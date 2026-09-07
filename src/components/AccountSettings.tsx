@@ -17,7 +17,7 @@ import { applyTheme, readStoredTheme, resolveTheme, type Theme } from '@/lib/the
 import { applyDensity, readStoredDensity, resolveDensity, type Density } from '@/lib/density';
 import { durationSince, relativeTime } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
-import { pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
+import { currentPushEndpoint, pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 import { EMAIL_GROUPS, emailGroupPrefKey, resolveEmailGroupPrefs, type EmailGroupId } from '@/lib/emailGroups';
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
@@ -25,6 +25,7 @@ import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } f
 import { ConnectedCalendarsCard } from '@/components/ConnectedCalendarsCard';
 import { useAnnounce } from '@/components/ui/LiveRegion';
 import type { TrustedDeviceView } from '@/lib/trustedDevice';
+import type { PushDeviceView } from '@/lib/pushDevices';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -106,6 +107,12 @@ export function AccountSettings() {
   // "Remember me" devices (#1495). null = still loading; [] = none remembered.
   const [devices, setDevices] = useState<TrustedDeviceView[] | null>(null);
   const [deviceBusy, setDeviceBusy] = useState<string | null>(null);
+  // Browsers holding a push subscription (#1716). null = still loading.
+  const [pushDevices, setPushDevices] = useState<PushDeviceView[] | null>(null);
+  // False until the server says this deployment has VAPID keys — with none, the
+  // whole section is hidden rather than showing a list that can never fill.
+  const [pushDevicesEnabled, setPushDevicesEnabled] = useState(false);
+  const [pushDeviceBusy, setPushDeviceBusy] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
   const [theme, setTheme] = useState<Theme>('system');
   const [density, setDensity] = useState<Density>('comfortable');
@@ -195,6 +202,7 @@ export function AccountSettings() {
       .catch(() => setPrefsLoadFailed(true));
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
     void loadDevices();
+    void loadPushDevices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -209,7 +217,16 @@ export function AccountSettings() {
     // a push endpoint is rotated by the browser, dropped when site data is
     // cleared, and never existed for anyone who opted in before push shipped.
     // Silent, and only ever for a user who has already granted permission.
-    if (on && pushSupported()) void registerPushSubscription().then(setPushActive);
+    // The device list is loaded by the effect above; re-asserting the
+    // subscription can create the row a moment later, so reload it afterwards
+    // or this browser is missing from its own list until the next visit.
+    if (on && pushSupported()) {
+      void registerPushSubscription().then((active) => {
+        setPushActive(active);
+        if (active) void loadPushDevices();
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // One switch covers both halves of "notify me" (#1464): the foreground
@@ -226,7 +243,8 @@ export function AccountSettings() {
     if (!next) {
       setBrowserNotif(false);
       setBrowserNotificationsPref(false);
-      if (pushSupported()) void unregisterPushSubscription();
+      setPushActive(false);
+      if (pushSupported()) void unregisterPushSubscription().then(loadPushDevices);
       return;
     }
     let perm = Notification.permission;
@@ -239,6 +257,7 @@ export function AccountSettings() {
       // that cannot do push, leaves the foreground notifications working.
       const subscribed = await registerPushSubscription();
       setPushActive(subscribed);
+      await loadPushDevices();
     } else {
       setBrowserNotif(false);
       setBrowserNotificationsPref(false);
@@ -457,6 +476,55 @@ export function AccountSettings() {
       flash(t.account.deviceForgetFailed, true);
     } finally {
       setDeviceBusy(null);
+    }
+  };
+
+  // The browsers push actually goes to (#1716). The endpoint this browser holds
+  // travels in a header so the server can mark one row as the current device —
+  // it never comes back, and neither do the delivery keys.
+  const loadPushDevices = async () => {
+    try {
+      const endpoint = await currentPushEndpoint();
+      const res = await fetch('/api/push/subscribe', {
+        headers: endpoint ? { 'x-push-endpoint': endpoint } : undefined,
+      });
+      const data = res.ok ? await res.json() : null;
+      setPushDevicesEnabled(Boolean(data?.enabled));
+      setPushDevices(Array.isArray(data?.devices) ? data.devices : []);
+    } catch {
+      setPushDevices([]);
+    }
+  };
+
+  const revokePushDevice = async (device: PushDeviceView) => {
+    setPushDeviceBusy(device.id);
+    try {
+      const res = await fetch(`/api/push/subscribe?id=${encodeURIComponent(device.id)}`, { method: 'DELETE' });
+      // 404 is not a failure: the row was already gone — the push service
+      // rejected it, or retention swept it — so say that rather than claim a
+      // revocation the user did not perform.
+      if (res.status === 404) {
+        await loadPushDevices();
+        flash(t.account.pushDeviceGone, true);
+        return;
+      }
+      if (!res.ok) throw new Error();
+      // Revoking the browser you are sitting at has to stop it locally too, or
+      // the silent re-subscribe on the next /account visit would hand the server
+      // the very row that was just deleted. Push off here means the switch is
+      // off here — the same switch that turned both halves on.
+      if (device.current) {
+        setBrowserNotificationsPref(false);
+        setBrowserNotif(false);
+        setPushActive(false);
+        await unregisterPushSubscription();
+      }
+      await loadPushDevices();
+      flash(t.account.pushDeviceRevoked);
+    } catch {
+      flash(t.account.pushDeviceRevokeFailed, true);
+    } finally {
+      setPushDeviceBusy(null);
     }
   };
 
@@ -955,6 +1023,50 @@ export function AccountSettings() {
                   ? t.account.pushNotificationsActive
                   : t.account.browserNotificationsHint}
             </p>
+          </div>
+        )}
+
+        {/* The browsers push actually reaches (#1716). Deliberately NOT nested in
+            the `browserNotifSupported` block above: a phone can hold a
+            subscription that a desktop browser without the Notification API must
+            still be able to see and switch off. */}
+        {pushDevicesEnabled && (
+          <div className="mt-4 pt-4 border-t border-gray-100" data-testid="push-devices">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.account.pushDevices}</h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 mb-3 max-w-lg">{t.account.pushDevicesHint}</p>
+            {pushDevices === null ? (
+              <p className="text-sm text-gray-500">{t.common.loading}</p>
+            ) : pushDevices.length === 0 ? (
+              <p className="text-sm text-gray-500" data-testid="no-push-devices">{t.account.noPushDevices}</p>
+            ) : (
+              <ul className="max-w-lg divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg">
+                {pushDevices.map((d) => (
+                  <li key={d.id} data-testid={`push-device-${d.id}`} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
+                        {/* d.label is server-derived from a fixed table, never the
+                            raw user-agent — see src/lib/deviceLabel.ts. */}
+                        {d.label || t.account.unknownBrowser}
+                        {d.current && <Badge variant="success" className="ml-2">{t.account.thisDevice}</Badge>}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t.account.pushDeviceSeen
+                          .replace('{added}', relativeTime(d.createdAt, locale))
+                          .replace('{when}', relativeTime(d.lastSeenAt, locale))}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      loading={pushDeviceBusy === d.id}
+                      onClick={() => revokePushDevice(d)}
+                    >
+                      {t.account.revokePushDevice}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

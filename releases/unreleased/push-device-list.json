@@ -1,0 +1,21 @@
+{
+  "bump": "minor",
+  "changelog": "- **The browsers receiving push notifications are now listed on /account, and can be revoked one at a time** (#1716). `PushSubscription.userAgent` has carried the comment \"so /account can list 'Chrome on Android' rather than an opaque endpoint\" since #1464, but nothing ever read it: there was no GET on `/api/push/subscribe`, so someone who had granted push on a laptop, a phone and a work machine could only switch all three off together. `GET /api/push/subscribe` now returns the caller's own rows as `{ id, label, createdAt, lastSeenAt, current }` through an explicit `select` allowlist in `src/lib/pushDevices.ts` — `endpoint`, `p256dh` and `auth` are the credential for pushing to that browser and never leave the server, and the label is derived server-side from the untrusted user-agent by the fixed table in the new `src/lib/deviceLabel.ts` (moved out of `trustedDevice.ts` so both /account device lists name a device with the same words instead of keeping two copies of the regexes). The page marks its own row by sending the endpoint its service worker already holds in an `x-push-endpoint` header — a header, not a query parameter, so half a delivery credential does not land in an access log. `DELETE /api/push/subscribe?id=<id>` revokes one browser, scoped `{ id, userId }` on the route so another account's id is a 404 rather than a silent success; the service worker's existing endpoint-body DELETE is untouched. Revoking the browser you are sitting at also unsubscribes it locally and clears the local preference, because otherwise the silent re-subscribe on the next /account visit would hand the server back the row just deleted. A 404 is reported as \"already unsubscribed — it had expired on its own\" rather than as a revocation, since #1678's retention sweep and the push service's own 404/410 rejections delete rows nobody revoked. No schema change and no cache to invalidate: `sendPushToUser` reads the table on every send.",
+  "notes": {
+    "en": [
+      "Your account page now lists every browser that receives push notifications — \"Chrome on Android\", when it was added and when it was last seen — with the one you are using marked.",
+      "You can revoke a single browser instead of turning notifications off everywhere.",
+      "A browser can also drop off the list on its own when its subscription expires, and the page says so rather than pretending you revoked it."
+    ],
+    "tr": [
+      "Hesap sayfan artık anlık bildirim alan her tarayıcıyı listeliyor — \"Chrome on Android\", ne zaman eklendiği ve en son ne zaman görüldüğü — kullandığın tarayıcı işaretli olarak.",
+      "Bildirimleri her yerde kapatmak yerine tek bir tarayıcıyı kaldırabilirsin.",
+      "Bir tarayıcının aboneliği kendiliğinden de sona erebilir; sayfa bunu, sen kaldırmışsın gibi göstermek yerine olduğu gibi söylüyor."
+    ],
+    "de": [
+      "Deine Kontoseite listet jetzt jeden Browser auf, der Push-Benachrichtigungen erhält — \"Chrome on Android\", wann er hinzugefügt und wann er zuletzt gesehen wurde — der gerade genutzte ist markiert.",
+      "Du kannst einen einzelnen Browser widerrufen, statt Benachrichtigungen überall abzuschalten.",
+      "Ein Browser kann auch von selbst aus der Liste verschwinden, wenn sein Abonnement abläuft — die Seite sagt das, statt einen Widerruf durch dich vorzutäuschen."
+    ]
+  }
+}

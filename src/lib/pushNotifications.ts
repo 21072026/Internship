@@ -79,6 +79,25 @@ export async function registerPushSubscription(): Promise<boolean> {
   }
 }
 
+/**
+ * The push endpoint this browser currently holds, or null.
+ *
+ * Used only to let the account page's device list mark one row as "this device"
+ * (#1716): the server cannot tell which of a person's browsers is asking, so the
+ * browser says so with something it already has. Sent as a header rather than in
+ * the URL — it is half of a delivery credential and query strings get logged.
+ */
+export async function currentPushEndpoint(): Promise<string | null> {
+  if (!pushSupported()) return null;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = await registration?.pushManager.getSubscription();
+    return subscription?.endpoint ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Drop this browser's subscription, on the device and on the server. */
 export async function unregisterPushSubscription(): Promise<void> {
   if (!pushSupported()) return;

@@ -116,10 +116,47 @@ no-op olur, `/api/push/subscribe` 503 verir ve uygulama eskisi gibi davranır.
 - `src/lib/messagePush.ts` — bildirim metnini **alıcının dilinde**, zilin
   kullandığı sözlük şablonundan üretir; böylece bildirim alanı ile uygulama içi
   satır aynı şeyi söyler.
-- `src/app/api/push/config` (GET), `src/app/api/push/subscribe` (POST/DELETE).
+- `src/app/api/push/config` (GET), `src/app/api/push/subscribe` (GET/POST/DELETE).
   Public key build-time `NEXT_PUBLIC_*` değişkeni **değil** bir uç: imajlar
   GitHub runner'ında derleniyor, anahtarlar yalnızca sunucuda runtime env olarak
   var (next.config.js'teki JaaS host'uyla aynı gerekçe).
+- `src/lib/pushDevices.ts` — `/account`'taki cihaz listesi (#1716).
+- `src/lib/deviceLabel.ts` — user-agent → "Chrome on Android". `trustedDevice.ts`
+  ile **ortak** tablo; iki liste aynı cihazı aynı kelimelerle adlandırsın diye.
+
+### Cihaz listesi (#1716)
+
+`GET /api/push/subscribe` kullanıcının kendi aboneliklerini döner:
+`{ id, label, createdAt, lastSeenAt, current }` — ve **başka hiçbir şey**.
+`endpoint`, `p256dh` ve `auth` o tarayıcıya gönderim yapmanın kimlik bilgisidir;
+listenin hiçbirine ihtiyacı yok, bu yüzden `listPushDevices` içindeki açık
+`select` izin listesinden geçerler ve sunucudan çıkmazlar. Modele bir sütun
+eklemek sessizce sızıntı başlatamaz.
+
+`label` **sunucuda** üretilir: `userAgent` sütunu şemada "serbest metin ve
+güvenilmez — yalnızca gösterim" diye işaretli, bu yüzden sabit bir tablodan
+geçirilir, ham hâliyle asla render edilmez.
+
+`current` oturumdan bilinemez — bir push aboneliği kişiye değil *tarayıcı
+profiline* aittir — bu yüzden sayfa kendi service worker'ının tuttuğu endpoint'i
+`x-push-endpoint` başlığıyla gönderir, eşleştirme sunucuda yapılır. Query
+parametresi değil **başlık**: query string erişim loglarına düşer.
+
+`DELETE /api/push/subscribe?id=<id>` tek bir tarayıcıyı kaldırır; sorgu rotada
+`{ id, userId }` ile daraltıldığı için başkasının id'si 200 değil **404**
+döner. Service worker'ın gövdeyle (`{ endpoint }`) yaptığı kendi aboneliğinden
+çıkışı olduğu gibi durur.
+
+**"Ben kaldırdım" ile "kendiliğinden düştü" ayrı şeylerdir.** Push servisinin
+404/410'u ve #1678'in saklama süpürmesi de satır siler; bu yüzden 404 dönen bir
+revoke, kullanıcıya bir iptal olarak değil "zaten aboneliği yoktu" diye
+bildirilir ve liste altındaki açıklama bir tarayıcının kendi başına da
+düşebileceğini söyler.
+
+Kişinin *oturduğu* tarayıcıyı kaldırması yerel aboneliği de iptal eder ve
+`/account`'taki anahtarı kapatır — yoksa bir sonraki ziyarette sessiz yeniden
+abonelik, az önce silinen satırı sunucuya geri verirdi. Geçersiz kılınacak bir
+önbellek yok: `sendPushToUser` tabloyu her gönderimde okur.
 - `public/sw.js` — `push`, `notificationclick`, `pushsubscriptionchange`.
 - `src/lib/pushNotifications.ts` — tarayıcı tarafı abone ol/çık.
 
