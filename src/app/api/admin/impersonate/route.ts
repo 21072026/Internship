@@ -41,7 +41,11 @@ export async function POST(request: Request) {
   const reason = parsed.data.reason?.trim() || null;
   const grant = await createImpersonationGrant(session.user.id, target.id, 'START');
   await prisma.auditLog.create({
-    data: { actorId: session.user.id, action: 'IMPERSONATE_START', targetId: target.id },
+    // The reason goes on the audit row too, not only on the ActivityLog entry
+    // below: the account holder's own access history (#1587) is built from
+    // these rows, and "why" is the part that turns a scary line into an
+    // explanation.
+    data: { actorId: session.user.id, action: 'IMPERSONATE_START', targetId: target.id, detail: reason },
   });
   await logActivity({
     action: 'impersonate.start',

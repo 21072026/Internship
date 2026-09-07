@@ -2739,6 +2739,9 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([actorId])
+  // "Who accessed my account" (#1587) reads this table by the *affected* user,
+  // not the actor — without this index that self-service list is a full scan.
+  @@index([targetId])
 }
 
 // Single-use, time-limited token to confirm a user's email address.

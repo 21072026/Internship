@@ -61,6 +61,13 @@ jobs:
       # these assertions do.
       - name: time-in-stage counts visits and candidates separately (#1427)
         run: npm run test:stage-aging
+      # "Who accessed my account" prints factual claims about who entered the
+      # reader's account and how the visit ended. An unclosed start five minutes
+      # old and one five hours old are the same two columns in the database and
+      # mean opposite things; no e2e run can hold the clock still across that
+      # boundary, so the three outcomes are pinned here (#1587).
+      - name: impersonation history states only what the rows prove (#1587)
+        run: npm run test:impersonation-history
       # The mentor directory's scan cap is only reachable with 2000+ consented
       # mentors, so no e2e run ever drives the `partial` branch. A complete
       # answer that claims to be truncated is as wrong as a truncated one that
