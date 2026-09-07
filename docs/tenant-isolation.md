@@ -123,6 +123,33 @@ subject from the invite/reset token, not a tenant context. Routes that only ever
 read the caller's own rows (account, profile, avatar, cv) are wrapped too for
 uniformity, though scoping is redundant there.
 
+### API-key requests have no session — so they bind their org themselves (#1546)
+
+`withTenantScope(session, …)` resolves the org from the session. A request to
+`/api/v1/*` authenticates with a Bearer API key and has **no session at all**,
+so `resolveOrgId()` returns null, `currentOrgId()` stays `undefined`, and the
+middleware reads that as *"no context — do not scope"*. A key-authenticated
+route that queried a tenant model therefore read **every** organisation's rows
+while looking entirely ordinary; that is what `GET /api/v1/candidates` did.
+
+The public API is now entered through one door, `withApiKey()`
+(`src/lib/apiKey.ts`), which — before the handler body runs — refuses an
+unknown, expired or revoked key (401), a key that does not hold the operation's
+scope (403) and a key that resolves to **no** organisation (403, never an
+unscoped read), then runs the handler inside `runWithApiKeyOrg(key.orgId, …)`.
+
+Two things keep it that way:
+
+- the handler's `where` also carries `orgId: key.orgId` **explicitly**. The
+  middleware only engages when `MT_ENFORCE_ISOLATION=true`, and a cross-tenant
+  read must not wait for a flag;
+- the absence of a tenant context is made loud rather than silent, in both
+  halves: `assertApiKeyRequestContext()` throws in development when a key is
+  authenticated outside `withApiKey()`, a development-only Prisma middleware
+  throws when a tenant-anchored model is queried inside an API-key request with
+  no org bound, and `npm run check:api-key-routes` fails the build for a
+  `/api/v1` route that queries the database without going through the door.
+
 ## Turning enforcement on (the guarded rollout)
 
 Do **not** set `MT_ENFORCE_ISOLATION=true` in production until every step below

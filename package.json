@@ -26,6 +26,7 @@
     "test:mentor-directory": "node --test --experimental-strip-types scripts/test/mentor-directory.test.mjs",
     "test:note-privacy": "node --test scripts/test/mentor-application-note-privacy.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
+    "check:api-key-routes": "node scripts/check-api-key-routes.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
     "check:locale-dates": "node scripts/check-locale-dates.mjs",
     "check:events": "node scripts/check-events.mjs",
