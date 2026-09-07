@@ -12,6 +12,7 @@
 // the clock in the browser, so nothing here may import Prisma.
 
 import { defaultPipelineStages, type ResolvedStage } from './pipeline';
+import { DEFAULT_HIRED_STAGE_KEY } from './offers';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -66,7 +67,12 @@ const CANONICAL_STOPPED = new Set<string>(
 /**
  * Stages whose clock has stopped whatever the tenant's own flags say.
  *
- * HIRED_660 is not flagged terminal in the canonical set (EMPLOYED_700 is) and
+ * The key comes from `DEFAULT_HIRED_STAGE_KEY` (src/lib/offers.ts) rather than
+ * being typed here: `npm run check:stage-keys` forbids naming a canonical stage
+ * key outside the two modules that own the defaults, and re-typing it would put
+ * the same string in a third place that nothing keeps in step.
+ *
+ * The default hired stage is not flagged terminal in the canonical set (EMPLOYED_700 is) and
  * a tenant's `PipelineStage` row for it will not be either, because the flag
  * means "the journey ended here" and a hire is followed by employment. The
  * clock still has to stop: an accepted offer is not a queue anybody is running
@@ -81,7 +87,7 @@ const CANONICAL_STOPPED = new Set<string>(
  * always won and a hired candidate with a stale `stageDeadline` still rendered
  * the red "past the stage deadline" chip.
  */
-const ALWAYS_STOPPED = new Set<string>(['HIRED_660']);
+const ALWAYS_STOPPED = new Set<string>([DEFAULT_HIRED_STAGE_KEY]);
 
 /**
  * Has this stage's clock stopped? Prefers the viewer's resolved stages so a
