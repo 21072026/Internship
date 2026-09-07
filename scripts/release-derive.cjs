@@ -9,7 +9,12 @@
 //   {
 //     "bump": "minor" | "patch",
 //     "changelog": "- **Title** (#issue). Developer-facing markdown bullet.",
-//     "notes": { "en": ["..."], "tr": ["..."], "de": ["..."] }   // optional
+//     "notes": { "en": ["..."], "tr": ["..."], "de": ["..."] },  // optional
+//     "media": {                                                 // optional (#2233)
+//       "poster": "release-media/<slug>.png",                    // required when media is present
+//       "video":  "release-media/<slug>.webm",                   // optional, <= 5s
+//       "alt": { "en": "...", "tr": "...", "de": "..." }
+//     }
 //   }
 // PRs only ever ADD such files — they never touch package.json, CHANGELOG.md
 // or src/lib/releaseNotes.ts, so parallel PRs cannot collide on version
@@ -31,6 +36,7 @@
 const { readFileSync, readdirSync, existsSync } = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
+const { validateMediaShape, resolveMediaAssets } = require('./release-media.cjs');
 
 const FRAGMENT_DIR = path.join('releases', 'unreleased');
 const LOCALES = ['en', 'tr', 'de'];
@@ -81,7 +87,8 @@ function validateFragment(fragment) {
     const extra = Object.keys(fragment.notes).filter((k) => !LOCALES.includes(k));
     if (extra.length) throw new Error(`${where}: unknown notes locale(s): ${extra.join(', ')}`);
   }
-  const known = ['file', 'bump', 'changelog', 'notes'];
+  if (fragment.media !== undefined) validateMediaShape(where, fragment.media);
+  const known = ['file', 'bump', 'changelog', 'notes', 'media'];
   const unknown = Object.keys(fragment).filter((k) => !known.includes(k));
   if (unknown.length) throw new Error(`${where}: unknown field(s): ${unknown.join(', ')}`);
 }
@@ -293,6 +300,9 @@ function releaseTimeline(baseVersion, fragments, stamps = {}) {
       bump: fragment.bump,
       changelog: fragment.changelog,
       notes: fragment.notes,
+      // The optional screenshot/clip (#2233), already carrying the poster's
+      // intrinsic size when resolveRelease could read the file.
+      media: fragment.media,
       version,
       date: when ? when.date : '',
       time: when ? when.time : '',
@@ -321,8 +331,16 @@ function deriveVersion(baseVersion, fragments, stamps = {}) {
  * build`).
  */
 function resolveRelease(repoRoot, baseVersion, env = process.env, { requireStamps = false } = {}) {
-  const fragments = readFragments(repoRoot);
-  fragments.forEach(validateFragment);
+  const raw = readFragments(repoRoot);
+  raw.forEach(validateFragment);
+  // Media (#2233) is validated against the files on disk here rather than in
+  // validateFragment, because only this entry point knows the repo root: the
+  // poster must exist, be a PNG within the cap, and a clip must be a WebM under
+  // five seconds. The poster's pixel size comes back with it so the page can
+  // reserve the space.
+  const fragments = raw.map((fragment) =>
+    fragment.media ? { ...fragment, media: resolveMediaAssets(repoRoot, fragment.file, fragment.media) } : fragment
+  );
   const stamps = resolveStamps(repoRoot, fragments, env);
   if (requireStamps) assertStamped(repoRoot, fragments, stamps);
   const timeline = releaseTimeline(baseVersion, fragments, stamps);
@@ -348,6 +366,7 @@ function unreleasedEntries(timeline) {
       time: entry.time,
       commit: entry.commit,
       highlights: entry.notes,
+      ...(entry.media ? { media: entry.media } : {}),
     }))
     .reverse();
 }

@@ -6,12 +6,31 @@
 
 import type { Locale } from '@/i18n/config';
 
+/**
+ * The optional screenshot — or short clip — a release note may carry (#2233).
+ *
+ * `poster` is never optional and `video` always is: CHANGELOG.md is markdown,
+ * an older browser may not decode WebM, and a reader who asked for reduced
+ * motion must be shown a still. One poster covers all three. Paths are relative
+ * to `public/` (always `release-media/<fragment-slug>.{png,webm}`); the pixel
+ * size is read from the PNG at build time so the page reserves the space and
+ * does not reflow when the image arrives.
+ */
+export interface ReleaseMedia {
+  poster: string;
+  video?: string;
+  alt: Record<Locale, string>;
+  width?: number;
+  height?: number;
+}
+
 export interface ReleaseNote {
   version: string;
   date: string; // ISO date (the day the change shipped)
   time?: string; // UTC HH:MM the change was merged (#1457)
   commit?: string; // short sha of the commit that brought it in (#1457)
   highlights: Record<Locale, string[]>;
+  media?: ReleaseMedia; // #2233 — optional, and permanently so
 }
 
 // Release fragments (#1275, per-change versions in #1457): PRs ship user-facing

@@ -6,6 +6,7 @@ import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { publicOrigin, releaseFeedUrl } from '@/lib/releaseFeed';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { PublicShell } from '@/components/landing/PublicShell';
+import { ReleaseNoteMedia } from '@/components/ReleaseNoteMedia';
 import { GITHUB_URL } from '@/components/landing/links';
 
 // Discoverability half of the feed (#1383): browsers and readers pick a feed up
@@ -44,6 +45,8 @@ export default async function ReleaseNotesPage() {
               key={r.version}
               /* The permalink the feed items point at (#1383). */
               id={`v${r.version}`}
+              /* The capture target for e2e/release-media.spec.ts (#2233). */
+              data-testid="release-card"
               className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 scroll-mt-20"
             >
               {/* Stacks on a phone: version + "2026-08-25 09:25 UTC · b174c20"
@@ -73,6 +76,11 @@ export default async function ReleaseNotesPage() {
                   <li key={i}>{h}</li>
                 ))}
               </ul>
+              {/* Optional (#2233), and permanently so: a backfill or an API fix
+                  has no screen to show. When a note does carry one, the picture
+                  is what tells a reader who has not seen the screen what
+                  changed. */}
+              {r.media ? <ReleaseNoteMedia media={r.media} locale={locale} /> : null}
             </div>
           ))}
         </div>

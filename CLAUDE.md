@@ -278,7 +278,10 @@ workaround, #636, and it compiled on every PR push).
   `releases/unreleased/<kebab-slug>.json` with `bump` (`minor` for features, `patch` for
   fixes), `changelog` (developer-facing Keep-a-Changelog bullet, markdown) and — for
   user-visible changes — `notes` with EN/TR/DE user-facing highlight strings (all three or
-  none). Full format + rationale: [releases/README.md](releases/README.md). Trivial
+  none), and — optionally, never as a checklist item — `media` with a captured
+  screenshot/clip of the screen that changed (#2233; `e2e/release-media.spec.ts`
+  captures it, `npm run test:e2e:media`, and it never runs in CI).
+  Full format + rationale: [releases/README.md](releases/README.md). Trivial
   non-user-facing changes (pure docs, CI config) still need no fragment.
   The displayed version is derived at build time from base+fragments (`next.config.js` →
   `src/lib/version.ts`), so it is correct immediately after every merge; a scheduled workflow

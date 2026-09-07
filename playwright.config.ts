@@ -59,7 +59,27 @@ export default defineConfig({
     // and never overlaps page actions. legal-consent.spec overrides this.
     storageState: './e2e/.state/consent.json',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      // e2e/release-media.spec.ts is a capture PRODUCER, not a test (#2233): it
+      // writes PNG/WebM files into public/release-media/. It must never run in
+      // the PR gate or the scheduled full suite — a run there would rewrite
+      // committed bytes on an unrelated change — so the default project ignores
+      // it and the project below only exists when an author asks for it.
+      testIgnore: /release-media\.spec\.ts/,
+    },
+    ...(process.env.CAPTURE_RELEASE_MEDIA
+      ? [
+        {
+          name: 'release-media',
+          testMatch: /release-media\.spec\.ts/,
+          use: { ...devices['Desktop Chrome'] },
+        },
+      ]
+      : []),
+  ],
   // Only spin up the app locally; when BASE_URL targets a deployed env, skip it.
   webServer: externalBase
     ? undefined

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Optional screenshot or short clip on a release note** (#2233). A release fragment may carry `media` — a required `.png` poster, an optional `.webm` clip and EN/TR/DE `alt`. `scripts/release-media.cjs` validates the referenced files against the bytes on disk (PNG IHDR for the size, the EBML header for the duration; no ffmpeg): poster ≤ 150 KB, clip ≤ 1.5 MB and ≤ 5s (WCAG 2.2.2), and a clip without a poster is rejected. `/release-notes` renders it at ≤ 480px in a light-pinned frame and shows the poster — never a paused video — under `prefers-reduced-motion`. `e2e/release-media.spec.ts` captures the media (element screenshots plus Playwright `recordVideo`) and runs only under the opt-in `release-media` project, never in the PR gate or the scheduled suite. Compaction carries the block into `releaseNotes.ts` and writes the poster into `CHANGELOG.md`.",
+  "notes": {
+    "en": [
+      "A release note can now carry a small screenshot, or a short clip, of the screen that changed."
+    ],
+    "tr": [
+      "Sürüm notları artık değişen ekranın küçük bir görüntüsünü ya da kısa bir klibini taşıyabiliyor."
+    ],
+    "de": [
+      "Eine Release-Notiz kann jetzt einen kleinen Screenshot oder einen kurzen Clip des geänderten Bildschirms zeigen."
+    ]
+  }
+}
