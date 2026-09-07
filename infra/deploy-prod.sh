@@ -580,6 +580,14 @@ run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
 # deliberate choice. Converges to a no-op after the first deploy.
 run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
 
+# Give every Organization a Subscription row matching the plan it already had
+# (#1731). The commercial state moved from the `Organization.plan` enum to its
+# own table on this deploy; an org without a row would be read as the free tier.
+# Creates only what is missing and never edits an existing subscription, so it
+# converges to a no-op — and the app's own getOrCreateSubscription() covers any
+# org created after this ran.
+run_tool node prisma/backfill-org-subscription.mjs || true
+
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
 # stopped and removed the running container BEFORE proving the new image works,
