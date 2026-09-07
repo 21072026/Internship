@@ -26,6 +26,10 @@ const schema = z.object({
   earlyAccessWindowDays: z.string().regex(/^\d{1,3}$/).optional(),
   premiumAnalytics: z.enum(['true', 'false']).optional(),
   aiMonthlyQuota: z.string().regex(/^\d{1,6}$/).optional(),
+  // Board WIP limit (#1439). `0` is meaningful and must pass: it switches the
+  // amber column warnings off entirely. Four digits is far past any real
+  // pipeline column, and a per-stage override lives on the stage-SLA endpoint.
+  boardWipLimit: z.string().regex(/^\d{1,4}$/).optional(),
   // Newsletter cadence (#1469). Edited from /admin/newsletters rather than the
   // settings page — the three of them only mean anything next to the issue
   // history they drive.

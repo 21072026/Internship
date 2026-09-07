@@ -20,11 +20,39 @@ export interface StageSlaEntry {
   days: number;
 }
 
-/** Every SLA an org has configured, keyed by stage. Empty when it configured none. */
+/**
+ * Every SLA an org has configured, keyed by stage. Empty when it configured none.
+ *
+ * Rows with a null `days` are skipped: since #1439 a `StageSla` row can exist
+ * for its `wipLimit` alone, and a board-only row must not make this org look
+ * "SLA-managed" — that flag is what clears a hand-typed deadline on every stage
+ * move (see `stageDeadlineUpdate` below).
+ */
 export async function resolveStageSlas(orgId: string | null | undefined): Promise<Map<string, number>> {
   if (!orgId) return new Map();
-  const rows = await prisma.stageSla.findMany({ where: { orgId }, select: { stageKey: true, days: true } });
-  return new Map(rows.map((r) => [r.stageKey, r.days]));
+  const rows = await prisma.stageSla.findMany({
+    where: { orgId, days: { not: null } },
+    select: { stageKey: true, days: true },
+  });
+  return new Map(rows.flatMap((r) => (r.days == null ? [] : [[r.stageKey, r.days] as [string, number]])));
+}
+
+/**
+ * Every per-stage board WIP limit an org has configured (#1439), keyed by stage.
+ * A stored 0 is kept as 0 — it means "never warn about this stage", which is not
+ * the same as having configured nothing. Resolution against the org-wide
+ * setting happens in src/lib/boardWip.ts, which is the only place that rule is
+ * written.
+ */
+export async function resolveStageWipLimits(
+  orgId: string | null | undefined
+): Promise<Map<string, number>> {
+  if (!orgId) return new Map();
+  const rows = await prisma.stageSla.findMany({
+    where: { orgId, wipLimit: { not: null } },
+    select: { stageKey: true, wipLimit: true },
+  });
+  return new Map(rows.flatMap((r) => (r.wipLimit == null ? [] : [[r.stageKey, r.wipLimit] as [string, number]])));
 }
 
 /**

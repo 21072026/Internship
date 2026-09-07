@@ -8,6 +8,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
+import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 
 // The delivery log answers "did our mail actually go out, and when?", and a
 // newsletter or announcement send writes one EmailLog row per recipient — 50
@@ -46,6 +47,14 @@ export default function AdminSettingsPage() {
   // tenant override at the operator's current number, and the operator's later
   // changes to the global budget would then never reach that tenant.
   const [loadedQuota, setLoadedQuota] = useState('200');
+  // Board WIP limit (#1439). Was a hardcoded 8 in the board page, which every
+  // column of a large pipeline breached — so the number is the org's now, with
+  // a per-stage override in the stage editor below and 0 meaning "no WIP
+  // warnings at all". Same load/post dance as the quota above, for the same
+  // reason: posting an untouched inherited value would pin a tenant override.
+  const [boardWipLimit, setBoardWipLimit] = useState(String(DEFAULT_BOARD_WIP_LIMIT));
+  const [loadedWipLimit, setLoadedWipLimit] = useState(String(DEFAULT_BOARD_WIP_LIMIT));
+  const [wipLimitError, setWipLimitError] = useState<string | null>(null);
   // Set when the box holds something the API's `\d{1,6}` would reject (empty is
   // the common one — clearing the box is how anybody retypes a number). Without
   // this the whole PUT 400s and every other change on the form is discarded.
@@ -145,6 +154,9 @@ export default function AdminSettingsPage() {
       setPremiumAnalytics(settings.premiumAnalytics === 'true');
       setAiMonthlyQuota(settings.aiMonthlyQuota ?? '200');
       setLoadedQuota(settings.aiMonthlyQuota ?? '200');
+      const wip = settings.boardWipLimit ?? String(DEFAULT_BOARD_WIP_LIMIT);
+      setBoardWipLimit(wip);
+      setLoadedWipLimit(wip);
       setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
       setBlindReview(settings.blindReview === 'true');
     }
@@ -153,7 +165,7 @@ export default function AdminSettingsPage() {
 
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFlash(null); setSaveError(null); setQuotaError(null);
+    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null);
     // The API validates the quota with /^\d{1,6}$/ and rejects the WHOLE
     // payload on a miss, so an unusable number is caught here and reported on
     // the field instead — the rest of the form still saves.
@@ -163,16 +175,24 @@ export default function AdminSettingsPage() {
       setQuotaError(t.settings.aiMonthlyQuotaInvalid);
       return;
     }
+    // Same shape for the WIP limit: the API's `\d{1,4}` rejects the whole
+    // payload on a miss, and clearing the box is how anybody retypes a number.
+    const wip = boardWipLimit.trim();
+    const wipChanged = wip !== loadedWipLimit;
+    if (wipChanged && !/^\d{1,4}$/.test(wip)) {
+      setWipLimitError(t.settings.boardWipLimitInvalid);
+      return;
+    }
     setSavingSettings(true);
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
       // change on the form was dropped.
-      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); }
+      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); setLoadedWipLimit(wip); }
       else setSaveError(t.settings.saveFailed);
     } catch {
       setSaveError(t.settings.saveFailed);
@@ -296,6 +316,9 @@ export default function AdminSettingsPage() {
             {/* max 999999 mirrors the API's `\d{1,6}` regex, which stays the
                 authority — the number attribute only keeps the form honest. */}
             <Input label={t.settings.aiMonthlyQuota} type="number" min={0} max={999999} step={1} value={aiMonthlyQuota} onChange={(e) => { setAiMonthlyQuota(e.target.value); setQuotaError(null); }} hint={t.settings.aiMonthlyQuotaHint} error={quotaError ?? undefined} data-testid="ai-monthly-quota" />
+            {/* max 9999 mirrors the API's `\d{1,4}`; the per-stage override for
+                this number is a row in the stage editor further down. */}
+            <Input label={t.settings.boardWipLimit} type="number" min={0} max={9999} step={1} value={boardWipLimit} onChange={(e) => { setBoardWipLimit(e.target.value); setWipLimitError(null); }} hint={t.settings.boardWipLimitHint} error={wipLimitError ?? undefined} data-testid="board-wip-limit" />
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">

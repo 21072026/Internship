@@ -135,6 +135,19 @@ export const SETTING_DEFAULTS = {
   // row is never deleted, and nothing younger than
   // NOTIFICATION_RETENTION_FLOOR_DAYS (30) is deleted whatever this says.
   notificationRetentionDays: '180',
+  // Board work-in-progress limit (#1439): a pipeline column holding more than
+  // this many candidates gets an amber count, so a bottleneck stands out.
+  // Advisory only — it never blocks a move.
+  //
+  // 8 because that is the number the board shipped with as a hardcoded
+  // constant, so an installation that configures nothing sees the board it saw
+  // yesterday. It was sized for one mentor's working set and does not survive
+  // growth: at 308 relations every one of the thirteen columns breached it, and
+  // a warning that fires everywhere is decoration. Hence a setting, a per-stage
+  // override on `StageSla.wipLimit` (a funnel mouth and a hiring column have
+  // very different healthy depths), and '0' here to switch WIP warnings off
+  // entirely rather than pick a number nobody will act on.
+  boardWipLimit: '8',
   // Grace period, in days, before the retention sweep ANONYMIZES an orphan
   // applicant account — a /apply account whose mentor declined and which shows
   // no other sign of life (#1780). The rule itself, and why 90 days, live in

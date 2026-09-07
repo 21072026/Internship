@@ -95,7 +95,10 @@ export async function GET() {
         interactions,
       ] = await Promise.all([
         orgId ? prisma.pipelineStage.count({ where: { orgId } }) : Promise.resolve(0),
-        orgId ? prisma.stageSla.count({ where: { orgId } }) : Promise.resolve(0),
+        // `days: not null` since #1439: a StageSla row can exist for its board
+        // WIP limit alone, and setting a column depth is not the same as having
+        // answered "how long may somebody wait here" — the step this counts.
+        orgId ? prisma.stageSla.count({ where: { orgId, days: { not: null } } }) : Promise.resolve(0),
         orgId ? prisma.documentRequirement.count({ where: { orgId } }) : Promise.resolve(0),
         orgId ? prisma.evaluationTemplate.count({ where: { orgId, active: true } }) : Promise.resolve(0),
         prisma.user.count({ where: orgScoped({ role: 'MENTOR' as const }, orgId) }),

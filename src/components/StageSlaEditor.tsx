@@ -12,6 +12,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Clock } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 
 interface StageRow {
   key: string;
@@ -19,18 +20,28 @@ interface StageRow {
   isOffPath: boolean;
   isTerminal: boolean;
   days: number | null;
+  // Board WIP limit for this stage (#1439): null = inherit the org-wide
+  // number, 0 = never warn about this stage.
+  wipLimit: number | null;
 }
 
 export function StageSlaEditor() {
   const t = useT();
   const [rows, setRows] = useState<StageRow[]>([]);
+  // The org-wide fallback, so an empty WIP box can show what it inherits
+  // instead of looking unconfigured. null = the org switched warnings off.
+  const [defaultWip, setDefaultWip] = useState<number | null>(DEFAULT_BOARD_WIP_LIMIT);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/stage-sla');
-    if (res.ok) setRows((await res.json()).stages ?? []);
+    if (res.ok) {
+      const body = await res.json();
+      setRows(body.stages ?? []);
+      setDefaultWip(body.defaultWipLimit ?? null);
+    }
   }, []);
   useEffect(() => {
     load();
@@ -44,7 +55,9 @@ export function StageSlaEditor() {
       const res = await fetch('/api/admin/stage-sla', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slas: rows.map((r) => ({ stageKey: r.key, days: r.days })) }),
+        body: JSON.stringify({
+          slas: rows.map((r) => ({ stageKey: r.key, days: r.days, wipLimit: r.wipLimit })),
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.details?.formErrors?.[0] || body.error || 'Failed');
@@ -71,6 +84,15 @@ export function StageSlaEditor() {
       {flash && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{flash}</div>}
       {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
 
+      {/* Two numbers per stage since #1439 — the waiting rule and the board's
+          column depth. Column headings rather than a unit label per input:
+          with two boxes on a row, "Days" after the first one stopped saying
+          which box it belonged to. */}
+      <div className="flex items-center gap-3 text-xs text-gray-500 mb-1 px-1">
+        <span className="flex-1" />
+        <span className="w-24">{t.stageSla.days}</span>
+        <span className="w-24">{t.stageSla.wipLimit}</span>
+      </div>
       <div className="space-y-2" data-testid="stage-sla-rows">
         {rows.map((r, i) => (
           <div key={r.key} className="flex items-center gap-3 text-sm">
@@ -93,7 +115,27 @@ export function StageSlaEditor() {
               }}
               className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
             />
-            <span className="w-10 text-xs text-gray-400">{t.stageSla.days}</span>
+            <input
+              type="number"
+              min={0}
+              max={9999}
+              value={r.wipLimit ?? ''}
+              /* The placeholder is what an empty box actually does: inherit the
+                 org-wide number, or nothing at all when that is switched off. */
+              placeholder={
+                defaultWip == null
+                  ? t.stageSla.wipLimitOff
+                  : t.stageSla.wipLimitDefault.replace('{n}', String(defaultWip))
+              }
+              aria-label={`${r.label} — ${t.stageSla.wipLimit}`}
+              data-testid={`wip-${r.key}`}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                const wipLimit = v === '' ? null : Number(v);
+                setRows((p) => p.map((row, j) => (j === i ? { ...row, wipLimit } : row)));
+              }}
+              className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+            />
           </div>
         ))}
       </div>
@@ -104,6 +146,7 @@ export function StageSlaEditor() {
         </Button>
       </div>
       <p className="mt-3 text-xs text-gray-500">{t.stageSla.calendarDays}</p>
+      <p className="mt-1 text-xs text-gray-500">{t.stageSla.wipLimitHint}</p>
       <p className="mt-1 text-xs text-gray-500">{t.stageSla.appliesOnMove}</p>
     </Card>
   );
