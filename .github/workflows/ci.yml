@@ -69,6 +69,14 @@ jobs:
         run: npm run test:mentor-directory
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
+      # An API-key request has no session, so nothing resolves a tenant for it
+      # and the tenant middleware treats that as "do not scope": a /api/v1 route
+      # that authenticates a key and then queries reads every organisation's
+      # rows while looking ordinary (#1546). withApiKey() is the one door where
+      # expiry, revocation, scope and the org binding are decided; this keeps
+      # every route behind it.
+      - name: the public API is entered through one door (#1546)
+        run: npm run check:api-key-routes
       # MentorApplication.adminNote is private admin commentary; an e-mail
       # template that rendered it would show an applicant what an admin wrote
       # about them. Nothing in the type system says so, so a file-level guard

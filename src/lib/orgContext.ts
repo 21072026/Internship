@@ -94,7 +94,10 @@ function mergeOrgWhere(where: unknown, orgId: string): Record<string, unknown> {
     : { orgId };
 }
 
-const globalForPrisma = globalThis as unknown as { tenantMiddlewareInstalled?: boolean };
+const globalForPrisma = globalThis as unknown as {
+  tenantMiddlewareInstalled?: boolean;
+  apiKeyOrgGuardInstalled?: boolean;
+};
 
 // Register the auto-scoping middleware exactly once on the prisma singleton.
 // Called lazily from runWithOrg (only when enforcement is on), so the middleware
@@ -163,6 +166,72 @@ export function runWithOrg<T>(orgId: string | null, fn: () => T): T {
       }) as T;
     }
     return result;
+  });
+}
+
+// ── API-key requests (#1546) ────────────────────────────────────────────────
+// A request authenticated by an API key carries no session, so `resolveOrgId`
+// has nothing to read and `currentOrgId()` stays `undefined` — which is exactly
+// the state the middleware above treats as "no context, do not scope". That is
+// how `/api/v1/candidates` came to read every organisation's mentees while
+// looking perfectly ordinary: nothing was missing from the query, the tenant
+// context simply never existed.
+//
+// These three helpers make that absence loud. They are deliberately INDEPENDENT
+// of `MT_ENFORCE_ISOLATION`: the flag being off is precisely when a missing
+// tenant context is silent, so the guard must not be off with it.
+const apiKeyRequestStorage = new AsyncLocalStorage<{ orgId: string | null }>();
+
+// Mark the current async context as "serving an API-key-authenticated request,
+// org not yet resolved". `withApiKey()` (src/lib/apiKey.ts) enters this BEFORE
+// looking the key up, so everything the request does afterwards is inside it.
+export function runAsApiKeyRequest<T>(fn: () => Promise<T>): Promise<T> {
+  ensureApiKeyOrgGuard();
+  return apiKeyRequestStorage.run({ orgId: null }, fn);
+}
+
+// Bind the key's organisation for the rest of the request: the marker records
+// it (so the dev guard below stops firing) and `runWithOrg` gives the Prisma
+// middleware the same tenant context a session-authenticated route has.
+export function runWithApiKeyOrg<T>(orgId: string, fn: () => T): T {
+  const store = apiKeyRequestStorage.getStore();
+  if (!store) assertApiKeyRequestContext('runWithApiKeyOrg');
+  else store.orgId = orgId;
+  return runWithOrg(orgId, fn);
+}
+
+// Loud in development, logged in production: authenticating by API key outside
+// `withApiKey()` means whatever the handler reads next is unscoped.
+export function assertApiKeyRequestContext(caller: string): void {
+  if (apiKeyRequestStorage.getStore()) return;
+  const message =
+    `${caller} ran outside runAsApiKeyRequest(): an API-key request must establish a tenant ` +
+    'context before it reads anything. Route it through withApiKey() in src/lib/apiKey.ts (#1546).';
+  if (process.env.NODE_ENV === 'production') {
+    console.error(message);
+    return;
+  }
+  throw new Error(message);
+}
+
+// The runtime half of the guard: while an API-key request has no organisation
+// bound, a query on a tenant-anchored model would read every tenant's rows. In
+// development that throws instead. `ApiKey` itself is exempt — the key lookup
+// and its `lastUsedAt` stamp are what resolve the org in the first place.
+function ensureApiKeyOrgGuard(): void {
+  if (process.env.NODE_ENV === 'production') return;
+  if (globalForPrisma.apiKeyOrgGuardInstalled) return;
+  globalForPrisma.apiKeyOrgGuardInstalled = true;
+
+  prisma.$use(async (params, next) => {
+    const store = apiKeyRequestStorage.getStore();
+    if (store && !store.orgId && params.model && params.model !== 'ApiKey' && TENANT_MODELS.has(params.model)) {
+      throw new Error(
+        `prisma.${params.model}.${params.action}() ran in an API-key request with no organisation ` +
+          'bound — it would read every tenant. Run the handler inside runWithApiKeyOrg() (#1546).',
+      );
+    }
+    return next(params);
   });
 }
 
