@@ -6,7 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { computeStageAging } from '@/lib/stageAging';
-import { daysInStage } from '@/lib/stageClock';
+import { daysInStage, isStageOverdue } from '@/lib/stageClock';
 
 // GET — hiring-funnel aging & SLA.
 // - stageAging: average/median time actually SPENT in each stage, computed from
@@ -65,11 +65,10 @@ export async function GET(request: Request) {
     },
   });
 
-  const negativeKeys = new Set(
-    (await resolvePipelineStages((session.user as { orgId?: string | null }).orgId ?? null))
-      .filter((s) => s.isOffPath)
-      .map((s) => s.key)
-  );
+  // The querying admin's own pipeline: which stages are off-path (for
+  // dropReasons) and which have stopped the clock altogether (for `overdue`).
+  const stages = await resolvePipelineStages((session.user as { orgId?: string | null }).orgId ?? null);
+  const negativeKeys = new Set(stages.filter((s) => s.isOffPath).map((s) => s.key));
   const dropCounts = new Map<string, Map<string, number>>();
   for (const r of relations) {
     for (const c of r.statusChanges) {
@@ -124,7 +123,16 @@ export async function GET(request: Request) {
       // Shared clock (src/lib/stageClock.ts) — same number the mentor board
       // and the mentor analytics export show for the same relation.
       daysInStage: daysInStage(r, now),
-      overdue: !!r.stageDeadline && r.stageDeadline.getTime() < now,
+      // Same shared rule the boards apply (src/lib/stageClock.ts): a terminal
+      // or off-path stage has stopped its clock, so a stale deadline on a hired
+      // or dropped candidate is not a breach. Reading the raw
+      // `stageDeadline < now` here is what made this report and the board
+      // disagree about the same relation.
+      overdue: isStageOverdue(
+        { stageDeadline: r.stageDeadline, pipelineStatus: r.pipelineStatus },
+        stages,
+        now
+      ),
     };
   });
 

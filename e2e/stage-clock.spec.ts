@@ -52,8 +52,8 @@ test('stage clock: mentor sees days-in-stage and an overdue state, the mentee se
     const row = rows.find((r) => r.id === rel.id);
     expect(row?.daysInStage).toBe(12);
 
-    // Board card: 12 days, and no alarm yet — no deadline is configured and 12
-    // is well under the fallback attention threshold.
+    // Board card: 12 days, and no alarm — nothing is overdue until the org's
+    // own stage deadline has passed. Elapsed days alone never raise a state.
     await page.goto('/mentor/board');
     const chip = page.getByTestId(`stage-clock-${rel.id}`);
     await expect(chip).toBeVisible({ timeout: 15_000 });
@@ -69,14 +69,35 @@ test('stage clock: mentor sees days-in-stage and an overdue state, the mentee se
     await expect(chip).toHaveAttribute('data-stage-clock-tone', 'overdue', { timeout: 15_000 });
     await expect(chip).toContainText('12');
 
-    // A terminal stage never reads as overdue, however stale the deadline is.
-    await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { pipelineStatus: 'EMPLOYED_700' } });
-    await page.reload();
-    await expect(chip).toHaveAttribute('data-stage-clock-tone', 'normal', { timeout: 15_000 });
+    // A stage whose clock has stopped never reads as overdue, however stale the
+    // deadline is. Both keys are checked on purpose: EMPLOYED_700 is flagged
+    // terminal in the stage set, HIRED_660 is NOT — it is stopped by the
+    // explicit carve-out the candidate-detail chip has always applied, and a
+    // test that only exercised the flagged one could not see that carve-out
+    // silently doing nothing.
+    for (const stopped of ['HIRED_660', 'EMPLOYED_700']) {
+      await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { pipelineStatus: stopped } });
+      await page.reload();
+      await expect(chip).toHaveAttribute('data-stage-clock-tone', 'normal', { timeout: 15_000 });
+    }
     await prisma.mentorshipRelation.update({
       where: { id: rel.id },
       data: { pipelineStatus: 'INTERVIEW_PENDING_250' },
     });
+
+    // Nor does somebody in the re-engagement pool (#834): an agreed "we'll
+    // write in September" is not a queue the mentor is late on, and the admin
+    // aging report drops those people from its breach list for the same reason.
+    await prisma.user.update({
+      where: { id: mentee.id },
+      data: { reEngageAt: new Date(Date.now() + 90 * DAY) },
+    });
+    await page.reload();
+    await expect(chip).toHaveAttribute('data-stage-clock-tone', 'normal', { timeout: 15_000 });
+    await expect(chip).toContainText('12');
+    await prisma.user.update({ where: { id: mentee.id }, data: { reEngageAt: null } });
+    await page.reload();
+    await expect(chip).toHaveAttribute('data-stage-clock-tone', 'overdue', { timeout: 15_000 });
 
     // Mentee side: the same clock, deliberately with no breach state — the
     // deadline is still three days in the past at this point.

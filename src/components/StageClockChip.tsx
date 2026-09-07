@@ -5,8 +5,8 @@
 // "How long has this person been stuck here" is the most useful number on a
 // pipeline board and it was on none of the mentor's screens — only in the
 // ADMIN-only aging report. This chip is that number, in the tone of a queue
-// that is aging: neutral by default, amber when nothing has moved for a long
-// time, red once the organisation's own stage deadline has passed.
+// that is aging: neutral by default, red once the organisation's own stage
+// deadline has passed.
 //
 // The mentee sees the same clock in the portal WITHOUT any of that — see
 // JourneyTracker. Do not reuse this component there.
@@ -22,7 +22,6 @@ import { stageClockTone, type StageClockTone } from '@/lib/stageClock';
 // no per-element dark: utility is needed here.
 const TONE_CLASS: Record<StageClockTone, string> = {
   normal: 'text-gray-500 bg-gray-50 border-gray-200',
-  attention: 'text-amber-700 bg-amber-50 border-amber-200',
   overdue: 'text-red-700 bg-red-50 border-red-200',
 };
 
@@ -31,6 +30,7 @@ export function StageClockChip({
   stageDeadline,
   pipelineStatus,
   relationStatus,
+  paused,
   testId,
   className = '',
 }: {
@@ -44,6 +44,14 @@ export function StageClockChip({
    * the aging report applies by only measuring ACTIVE relations.
    */
   relationStatus?: string | null;
+  /**
+   * The mentee is in the re-engagement pool (#834) — "we'll write in
+   * September". Served by the API, never derived here: the pool date lives on
+   * the User. A paused clock still shows the days, it just never turns red, so
+   * the mentor is not chased about somebody they were told to leave alone —
+   * the same exclusion the admin aging report applies to its breach list.
+   */
+  paused?: boolean;
   testId?: string;
   className?: string;
 }) {
@@ -56,17 +64,15 @@ export function StageClockChip({
   if (daysInStage == null) return null;
   if (relationStatus && relationStatus !== 'ACTIVE') return null;
 
-  const tone = stageClockTone({ daysInStage, stageDeadline, pipelineStatus }, stages);
+  const tone = stageClockTone({ stageDeadline, pipelineStatus, paused }, stages);
   const days = String(daysInStage);
   const text = daysInStage === 0 ? t.stageClock.chipToday : t.stageClock.chip.replace('{n}', days);
   const title =
     tone === 'overdue' && stageDeadline
       ? t.stageClock.chipTitleOverdue.replace('{n}', days).replace('{date}', formatDate(stageDeadline, locale))
-      : tone === 'attention'
-        ? t.stageClock.chipTitleAttention.replace('{n}', days)
-        : daysInStage === 0
-          ? t.stageClock.chipTitleToday
-          : t.stageClock.chipTitle.replace('{n}', days);
+      : daysInStage === 0
+        ? t.stageClock.chipTitleToday
+        : t.stageClock.chipTitle.replace('{n}', days);
 
   const Icon = tone === 'overdue' ? AlertTriangle : Clock;
 

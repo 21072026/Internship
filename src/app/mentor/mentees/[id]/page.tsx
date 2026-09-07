@@ -58,6 +58,9 @@ interface RelationDetail {
   // route already returns the full audit trail, so the shared helper can read
   // the same "since the last recorded move, else since the relation started".
   stageDeadline: string | null;
+  // The mentee is in the re-engagement pool (#834) — the clock shows, but it
+  // can never read as a breach. Derived server-side; see the route.
+  stageClockPaused?: boolean;
   completedAt: string | null;
   mentor: { fullName: string };
   mentee: {
@@ -246,6 +249,7 @@ export default function MenteeDetailPage() {
                 stageDeadline={relation.stageDeadline}
                 pipelineStatus={relation.pipelineStatus}
                 relationStatus={relation.status}
+                paused={relation.stageClockPaused}
               />
             </div>
             <div className="w-full">

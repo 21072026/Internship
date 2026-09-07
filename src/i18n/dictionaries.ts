@@ -1355,7 +1355,6 @@ const en = {
     chipToday: 'today',
     chipTitle: 'In this stage for {n} days',
     chipTitleToday: 'Moved into this stage today',
-    chipTitleAttention: 'In this stage for {n} days — nothing has moved here in a while',
     chipTitleOverdue: 'In this stage for {n} days — past the stage deadline ({date})',
     mentee: {
       title: 'Where you are now',
@@ -5908,7 +5907,6 @@ const tr: Dict = {
     chipToday: 'bugün',
     chipTitle: 'Bu aşamada {n} gündür',
     chipTitleToday: 'Bu aşamaya bugün geçti',
-    chipTitleAttention: 'Bu aşamada {n} gündür — bir süredir burada hareket yok',
     chipTitleOverdue: 'Bu aşamada {n} gündür — aşama son tarihi geçti ({date})',
     mentee: {
       title: 'Şu an neredesin',
@@ -10412,7 +10410,6 @@ const de: Dict = {
     chipToday: 'heute',
     chipTitle: 'Seit {n} Tagen in dieser Phase',
     chipTitleToday: 'Heute in diese Phase gewechselt',
-    chipTitleAttention: 'Seit {n} Tagen in dieser Phase — hier bewegt sich seit Längerem nichts',
     chipTitleOverdue: 'Seit {n} Tagen in dieser Phase — Frist der Phase überschritten ({date})',
     mentee: {
       title: 'Wo du gerade stehst',

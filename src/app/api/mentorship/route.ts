@@ -93,6 +93,9 @@ export async function GET(request: Request) {
           // Same idea for the clock they read (#1210): the scheduler previews
           // the picked time on every selected mentee's zone before inviting.
           timezone: true,
+          // Only to derive `stageClockPaused` below — destructured out before
+          // the response, so the pool date itself reaches no client (#1724).
+          reEngageAt: true,
         },
       },
       company: { select: { id: true, name: true, industry: true } },
@@ -108,11 +111,29 @@ export async function GET(request: Request) {
     // the board, the mentee list and the aging report cannot drift apart. The
     // audit row itself is dropped again — the clients only need the number, and
     // the caller's own scope is not widened by either field.
-    const withStageClock = <T extends { startDate: Date; statusChanges: { createdAt: Date }[] }>(rows: T[]) =>
-      rows.map(({ statusChanges, ...rest }) => ({
-        ...rest,
-        daysInStage: daysInStage({ startDate: rest.startDate, statusChanges }),
-      }));
+    //
+    // `stageClockPaused` is the re-engagement pool (#834) reaching the chip: a
+    // mentee with an agreed "we'll write in September" date is not a queue
+    // anybody is late on, which is why the admin aging report already drops
+    // them from its breach list. The pool date is read here and thrown away —
+    // only the boolean ships, and only to the two roles that can already list
+    // the pool through GET /api/re-engagement, so COMPANY and SOURCE callers
+    // see exactly the payload they saw before.
+    const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
+    const withStageClock = <
+      T extends { startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
+    >(
+      rows: T[]
+    ) =>
+      rows.map(({ statusChanges, mentee, ...rest }) => {
+        const { reEngageAt, ...menteeRest } = mentee;
+        return {
+          ...rest,
+          mentee: menteeRest,
+          daysInStage: daysInStage({ startDate: rest.startDate, statusChanges }),
+          ...(seesPool ? { stageClockPaused: reEngageAt != null } : {}),
+        };
+      });
 
     if (!pageParam) {
       const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });

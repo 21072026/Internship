@@ -23,9 +23,10 @@ interface Relation {
   id: string;
   pipelineStatus: string;
   stageDeadline?: string | null;
-  // Served by GET /api/mentorship since #1724 — the same number the mentor
-  // board's stage clock shows, so the two screens cannot disagree.
-  daysInStage?: number | null;
+  // Served by GET /api/mentorship since #1724: the mentee sits in the
+  // re-engagement pool, so this card can never read as a breach — the same
+  // exclusion the admin aging report applies to its own overdue list.
+  stageClockPaused?: boolean;
   mentee: { id: string; fullName: string; university?: string };
   mentor: { id: string; fullName: string };
   _count: { interactions: number };
@@ -172,7 +173,7 @@ export default function AdminBoardPage() {
     // queue anybody is late on, which is what the candidate-detail chip has
     // always done and what this card used to miss.
     const overdue = isStageOverdue(
-      { daysInStage: r.daysInStage ?? 0, stageDeadline: r.stageDeadline, pipelineStatus: r.pipelineStatus },
+      { stageDeadline: r.stageDeadline, pipelineStatus: r.pipelineStatus, paused: r.stageClockPaused },
       stages,
       now
     );

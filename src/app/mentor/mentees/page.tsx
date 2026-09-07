@@ -22,6 +22,7 @@ interface MentorshipRelation {
   pipelineStatus: string;
   stageDeadline: string | null;
   daysInStage?: number | null;
+  stageClockPaused?: boolean;
   // Stamped by the daily sweep (#1508) when the mentee is still parked at first
   // contact, was messaged and never answered. Null for everybody else.
   dormantSince: string | null;
@@ -129,6 +130,7 @@ export default function MenteesPage() {
                     stageDeadline={rel.stageDeadline}
                     pipelineStatus={rel.pipelineStatus}
                     relationStatus={rel.status}
+                    paused={rel.stageClockPaused}
                   />
                   {rel.dormantSince && (
                     <Badge variant="default" title={t.mentor.dormantTitle} data-testid={`dormant-badge-${rel.id}`}>

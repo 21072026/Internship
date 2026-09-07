@@ -32,6 +32,9 @@ interface Relation {
   // days-in-stage number the aging report and the analytics export also use.
   stageDeadline?: string | null;
   daysInStage?: number | null;
+  // The mentee is in the re-engagement pool (#834): an agreed "we'll write in
+  // September", so the clock shows but never turns red.
+  stageClockPaused?: boolean;
   mentee: Mentee;
   _count: { interactions: number };
 }
@@ -146,6 +149,7 @@ export default function MentorBoardPage() {
           stageDeadline={r.stageDeadline}
           pipelineStatus={r.pipelineStatus}
           relationStatus={r.status}
+          paused={r.stageClockPaused}
         />
       </div>
       {r.mentee.university && (

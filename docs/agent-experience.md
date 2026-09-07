@@ -5892,6 +5892,31 @@ olduğu için karanlık modda koyu-üstüne-koyu kalıyordu. Yeni bir çip yazar
 gözle kontrol et: `-700/-800/-900/-500` aynı elemanda kapsanmış, `-600` kapsanmamıştı.
 
 **İki izleyicili bir özellikte dil, stil değil kuraldır.** Aynı sayı mentor'a "kuyruk
-yaşlanıyor" (kehribar/kırmızı), mentee'ye "şu an buradasın, sırada şu var" olarak
-gösteriliyor; mentee tarafında geçmiş bir son tarih **hiç yazılmıyor**. Bunu bir
+yaşlanıyor" (son tarih geçtiyse kırmızı), mentee'ye "şu an buradasın, sırada şu var"
+olarak gösteriliyor; mentee tarafında geçmiş bir son tarih **hiç yazılmıyor**. Bunu bir
 prop'un JSDoc'una yazmak, sonraki ajanın çipi "yeniden kullanmasını" engelleyen tek şey.
+
+### Aynı PR'ın kod incelemesinden çıkanlar
+
+**Bir "fallback" kümesine koyduğun istisna, önündeki arama her zaman kazanıyorsa ölü
+koddur.** `stageClockStopped()` önce çözümlenmiş aşamalara bakıp bulursa dönüyordu;
+istisna (`HIRED_660`) ise yalnızca **bulunamazsa** okunan kümedeydi. Bütün UI çağrıları
+`useResolvedStages()` veriyor ve o hook hiçbir zaman boş liste döndürmüyor — yani istisna
+hiç çalışmadı, işe alınmış aday kırmızı "süre doldu" rozetiyle göründü. Testi de yalnızca
+`EMPLOYED_700` ile yazmıştım; **bayrağı gerçekten set edilen** örnek, carve-out'un sessizce
+çalışmadığını gösteremez. Kural: istisnayı, onu geçersiz kılabilecek aramanın **önüne** koy
+ve testte tam olarak "bayraksız ama yine de durmuş" olan anahtarı seç.
+
+**Varsayılan kurulumda hangi alanların boş olduğunu hesaba katmadan eşik koyma.** Stage
+SLA'ları opt-in olduğu için varsayılan bir kurulumda `stageDeadline` neredeyse her ilişkide
+`null`; "30 gündür kimse dokunmadı → kehribar" kuralı bu yüzden 4 aylık stajın tamamını
+kehribara boyuyordu. Bir sayaç için "güvenli yön" diye yazdığın taraf, alanın varsayılanı
+boşsa **çoğunluk** demektir. Tek düz eşik yerine ya istenen iki durumu gönder, ya da
+`computeStageAging`'in ürettiği gözlemlenmiş medyan gibi gerçek bir kaynağa bağla.
+
+**Bir raporun bilerek dışladığı kişileri yeni ekran içeri almamalı.** Yaşlanma raporu
+yeniden temas havuzundaki (#834) adayları `overdue` listesinden çıkarıyor ("eylülde
+yazacağız" sözü verilmiş kişi geç kalmış sayılmaz). Yeni çip bunu bilmediği için mentor'a
+tam da kovalamaması söylenen kişiyi kırmızı gösteriyordu. Aynı kuralı paylaşmanın bedeli
+küçük: tarihi sunucuda oku, yanıta **yalnızca boolean** koy ve onu da havuzu zaten
+görebilen rollere ver — payload genişlemiyor.
