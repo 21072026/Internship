@@ -108,6 +108,14 @@ jobs:
       # keeps honest (#1730).
       - name: money and percent formatting in all three locales (#1730)
         run: npm run test:money
+      # The billable unit goes on an invoice, and none of the ways of getting it
+      # wrong are visible in a browser: a month boundary cannot be crossed in an
+      # e2e run, a dormant pair that is still counted looks like every other
+      # row, and "a future PAUSED state is excluded automatically" has no screen
+      # at all. These assertions are the published definition read back one
+      # clause at a time (#1750).
+      - name: the billable pair means exactly one thing (#1750)
+        run: npm run test:metering
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # An API-key request has no session, so nothing resolves a tenant for it

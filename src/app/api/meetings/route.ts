@@ -11,6 +11,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { generateMeetingLink } from '@/lib/meetingContext';
+import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
 
@@ -154,7 +155,7 @@ export async function POST(request: Request) {
     // same room, so the video link is generated once (Jitsi, no account needed)
     // when the organizer didn't paste one. The per-person RSVP token stays
     // unique — each participant confirms attendance individually.
-    const link = meetLink || generateMeetingLink({ inviteeCount: relations.length });
+    const link = meetLink || generateMeetingLink({ inviteeCount: relations.length, orgId: session.user.orgId });
 
     // Guests are resolved once for the whole batch: they are invited to the
     // shared room, not to each relation. Anyone with an account is dropped here
@@ -253,6 +254,11 @@ export async function POST(request: Request) {
         organizerName: session.user.name ?? null,
       });
     }
+
+    // Metering signal (#1750) — volume, not the pair count. One increment per
+    // Meeting row written, because a bulk schedule is activity on each of those
+    // relations. See the note in /api/interactions.
+    if (created > 0) recordPairActivity(session.user.orgId, created);
 
     if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created });
     return NextResponse.json({ created, guestsInvited: invitedGuests.length, guests: invitedGuests, rejectedAsMembers });

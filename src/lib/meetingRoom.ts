@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
 import { jaasConfig, jaasRoomUrl } from '@/lib/jaas';
+import { recordVideoUsage } from '@/lib/metering';
 
 // Where a meeting's video room comes from. Server-only (node:crypto); the
 // client-side link *checks* live in @/lib/meetingLink so components can import
@@ -33,8 +34,20 @@ export function generateMeetingRoomName(): string {
 // unable to create a meeting — the link degrades to one that anybody can still
 // open in a tab. The runtime counterpart (an existing 8x8.vc room failing) is
 // handled client-side via freeMeetingFallbackLink in @/lib/meetingLink.
-export function generateMeetingLink(opts: { inviteeCount: number | null }): string {
+//
+// `orgId` is metering only (#1750) and changes nothing about the link: this is
+// the one chokepoint every room creation passes through, so it is the only
+// place where "how much video did this tenant use?" can be answered without
+// guessing. Optional, because a caller with no resolvable tenant still gets a
+// room — an unattributed room is simply not counted, never refused.
+export function generateMeetingLink(opts: { inviteeCount: number | null; orgId?: string | null }): string {
   const room = generateMeetingRoomName();
   const config = opts.inviteeCount === 1 ? jaasConfig() : null;
+  // REPORTED, NEVER GATED. JaaS MAU is a metered allowance and every
+  // participant of a JaaS room counts against it, so the routing above is a
+  // guess at protecting it; this makes the exposure a number. Fire-and-forget
+  // and swallowed inside — a meter must not be able to fail a call, and this
+  // function stays synchronous for its four call sites.
+  recordVideoUsage({ orgId: opts.orgId ?? null, inviteeCount: opts.inviteeCount });
   return config ? jaasRoomUrl(config, room) : `https://meet.jit.si/${room}`;
 }

@@ -133,6 +133,7 @@ model Organization {
   placements           Placement[]
   subscription         Subscription?
   orgEntitlements      OrgEntitlement[]
+  usageRollups         UsageRollup[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -3476,4 +3477,47 @@ model JobLease {
   /// Cheap sweep of leases nobody renewed (an environment that shrank back to
   /// one replica, a renamed container).
   @@index([expiresAt])
+}
+
+// ── Usage ledger ─────────────────────────────────────────────────────────────
+// One row per (org, metric, period): what a tenant used in a calendar month
+// (#1750). The billing history, and the only table an invoice or a usage screen
+// reads — a request path must never scan seven domain tables to answer "how
+// many active pairs?".
+//
+// TWO SHAPES OF NUMBER live in the same table, and the difference is what keeps
+// a re-run honest (src/lib/meteringRules.ts owns the catalogue):
+//   · COMPUTED (ACTIVE_MATCHED_PAIRS, ADMIN_SEATS) — recomputed from the domain
+//     tables by the nightly rollup and written ABSOLUTELY. Re-running a closed
+//     period writes the same value again, so the job is idempotent, and the
+//     unique triple below guarantees exactly one row per (org, metric, period).
+//   · COUNTER (VIDEO_ROOM, VIDEO_PARTICIPANT, ACTIVE_PAIR_ACTIVITY) —
+//     incremented at the moment the thing happens, because a room created last
+//     Tuesday cannot be recounted afterwards. The rollup never touches these.
+//
+// `metric` is a String and not an enum on purpose: metrics are added far more
+// often than a column type change is welcome on a `db push` project, and the
+// authoritative list is a TypeScript union that both the writer and the reader
+// import. An unknown string here is inert — a row nothing reads.
+model UsageRollup {
+  id     String @id @default(cuid())
+  orgId  String
+  metric String @db.VarChar(64)
+  // 'YYYY-MM', a UTC calendar month (src/lib/meteringRules.ts periodRange()).
+  period String @db.VarChar(7)
+  value  Int    @default(0)
+
+  // When the number was last written. For a COMPUTED metric that is when the
+  // rollup last recomputed it — an invoice dispute starts with "as of when?".
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // The idempotency key, and why the nightly job can be re-run for a closed
+  // period without producing a second row.
+  @@unique([orgId, metric, period])
+  @@index([orgId, period])
+  @@index([metric, period])
 }

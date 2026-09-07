@@ -22,6 +22,7 @@ import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newslett
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runRetentionPrune } from '@/lib/retentionEntries';
+import { runUsageRollup } from '@/lib/jobs/usageRollup';
 
 export async function GET(request: Request) {
   try {
@@ -82,6 +83,14 @@ export async function GET(request: Request) {
     // asked for.
     if (job === 'retention') {
       return NextResponse.json({ message: 'Retention prune ran', retentionPrune: await runRetentionPrune() });
+    }
+    // Usage rollup (#1750) — named only, and for the opposite reason to the two
+    // above: it is the one job here that is *completely* safe to click twice
+    // (every metric it writes is recomputed and set absolutely), but it is also
+    // the one nothing else in the batch needs. An admin runs it when they want
+    // this month's billing numbers refreshed now rather than at 02:40.
+    if (job === 'usage-rollup') {
+      return NextResponse.json({ message: 'Usage rollup ran', usageRollup: await runUsageRollup() });
     }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();
