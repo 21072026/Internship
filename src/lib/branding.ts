@@ -3,10 +3,15 @@
 //
 // A tenant (Organization) may override the product's name, logo, accent color
 // and support email. When a field is null/blank the app falls back to its own
-// defaults below. This module only *resolves* branding; applying it to the live
-// chrome per request depends on tenant resolution (the #543 enforcement slice),
-// so in this phase branding is managed and resolvable but not yet applied to the
-// single-tenant UI.
+// defaults below.
+//
+// This module only *resolves* branding — the applying is done by its callers,
+// each of which passes the org of whoever is being served: `BrandWordmark` for
+// the five role shells, `emailBrand()` for the transactional mail, the
+// newsletter dispatcher per recipient, and the certificate PDF. Which surfaces
+// are branded today and which are deliberately not (the in-app accent palette,
+// pre-login pages) is listed in docs/white-label.md — that list, not this
+// comment, is the one to keep current.
 
 export interface Branding {
   brandName: string | null;

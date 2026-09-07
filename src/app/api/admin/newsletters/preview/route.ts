@@ -58,6 +58,9 @@ export async function POST(request: Request) {
     // file next to the preview.
     imageSrc: parsed.data.newsletterId ? newsletterImageUrl(parsed.data.newsletterId) : null,
     userId: null,
+    // The previewing admin's own tenant, so the pane shows the brand this
+    // admin's members will actually receive rather than the product default.
+    orgId: session.user.orgId ?? null,
   });
 
   return NextResponse.json({ subject, html, locale });

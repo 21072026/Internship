@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { getOrgBranding } from '@/lib/orgBranding';
+import type { ResolvedBranding } from '@/lib/branding';
 import { getSetting } from '@/lib/settings';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, type Locale } from '@/i18n/config';
@@ -99,9 +100,43 @@ interface Recipient {
   id: string;
   email: string;
   role: string;
+  /** Which tenant's brand this person's copy carries. Null → product default. */
+  orgId: string | null;
   preferredLanguage: string | null;
   emailNotifications: boolean | null;
   notificationPrefs: Prisma.JsonValue;
+}
+
+/**
+ * Resolved branding for one dispatch run, memoised by `orgId` (`''` = no org).
+ *
+ * The brand has to be resolved per RECIPIENT (#1667): one issue fans out across
+ * people who may belong to different organizations, so a single lookup hoisted
+ * out of the send loop would stamp whoever happened to be first onto everybody
+ * else's copy. Resolving inside the loop is correct but would read a row per
+ * recipient; this keeps the correctness and pays one query per *tenant* — the
+ * 400 members of one org cost one lookup.
+ *
+ * It caches the promise rather than the value, so the recipients the pool has in
+ * flight at once (SEND_CONCURRENCY) share a single query instead of racing to
+ * issue the same one.
+ *
+ * Created per run and never at module scope: branding edited between two issues
+ * must show up in the second one.
+ */
+export type NewsletterBrandCache = Map<string, Promise<ResolvedBranding>>;
+
+export function newNewsletterBrandCache(): NewsletterBrandCache {
+  return new Map();
+}
+
+function brandFor(orgId: string | null | undefined, cache?: NewsletterBrandCache): Promise<ResolvedBranding> {
+  const key = orgId ?? '';
+  const hit = cache?.get(key);
+  if (hit) return hit;
+  const pending = getOrgBranding(orgId ?? null);
+  cache?.set(key, pending);
+  return pending;
 }
 
 /**
@@ -119,11 +154,19 @@ export async function renderNewsletterFor(options: {
   imageSrc?: string | null;
   /** Omitted for the preview: there is no subscription to cancel from there. */
   userId?: string | null;
+  /**
+   * The reader's tenant. Their organization's name, logo and accent brand this
+   * copy; null (no org, or a caller with no tenant context) keeps the product
+   * default, which is what a single-tenant install has always sent.
+   */
+  orgId?: string | null;
+  /** Per-run memo, so a fan-out over one tenant reads its branding once. */
+  brandCache?: NewsletterBrandCache;
 }): Promise<{ subject: string; html: string; locale: Locale }> {
-  const { variants, canonical, audience, role, preferredLanguage, imageSrc, userId } = options;
+  const { variants, canonical, audience, role, preferredLanguage, imageSrc, userId, orgId, brandCache } = options;
   const locale = resolveNewsletterLocale(variants, preferredLanguage);
   const content = resolveNewsletterContent(variants, canonical, preferredLanguage);
-  const brand = await getOrgBranding(null);
+  const brand = await brandFor(orgId, brandCache);
 
   return {
     subject: content.subject,
@@ -197,7 +240,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   const roles = audienceRoles(issue.audience as NewsletterAudience);
   const users = (await prisma.user.findMany({
     where: { isActive: true, role: { in: roles as ('MENTEE' | 'MENTOR')[] } },
-    select: { id: true, email: true, role: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
+    select: { id: true, email: true, role: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
   })) as Recipient[];
 
   // Resume safety: everyone this issue has already reached.
@@ -222,6 +265,8 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   // is the wrong trade.
   let skipped = 0;
   const recipients = users.filter((u) => u.email && !already.has(u.email));
+  // One memo for the whole fan-out; see NewsletterBrandCache.
+  const brandCache = newNewsletterBrandCache();
 
   await pooled(recipients, async (user) => {
     // The group check, not the bare legacy key. They agree today — 'newsletter'
@@ -244,6 +289,8 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       preferredLanguage: user.preferredLanguage,
       imageSrc: issue.image ? `cid:${IMAGE_CID}` : null,
       userId: user.id,
+      orgId: user.orgId,
+      brandCache,
     });
 
     let status: 'SENT' | 'FAILED' | 'SKIPPED' = 'SENT';
