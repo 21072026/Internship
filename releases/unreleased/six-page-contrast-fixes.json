@@ -1,0 +1,21 @@
+{
+  "bump": "patch",
+  "changelog": "- **White text on a mid-tone accent surface now clears WCAG AA everywhere** (#1299). The six selectors the issue named had all been fixed already (#1336/#1482, #2131), but the *pair* behind them had not: a solid `bg-<hue>-500`/`-600` carrying `text-white`. Tailwind's mid shades are picked to look good, not to clear 4.5:1 under white — amber-500 measures 2.15:1, green-500 2.28:1, amber-600 3.19:1, green-600 3.30:1, red-500 3.76:1 — and fourteen call sites had drifted onto them. All fourteen move one shade down to red-600 (4.83:1), amber-700 (5.02:1) or green-700 (5.02:1) — at least as readable as the app's own `bg-blue-600` primary button (5.17:1) — with each hover state stepped down beside it: the mentee portal's missing-documents CTA, the meeting-join button and pill, the RSVP accept button, the sign-in demo-login and contributor-terms and reconnect-calendar buttons, the admin nav's application and offer badges, the inbox and bell unread counts, and the journey tracker's completed-stage check mark (2.28:1, a WCAG 1.4.11 failure axe's text rule cannot see). `LanguageBadge`'s unset variant is fixed too — gray-400 on gray-100 at 4.39:1 in light and its `dark:!text-gray-500` pin at 3.04:1 in dark, under AA in *both* themes. Why the existing gate was green on all of it: the accessibility step in `e2e.yml` runs *after* the smoke step, so a job whose smoke step fails never reaches it. The pair is therefore now guarded statically by `npm run check:contrast` (`scripts/check-contrast.mjs`, in `ci.yml`) — no browser, no database, under a second, and unskippable by an earlier failing step — with the guard's own too-narrow/too-broad failure modes pinned by `scripts/test/contrast-guard.test.mjs`, and the rendered result in both themes asserted by `e2e/contrast-1299.spec.ts`.",
+  "notes": {
+    "en": [
+      "Green, amber and red buttons and unread-count badges are a shade darker, so their white labels now meet the contrast level WCAG AA requires — in bright sunlight too.",
+      "The language tag on candidate cards was too faint to read in either light or dark mode and is now legible in both.",
+      "The completed-stage check mark in your progress tracker is easier to make out."
+    ],
+    "tr": [
+      "Yeşil, turuncu ve kırmızı düğmeler ile okunmamış sayaç rozetleri bir ton koyulaştı; üzerlerindeki beyaz yazılar artık WCAG AA'nın istediği kontrastı sağlıyor — güneş altında da.",
+      "Aday kartlarındaki dil etiketi hem açık hem koyu temada okunamayacak kadar soluktu; artık ikisinde de okunuyor.",
+      "İlerleme takipçinizde tamamlanan aşamayı gösteren onay işareti daha belirgin."
+    ],
+    "de": [
+      "Grüne, orangefarbene und rote Schaltflächen sowie die Zähler für Ungelesenes sind eine Stufe dunkler — ihre weiße Schrift erreicht damit den von WCAG AA geforderten Kontrast, auch bei hellem Sonnenlicht.",
+      "Die Sprachmarkierung auf Kandidatenkarten war im hellen wie im dunklen Modus zu blass und ist jetzt in beiden lesbar.",
+      "Das Häkchen für abgeschlossene Phasen in der Fortschrittsanzeige ist deutlicher zu erkennen."
+    ]
+  }
+}

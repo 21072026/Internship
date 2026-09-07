@@ -223,7 +223,7 @@ export function ConnectedCalendarsCard() {
                         <a
                           href={row.connectPath}
                           data-testid={`${row.provider}-calendar-reconnect`}
-                          className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 dark:!text-white"
+                          className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800 dark:!text-white"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                           {c.reconnect}

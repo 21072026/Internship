@@ -151,6 +151,18 @@ jobs:
       # the next call site from re-introducing it.
       - name: dates are formatted on the app locale, not the browser's (#1422)
         run: npm run check:locale-dates
+      # Tailwind's mid shades are picked to look good, not to clear 4.5:1 under
+      # white: amber-500 is 2.15:1 and green-600 3.30:1. Fourteen buttons and
+      # unread badges had drifted onto them without the e2e accessibility gate
+      # ever going red, because that gate runs AFTER the smoke step — on a job
+      # whose smoke step fails it never runs at all. This is the cheap static
+      # half, deliberately outside Playwright so nothing upstream can skip it
+      # (#1299). Its own too-narrow/too-broad assertions run under
+      # `npm run test:unit` (scripts/test/contrast-guard.test.mjs).
+      - name: white text sits on a surface dark enough for it (#1299)
+        run: npm run check:contrast
+      - name: the contrast guard still catches what it is for (#1299)
+        run: npm run test:contrast-guard
       # A renamed route would silently drop out of the demo's write blocklist,
       # re-enabling password changes and uploads on the public demo (#966).
       - name: demo write blocklist still matches the routes (#966)

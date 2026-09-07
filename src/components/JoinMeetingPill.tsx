@@ -22,7 +22,7 @@ export function JoinMeetingPill() {
       title={`${meeting.title} — ${t.upcomingMeeting.inProgress}`}
       aria-label={t.upcomingMeeting.joinAria}
       data-testid="join-meeting-pill"
-      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-green-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-green-800"
     >
       {/* The mobile bar has room for three icon buttons and a wordmark, so the
           label is desktop-only there (#936). */}

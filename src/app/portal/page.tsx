@@ -117,7 +117,7 @@ export default async function PortalDashboard({
           <CardHeader><div className="flex items-center gap-2"><FileWarning className="h-5 w-5 text-amber-600 dark:text-amber-400" /><CardTitle>{t.documentRequirements.portalTitle}</CardTitle></div></CardHeader>
           <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">{t.documentRequirements.portalHint}</p>
           <ul className="mb-4 list-disc pl-5 text-sm text-gray-800 dark:text-gray-200">{missingDocuments.map((requirement) => <li key={requirement.id}>{requirement.label}</li>)}</ul>
-          <Link href="/portal/profile#documents" className="inline-flex items-center rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700">{t.documentRequirements.uploadCta}</Link>
+          <Link href="/portal/profile#documents" className="inline-flex items-center rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium text-white hover:bg-amber-800">{t.documentRequirements.uploadCta}</Link>
         </Card>
       )}
 

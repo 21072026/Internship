@@ -36,7 +36,12 @@ export function LanguageBadge({
       className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
         chosen
           ? 'bg-blue-50 text-blue-700 dark:!bg-blue-900/40 dark:!text-blue-200'
-          : 'bg-gray-100 text-gray-400 dark:!bg-gray-800 dark:!text-gray-500'
+          // gray-400 on gray-100 measured 4.39:1 and its dark pin (gray-500 on
+          // gray-800) 3.04:1 — under AA in BOTH themes (#1299). gray-600 is
+          // 6.87:1 here, and dropping the dark pin lets globals.css's flat
+          // `html.dark .text-gray-600` → #9ca3af land on the pinned gray-800
+          // at 5.78:1. A `dark:!text-*` here would only re-break it.
+          : 'bg-gray-100 text-gray-600 dark:!bg-gray-800'
       } ${className}`}
     >
       {locale}

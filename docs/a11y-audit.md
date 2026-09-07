@@ -43,6 +43,81 @@ moderate/minor findings are listed here but never gate.
 
 <!-- MANUAL SECTION — hand-written, carried over verbatim on every regenerate. Keep this marker. -->
 
+## White text on an accent surface, and the limit of "the gate is green" (#1299)
+
+**This section is below the manual marker deliberately.** It is the only record
+of the pairs listed at the end of it, and everything *above* the marker is
+replaced wholesale by `renderReport()` on the next
+`A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts` — which is
+the very command this file tells the next person to run. A note about
+deliberately-deferred findings cannot live in the generated half.
+
+#1299 named six pages and six selectors from the original #862 scan.
+Re-measured on `main`: all six nodes were already fixed — `#mode-switch-label`
+is `text-gray-600` (7.56:1), the portal's yellow hint is `text-yellow-800` on
+`bg-yellow-50` (6.62:1), and the `text-gray-400` empty states are covered by
+#2131's token raise (4.83:1 on white). So nothing came *out* of the baseline: it
+was already `{}` on every key, and this report's counts are unchanged.
+
+What the re-measurement did find is that the same *rule* had returned to the
+same pages at new nodes, and that a green gate is not the same as a measured
+one:
+
+- `/portal` — the missing-documents CTA (`bg-amber-600`, 3.19:1) and the
+  journey tracker's completed-stage check mark (`bg-green-500`, 2.28:1, a 1.4.11
+  failure axe's *text* rule cannot see) are both behind fixtures the scan does
+  not create.
+- `/admin`, `/admin/candidates` — the admin nav's offer badge (`bg-amber-500`,
+  **2.15:1**) and application badge (`bg-red-500`, 3.76:1) need a pending
+  application or an outstanding offer to render; `LanguageBadge`'s unset variant
+  needs a candidate, and failed in *both* themes (4.39:1 light, 3.04:1 dark).
+- `/auth/signin`, `/rsvp/<token>`, `/messages` — the demo quick-login buttons,
+  the RSVP accept button and the composer's send affordance are all reachable
+  with no account, and all three carried the pair; none of them is in the
+  sixteen pages the scan walks.
+
+**The gate-skipping failure mode is the durable lesson.** The "Accessibility
+regression gate" step in `e2e.yml` runs unconditionally, but it runs *after* the
+smoke step — so on a job whose smoke step fails, the gate never runs at all and
+the PR's red tick says nothing about accessibility. A failed step earlier in
+that job silently disables this gate. That is why the cheap half of the rule was
+moved out of Playwright entirely (see below).
+
+Fifteen call sites of that one pair — solid `bg-<hue>-500`/`-600` under
+`text-white` — were moved one shade down (red-600 4.83:1, amber-700 5.02:1,
+green-700 5.02:1; the app's own `bg-blue-600` primary button is 5.17:1 and was
+always fine, which is where the threshold comes from).
+
+### What now guards it, and what each guard cannot see
+
+| Guard | Covers | Blind to |
+| --- | --- | --- |
+| `npm run check:contrast` (`scripts/check-contrast.mjs`, in `ci.yml`) | `text-white` over a solid `bg-*-N` in a className attribute or a class map, including a background in a ternary arm under an unconditional white label. No browser, no database, under a second — so no earlier failing step can skip it. | Translucent surfaces (`bg-red-500/40`), inherited and composited backgrounds, the dark remaps in `globals.css`, and any pair that is not white-on-accent. Also, by design, a white label that is itself conditional in one arm with the background in another — pairing those reports the ordinary toggle at a fictional 1.02:1, and a gate that cries wolf gets bypassed. |
+| `e2e/contrast-1299.spec.ts` | The rendered result in both themes for the public RSVP buttons (green-700, red-600), the bell's unread badge (red-600) and `LanguageBadge`'s unset variant — the last of which is the one fix here that is *not* a white pair and so has no static cover at all. | Anything needing a fixture it does not build. |
+| `scripts/test/contrast-guard.test.mjs` (`npm run test:unit`) | The guard's own two failure modes, pinned in both directions: too narrow (the split template-literal shape, which the first version missed on a site it had just fixed) and too broad (the toggle false positive). | — |
+
+A per-file revert sweep over this change puts the static guard at 12 of the 13
+touched files; the miss is `LanguageBadge`, which is a gray-on-gray pair the
+guard does not model and the e2e spec asserts instead.
+
+### Deliberately not fixed here — recorded so the next audit need not re-derive them
+
+Both are a *different* pair on pages #1299 does not name, and folding them into
+`check:contrast` would have it fail on code this change does not touch:
+
+- **Mid-tone accent text on a light `bg-*-100` chip** — the icon containers on
+  `/` and `/features`, 2.86-4.24:1. Above the 3:1 that WCAG 1.4.11 asks of a
+  glyph, below the 4.5:1 that 1.4.3 asks if one ever carries text.
+- **`text-gray-500` on `bg-gray-100`** — 4.39:1, seven call sites across the
+  projects, messages and todo surfaces.
+- **`StatCard`'s value/label pairing** is a 1.4.11 item, not a text-contrast
+  one, and is untouched.
+- **Two white-on-accent glyphs survive on purpose**:
+  `src/app/mentor/feedback/page.tsx` lines 93 and 104 put white icons on
+  `bg-blue-500` (3.68:1) and `bg-purple-500` (3.96:1). Both are decorative
+  glyphs, so 1.4.11's 3:1 is the applicable threshold and both clear it.
+
+
 ## Manual assistive-technology review — board and calendar (#2047)
 
 An empty axe report is not an AA claim. Three WCAG categories are structurally
