@@ -26,6 +26,8 @@ import { ConnectedCalendarsCard } from '@/components/ConnectedCalendarsCard';
 import { useAnnounce } from '@/components/ui/LiveRegion';
 import type { TrustedDeviceView } from '@/lib/trustedDevice';
 import type { PushDeviceView } from '@/lib/pushDevices';
+import { IMPERSONATION_SESSION_MAX_MS, type ImpersonationSession } from '@/lib/impersonationHistory';
+import { interpolate } from '@/lib/notificationText';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -106,6 +108,15 @@ export function AccountSettings() {
   const [signOutBusy, setSignOutBusy] = useState(false);
   // "Remember me" devices (#1495). null = still loading; [] = none remembered.
   const [devices, setDevices] = useState<TrustedDeviceView[] | null>(null);
+  // "Who accessed my account" (#1587). null = still loading; [] = nobody ever
+  // did. `retentionDays` is null while the rows are kept forever — it decides
+  // which empty state is honest, so it is carried rather than assumed.
+  const [accessHistory, setAccessHistory] = useState<ImpersonationSession[] | null>(null);
+  const [accessRetentionDays, setAccessRetentionDays] = useState<number | null>(null);
+  // Total sessions on record. The list is capped at the newest 50; the card
+  // says so rather than quietly presenting a page as the whole history.
+  const [accessTotal, setAccessTotal] = useState(0);
+  const [accessHistoryFailed, setAccessHistoryFailed] = useState(false);
   const [deviceBusy, setDeviceBusy] = useState<string | null>(null);
   // Browsers holding a push subscription (#1716). null = nothing loaded yet.
   const [pushDevices, setPushDevices] = useState<PushDeviceView[] | null>(null);
@@ -209,6 +220,7 @@ export function AccountSettings() {
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
     void loadDevices();
     void loadPushDevices();
+    void loadAccessHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -549,6 +561,52 @@ export function AccountSettings() {
     }
   };
 
+  // Read-only, and no failure path that could be mistaken for "nobody entered
+  // your account": a request that does not come back says so explicitly.
+  const loadAccessHistory = async () => {
+    try {
+      const res = await fetch('/api/account/impersonations');
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const sessions: ImpersonationSession[] = Array.isArray(data?.sessions) ? data.sessions : [];
+      setAccessHistory(sessions);
+      setAccessTotal(typeof data?.total === 'number' ? data.total : sessions.length);
+      setAccessRetentionDays(typeof data?.retentionDays === 'number' ? data.retentionDays : null);
+    } catch {
+      setAccessHistoryFailed(true);
+      setAccessHistory([]);
+    }
+  };
+
+  // `roundUp` is for the sessions that were never closed: their duration is an
+  // upper bound, and "lasted at most less than a minute" is not a sentence.
+  const formatAccessDuration = (ms: number, roundUp = false) => {
+    const minutes = roundUp ? Math.max(1, Math.ceil(ms / 60000)) : Math.round(ms / 60000);
+    if (minutes < 1) return t.account.accessHistoryUnderMinute;
+    if (minutes < 60) return interpolate(t.account.accessHistoryMinutes, { count: String(minutes) });
+    return interpolate(t.account.accessHistoryHoursMinutes, {
+      hours: String(Math.floor(minutes / 60)),
+      minutes: String(minutes % 60),
+    });
+  };
+
+  // What the card is allowed to say about how a visit finished. Only `closed`
+  // has an exact duration; `autoExpired` states a fact (the cap has passed, so
+  // the JWT callback has certainly reverted it); `open` states the only thing
+  // that is knowable while the start is still inside the cap — that no end has
+  // been recorded — without claiming the admin is or is not still in there.
+  const accessOutcomeText = (a: ImpersonationSession) => {
+    if (a.outcome === 'closed') {
+      return interpolate(t.account.accessHistoryDuration, { duration: formatAccessDuration(a.durationMs) });
+    }
+    if (a.outcome === 'autoExpired') {
+      return interpolate(t.account.accessHistoryAutoEnded, { duration: formatAccessDuration(a.durationMs, true) });
+    }
+    return interpolate(t.account.accessHistoryOpen, {
+      minutes: String(Math.round(IMPERSONATION_SESSION_MAX_MS / 60000)),
+    });
+  };
+
   const flash = (m: string, isErr = false) => {
     setMsg(isErr ? '' : m);
     setErr(isErr ? m : '');
@@ -833,6 +891,68 @@ export function AccountSettings() {
         <Button variant="outline" loading={signOutBusy} onClick={signOutAll}>{t.account.signOutAll}</Button>
       </Card>
       )}
+
+      {/* "Who accessed my account" (#1587). Unlike the cards above this one is
+          NOT hidden during impersonation: it is read-only, it holds no
+          credential and no destructive action, and hiding the record of
+          impersonation from the very screen an impersonated account is looking
+          at would be the wrong way round. It is also available to every role —
+          transparency about who entered your account is not a paid feature. */}
+      <Card className="mt-6 max-w-4xl" data-testid="access-history-card">
+        <CardHeader><CardTitle>{t.account.accessHistorySection}</CardTitle></CardHeader>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 max-w-lg">{t.account.accessHistoryHint}</p>
+        {accessHistory === null ? (
+          <p className="text-sm text-gray-500">{t.common.loading}</p>
+        ) : accessHistoryFailed ? (
+          <p className="text-sm text-red-700 dark:text-red-300" data-testid="access-history-failed">{t.account.accessHistoryFailed}</p>
+        ) : accessHistory.length === 0 ? (
+          <p className="text-sm text-gray-500" data-testid="no-access-history">
+            {accessRetentionDays === null
+              ? t.account.accessHistoryEmpty
+              : interpolate(t.account.accessHistoryEmptyBounded, { days: String(accessRetentionDays) })}
+          </p>
+        ) : (
+          <>
+            <ul className="max-w-lg divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg">
+              {accessHistory.map((a) => (
+                <li key={a.id} data-testid={`access-history-entry-${a.id}`} className="px-3 py-2">
+                  <p className="text-sm text-gray-900 dark:text-gray-100">
+                    {a.adminName || t.account.accessHistoryAdminUnknown}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {formatInTimeZone(new Date(a.startedAt), timezone, undefined, language)} · {relativeTime(a.startedAt, locale)}
+                  </p>
+                  <p className="text-xs text-gray-500" data-testid={`access-history-outcome-${a.id}`}>
+                    {accessOutcomeText(a)}
+                  </p>
+                  <p className="text-xs text-gray-500" data-testid={`access-history-reason-${a.id}`}>
+                    {/* The reason is free text an admin typed into a prompt, so
+                        it must never reach String.replace as a replacement
+                        string: "Refund $& duplicate" would render the
+                        placeholder back at the reader. */}
+                    {a.reason
+                      ? interpolate(t.account.accessHistoryReason, { reason: a.reason })
+                      : t.account.accessHistoryNoReason}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            {accessTotal > accessHistory.length && (
+              <p className="text-xs text-gray-500 mt-2" data-testid="access-history-truncated">
+                {interpolate(t.account.accessHistoryTruncated, {
+                  shown: String(accessHistory.length),
+                  total: String(accessTotal),
+                })}
+              </p>
+            )}
+            {accessRetentionDays !== null && (
+              <p className="text-xs text-gray-500 mt-2">
+                {interpolate(t.account.accessHistoryBoundedNote, { days: String(accessRetentionDays) })}
+              </p>
+            )}
+          </>
+        )}
+      </Card>
 
       <Card className="mt-6 max-w-4xl" data-testid="meeting-notes-card">
         <CardHeader><CardTitle>{t.meetings.notesWindow.title}</CardTitle></CardHeader>

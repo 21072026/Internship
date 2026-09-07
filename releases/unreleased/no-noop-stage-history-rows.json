@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **No no-op stage-history rows** (#934). Every path that writes a `StatusChange` now builds it through `statusChangeData()` in `src/lib/stageChange.ts`, which refuses a row whose `fromStatus` equals its `toStatus` — one rule instead of a copy per write path, and the demo seeder no longer seeds the `APPLICATION_100 → APPLICATION_100` row the bug report reproduced against. A same-stage write stays a successful no-op rather than becoming a 400. Rows already in the table are left alone, as #934 decided: the UI has hidden them since #1338, and teaching the stage clock and the aging report to skip them as well is #2264.",
+  "notes": {
+    "en": [
+      "Setting a candidate to the stage they are already in no longer writes a history entry — and no longer restarts their \"days in stage\" counter."
+    ],
+    "tr": [
+      "Bir adayı zaten bulunduğu aşamaya almak artık geçmişe kayıt düşmüyor ve \"aşamada geçen gün\" sayacını yeniden başlatmıyor."
+    ],
+    "de": [
+      "Wird eine Kandidatin auf die Stufe gesetzt, in der sie bereits ist, entsteht kein Verlaufseintrag mehr — und der Zähler \"Tage in der Stufe\" beginnt nicht von vorn."
+    ]
+  }
+}

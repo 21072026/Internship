@@ -118,6 +118,34 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // In-app notification rows (#1646). Unlike the four telemetry windows above
+  // this one IS on the settings form, because it is the one an org actually has
+  // an opinion about: a notification is a rendered sentence about a person plus
+  // a link to their record — the same kind of data EmailLog is pruned for — and
+  // how long a bell keeps its history is a programme decision, not an
+  // infrastructure one.
+  //
+  // 180 days, matching PageView: half a year is far longer than anybody scrolls
+  // back through a bell, and it is the window this product already publishes for
+  // the other per-user history table, so there is one number to defend rather
+  // than two. `0` means keep forever (the pre-#1646 behaviour, chosen
+  // explicitly rather than by accident).
+  //
+  // Two rails live in the prune itself and no setting can lower them: an UNREAD
+  // row is never deleted, and nothing younger than
+  // NOTIFICATION_RETENTION_FLOOR_DAYS (30) is deleted whatever this says.
+  notificationRetentionDays: '180',
+  // Grace period, in days, before the retention sweep ANONYMIZES an orphan
+  // applicant account — a /apply account whose mentor declined and which shows
+  // no other sign of life (#1780). The rule itself, and why 90 days, live in
+  // src/lib/orphanApplicant.ts; the dry run an admin reads before it happens is
+  // /admin/retention. Same fallback contract as the windows above: 0, negative
+  // or unparseable falls back to the entry's default rather than erasing
+  // everything. Unlike the windows above it is read from the GLOBAL layer only:
+  // the sweep runs with no tenant bound and crosses every org in one pass, so a
+  // per-tenant override would be written and never read — the admin dry run
+  // reads the same layer deliberately, so its countdown is the one that fires.
+  orphanApplicantGraceDays: '90',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

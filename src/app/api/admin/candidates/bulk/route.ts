@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
-import { nextOnPathStatus, type PipelineStatus } from '@/lib/pipeline';
+import { nextOnPathStatus } from '@/lib/pipeline';
 import { withTenantScope } from '@/lib/orgContext';
-import { validateDropoffReason } from '@/lib/stageChange';
+import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 import { resolveOrgId } from '@/lib/orgScope';
 import { MAX_TAGS_PER_USER } from '@/lib/tags';
@@ -146,19 +146,28 @@ export async function POST(request: Request) {
       const reasonCheck = await validateDropoffReason({ orgId: rel.orgId, toStatus: nextStatus });
       if (!reasonCheck.ok) continue;
 
+      // Through the shared gate (#934) for uniformity, not because this path
+      // can currently produce a no-op: `nextOnPathStatus` walks a hardcoded,
+      // duplicate-free list (src/lib/pipeline.ts) and returns the NEXT element,
+      // so `toStatus` can never equal `fromStatus` here, and a tenant's own
+      // stage key is not on that list at all — it yields null and is dropped
+      // one line above by `if (!nextStatus) continue`. The branch below is
+      // therefore unreachable today; it is here so this path cannot drift from
+      // the other two if the source of `nextStatus` ever changes.
+      const auditRow = statusChangeData({
+        relationId: rel.id,
+        fromStatus: rel.pipelineStatus,
+        toStatus: nextStatus,
+        changedById: session.user.id,
+      });
+      if (!auditRow) continue;
+
       await prisma.$transaction([
         prisma.mentorshipRelation.update({
           where: { id: rel.id },
           data: { pipelineStatus: nextStatus },
         }),
-        prisma.statusChange.create({
-          data: {
-            relationId: rel.id,
-            fromStatus: rel.pipelineStatus as PipelineStatus,
-            toStatus: nextStatus,
-            changedById: session.user.id,
-          },
-        }),
+        prisma.statusChange.create({ data: auditRow }),
       ]);
       // Same effects as every other stage-write path (#926/#886): one
       // notification per PERSON even if a mentee has two active relations in

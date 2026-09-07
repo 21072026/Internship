@@ -20,6 +20,9 @@ export default function AdminSettingsPage() {
   const locale = useLocale();
   const [reminderDays, setReminderDays] = useState('14');
   const [retentionMonths, setRetentionMonths] = useState('12');
+  // Notification history window (#1646) — a different thing from the one
+  // above, which is about candidate records; the two hints say which is which.
+  const [notificationRetentionDays, setNotificationRetentionDays] = useState('180');
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [require2fa, setRequire2fa] = useState('off');
@@ -115,6 +118,7 @@ export default function AdminSettingsPage() {
       const { settings } = await res.json();
       setReminderDays(settings.reminderDays ?? '14');
       setRetentionMonths(settings.retentionMonths ?? '12');
+      setNotificationRetentionDays(settings.notificationRetentionDays ?? '180');
       setSupportEmail(settings.supportEmail ?? '');
       setWeeklyDigest(settings.weeklyDigest !== 'false');
       setRequire2fa(settings.require2fa ?? 'off');
@@ -133,7 +137,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false' }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false' }),
       });
       if (res.ok) setFlash(t.settings.saved);
     } finally {
@@ -181,6 +185,10 @@ export default function AdminSettingsPage() {
           <form onSubmit={saveSettings} className="space-y-4">
             <Input label={t.settings.reminderDays} type="number" min={1} max={365} value={reminderDays} onChange={(e) => setReminderDays(e.target.value)} hint={t.settings.reminderDaysHint} />
             <Input label={t.settings.retentionMonths} type="number" min={1} max={120} value={retentionMonths} onChange={(e) => setRetentionMonths(e.target.value)} hint={t.settings.retentionMonthsHint} />
+            {/* Immediately below retentionMonths on purpose: the two are easy to
+                confuse (one is candidate records, the other in-app notification
+                rows) and reading them side by side is what tells them apart. */}
+            <Input label={t.settings.notificationRetentionDays} type="number" min={0} max={3650} value={notificationRetentionDays} onChange={(e) => setNotificationRetentionDays(e.target.value)} hint={t.settings.notificationRetentionDaysHint} data-testid="notification-retention-days" />
             <Input label={t.settings.supportEmail} type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={weeklyDigest} onChange={(e) => setWeeklyDigest(e.target.checked)} />

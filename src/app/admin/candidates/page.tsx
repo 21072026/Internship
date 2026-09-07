@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Users, ExternalLink, Search, Filter, Download } from 'lucide-react';
+import { Users, ExternalLink, Search, Filter, Download, Ghost } from 'lucide-react';
 import { LanguageBadge } from '@/components/LanguageBadge';
 import { TagFilter, TagChips, type TagOption } from '@/components/TagFilter';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -35,6 +35,12 @@ interface Candidate {
   city?: string;
   createdAt: string;
   isActive: boolean;
+  /**
+   * A /apply account whose mentor declined and which shows no sign of life
+   * (#1780). Computed server-side from src/lib/orphanApplicant.ts — the rule is
+   * never restated here, so the badge and the nightly sweep cannot disagree.
+   */
+  orphan?: boolean;
   preferredLanguage?: string | null;
   tags?: { tag: TagOption }[];
   menteeRelations: {
@@ -85,6 +91,9 @@ export default function CandidatesPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Deactivated candidates are hidden by default and live in the archive view.
   const [archived, setArchived] = useState(false);
+  // Narrow the list to orphan applicants (#1780). Off by default: they are
+  // marked wherever they appear, and this only isolates them.
+  const [orphanOnly, setOrphanOnly] = useState(false);
 
   const COLS = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
   const toRow = (c: Candidate) => {
@@ -142,12 +151,13 @@ export default function CandidatesPage() {
     if (projectFilter) params.set('project', projectFilter);
     if (sourceFilter) params.set('source', sourceFilter);
     if (archived) params.set('archived', '1');
+    if (orphanOnly) params.set('orphan', '1');
     if (tagFilter.length > 0) {
       params.set('tags', tagFilter.join(','));
       params.set('tagMode', tagMode);
     }
     return params;
-  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter, archived, tagFilter, tagMode]);
+  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter, archived, orphanOnly, tagFilter, tagMode]);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -214,7 +224,7 @@ export default function CandidatesPage() {
   // Any filter change (including switching to/from the archive) returns to page 1.
   useEffect(() => {
     setPage(1);
-  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter, archived, tagFilter, tagMode]);
+  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter, archived, orphanOnly, tagFilter, tagMode]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -453,6 +463,27 @@ export default function CandidatesPage() {
         ))}
       </div>
 
+      {/* Orphan applicants (#1780). A filter rather than a third tab: these are
+          a property of a row, not a separate collection — an orphan is still an
+          active candidate until the retention sweep anonymizes it. */}
+      <button
+        type="button"
+        data-testid="candidates-orphan-filter"
+        aria-pressed={orphanOnly}
+        onClick={() => {
+          setOrphanOnly((on) => !on);
+          setSelected(new Set());
+        }}
+        className={`mb-4 ml-0 inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-4 py-1.5 text-sm sm:ml-3 ${
+          orphanOnly
+            ? 'border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-100'
+            : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800'
+        }`}
+      >
+        <Ghost className="h-4 w-4" aria-hidden />
+        {t.candidates.orphanFilter}
+      </button>
+
       {/* Results count + bulk selection */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-3">
@@ -589,9 +620,16 @@ export default function CandidatesPage() {
                       )}
                     </p>
                   </div>
-                  <Badge data-testid="candidate-mobile-stage" variant={activeRelation?.pipelineStatus ? 'info' : 'warning'} className="max-w-[9rem] flex-shrink-0 text-center whitespace-normal break-words">
-                    {activeRelation?.pipelineStatus ? label(activeRelation.pipelineStatus) : t.candidates.unassigned}
-                  </Badge>
+                  <div className="flex max-w-[9rem] flex-shrink-0 flex-col items-end gap-1">
+                    <Badge data-testid="candidate-mobile-stage" variant={activeRelation?.pipelineStatus ? 'info' : 'warning'} className="max-w-full text-center whitespace-normal break-words">
+                      {activeRelation?.pipelineStatus ? label(activeRelation.pipelineStatus) : t.candidates.unassigned}
+                    </Badge>
+                    {candidate.orphan && (
+                      <Badge variant="warning" data-testid={`candidate-mobile-orphan-${candidate.id}`} className="max-w-full whitespace-normal break-words">
+                        {t.candidates.orphanBadge}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 {(candidate.university || candidate.department || candidate.graduationYear || candidate.city || candidate.skills.length > 0) && (
@@ -663,6 +701,12 @@ export default function CandidatesPage() {
                       <Badge variant="success">{t.candidates.assigned}</Badge>
                     ) : (
                       <Badge variant="warning">{t.candidates.unassigned}</Badge>
+                    )}
+                    {/* Why this row is not a real candidate (#1780). */}
+                    {candidate.orphan && (
+                      <Badge variant="warning" data-testid={`candidate-orphan-${candidate.id}`} title={t.candidates.orphanHint}>
+                        {t.candidates.orphanBadge}
+                      </Badge>
                     )}
                   </div>
                 </div>

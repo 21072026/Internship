@@ -12,6 +12,12 @@
  * address later creates a second, unrelated user, orphaning the interaction log
  * and stage history the mentor built up (#1123).
  *
+ * The public application link (`POST /api/apply`) mints the same kind of row:
+ * the account exists before the mentor has accepted or declined, so there is
+ * something for the applicant to set a password on. It is the largest source of
+ * these records by far — and #1780 found it was the one source the list below
+ * did not know about.
+ *
  * `isPendingActivation` marks exactly the rows that a mentor/admin may still
  * correct and turn into a real login via `PATCH /api/mentor/mentees/[id]`.
  */
@@ -20,8 +26,19 @@
 export const NO_LOGIN_PASSWORD = '!created-no-login';
 // Written by scripts/import-csv.mjs for rows imported from the spreadsheet.
 export const IMPORTED_NO_LOGIN_PASSWORD = '!imported-no-login';
+// Written by POST /api/apply for a public application (#1188): the account
+// exists before the mentor has decided, so the applicant has something to set a
+// password on. It was missing from the list below (#1780) — which meant the one
+// helper whose whole job is "this account has never had a password" did not
+// recognise the LARGEST source of exactly that, and the relation detail page
+// never offered to correct the address of an apply-link mentee.
+export const APPLY_NO_LOGIN_PASSWORD = '!apply-no-login';
 
-const NO_LOGIN_PASSWORDS: readonly string[] = [NO_LOGIN_PASSWORD, IMPORTED_NO_LOGIN_PASSWORD];
+const NO_LOGIN_PASSWORDS: readonly string[] = [
+  NO_LOGIN_PASSWORD,
+  IMPORTED_NO_LOGIN_PASSWORD,
+  APPLY_NO_LOGIN_PASSWORD,
+];
 
 // Generated stand-in addresses (mentor form + CSV import) live on this domain.
 export const PLACEHOLDER_EMAIL_DOMAIN = 'import.local';

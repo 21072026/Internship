@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { canManageProject, isProjectMember, isProjectOwner } from '@/lib/projectAccess';
 import { notify } from '@/lib/notify';
 import { goalLinkFor } from '@/lib/projectGoalLink';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // One to-do: tick it off, put it away, reword it, hand it over.
 //
@@ -37,7 +38,7 @@ const schema = z.object({
   done: z.boolean().optional(),
   // Finished and put away — leaves the active list without losing the record.
   archived: z.boolean().optional(),
-  title: z.string().min(1).max(300).optional(),
+  title: z.string().min(1).max(TEXT_LIMITS.todoTitle).optional(),
   // null clears the assignment (back to an unassigned project goal).
   assigneeId: z.string().min(1).nullable().optional(),
 });
