@@ -440,6 +440,18 @@ workaround, #636, and it compiled on every PR push).
   Escape, a backdrop tap **and the phone's back button** (it pushes a history entry while
   open and pops it again on close — keep that balance if you touch it). Non-image
   attachments still hand off to the browser, which is the right viewer for a PDF.
+- **One import engine, one parser** (`docs/roster-feed.md`, #1965/#2072): every importer in
+  the tree runs on `runImport({ parse, validate, resolve, apply })` in
+  `src/lib/importPreview.ts` and parses with its shared delimited parser (quoted embedded
+  newlines, CRLF, BOM, `;` for a German Excel export). Do not add a second parser or a
+  second dry-run engine: **a dry run is the same call with a writer that does not write**,
+  and a preview built in its own branch is a different program from the run it previews
+  (that is #1432). The scheduled roster feed is its first consumer — `src/lib/rosterIngest.ts`
+  (pure: transport, file hash, diff, resume protocol) plus `src/lib/rosterIngestStore.ts`
+  (the only Prisma-aware half: one transaction per chunk, the contiguous
+  `RosterRun.nextChunkIndex` checkpoint, and `runWithOrg(feed.orgId, …)` because a cron run
+  has no session). What an external system may overwrite on a user is decided in exactly one
+  place, `src/lib/externalSyncPolicy.ts`, shared with SSO sync.
 - **E2E locator pitfalls** (hit repeatedly): `AdminNav` renders its own sidebar
   `input[type="search"]` filter box present on every admin page — an unscoped
   `input[type="search"]` selector in a new test will hit that instead of a page-level search

@@ -168,6 +168,28 @@ npm run test:unit            # every scripts/test/*.test.mjs, no coverage (~2s)
 npm run test:unit:coverage   # the same, plus the per-module floor  (CI runs this)
 ```
 
+### A module that imports another module (#1965)
+
+Node's runner strips TypeScript but resolves specifiers like any ESM loader: inside
+`src/lib/foo.ts`, `import … from './bar'` is an error, because in ESM the extension is
+part of the specifier. Every unit-tested module happened to have no relative imports at
+all until `rosterIngest.ts`, which is built *on* the shared import engine
+(`./importPreview`) rather than carrying a copy of it.
+
+The way out is `scripts/test/ts-extensionless-resolve.mjs` — a resolve hook that retries a
+failed relative, extensionless specifier with `.ts`. It runs only after Node's own
+resolution has failed, so it cannot mask a missing module, and it changes nothing about
+how the app is compiled. Use it from the test, not from the module:
+
+```js
+import { register } from 'node:module';
+register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
+const { diffRoster } = await import('../../src/lib/rosterIngest.ts');
+```
+
+The imports have to be **dynamic** and come after `register()`: a static import is hoisted
+above it and would resolve before the hook is installed.
+
 Anything that needs a rendered page, a session cookie or a Prisma query stays in `e2e/`
 under Playwright. The one awkward case is the `e2e/*.unit.spec.ts` files (16 of them at the
 time of writing, and the set keeps growing — count them, don't trust this sentence): they
