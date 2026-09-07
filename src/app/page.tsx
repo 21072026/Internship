@@ -374,7 +374,7 @@ export default async function HomePage() {
           audience sections have made their case and before "how it works".
           `heroModel` is the headline verbatim: it is existing shipped copy (it
           used to be a hero sub-line), so promoting it here changes where the
-          promise is read, not what it claims. The band's only CTA is /pricing.
+          promise is read, not what it claims. Its CTA is parked — see below.
 
           Dark mode: `bg-green-50` is retinted by globals.css and the
           `text-green-*` descendants are already covered by the green compound
@@ -392,13 +392,13 @@ export default async function HomePage() {
           </p>
           <h2 className="mt-4 text-2xl sm:text-3xl font-bold text-gray-900 leading-snug">{L.heroModel}</h2>
           <p className="mt-4 text-base text-gray-600 leading-relaxed">{L.freeCoreBody}</p>
-          <Link
-            href="/pricing"
-            data-testid="free-core-pricing-cta"
-            className="mt-8 inline-flex items-center justify-center gap-2 bg-green-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-green-700 transition-colors"
-          >
-            {L.freeCoreCta} <ArrowRight className="h-5 w-5" />
-          </Link>
+          {/* The "See pricing" CTA is parked with the nav entries until
+              `/pricing` exists (see PublicHeader). It cannot point anywhere
+              else: `freeCoreCta` promises the price in all three locales, and
+              a button that says "See pricing" and lands on /features is worse
+              than no button. The band still carries the promise and the proof;
+              only the click is missing. `freeCoreCta` stays in the
+              dictionaries for the page that will use it. */}
         </div>
       </section>
 
