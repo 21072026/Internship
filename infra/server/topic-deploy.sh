@@ -287,6 +287,8 @@ if [ "${EXISTING_TABLES:-0}" -gt 0 ]; then
   # an older schema — the same repairs prod runs before its push (#1288).
   _in_image "$IMAGE" node prisma/push-company-interest-expand.mjs || true
   _in_image "$IMAGE" node prisma/backfill-company-interest-scope.mjs || true
+  _in_image "$IMAGE" node prisma/push-setting-id-expand.mjs || true
+  _in_image "$IMAGE" node prisma/backfill-setting-id.mjs || true
   _in_image "$IMAGE" node prisma/backfill-json-columns.mjs --repair || true
 fi
 
