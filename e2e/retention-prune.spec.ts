@@ -154,7 +154,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     // No entry may fail: a failure here is a broken query, not a clean table.
     expect(result.failed).toEqual([]);
     expect(result.results.map((r) => r.key).sort()).toEqual(
-      ['activityLog', 'emailLog', 'job', 'notification', 'pageView', 'pushSubscription'].sort()
+      ['activityLog', 'emailLog', 'job', 'notification', 'orphanApplicant', 'pageView', 'pushSubscription'].sort()
     );
 
     const gone = async (
