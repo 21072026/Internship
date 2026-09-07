@@ -188,6 +188,20 @@ jobs:
       # database every minute.
       - name: mysql watchdog probe logic
         run: bash infra/test/mysql-watchdog.test.sh
+      # The steps above each run ONE unit suite because each was added by the
+      # incident it names. Nothing held the set together, so a suite whose rule
+      # got refactored away could lose its assertions and stay green — the test
+      # that would have failed no longer exists (#1599). This runs every
+      # scripts/test/*.test.mjs under Node's own coverage and holds each covered
+      # module to a per-file LINE floor. Per-file on purpose: a repo-wide
+      # percentage moves when unrelated code lands, so it is a number nobody
+      # acts on and can only ever be argued down (#1591). Floors are the value
+      # measured on main, rounded down — green on day one, and they only ever go
+      # up (docs/testing.md § The coverage ratchet). The table lands in the job
+      # summary, so a reviewer sees where each module stands without opening the
+      # log.
+      - name: unit tests + per-module coverage floor (#1599)
+        run: npm run test:unit:coverage
       - run: npm run build
 
   # The demo seed is the only data most people ever see: the public demo, every
