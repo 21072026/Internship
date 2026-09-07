@@ -29,8 +29,13 @@ export function isAccentColor(value: unknown): value is AccentColor {
 // (so it's never mistaken for production), blue everywhere else.
 export const DEFAULT_ACCENT: AccentColor = IS_PREVIEW ? 'green' : 'blue';
 
-// Resolve the accent to apply: an explicit user preference wins, otherwise the
-// environment default. Returns the value for the <html data-accent> attribute.
-export function resolveAccent(preference?: string | null): AccentColor {
-  return isAccentColor(preference) ? preference : DEFAULT_ACCENT;
+// Resolve the accent to apply: an explicit user preference wins, otherwise
+// `fallback` (the environment default unless the caller supplies its own — the
+// root layout passes the product's colour, see src/lib/product.ts). Returns the
+// value for the <html data-accent> attribute.
+export function resolveAccent(
+  preference?: string | null,
+  fallback: AccentColor = DEFAULT_ACCENT,
+): AccentColor {
+  return isAccentColor(preference) ? preference : fallback;
 }

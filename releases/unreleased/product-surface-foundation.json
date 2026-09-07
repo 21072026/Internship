@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "- **One image, more than one product**: `src/lib/product.ts` resolves `APP_PRODUCT` (server-only, runtime — not `NEXT_PUBLIC_`, so a single image still serves every product) into a catalogue of name, title, description, accent and theme-color. The root layout's metadata/viewport become `generateMetadata()`/`generateViewport()`, and `resolveBranding()`/`resolveAccent()` gained optional defaults so the product supplies the fallback a tenant's white-label overrides layer on top of. Unset `APP_PRODUCT` resolves to `internship`, and preview's green accent still outranks the product colour — the existing deployment is byte-for-byte unchanged."
+}

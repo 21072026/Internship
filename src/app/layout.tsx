@@ -8,31 +8,41 @@ import { getClientDictionary } from '@/i18n/dictionaries';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
-import { resolveAccent } from '@/lib/accent';
+import { DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
+import { IS_PREVIEW } from '@/lib/appEnv';
+import { PRODUCT } from '@/lib/product';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
 
-export const metadata: Metadata = {
-  title: 'Internship CRM - Mentor-Mentee Management',
-  description: 'A comprehensive CRM for managing mentor-mentee relationships and internship programs',
-  applicationName: 'Internship CRM',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'InternshipCRM' },
-  icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.ico', sizes: 'any' },
-    ],
-    apple: '/apple-touch-icon.png',
-  },
-};
+// A function rather than a constant because the title/name depend on which
+// product this container serves (src/lib/product.ts), and APP_PRODUCT is read at
+// run time — a module-level constant would be evaluated once at build and bake
+// one product's name into the shared image.
+export function generateMetadata(): Metadata {
+  return {
+    title: PRODUCT.title,
+    description: PRODUCT.description,
+    applicationName: PRODUCT.name,
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: PRODUCT.shortName },
+    icons: {
+      icon: [
+        { url: '/icon.svg', type: 'image/svg+xml' },
+        { url: '/favicon.ico', sizes: 'any' },
+      ],
+      apple: '/apple-touch-icon.png',
+    },
+  };
+}
 
-export const viewport: Viewport = {
-  themeColor: '#1D4ED8',
-  // Shrink the layout viewport when the on-screen keyboard opens instead of
-  // letting it overlay the page, so a full-height screen (the chat shell, #1006)
-  // keeps its composer above the keyboard rather than behind it.
-  interactiveWidget: 'resizes-content',
-};
+export function generateViewport(): Viewport {
+  return {
+    themeColor: PRODUCT.themeColor,
+    // Shrink the layout viewport when the on-screen keyboard opens instead of
+    // letting it overlay the page, so a full-height screen (the chat shell, #1006)
+    // keeps its composer above the keyboard rather than behind it.
+    interactiveWidget: 'resizes-content',
+  };
+}
 
 // Runs before paint to set the dark class from the saved preference or the OS,
 // so there's no light flash. Mirrors the server-side cookie read below.
@@ -60,13 +70,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       }
     } catch { /* ignore */ }
   }
+  // With no stored preference the accent comes from the product this container
+  // serves — EXCEPT on preview, whose green is a "this is not production" signal
+  // and outranks the product's own colour (mistaking preview for prod is worse
+  // than mistaking one product for the other).
+  const accentFallback = IS_PREVIEW ? DEFAULT_ACCENT : PRODUCT.accent;
   const fontSizeClass = fontSize === 'sm' || fontSize === 'lg' || fontSize === 'xl' ? `font-${fontSize}` : undefined;
 
   return (
     <html
       lang={locale}
       className={[theme === 'dark' ? 'dark' : undefined, fontSizeClass].filter(Boolean).join(' ') || undefined}
-      data-accent={resolveAccent(accent)}
+      data-accent={resolveAccent(accent, accentFallback)}
       suppressHydrationWarning
     >
       <head>

@@ -22,7 +22,9 @@ export interface ResolvedBranding {
   supportEmail: string | null;
 }
 
-// Product defaults used when a tenant hasn't set an override.
+// Last-resort defaults, used when a tenant has set no override and no product
+// defaults were supplied (i.e. from a client component, which cannot read the
+// server-only APP_PRODUCT). Server code should pass PRODUCT_BRANDING instead.
 export const DEFAULT_BRANDING: ResolvedBranding = {
   name: 'Internship CRM',
   logoUrl: null,
@@ -36,13 +38,23 @@ function clean(v: string | null | undefined): string | null {
   return t.length ? t : null;
 }
 
-// Merge a tenant's (possibly partial/null) branding over the product defaults.
-export function resolveBranding(b: Partial<Branding> | null | undefined): ResolvedBranding {
+// Merge a tenant's (possibly partial/null) branding over a set of defaults.
+//
+// `defaults` exists because the fallback is no longer a single constant: this
+// codebase serves more than one product from one image (src/lib/product.ts), so
+// "the product's name" depends on which product the deployment is. That module
+// is server-only, and this one is imported from client components too — so the
+// defaults are passed IN rather than imported here. Server callers hand in
+// PRODUCT_BRANDING (see orgBranding.ts); client callers get DEFAULT_BRANDING.
+export function resolveBranding(
+  b: Partial<Branding> | null | undefined,
+  defaults: ResolvedBranding = DEFAULT_BRANDING,
+): ResolvedBranding {
   return {
-    name: clean(b?.brandName) ?? DEFAULT_BRANDING.name,
-    logoUrl: clean(b?.brandLogoUrl) ?? DEFAULT_BRANDING.logoUrl,
-    color: clean(b?.brandColor) ?? DEFAULT_BRANDING.color,
-    supportEmail: clean(b?.supportEmail) ?? DEFAULT_BRANDING.supportEmail,
+    name: clean(b?.brandName) ?? defaults.name,
+    logoUrl: clean(b?.brandLogoUrl) ?? defaults.logoUrl,
+    color: clean(b?.brandColor) ?? defaults.color,
+    supportEmail: clean(b?.supportEmail) ?? defaults.supportEmail,
   };
 }
 
