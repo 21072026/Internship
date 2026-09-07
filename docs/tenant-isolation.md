@@ -62,6 +62,14 @@ All of this is exercised against a real DB by `e2e/org-isolation.spec.ts` and
 never called `orgScoped()`** is still isolated purely because it ran inside
 `runWithOrg()` with the flag on, and is a no-op with the flag off.
 
+Both of those run **in the Playwright process**, though: they flip
+`MT_ENFORCE_ISOLATION` in their own env and call the helpers directly, so they
+say nothing about the deployed server. The `isolation` Playwright project
+(#1566) covers that half — `npm run test:e2e:isolation` boots a second app
+server on port 3010 with the flag genuinely on and runs `e2e/isolation/**`
+against it, using the two-tenant fixture in `e2e/helpers/tenants.ts`. See
+[`docs/testing.md`](testing.md#tenant-isolation-the-isolation-playwright-project-1566).
+
 ### Keeping the registry honest (`npm run check:tenant-models`)
 
 The middleware only scopes models that are named in `TENANT_MODELS`. An

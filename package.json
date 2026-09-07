@@ -37,6 +37,7 @@
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:headed": "playwright test --headed",
+    "test:e2e:isolation": "playwright test --project=isolation",
     "test:stress": "node scripts/stress-test.mjs",
     "test:load": "k6 run k6/nightly-load.js",
     "import:csv": "node scripts/import-csv.mjs",
