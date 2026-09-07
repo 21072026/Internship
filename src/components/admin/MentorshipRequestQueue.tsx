@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
+import { mentorshipAssignmentError } from '@/lib/mentorshipAssignmentError';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -99,11 +100,13 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
         if (action === 'approve') onApproved();
       } else {
         const d = await res.json().catch(() => ({}));
-        // The approval path answers `already_mentored` (#419) and
-        // `already_decided`; both used to arrive here as the server's English
-        // literal. Anything unrecognised falls back to the generic line rather
-        // than publishing whatever text a route happens to carry.
-        setErr(d.code === 'already_mentored' ? a.alreadyAssigned : t.common.error);
+        // The approval path answers `already_mentored` (#419), `already_decided`,
+        // `invalid_mentor` and the plan gate's `plan_limit_reached`; all four
+        // used to arrive here as the server's English literal, and then all but
+        // the first collapsed into the generic line. Anything unrecognised
+        // still falls back to it rather than publishing whatever text a route
+        // happens to carry (#2283 follow-up).
+        setErr(mentorshipAssignmentError(t, d, t.common.error));
       }
     } catch {
       setErr(t.common.error);
