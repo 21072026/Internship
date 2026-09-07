@@ -28,12 +28,22 @@ runAiGated({ scope, consent?, userId?, companyId?, call })
 ```
 
 The order is deliberate. Quota is checked **before** configuration so that
-`aiMonthlyQuota = 0` means "AI is off for this organisation" whether or not an
-API key happens to be present, and so quota behaviour stays testable in an
-environment with no key. Metering happens **after** a successful call, so a
-provider failure never consumes credit; the `AiUsage` insert is
-`.catch(() => {})` because metering must never break a call the user already
-paid for in latency.
+`aiMonthlyQuota = 0` means "AI is off" whether or not an API key happens to be
+present, and so quota behaviour stays testable in an environment with no key.
+Metering happens **after** a successful call, so a provider failure never
+consumes credit; the `AiUsage` insert is `.catch(() => {})` because metering must
+never break a call the user already paid for in latency.
+
+The **limit and the counter are scoped differently**, which matters on a
+multi-tenant installation: the limit is a `Setting`, so it resolves tenant row →
+global row → default like every other one, while `AiUsage` has no `orgId` and is
+not in `TENANT_MODELS` — `getAiQuota()` counts every row for the month, whoever
+made the call. So the month's pool is **installation-wide**: two tenants share
+one counter, and the number one tenant's admin sets is measured against the
+calls both of them made. The field on `/admin/settings` (#1625) says so in its
+hint. Scoping the meter per tenant means adding `orgId` to `AiUsage`,
+registering it, and filtering the count — until then, treat the quota as an
+operator-level cost control that happens to be editable per tenant.
 
 ## The task table
 

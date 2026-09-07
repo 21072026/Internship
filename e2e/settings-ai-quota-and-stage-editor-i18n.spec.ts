@@ -14,16 +14,25 @@ test.afterAll(async () => {
 test('the monthly AI quota round-trips through the settings form', async ({ page }) => {
   const adminEmail = uniqueEmail('quota-admin');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Quota Admin');
+  // Whatever the API resolves right now (tenant row → global row → code
+  // default). The save below writes a real row through the browser, so the
+  // value is put back the same way in `finally`: a Prisma cleanup would edit
+  // the local database rather than the one the page just changed whenever the
+  // suite runs against a deployed BASE_URL.
+  let original: string | null = null;
 
   try {
     await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
+    original = (await (await page.request.get('/api/admin/settings')).json()).settings.aiMonthlyQuota ?? null;
+    expect(original).toMatch(/^\d{1,6}$/);
+
     await page.goto('/admin/settings');
 
     // AdminNav renders its own sidebar input[type="search"] on every admin
     // page, and this form holds a handful of number inputs — hence the testid.
     const quota = page.getByTestId('ai-monthly-quota');
-    // The stored default is rendered, not an empty box.
-    await expect(quota).toHaveValue('200', { timeout: 20_000 });
+    // The resolved value is rendered, not an empty box.
+    await expect(quota).toHaveValue(String(original), { timeout: 20_000 });
     // A numeric control server-side-validated by /^\d{1,6}$/.
     await expect(quota).toHaveAttribute('type', 'number');
 
@@ -48,7 +57,11 @@ test('the monthly AI quota round-trips through the settings form', async ({ page
     await page.goto('/admin/settings');
     await expect(page.getByTestId('ai-monthly-quota')).toHaveValue('37', { timeout: 20_000 });
   } finally {
-    await prisma.setting.deleteMany({ where: { orgId: null, key: 'aiMonthlyQuota' } });
+    if (original !== null) {
+      await page.request
+        .put('/api/admin/settings', { data: { aiMonthlyQuota: original } })
+        .catch(() => {});
+    }
     await cleanupByEmail(adminEmail);
   }
 });
@@ -75,8 +88,10 @@ test('the pipeline-stage editor renders in Turkish with no English left', async 
     // the assertions below are made against the finished page, not its shell.
     await expect(editor.locator('input[type="color"]').first()).toBeVisible({ timeout: 20_000 });
 
-    // Turkish copy that only exists on this page.
-    await expect(editor.getByText('Bu kurum yerleşik varsayılan aşamaları kullanıyor.', { exact: true })).toBeVisible();
+    // Turkish copy that only exists on this page. Asserted against the element
+    // that holds exactly this sentence — it shares its paragraph with the
+    // subtitle, so a text locator with `exact: true` would match nothing.
+    await expect(editor.getByTestId('pipeline-stages-source')).toHaveText('Bu kurum yerleşik varsayılan aşamaları kullanıyor.');
     // A new org is on FREE, so the paid-plan notice is on screen too.
     await expect(editor.getByText(/ücretli bir plan gerektirir/)).toBeVisible();
     await expect(editor.getByRole('button', { name: 'Kaydet', exact: true })).toBeVisible();

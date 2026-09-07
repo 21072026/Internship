@@ -98,7 +98,12 @@ export default function PipelineStagesPage({ params }: { params: Promise<{ id: s
 
         <p className="text-sm text-gray-500 mb-4">
           {t.pipelineStages.subtitle}{' '}
-          {custom ? t.pipelineStages.usingCustom : t.pipelineStages.usingDefaults}
+          {/* Its own element, not a bare text node in the paragraph: which of
+              the two sentences is on screen is the one fact a test needs to
+              read exactly, and a shared <p> can only be matched by substring. */}
+          <span data-testid="pipeline-stages-source">
+            {custom ? t.pipelineStages.usingCustom : t.pipelineStages.usingDefaults}
+          </span>
         </p>
 
         {plan === 'FREE' && (

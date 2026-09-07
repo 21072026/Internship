@@ -621,7 +621,7 @@ the capability is evidenced in the corpus; it is not exhaustive where the whole 
 | ATS integration | Handshake (via Merge) | ❌ **non-goal — publish the write API instead** | — |
 | AI matching | Together, Qooper, Chronus (MatchIQ), Guider, Mentorloop, PushFar | ✅ privacy-preserving re-rank, mentors sent as anonymous labels A–E | `src/lib/aiMentorMatch.ts:103-108`, `src/app/api/admin/mentor-suggest/route.ts:71-108` |
 | Enforced AI consent → quota → provider → metering chokepoint | Together comes closest (PII redaction + kill switch) | ✅ one mandatory gate, metered only after a successful call | `src/lib/aiGate.ts:32-56` |
-| AI admin console (quota control, usage dashboard, provider status) | Together, Mentorloop (AI governance) | ❌ `aiMonthlyQuota` is not even settable from the admin UI | `src/app/admin/settings/page.tsx:128`, `src/lib/settings.ts:35` |
+| AI admin console (quota control, usage dashboard, provider status) | Together, Mentorloop (AI governance) | 🟡 **quota control only** — `aiMonthlyQuota` is editable on `/admin/settings` since #1625; no usage dashboard, no provider status, and usage is metered installation-wide (`AiUsage` carries no `orgId`) so the pool is shared across tenants | `src/app/admin/settings/page.tsx:295`, `src/lib/settings.ts:69`, `src/lib/aiGate.ts:24-30` |
 | AI session agendas | Together, Qooper, Chronus | ❌ | — |
 | Rate limiting on AI endpoints | n/a | ❌ none of the AI routes are rate-limited | `src/lib/aiGate.ts` |
 
