@@ -1,0 +1,21 @@
+{
+  "bump": "minor",
+  "changelog": "- **Stage clock on the mentor board card and in the mentee portal** (#1724). \"How long has this person been stuck here\" existed only in the ADMIN-only aging report, so the mentor who has to meet the service level could not see it and the mentee had no idea whether they were on track or forgotten. The days-in-stage formula is extracted into `src/lib/stageClock.ts` (client-safe, no Prisma) and every caller now reads it: the admin aging report and the mentor analytics export, which held two copies that already disagreed about a relation whose last recorded move predates its `startDate`, plus the new surfaces. `GET /api/mentorship` returns a derived `daysInStage` alongside the `stageDeadline` it already carried — inside the caller's existing scope, one extra `StatusChange` row per relation, no widening. The mentor board card, the mentor's mentee list and the mentee detail header get a chip that is neutral by default, amber once a relation with no configured SLA has sat in one stage for `STAGE_ATTENTION_DAYS` (30 — the reasoning is in the constant's comment), and red once the org's own `StageSla`-derived `stageDeadline` has passed; terminal and off-path stages never read as overdue, which the admin board's copy of the rule used to miss. The mentee portal shows the same number under `JourneyTracker` with deliberately none of that: elapsed time, what comes next, and an expected date only while it is still in the future — no breach state, no red badge. Dark mode: the `bg-*-50` + same-element `text-*-600` pairing was missing from the compound overrides in `globals.css`, so the admin board's overdue chip was dark-on-dark; red and amber are added.",
+  "notes": {
+    "en": [
+      "Mentor board cards now show how long each mentee has been in their current stage, and turn amber or red when a stage is aging or past its deadline.",
+      "The same clock appears on your mentee list and on a mentee's detail page.",
+      "Mentees can see how long they have been at their current stage, what comes next, and — when there is one — the date their mentor is working towards."
+    ],
+    "tr": [
+      "Mentor panosundaki kartlar artık her mentee'nin mevcut aşamada kaç gündür beklediğini gösteriyor; aşama uzadıkça turuncuya, son tarih geçtiğinde kırmızıya dönüyor.",
+      "Aynı sayaç mentee listende ve mentee detay sayfasında da var.",
+      "Mentee'ler bulundukları aşamada kaç gündür olduklarını, sırada ne olduğunu ve varsa mentörlerinin hedeflediği tarihi görebiliyor."
+    ],
+    "de": [
+      "Karten auf dem Mentor-Board zeigen jetzt, wie lange ein Mentee schon in seiner aktuellen Phase ist — orange, wenn sich lange nichts bewegt, rot nach Ablauf der Frist.",
+      "Dieselbe Anzeige gibt es in deiner Mentee-Liste und auf der Detailseite eines Mentees.",
+      "Mentees sehen, seit wann sie in ihrer aktuellen Phase sind, was als Nächstes kommt und — falls vorhanden — bis wann ihr Mentor den nächsten Schritt plant."
+    ]
+  }
+}

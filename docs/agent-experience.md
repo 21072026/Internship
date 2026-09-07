@@ -5868,3 +5868,30 @@ reddettiği şeyi** anlatmalı, sonraki issue'yu değil.
 **Metin taramasının sınırını guard'ın kendi başlığına yaz.** Yorum satırına alınmış bir
 çağrı hâlâ çağrı sayılır; `import { dispatchWebhook as fire }` kaçar. Bunlar grep şeklindeki
 bir guard'ın bedeli — ama yazılmamışsa, bir sonraki okuyucu guard'ı olduğundan güçlü sanar.
+
+## 2026-09-07 — Aynı sayıyı üçüncü kez yazmadan önce ikisinin ayrıştığını fark et (#1724)
+
+**"Formülü kopyala" görevinde önce mevcut kopyaların birbirini tutup tutmadığına bak.**
+Görev "admin panosundaki kuralı mentor panosuna taşı" idi; iki kopya buldum
+(`api/admin/analytics/aging` ve `api/mentor/analytics`) ve **zaten ayrışmışlardı** —
+biri negatif süreyi 0'a kırpıyordu, diğeri negatif döndürüyordu. Üçüncü bir kopya
+eklemek sorunu görünmez kılardı. Ortak yardımcıyı (`src/lib/stageClock.ts`) yazarken
+"son hareket, yoksa başlangıç" yerine **ikisinin maksimumu**nu almak, ayrışmanın
+kaynağını (geriye tarihlenmiş `startDate`) tek satırda kapatıyor.
+
+**Prisma'da `include` kullanan bir sorgu tüm skaler alanları zaten döndürür.** Issue
+"`stageDeadline`'ı payload'a ekle" diyordu; `GET /api/mentorship` `include` kullandığı
+için alan **zaten oradaydı**. Eklenmesi gereken tek şey türetilmiş `daysInStage` idi.
+Bir alanı "eklemeden" önce yanıtı gerçekten oku — yoksa var olan bir şeyi ikinci kez
+seçersin.
+
+**`bg-*-50` + `text-*-600` aynı elemanda ise globals.css seni kurtarmıyordu.** Bileşik
+override listesi `-600` için yalnızca **descendant** (`.bg-red-50 .text-red-600`) biçimini
+içeriyordu; admin panosunun gecikme rozeti tek bir `<span class="bg-red-50 text-red-600">`
+olduğu için karanlık modda koyu-üstüne-koyu kalıyordu. Yeni bir çip yazarken listeyi
+gözle kontrol et: `-700/-800/-900/-500` aynı elemanda kapsanmış, `-600` kapsanmamıştı.
+
+**İki izleyicili bir özellikte dil, stil değil kuraldır.** Aynı sayı mentor'a "kuyruk
+yaşlanıyor" (kehribar/kırmızı), mentee'ye "şu an buradasın, sırada şu var" olarak
+gösteriliyor; mentee tarafında geçmiş bir son tarih **hiç yazılmıyor**. Bunu bir
+prop'un JSDoc'una yazmak, sonraki ajanın çipi "yeniden kullanmasını" engelleyen tek şey.

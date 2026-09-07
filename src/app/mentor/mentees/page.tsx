@@ -12,11 +12,16 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { StageClockChip } from '@/components/StageClockChip';
 
 interface MentorshipRelation {
   id: string;
   status: string;
   startDate: string;
+  // The stage clock (#1724) — same two fields the board card reads.
+  pipelineStatus: string;
+  stageDeadline: string | null;
+  daysInStage?: number | null;
   // Stamped by the daily sweep (#1508) when the mentee is still parked at first
   // contact, was messaged and never answered. Null for everybody else.
   dormantSince: string | null;
@@ -118,6 +123,13 @@ export default function MenteesPage() {
                 </div>
                 <div className="flex flex-shrink-0 flex-col items-end gap-1">
                   <StatusBadge status={rel.status} />
+                  <StageClockChip
+                    testId={`stage-clock-${rel.id}`}
+                    daysInStage={rel.daysInStage}
+                    stageDeadline={rel.stageDeadline}
+                    pipelineStatus={rel.pipelineStatus}
+                    relationStatus={rel.status}
+                  />
                   {rel.dormantSince && (
                     <Badge variant="default" title={t.mentor.dormantTitle} data-testid={`dormant-badge-${rel.id}`}>
                       {t.mentor.dormantBadge}

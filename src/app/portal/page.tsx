@@ -24,6 +24,7 @@ import { FileWarning } from 'lucide-react';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { ArchivedNotice } from '@/components/ArchivedNotice';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
+import { daysInStage } from '@/lib/stageClock';
 
 // #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
 // deep links and the back button work and the phone page stays short:
@@ -48,6 +49,11 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         startDate: true,
         completedAt: true,
         pipelineStatus: true,
+        // The stage clock (#1724): the org's per-stage deadline when one is
+        // configured, plus the newest recorded move so the shared helper can
+        // date the current stage. One extra row per relation, not the trail.
+        stageDeadline: true,
+        statusChanges: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
         mentor: { select: { id: true, fullName: true, publicProfile: true } },
       },
     }),
@@ -180,7 +186,13 @@ export default async function PortalDashboard({
           (#692); the full mentorship detail lives on /portal/journey. */}
       {relation && (
         <div className="mb-6">
-          <JourneyTracker status={relation.pipelineStatus} />
+          <JourneyTracker
+            status={relation.pipelineStatus}
+            /* An archived (COMPLETED) mentorship has no running clock — see
+               StageClockChip for the same rule on the mentor's side. */
+            daysInStage={isArchived ? null : daysInStage(relation)}
+            stageDeadline={relation.stageDeadline?.toISOString() ?? null}
+          />
         </div>
       )}
 

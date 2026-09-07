@@ -14,6 +14,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { daysInStage } from '@/lib/stageClock';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -96,11 +97,26 @@ export async function GET(request: Request) {
       },
       company: { select: { id: true, name: true, industry: true } },
       _count: { select: { interactions: true } },
+      // The stage clock (#1724). Only the newest move is needed — the shared
+      // helper takes the latest `createdAt` and falls back to `startDate` —
+      // so this stays one extra row per relation, not the whole audit trail.
+      statusChanges: { orderBy: { createdAt: 'desc' as const }, take: 1, select: { createdAt: true } },
     };
+
+    // `stageDeadline` already rides along on every row (the query uses
+    // `include`, so all scalars are selected); `daysInStage` is derived here so
+    // the board, the mentee list and the aging report cannot drift apart. The
+    // audit row itself is dropped again — the clients only need the number, and
+    // the caller's own scope is not widened by either field.
+    const withStageClock = <T extends { startDate: Date; statusChanges: { createdAt: Date }[] }>(rows: T[]) =>
+      rows.map(({ statusChanges, ...rest }) => ({
+        ...rest,
+        daysInStage: daysInStage({ startDate: rest.startDate, statusChanges }),
+      }));
 
     if (!pageParam) {
       const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });
-      return NextResponse.json({ relations });
+      return NextResponse.json({ relations: withStageClock(relations) });
     }
 
     const [total, relations] = await Promise.all([
@@ -114,7 +130,7 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    return NextResponse.json({ relations, total, page, pageSize });
+    return NextResponse.json({ relations: withStageClock(relations), total, page, pageSize });
     });
   } catch (error) {
     console.error('Get mentorships error:', error);

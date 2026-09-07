@@ -6,8 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { computeStageAging } from '@/lib/stageAging';
-
-const DAY = 24 * 60 * 60 * 1000;
+import { daysInStage } from '@/lib/stageClock';
 
 // GET — hiring-funnel aging & SLA.
 // - stageAging: average/median time actually SPENT in each stage, computed from
@@ -117,14 +116,14 @@ export async function GET(request: Request) {
   );
   const active = relations.filter((r) => r.status === 'ACTIVE' && !pooledIds.has(r.mentee.id));
   const items = active.map((r) => {
-    const last = r.statusChanges[r.statusChanges.length - 1];
-    const enteredStageAt = last ? last.createdAt : r.startDate;
     return {
       relationId: r.id,
       menteeId: r.mentee.id,
       menteeName: r.mentee.fullName,
       pipelineStatus: r.pipelineStatus,
-      daysInStage: Math.floor((now - enteredStageAt.getTime()) / DAY),
+      // Shared clock (src/lib/stageClock.ts) — same number the mentor board
+      // and the mentor analytics export show for the same relation.
+      daysInStage: daysInStage(r, now),
       overdue: !!r.stageDeadline && r.stageDeadline.getTime() < now,
     };
   });

@@ -1346,6 +1346,27 @@ const en = {
     wipWarning: 'Over the recommended limit',
     groups: { pre: 'Pre-internship', internship: 'Internship', result: 'Outcome', custom: 'Custom stages' },
   },
+  // The stage clock (#1724) — how long somebody has been in their current
+  // pipeline stage. Two audiences, two tones on purpose: the mentor is being
+  // told a queue is aging, the mentee must not be made to feel accused of
+  // being slow, so the mentee half never says "overdue" or "late".
+  stageClock: {
+    chip: '{n}d',
+    chipToday: 'today',
+    chipTitle: 'In this stage for {n} days',
+    chipTitleToday: 'Moved into this stage today',
+    chipTitleAttention: 'In this stage for {n} days — nothing has moved here in a while',
+    chipTitleOverdue: 'In this stage for {n} days — past the stage deadline ({date})',
+    mentee: {
+      title: 'Where you are now',
+      days: 'You have been at this stage for {n} days.',
+      oneDay: 'You have been at this stage for 1 day.',
+      today: 'You reached this stage today.',
+      nextUp: 'Next up: {stage}.',
+      expectedBy: 'Your mentor plans to take the next step by {date}.',
+      reassure: 'Waiting times differ from stage to stage — if you would like an update, just ask your mentor.',
+    },
+  },
   mentorEmail: {
     title: 'Email mentees',
     subtitle: 'Send a message to one or more of your mentees',
@@ -5882,6 +5903,23 @@ const tr: Dict = {
     wipWarning: 'Önerilen limitin üzerinde',
     groups: { pre: 'Staj öncesi', internship: 'Staj', result: 'Sonuç', custom: 'Özel aşamalar' },
   },
+  stageClock: {
+    chip: '{n} gün',
+    chipToday: 'bugün',
+    chipTitle: 'Bu aşamada {n} gündür',
+    chipTitleToday: 'Bu aşamaya bugün geçti',
+    chipTitleAttention: 'Bu aşamada {n} gündür — bir süredir burada hareket yok',
+    chipTitleOverdue: 'Bu aşamada {n} gündür — aşama son tarihi geçti ({date})',
+    mentee: {
+      title: 'Şu an neredesin',
+      days: 'Bu aşamada {n} gündür bulunuyorsun.',
+      oneDay: 'Bu aşamada 1 gündür bulunuyorsun.',
+      today: 'Bu aşamaya bugün geçtin.',
+      nextUp: 'Sırada: {stage}.',
+      expectedBy: 'Mentörün bir sonraki adımı {date} tarihine kadar atmayı planlıyor.',
+      reassure: 'Bekleme süresi aşamadan aşamaya değişir — durumu merak ediyorsan mentörüne sormaya çekinme.',
+    },
+  },
   mentorEmail: {
     title: 'Mentee’lere e-posta',
     subtitle: 'Bir veya birden çok mentee’ne mesaj gönder',
@@ -10368,6 +10406,23 @@ const de: Dict = {
     overdue: 'überfällig',
     wipWarning: 'Über dem empfohlenen Limit',
     groups: { pre: 'Vor dem Praktikum', internship: 'Praktikum', result: 'Ergebnis', custom: 'Eigene Phasen' },
+  },
+  stageClock: {
+    chip: '{n} T.',
+    chipToday: 'heute',
+    chipTitle: 'Seit {n} Tagen in dieser Phase',
+    chipTitleToday: 'Heute in diese Phase gewechselt',
+    chipTitleAttention: 'Seit {n} Tagen in dieser Phase — hier bewegt sich seit Längerem nichts',
+    chipTitleOverdue: 'Seit {n} Tagen in dieser Phase — Frist der Phase überschritten ({date})',
+    mentee: {
+      title: 'Wo du gerade stehst',
+      days: 'Du bist seit {n} Tagen in dieser Phase.',
+      oneDay: 'Du bist seit 1 Tag in dieser Phase.',
+      today: 'Du hast diese Phase heute erreicht.',
+      nextUp: 'Als Nächstes: {stage}.',
+      expectedBy: 'Dein Mentor plant den nächsten Schritt bis zum {date}.',
+      reassure: 'Wartezeiten unterscheiden sich von Phase zu Phase — wenn du ein Update möchtest, frag einfach deinen Mentor.',
+    },
   },
   mentorEmail: {
     title: 'Mentees per E-Mail erreichen',
