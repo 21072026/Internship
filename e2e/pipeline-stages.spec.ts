@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, uniqueEmail } from './helpers/db';
-import { defaultPipelineStages, resolvePipelineStages, onPathKeys, startStageKey } from '../src/lib/pipelineStages';
+import { defaultPipelineStages, resolvePipelineStages, onPathKeys, startStageKey, isDefaultLabel } from '../src/lib/pipelineStages';
 
 // Per-tenant pipeline stages (#747, Phase A). Behavior-preserving: no rows → the
 // canonical enum defaults; rows → the tenant's override. Exercised against a real
@@ -71,4 +71,50 @@ test('startStageKey never returns a key outside a non-empty stage set', () => {
   expect(startStageKey([stage('LOST', 1, true), stage('WITHDRAWN', 0, true)])).toBe('WITHDRAWN');
   // Genuinely empty (an org on the defaults, resolved elsewhere): canonical floor.
   expect(startStageKey([])).toBe('APPLICATION_100');
+});
+
+// #2268: a stage the tenant never renamed must read back in the VIEWER'S
+// language. The editor's GET used to prefill the English built-in labels and its
+// Save posted them straight back, so a single click on an untouched editor froze
+// English into the DB for every reader in every language.
+test('isDefaultLabel recognizes a built-in label in any locale, and only for a built-in key', () => {
+  // The label the editor prefilled, in each of the three languages.
+  expect(isDefaultLabel('APPLICATION_100', '100 · First contact')).toBe(true);
+  expect(isDefaultLabel('APPLICATION_100', '100 · İlk temas')).toBe(true);
+  expect(isDefaultLabel('APPLICATION_100', '100 · Erstkontakt')).toBe(true);
+  // Blank is the sentinel a save writes for an untouched stage.
+  expect(isDefaultLabel('APPLICATION_100', '')).toBe(true);
+  expect(isDefaultLabel('APPLICATION_100', '   ')).toBe(true);
+  // Something an admin actually typed is theirs, and a custom KEY never counts
+  // as a default however plausible its label reads.
+  expect(isDefaultLabel('APPLICATION_100', 'Ön görüşme')).toBe(false);
+  expect(isDefaultLabel('APPLICATION_100', '100 · First contacts')).toBe(false);
+  expect(isDefaultLabel('LEAD', 'Lead')).toBe(false);
+});
+
+test('un-renamed stage rows localize, renamed ones render verbatim', async () => {
+  const stamp = uniqueEmail('ps').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const org = await prisma.organization.create({ data: { name: `PS ${stamp}`, slug: `psl-${stamp}` } });
+  try {
+    await prisma.pipelineStage.createMany({
+      data: [
+        // The sentinel a save writes now …
+        { orgId: org.id, key: 'APPLICATION_100', label: '', order: 0 },
+        // … and what the old editor actually persisted: the English default.
+        { orgId: org.id, key: 'APPROVAL_PENDING_220', label: '220 · Awaiting approval', order: 1 },
+        // A label the admin really typed.
+        { orgId: org.id, key: 'INTERVIEW_PENDING_250', label: 'Ön görüşme', order: 2 },
+      ],
+    });
+
+    const tr = await resolvePipelineStages(org.id, 'tr');
+    expect(tr.map((s) => s.label)).toEqual(['100 · İlk temas', '220 · Onay bekliyor', 'Ön görüşme']);
+    const de = await resolvePipelineStages(org.id, 'de');
+    expect(de.map((s) => s.label)).toEqual(['100 · Erstkontakt', '220 · Warte auf Freigabe', 'Ön görüşme']);
+    const en = await resolvePipelineStages(org.id, 'en');
+    expect(en.map((s) => s.label)).toEqual(['100 · First contact', '220 · Awaiting approval', 'Ön görüşme']);
+  } finally {
+    await prisma.pipelineStage.deleteMany({ where: { orgId: org.id } });
+    await prisma.organization.deleteMany({ where: { id: org.id } });
+  }
 });
