@@ -11,6 +11,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Static analysis** | Lint + strict TypeScript typecheck | `npm run lint`, `npx tsc --noEmit` | CI (`ci.yml`) on every PR |
 | **Build test** | Production build compiles | `npm run build` | CI (`ci.yml`) |
 | **i18n parity** | EN/TR/DE translation keys stay in sync | `npm run check:i18n` | CI (`ci.yml`) |
+| **Unit + coverage floor** | Pure logic, no browser and no database, with a per-file line-coverage floor on the modules that have suites | `scripts/test/*.test.mjs` (`node --test`) + `scripts/check-unit-coverage.mjs` | CI (`ci.yml`) on every PR |
 | **Smoke / functional (E2E)** | App boots, auth works, core pages render without errors | `e2e/*.spec.ts` (Playwright) | CI (`e2e.yml`) on every PR |
 | **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics, status messages (4.1.3), reflow at 320px; OS media preferences (reduced motion, increased contrast, forced colors) | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/live-region.spec.ts`, `e2e/mobile-layout-audit.spec.ts`, `e2e/a11y-media-preferences.spec.ts` | with E2E |
 | **Security** | Headers, IDOR/RBAC, rate limiting, 2FA, login hardening | `e2e/security-headers.spec.ts`, `e2e/authz-idor.spec.ts`, `e2e/idor-hardening.spec.ts`, `e2e/rate-limit.spec.ts`, `e2e/login-security.spec.ts`, `e2e/two-factor-*.spec.ts` | with E2E |
@@ -25,7 +26,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 | **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) beyond the ten call sites the script lists by name and count; those ten move onto `emit()` when #1693 lands (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
 
-The first eleven are **functional / correctness** tests: given an input, is the output
+The first twelve are **functional / correctness** tests: given an input, is the output
 right? The two load rows are **non-functional**: the app may be correct yet too slow or
 fragile under load — those catch that. They are not redundant with each other.
 The final two rows are neither: they never run the app, they read the source tree and the
@@ -153,6 +154,65 @@ of those four is a documented gap, not a fresh regression.
 see A) — a filter accidentally pinned to one tenant passes one direction. Do not add
 `@smoke` to anything there: the PR gate runs the default project, where these specs are
 excluded and would not run anyway.
+
+## Unit tests and the coverage floor (#1599)
+
+Pure logic — a function you can call with an object and compare the result — belongs in
+`scripts/test/<name>.test.mjs`, under **Node's own test runner**. No browser, no database,
+no dependency: since Node 22 the runner strips TypeScript (`--experimental-strip-types`)
+and measures coverage (`--experimental-test-coverage`) on its own, so a test importing
+`../../src/lib/foo.ts` costs about a second.
+
+```bash
+npm run test:unit            # every scripts/test/*.test.mjs, no coverage (~2s)
+npm run test:unit:coverage   # the same, plus the per-module floor  (CI runs this)
+```
+
+Anything that needs a rendered page, a session cookie or a Prisma query stays in `e2e/`
+under Playwright. The one awkward case is the eight `e2e/*.unit.spec.ts` files: they are
+pure, but they import through the `@/` alias, which is why they were written against
+Playwright's resolver. They will move to a real unit runner in #1598; until then they run
+in the browser suite and **contribute no coverage**.
+
+### The coverage ratchet
+
+`scripts/check-unit-coverage.mjs` runs the whole unit suite and then holds each listed
+module to a **per-file line-coverage floor**. There is deliberately no repo-wide
+percentage: a single number for the tree moves whenever unrelated code lands, so nobody
+can act on it and it can only ever be argued down (#1591).
+
+The rule, and it is the whole point of the file:
+
+> **A floor goes up when a module gains tests. It is never lowered to make a PR pass.**
+
+A PR that drops a module below its floor has deleted coverage. That is the thing the gate
+exists to notice — the failing test is gone, so the suite is green and only the floor
+says anything. Restore the assertions; do not edit the number. Raising a floor is a
+normal, welcome diff; lowering one needs a reviewer to agree in writing that the rule
+being tested no longer exists.
+
+Each floor is the value measured on `main` when it was added, rounded **down** to the
+nearest 5 and capped at 95, so the gate is green on the day it lands and a routine
+refactor has a little headroom. Both numbers — floor and measured — live next to the
+entry in the script, so the headroom is readable without running anything.
+
+Two lists live in that script:
+
+| List | What it means |
+|------|---------------|
+| `FLOORS` | Modules with real coverage today. Each carries a floor, the measured value, and the incident its suite pins down. |
+| `AWAITING_TESTS` | The wave-0/1 modules (#1592) that score 0% under this runner: `orgContext`, `entitlements`, `planGate`, `pipeline`, `dormantFirstContact`, `relativeTime`. |
+
+`AWAITING_TESTS` is a ratchet, not an allowlist — the same shape as
+`PENDING_REGISTRATION` in `check-tenant-models.mjs`. It is printed on every run with a
+GitHub annotation (so the PR page shows it rather than burying it in a green step), its
+size is pinned by an `EXPECTED_AWAITING` literal so a seventh unfloored module cannot be
+appended quietly, and the moment one of those modules *is* exercised by the node runner
+the check **fails** and tells you which floor to write. That way the number lands in the
+same PR as the first test, instead of months later.
+
+The floor table is written to `$GITHUB_STEP_SUMMARY`, so a reviewer sees where every
+module stands on the PR's checks page without opening the log.
 
 ## Stress / load test
 
