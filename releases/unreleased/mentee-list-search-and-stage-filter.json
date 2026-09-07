@@ -1,0 +1,24 @@
+{
+  "bump": "minor",
+  "changelog": "- **Name search and stage/status filters on the mentor mentee list and board** (#1367). `/mentor/mentees` was a bare `relations.map()` and `/mentor/board` filtered only by column, so past a dozen active mentees both screens were a scan. The list now carries an Active/Completed chip row, a stage `<select>` fed from `useResolvedStages()` (the org's own per-tenant stages, #747 — no canonical key is named anywhere in the new code), a `data-testid=\"mentee-search\"` box over name/e-mail/university, and `SavedViews` on the same `search`/`status`/`stage` triple the admin mentorship list uses (a saved view naming a stage the org has since renamed falls back to \"all stages\" instead of silently emptying the grid). The board gets `data-testid=\"mentor-board-search\"`, and every column count is derived from the filtered `itemsFor()` so a badge can never claim rows the search has hidden. Filtering is **client-side and honestly so**: neither page passes `page` to `GET /api/mentorship`, so both already hold every relation the mentor can see and the search covers all of them — not a visible page, unlike the trap #1820 documents. The matching rule itself is one dependency-free module, `src/lib/menteeFilter.ts`, shared by both surfaces and unit-tested (`scripts/test/mentee-filter.test.mjs`); it folds diacritics and Turkish dotless ı, so \"Sahin\" finds \"Şahin\", \"Muller\" finds \"Müller\" and \"Isik\" finds \"Işık\". Deliberately **not** a board hook — extracting the admin board's `search`/`hideEmpty` state into `useBoardFilters()` remains #2076's job, and a stateless matcher cannot collide with it. Filtered-to-nothing gets its own empty state with a Clear-filters action rather than the misleading \"no mentees assigned yet\", and both surfaces announce the result count through `useFilterAnnouncement` (WCAG 4.1.3). New e2e coverage in `e2e/mentee-search-filter.spec.ts`.",
+  "notes": {
+    "en": [
+      "Your mentee list has a search box: type part of a name, e-mail address or university to find someone instantly.",
+      "Filter the mentee list by mentorship status (active or completed) and by pipeline stage, and save a filter combination you use often.",
+      "The mentor board has the same search box — non-matching cards disappear and each column's count updates with them.",
+      "Searching ignores accents, so \"Sahin\" finds \"Şahin\" and \"Muller\" finds \"Müller\"."
+    ],
+    "tr": [
+      "Mentee listenize arama kutusu eklendi: bir ismin, e-posta adresinin veya üniversitenin bir parçasını yazarak aradığınız kişiyi anında bulun.",
+      "Mentee listesini mentorluk durumuna (aktif veya tamamlandı) ve pipeline aşamasına göre süzebilir, sık kullandığınız filtre bileşimini kaydedebilirsiniz.",
+      "Mentor panosunda da aynı arama kutusu var — eşleşmeyen kartlar kaybolur ve sütun sayıları buna göre güncellenir.",
+      "Arama Türkçe harfleri görmezden gelir: \"Sahin\" yazınca \"Şahin\", \"Isik\" yazınca \"Işık\" bulunur."
+    ],
+    "de": [
+      "Ihre Mentee-Liste hat ein Suchfeld: Geben Sie einen Teil eines Namens, einer E-Mail-Adresse oder einer Hochschule ein, um jemanden sofort zu finden.",
+      "Filtern Sie die Mentee-Liste nach Mentoring-Status (aktiv oder abgeschlossen) und nach Pipeline-Phase — und speichern Sie eine Filterkombination, die Sie häufig nutzen.",
+      "Das Mentor-Board hat dasselbe Suchfeld — nicht passende Karten verschwinden, und die Anzahl je Spalte wird mit ihnen aktualisiert.",
+      "Die Suche ignoriert Akzente: \"Muller\" findet \"Müller\" und \"Sahin\" findet \"Şahin\"."
+    ]
+  }
+}

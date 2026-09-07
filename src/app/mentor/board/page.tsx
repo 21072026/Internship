@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap, LayoutGrid } from 'lucide-react';
+import { GraduationCap, LayoutGrid, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
@@ -15,10 +15,13 @@ import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { StageClockChip } from '@/components/StageClockChip';
+import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
+import { foldSearchText, matchesMenteeQuery } from '@/lib/menteeFilter';
 
 interface Mentee {
   id: string;
   fullName: string;
+  email?: string;
   university?: string;
 }
 
@@ -53,6 +56,11 @@ export default function MentorBoardPage() {
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [mobileStage, setMobileStage] = useState('');
+  // Client-side by design: this page fetches the mentor's whole relation list
+  // (GET /api/mentorship pages only for callers that pass `page`), so the box
+  // searches every mentee, not a visible page. The matching rule is shared with
+  // /mentor/mentees — see src/lib/menteeFilter.ts.
+  const [search, setSearch] = useState('');
 
   const fetchRelations = useCallback(async () => {
     const res = await fetch('/api/mentorship');
@@ -121,9 +129,29 @@ export default function MentorBoardPage() {
     }
   };
 
+  // WCAG 4.1.3, same as the admin board: the box re-filters every column in
+  // place and moves no focus, so the outcome is announced once typing settles.
+  const q = foldSearchText(search);
+  const matchCount = useMemo(
+    () => (q ? relations.filter((r) => matchesMenteeQuery(r, q)).length : 0),
+    [relations, q],
+  );
+  useFilterAnnouncement(
+    q
+      ? matchCount === 0
+        ? t.a11y.noResultsShown
+        : matchCount === 1
+          ? t.a11y.resultsShownOne
+          : t.a11y.resultsShown.replace('{count}', String(matchCount))
+      : null,
+  );
+
   if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
 
-  const itemsFor = (status: string) => relations.filter((r) => r.pipelineStatus === status);
+  // Search ∩ stage. Every column header count is derived from this, so the
+  // numbers describe what is actually on screen rather than the unfiltered set.
+  const itemsFor = (status: string) =>
+    relations.filter((r) => r.pipelineStatus === status && matchesMenteeQuery(r, q));
 
   const renderCard = (r: Relation) => (
     <div
@@ -179,6 +207,28 @@ export default function MentorBoardPage() {
         </p>
       </div>
 
+      {relations.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="relative w-full sm:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              data-testid="mentor-board-search"
+              aria-label={t.mentor.menteeBoardSearchPlaceholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t.mentor.menteeBoardSearchPlaceholder}
+              className="min-h-11 w-full rounded-lg border border-gray-300 pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+            />
+          </div>
+          {q && matchCount === 0 && (
+            <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="mentor-board-no-match">
+              {t.mentor.noMatchingMentees}
+            </span>
+          )}
+        </div>
+      )}
+
       {relations.length === 0 ? (
         /* Day one for a mentor: no assignment yet, so no board. Deliberately no
            button — assigning a mentorship is an admin action. */
@@ -220,6 +270,7 @@ export default function MentorBoardPage() {
             return (
               <div
                 key={status}
+                data-testid={`board-column-${status}`}
                 // See the admin board: forced-colors drops the bg-blue-50 drop
                 // target highlight, so mark the state for globals.css (#2045).
                 data-drop-active={dragOver === status ? 'true' : undefined}
@@ -240,7 +291,12 @@ export default function MentorBoardPage() {
               >
                 <div className="flex items-center justify-between mb-3 px-1">
                   <span className="text-xs font-semibold text-gray-700">{label(status)}</span>
-                  <span className="text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5">
+                  {/* Derived from the same filtered `items` the column renders,
+                      so the badge never claims rows the search has hidden. */}
+                  <span
+                    data-testid={`board-column-count-${status}`}
+                    className="text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5"
+                  >
                     {items.length}
                   </span>
                 </div>
