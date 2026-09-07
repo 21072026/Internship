@@ -31,6 +31,16 @@ const schema = z.object({
   newsletterSchedule: z.enum(['off', 'weekly', 'biweekly', 'monthly']).optional(),
   newsletterAudience: z.enum(['MENTEE', 'MENTOR', 'BOTH']).optional(),
   newsletterSendHour: z.string().regex(/^(?:[0-9]|1[0-9]|2[0-3])$/).optional(),
+  // Retention windows (#1678). Writable here — an operator can widen or narrow
+  // a window without a deploy — but deliberately absent from the settings form:
+  // the reasoning that makes each number defensible lives in
+  // docs/pii-access-lifecycle.md, and a field on a form separates the number
+  // from it. `\d{1,4}` bounds them at ~27 years; the job itself rejects 0 and
+  // falls back to the entry default, so an empty window cannot empty a table.
+  activityLogRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  pageViewRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  pushSubscriptionStaleDays: z.string().regex(/^\d{1,4}$/).optional(),
+  jobRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
 });
 
 // PUT — upsert one or more settings.

@@ -469,6 +469,12 @@ model PageView {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  /// The retention sweep (#1678) asks the one question the composite index
+  /// above cannot serve: "the oldest rows across ALL users, older than X". With
+  /// only a userId-leading index that is a full scan plus a filesort on every
+  /// batch — on the table that grows fastest in the product, which is exactly
+  /// the table the sweep exists for. This is the only schema change #1678 needs.
+  @@index([createdAt])
 }
 
 // Reusable, auditable per-user consent (GDPR). A consent is "active" when

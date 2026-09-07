@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { RETENTION_ACTIVITY_ACTION } from '@/lib/retentionPrune';
 
 // Job-queue health (#1674), DERIVED from the `Job` table the same way
 // `emailHealth.ts` is derived from the EmailLog ledger — there is no separate
@@ -73,5 +74,45 @@ export async function jobQueueHealth(): Promise<JobQueueHealth> {
       ? Math.max(0, Math.round((now - oldestDue.runAt.getTime()) / 1000))
       : null,
     failedLast24h,
+  };
+}
+
+// Retention health (#1678), DERIVED the same way — from the `retention.pruned`
+// ActivityLog row the daily sweep writes, not from a counter kept beside it.
+//
+// The question this answers is the one nothing can answer today: DID THE PRUNE
+// RUN? A retention job that quietly stopped looks exactly like a retention job
+// with nothing to do — both delete zero rows — and the difference between them
+// is the difference between "clean" and "we are still holding personal data we
+// said we would delete". The age of the last receipt tells them apart; the
+// summary line says what that run actually removed.
+//
+// Cost rule, as above: ONE query, behind the same gate as the queue counters
+// (`?jobs=1` AND proof of identity). That takes the opt-in jobs block from
+// three queries to four; an anonymous /api/health still issues none.
+export interface RetentionHealth {
+  /** When the last sweep recorded itself, or null when there is no receipt at all. */
+  lastRunAt: string | null;
+  /** How long ago that was, in hours. Much over 24 means a run was missed. */
+  ageHours: number | null;
+  /** The per-table counts line, e.g. `pageView=340 job=88 (1.2s)`. */
+  summary: string | null;
+  /** True when the last run recorded a failing entry (its row is logged at WARNING). */
+  degraded: boolean;
+}
+
+export async function retentionHealth(): Promise<RetentionHealth> {
+  const last = await prisma.activityLog.findFirst({
+    where: { action: RETENTION_ACTIVITY_ACTION },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true, detail: true, level: true },
+  });
+  if (!last) return { lastRunAt: null, ageHours: null, summary: null, degraded: false };
+
+  return {
+    lastRunAt: last.createdAt.toISOString(),
+    ageHours: Math.round(((Date.now() - last.createdAt.getTime()) / 3_600_000) * 10) / 10,
+    summary: last.detail,
+    degraded: last.level === 'WARNING' || last.level === 'ERROR',
   };
 }

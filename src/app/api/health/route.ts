@@ -4,7 +4,7 @@ import { timingSafeEqual } from 'crypto';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getEmailHealth } from '@/lib/emailHealth';
-import { jobQueueHealth } from '@/lib/jobs/health';
+import { jobQueueHealth, retentionHealth } from '@/lib/jobs/health';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { verifySmtpConnection } from '@/services/emailService';
 
@@ -140,7 +140,17 @@ export async function GET(request: Request) {
       // them on the fail-open detail path. Appended rather than inserted: the
       // deploy gate parses `sha` out of this response and every existing field
       // keeps its place.
-      ...(wantsJobs && access.verified ? { jobs: await jobQueueHealth() } : {}),
+      ...(wantsJobs && access.verified
+        ? {
+            jobs: await jobQueueHealth(),
+            // The daily retention sweep's own receipt (#1678): when it last
+            // ran, what it removed, whether an entry failed. Same gate and the
+            // same discipline as `jobs` — counts and one age, never row
+            // content — and it rides `?jobs=1` rather than adding a third
+            // parameter, because "is the housekeeping running?" is one question.
+            retention: await retentionHealth(),
+          }
+        : {}),
       uptimeMs: Math.round(process.uptime() * 1000),
       responseMs: Date.now() - started,
       timestamp: new Date().toISOString(),

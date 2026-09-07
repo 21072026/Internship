@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { initCronJobs } from '@/services/emailService';
 import { initNewsletterCron } from '@/lib/newsletterDispatch';
 import { initDeadLetterAlertCron } from '@/lib/jobs/dlqAlert';
+import { initRetentionCron } from '@/lib/retentionEntries';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -36,5 +37,10 @@ export async function POST(request: Request) {
   // send its mail, so registering it inside initCronJobs would close the import
   // graph into a cycle.
   initDeadLetterAlertCron();
+  // The one retention schedule in the product (#1678). Registered here for the
+  // same reason as the two above — it imports emailService for the EmailLog
+  // window it took over — and because the mail service should not be the owner
+  // of the product's data-retention policy.
+  initRetentionCron();
   return NextResponse.json({ ok: true, started: true });
 }
