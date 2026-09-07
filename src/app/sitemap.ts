@@ -58,6 +58,11 @@ const PUBLIC_ROUTES: readonly { path: string; priority: number; changeFrequency:
   { path: '/', priority: 1.0, changeFrequency: 'weekly' },
   { path: '/features', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/for-companies', priority: 0.8, changeFrequency: 'monthly' },
+  // The price is one of the two things a stranger searches for by name
+  // (#1730), so it sits with /features rather than down among the legal
+  // pages. `monthly` is honest: a published price list that changed weekly
+  // would not be a published price list.
+  { path: '/pricing', priority: 0.8, changeFrequency: 'monthly' },
   { path: '/apply-as-mentor', priority: 0.8, changeFrequency: 'monthly' },
   { path: '/projects', priority: 0.7, changeFrequency: 'weekly' },
   { path: '/release-notes', priority: 0.5, changeFrequency: 'daily' },

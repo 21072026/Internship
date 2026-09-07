@@ -99,6 +99,10 @@ const FLOORS = new Map([
     { floor: 95, measured: 99.56, why: 'the plan -> feature matrix and its free-tier fallbacks (#1731)' },
   ],
   [
+    'src/lib/money.ts',
+    { floor: 95, measured: 100.0, why: 'the only place a currency symbol is written (#1730)' },
+  ],
+  [
     'src/lib/menteeFilter.ts',
     {
       floor: 95,

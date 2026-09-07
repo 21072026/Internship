@@ -64,15 +64,18 @@ export function PublicHeader({
   // One array drives both the `lg` nav bar and the mobile disclosure panel
   // below, so a link added here is reachable on a phone by construction.
   //
-  // The Pricing entry (#1732) is parked until `/pricing` exists: #2284 shipped
-  // the link before the page, and App Router prefetches every in-viewport
-  // <Link>, so the 404 landed in the console and reded `smoke.spec.ts` — the
-  // whole merge gate — on main. `publicNav.pricing` stays in all three
-  // dictionaries, so restoring the entry is a one-line change once the page
-  // lands.
+  // The Pricing entry is back (#1730): `/pricing` now exists, so the App Router
+  // prefetch of this in-viewport <Link> resolves instead of putting a 404 in
+  // the browser console. That console error is what `smoke.spec.ts` treats as a
+  // failure, and it reded main's whole merge gate for 13 commits when #2284
+  // shipped the three links ahead of the page (#2296 parked them). The lesson
+  // worth keeping: a nav entry may only point at a route that ships in the same
+  // PR — `e2e/pricing.spec.ts` now asserts the page renders, not merely that
+  // clicking changed the URL, which is how the original break passed its gate.
   const links = [
     { href: '/features', label: n.features },
     { href: '/for-companies', label: n.forCompanies },
+    { href: '/pricing', label: n.pricing },
     { href: '/projects', label: n.showcase },
   ];
 

@@ -38,6 +38,17 @@ import {
   planFeatures,
   planIncludingFeature,
   planLimits,
+  ADDONS,
+  ADDON_KEYS,
+  METERING_UNIT,
+  NEVER_METERED,
+  PLACEMENT_FEE_BOOKABLE,
+  PLACEMENT_FEE_EUR,
+  SELF_SERVE_CHECKOUT,
+  annualMonthlyEur,
+  annualMonthsFree,
+  annualSavingEur,
+  overagePerPairCents,
   planPrice,
   plansForAudience,
   resolveEntitlements,
@@ -297,4 +308,156 @@ test('LEGACY_PLAN_MAP maps the three legacy tiers onto real plans', () => {
 
 test('the deploy backfill translates legacy plans exactly like the matrix does', () => {
   assert.deepEqual(BACKFILL_LEGACY_PLAN_MAP, LEGACY_PLAN_MAP);
+});
+
+// ── The published commercials (#1730) ────────────────────────────────────────
+//
+// The pricing page prints these, so getting one wrong is a wrong number on a
+// public page — and two of them are DERIVED from the plan table rather than
+// stored, which is the whole point but also means a price change silently
+// moves them. These tests are what makes that movement loud.
+
+test('NEVER_METERED is the free-core rule and holds no billable capability', () => {
+  // The promise is structural: nothing on this list may be sold, so no entry
+  // may collide with a premium feature key or an add-on key.
+  assert.ok(NEVER_METERED.length > 0);
+  assert.equal(new Set(NEVER_METERED).size, NEVER_METERED.length, 'duplicate entry');
+  for (const cap of NEVER_METERED) {
+    assert.ok(!KNOWN_GRANTABLE_FEATURES.has(cap), `${cap} is sold as a premium feature`);
+    assert.ok(!ADDON_KEYS.includes(cap), `${cap} is sold as an add-on`);
+  }
+  // The pipeline and the mentee portal are the two the free-core claim is
+  // most often read as excluding. Pin them by name.
+  assert.ok(NEVER_METERED.includes('pipeline'));
+  assert.ok(NEVER_METERED.includes('portal'));
+});
+
+test('the overage rate is the published 120 cents for Program', () => {
+  // €1.20/pair/month is already public. The rule (80 % of the in-band annual
+  // per-pair price) has to reproduce it exactly, or the rule is not the rule.
+  assert.equal(overagePerPairCents('program'), 120);
+});
+
+test('an over-band pair is always cheaper than an in-band one', () => {
+  // This is the "going over is not a penalty" promise, checked rather than
+  // asserted in prose. Every plan that quotes an overage must satisfy it.
+  for (const plan of PLANS) {
+    const cents = overagePerPairCents(plan.key);
+    if (cents == null) continue;
+    const inBandCents = ((plan.prices.YEARLY / 12) * 100) / plan.limits.activePairs;
+    assert.ok(
+      cents < inBandCents,
+      `${plan.key}: overage ${cents}c is not below the in-band ${inBandCents.toFixed(1)}c`,
+    );
+  }
+});
+
+test('overage is quoted only where a band can actually be exceeded', () => {
+  // Program Plus has a band and a price, so it gets a rate too — a banded paid
+  // plan with no overage rate can only mean "upgrade or stop", which is not
+  // what the page says.
+  assert.equal(overagePerPairCents('program_plus'), 80);
+  // Unlimited: nothing to exceed.
+  assert.equal(overagePerPairCents('enterprise'), null);
+  // Free tier: billing an overage needs a card, and Community has none, so its
+  // cap is hard.
+  assert.equal(overagePerPairCents('community'), null);
+  // The employer wallet owns no pairs at all.
+  for (const key of ['employer_free', 'employer', 'employer_plus']) {
+    assert.equal(overagePerPairCents(key), null, key);
+  }
+  // An unknown key must not fall back to some plan's rate.
+  assert.equal(overagePerPairCents('nope'), null);
+  assert.equal(overagePerPairCents(undefined), null);
+});
+
+test('the annual saving is derived from the two published prices', () => {
+  // Program: €189 × 12 = €2 268 monthly vs €1 788 annually.
+  assert.equal(annualSavingEur('program'), 480);
+  // Program Plus: €479 × 12 = €5 748 vs €4 788.
+  assert.equal(annualSavingEur('program_plus'), 960);
+  // Annual-only and free plans have no saving to state.
+  assert.equal(annualSavingEur('enterprise'), null);
+  assert.equal(annualSavingEur('community'), null);
+  assert.equal(annualSavingEur('employer'), null);
+  assert.equal(annualSavingEur('nope'), null);
+});
+
+test('the saving in months is what the page prints, not a rounded claim', () => {
+  // The reason a fixed "2 months free" was dropped: it is true for Program
+  // Plus and understates Program by half a month.
+  assert.equal(annualMonthsFree('program'), 2.5);
+  assert.equal(annualMonthsFree('program_plus'), 2);
+  assert.equal(annualMonthsFree('enterprise'), null);
+  assert.equal(annualMonthsFree('community'), null);
+  assert.equal(annualMonthsFree('nope'), null);
+});
+
+test('every add-on has a price, a billing shape and at most one grant', () => {
+  assert.deepEqual(
+    ADDONS.map((a) => a.key),
+    [...ADDON_KEYS],
+    'ADDONS and ADDON_KEYS disagree',
+  );
+  for (const addon of ADDONS) {
+    assert.ok(Number.isInteger(addon.priceEur) && addon.priceEur >= 0, addon.key);
+    assert.ok(['PER_MONTH', 'ONE_OFF', 'INCLUDED'].includes(addon.billing), addon.key);
+    // A charged add-on with a zero price is a giveaway nobody decided on; an
+    // INCLUDED one with a price is a charge nobody sees.
+    if (addon.billing === 'INCLUDED') assert.equal(addon.priceEur, 0, addon.key);
+    else assert.ok(addon.priceEur > 0, addon.key);
+    if (addon.grants) assert.ok(KNOWN_GRANTABLE_FEATURES.has(addon.grants), addon.key);
+  }
+  // The AI pack is the add-on that must stay an add-on: folding it into a tier
+  // gives away a €49/mo product.
+  const ai = ADDONS.find((a) => a.key === 'ai_pack');
+  assert.equal(ai.priceEur, 49);
+  assert.equal(ai.grants, 'AI_PACKAGE');
+  assert.ok(GRANT_ONLY_FEATURES.includes('AI_PACKAGE'));
+  // "Additional languages cost nothing" is a claim we publish, so it has to be
+  // in the list a reader can find.
+  assert.equal(ADDONS.find((a) => a.key === 'extra_languages').billing, 'INCLUDED');
+});
+
+test('the placement fee is published but not bookable until a lawyer says so', () => {
+  assert.equal(PLACEMENT_FEE_EUR, 890);
+  // Flipping this without a legal sign-off is the failure mode; the test is
+  // here so the flip cannot happen as a silent one-character diff.
+  assert.equal(PLACEMENT_FEE_BOOKABLE, false);
+});
+
+test('no plan sells a never-metered capability as a feature', () => {
+  // Belt and braces over the NEVER_METERED test above: the collision that
+  // matters is a capability appearing in some plan's feature list.
+  for (const plan of PLANS) {
+    for (const feature of plan.features) {
+      assert.ok(!NEVER_METERED.includes(feature), `${plan.key} sells ${feature}`);
+    }
+  }
+});
+
+test('there is no self-serve checkout, and the page is told so', () => {
+  // Subscription.currentPeriodStart is nullable because no billing provider is
+  // wired up. The page reads this flag instead of promising a card flow.
+  assert.equal(SELF_SERVE_CHECKOUT, false);
+  assert.equal(METERING_UNIT, 'ACTIVE_PAIR_MONTH');
+});
+
+test('the annual monthly-equivalent is the yearly total over twelve', () => {
+  // The headline figure on a plan column. These are the numbers printed on the
+  // website, so they are pinned rather than merely derived.
+  assert.equal(annualMonthlyEur('program'), 149);
+  assert.equal(annualMonthlyEur('program_plus'), 399);
+  assert.equal(annualMonthlyEur('enterprise'), 749);
+  assert.equal(annualMonthlyEur('employer'), 99);
+  assert.equal(annualMonthlyEur('employer_plus'), 299);
+  assert.equal(annualMonthlyEur('community'), 0);
+  assert.equal(annualMonthlyEur('nope'), null);
+  // Every annually-sold plan divides evenly, so no column shows a rounded
+  // price today. If a future price breaks this, the column is still correct to
+  // the euro — but we want to know.
+  for (const plan of PLANS) {
+    if (plan.prices.YEARLY == null) continue;
+    assert.equal(plan.prices.YEARLY % 12, 0, `${plan.key} does not divide evenly`);
+  }
 });

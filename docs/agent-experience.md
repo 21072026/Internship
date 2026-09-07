@@ -6410,3 +6410,70 @@ aramamıştım. Aynı şey `/admin/candidates`'te farklı bir sebeple geçerli (
 mobil + masaüstü listesinde iki kez); orada çözüm `candidate-card-<id>`'ye
 daraltmak. **Kural: paylaşılan kabuktaki bir bileşene testid ile bağlanırken
 önce `grep -c "<Bileşen />" src/components/ResponsiveShell.tsx`.**
+
+## 2026-09-07 — Bir issue'nun "mevcut durum" bölümü eskimiş olabilir (#1730/#1728)
+
+#1728, `src/lib/pricing.ts` diye yeni bir fiyat kataloğu modülü yaratmamı
+istiyordu ve gerekçesi olarak "`grep -rn '€\|EUR\|price' src/lib` plan ile
+ilgili hiçbir şey döndürmüyor" diyordu. Issue 2026-08-30 tarihli; o tarihten
+sonra **#1731 `src/lib/plans.ts`'i ekledi** — 462 satır, başlığında "THIS FILE
+IS THE SINGLE SOURCE OF THE PACKAGING … for the pricing page" yazıyor, ve
+istenen fiyatların, bantların, koltukların, feature matrisinin tamamı zaten
+içinde. Issue'yu harfiyen uygulamak, tam olarak issue'nun engellemek için
+yazıldığı ikinci fiyat evini yaratacaktı. `plans.ts`'i eksik ticari kalemlerle
+(overage, add-on'lar, placement fee, metering) genişlettim.
+**Kural: bir issue'nun "Current state" listesini uygulamaya başlamadan önce
+doğrula** — `ls` ile dosyanın yokluğunu, `git log --since=<issue tarihi>
+--oneline -- src/lib/` ile o alanda ne değiştiğini kontrol et. Issue'lar
+zamanda donar, kod donmaz.
+
+## 2026-09-07 — Yayınlanmış bir indirim, altındaki tablonun aritmetiğiyle çelişebilir (#1730)
+
+Strateji rakamları "yıllıkta 2 ay bedava" diyordu ve `DISCOUNTS.annualMonthsFree:
+2` olarak saklanması isteniyordu. Gerçek fiyatlarla hesap: Program Plus için
+`479 × 10 ≈ 4 788` — birebir doğru; ama Program için `189 × 12 − 1 788 = 480`,
+yani `480 / 189 = 2,54` ay. Sabit "2 ay" iddiası kendi tablosunun yarım ay
+altını söylüyordu. Sabit literal yerine `annualSavingEur()` /
+`annualMonthsFree()` türetilmiş helper'ları yazdım; sayfa hesaplanmış rakamı
+basıyor. Aynı şeyin tersi aşım ücretinde çıktı: yayınlanmış €1,20 tam olarak
+"bant içi yıllık çift başı fiyatın %80'i" kuralına oturuyor
+(`1 788/12/100 × 0,8 = 1,192 → 1,20`), yani rakam aslında bir kuralın sonucu.
+Kuralı `OVERAGE_SHARE` olarak kodladım, ücreti türettim ve unit test'te
+Program'ın **tam 120 kuruş** çıktığını sabitledim — kural yayınlanmış sayıyı
+sessizce başka bir şeye çeviremiyor. **Bir fiyat sayfası yazarken ilk iş her
+yayınlanmış iddiayı kendi tablosuna karşı hesaplamak;** pazarlama cümlesi ile
+tablo arasındaki fark, okuyucunun fark ettiği ilk şey oluyor.
+
+## 2026-09-07 — `formatCount` ondalığı yuvarlıyor, "2,5 ay" → "3 ay" (#1730)
+
+Kendi yazdığım `formatCount()` içinde `Math.round(value)` var (plan limitleri
+tamsayı olduğu için doğru). Aynı fonksiyonu "2,5 ay bedava" için de kullanınca
+sayfa **"3 ay bedava"** bastı — yani vermediğimiz bir indirimi ilan etti,
+üstelik hiçbir test kırılmadan, çünkü testler o yolu geçmiyordu. Ayrı bir
+`formatDecimal()` ekleyip pinledim. **Kural: bir sayı biçimlendiricisini ikinci
+bir çağrı yerinde kullanırken, o yerin sayısının birinciyle aynı *şekilde*
+olduğunu (tamsayı mı, ondalıklı mı, para mı) doğrula** — imza `number` kabul
+ettiği için tip sistemi bunu yakalamıyor.
+
+## 2026-09-07 — `check:contrast`, geri açtığım eski bir düğmeyi yakaladı (#1730)
+
+#2296'nın park ettiği landing CTA'sını geri açarken `bg-green-600 text-white`
+yazdım (repoda başka yerlerde geçen bir kombinasyon). `npm run check:contrast`
+3,30:1 ölçtü ve WCAG AA'nın altında olduğunu, `green-700`'e (5,02:1) inmem
+gerektiğini **ölçülen oranla birlikte** söyledi. Guard'ın verdiği tavsiye
+doğrudan uygulanabilir haldeydi. **Kural: public bir sayfaya `text-white` +
+renkli zemin ekleyen her diff'te `npm run check:contrast` çalıştır** — CI'da
+zaten var, ama lokalde çalıştırmak bir tur tasarrufu; ve "başka yerde de böyle
+yazılmış" bir kombinasyonun geçerli olduğunun kanıtı değil.
+
+## 2026-09-07 — Yeni bir public route'un iki kaydı var, biri kolayca atlanıyor (#1730)
+
+`/pricing` sayfasını yazıp header/footer linklerini geri açtıktan sonra
+`src/app/sitemap.ts`'teki `PUBLIC_ROUTES` listesini eklemeyi neredeyse
+atlıyordum: sayfa çalışıyor, linkler çalışıyor, hiçbir test kırılmıyor —
+yalnızca sayfa arama motorlarına görünmez oluyor, ki fiyat sayfası için bu
+hatanın en pahalı hâli. `e2e/robots-sitemap.spec.ts` listedeki her route'u
+çözüyor ama listede **olmayan** bir route'u şikâyet etmiyor. **Kural: yeni bir
+public sayfa = üç kayıt** — `src/app/<route>/page.tsx`, `PublicHeader`/
+`PublicFooter` girişi ve `src/app/sitemap.ts`. Bir de dördüncüsü:
+`src/lib/features.ts` (CLAUDE.md'nin feature-catalogue disiplini).
