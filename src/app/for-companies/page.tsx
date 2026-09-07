@@ -63,10 +63,17 @@ export default async function ForCompaniesPage() {
           ))}
         </ul>
 
-        {/* Pilot framing */}
+        {/* Pilot framing. The body used to promise that pricing would be
+            "worked out together with the first companies"; with /pricing live
+            (#1730) that was the site stating two pricing policies, so it now
+            says what is true — free on the pilot tier — and links to the
+            published list rather than restating a number that would drift. */}
         <section className="mt-14 rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">{c.pilotTitle}</h2>
           <p className="text-gray-600 leading-relaxed">{c.pilotBody}</p>
+          <Link href="/pricing" className="mt-3 inline-block text-sm font-medium text-blue-600 hover:underline">
+            {c.pilotLink}
+          </Link>
         </section>
 
         {/* Verifiable proof */}

@@ -460,3 +460,177 @@ export const KNOWN_GRANTABLE_FEATURES: ReadonlySet<string> = new Set<string>([
   ...PLANS.flatMap((p) => [...p.features]),
   ...GRANT_ONLY_FEATURES,
 ]);
+
+// ── Published commercials beyond the plan table (#1730) ──────────────────────
+//
+// Everything below is what the pricing page needs and the plan matrix above
+// does not carry: how we count, what we never count, what going over the band
+// costs, the add-ons, and the per-hire alternative on the employer side. It
+// lives here rather than in a module of its own for the reason stated at the
+// top of this file — a second home for a published number is how the pricing
+// page and the invoice start disagreeing.
+
+// The one metering unit of the programme side. A pair is counted for a
+// calendar month when it is an ACTIVE relation with any logged activity in
+// that month; paused, benched and completed pairs are not counted. #1750
+// computes it — this constant is the name the page and the invoice both use.
+export const METERING_UNIT = 'ACTIVE_PAIR_MONTH' as const;
+
+// What is never metered, at any tier, for anybody. Capability KEYS, not prose:
+// the pricing page renders each from `pricing.neverMetered.<key>`, so the
+// promise and the list it is made of cannot drift apart in one locale.
+//
+// This list is the free-core rule in machine-readable form. Nothing in it may
+// ever appear as a paid line item — not as a plan feature, not as an add-on.
+export const NEVER_METERED = [
+  'messaging',
+  'meetings',
+  'video',
+  'goals',
+  'evaluations',
+  'interactionLogs',
+  'cv',
+  'portal',
+  'pipeline',
+] as const;
+export type NeverMeteredCapability = (typeof NEVER_METERED)[number];
+
+// Going over the band is not a penalty, and the page makes that checkable by
+// publishing the RULE instead of a number: one extra pair costs this share of
+// what a pair inside the band costs at the annual price, rounded to 10 cents.
+// Below 1.0 means over-band pairs are always cheaper than in-band ones, which
+// is the promise "aşım cezası değil" actually rests on.
+export const OVERAGE_SHARE = 0.8;
+
+/**
+ * The overage rate for a plan, in CENTS per extra active pair per month, or
+ * null when the plan has no overage to quote.
+ *
+ * Derived rather than stored, deliberately: a stored rate is a second price,
+ * and it goes stale the first time a plan's YEARLY figure moves. The unit test
+ * pins Program to the already-published 120 cents, so the rule cannot quietly
+ * restate the public figure as something else.
+ *
+ * Null for: Enterprise (no band — unlimited), Community (a free tier's cap is
+ * hard, because billing an overage needs a card and Community has none), and
+ * every employer plan (they own no pairs at all).
+ *
+ * Cents, not euros, because €1.20 is not representable as a whole-EUR price
+ * like everything in `Plan.prices`, and a float euro on an invoice line is a
+ * rounding bug waiting for a support ticket.
+ */
+export function overagePerPairCents(key: unknown): number | null {
+  const plan = getPlan(key);
+  if (!plan) return null;
+  const band = plan.limits.activePairs;
+  const yearly = plan.prices.YEARLY;
+  if (band == null || band <= 0 || yearly == null || yearly <= 0) return null;
+  const perPairPerMonth = yearly / 12 / band;
+  return Math.round((perPairPerMonth * OVERAGE_SHARE * 100) / 10) * 10;
+}
+
+/**
+ * What paying annually saves, in whole EUR per year, or null when the plan is
+ * not sold on both intervals (Enterprise is annual-only) or is free.
+ *
+ * Derived, and the page prints the derived figure rather than a rounded claim.
+ * A fixed "2 months free" was exactly true for Program Plus (479 × 10 ≈ 4 788)
+ * and understated Program, whose annual price is nearer two and a half months
+ * off — so the headline discount contradicted the very table under it.
+ */
+export function annualSavingEur(key: unknown): number | null {
+  const plan = getPlan(key);
+  if (!plan) return null;
+  const { MONTHLY, YEARLY } = plan.prices;
+  if (MONTHLY == null || YEARLY == null || MONTHLY <= 0) return null;
+  const saving = MONTHLY * 12 - YEARLY;
+  return saving > 0 ? saving : null;
+}
+
+/**
+ * The monthly-equivalent price of the annual plan, in whole EUR — the headline
+ * figure on a pricing column ("€149/month, billed annually"), which is the
+ * annual total divided by twelve rather than a second published number.
+ *
+ * Every plan sold annually divides evenly today (1 788, 4 788, 8 988, 1 188 and
+ * 3 588 are all multiples of 12), so the rounding never actually bites; it is
+ * there because the next price someone picks might not be, and a column
+ * reading "€149.0833/month" is worse than one cent of imprecision.
+ */
+export function annualMonthlyEur(key: unknown): number | null {
+  const yearly = getPlan(key)?.prices.YEARLY;
+  return yearly == null ? null : Math.round(yearly / 12);
+}
+
+/**
+ * The same saving expressed in months of the monthly price, to one decimal —
+ * "2.5 months free" lands with a buyer in a way "€480" does not. Null exactly
+ * when annualSavingEur() is.
+ */
+export function annualMonthsFree(key: unknown): number | null {
+  const saving = annualSavingEur(key);
+  const monthly = getPlan(key)?.prices.MONTHLY;
+  if (saving == null || monthly == null || monthly <= 0) return null;
+  return Math.round((saving / monthly) * 10) / 10;
+}
+
+// ── Add-ons ──────────────────────────────────────────────────────────────────
+
+export const ADDON_KEYS = ['ai_pack', 'migration', 'eu_hosting', 'extra_languages'] as const;
+export type AddonKey = (typeof ADDON_KEYS)[number];
+
+// PER_MONTH and ONE_OFF are charged; INCLUDED is a published promise that
+// something costs nothing. `extra_languages` is INCLUDED rather than absent
+// from this list on purpose: "additional languages are free" is a competitive
+// claim, and a claim nobody can find is not made.
+export type AddonBilling = 'PER_MONTH' | 'ONE_OFF' | 'INCLUDED';
+
+export interface Addon {
+  key: AddonKey;
+  // Whole EUR, net of VAT, per `billing`.
+  priceEur: number;
+  billing: AddonBilling;
+  // The premium feature this add-on grants, when it maps to one. The AI pack
+  // is the only one that does — it is the whole of GRANT_ONLY_FEATURES — and
+  // naming it here is what keeps its published price and its entitlement key
+  // from being maintained in two places.
+  grants?: PremiumFeature;
+}
+
+export const ADDONS: readonly Addon[] = [
+  { key: 'ai_pack', priceEur: 49, billing: 'PER_MONTH', grants: 'AI_PACKAGE' },
+  { key: 'migration', priceEur: 890, billing: 'ONE_OFF' },
+  { key: 'eu_hosting', priceEur: 99, billing: 'PER_MONTH' },
+  { key: 'extra_languages', priceEur: 0, billing: 'INCLUDED' },
+];
+
+// ── The per-hire alternative, and why it is not for sale yet ─────────────────
+//
+// €890 per confirmed hire, offered instead of an employer subscription to a
+// company that hires rarely.
+//
+// NOT BOOKABLE. Charging a fee for placing a person touches regulated ground
+// in both of our markets — Arbeitsvermittlung / AÜG in Germany and the İŞKUR
+// private-employment-agency regime in Turkey — and neither has been checked by
+// a lawyer. So the pricing page renders the figure with a "subject to a legal
+// check before it can be booked" footnote and gives it no CTA, which is the
+// difference between publishing a price and selling a service.
+//
+// `PLACEMENT_FEE_BOOKABLE` flips in the same diff as the legal sign-off and
+// not one commit earlier; the page reads the flag rather than hardcoding the
+// footnote, so the footnote disappears by itself when it stops being true.
+export const PLACEMENT_FEE_EUR = 890;
+export const PLACEMENT_FEE_BOOKABLE = false;
+
+// ── Where the price is actually agreed, today ────────────────────────────────
+//
+// There is no self-serve checkout: `Subscription.currentPeriodStart` is
+// nullable precisely because "the authority for these dates is the billing
+// provider, which is not wired up yet". Every paid plan is therefore invoiced
+// by hand after a conversation.
+//
+// The pricing page has to say so. A published price list with a "Buy" button
+// that opens an email client is worse than one that tells you up front how
+// this works — and the honest version is also the one that does not promise a
+// card flow we would then have to build in a hurry.
+export const SELF_SERVE_CHECKOUT = false;

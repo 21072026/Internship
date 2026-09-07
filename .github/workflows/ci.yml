@@ -98,6 +98,16 @@ jobs:
       # the two can silently disagree (#1731).
       - name: the plan → feature matrix and its fallbacks (#1731)
         run: npm run test:plans
+      # src/lib/money.ts is the ONLY place a currency symbol is written, which
+      # is what lets the pricing page carry no currency literal of its own. So
+      # every bug in it is a wrong number on a public page, in a locale the
+      # author probably does not read: the group and decimal separators are
+      # swapped between en and tr/de (€1,20 read as English is €120), the symbol
+      # changes side, and the module is hand-rolled rather than Intl precisely
+      # because ICU builds disagree — which only a test pinning exact strings
+      # keeps honest (#1730).
+      - name: money and percent formatting in all three locales (#1730)
+        run: npm run test:money
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # An API-key request has no session, so nothing resolves a tenant for it

@@ -16,7 +16,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban,
+  FolderKanban, BadgeEuro,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -92,5 +92,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'enterpriseSso', category: 'trust', icon: KeyRound, color: 'indigo', title: C.enterpriseSso.t, desc: C.enterpriseSso.d },
     { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', title: C.rematch.t, desc: C.rematch.d },
+    { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', title: C.pricing.t, desc: C.pricing.d },
   ];
 }

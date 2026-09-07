@@ -396,13 +396,17 @@ export default async function HomePage() {
           </p>
           <h2 className="mt-4 text-2xl sm:text-3xl font-bold text-gray-900 leading-snug">{L.heroModel}</h2>
           <p className="mt-4 text-base text-gray-600 leading-relaxed">{L.freeCoreBody}</p>
-          {/* The "See pricing" CTA is parked with the nav entries until
-              `/pricing` exists (see PublicHeader). It cannot point anywhere
-              else: `freeCoreCta` promises the price in all three locales, and
-              a button that says "See pricing" and lands on /features is worse
-              than no button. The band still carries the promise and the proof;
-              only the click is missing. `freeCoreCta` stays in the
-              dictionaries for the page that will use it. */}
+          {/* The CTA the band was built around, restored with the page it
+              needs (#1730). `freeCoreCta` promises the price in all three
+              locales, which is why it was left pointing nowhere rather than
+              re-aimed at /features while the route was missing. */}
+          <Link
+            href="/pricing"
+            data-testid="free-core-cta"
+            className="mt-6 inline-flex items-center justify-center rounded-lg bg-green-700 px-5 py-3 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+          >
+            {L.freeCoreCta}
+          </Link>
         </div>
       </section>
 
