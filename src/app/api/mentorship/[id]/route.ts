@@ -8,7 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 import { withTenantScope } from '@/lib/orgContext';
 import { isPendingActivation } from '@/lib/menteeAccount';
-import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
+import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 
 const updateRelationSchema = z.object({
   status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
@@ -212,18 +212,22 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         },
       });
 
-      // Record an audit entry when the pipeline stage actually changes.
-      if (stageChanging) {
-        await prisma.statusChange.create({
-          data: {
+      // Record an audit entry when the pipeline stage actually changes. The row
+      // is built by the shared gate (#934), which is what refuses a from === to
+      // entry — `stageChanging` already excludes that case, so this is the same
+      // rule expressed once instead of per write path.
+      const auditRow = stageChanging
+        ? statusChangeData({
             relationId: id,
             fromStatus: relation.pipelineStatus,
             toStatus: pipelineStatus!,
             changedById: session.user.id,
-            reasonCode: reasonCode ?? null,
-            reasonNote: reasonNote?.trim() || null,
-          },
-        });
+            reasonCode,
+            reasonNote,
+          })
+        : null;
+      if (auditRow) {
+        await prisma.statusChange.create({ data: auditRow });
         await logActivity({
           action: 'pipeline.stage_change',
           actorId: session.user.id,

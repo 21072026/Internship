@@ -114,6 +114,14 @@ async function main() {
         skipped++;
         continue;
       }
+      // Cannot happen — `target` comes from a stage set that was just checked
+      // not to contain `SCHEMA_DEFAULT_STAGE` — but no path may write a
+      // from === to StatusChange (#934), and a backfill running unattended on
+      // production is the last place to rely on "cannot happen".
+      if (rel.pipelineStatus === target) {
+        skipped++;
+        continue;
+      }
       await prisma.$transaction([
         prisma.mentorshipRelation.update({
           where: { id: rel.id },

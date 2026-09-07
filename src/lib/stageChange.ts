@@ -50,3 +50,61 @@ export async function validateDropoffReason(input: DropoffReasonInput): Promise<
   }
   return { ok: true };
 }
+
+// ── The single gate every StatusChange write goes through (#934) ─────────────
+//
+// A row whose `fromStatus` equals its `toStatus` is not a move: it is noise in
+// the one table that is supposed to be a clean record of a person's progress,
+// and — quieter but worse — it is arithmetic. `stageEnteredAt()`
+// (src/lib/stageClock.ts) takes the newest StatusChange whatever it says, so a
+// no-op row silently RESTARTS the stage clock; `computeStageAging()`
+// (src/lib/stageAging.ts) reads it as "left stage X, entered stage X" and
+// counts two visits where there was one; the mentor analytics "stage moves"
+// figure and the activity report both count rows.
+//
+// The guard used to be written out at each write path, which meant the bulk
+// "advance stage" action never had it. Now every caller builds its row here and
+// a `null` means "there is nothing to record" — the surrounding operation is
+// still a success (see the callers: a request that sets a stage to its current
+// value is a silent no-op, never a 400).
+export interface StatusChangeInput {
+  relationId: string;
+  fromStatus: string;
+  toStatus: string;
+  changedById: string;
+  reasonCode?: string | null;
+  reasonNote?: string | null;
+  /** Only for a backdated history correction; omitted rows use the DB default. */
+  createdAt?: Date;
+}
+
+export interface StatusChangeData {
+  relationId: string;
+  fromStatus: string;
+  toStatus: string;
+  changedById: string;
+  reasonCode: string | null;
+  reasonNote: string | null;
+  createdAt?: Date;
+}
+
+/**
+ * The `data` for `prisma.statusChange.create()`, or `null` when the row would
+ * be a no-op and must not be written at all.
+ *
+ * Returning the payload rather than performing the write keeps this usable from
+ * inside the `$transaction([...])` arrays the write paths use, so the audit row
+ * and the relation's `pipelineStatus` still land together or not at all.
+ */
+export function statusChangeData(input: StatusChangeInput): StatusChangeData | null {
+  if (!isStageTransition(input.fromStatus, input.toStatus)) return null;
+  return {
+    relationId: input.relationId,
+    fromStatus: input.fromStatus,
+    toStatus: input.toStatus,
+    changedById: input.changedById,
+    reasonCode: input.reasonCode ?? null,
+    reasonNote: input.reasonNote?.trim() || null,
+    ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+  };
+}

@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
-import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
+import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 
 // Stage key is a free string now (#747) so tenant-defined stages are accepted.
@@ -63,18 +63,25 @@ export async function POST(request: Request) {
     // + pipeline.stage_change webhook fire like on every other write path.
     const applyToRelation = !isBackdated && toStatus !== relation.pipelineStatus;
 
+    // Built through the shared gate (#934) rather than inline: it is the one
+    // place that refuses a from === to row. The early return above has already
+    // handled the no-op cases, so this is non-null here — the fallback keeps
+    // the guarantee true if that reasoning ever stops holding.
+    const changeData = statusChangeData({
+      relationId,
+      fromStatus: isBackdated ? fromStatus : relation.pipelineStatus,
+      toStatus,
+      changedById: session.user.id,
+      reasonCode,
+      reasonNote,
+      ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+    });
+    if (!changeData) {
+      return NextResponse.json({ change: null, changed: false });
+    }
+
     const [change] = await prisma.$transaction([
-      prisma.statusChange.create({
-        data: {
-          relationId,
-          fromStatus: isBackdated ? fromStatus : relation.pipelineStatus,
-          toStatus,
-          changedById: session.user.id,
-          reasonCode: reasonCode ?? null,
-          reasonNote: reasonNote?.trim() || null,
-          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
-        },
-      }),
+      prisma.statusChange.create({ data: changeData }),
       ...(applyToRelation
         ? [prisma.mentorshipRelation.update({ where: { id: relationId }, data: { pipelineStatus: toStatus } })]
         : []),

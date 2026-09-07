@@ -580,6 +580,14 @@ run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
 # deliberate choice. Converges to a no-op after the first deploy.
 run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
 
+# Remove the stage-history rows that record no movement — `fromStatus` equal to
+# `toStatus`, and nothing else (#934). They are noise in the relation timeline
+# and, less visibly, arithmetic: the stage clock restarts on the newest
+# StatusChange whatever it says, and the aging report counts a no-op as a
+# completed stage visit with a near-zero dwell. Every write path now refuses to
+# create one, so this converges to a no-op after the first deploy.
+run_tool node prisma/backfill-noop-status-changes.mjs --apply || true
+
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
 # stopped and removed the running container BEFORE proving the new image works,

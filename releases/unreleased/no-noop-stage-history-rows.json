@@ -1,0 +1,18 @@
+{
+  "bump": "patch",
+  "changelog": "- **No no-op stage-history rows** (#934). Every path that writes a `StatusChange` now builds it through `statusChangeData()` in `src/lib/stageChange.ts`, which refuses a row whose `fromStatus` equals its `toStatus` — including the bulk \"advance stage\" action and the demo seeder, neither of which had the check. A same-stage write stays a successful no-op rather than becoming a 400. `prisma/backfill-noop-status-changes.mjs` (idempotent, registered in `infra/deploy-prod.sh` and `infra/server/topic-deploy.sh`) deletes the rows already in the table; hiding them in the UI was never enough, because the stage clock (`stageEnteredAt`) and the aging report read the table, not the rendered list.",
+  "notes": {
+    "en": [
+      "Stage history no longer shows \"moves\" that went nowhere, and the ones already recorded have been cleaned up.",
+      "\"Days in stage\" and the time-in-stage report are accurate again: a phantom entry can no longer restart a candidate's stage clock."
+    ],
+    "tr": [
+      "Aşama geçmişinde artık aynı aşamadan aynı aşamaya \"geçiş\" kayıtları görünmüyor; daha önce yazılmış olanlar da temizlendi.",
+      "\"Aşamada geçen gün\" ve aşama süresi raporu yeniden doğru: sahte bir kayıt artık adayın aşama sayacını sıfırlayamıyor."
+    ],
+    "de": [
+      "Der Stufenverlauf zeigt keine \"Wechsel\" mehr, bei denen sich nichts geändert hat; bereits erfasste Einträge wurden entfernt.",
+      "\"Tage in der Stufe\" und der Verweildauer-Bericht stimmen wieder: ein Scheineintrag kann die Stufenuhr einer Kandidatin nicht mehr zurücksetzen."
+    ]
+  }
+}
