@@ -5868,3 +5868,34 @@ reddettiği şeyi** anlatmalı, sonraki issue'yu değil.
 **Metin taramasının sınırını guard'ın kendi başlığına yaz.** Yorum satırına alınmış bir
 çağrı hâlâ çağrı sayılır; `import { dispatchWebhook as fire }` kaçar. Bunlar grep şeklindeki
 bir guard'ın bedeli — ama yazılmamışsa, bir sonraki okuyucu guard'ı olduğundan güçlü sanar.
+
+## 2026-09-07 — Ekran görüntüsünü doğrulamak, üretmekten daha kolay (#2233)
+
+**`ffmpeg` yoksa süreyi başlıktan oku.** Klip için "en fazla 5 saniye" kuralını
+`ffprobe` ile zorlamak CI'da mümkün değil (kurulu değil, kurmak da 60 MB). WebM = EBML;
+`Segment > Info > Duration` alanını okumak 60 satırlık bir vint ayrıştırıcı. Ama
+Playwright kaydı **canlı mux ediyor**, yani `Duration` her zaman yazılmıyor — bu yüzden
+ikinci kaynak olarak son `Cluster` zaman kodunu kullan: hep **eksik** tahmin eder, yani
+üst sınır için güvenli yön. Aynı mantık PNG için de geçerli: `IHDR` sabit ofsette, genişlik
+ve yükseklik dört baytlık iki tam sayı — sayfanın `width`/`height` vermesi için kullanıcıya
+piksel yazdırmaya gerek yok.
+
+**Bir e2e dosyası "üretici" olacaksa, projeyi koşullu tanımla.** Playwright'ta bir spec'i
+"varsayılan koşuda çalışmasın" yapmanın temiz yolu grep değil: varsayılan projeye
+`testIgnore`, üreticiye ise yalnızca bir env değişkeni varken var olan **ayrı bir proje**.
+Böylece hem PR gate'i hem 4x günlük tam koşu dosyayı hiç görmüyor — etiket unutulsa bile.
+
+**İkili fixture'ı depoya koymak yerine baytı testte üret.** Geçerli PNG (CRC32 + zlib) ve
+geçerli EBML üretmek ~80 satır; karşılığında testler "gerçekten 469 KB olan bir PNG" veya
+"gerçekten 9 saniye diyen bir WebM" ile çalışıyor, depoda tek bir blob yok ve her kural
+kendi özelliğini taşıyan bir dosyayla kanıtlanıyor.
+
+**`prefers-reduced-motion` için videoyu duraklatmak yetmez.** Doğru davranış videoyu
+**hiç mount etmemek**: SSR poster'ı basar, istemci tercihi okuyup sadece hareket serbestse
+`<video>`'ya geçer. Duraklatılmış video hâlâ indiriliyor ve hâlâ bir video; poster ise
+CHANGELOG.md'nin ve WebM çözemeyen tarayıcının da ihtiyacı olan tek dosya.
+
+**Üretemediğin şeyi sahtesiyle doldurma.** Kabul kriteri "PR kendi özelliğini kullansın"
+diyordu; konteynerde tarayıcı ve veritabanı yok, yani gerçek bir ekran görüntüsü çıkmıyor.
+Elde çizilmiş bir PNG'yi "uygulamanın ekran görüntüsü" diye commit etmek mekanizmayı test
+etmez, sadece kaydı kirletir — fragment medyasız gitti ve PR gövdesinde nedeni yazıyor.
