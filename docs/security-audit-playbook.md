@@ -170,6 +170,7 @@ regresyondur**:
 | API anahtarı saklama | SHA-256 hash'li (`src/lib/apiKey.ts`) — token saklamada örnek alınmalı |
 | Oturum çerezi | `httpOnly` + `SameSite=Lax` |
 | Login brute-force | **E-posta** anahtarlı limit → XFF spoof'undan etkilenmiyor (bilinçli tasarım, koruyun) |
+| Hız sınırı sayacı (#1696) | `RATE_LIMIT_REDIS_URL` **ayarlıysa** sayaç replikalar arasında ortak; ayarlı değilse süreç başına (tek konteyner için doğru varsayılan). Sızma testinde bunu önce doğrulayın — çok replikalı bir ortamda `memory` görmek, ölçtüğünüz her limitin replika sayısı kadar cömert olduğu anlamına gelir: `GET /api/health?limits=1` → `rateLimitStore` (admin oturumu veya `HEALTH_TOKEN`). `degraded: true` ise depo o an erişilemiyor ve sınırlayıcı **bilinçli olarak açık kalıyor** (kimse girişten kilitlenmesin diye) — bu bir bulgu değil, kayıtlı bir tasarım kararı; kalıcı olması bir bulgudur |
 | Inbound e-posta | Gönderenin thread katılımcısı olması ayrıca doğrulanıyor + `timingSafeEqual` |
 | Prisma sorgu kurulumu | Uygulama kodunda ham SQL yok; hiçbir doğrulanmamış gövde alanı `where`'e girmiyor — `npm run check:query-scalars` bunu CI'da tutuyor (§8) |
 | Giden `fetch` (SSRF) | Sunucu tarafındaki iki çağrı yeri de `assertPublicHttpsUrl`'den geçiyor: `src/lib/webhooks.ts` ve `src/lib/certificatePdf.ts` |

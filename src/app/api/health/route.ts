@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getEmailHealth } from '@/lib/emailHealth';
 import { jobQueueHealth } from '@/lib/jobs/health';
+import { rateLimitStoreHealth } from '@/lib/rateLimit';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { verifySmtpConnection } from '@/services/emailService';
 
@@ -90,7 +91,13 @@ export async function GET(request: Request) {
   // what keeps the endpoint inside its k6 latency budget (docs/testing.md — it
   // already pays four EmailLog queries in the detail view).
   const wantsJobs = params.get('jobs') === '1';
-  const access = await resolveAccess(request, wantsJobs);
+  // Which backend the rate limiter counts into, and whether it has fallen back
+  // to per-process counting (#1696). Costs nothing to read — two in-process
+  // fields, no query — but it rides on the same proof of identity as the queue
+  // counters rather than the fail-open detail path: "the limiter is degraded"
+  // is exactly the hint an attacker wants before a credential-stuffing run.
+  const wantsLimits = params.get('limits') === '1';
+  const access = await resolveAccess(request, wantsJobs || wantsLimits);
 
   let db: 'ok' | 'error' | 'skipped' = 'skipped';
   if (wantsDb) {
@@ -141,6 +148,8 @@ export async function GET(request: Request) {
       // deploy gate parses `sha` out of this response and every existing field
       // keeps its place.
       ...(wantsJobs && access.verified ? { jobs: await jobQueueHealth() } : {}),
+      // Opt-in with ?limits=1, and only for a verified caller — see above.
+      ...(wantsLimits && access.verified ? { rateLimitStore: rateLimitStoreHealth() } : {}),
       uptimeMs: Math.round(process.uptime() * 1000),
       responseMs: Date.now() - started,
       timestamp: new Date().toISOString(),

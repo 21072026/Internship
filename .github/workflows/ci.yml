@@ -67,6 +67,13 @@ jobs:
       # claims to be complete (#1820).
       - name: mentor directory reports a truncated scan exactly (#1820)
         run: npm run test:mentor-directory
+      # Rate limits are a security control on ~30 endpoints, and both ways of
+      # getting the shared store wrong are invisible in a browser: counting
+      # per-process again (every limit doubles per replica) or letting a store
+      # outage reach the caller (nobody signs in). These assertions are the only
+      # thing that looks (#1696).
+      - name: rate limits are shared, and fall back safely (#1696)
+        run: npm run test:rate-limit-store
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # An API-key request has no session, so nothing resolves a tenant for it
