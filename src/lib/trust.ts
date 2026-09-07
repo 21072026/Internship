@@ -18,7 +18,7 @@
 import type { Dictionary } from '@/i18n/dictionaries';
 
 /** Bump together with the "Last updated" line in docs/trust/subprocessors.md. */
-export const SUBPROCESSORS_UPDATED = '2026-09-02';
+export const SUBPROCESSORS_UPDATED = '2026-09-07';
 
 /**
  * How much has to be true before this party receives anything.

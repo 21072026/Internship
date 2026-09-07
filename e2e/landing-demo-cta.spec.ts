@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { COOKIE_CONSENT_KEY, COOKIE_CONSENT_VERSION } from '../src/lib/cookieConsent';
 
 // The landing page must offer a path to the public demo (#966): a hero button,
 // an inline link in the bottom CTA block, and a footer link. All three point at
@@ -61,30 +62,118 @@ test('the demo links are distinguishable by utm_content', async ({ page }) => {
   expect(new Set(contents).size).toBe(contents.length);
 });
 
-// The click event is consent-gated (src/lib/track.ts): with no stored analytics
-// consent no provider is loaded and the handler must be a silent no-op — the
-// navigation still happens and nothing throws.
+// The click event is consent-gated (`src/lib/track.ts`). Proving that needs a
+// transport to watch: in CI none of NEXT_PUBLIC_PLAUSIBLE_DOMAIN /
+// NEXT_PUBLIC_GA4_MEASUREMENT_ID / NEXT_PUBLIC_POSTHOG_KEY is set, so
+// AnalyticsScripts injects nothing, `window.plausible` never exists and
+// `track()` no-ops through its optional-call chain whether or not the gate is
+// there. Watching outbound *requests* therefore cannot fail — so these two
+// tests install a recorder on `window.plausible` before the page loads and
+// assert on what `track()` did with it: silence without consent, the event with
+// it. Delete the `hasConsent('analytics')` line in track.ts and the first one
+// goes red.
+//
+// The recorder is a get/set pair rather than a plain assignment so it survives
+// an environment where a provider *is* configured: the real script's
+// `window.plausible = …` lands in `real`, and the getter records and forwards.
+async function recordPlausibleCalls(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __trackCalls: unknown[][];
+      plausible?: (...a: unknown[]) => void;
+    };
+    w.__trackCalls = [];
+    let real: ((...a: unknown[]) => void) | undefined;
+    // One stable wrapper, and the setter refuses to store it: the real
+    // Plausible snippet assigns `window.plausible = window.plausible || …`,
+    // which would otherwise make the wrapper its own `real` and recurse.
+    const wrapper = (...args: unknown[]) => {
+      w.__trackCalls.push(args);
+      real?.(...args);
+    };
+    Object.defineProperty(w, 'plausible', {
+      configurable: true,
+      get: () => wrapper,
+      set: (fn: (...a: unknown[]) => void) => {
+        if (fn !== wrapper) real = fn;
+      },
+    });
+  });
+}
+
+// Store an analytics-consent choice before any page script runs. The suite's
+// default storageState (e2e/global-setup.ts) is a returning visitor with
+// analytics: false, which is exactly the state the first test wants.
+async function grantAnalyticsConsent(page: Page) {
+  // Key and version read from the app, so bumping COOKIE_CONSENT_VERSION makes
+  // this test re-consent instead of silently asserting on a stale choice.
+  await page.addInitScript(
+    ([key, version]: [string, number]) => {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          version,
+          necessary: true,
+          analytics: true,
+          marketing: false,
+          ts: new Date().toISOString(),
+        }),
+      );
+    },
+    [COOKIE_CONSENT_KEY, COOKIE_CONSENT_VERSION] as [string, number],
+  );
+}
+
+// Click the hero CTA without leaving the site: the event fires on click, the
+// navigation is irrelevant to what we assert.
+async function clickHeroDemoCta(page: Page) {
+  await page.getByTestId('hero-demo-cta').evaluate((el) => {
+    el.addEventListener('click', (e) => e.preventDefault());
+    (el as HTMLElement).click();
+  });
+}
+
 test('clicking a demo link without analytics consent sends nothing', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-
-  await page.goto('/');
-  // Nothing may leave for a third party without consent.
+  // Registered before the navigation, or the pageview fired during load is
+  // never seen.
   const analyticsRequests: string[] = [];
   page.on('request', (r) => {
     const u = r.url();
     if (/plausible|google-analytics|googletagmanager|posthog/.test(u)) analyticsRequests.push(u);
   });
 
-  // Don't actually leave the site: the event fires on click, the navigation is
-  // irrelevant to what we assert.
-  await page.getByTestId('hero-demo-cta').evaluate((el) => {
-    el.addEventListener('click', (e) => e.preventDefault());
-    (el as HTMLElement).click();
-  });
+  await recordPlausibleCalls(page);
+  await page.goto('/');
+  await clickHeroDemoCta(page);
 
-  expect(errors).toEqual([]);
+  // The gate, asserted where it lives: a transport was available and track()
+  // declined to use it.
+  expect(await page.evaluate(() => (window as unknown as { __trackCalls: unknown[][] }).__trackCalls)).toEqual([]);
+  // And nothing left for a third party either.
   expect(analyticsRequests).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('clicking a demo link with analytics consent reports the placement', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await recordPlausibleCalls(page);
+  await grantAnalyticsConsent(page);
+  await page.goto('/');
+  await clickHeroDemoCta(page);
+
+  const calls = await page.evaluate(
+    () => (window as unknown as { __trackCalls: unknown[][] }).__trackCalls,
+  );
+  expect(calls).toHaveLength(1);
+  const [name, opts] = calls[0] as [string, { props?: Record<string, unknown> }];
+  expect(name).toBe('demo_cta_click');
+  // The placement, and deliberately nothing else — this is an anonymous page.
+  expect(opts?.props).toEqual({ placement: 'hero' });
+  expect(errors).toEqual([]);
 });
 
 test('the demo CTA is localized', async ({ page }) => {
