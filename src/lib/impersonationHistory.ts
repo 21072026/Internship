@@ -51,6 +51,26 @@ export interface ImpersonationAuditRow {
   createdAt: Date;
 }
 
+/**
+ * How a session finished, as far as the audit rows can honestly say.
+ *
+ *   - `closed`      — a matching stop row exists. The duration is exact.
+ *   - `open`        — no stop row, and the start is still inside the 30-minute
+ *                     cap, so the visit may be happening *right now*. The only
+ *                     truthful statement is that no end has been recorded yet;
+ *                     an absent stop row is not evidence the admin is present
+ *                     (they may simply have closed the tab), so the copy must
+ *                     not claim the session is active either.
+ *   - `autoExpired` — no stop row and the cap has already passed, so the JWT
+ *                     callback has certainly reverted it by now. This is the
+ *                     only case where "ended automatically" is a fact.
+ *
+ * The distinction exists because it is free (`now` and the cap are both to
+ * hand) and because getting it wrong made the card state something false about
+ * a live session for a full thirty minutes.
+ */
+export type ImpersonationOutcome = 'closed' | 'open' | 'autoExpired';
+
 /** One readable "somebody was in your account" entry. */
 export interface ImpersonationSession {
   /** Id of the START row — stable, and never exposes the admin's id. */
@@ -63,14 +83,14 @@ export interface ImpersonationSession {
   startedAt: string;
   /** ISO time of the matching stop row; `null` when the session was never closed. */
   endedAt: string | null;
-  /** Length of the visit in milliseconds, never above the 30-minute cap. */
-  durationMs: number;
   /**
-   * True when no stop row followed: the admin closed the tab or the 30-minute
-   * cap reverted them. Rendered as "ended automatically", never as "still
-   * active" — an unclosed row is far more often a lost tab than a live session.
+   * Length of the visit in milliseconds, never above the 30-minute cap. Exact
+   * for `closed`; an upper bound for the other two outcomes, and for `open` it
+   * is only "so far" — the UI does not quote it as a duration there.
    */
-  autoExpired: boolean;
+  durationMs: number;
+  /** See {@link ImpersonationOutcome} — never a claim the session IS active. */
+  outcome: ImpersonationOutcome;
   /** Reason the admin typed, when they typed one. */
   reason: string | null;
 }
@@ -88,9 +108,11 @@ export const IMPERSONATE_STOP = 'IMPERSONATE_STOP';
  *
  *   - a stop with no open start (its start fell outside the window, or was
  *     pruned) is dropped rather than invented into a zero-length session;
- *   - a second start from the same admin closes the first one as auto-expired;
- *   - anything still open at the end is auto-expired too, with the elapsed time
- *     clamped to the cap.
+ *   - a second start from the same admin closes the first one as auto-expired
+ *     (that one is definitively over whatever the clock says — the same admin
+ *     is demonstrably somewhere else), bounded by the newer start's time;
+ *   - anything still open at the end is `open` while it is inside the cap and
+ *     `autoExpired` once the cap has passed, with the elapsed time clamped.
  */
 export function pairImpersonationSessions(
   rows: ImpersonationAuditRow[],
@@ -100,9 +122,22 @@ export function pairImpersonationSessions(
   const open = new Map<string, ImpersonationAuditRow>();
   const sessions: ImpersonationSession[] = [];
 
-  const close = (start: ImpersonationAuditRow, stop: ImpersonationAuditRow | null) => {
+  // `supersededBy` is the later start from the same admin that proves an
+  // unclosed session is over; it also bounds its duration far better than
+  // `now` does.
+  const close = (
+    start: ImpersonationAuditRow,
+    stop: ImpersonationAuditRow | null,
+    supersededBy: ImpersonationAuditRow | null = null,
+  ) => {
     const startedMs = start.createdAt.getTime();
-    const elapsed = (stop ? stop.createdAt.getTime() : now) - startedMs;
+    const endBound = stop?.createdAt.getTime() ?? supersededBy?.createdAt.getTime() ?? now;
+    const elapsed = endBound - startedMs;
+    const outcome: ImpersonationOutcome = stop
+      ? 'closed'
+      : supersededBy || now - startedMs >= IMPERSONATION_SESSION_MAX_MS
+        ? 'autoExpired'
+        : 'open';
     sessions.push({
       id: start.id,
       adminName: adminNames.get(start.actorId) ?? null,
@@ -111,7 +146,7 @@ export function pairImpersonationSessions(
       // Clamp both ends: a clock skew must not produce a negative duration, and
       // an unclosed session cannot have outlived the cap that ends it.
       durationMs: Math.min(Math.max(elapsed, 0), IMPERSONATION_SESSION_MAX_MS),
-      autoExpired: stop === null,
+      outcome,
       reason: start.detail?.trim() ? start.detail.trim() : null,
     });
   };
@@ -119,7 +154,7 @@ export function pairImpersonationSessions(
   for (const row of rows) {
     if (row.action === IMPERSONATE_START) {
       const previous = open.get(row.actorId);
-      if (previous) close(previous, null);
+      if (previous) close(previous, null, row);
       open.set(row.actorId, row);
     } else if (row.action === IMPERSONATE_STOP) {
       const start = open.get(row.actorId);

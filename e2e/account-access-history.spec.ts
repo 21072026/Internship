@@ -13,7 +13,10 @@ test.afterAll(async () => {
 test('a mentee sees who impersonated their account, when and why', async ({ page }) => {
   const adminEmail = uniqueEmail('acchist-admin');
   const menteeEmail = uniqueEmail('acchist-mentee');
-  const reason = 'Ticket 4711 — portal shows no mentor';
+  // The `$&` is not decoration: the reason is free text an admin types into a
+  // window.prompt, and a string-replacement interpolation would render it back
+  // as the literal "{reason}" placeholder. It must survive verbatim.
+  const reason = 'Ticket 4711 $& portal shows no mentor';
   await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'AccHist Admin');
   const mentee = await seedUser(menteeEmail, 'MenteePass123!', 'MENTEE', 'AccHist Mentee');
 
@@ -35,14 +38,18 @@ test('a mentee sees who impersonated their account, when and why', async ({ page
     await row.getByRole('button', { name: 'Login as' }).click();
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
-    // Mid-impersonation there is a start row and no stop row yet, so the entry
-    // reads as auto-ended rather than "still active". The card stays visible
-    // during impersonation on purpose — it is read-only.
+    // Mid-impersonation there is a start row and no stop row yet — and the
+    // session is happening right now. The entry must therefore say only that no
+    // end has been recorded: claiming it "ended automatically" would be false
+    // for the whole 30-minute window, and claiming it is active is more than an
+    // absent stop row can prove. The card stays visible during impersonation on
+    // purpose — it is read-only.
     await page.goto('/account');
     const card = page.getByTestId('access-history-card');
     await expect(card).toBeVisible({ timeout: 10_000 });
     await expect(card.getByText('AccHist Admin', { exact: true })).toBeVisible();
-    await expect(card.getByText(/ended automatically/i)).toBeVisible();
+    await expect(card.getByText(/no end has been recorded yet/i)).toBeVisible();
+    await expect(card.getByText(/ended automatically/i)).toHaveCount(0);
 
     // Back to the admin's own account, which writes the matching stop row.
     await page.getByRole('button', { name: /Return to your account/ }).click();
@@ -62,7 +69,9 @@ test('a mentee sees who impersonated their account, when and why', async ({ page
     await expect(own).toBeVisible({ timeout: 10_000 });
     await expect(own.getByTestId('no-access-history')).toHaveCount(0);
     await expect(own.getByText('AccHist Admin', { exact: true })).toBeVisible();
-    await expect(own.getByText(new RegExp(reason.split('—')[0].trim()))).toBeVisible();
+    // Verbatim, `$&` and all — not the mangled "Ticket 4711 {reason} portal…".
+    await expect(own.getByText(reason, { exact: false })).toBeVisible();
+    await expect(own.getByText(/\{reason\}/)).toHaveCount(0);
     // A closed session reports how long it lasted, not "ended automatically".
     await expect(own.getByText(/Lasted/)).toBeVisible();
     await expect(own.getByText(/ended automatically/i)).toHaveCount(0);

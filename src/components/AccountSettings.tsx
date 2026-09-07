@@ -25,7 +25,8 @@ import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } f
 import { ConnectedCalendarsCard } from '@/components/ConnectedCalendarsCard';
 import { useAnnounce } from '@/components/ui/LiveRegion';
 import type { TrustedDeviceView } from '@/lib/trustedDevice';
-import type { ImpersonationSession } from '@/lib/impersonationHistory';
+import { IMPERSONATION_SESSION_MAX_MS, type ImpersonationSession } from '@/lib/impersonationHistory';
+import { interpolate } from '@/lib/notificationText';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -111,6 +112,9 @@ export function AccountSettings() {
   // which empty state is honest, so it is carried rather than assumed.
   const [accessHistory, setAccessHistory] = useState<ImpersonationSession[] | null>(null);
   const [accessRetentionDays, setAccessRetentionDays] = useState<number | null>(null);
+  // Total sessions on record. The list is capped at the newest 50; the card
+  // says so rather than quietly presenting a page as the whole history.
+  const [accessTotal, setAccessTotal] = useState(0);
   const [accessHistoryFailed, setAccessHistoryFailed] = useState(false);
   const [deviceBusy, setDeviceBusy] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
@@ -475,7 +479,9 @@ export function AccountSettings() {
       const res = await fetch('/api/account/impersonations');
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setAccessHistory(Array.isArray(data?.sessions) ? data.sessions : []);
+      const sessions: ImpersonationSession[] = Array.isArray(data?.sessions) ? data.sessions : [];
+      setAccessHistory(sessions);
+      setAccessTotal(typeof data?.total === 'number' ? data.total : sessions.length);
       setAccessRetentionDays(typeof data?.retentionDays === 'number' ? data.retentionDays : null);
     } catch {
       setAccessHistoryFailed(true);
@@ -488,10 +494,28 @@ export function AccountSettings() {
   const formatAccessDuration = (ms: number, roundUp = false) => {
     const minutes = roundUp ? Math.max(1, Math.ceil(ms / 60000)) : Math.round(ms / 60000);
     if (minutes < 1) return t.account.accessHistoryUnderMinute;
-    if (minutes < 60) return t.account.accessHistoryMinutes.replace('{count}', String(minutes));
-    return t.account.accessHistoryHoursMinutes
-      .replace('{hours}', String(Math.floor(minutes / 60)))
-      .replace('{minutes}', String(minutes % 60));
+    if (minutes < 60) return interpolate(t.account.accessHistoryMinutes, { count: String(minutes) });
+    return interpolate(t.account.accessHistoryHoursMinutes, {
+      hours: String(Math.floor(minutes / 60)),
+      minutes: String(minutes % 60),
+    });
+  };
+
+  // What the card is allowed to say about how a visit finished. Only `closed`
+  // has an exact duration; `autoExpired` states a fact (the cap has passed, so
+  // the JWT callback has certainly reverted it); `open` states the only thing
+  // that is knowable while the start is still inside the cap — that no end has
+  // been recorded — without claiming the admin is or is not still in there.
+  const accessOutcomeText = (a: ImpersonationSession) => {
+    if (a.outcome === 'closed') {
+      return interpolate(t.account.accessHistoryDuration, { duration: formatAccessDuration(a.durationMs) });
+    }
+    if (a.outcome === 'autoExpired') {
+      return interpolate(t.account.accessHistoryAutoEnded, { duration: formatAccessDuration(a.durationMs, true) });
+    }
+    return interpolate(t.account.accessHistoryOpen, {
+      minutes: String(Math.round(IMPERSONATION_SESSION_MAX_MS / 60000)),
+    });
   };
 
   const flash = (m: string, isErr = false) => {
@@ -792,7 +816,7 @@ export function AccountSettings() {
           <p className="text-sm text-gray-500" data-testid="no-access-history">
             {accessRetentionDays === null
               ? t.account.accessHistoryEmpty
-              : t.account.accessHistoryEmptyBounded.replace('{days}', String(accessRetentionDays))}
+              : interpolate(t.account.accessHistoryEmptyBounded, { days: String(accessRetentionDays) })}
           </p>
         ) : (
           <>
@@ -805,22 +829,32 @@ export function AccountSettings() {
                   <p className="text-xs text-gray-500">
                     {formatInTimeZone(new Date(a.startedAt), timezone, undefined, language)} · {relativeTime(a.startedAt, locale)}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {a.autoExpired
-                      ? t.account.accessHistoryAutoEnded.replace('{duration}', formatAccessDuration(a.durationMs, true))
-                      : t.account.accessHistoryDuration.replace('{duration}', formatAccessDuration(a.durationMs))}
+                  <p className="text-xs text-gray-500" data-testid={`access-history-outcome-${a.id}`}>
+                    {accessOutcomeText(a)}
                   </p>
                   <p className="text-xs text-gray-500" data-testid={`access-history-reason-${a.id}`}>
+                    {/* The reason is free text an admin typed into a prompt, so
+                        it must never reach String.replace as a replacement
+                        string: "Refund $& duplicate" would render the
+                        placeholder back at the reader. */}
                     {a.reason
-                      ? t.account.accessHistoryReason.replace('{reason}', a.reason)
+                      ? interpolate(t.account.accessHistoryReason, { reason: a.reason })
                       : t.account.accessHistoryNoReason}
                   </p>
                 </li>
               ))}
             </ul>
+            {accessTotal > accessHistory.length && (
+              <p className="text-xs text-gray-500 mt-2" data-testid="access-history-truncated">
+                {interpolate(t.account.accessHistoryTruncated, {
+                  shown: String(accessHistory.length),
+                  total: String(accessTotal),
+                })}
+              </p>
+            )}
             {accessRetentionDays !== null && (
               <p className="text-xs text-gray-500 mt-2">
-                {t.account.accessHistoryBoundedNote.replace('{days}', String(accessRetentionDays))}
+                {interpolate(t.account.accessHistoryBoundedNote, { days: String(accessRetentionDays) })}
               </p>
             )}
           </>
