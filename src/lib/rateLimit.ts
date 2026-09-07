@@ -48,7 +48,7 @@ setRateLimitStoreLogger(logger);
 
 let store: RateLimitStore = selectRateLimitStore().store;
 
-/** Swap the counter store (tests, or a future shared implementation). */
+/** Swap the counter store (tests; the backend itself comes from config). */
 export function setRateLimitStore(next: RateLimitStore): void {
   store = next;
 }
