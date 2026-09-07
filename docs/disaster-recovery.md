@@ -153,6 +153,67 @@ coming back is.
 It also runs **monthly**, on the 1st, from the same workflow, and on demand via
 *Run workflow* → *Also run the restore drill*.
 
+## The multi-replica drill (#1701)
+
+A second replica is a claim about availability, and a claim about availability
+that nobody has tried is a wish. This is the procedure; its result belongs in
+the log below, in the same spirit as the restore drill — measured, or blank.
+
+Run it against **preview**, which shares the box with production and has the
+same shape (`REPLICAS=2` puts `internship-crm-preview` on 3201 and
+`internship-crm-preview-2` on 3211). Prod goes second, once preview has passed.
+
+```bash
+# 1. Deploy two replicas. Nothing else changes; REPLICAS=1 is the default and
+#    the roll is one-at-a-time, so the environment serves traffic throughout.
+sudo ENV_FILE=/etc/internship-crm/preview.env REPLICAS=2 \
+  CONTAINER=internship-crm-preview PORT=3201 NETWORK=bridge \
+  ./infra/deploy-prod.sh --pull-image
+
+# 2. Both replicas answer, and each says who it is.
+for port in 3201 3211; do
+  curl -sH "X-Health-Token: $HEALTH_TOKEN" "http://127.0.0.1:$port/api/health?db=1&leases=1" \
+    | jq -c '{replica, sha, db, leases}'
+done
+
+# 3. Exactly ONE holder per lease, and the site answers through the proxy.
+curl -sH "X-Health-Token: $HEALTH_TOKEN" 'https://preview.interncrm.com/api/health?leases=1' | jq .leases
+```
+
+What to check, and what a pass looks like:
+
+| # | Check | Pass |
+|---|---|---|
+| 1 | Both replicas report `status: ok` and the **same `sha`** | two healthy containers, one release |
+| 2 | `/api/health?leases=1` shows one holder for `scheduler` and one for `imap-bridge` | `mine: true` on exactly one replica per lease |
+| 3 | One scheduled tick per slot | the reminder/digest e-mails for one window arrive **once** (`EmailLog`, or the admin e-mail health card) |
+| 4 | One IMAP poller | `[MailBridge]` fetch lines in exactly one container's `docker logs`; the other logs nothing and errors nothing |
+| 5 | Rate limits are shared | `?limits=1` says `backend: shared`, and the 6th failed sign-in across BOTH replicas is refused (not the 6th per replica) |
+| 6 | SSE survives a replica change | an open `/api/realtime/stream` reconnects on its own after its replica is drained; no user-visible error |
+| 7 | `kill -9` on the lease holder | the site keeps answering (Caddy sheds it within `lb_try_duration`); the other replica takes the lease over **within one TTL** (~3 min for the bridge) and **no duplicate mail is sent** in the meantime |
+| 8 | The roll | during a deploy, a `curl` loop against the public URL sees no failed request |
+| 9 | A failing release | with a deliberately broken image, the deploy aborts after replica 1 and replica 2 still serves the previous sha |
+
+Then put it back with `REPLICAS=1` (see `infra/README.md` § Two replicas) and
+confirm the site is served by one container again.
+
+**Result: not yet run.** The code path landed with #1701 and is unit-tested off
+the box (`infra/test/replica-rollout.test.sh`, `scripts/test/job-lease.test.mjs`),
+but nothing in this repository has executed the drill against a live
+environment — it needs the server, and prod deploys were stalled the day it
+merged. Until the row below is filled in, treat two replicas as **untried in
+production**: `REPLICAS` stays at 1 in every environment, which is why merging
+it changed nothing operationally. The drill is the gate for turning it on, not
+paperwork after the fact.
+
+**Same caveat as everywhere else:** two replicas on one host remove the
+*process* single point of failure. The box and its MySQL are still single, so
+this drill cannot and does not measure host failure.
+
+| Date | Environment | Replicas | Checks 1–9 | Notes |
+|---|---|---|---|---|
+| — | — | — | not run | Fill this in from a real run; an estimate here is worse than an empty row, because it will be believed. |
+
 ## Drill log
 
 The point of a drill is to measure two numbers and keep them honest:

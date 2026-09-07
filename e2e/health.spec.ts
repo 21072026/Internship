@@ -33,6 +33,37 @@ test('health endpoint verifies DB connectivity when asked', { tag: '@smoke' }, a
   expect(['ok', 'error']).toContain(body.db);
 });
 
+// #1701: two replicas serve every environment behind one proxy, so "which
+// process answered, and which one is running the scheduler?" has to be
+// answerable from outside the box. The identity rides the existing detail gate;
+// the lease rows cost a query, so they are opt-in and need the same proof of
+// identity as the queue counters.
+test('the detail view names the replica, and ?leases=1 reports the lease holders', async ({ request }) => {
+  test.skip(!local, 'needs the local HEALTH_TOKEN and this environment’s own DB');
+
+  const res = await request.get('/api/health?leases=1', {
+    headers: { 'X-Health-Token': E2E_HEALTH_TOKEN },
+  });
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(typeof body.replica).toBe('string');
+  expect(body.replica.length).toBeGreaterThan(0);
+  // An array — empty here, because a single-container test environment has
+  // never had a reason to take a lease. The shape is what matters: the field is
+  // read from the JobLease rows, so an empty array means "nobody holds
+  // anything", not "the query failed" (which would be null).
+  expect(Array.isArray(body.leases)).toBe(true);
+  for (const lease of body.leases) {
+    expect(typeof lease.holder).toBe('string');
+    expect(typeof lease.mine).toBe('boolean');
+  }
+
+  // Without the token the lease rows are not released at all — no fail-open
+  // path, same rule as the queue counters.
+  const anon = await request.get('/api/health?leases=1');
+  expect((await anon.json()).leases).toBeUndefined();
+});
+
 test('an anonymous caller sees liveness only, not the version or sha', { tag: '@smoke' }, async ({ request }) => {
   test.skip(!local, 'the deployed env may not have HEALTH_TOKEN configured');
   const res = await request.get('/api/health');

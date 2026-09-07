@@ -121,6 +121,111 @@ which state a box is in with an admin session or the health token:
 multi-replica environment is a misconfiguration, and `"degraded": true` means
 the limits are per-process right now.
 
+### Two replicas behind one proxy (`REPLICAS`, #1701)
+
+Every environment is **one container by default, and that has not changed**.
+`REPLICAS=1` is the default in `infra/deploy-prod.sh`; at that value the deploy
+is byte-for-byte what it was — one `docker stop`/`docker run` on
+`internship-crm:3200`, and no reverse-proxy call at all.
+
+The switch is the environment's own env file — `infra/deploy-prod.sh` sources
+it before reading `REPLICAS`, so `REPLICAS=2` in `/etc/internship-crm/prod.env`
+is the whole change and no workflow needs editing.
+
+`REPLICAS=2` runs two containers and rolls the deploy through them one at a
+time:
+
+| Replica | Container | Port (prod) | Port (preview) |
+|---|---|---|---|
+| 1 | `internship-crm` | 3200 | 3201 |
+| 2 | `internship-crm-2` | 3210 | 3211 |
+
+Replica 1 deliberately keeps the historical name and port: the env-file capture
+at the top of the deploy script, `--rollback`, the `FORWARD_ONLY` guard and the
+workflows' drift gate all address the environment as `internship-crm` on 3200.
+Renaming it would be a second, unrelated change riding along on a deploy.
+Replica *k* is `${CONTAINER}-k` on `PORT + (k-1)*REPLICA_PORT_STRIDE` (stride
+10, so the pool stays clear of the canary at `PORT+100` and of the topic range
+3400–3499).
+
+**The roll.** For each replica in turn: rewrite the proxy pool without it →
+`docker stop -t 25` (SIGTERM, then the grace period for work already in
+flight) → start the new image → assert `/api/health?db=1` reports the sha just
+built → put it back in the pool. A failed health check **stops there**: that
+replica stays out of the pool and the untouched one keeps serving the previous
+image, so a bad release can never take both. The routing call is *pre-flighted*
+before the first container is touched, so a box whose proxy the script cannot
+drive fails the deploy while everything is still serving.
+
+`infra/server/replica-route.sh` writes the pool. On the Caddy host it rewrites
+`/etc/caddy/sites/<fqdn>.caddy` — one `reverse_proxy` with both upstreams,
+`lb_policy round_robin`, `lb_try_duration 5s` (so a replica dying mid-request
+costs that request a retry, not an error) and an active `health_uri
+/api/health`. It **validates before reloading** and, unlike
+`topic-deploy.sh`, restores the previous file if Caddy refuses the new one:
+deleting `interncrm.com.caddy` to avoid a bad load-balancer stanza would be an
+outage. On the retired Plesk box it refuses and prints the `upstream` block to
+install by hand — a panel-managed vhost is not ours to rewrite.
+
+**No sticky sessions, and never `ip_hash`.** Nothing here is pinned to a
+process: the session is a signed JWT (`src/lib/auth.ts`), the rate-limit
+counters live in the shared store above (#1696), and the SSE stream reconnects
+by itself. Pinning clients would only concentrate a NATed office on one replica
+and strand its sessions whenever that replica is drained. The generated config
+carries that sentence, so nobody adds it "to be safe".
+
+**Two jobs must have exactly one owner**, and they are the reason this is not
+just an nginx change: the in-process **scheduler** would send every reminder
+twice, and the **IMAP bridge** would race a second poller over the `\Seen`
+flag on one mailbox. Both are settled by a `JobLease` row — a single-owner
+lease with a TTL and a conditional-update takeover (`src/lib/jobs/lease.ts`,
+unit-tested in `scripts/test/job-lease.test.mjs`). Who holds what is visible
+from outside the box:
+
+```bash
+curl -sH "X-Health-Token: $HEALTH_TOKEN" 'https://interncrm.com/api/health?leases=1' \
+  | jq '{replica, leases}'
+```
+
+A replica that does not hold a lease does nothing and says nothing — losing is
+the normal state of exactly one of the two. After a replica dies its lease is
+freed by **expiry only** (nothing else can free a process that was
+SIGKILLed), so the work resumes on the other replica within one TTL — three
+poll intervals, i.e. about three minutes for the mail bridge. Late, never
+double.
+
+**The cron is not leased yet, and that is why replica ≥2 runs with
+`CRON_ENABLED=0`.** Schedules are registered once at boot
+(`src/instrumentation.ts` → `/api/cron/start`), so a lease taken at
+registration would be held by whoever booted first and never renewed. Making
+each tick take the `'scheduler'` lease needs the schedule registry, which is
+**#1676**. Until that lands the deploy passes the documented kill switch to
+every replica but the first — the same flag the canary already uses, not a
+second election mechanism. The trade is deliberate: the scheduler is *pinned*
+to replica 1, so while replica 1 is down or mid-swap, reminders wait instead of
+being sent by replica 2. Waiting is recoverable; sending every reminder twice
+is not.
+
+**Also set `RATE_LIMIT_REDIS_URL`** for a two-replica environment (see the
+section above) or every limit becomes twice as generous.
+
+**Going back to one replica** is a deploy with `REPLICAS=1`, then
+
+```bash
+./infra/server/replica-route.sh --host interncrm.com --ports 3200   # single upstream
+docker rm -f internship-crm-2
+```
+
+Re-running `bootstrap.sh`'s `sites` step writes the same single-upstream file.
+
+**The honest limit: this removes the PROCESS single point of failure, not the
+host one.** Both replicas, both other environments and MySQL all run on the
+same Plesk/Oracle box. A crashed container, an OOM-killed app process or a
+deploy no longer takes the site down; a kernel panic, a full disk, a network
+outage or that one MySQL still does. Anything that quotes this work as an
+availability guarantee — #1604's status page and SLA in particular — has to
+carry that sentence with it.
+
 ### One-time server setup this requires
 - The stock `include /etc/nginx/conf.d/*.conf;` must be active (default on Plesk).
   These hostnames are **not** Plesk-managed domains (only the apex/`preview` are),

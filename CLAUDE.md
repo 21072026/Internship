@@ -144,9 +144,25 @@ workaround, #636, and it compiled on every PR push).
 
 | Env | Container | Port | URL | Image tag | Trigger |
 |-----|-----------|------|-----|-----------|---------|
-| Production | `internship-crm` | 3200 | https://interncrm.com | `prod-<sha>` | push to `main` (+6h drift check, manual) |
-| Preview | `internship-crm-preview` | 3201 | https://preview.interncrm.com | `preview-<sha>` | push to `main` (+6h drift check, manual) |
+| Production | `internship-crm` (+ `-2` at `REPLICAS=2`) | 3200 (+3210) | https://interncrm.com | `prod-<sha>` | push to `main` (+6h drift check, manual) |
+| Preview | `internship-crm-preview` (+ `-2`) | 3201 (+3211) | https://preview.interncrm.com | `preview-<sha>` | push to `main` (+6h drift check, manual) |
 | Topic (per PR) | `internship-crm-pr<N>` | 3400–3499 | `https://pr<N>.interncrm.com` | `topic-pr<N>` | every push to the PR |
+
+- **Replicas (#1701):** every environment is **one container today** —
+  `REPLICAS` defaults to `1` in `infra/deploy-prod.sh` and at that value the
+  deploy is byte-for-byte what it always was, with no reverse-proxy call at all.
+  `REPLICAS=2` adds `${CONTAINER}-2` on `PORT+10`, puts both behind one proxy
+  pool (`infra/server/replica-route.sh`) and rolls the deploy through them **one
+  at a time** — drain, swap, health-assert, return to the pool, then the next;
+  a failed check aborts before the second replica is touched. Replica 1 keeps
+  the historical name and port on purpose (the env capture, `--rollback`,
+  `FORWARD_ONLY` and the drift gate all address it that way). **No sticky
+  sessions ever** — the session is a JWT and SSE reconnects itself, so `ip_hash`
+  would only strand sessions on a drained replica. Two replicas need
+  `RATE_LIMIT_REDIS_URL` set, and they remove the **process** SPOF only: one
+  box, one MySQL. Turning it on is gated on the drill in
+  `docs/disaster-recovery.md` § The multi-replica drill, which has **not been
+  run** yet. Topic environments stay single-container.
 
 - `deploy-prod.yml` / `deploy-preview.yml` — **both follow `main` automatically**. Every merge
   lands on preview and prod. Three jobs: **gate** (self-hosted; resolves the target sha and
@@ -294,6 +310,25 @@ workaround, #636, and it compiled on every PR push).
   `prisma/check-active-mentor-duplicates.mjs` line) reading clean on prod AND shared preview —
   a `db push --accept-data-loss` that fails on the constraint is a failed deploy. Read the doc
   before touching any of it; the sequencing is the load-bearing part.
+- **Single-owner background work** (`src/lib/jobs/lease.ts`, #1701): anything that
+  must run **once per environment** rather than once per process takes a `JobLease`
+  — one row per lease name, a TTL, and a takeover by conditional `UPDATE`. Today
+  that is `'scheduler'` (the in-process cron, whose registry side is #1676) and
+  `'imap-bridge'` (the inbound-mail poller, gated inside
+  `/api/inbound-email/poll`). Four rules are load-bearing: a lease is freed by
+  **expiry, never by a release** (a SIGKILLed replica releases nothing); every
+  transition is **one conditional UPDATE** so two contenders cannot both win;
+  **losing is quiet** — a replica without the lease does nothing and logs
+  nothing, because exactly one replica is supposed to lose; and an unreachable
+  database reads as "not the holder", so work is skipped rather than duplicated.
+  Never add a second lease table or a second election mechanism. The job WORKER
+  is the opposite case — it claims rows with `SKIP LOCKED`, so more workers are
+  better, and it must never take a lease.
+  The **cron is not leased yet**: its schedules are registered once at boot, so
+  a lease taken there would never be renewed. Until #1676 makes each tick take
+  the `'scheduler'` lease, `infra/deploy-prod.sh` runs replica ≥2 with
+  `CRON_ENABLED=0` — an interim pin, not an election, and the reason two
+  replicas cannot double-send today.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

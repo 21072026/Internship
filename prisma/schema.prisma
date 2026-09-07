@@ -3346,3 +3346,67 @@ model OrgEntitlement {
   @@unique([orgId, feature])
   @@index([orgId])
 }
+
+// ── Single-owner leases for background work (#1701) ─────────────────────────
+//
+// Two app replicas behind one reverse proxy is the point of #1694: the process
+// stops being a single point of failure and a release stops being a moment of
+// downtime. Almost everything the app does is safe to run twice — requests are
+// stateless (the session is a JWT), the job worker claims rows with SKIP LOCKED
+// so *more* workers are better, and since #1696 the rate-limit counters live
+// outside the process. Two pieces of background work are not:
+//
+//   'scheduler'   — the in-process cron. Two of them send every reminder twice.
+//   'imap-bridge' — the inbound-mail poller. Two of them race over the `\Seen`
+//                   flag on one mailbox, so a reply is imported twice or not at
+//                   all (src/instrumentation.ts).
+//
+// A lease is how those keep exactly one owner without anyone electing anything:
+// one row per lease NAME (the primary key, so "two rows for one lease" is a
+// database error rather than a race), the current `holder`, and an `expiresAt`
+// in the near future. Acquiring or stealing is ONE conditional UPDATE whose
+// WHERE clause carries the precondition ("still mine", or "expired"), the same
+// shape as the trusted-device token rotation: MySQL locks the row for the
+// update and re-evaluates the clause against the committed value, so of two
+// contenders exactly one can match.
+//
+// TTL, never a manual release: a replica that is SIGKILLed, OOM-killed or
+// simply hangs releases nothing. The lease therefore has to expire on its own,
+// and the holder keeps it by renewing well inside the TTL. The cost of that
+// choice is bounded and deliberate — after the holder dies the work pauses for
+// up to one TTL before the other replica picks it up. For the mail bridge that
+// is a few minutes of delayed inbound mail, never a duplicate, which is the
+// failure that cannot be undone.
+//
+// Rules in src/lib/jobs/lease.ts; unit-tested in scripts/test/job-lease.test.mjs.
+// No `orgId`: this is operational state about processes, not tenant data.
+model JobLease {
+  /// The lease name — 'scheduler', 'imap-bridge'. Primary key on purpose: the
+  /// uniqueness of a lease is the invariant this table exists to enforce.
+  name String @id @db.VarChar(64)
+
+  /// Who holds it right now: the replica id (container name + pid), as reported
+  /// by /api/health. Never a person.
+  holder String @db.VarChar(190)
+
+  /// When the current holder first took it (a renewal does not move this), so
+  /// "how long has this replica been the owner?" is answerable.
+  acquiredAt DateTime @default(now())
+
+  /// Last successful renewal. A holder whose renewedAt is old is a holder that
+  /// stopped renewing — the lease is about to change hands.
+  renewedAt DateTime @default(now())
+
+  /// The moment the lease becomes stealable. The only thing that frees a lease
+  /// held by a replica that died.
+  expiresAt DateTime
+
+  /// Incremented on every change of ownership. Nothing depends on it for
+  /// correctness — the conditional UPDATE already provides that — but it makes
+  /// a flapping lease visible instead of guessable.
+  generation Int @default(1)
+
+  /// Cheap sweep of leases nobody renewed (an environment that shrank back to
+  /// one replica, a renamed container).
+  @@index([expiresAt])
+}
