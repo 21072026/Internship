@@ -118,6 +118,13 @@ two-tenant fixture that a feed for org A can neither read nor write a row of org
   the run log screen and the cron registration. The engine is callable from a route handler
   and from a scheduled job today (`runRosterFeed`, `sweepRosterFeeds`); nothing calls it
   yet.
+- **Row-level retry.** A row that throws is recorded `ERROR` and its chunk still commits, so
+  the checkpoint moves past it. Re-running the *same* file therefore resumes at the end and
+  changes nothing: the errored row is retried when the file next changes (the plan is
+  re-derived, so it comes back as the `CREATE`/`UPDATE` it always was), not on the next
+  night. That is deliberate for now — retrying individual rows means deciding how many
+  times and how far apart, which is a feature and not a detail of the checkpoint. The run
+  stays `FAILED` and its `RosterRowResult` rows say exactly which keys are outstanding.
 - **The SFTP client.** The host-key pin is implemented and tested, but pulling in an SFTP
   dependency is its own reviewed change. Until then the transport refuses loudly rather
   than falling back to anything less safe, and `scripts/import-csv.mjs` stays the manual
