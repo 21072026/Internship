@@ -111,6 +111,50 @@ test('the account page lists push devices, marks the current one and revokes jus
   }
 });
 
+test('a failed refresh does not take the push device list off the screen', async ({ page }) => {
+  const email = uniqueEmail('pushdev-stale');
+  const pw = 'PushDevPass123!';
+  const user = await seedUser(email, pw, 'MENTEE', 'Stale Refresh Owner');
+
+  const phone = await seedSubscription(user.id, `https://push.e2e.local/${uniqueEmail('phone2')}`, ANDROID_UA, new Date(Date.now() - 3 * 86_400_000));
+  const laptop = await seedSubscription(user.id, `https://push.e2e.local/${uniqueEmail('laptop2')}`, WINDOWS_UA, new Date(Date.now() - 60_000));
+
+  try {
+    await signInAndSettle(page, email, pw, '/portal');
+    await page.goto('/account');
+
+    const list = page.getByTestId('push-devices');
+    await expect(list.getByTestId(`push-device-${phone.id}`)).toBeVisible();
+
+    // From here the refresh GET fails. The DELETE still goes through, so the
+    // revoke succeeds and only the reload of the list breaks — the exact shape
+    // of a transient failure, and the one that used to unmount the whole
+    // section and leave the remaining browser invisible and unrevocable.
+    await page.route('**/api/push/subscribe', async (route) => {
+      if (route.request().method() === 'GET') return route.fulfill({ status: 500, body: '{}' });
+      return route.fallback();
+    });
+
+    await list.getByTestId(`push-device-${phone.id}`).getByRole('button', { name: 'Revoke' }).click();
+
+    // The revoked row goes, everything else stays: the section, the other
+    // browser and its Revoke button, plus a note that the list may be stale.
+    await expect(list.getByTestId(`push-device-${phone.id}`)).toHaveCount(0);
+    await expect(list.getByTestId(`push-device-${laptop.id}`)).toBeVisible();
+    await expect(page.getByTestId('push-devices-stale')).toBeVisible();
+    expect(await prisma.pushSubscription.count({ where: { id: phone.id } })).toBe(0);
+    expect(await prisma.pushSubscription.count({ where: { id: laptop.id } })).toBe(1);
+
+    // And the still-listed browser is genuinely revocable while the GET is down.
+    await page.unroute('**/api/push/subscribe');
+    await list.getByTestId(`push-device-${laptop.id}`).getByRole('button', { name: 'Revoke' }).click();
+    await expect(page.getByTestId('no-push-devices')).toBeVisible();
+    expect(await prisma.pushSubscription.count({ where: { userId: user.id } })).toBe(0);
+  } finally {
+    await cleanupByEmail(email);
+  }
+});
+
 test('an anonymous caller gets nothing from the push device list', async ({ request }) => {
   const res = await request.get('/api/push/subscribe');
   expect(res.status()).toBe(401);

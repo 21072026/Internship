@@ -123,6 +123,8 @@ no-op olur, `/api/push/subscribe` 503 verir ve uygulama eskisi gibi davranır.
 - `src/lib/pushDevices.ts` — `/account`'taki cihaz listesi (#1716).
 - `src/lib/deviceLabel.ts` — user-agent → "Chrome on Android". `trustedDevice.ts`
   ile **ortak** tablo; iki liste aynı cihazı aynı kelimelerle adlandırsın diye.
+- `public/sw.js` — `push`, `notificationclick`, `pushsubscriptionchange`.
+- `src/lib/pushNotifications.ts` — tarayıcı tarafı abone ol/çık.
 
 ### Cihaz listesi (#1716)
 
@@ -132,6 +134,17 @@ no-op olur, `/api/push/subscribe` 503 verir ve uygulama eskisi gibi davranır.
 listenin hiçbirine ihtiyacı yok, bu yüzden `listPushDevices` içindeki açık
 `select` izin listesinden geçerler ve sunucudan çıkmazlar. Modele bir sütun
 eklemek sessizce sızıntı başlatamaz.
+
+**`enabled` ile satırlar birbirinden ayrı iki gerçektir.** Yanıt ikisini ayrı
+taşır: `enabled` bu kurulumun hâlâ push gönderip gönderemediğini söyler (VAPID
+anahtarı var mı), satırlar ise her hâlükârda döner. Sayfa bölümü **yalnızca**
+push kapalıyken *ve* kayıtlı satır yokken gizler; satır varsa listeler ve üstüne
+"şu anda gönderim yapılmıyor" notunu koyar. Aksi hâlde anahtarlarını kaybetmiş
+bir kurulumda kullanıcı, kendi verdiği izinleri ne görebilir ne geri alabilirdi —
+listenin var olma sebebi tam olarak buydu. Aynı gerekçeyle **başarısız bir GET
+listeyi silmez**: bilinen son cevap ekranda kalır, üstüne "yenilenemedi" notu
+düşer, ve bir revoke başarılıysa o satır yanıtı beklemeden yerel olarak da
+listeden çıkar.
 
 `label` **sunucuda** üretilir: `userAgent` sütunu şemada "serbest metin ve
 güvenilmez — yalnızca gösterim" diye işaretli, bu yüzden sabit bir tablodan
@@ -157,8 +170,6 @@ Kişinin *oturduğu* tarayıcıyı kaldırması yerel aboneliği de iptal eder v
 `/account`'taki anahtarı kapatır — yoksa bir sonraki ziyarette sessiz yeniden
 abonelik, az önce silinen satırı sunucuya geri verirdi. Geçersiz kılınacak bir
 önbellek yok: `sendPushToUser` tabloyu her gönderimde okur.
-- `public/sw.js` — `push`, `notificationclick`, `pushsubscriptionchange`.
-- `src/lib/pushNotifications.ts` — tarayıcı tarafı abone ol/çık.
 
 ### Platform sınırları
 

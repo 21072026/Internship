@@ -36,10 +36,13 @@ const unsubscribeSchema = z.object({ endpoint: z.string().min(1).max(500) });
  * than a query parameter deliberately: a query string ends up in access logs,
  * and this value, while not usable on its own, is half of a delivery credential.
  *
- * `enabled` is false on a deployment with no VAPID keys; the page hides the
- * section rather than showing an empty list nobody can ever fill. Rows are still
- * returned in that case, because a deployment that turned push off should not
- * strand rows a user can no longer revoke.
+ * `enabled` and `devices` are two **independent** facts and are reported as
+ * such: `enabled` says whether this deployment can still deliver push (it is
+ * false with no VAPID keys), and the rows are returned either way. The page
+ * needs both, and hides the section only when push is off *and* nothing is on
+ * record — with rows it lists them plus a note that nothing is being delivered,
+ * because a deployment that lost its keys must not strand subscriptions their
+ * owner can no longer see or revoke.
  */
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
