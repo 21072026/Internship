@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { submitSignInForm } from './helpers/auth';
 
 // Drop-off reason codes + analytics (#810): every pipeline-stage write path
 // (status-changes, mentorship/[id] — also what the board drag/drop and the
@@ -10,11 +11,14 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
+// Delegates to the shared, form-scoped submitSignInForm() (e2e/helpers/auth.ts)
+// rather than filling/clicking raw page-level selectors: a hand-rolled
+// page.click('button[type="submit"]') right after page.goto('/auth/signin')
+// can race the sign-in page's own hydration, which sometimes swaps the form
+// node out from under the click ("element was detached from the DOM") — the
+// same failure mode documented on signInAsFreshUser/submitSignInForm.
 async function signInAdmin(page: Page, email: string, password: string) {
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
+  await submitSignInForm(page, email, password);
   await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 }
 
