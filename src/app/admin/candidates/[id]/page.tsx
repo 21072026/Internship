@@ -45,6 +45,8 @@ interface Relation {
   pipelineStatus: string;
   startDate: string;
   completedAt: string | null;
+  /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
+  lifecycleState?: string | null;
   stageDeadline?: string | null;
   mentor: { id: string; fullName: string; email: string };
   company: { id: string; name: string; industry?: string } | null;

@@ -1311,20 +1311,32 @@ model MentorshipRequest {
   preferredField     String?
   preferredLanguages Json                    @default("[]")
   preferredMentorId  String?
+  // Re-match (#1801): when set, this request asks to REPLACE the named live
+  // pairing rather than to open a first one. The reason code is required at the
+  // API (a code from END_REASON_CODES, src/lib/relationLifecycle.ts); the free
+  // text note is optional. Both are read by ADMINS ONLY — the outgoing mentor
+  // is told the pairing ended and is never shown either field.
+  replacesRelationId String?
+  rematchReason      String?
+  rematchNote        String?                 @db.Text
   decidedById        String?
   decidedAt          DateTime?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
-  mentee          User  @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
-  decidedBy       User? @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
+  mentee           User                @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  decidedBy        User?               @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
   // SetNull: a mentor leaving must not take pending requests with them — the
   // preference simply disappears while the request survives.
-  preferredMentor User? @relation("PreferredMentorRequests", fields: [preferredMentorId], references: [id], onDelete: SetNull)
+  preferredMentor  User?               @relation("PreferredMentorRequests", fields: [preferredMentorId], references: [id], onDelete: SetNull)
+  // SetNull for the same reason: a deleted relation must not delete the record
+  // that a re-match was asked for.
+  replacesRelation MentorshipRelation? @relation("RematchRequests", fields: [replacesRelationId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([menteeId])
   @@index([preferredMentorId])
+  @@index([replacesRelationId])
 }
 
 // A public, unauthenticated application to become a mentor (#904). No User
@@ -1925,6 +1937,15 @@ model MentorshipRelation {
   // months later is written to again rather than being silently written off.
   dormantNudgeCount       Int              @default(0)
   dormantNudgeSentAt      DateTime?
+  // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
+  // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
+  // different mentor and an admin approved it. Nullable and additive: an
+  // untouched row keeps meaning exactly what it meant before. `status` still
+  // carries "is this pairing live", so every existing ACTIVE/COMPLETED check is
+  // unchanged; this column is what keeps a re-match from being counted (or
+  // certified) as a successful completion. Keys live in
+  // src/lib/relationLifecycle.ts.
+  lifecycleState          String?
 
   mentor                User                   @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                   @relation("MenteeRelations", fields: [menteeId], references: [id])
@@ -1944,8 +1965,10 @@ model MentorshipRelation {
   weeklyReports         WeeklyReport[]
   weeklyReportReminders WeeklyReportReminder[]
   placement             Placement?
+  rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
 
   @@index([status])
+  @@index([lifecycleState])
   @@index([pipelineStatus])
 }
 

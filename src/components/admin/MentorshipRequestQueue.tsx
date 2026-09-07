@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Inbox } from 'lucide-react';
+import { Inbox, Repeat2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -22,7 +22,25 @@ interface RequestRow {
   preferredMentor?: { id: string; fullName: string } | null;
   createdAt: string;
   mentee: { id: string; fullName: string; email: string; university?: string | null; skills: string[] };
+  // Re-match (#1801). Set when this request asks to REPLACE a live pairing.
+  // `rematchReason`/`rematchNote` reach this component and nowhere else: the
+  // admin queue is the only read path for them, and the outgoing mentor —
+  // shown here as `replacesRelation.mentor` — is never told either.
+  replacesRelationId?: string | null;
+  rematchReason?: string | null;
+  rematchNote?: string | null;
+  replacesRelation?: { id: string; startDate: string; mentor: { id: string; fullName: string } } | null;
 }
+
+/** Programme-health counts returned alongside the queue (#1801). */
+interface RematchStats {
+  days: number;
+  rematched: number;
+  ended: number;
+  byReason: Record<string, number>;
+}
+
+type Filter = 'all' | 'rematch' | 'new';
 
 interface MentorOption {
   id: string;
@@ -45,8 +63,11 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
 }) {
   const t = useT();
   const q = t.mentorshipRequests;
+  const rm = t.rematchRequest;
   const a = t.assignMentor;
   const [rows, setRows] = useState<RequestRow[]>([]);
+  const [stats, setStats] = useState<RematchStats | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
@@ -58,7 +79,7 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
   const load = useCallback(() => {
     fetch('/api/admin/mentorship-requests')
       .then((r) => (r.ok ? r.json() : { requests: [] }))
-      .then((d) => setRows(d.requests ?? []))
+      .then((d) => { setRows(d.requests ?? []); setStats(d.rematchStats ?? null); })
       .catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -140,6 +161,17 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
 
   if (rows.length === 0) return null;
 
+  // The server already sorted re-matches to the top; this only narrows.
+  const rematchCount = rows.filter((r) => r.replacesRelationId).length;
+  const visible = rows.filter((r) =>
+    filter === 'all' ? true : filter === 'rematch' ? !!r.replacesRelationId : !r.replacesRelationId
+  );
+  const filters: { key: Filter; label: string; count: number }[] = [
+    { key: 'all', label: rm.filterAll, count: rows.length },
+    { key: 'rematch', label: rm.filterRematch, count: rematchCount },
+    { key: 'new', label: rm.filterNew, count: rows.length - rematchCount },
+  ];
+
   return (
     <>
     <Card className="mb-6 border-blue-200 dark:border-blue-800" data-testid="request-queue">
@@ -149,9 +181,49 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
           <CardTitle>{q.queueTitle} ({rows.length})</CardTitle>
         </div>
       </CardHeader>
+      {rematchCount > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5" data-testid="request-queue-filters">
+          {filters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              data-testid={`request-queue-filter-${f.key}`}
+              aria-pressed={filter === f.key}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                filter === f.key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
+              }`}
+            >
+              {f.label} ({f.count})
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Programme health, not an embarrassment to hide (#1801): how many
+          pairings that ended in the window ended because the mentee asked for
+          somebody else, and for which stated reasons. A re-match is never
+          counted as a completion anywhere. */}
+      {stats && stats.rematched > 0 && (
+        <p className="mb-3 text-xs text-gray-600 dark:text-gray-400" data-testid="rematch-stats">
+          {rm.statsSummary
+            .replace('{count}', String(stats.rematched))
+            .replace('{total}', String(stats.ended))
+            .replace('{days}', String(stats.days))}
+          {Object.keys(stats.byReason).length > 0 && (
+            <span>
+              {' · '}
+              {Object.entries(stats.byReason)
+                .map(([code, n]) => `${rm.reasons[code as keyof typeof rm.reasons] ?? code}: ${n}`)
+                .join(' · ')}
+            </span>
+          )}
+        </p>
+      )}
       {err && <p className="text-sm text-red-600 mb-2">{err}</p>}
       <div className="divide-y divide-gray-50 dark:divide-gray-800">
-        {rows.map((r) => {
+        {visible.map((r) => {
           const preferredLanguages = Array.isArray(r.preferredLanguages)
             ? (r.preferredLanguages as unknown[]).map((l) => String(l))
             : [];
@@ -159,11 +231,48 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
           <div key={r.id} data-testid={`request-${r.id}`} className="py-3 flex flex-col lg:flex-row lg:items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {r.replacesRelationId && (
+                  <span
+                    className="mr-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                    data-testid="rematch-badge"
+                  >
+                    <Repeat2 className="h-3 w-3" /> {rm.badge}
+                  </span>
+                )}
                 <PersonHoverCard personId={r.mentee.id} name={r.mentee.fullName} role="MENTEE" />
                 {r.targetPosition && <span className="text-xs text-gray-500 ml-2">→ {r.targetPosition}</span>}
               </p>
               <p className="text-xs text-gray-500 truncate">{r.mentee.email}{r.mentee.university ? ` · ${r.mentee.university}` : ''}</p>
               {r.message && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{r.message}</p>}
+              {/* The re-match detail: who they are with today, why they asked
+                  and anything they wrote. This block is the ONLY place the
+                  reason and the note are ever rendered — the outgoing mentor is
+                  told the pairing ended and nothing more. */}
+              {r.replacesRelationId && (
+                <div
+                  className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                  data-testid={`rematch-detail-${r.id}`}
+                >
+                  {r.replacesRelation && (
+                    <p>
+                      {rm.currentMentor}:{' '}
+                      <PersonHoverCard
+                        personId={r.replacesRelation.mentor.id}
+                        name={r.replacesRelation.mentor.fullName}
+                        role="MENTOR"
+                      />
+                    </p>
+                  )}
+                  {r.rematchReason && (
+                    <p className="mt-0.5" data-testid="rematch-reason-label">
+                      {rm.reasonLabel}:{' '}
+                      {rm.reasons[r.rematchReason as keyof typeof rm.reasons] ?? r.rematchReason}
+                    </p>
+                  )}
+                  {r.rematchNote && <p className="mt-0.5 whitespace-pre-line">{r.rematchNote}</p>}
+                  <p className="mt-1 text-[11px] text-amber-700">{rm.adminPrivacyHint}</p>
+                </div>
+              )}
               {(r.preferredField || preferredLanguages.length > 0 || r.preferredMentor) && (
                 <div className="flex flex-wrap gap-1.5 mt-1.5" data-testid="request-preferences">
                   {r.preferredField && (

@@ -21,7 +21,11 @@ export async function GET() {
   }
   return await withTenantScope(session, async () => {
     const requests = await prisma.mentorshipRequest.findMany({
-      where: { status: 'PENDING', preferredMentorId: session.user.id },
+      // `replacesRelationId: null` keeps re-match requests (#1801) out of a
+      // mentor's inbox entirely: they are worked by an admin, because approving
+      // one also closes someone else's live pairing. It is a privacy line too —
+      // no mentor-facing query may ever reach `rematchReason`/`rematchNote`.
+      where: { status: 'PENDING', preferredMentorId: session.user.id, replacesRelationId: null },
       orderBy: { createdAt: 'asc' },
       take: 50,
       select: {
