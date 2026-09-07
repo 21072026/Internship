@@ -16,6 +16,7 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { referrerLabel } from '@/lib/referrer';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
+import { RelationTimeline } from '@/components/RelationTimeline';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
@@ -517,6 +518,10 @@ export default function MenteeDetailPage() {
               ))}
             </div>
           </Card>
+
+          {/* The merged history (#1702) — the handover artefact when a mentor
+              changes, right under the interaction log it summarizes. */}
+          <RelationTimeline relationId={id} />
 
           <EvaluationPanel relationId={id} />
 
