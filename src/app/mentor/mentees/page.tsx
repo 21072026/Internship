@@ -92,12 +92,34 @@ export default function MenteesPage() {
   );
   const filtering = hasActiveMenteeFilters(filters);
 
+  // ...but a filter the dormant toggle silently overrules is worse than no
+  // filter: typing an exact substring of a dormant mentee's name used to render
+  // "clear the filters to see everyone again" plus a Clear-filters button that
+  // brought back everyone EXCEPT her. So count the rows the toggle is holding
+  // back that DO match, and say so — the way out of that screen is "show
+  // dormant", not "clear filters", and both surfaces now offer the right one.
+  const hiddenDormantMatches = useMemo(
+    () =>
+      showDormant
+        ? 0
+        : filterMenteeRows(relations.filter((rel) => rel.dormantSince), filters).length,
+    [relations, showDormant, filters],
+  );
+  const dormantMatchText =
+    hiddenDormantMatches === 1
+      ? t.mentor.menteeDormantMatchOne
+      : t.mentor.menteeDormantMatchMany.replace('{n}', String(hiddenDormantMatches));
+
   // WCAG 4.1.3: typing rewrites the grid in place and moves no focus, so a
   // screen-reader user is told how many rows survived (debounced by the hook).
+  // "No results" would be a lie whenever the only matches are dormant, so that
+  // case announces the same sentence the banner shows.
   useFilterAnnouncement(
     filtering
       ? visibleRelations.length === 0
-        ? t.a11y.noResultsShown
+        ? hiddenDormantMatches > 0
+          ? dormantMatchText
+          : t.a11y.noResultsShown
         : visibleRelations.length === 1
           ? t.a11y.resultsShownOne
           : t.a11y.resultsShown.replace('{count}', String(visibleRelations.length))
@@ -199,18 +221,44 @@ export default function MenteesPage() {
         </>
       )}
 
+      {/* Matches the toggle is hiding, while other rows survived: without this the
+          mentor sees 3 of 4 and has no way to know a fourth exists. bg-amber-50 +
+          text-amber-800 is already retinted by the flat html.dark rules. */}
+      {!loading && filtering && visibleRelations.length > 0 && hiddenDormantMatches > 0 && (
+        <div
+          className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+          data-testid="mentee-dormant-matches"
+        >
+          <span>{dormantMatchText}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowDormant(true)}
+            data-testid="show-dormant-matches"
+          >
+            {t.mentor.menteeShowDormantMatches}
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <Card><SkeletonRows rows={6} /></Card>
       ) : visibleRelations.length === 0 && filtering ? (
         /* Filtered to nothing — a different situation from "no mentees yet", and
-           the way out is clearing the filter, not adding a mentee. */
+           the way out is clearing the filter, not adding a mentee. Unless the
+           matches are all dormant, in which case clearing the filters would not
+           reveal them either and the honest action is the toggle. */
         <Card>
           <EmptyState
             testId="mentor-mentees-no-match"
             icon={Search}
             title={t.mentor.noMatchingMentees}
-            body={t.mentor.noMatchingMenteesHint}
-            action={{ label: t.mentor.clearMenteeFilters, onClick: () => setFilters(EMPTY_MENTEE_FILTERS) }}
+            body={hiddenDormantMatches > 0 ? dormantMatchText : t.mentor.noMatchingMenteesHint}
+            action={
+              hiddenDormantMatches > 0
+                ? { label: t.mentor.menteeShowDormantMatches, onClick: () => setShowDormant(true) }
+                : { label: t.mentor.clearMenteeFilters, onClick: () => setFilters(EMPTY_MENTEE_FILTERS) }
+            }
           />
         </Card>
       ) : visibleRelations.length === 0 ? (

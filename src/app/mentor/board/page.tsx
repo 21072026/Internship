@@ -132,10 +132,17 @@ export default function MentorBoardPage() {
   // WCAG 4.1.3, same as the admin board: the box re-filters every column in
   // place and moves no focus, so the outcome is announced once typing settles.
   const q = foldSearchText(search);
-  const matchCount = useMemo(
-    () => (q ? relations.filter((r) => matchesMenteeQuery(r, q)).length : 0),
-    [relations, q],
-  );
+  // Counted over the stage keys the columns actually walk, not over `relations`.
+  // A row can carry a key the org's resolved catalogue no longer holds (stages
+  // are per-tenant since #747 — an admin renamed or removed one after the row
+  // was stamped), and no column ever renders such a row. Counting it made the
+  // banner and the live region claim "1 result shown" over a board with nothing
+  // on it and every count badge at 0.
+  const matchCount = useMemo(() => {
+    if (!q) return 0;
+    const known = new Set(stages.map((s) => s.key));
+    return relations.filter((r) => known.has(r.pipelineStatus) && matchesMenteeQuery(r, q)).length;
+  }, [relations, q, stages]);
   useFilterAnnouncement(
     q
       ? matchCount === 0
@@ -197,6 +204,11 @@ export default function MentorBoardPage() {
 
   // Phone: one stage at a time as a list (13 columns don't fit at 390px).
   const activeStage = mobileStage || stages[0]?.key || '';
+  // ...which means a search whose only match sits in another stage rendered as
+  // "no cards in this stage" while the no-match hint was suppressed (matchCount
+  // was non-zero), so a successful search looked like a broken one. The stages
+  // holding the matches are named instead, each one a tap away.
+  const stagesWithMatches = q ? stages.filter((s) => itemsFor(s.key).length > 0) : [];
 
   return (
     <div>
@@ -251,15 +263,39 @@ export default function MentorBoardPage() {
           />
           <div className="space-y-2">
             {itemsFor(activeStage).map(renderCard)}
-            {itemsFor(activeStage).length === 0 && (
-              <EmptyState
-                testId="mentor-board-stage"
-                size="sm"
-                icon={LayoutGrid}
-                title={t.emptyStates.boardStage.title}
-                body={t.emptyStates.boardStage.body}
-              />
-            )}
+            {itemsFor(activeStage).length === 0 &&
+              (stagesWithMatches.length > 0 ? (
+                /* bg-amber-50 + text-amber-800, and bg-white + text-amber-900 on
+                   the taps: both pairs are already retinted by the flat
+                   html.dark rules in globals.css. */
+                <div
+                  className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                  data-testid="mentor-board-matches-elsewhere"
+                >
+                  <p>{t.mentor.menteeBoardMatchesElsewhere}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {stagesWithMatches.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setMobileStage(s.key)}
+                        data-testid={`board-jump-to-${s.key}`}
+                        className="min-h-11 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900"
+                      >
+                        {s.label} ({itemsFor(s.key).length})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <EmptyState
+                  testId="mentor-board-stage"
+                  size="sm"
+                  icon={LayoutGrid}
+                  title={t.emptyStates.boardStage.title}
+                  body={t.emptyStates.boardStage.body}
+                />
+              ))}
           </div>
         </div>
       ) : (

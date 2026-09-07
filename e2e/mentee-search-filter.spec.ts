@@ -138,3 +138,63 @@ test('mentor board search hides non-matching cards and re-counts the columns', a
     await cleanupByEmail(mentorEmail);
   }
 });
+
+test('a dormant mentee is still findable by name — the empty state offers the toggle, not "clear filters"', async ({ page }) => {
+  const mentorEmail = uniqueEmail('msd-mentor');
+  const mentor = await seedUser(mentorEmail, PASSWORD, 'MENTOR', 'Dormant Search Mentor');
+  const quiet = await seedUser(uniqueEmail('msd-quiet'), 'x', 'MENTEE', 'Şevval Işıkdemir');
+  const loud = await seedUser(uniqueEmail('msd-loud'), 'x', 'MENTEE', 'Zephyr Quicksilver');
+
+  // Stamped the way the daily sweep stamps it (docs/dormant-first-contacts.md),
+  // so this row is behind the "Show dormant" toggle in its default state.
+  const relQuiet = await prisma.mentorshipRelation.create({
+    data: {
+      mentorId: mentor.id,
+      menteeId: quiet.id,
+      status: 'ACTIVE',
+      pipelineStatus: 'APPLICATION_100',
+      dormantSince: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+      dormantNudgeCount: 1,
+    },
+  });
+  const relLoud = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: loud.id, status: 'ACTIVE', pipelineStatus: 'APPLICATION_100' },
+  });
+
+  try {
+    await signInAsMentor(page, mentorEmail);
+    await page.goto('/mentor/mentees');
+
+    // Default state: the dormant row is hidden, the other one is not.
+    await expect(page.getByTestId(`mentee-card-${relLoud.id}`)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId(`mentee-card-${relQuiet.id}`)).toHaveCount(0);
+
+    // Searching her name used to render "clear the filters to see everyone
+    // again" over a Clear-filters button that brought back everyone except her.
+    const search = page.getByTestId('mentee-search');
+    await search.fill('isikdemir');
+    const empty = page.getByTestId('empty-mentor-mentees-no-match');
+    await expect(empty).toBeVisible();
+    await empty.getByRole('button').click();
+    // The toggle flipped rather than the filters clearing: her card is on
+    // screen, still badged dormant, and the query is untouched.
+    await expect(page.getByTestId(`mentee-card-${relQuiet.id}`)).toBeVisible();
+    await expect(page.getByTestId(`dormant-badge-${relQuiet.id}`)).toBeVisible();
+    await expect(search).toHaveValue('isikdemir');
+    await expect(page.getByTestId(`mentee-card-${relLoud.id}`)).toHaveCount(0);
+
+    // Hide them again and search something both rows share: the visible match
+    // renders, and the banner says a hidden dormant row matches too.
+    await page.getByTestId('toggle-dormant-mentees').click();
+    await search.fill('e');
+    await expect(page.getByTestId('mentee-dormant-matches')).toBeVisible();
+    await page.getByTestId('show-dormant-matches').click();
+    await expect(page.getByTestId(`mentee-card-${relQuiet.id}`)).toBeVisible();
+    await expect(page.getByTestId('mentee-dormant-matches')).toHaveCount(0);
+  } finally {
+    await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [relQuiet.id, relLoud.id] } } });
+    await cleanupByEmail(quiet.email);
+    await cleanupByEmail(loud.email);
+    await cleanupByEmail(mentorEmail);
+  }
+});
