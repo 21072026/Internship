@@ -34,6 +34,15 @@ export const E2E_JAAS_WEBHOOK_SECRET = 'e2e-jaas-webhook-secret';
 // signing, token sealing, refresh, event create/patch/delete, revoke.
 export const E2E_GOOGLE_MOCK_PORT = 4599;
 const googleMock = `http://127.0.0.1:${E2E_GOOGLE_MOCK_PORT}`;
+// Shared with e2e/sso-roundtrip.spec.ts (#1936). Enterprise SSO had no
+// end-to-end coverage at all — the only recipe was a human clicking through the
+// public mocksaml.com, which CI cannot depend on. This stub IdP signs real SAML
+// assertions (and issues OIDC ID tokens, ready for #1929) with a key pair it
+// generates at start-up, so the app's verification path runs for real and can
+// also be handed assertions that are deliberately wrong. Unlike the Google
+// stub, the app needs no env pointing at it: a tenant's IdP endpoint is stored
+// per organization, so the spec seeds the port into the org row it creates.
+export const E2E_IDP_MOCK_PORT = 4600;
 
 export default defineConfig({
   testDir: './e2e',
@@ -70,6 +79,13 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
         timeout: 30_000,
         env: { GOOGLE_MOCK_PORT: String(E2E_GOOGLE_MOCK_PORT) },
+      },
+      {
+        command: `node e2e/support/idp-mock.mjs`,
+        url: `http://127.0.0.1:${E2E_IDP_MOCK_PORT}/__state`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+        env: { IDP_MOCK_PORT: String(E2E_IDP_MOCK_PORT) },
       },
       {
         command: process.env.CI ? 'npm run start' : 'npm run dev',

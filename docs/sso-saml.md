@@ -51,6 +51,15 @@ The SP-initiated SAML flow is implemented with `@node-saml/node-saml`
 allows IdP-initiated). The assertion signature + audience/recipient/expiry are
 the security anchors.
 
+The tenant's stored `ssoIssuer` is **not** passed to node-saml as `idpIssuer`,
+so the assertion's `<Issuer>` string is not compared against it. What binds an
+assertion to the tenant is the **certificate** it is signed with, which is
+per-tenant and pinned — an assertion from another IdP fails the signature check
+regardless of what it calls itself. Pinning the issuer as well would be belt and
+braces; it is deliberately out of scope for the harness in #1936 because turning
+it on is a behaviour change for any tenant whose stored issuer does not match
+their IdP's entity ID character for character.
+
 ### SP identifiers to register in the IdP (per tenant)
 **Don't copy these by hand — we publish them.** For a tenant with slug `<slug>`
 on base URL `<BASE>` (e.g. `https://preview.interncrm.com`):
@@ -88,11 +97,59 @@ Two gates close that, both in `src/lib/sso.ts` so every write path inherits them
 
 Implementing OIDC means adding it to `SSO_IMPLEMENTED_PROVIDERS`, branching the
 login/ACS routes on the provider, and re-enabling the option in the admin card.
+That is #1929; the customer-facing setup it will need is already written up in
+[`docs/sso-oidc.md`](sso-oidc.md), and the e2e stub IdP below already serves the
+OIDC endpoints.
 
-## Verifying on preview with mock-saml.com (no real IdP needed)
+## What CI proves (#1936)
 
-[mocksaml.com](https://mocksaml.com) is a free public test IdP. To verify the
-round-trip end-to-end on the preview environment:
+`e2e/sso-roundtrip.spec.ts` drives the **whole** SP-initiated flow — `/auth/sso`
+→ login route → IdP → HTTP-POST back to our ACS → `/auth/sso/complete` → session
+— against a local stub IdP, `e2e/support/idp-mock.mjs`, started by
+`playwright.config.ts` the same way the Google Calendar stub is. Nothing leaves
+the machine, so it runs in the PR gate; the happy path is tagged `@smoke`.
+
+The stub generates an RSA key pair and a self-signed certificate **at start-up**
+and hands the certificate to the spec over HTTP, which stores it on the tenant
+exactly as a customer would paste theirs in. No key material is committed —
+a private key in a public repo is a finding whatever it protects.
+
+It signs real assertions with `xml-crypto` (the library node-saml verifies
+with), so the app's verification path runs for real. It can also produce, on
+request, an assertion that is wrong in exactly one way, and the spec asserts
+each is refused with a redirect to `/auth/signin?error=sso_failed` — never a 500
+and never a session:
+
+| Case | What it stands for |
+|------|--------------------|
+| signed by an unadvertised key | an assertion from an IdP this tenant never trusted |
+| one byte of `SignatureValue` flipped | tampering in transit |
+| no `<Signature>` at all | `wantAssertionsSigned` must not be optional |
+| `NotOnOrAfter` in the past | a captured assertion replayed later |
+| `AudienceRestriction` naming another SP | a genuine assertion issued for a different service |
+| a consumed `SsoLoginGrant` reused | a leaked or logged `/auth/sso/complete?token=…` URL |
+
+Each negative is preceded by a **control**: the same machinery, one flag apart,
+producing an assertion the ACS accepts. Without it a broken harness would look
+exactly like working security.
+
+### What the stub cannot prove
+
+- that Okta / Entra ID / Google Workspace emit what we accept — claim names,
+  NameID formats and signing choices vary, and only a real tenant settles it;
+- that a real IdP accepts our SP metadata and AuthnRequest as we send them;
+- anything about consent screens, MFA or conditional access;
+- clock-skew behaviour between two real hosts.
+
+So before enabling a tenant, still do one live sign-in against their IdP on
+preview — the recipe below.
+
+## Verifying on preview with mock-saml.com (a public IdP, no real tenant needed)
+
+[mocksaml.com](https://mocksaml.com) is a free public test IdP. CI no longer
+depends on it (that is what the stub above is for) — this is the manual,
+human-in-the-loop check that a *real, remote* IdP over TLS also works, which the
+stub cannot answer. Do it on preview before enabling a tenant:
 
 1. **Admin → Organizations** → create an org, e.g. name *SSO Test*, slug
    `sso-test`. Open its **Enterprise SSO** card and set:

@@ -219,8 +219,15 @@ Bir sonraki turda buradan başlayın:
 
 - **Yük / DoS davranışı** — `npm run test:stress` var ama güvenlik açısından
   koşulmadı.
-- **SAML SSO akışı** — `mocksaml.com` ile uçtan uca test edilebilir
-  (bkz. `agent-experience.md`, 2026-07-24 girdisi); bu turda kod okumasıyla yetinildi.
+- ~~**SAML SSO akışı**~~ — **artık CI'da koşuyor (#1936).** `e2e/sso-roundtrip.spec.ts`,
+  yerel bir sahte IdP'ye (`e2e/support/idp-mock.mjs`, anahtar çifti açılışta üretilir)
+  karşı tam turu sürüyor: giriş → IdP → ACS → oturum, `@smoke` etiketli. Olumsuz
+  senaryolar da kapsamda: güvenilmeyen anahtarla imzalanmış, kurcalanmış, imzasız,
+  süresi geçmiş ve yanlış `Audience` taşıyan assertion'lar ile tekrar kullanılan
+  `SsoLoginGrant` — hepsi `/auth/signin?error=sso_failed` ile bitiyor, 500 yok, oturum
+  yok. **Kapsam dışı kalan:** gerçek bir IdP (Okta/Entra/Google) ile canlı tur ve
+  `ssoIssuer`'ın `idpIssuer` olarak pinlenmemesi (bağlayıcı olan sertifika pinlemesi —
+  bkz. `docs/sso-saml.md`).
 - **Google Calendar OAuth** — env'de dormant, test edilmedi.
 - **AI uçları** (`/api/cv/[userId]/extract-ai`, `interview-prep`) — prompt injection
   yüzeyi hiç incelenmedi. Kullanıcı CV'si model'e giriyor; bu ayrı bir tehdit sınıfı.
