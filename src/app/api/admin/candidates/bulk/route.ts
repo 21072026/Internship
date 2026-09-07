@@ -146,12 +146,14 @@ export async function POST(request: Request) {
       const reasonCheck = await validateDropoffReason({ orgId: rel.orgId, toStatus: nextStatus });
       if (!reasonCheck.ok) continue;
 
-      // Through the shared gate (#934): `nextOnPathStatus` should never hand
-      // back the stage the relation is already in, but this is the write path
-      // that never had the from === to check, and a tenant pipeline carrying a
-      // duplicate key would have written the no-op row unchallenged. A `null`
-      // means exactly that case — skip the relation rather than issue an UPDATE
-      // that changes nothing and tell the mentee their stage moved.
+      // Through the shared gate (#934) for uniformity, not because this path
+      // can currently produce a no-op: `nextOnPathStatus` walks a hardcoded,
+      // duplicate-free list (src/lib/pipeline.ts) and returns the NEXT element,
+      // so `toStatus` can never equal `fromStatus` here, and a tenant's own
+      // stage key is not on that list at all — it yields null and is dropped
+      // one line above by `if (!nextStatus) continue`. The branch below is
+      // therefore unreachable today; it is here so this path cannot drift from
+      // the other two if the source of `nextStatus` ever changes.
       const auditRow = statusChangeData({
         relationId: rel.id,
         fromStatus: rel.pipelineStatus,

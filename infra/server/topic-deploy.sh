@@ -294,9 +294,6 @@ _in_image "$IMAGE" npx prisma db push --accept-data-loss
 _in_image "$IMAGE" node prisma/seed-templates.mjs || true
 _in_image "$IMAGE" node prisma/seed-contributor-terms.mjs || true
 _in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
-# Drop pre-#934 no-op stage-history rows (fromStatus === toStatus). Idempotent:
-# no write path can create another one.
-_in_image "$IMAGE" node prisma/backfill-noop-status-changes.mjs --apply || true
 
 if [ "${EXISTING_TABLES:-0}" -eq 0 ]; then
   # First deploy of this PR: fill it with the synthetic demo set. Nothing here

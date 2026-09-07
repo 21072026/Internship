@@ -8,9 +8,14 @@ import { signInAsFreshUser } from './helpers/auth';
  * `e2e/admin-status.spec.ts` already covers the two request-shaped write paths
  * from the admin UI's point of view. This spec is about the *rule*: every path
  * that can create a `StatusChange` now builds it through `statusChangeData()`
- * (src/lib/stageChange.ts), which refuses a `fromStatus === toStatus` row — so
- * the bulk "advance stage" action, which never had the check at all, is
- * exercised here alongside the two that did.
+ * (src/lib/stageChange.ts), which refuses a `fromStatus === toStatus` row.
+ *
+ * Only the first two steps reach that gate. The bulk "advance stage" step below
+ * cannot: `nextOnPathStatus` returns the NEXT element of a duplicate-free list,
+ * so it never hands back the current stage, and a terminal relation is dropped
+ * earlier by `if (!nextStatus) continue` (#740). That step is here for the
+ * outcome an admin cares about — a batch that has nowhere to advance to writes
+ * no history and sends no notification — not as coverage of the new gate.
  *
  * A same-stage write is a successful no-op, never a 400: an admin who re-picks
  * the current value in a select has not made a mistake, and the clients that
@@ -62,7 +67,9 @@ test('a stage write to the current stage records no history row and no error', a
 
     // 3. Bulk "advance stage" on a terminal relation: there is nowhere on-path
     //    to advance to, so the batch reports zero and writes nothing rather
-    //    than logging a move to the stage the mentee is already in.
+    //    than logging a move to the stage the mentee is already in. This is the
+    //    pre-existing `if (!nextStatus) continue` (#740) doing the work, not
+    //    the new gate — see the note at the top of this file.
     await prisma.mentorshipRelation.update({
       where: { id: relation.id },
       data: { pipelineStatus: 'EMPLOYED_700' },

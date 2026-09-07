@@ -1,18 +1,15 @@
 {
   "bump": "patch",
-  "changelog": "- **No no-op stage-history rows** (#934). Every path that writes a `StatusChange` now builds it through `statusChangeData()` in `src/lib/stageChange.ts`, which refuses a row whose `fromStatus` equals its `toStatus` — including the bulk \"advance stage\" action and the demo seeder, neither of which had the check. A same-stage write stays a successful no-op rather than becoming a 400. `prisma/backfill-noop-status-changes.mjs` (idempotent, registered in `infra/deploy-prod.sh` and `infra/server/topic-deploy.sh`) deletes the rows already in the table; hiding them in the UI was never enough, because the stage clock (`stageEnteredAt`) and the aging report read the table, not the rendered list.",
+  "changelog": "- **No no-op stage-history rows** (#934). Every path that writes a `StatusChange` now builds it through `statusChangeData()` in `src/lib/stageChange.ts`, which refuses a row whose `fromStatus` equals its `toStatus` — one rule instead of a copy per write path, and the demo seeder no longer seeds the `APPLICATION_100 → APPLICATION_100` row the bug report reproduced against. A same-stage write stays a successful no-op rather than becoming a 400. Rows already in the table are left alone, as #934 decided: the UI has hidden them since #1338, and teaching the stage clock and the aging report to skip them as well is #2264.",
   "notes": {
     "en": [
-      "Stage history no longer shows \"moves\" that went nowhere, and the ones already recorded have been cleaned up.",
-      "\"Days in stage\" and the time-in-stage report are accurate again: a phantom entry can no longer restart a candidate's stage clock."
+      "Setting a candidate to the stage they are already in no longer writes a history entry — and no longer restarts their \"days in stage\" counter."
     ],
     "tr": [
-      "Aşama geçmişinde artık aynı aşamadan aynı aşamaya \"geçiş\" kayıtları görünmüyor; daha önce yazılmış olanlar da temizlendi.",
-      "\"Aşamada geçen gün\" ve aşama süresi raporu yeniden doğru: sahte bir kayıt artık adayın aşama sayacını sıfırlayamıyor."
+      "Bir adayı zaten bulunduğu aşamaya almak artık geçmişe kayıt düşmüyor ve \"aşamada geçen gün\" sayacını yeniden başlatmıyor."
     ],
     "de": [
-      "Der Stufenverlauf zeigt keine \"Wechsel\" mehr, bei denen sich nichts geändert hat; bereits erfasste Einträge wurden entfernt.",
-      "\"Tage in der Stufe\" und der Verweildauer-Bericht stimmen wieder: ein Scheineintrag kann die Stufenuhr einer Kandidatin nicht mehr zurücksetzen."
+      "Wird eine Kandidatin auf die Stufe gesetzt, in der sie bereits ist, entsteht kein Verlaufseintrag mehr — und der Zähler \"Tage in der Stufe\" beginnt nicht von vorn."
     ]
   }
 }

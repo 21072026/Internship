@@ -62,11 +62,19 @@ export async function validateDropoffReason(input: DropoffReasonInput): Promise<
 // counts two visits where there was one; the mentor analytics "stage moves"
 // figure and the activity report both count rows.
 //
-// The guard used to be written out at each write path, which meant the bulk
-// "advance stage" action never had it. Now every caller builds its row here and
-// a `null` means "there is nothing to record" — the surrounding operation is
-// still a success (see the callers: a request that sets a stage to its current
-// value is a silent no-op, never a 400).
+// This gate stops NEW ones. The rows already in the table stay — #934 decided
+// that explicitly ("eski veri geriye dönük temizlenmeyecek"), and a StatusChange
+// can carry an admin's own `reasonCode`/`reasonNote`, so no unattended script
+// deletes them. The UI already hides them (`isStageTransition` in
+// /api/mentorship/[id], /api/users/[id] and lib/relationTimeline.ts); teaching
+// the two readers above to skip them as well is #2264.
+//
+// The guard used to be written out at each write path — three copies of one
+// rule, and the bulk "advance stage" action carried none of them (it could not
+// reach the case, but nothing said so). Now every caller builds its row here
+// and a `null` means "there is nothing to record" — the surrounding operation
+// is still a success (see the callers: a request that sets a stage to its
+// current value is a silent no-op, never a 400).
 export interface StatusChangeInput {
   relationId: string;
   fromStatus: string;
