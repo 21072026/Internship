@@ -9,10 +9,12 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { CohortComparison } from '@/components/admin/CohortComparison';
+import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocked';
 import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { MatchQuality } from '@/components/admin/MatchQuality';
 import { useT } from '@/i18n/client';
+import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 
@@ -123,9 +125,12 @@ export default function AdminAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangePreset>('6m');
-  // Premium tier state (#540): drives the full-report export buttons. Detected
-  // via the (server-gated) cohorts endpoint — 403 means the tier is off.
-  const [premium, setPremium] = useState(false);
+  // Premium tier state (#540): drives the full-report export buttons and the
+  // three premium report cards. Read from `/api/admin/analytics/entitlements` —
+  // one request that answers the question, where this used to probe the gated
+  // cohorts endpoint and infer the tier from a 403 (#1442). `null` = not known
+  // yet, so neither the premium cards nor the locked panel is drawn.
+  const premium = usePremiumAnalytics();
 
   useEffect(() => {
     const qs = rangeQuery(range);
@@ -145,10 +150,6 @@ export default function AdminAnalyticsPage() {
       .then((d) => setKpi(d))
       .catch((e) => console.error('[analytics/funnel]', e));
   }, [range, t.common.error]);
-
-  useEffect(() => {
-    fetch('/api/admin/analytics/cohorts').then((r) => setPremium(r.ok)).catch((e) => console.error('[analytics/cohorts]', e));
-  }, []);
 
   const maxFunnel = data ? Math.max(1, ...stages.map((s) => data.funnel[s.key] || 0)) : 1;
 
@@ -698,15 +699,23 @@ export default function AdminAnalyticsPage() {
         </Card>
       )}
 
-      <CohortComparison />
+      {/* The three premium report cards and their locked state (#1442). All
+          three sit behind one gate, so an unentitled tenant gets one panel that
+          says so instead of three cards that each learned it from a 403. */}
+      {premium === false && <PremiumAnalyticsLocked />}
+      {premium === true && <CohortComparison />}
 
       {/* Match quality (#2040): how often the mentor suggestion is taken, and
           at which rank position. Not premium-gated — it is the answer to the
           first question every buyer asks about the matching. */}
       <MatchQuality />
 
-      <ProgramBenchmark />
-      <SourceConversion />
+      {premium === true && (
+        <>
+          <ProgramBenchmark />
+          <SourceConversion />
+        </>
+      )}
         </>
       )}
     </div>

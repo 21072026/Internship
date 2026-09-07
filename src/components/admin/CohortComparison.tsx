@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Lock, Users } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useT } from '@/i18n/client';
 
@@ -19,44 +18,26 @@ interface CohortRow {
   interactionsPerRelation: number;
 }
 
-// Premium cohort comparison (Faz 2, #538) on the admin analytics page.
-// Locked (403 feature_locked) until the premiumAnalytics setting is enabled —
-// then renders a side-by-side metrics table for every cohort.
+// Premium cohort comparison (Faz 2, #538) on the admin analytics page: a
+// side-by-side metrics table for every cohort.
+//
+// Mounted only when the tenant holds the premium analytics tier — the page asks
+// `/api/admin/analytics/entitlements` once and renders PremiumAnalyticsLocked
+// instead of this component when the answer is no (#1442). So this fetch is
+// expected to succeed; a 403 here means the tier was switched off mid-session,
+// and the card then simply does not draw (the reload picks up the locked panel).
 export function CohortComparison() {
   const t = useT();
   const c = t.analytics;
   const [rows, setRows] = useState<CohortRow[] | null>(null);
-  const [locked, setLocked] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/admin/analytics/cohorts')
       .then(async (r) => {
-        if (r.status === 403) { setLocked(true); return; }
         if (r.ok) setRows((await r.json()).cohorts ?? []);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, []);
-
-  if (loading) return null;
-
-  if (locked) {
-    return (
-      <Card className="mt-6" data-testid="cohort-compare-locked">
-        <div className="flex items-start gap-3">
-          <Lock className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{c.cohortCompareTitle}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{c.cohortCompareLocked}</p>
-            <Link href="/admin/settings" className="text-sm text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block">
-              {c.cohortCompareUnlockCta}
-            </Link>
-          </div>
-        </div>
-      </Card>
-    );
-  }
 
   if (!rows) return null;
 

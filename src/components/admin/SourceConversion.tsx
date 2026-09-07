@@ -15,8 +15,10 @@ interface SourceRow {
 }
 
 // Premium source-conversion report (Faz 2, #539) on the admin analytics page.
-// Silent when locked — the CohortComparison card already renders the premium
-// teaser for the whole tier, so we don't repeat it.
+//
+// Mounted only when the tenant holds the premium analytics tier — the page's
+// single PremiumAnalyticsLocked panel speaks for the whole tier, so this
+// component no longer fires a request that is expected to 403 (#1442).
 export function SourceConversion() {
   const t = useT();
   const c = t.analytics;
@@ -26,7 +28,7 @@ export function SourceConversion() {
   useEffect(() => {
     fetch('/api/admin/analytics/sources')
       .then(async (r) => {
-        if (!r.ok) return; // locked or error → the tier teaser handles messaging
+        if (!r.ok) return; // tier switched off mid-session, or a transient error
         const d = await r.json();
         setRows(d.sources ?? []);
         setUnsourced(d.unsourced ?? 0);
