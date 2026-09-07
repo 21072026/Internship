@@ -10,6 +10,44 @@ Newest entries on top.
 
 ---
 
+## 2026-09-07 — Widening a mechanical audit you cannot run (#1615)
+
+**Extract the rules before you copy the routes.** The phone-layout audit's four overflow
+rules lived as ~100 lines of `page.evaluate()` inside `e2e/mobile-layout-audit.spec.ts`.
+Adding a second file that measures thirty-one more routes meant either importing them or
+copying them, and a copy drifts the first time somebody tightens rule 3. They now live in
+`e2e/helpers/layoutAudit.ts`; the default Playwright `testMatch` ignores
+`e2e/helpers/*.ts`, so a helper module there is not discovered as a spec.
+
+**Read the nav from the DOM, not from the module.** The coverage gate ("every `AdminNav`
+destination is audited") wants the route table, but `src/lib/navLinks.ts` stores a
+`LucideIcon` per entry, so importing it into a spec drags `lucide-react` and React into the
+Playwright process. `[data-testid="app-drawer"] nav a[href^="/"]` gives the same 41
+destinations with no import at all — and it measures what a user can actually reach.
+`ResponsiveShell` keeps the drawer mounted and merely `-translate-x-full` at phone width, so
+its links are readable without opening it.
+
+**Collect findings, assert once.** `a11y-scan.spec.ts:185-187` already records the lesson;
+it applies to any sweep. A per-route `expect` turns a 31-route audit into "learn one broken
+route per CI cycle". Same for readiness: a route that 500s or never stops rendering
+`animate-pulse` is pushed onto the findings list as a string, not thrown, or one dead route
+hides the layout of every route behind it.
+
+**A geometric ≥24×24 tap-target rule without WCAG 2.5.8's spacing exception is not a
+finding, it is a carpet bomb.** Every 16px checkbox in the product fails it, and none of
+them is the bug you are looking for. The exception is ~15 lines (a 24px circle centred on an
+undersized target may not reach another target, nor another undersized target's circle) and
+it is the half that makes the rule mean something — implement it or leave the criterion to
+axe.
+
+**Say plainly when the first real run is somewhere else.** There is no database and no
+browser in this container, so a spec written here is verified by `tsc`, `next lint`,
+`npm run build` and `npx playwright test --list` (which parses the file and enumerates the
+tests without starting the web server) — and by nothing else. `--list` caught nothing this
+time but it is the cheapest proof that the file loads under Playwright's own loader.
+
+---
+
 ## 2026-09-05 — Stale `.git/index.lock` on the self-hosted runner (#2143, #2170)
 
 **A cancelled self-hosted job can leave a lock file that fails every job after it, forever, until someone SSHes in.** Three days into the #2143 outage, the runner started accepting jobs again but `deploy-prod`/`deploy-preview` both failed in ~1s at `Fetch the repo` with `Unable to create .git/index.lock: File exists` — a `git` process killed mid-fetch (very plausibly the immediately-preceding run, which shows `conclusion: cancelled`) never got the chance to clean up after itself. **This can't be fixed from a watchdog session with no SSH**, but the recurrence *can* be prevented in the workflow itself: `rm -f .git/index.lock` right after `git init`, before the first `git remote`/`fetch` call. Grep `[ -d .git ] || git init -q .` across `.github/workflows/` before assuming this is a one-workflow fix — the same fetch-repo script is hand-copied into six files (`backup-verify`, `demo-reset`, `deploy-preview`, `deploy-prod`, `topic-preview`, `topic-sweep`) that all share one runner's working directory, so all six are exposed the same way.
@@ -5975,3 +6013,163 @@ yaptığı atıfları düzeltmek gerekiyor. Marker kalmaması, metnin doğru olm
 kendiliğinden birleşti; yine de `grep -n "key: '"` ile iki girdinin de yerinde olduğuna
 baktım. Otomatik birleşme "çatışma yok" demektir, "iki taraf da korundu" demek değildir —
 kayıt defteri gibi dosyalarda sessizce bir girdi düşerse hiçbir tip hatası vermez.
+
+## 2026-09-07 — Bir kilit değerin kaynağı veriyse, kodu düzeltmek veriyi de iyileştirebilir (#2268)
+
+İki küçük kusuru tek PR'da kapattım (#2269). İkincisinin — Türkçe arayüzde İngilizce
+pipeline aşama etiketleri — bulgusu "isDataNotCode: true" idi ve doğruydu: semptomu üreten
+şey `PipelineStage.label` satırlarıydı. Refleks çözüm bir backfill betiği yazıp
+`infra/deploy-prod.sh`'e eklemek olurdu; bu, canlı satırları her ortamda yeniden yazmak
+demekti ve onay gerektirirdi. Bunun yerine **okuma yolunu** "bu etiket hâlâ bizim yerleşik
+etiketimizse, okuyanın diliyle çevir" diye değiştirdim. Aynı sonuç, sıfır veri mutasyonu,
+sıfır operatör adımı. Ders: veriden gelen bir semptomda önce "bu değeri kim okuyor ve
+okurken düzeltebilir miyim?" diye sor — backfill en son çare.
+
+**"Herhangi bir dilde eşleşiyor mu" kontrolü, kapatılması en zor deliği kapatıyor.**
+`isDefaultLabel` sadece okuyanın dilindeki yerleşik etiketle karşılaştırsaydı, editörde
+yalnızca **rengi** değiştirip kaydeden bir yönetici hâlâ bir dili dondururdu (prefill
+İngilizceydi, karşılaştırma Türkçeydi, eşleşme olmazdı). Üç dilin hepsine bakmak bu deliği
+kapatıyor; bedeli — bir kiracı Almanca yerleşik dizeyi Türkçe okuyuculara sabitleyemiyor —
+kod yorumuna yazılmalı, yoksa bir sonraki okuyan bunu hata sanar.
+
+**Konu numarasını issue'yu AÇTIKTAN sonra yaz.** Yorumlara ve release fragment'ına `#2270`
+yazdım (sıradaki numarayı tahmin ederek); `gh issue create` `#2268` verdi ve tahminim iki
+şey birden kaydırmıştı. Dokuz dosyada `sed` ile düzeltip kontrolleri baştan koşturmak
+gerekti. Ya issue'yu ilk iş aç, ya da numarayı yer tutucu bırakıp commit'ten önce doldur.
+
+**`npm install`, PR'ına versiyon değişikliği sızdırır.** Yerel `node_modules` eksikti
+(`@axe-core/playwright`, `web-push` yüzünden `tsc` 13 sahte hata veriyordu), `npm install`
+sorunu çözdü ama `package-lock.json`'ın `version` alanını 0.135.0 → 0.156.21 diye
+güncelledi. CLAUDE.md PR'ların versiyon dosyalarına dokunmamasını söylüyor: commit'ten önce
+`git checkout -- package-lock.json`. `git status`'u diff'e bakmadan `git add -A` ile
+geçmeyin.
+
+**`node --experimental-strip-types` `@/` takma adını çözmez.** `scripts/test/*.test.mjs`
+birim koşucusu `.ts` dosyalarını doğrudan import ediyor, ama `src/lib/pipeline.ts`
+`@/i18n/config`'ten import ettiği için o koşucudan erişilemiyor (coverage raporu da
+"Playwright altında, #1598 bekliyor" diyor). Saf yardımcıları yine de doğrulamak için
+`/tmp`'ye kopyalayıp import satırını `sed`'le göreceli hale getirdim: 30 saniye, ve üç
+dilin çıktısını gözle gördüm. Veritabanı olmadan da saf mantık kanıtlanabilir.
+
+## 2026-09-07 — Mentee kendi projesini açıyor: doğru soyutlama zaten oradaydı (#2270)
+
+**Rol string'i ile sahiplik kontrolü aynı dosyada yan yana yaşıyorsa, "yetkiyi genişlet"
+işinin çoğu silme işidir.** `projectAccess.ts`'in beş yardımcısı (`canViewProject`,
+`canManageProject`, `isProjectOwner`, `isProjectMember`, `resolveOwner`) baştan
+**rol-kör** yazılmış: bir MENTEE proje sahibi `PUT /api/projects/[id]`'de sahibe özel alan
+kümesinin tamamını bugün de düzenliyor, `[id]/tasks`, `[id]/task-templates` ve
+`[id]/join-requests` de çalışıyor. Kilitleyen şey yalnızca `session.user.role === 'MENTEE'`
+karşılaştırması yapan **üç** guard'dı. Yani "mentee proje yönetebilsin" işi yeni bir yetki
+modeli değil, üç literal'in kaldırılmasıydı — ve o üç yer, admin'in bugün yaratabildiği
+mentee-sahipli projelerde **canlı hata**ydı, yeni özellik iskelesi değil. Guard'ları
+genişletmeden önce dosyanın hangi deyimi kullandığını sayın.
+
+**Rol literal'ini silerken "kimin hakkını daralttım?" diye sorun.** `project-tasks/[taskId]`
+DELETE'te önerilen sadeleştirme `!lead && task.assigneeId !== me` idi; bu, o düğmeye her
+zaman sahip olan **mentor üyelerden** hak alıyordu. Doğru diff `!lead &&` eklemek, literal'i
+bırakmaktı: mentee sahip açılıyor, mentor üye aynen kalıyor. Genişletme PR'ında sessiz bir
+daraltma en kolay gözden kaçan regresyondur.
+
+**Formu tek mount noktasından çıkarmak, "mentee için de göster"den daha güvenli.**
+`ProjectsManager` (436 satır) formu ve listeyi ortak state ile iç içe tutuyordu; form
+`src/components/project/ProjectForm.tsx`'e taşınıp hangi kontrolün görüneceği **prop**
+oldu (`showOwnerPicker`/`showTermsPicker`/`showVisibility`/`canEditProtected`). Bunu
+"ProjectsManager'ı portalda da mount et" ile yapmak üç sızıntı demekti: mentee'ye owner
+seçici, `TERMS_NONE` ile proje düzeyindeki IP kapısını kapatma imkânı ve `isPublic` ile
+anonim vitrine + `sitemap.xml`'e kendi adıyla çıkma. DOM'u (label'lar, `project-terms-select`,
+"Create"/"Save") harfiyen korumak sekiz spec'i kırmızıya döndürmeden taşımanın bedeli.
+
+**Sahiplik görünürlüğü `ownerUserId`'den okunmalı, üye satırının yan etkisinden değil.**
+`BUILDERS.project.MENTEE` kapsamında `ownerUserId` kolu yoktu; mentee kendi gizli projesini
+yalnızca OWNER `ProjectMember` satırı yaşadığı sürece görüyordu — `POST /api/projects`
+o satırı aynı `create()` içinde attığı için mutlu yol çalışıyor, ama seeder/backfill/üye
+silme sonrası sahip projeyi id ile düzenleyebilirken listesinde göremiyor. Yeni spec bunu
+üye satırını silip `GET /api/projects`'i tekrar sorarak kanıtlıyor; testi yazmasaydım diff'ten
+"gereksiz" diye düşecek satır tam olarak buydu.
+
+**Lokal e2e reçetesi hâlâ çalışıyor ve tek doğru yol:** ana checkout'un `.env`'i
+**paylaşılan preview DB'sine** bakıyor, dolayısıyla Playwright'ı öyle koşmak preview verisine
+yazmak demek. `DATABASE_URL="mysql://e2e:e2epass@127.0.0.1:3306/internship_e2e"` kabuktan
+export edilir (Next `.env`'i process env'in üzerine yazmaz), `prisma db push
+--accept-data-loss` + `npm run build`, sonra `CI=1 npx playwright test` — prod build'e karşı
+136/136 smoke yeşil, yeni spec dahil.
+
+## 2026-09-07 — Bir rozetin yanlış olması, kuralın yanlış yerden okunması demekti (#2275)
+
+**Bulgu, tek bir sorunun cevabıydı: "temas" nereden okunuyor?** Mentor panosunda 11 satırlık
+"Dikkat gerektiriyor" listesi vardı ve satırların çoğu, mentorun o hafta yazıştığı
+mentee'lerdi. Kodun tek kusuru `r.interactions[0]?.date` idi: temas, mentorun ayrıca
+doldurmayı hatırladığı formdan okunuyordu. Ürünün etkileşim yüzeyi taşındığında (uygulama
+içi mesajlaşma), tazelik hesabı taşınmayı unutmuş. Aynı yanlış girdi beş yüzeyi besliyordu
+(kuyruk, günlük hatırlatma, haftalık özet, mentee kartları, aday sayfasındaki "Sıradaki
+aksiyon"), dolayısıyla doğru düzeltme beş yerde `||` eklemek değil, **kuralı tek modüle
+çıkarmak**tı.
+
+**Kuralın kendisini bağımlılıksız modüle koy, sorguları ayrı tut.** Repo deseni bu
+(`stageAging.ts`): `lastContactRule.ts` hiç `@/` importu içermiyor, bu yüzden
+`node --experimental-strip-types` ile birim testi yazılabiliyor; `lastContact.ts` üç grouped
+aggregate'i çalıştırıp aynı fonksiyonu çağırıyor ve her şeyi re-export ediyor, böylece çağrı
+yerleri tek yerden import ediyor. İlk denemede ikisini tek dosyada yazdım ve test
+`ERR_MODULE_NOT_FOUND` ile patladı — `@/lib/prisma` alias'ını strip-types çözemiyor. Yeni
+modülün gerçek bir suite'i olunca `scripts/check-unit-coverage.mjs`'teki `FLOORS`'a kaydını
+**aynı PR'da** eklemek gerekiyor, yoksa yarın kuralı silen bir refactor hiçbir yeri
+kırmızıya çevirmez.
+
+**Prisma `groupBy`, `where` içinde ilişki filtresi kabul ediyor.** Grup mesajının
+`relationId`'si yok (yazma yolu yalnızca DIRECT sohbette damgalıyor), dolayısıyla yazara göre
+aramak gerekiyor: `groupBy({ by: ['senderId'], where: { senderId: { in: ids },
+conversation: { type: 'GROUP' } }, _max: { createdAt: true } })`. Aynı imkân, "birebir mesaj"
+tarafını da yazma yoluna güvenmek yerine **inşa gereği** doğru tutmayı sağlıyor
+(`OR: [{ conversationId: null }, { conversation: { type: 'DIRECT' } }]`).
+
+**Simetrik kural burada yanlış olurdu.** "Mesaj = temas" derken grup mesajlarını da katmak
+en kısa diff'ti ve tam ters hatayı üretirdi: dokuz mentee'nin bulunduğu kanala mentorun
+attığı tek satır, kuyruğu dokuz kişi için birden susturur. Sınır şu: **birebir** mesaj her iki
+yönde sayılır, **grup** mesajı yalnızca mentee kendi yazdıysa sayılır. Bir asimetriyi
+"tutarsızlık" diye düzleştirmeden önce, iki tarafın aynı şeyi mi ölçtüğüne bakmak gerekiyor.
+
+**Sayaçlara dokunmamak da bir karar ve yazıya geçmesi gerekiyor.** "Toplam Etkileşim" ve
+`/mentor/interactions` hâlâ `InteractionLog` satırlarını sayıyor: orası bir kayıt defteri,
+bozuk olan şey tazelikti. PR'da ve `docs/last-contact.md`'de açıkça yazmasam, bir sonraki
+oturum bunu eksik iş sanıp defteri de bozardı.
+
+**Bu container'da lokal e2e reçetesi (güncel adımlar):**
+- `apt-get install mariadb-server` **önce `apt-get update` istiyor** — bayat paket indeksi
+  iproute2/libmysqlclient21 için 404 veriyor ve mesaj "maybe run apt-get update" diye
+  gerçek sebebi söylüyor. `mariadbd --user=mysql` elle başlatılıyor (`service` yok,
+  `policy-rc.d` restart'ı reddediyor), `/run/mysqld` dizinini önce açmak gerekiyor.
+- **Playwright'ın pinlenmiş build'i (`chromium_headless_shell-1234`) yok, kurulu olan
+  1194** — ve iki sürümün **dizin düzeni farklı**: yenisi
+  `chrome-headless-shell-linux64/chrome-headless-shell`, eskisi `chrome-linux/headless_shell`.
+  Yani dizin sembolik bağı yetmiyor; beklenen yolu açıp **binary'ye** bağ vermek gerekiyor
+  (`mkdir -p .../chromium_headless_shell-1234/chrome-headless-shell-linux64` + `ln -s`
+  `.../chromium_headless_shell-1194/chrome-linux/headless_shell`), ayrıca
+  `INSTALLATION_COMPLETE` dosyasına dokunmak.
+- **Seed edilmemiş DB'ye karşı koşulan smoke, `AccountLockout` bırakıyor.** `admin@example.com`
+  yokken 5 spec düşüyor; `prisma db seed` sonrası **aynı 5 spec yine düşüyor**, bu kez
+  "Too many attempts" ile — ve bu, gerçek bir auth regresyonu gibi okunuyor. `delete from
+  AccountLockout` sonrası 9/9 yeşil. Önce seed et, sonra koş; sıra ters gittiyse kilidi sil.
+
+## 2026-09-07 — "Tek çağrıyı düzelt" dediğinde bile, çağrının **döngünün içinde** olması gerekiyor (#1667)
+
+Bülten markası tek bir `getOrgBranding(null)` yüzünden yok sayılıyordu. Düzeltmenin kolay
+görünen hâli, çağrıyı gönderim döngüsünün **dışına** alıp bir kez çözmek — ve o hâl, bir
+sayı birden fazla organizasyonun üyesine dağıldığı için ilk gelen kiracının markasını
+herkese basardı. Doğru yer alıcı başına; maliyeti de `orgId`'ye göre bir memo ile
+kiracı başına bir sorguya indiriyorsun. Memo'da **değeri değil promise'i** tutmak gerekiyor:
+havuz aynı anda dört alıcıyı açtığı için değer saklarsan dördü de aynı sorguyu yarıştırır.
+Memo çalıştırma başına, asla modül kapsamında — iki sayı arasında değişen marka ikincisinde
+görünmek zorunda.
+
+**İşin yarısı zaten shipping'di ve issue bunu bilmiyordu.** Beş maddelik listenin ikisi
+(`features.ts` beyaz etiket girdisi, `sso.ts`/`ssoProvisioning.ts` başlık yorumları) başka
+PR'larla çoktan gelmişti; `ssoHint` de üç dilde düzeltilmişti. Yazılmış bir issue'yu
+uygulamaya başlamadan önce her maddesini **kod üzerinde** doğrulamak, "yapıldı" diye
+raporlanan işten daha hızlı: aksi hâlde ya doğru olanı bozarsın ya da olmayan bir işi
+anlatırsın.
+
+**Bir dokümanı "güncelledim" demek yetmiyor, çürümeyecek şekilde yazmak gerekiyor.**
+`docs/white-label.md`'de eski metin "uygulanmıyor" diyordu; yerine hangi yüzeyin hangi
+`orgId`'den markalandığını veren bir tablo ve **bilinçli olarak markalanmayanların** adı
+geçen bir liste koydum. Bir araştırma dokümanı da o dosyaya `:31-40` satır aralığıyla
+bağlanıyordu — satır çapaları çürüyor, bölüm adı çürümüyor.

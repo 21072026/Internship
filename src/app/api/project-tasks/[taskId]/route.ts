@@ -143,7 +143,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
 // (owners and mentor/admin members); a mentee member, who only got a task UI
 // now, may delete their own goal and nothing else — and never a shared one,
 // which is the pool's to retire, not theirs (#1113). Archiving is what a person
-// does with a to-do they are finished with.
+// does with a to-do they are finished with. A mentee who *owns* the project is
+// on the owner side of that line, not the member side (#2270).
 export async function DELETE(_request: Request, { params }: { params: Promise<{ taskId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -155,7 +156,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const lead = task.projectId
     ? await isProjectOwner(session.user, task.projectId)
     : task.createdById === session.user.id || session.user.role === 'ADMIN';
-  if (task.projectId && session.user.role === 'MENTEE' && task.assigneeId !== session.user.id) {
+  // `!lead` first (#2270): the mentee carve-out is about a plain *member*, and
+  // reading the role string alone locked a MENTEE **owner** out of to-dos on
+  // their own project — including ones they wrote themselves. Mentor/admin
+  // members keep exactly the access they had.
+  if (task.projectId && !lead && session.user.role === 'MENTEE' && task.assigneeId !== session.user.id) {
     return NextResponse.json({ error: 'This goal belongs to the project' }, { status: 403 });
   }
   // A to-do that came from the shared pool is not the recipient's to delete: it

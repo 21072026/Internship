@@ -266,6 +266,25 @@ workaround, #636, and it compiled on every PR push).
   İki sınır tartışmaya kapalıdır: **üçüncü mail yok** (gönderen alan adının itibarı) ve
   **otomatik aşama değişikliği / kapatma yok**. Herhangi bir yaşam belirtisi (mentee mesajı,
   yanıtsız soru, bekleyen toplantı, aşama ilerlemesi) damgayı ve sayaçları sıfırlar.
+- **"Son temas" tek bir kuraldır** (`docs/last-contact.md`, #2275): mentor panosundaki
+  *Yakın zamanda temas yok* rozeti, günlük durgunluk hatırlatması, haftalık özet, mentee
+  kartları ve `/admin/candidates/[id]` "Sıradaki aksiyon" — hepsi
+  `src/lib/lastContact.ts`'ten okur (kuralın kendisi bağımlılıksız `lastContactRule.ts`'te,
+  birim testli). Temas = **en yenisi**: `InteractionLog` kaydı, mentorluk başlığındaki
+  **birebir (DIRECT)** mesaj (her iki yönde) ve **mentee'nin kendi yazdığı grup mesajı**.
+  Başkasının grup mesajı bilinçli olarak temas **değildir** — grup sohbeti bir yayındır,
+  mentorun tek satırı dokuz mentee ile temas sayılsa listeyi hepsi için birden susturur.
+  Etkileşim **sayaçları** ("Toplam Etkileşim", `/mentor/interactions`) hâlâ yalnızca
+  `InteractionLog` satırlarını sayar: orası bir kayıt defteri, değişen şey tazelik.
+- **Bir mentee, en fazla bir aktif mentor** ([`docs/one-active-mentor.md`](docs/one-active-mentor.md),
+  EPIC F / #419): the invariant is enforced by `src/lib/activeMentorship.ts` and **every**
+  write path calls it — no hand-rolled `findFirst`. A duplicate merge whose two records have
+  different active mentors is **refused** (`active_mentor_conflict`), never auto-completed.
+  The DB-level `@@unique([activeMenteeKey])` backstop is a deliberate follow-up, gated on the
+  integrity report (`GET /api/admin/relation-integrity`, or the deploy's
+  `prisma/check-active-mentor-duplicates.mjs` line) reading clean on prod AND shared preview —
+  a `db push --accept-data-loss` that fails on the constraint is a failed deploy. Read the doc
+  before touching any of it; the sequencing is the load-bearing part.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

@@ -9,6 +9,12 @@ import { emitStageChange } from '@/lib/stageChangeEffects';
 import { withTenantScope } from '@/lib/orgContext';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
+import {
+  findActiveMentorship,
+  hasOtherActiveMentorship,
+  ALREADY_MENTORED_ERROR,
+  AlreadyMentoredError,
+} from '@/lib/activeMentorship';
 
 const updateRelationSchema = z.object({
   status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
@@ -180,6 +186,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         }
       }
 
+      // Back door (#419): reopening a COMPLETED relation to ACTIVE is a second
+      // assignment by another name, so it owes the same 409 POST /api/mentorship
+      // answers. `exceptRelationId` because this relation is itself part of the
+      // comparison. Checked before anything is written — clearing `completedAt`
+      // below also silently reopens the post-mentorship document window (#854).
+      if (parsed.data.status === 'ACTIVE' && relation.status !== 'ACTIVE') {
+        if (await hasOtherActiveMentorship(prisma, relation.menteeId, { exceptRelationId: id })) {
+          return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
+        }
+      }
+
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = {
         ...rest,
         ...(stageChanging ? { pipelineStatus } : {}),
@@ -202,15 +219,31 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ relation, changed: false });
       }
 
-      const updated = await prisma.mentorshipRelation.update({
-        where: { id },
-        data,
-        include: {
-          mentor: { select: { id: true, fullName: true, email: true } },
-          mentee: { select: { id: true, fullName: true, email: true } },
-          company: { select: { id: true, name: true } },
-        },
-      });
+      // Guard + write in one transaction, mirroring the two front doors: a
+      // reopen must not slip past a mentor assigned in between.
+      let updated;
+      try {
+        updated = await prisma.$transaction(async (tx) => {
+          if (parsed.data.status === 'ACTIVE' && relation.status !== 'ACTIVE') {
+            const active = await findActiveMentorship(tx, relation.menteeId, { exceptRelationId: id });
+            if (active) throw new AlreadyMentoredError(relation.menteeId, active.id);
+          }
+          return tx.mentorshipRelation.update({
+            where: { id },
+            data,
+            include: {
+              mentor: { select: { id: true, fullName: true, email: true } },
+              mentee: { select: { id: true, fullName: true, email: true } },
+              company: { select: { id: true, name: true } },
+            },
+          });
+        });
+      } catch (e) {
+        if (e instanceof AlreadyMentoredError) {
+          return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
+        }
+        throw e;
+      }
 
       // Record an audit entry when the pipeline stage actually changes. The row
       // is built by the shared gate (#934), which is what refuses a from === to

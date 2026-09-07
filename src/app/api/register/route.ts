@@ -16,6 +16,8 @@ import { getSetting } from '@/lib/settings';
 import { isValidTimeZone } from '@/lib/timezone';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { logActivity } from '@/lib/activity';
+import { findActiveMentorship } from '@/lib/activeMentorship';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -215,21 +217,68 @@ export async function POST(request: Request) {
             ? { mentorId: user.id, menteeId }
             : null;
         if (pair) {
-          const already = await prisma.mentorshipRelation.findFirst({ where: pair, select: { id: true } });
-          if (!already) {
-            // The invitation auto-link creates a real relation, so it starts on
-            // the tenant's own first on-path stage too (#1634).
-            await prisma.mentorshipRelation.create({
-              data: { ...pair, orgId: user.orgId, pipelineStatus: await resolveStartStage(user.orgId) },
-            });
-          }
+          // The worst back door (#419), and two bugs in one line: the lookup
+          // here used to match the (mentorId, menteeId) PAIR with NO status
+          // filter. So (a) inviting a MENTOR pre-linked to an EXISTING mentee
+          // who meanwhile acquired a mentor created a SECOND ACTIVE relation —
+          // silently, and it notified the mentee — the very operation POST
+          // /api/mentorship answers 409 to; and (b) re-inviting on a CLOSED
+          // pair matched the completed row, created nothing, and still told the
+          // counterpart "you are now connected".
+          //
+          // Only the mentee side can conflict: when the registrant IS the
+          // mentee their row is seconds old. Refusing cannot be an HTTP code
+          // here — the registration itself is valid and the account is already
+          // usable — so the refusal is an ActivityLog entry plus an admin
+          // notification, and above all NO "connected" message to either side.
+          const active = await findActiveMentorship(prisma, pair.menteeId);
           const counterpartId = pair.mentorId === user.id ? pair.menteeId : pair.mentorId;
-          await notify(
-            counterpartId,
-            'mentorship.connected',
-            { name: user.fullName },
-            role === 'MENTEE' ? '/mentor/mentees' : '/portal'
-          );
+          if (active && active.mentorId !== pair.mentorId) {
+            await logActivity({
+              action: 'mentorship.autolink_skipped',
+              level: 'warning',
+              actorId: user.id,
+              targetType: 'user',
+              targetId: pair.menteeId,
+              detail: `already mentored by ${active.mentorId} (relation ${active.id})`,
+            });
+            const admins = await prisma.user.findMany({
+              where: { role: 'ADMIN', isActive: true },
+              select: { id: true },
+            });
+            await Promise.all(
+              admins.map((a) =>
+                notify(a.id, 'mentorship.autoLinkSkipped', { name: user.fullName }, '/admin/mentorship')
+              )
+            );
+          } else if (!active) {
+            // A COMPLETED relation for this exact pair means the two have
+            // already been through a mentorship together. Still not recreated —
+            // resurrecting a finished mentorship would re-open its `completedAt`
+            // window (#854) — but the bug being fixed is the notification: the
+            // counterpart used to be told "you are now connected" for a link
+            // that created nothing at all.
+            const alreadyClosed = await prisma.mentorshipRelation.findFirst({
+              where: { ...pair, status: 'COMPLETED' },
+              select: { id: true },
+            });
+            if (!alreadyClosed) {
+              // The invitation auto-link creates a real relation, so it starts on
+              // the tenant's own first on-path stage too (#1634).
+              await prisma.mentorshipRelation.create({
+                data: { ...pair, orgId: user.orgId, pipelineStatus: await resolveStartStage(user.orgId) },
+              });
+              await notify(
+                counterpartId,
+                'mentorship.connected',
+                { name: user.fullName },
+                role === 'MENTEE' ? '/mentor/mentees' : '/portal'
+              );
+            }
+          }
+          // `active && active.mentorId === pair.mentorId` falls through
+          // deliberately: the mentorship is already live, so there is nothing
+          // to create and nothing to announce.
         }
         if (autoLink.projectId) {
           await prisma.projectMember.upsert({

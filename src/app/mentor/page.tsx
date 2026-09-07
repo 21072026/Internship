@@ -10,6 +10,7 @@ import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getAttentionItems } from '@/lib/mentorAttention';
+import { getLastContacts } from '@/lib/lastContact';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
@@ -36,10 +37,9 @@ async function getMentorData(mentorId: string) {
         },
       },
       company: { select: { id: true, name: true, industry: true } },
-      interactions: {
-        orderBy: { date: 'desc' },
-        take: 3,
-      },
+      // Only the count: the cards' "last contact" line comes from
+      // getLastContacts below, and the "Recent interactions" panel has its own
+      // query. Selecting three logs per relation here fed nothing.
       _count: { select: { interactions: true } },
     },
     orderBy: { startDate: 'desc' },
@@ -58,7 +58,14 @@ async function getMentorData(mentorId: string) {
     take: 10,
   });
 
-  return { relations, recentInteractions };
+  // The mentee cards say "last contact N days ago", and contact includes the
+  // 1:1 message thread — not just what somebody remembered to log
+  // (lib/lastContact.ts).
+  const lastContacts = await getLastContacts(
+    relations.map((r) => ({ id: r.id, menteeId: r.menteeId })),
+  );
+
+  return { relations, recentInteractions, lastContacts };
 }
 
 export default async function MentorDashboard() {
@@ -89,7 +96,7 @@ export default async function MentorDashboard() {
   }
 
   const { t, locale } = await getServerDictionary();
-  const { relations, recentInteractions } = await getMentorData(session.user.id);
+  const { relations, recentInteractions, lastContacts } = await getMentorData(session.user.id);
   const attention = await getAttentionItems(session.user.id);
 
   const activeRelations = relations.filter((r) => r.status === 'ACTIVE');
@@ -170,11 +177,9 @@ export default async function MentorDashboard() {
               <p className="text-sm text-gray-600 dark:text-gray-400 text-center py-4">{t.mentor.noActiveMentees}</p>
             )}
             {activeRelations.map((rel) => {
-              const lastInteraction = rel.interactions[0];
-              const daysSince = lastInteraction
-                ? Math.floor(
-                    (Date.now() - new Date(lastInteraction.date).getTime()) / (1000 * 60 * 60 * 24)
-                  )
+              const lastContact = lastContacts.get(rel.id);
+              const daysSince = lastContact
+                ? Math.floor((Date.now() - lastContact.at.getTime()) / (1000 * 60 * 60 * 24))
                 : null;
 
               return (

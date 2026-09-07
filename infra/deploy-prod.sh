@@ -544,6 +544,13 @@ run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-organization.mjs \
   || log "WARNING: org backfill FAILED (exit non-zero) — see the output above. It may be incomplete; do NOT enable MT_ENFORCE_ISOLATION until it runs green (#1557)."
 run_tool node scripts/backfill-requisitions.mjs || true
+# Detector, NOT a gate (#419): reports mentees holding more than one ACTIVE
+# mentorship. Exits 0 by design, and `|| true` on top — this must never be the
+# reason a deploy fails. The DB-level @@unique([activeMenteeKey]) backstop lands
+# only once this reads clean on prod AND on the shared preview, because
+# `prisma db push --accept-data-loss` would fail on it otherwise.
+log "check for mentees with more than one active mentor (report only)"
+run_tool node prisma/check-active-mentor-duplicates.mjs || true
 # API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.
@@ -585,6 +592,14 @@ run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
 # stage 1 unattended. The script is dry-run by default; `--apply` is this line's
 # deliberate choice. Converges to a no-op after the first deploy.
 run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
+
+# Give every Organization a Subscription row matching the plan it already had
+# (#1731). The commercial state moved from the `Organization.plan` enum to its
+# own table on this deploy; an org without a row would be read as the free tier.
+# Creates only what is missing and never edits an existing subscription, so it
+# converges to a no-op — and the app's own getOrCreateSubscription() covers any
+# org created after this ran.
+run_tool node prisma/backfill-org-subscription.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it

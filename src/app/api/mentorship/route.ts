@@ -15,6 +15,12 @@ import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/ema
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveStartStage } from '@/lib/pipelineStages';
 import { daysInStage } from '@/lib/stageClock';
+import {
+  findActiveMentorship,
+  hasOtherActiveMentorship,
+  ALREADY_MENTORED_ERROR,
+  AlreadyMentoredError,
+} from '@/lib/activeMentorship';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -203,15 +209,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A user cannot mentor themselves' }, { status: 400 });
     }
 
-    const existingActive = await prisma.mentorshipRelation.findFirst({
-      where: { menteeId, status: 'ACTIVE' },
-    });
-
-    if (existingActive) {
-      return NextResponse.json(
-        { error: 'This mentee already has an active mentorship relation' },
-        { status: 409 }
-      );
+    // Cheap pre-flight for the common case; the real guard is re-run inside the
+    // transaction below (#419) — everything between here and the create is an
+    // await another request can win.
+    if (await hasOtherActiveMentorship(prisma, menteeId)) {
+      return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
     }
 
     // Plan gate (#547): block a new active relation once the tenant is at its
@@ -248,23 +250,42 @@ export async function POST(request: Request) {
     // org that never touched the stage editor.
     const pipelineStatus = await resolveStartStage(mentee.orgId);
 
-    const relation = await prisma.mentorshipRelation.create({
-      data: {
-        mentorId,
-        menteeId,
-        orgId: mentee.orgId,
-        pipelineStatus,
-        companyId: companyId || null,
-        projectId: projectId || null,
-        startDate: startDate ? new Date(startDate) : new Date(),
-      },
-      include: {
-        mentor: { select: { id: true, fullName: true, email: true } },
-        mentee: { select: { id: true, fullName: true, email: true } },
-        company: { select: { id: true, name: true } },
-        project: { select: { id: true, name: true } },
-      },
-    });
+    // The guard and the write, adjacent and atomic (#419). The pre-flight above
+    // ran before the plan gate, the availability count and resolveStartStage —
+    // three awaits during which another admin could have assigned this mentee.
+    // A throw here rolls the create back instead of leaving it committed behind
+    // a 409. Everything after this (webhook, notifications, e-mail) stays
+    // OUTSIDE: it must not run if the transaction rolls back, and must not hold
+    // a transaction open across two SMTP sends.
+    let relation;
+    try {
+      relation = await prisma.$transaction(async (tx) => {
+        const active = await findActiveMentorship(tx, menteeId);
+        if (active) throw new AlreadyMentoredError(menteeId, active.id);
+        return tx.mentorshipRelation.create({
+          data: {
+            mentorId,
+            menteeId,
+            orgId: mentee.orgId,
+            pipelineStatus,
+            companyId: companyId || null,
+            projectId: projectId || null,
+            startDate: startDate ? new Date(startDate) : new Date(),
+          },
+          include: {
+            mentor: { select: { id: true, fullName: true, email: true } },
+            mentee: { select: { id: true, fullName: true, email: true } },
+            company: { select: { id: true, name: true } },
+            project: { select: { id: true, name: true } },
+          },
+        });
+      });
+    } catch (e) {
+      if (e instanceof AlreadyMentoredError) {
+        return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
+      }
+      throw e;
+    }
 
     await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null });
 

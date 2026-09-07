@@ -28,6 +28,7 @@ const MERGE_ERROR_STATUS: Record<MergeError['code'], number> = {
   not_mentee: 400,
   erased: 400,
   linked_by_mentorship: 409,
+  active_mentor_conflict: 409,
 };
 
 // POST — merge a duplicate candidate into a primary one (#841). The single
@@ -68,7 +69,24 @@ export async function POST(request: Request) {
     result = await mergeUsers({ primaryId, duplicateId });
   } catch (error) {
     if (error instanceof MergeError) {
-      return NextResponse.json({ error: error.code }, { status: MERGE_ERROR_STATUS[error.code] });
+      // `error: error.code` stays for back-compat; `code` is the field the UI
+      // switches on. "Close one of them first" is not actionable without saying
+      // WHICH two mentors clash, so the ids are resolved to names here — the lib
+      // stays free of presentation lookups.
+      const detail = error.detail ? { ...error.detail } : undefined;
+      if (detail?.primaryMentorId && detail?.duplicateMentorId) {
+        const mentors = await prisma.user.findMany({
+          where: { id: { in: [String(detail.primaryMentorId), String(detail.duplicateMentorId)] } },
+          select: { id: true, fullName: true },
+        });
+        const nameOf = (id: unknown) => mentors.find((m) => m.id === String(id))?.fullName ?? '';
+        detail.primaryMentorName = nameOf(detail.primaryMentorId);
+        detail.duplicateMentorName = nameOf(detail.duplicateMentorId);
+      }
+      return NextResponse.json(
+        { error: error.code, code: error.code, ...(detail ? { detail } : {}) },
+        { status: MERGE_ERROR_STATUS[error.code] },
+      );
     }
     console.error('Merge failed:', error);
     return NextResponse.json({ error: 'Merge failed' }, { status: 500 });

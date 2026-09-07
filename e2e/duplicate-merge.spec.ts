@@ -166,6 +166,88 @@ test('merge moves every linked record and deletes the duplicate', async ({ page 
   expect(audit?.actorId).toBe(admin.id);
 });
 
+// #419 — the coverage hole: the spec above deliberately seeds BOTH accounts to
+// the SAME mentor (the collapse path), so the divergent-mentor branch of
+// mergeUsers' menteeId re-point had never been executed by a test. That branch
+// used to carry the duplicate's ACTIVE relation over ALONGSIDE the primary's,
+// leaving one mentee with two active mentors — silently, in the one operation
+// that cannot be undone. Two mentors each entering the same person is exactly
+// the duplicate scenario, which makes it the most likely producer in practice.
+test('merging two records whose active mentors differ is refused, and nothing is written', async ({ page }) => {
+  const admin = await seedUser(trackEmail('divmerge-admin'), ADMIN_PASSWORD, 'ADMIN', 'DivMerge Admin');
+  adminIds.push(admin.id);
+  const mentorA = await seedUser(trackEmail('divmerge-mentor-a'), MENTOR_PASSWORD, 'MENTOR', 'DivMerge Mentor A');
+  const mentorB = await seedUser(trackEmail('divmerge-mentor-b'), MENTOR_PASSWORD, 'MENTOR', 'DivMerge Mentor B');
+  const primary = await seedUser(trackEmail('divmerge-primary'), 'MenteePass123!', 'MENTEE', 'Deniz Şahin');
+  const duplicate = await seedUser(trackEmail('divmerge-dup'), 'MenteePass123!', 'MENTEE', 'Deniz Sahin');
+
+  const relP = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentorA.id, menteeId: primary.id, status: 'ACTIVE' },
+  });
+  const relD = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentorB.id, menteeId: duplicate.id, status: 'ACTIVE' },
+  });
+  // History hanging off the losing relation: it must be intact afterwards, since
+  // the whole point of refusing is that no data decision was taken.
+  const log = await prisma.interactionLog.create({
+    data: { relationId: relD.id, date: new Date(), notes: 'Call with mentor B', type: 'Meeting' },
+  });
+
+  await signIn(page, admin.email, ADMIN_PASSWORD, '/admin');
+
+  const res = await page.request.post('/api/admin/duplicates/merge', {
+    data: {
+      primaryId: primary.id,
+      duplicateId: duplicate.id,
+      confirmName: duplicate.fullName,
+      adminPassword: ADMIN_PASSWORD,
+    },
+  });
+  expect(res.status()).toBe(409);
+  const body = await res.json();
+  expect(body.code).toBe('active_mentor_conflict');
+  // "Close one first" is not actionable without saying which two mentors clash.
+  expect([body.detail.primaryMentorName, body.detail.duplicateMentorName].sort()).toEqual(
+    [mentorA.fullName, mentorB.fullName].sort()
+  );
+
+  // The transaction rolled back — the real assertion, because a merge is
+  // otherwise irreversible: both user rows, both relations and the child row
+  // are all exactly as they were.
+  expect(await prisma.user.findUnique({ where: { id: duplicate.id } })).not.toBeNull();
+  expect(await prisma.user.findUnique({ where: { id: primary.id } })).not.toBeNull();
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: { id: { in: [relP.id, relD.id] } },
+    orderBy: { id: 'asc' },
+  });
+  expect(relations).toHaveLength(2);
+  expect(relations.every((r) => r.status === 'ACTIVE')).toBe(true);
+  expect(relations.find((r) => r.id === relD.id)?.menteeId).toBe(duplicate.id);
+  expect((await prisma.interactionLog.findUnique({ where: { id: log.id } }))?.relationId).toBe(relD.id);
+
+  // And the documented remediation works: one mentor closes their mentorship
+  // through the normal path, then the same merge goes through.
+  await prisma.mentorshipRelation.update({
+    where: { id: relD.id },
+    data: { status: 'COMPLETED', completedAt: new Date() },
+  });
+  const retry = await page.request.post('/api/admin/duplicates/merge', {
+    data: {
+      primaryId: primary.id,
+      duplicateId: duplicate.id,
+      confirmName: duplicate.fullName,
+      adminPassword: ADMIN_PASSWORD,
+    },
+  });
+  expect(retry.ok(), await retry.text()).toBeTruthy();
+  expect(await prisma.user.findUnique({ where: { id: duplicate.id } })).toBeNull();
+  // Exactly one ACTIVE mentorship survives on the primary, and the closed one's
+  // history came with it rather than being deleted.
+  expect(await prisma.mentorshipRelation.count({ where: { menteeId: primary.id, status: 'ACTIVE' } })).toBe(1);
+  expect((await prisma.interactionLog.findUnique({ where: { id: log.id } }))?.relationId).toBe(relD.id);
+  expect((await prisma.mentorshipRelation.findUnique({ where: { id: relD.id } }))?.menteeId).toBe(primary.id);
+});
+
 test('scan page lists the pair and typed-name gate blocks a wrong name', async ({ page }) => {
   const admin = await seedUser(trackEmail('dupscan-admin'), ADMIN_PASSWORD, 'ADMIN', 'DupScan Admin');
   adminIds.push(admin.id);

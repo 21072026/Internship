@@ -51,6 +51,9 @@ interface Relation {
   project: { id: string; name: string } | null;
   cohort: { id: string; name: string } | null;
   interactions: Interaction[];
+  // Newest contact of any kind — a logged interaction OR an in-app message
+  // (lib/lastContact.ts). Server-computed: the messages are not in this payload.
+  lastContactAt?: string | null;
   statusChanges: StatusChange[];
 }
 interface MenteeDetail {
@@ -459,7 +462,7 @@ export default function AdminMenteeDetailPage() {
               </div>
 
               {(() => {
-                const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.interactions[0]?.date }, t.nextActions);
+                const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.lastContactAt ?? rel.interactions[0]?.date }, t.nextActions);
                 const color = na.level === 'urgent' ? 'text-red-700 bg-red-50 border-red-200' : na.level === 'warn' ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-green-700 bg-green-50 border-green-200';
                 return (
                   <div className={`inline-flex items-center gap-2 text-sm rounded-lg border px-3 py-1.5 ${color}`}>

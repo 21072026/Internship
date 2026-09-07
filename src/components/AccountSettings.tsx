@@ -17,7 +17,7 @@ import { applyTheme, readStoredTheme, resolveTheme, type Theme } from '@/lib/the
 import { applyDensity, readStoredDensity, resolveDensity, type Density } from '@/lib/density';
 import { durationSince, relativeTime } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
-import { pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
+import { currentPushEndpoint, pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 import { EMAIL_GROUPS, emailGroupPrefKey, resolveEmailGroupPrefs, type EmailGroupId } from '@/lib/emailGroups';
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
@@ -25,6 +25,7 @@ import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } f
 import { ConnectedCalendarsCard } from '@/components/ConnectedCalendarsCard';
 import { useAnnounce } from '@/components/ui/LiveRegion';
 import type { TrustedDeviceView } from '@/lib/trustedDevice';
+import type { PushDeviceView } from '@/lib/pushDevices';
 import { IMPERSONATION_SESSION_MAX_MS, type ImpersonationSession } from '@/lib/impersonationHistory';
 import { interpolate } from '@/lib/notificationText';
 
@@ -117,6 +118,18 @@ export function AccountSettings() {
   const [accessTotal, setAccessTotal] = useState(0);
   const [accessHistoryFailed, setAccessHistoryFailed] = useState(false);
   const [deviceBusy, setDeviceBusy] = useState<string | null>(null);
+  // Browsers holding a push subscription (#1716). null = nothing loaded yet.
+  const [pushDevices, setPushDevices] = useState<PushDeviceView[] | null>(null);
+  // Whether this deployment can still deliver push (VAPID keys present). It is
+  // deliberately NOT what decides whether the section renders: rows on record
+  // stay listed and revocable on a deployment whose keys went away, which is
+  // precisely when someone wants to clear them out.
+  const [pushDevicesEnabled, setPushDevicesEnabled] = useState(false);
+  // The last GET did not come back. What is already known stays on screen — a
+  // failed refresh must never make a device list vanish — but it is flagged as
+  // possibly out of date rather than presented as current.
+  const [pushDevicesStale, setPushDevicesStale] = useState(false);
+  const [pushDeviceBusy, setPushDeviceBusy] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
   const [theme, setTheme] = useState<Theme>('system');
   const [density, setDensity] = useState<Density>('comfortable');
@@ -206,6 +219,7 @@ export function AccountSettings() {
       .catch(() => setPrefsLoadFailed(true));
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
     void loadDevices();
+    void loadPushDevices();
     void loadAccessHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -221,7 +235,16 @@ export function AccountSettings() {
     // a push endpoint is rotated by the browser, dropped when site data is
     // cleared, and never existed for anyone who opted in before push shipped.
     // Silent, and only ever for a user who has already granted permission.
-    if (on && pushSupported()) void registerPushSubscription().then(setPushActive);
+    // The device list is loaded by the effect above; re-asserting the
+    // subscription can create the row a moment later, so reload it afterwards
+    // or this browser is missing from its own list until the next visit.
+    if (on && pushSupported()) {
+      void registerPushSubscription().then((active) => {
+        setPushActive(active);
+        if (active) void loadPushDevices();
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // One switch covers both halves of "notify me" (#1464): the foreground
@@ -238,7 +261,8 @@ export function AccountSettings() {
     if (!next) {
       setBrowserNotif(false);
       setBrowserNotificationsPref(false);
-      if (pushSupported()) void unregisterPushSubscription();
+      setPushActive(false);
+      if (pushSupported()) void unregisterPushSubscription().then(loadPushDevices);
       return;
     }
     let perm = Notification.permission;
@@ -251,6 +275,7 @@ export function AccountSettings() {
       // that cannot do push, leaves the foreground notifications working.
       const subscribed = await registerPushSubscription();
       setPushActive(subscribed);
+      await loadPushDevices();
     } else {
       setBrowserNotif(false);
       setBrowserNotificationsPref(false);
@@ -472,6 +497,70 @@ export function AccountSettings() {
     }
   };
 
+  // The browsers push actually goes to (#1716). The endpoint this browser holds
+  // travels in a header so the server can mark one row as the current device —
+  // it never comes back, and neither do the delivery keys.
+  //
+  // A GET that fails leaves the previous answer standing. Overwriting it with
+  // "push off, no devices" would hide rows the user still owns, and the moment
+  // the refresh is most likely to fail is the one right after a revoke — when
+  // the list is exactly what they are looking at.
+  const loadPushDevices = async () => {
+    try {
+      const endpoint = await currentPushEndpoint();
+      const res = await fetch('/api/push/subscribe', {
+        headers: endpoint ? { 'x-push-endpoint': endpoint } : undefined,
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setPushDevicesEnabled(Boolean(data?.enabled));
+      setPushDevices(Array.isArray(data?.devices) ? data.devices : []);
+      setPushDevicesStale(false);
+    } catch {
+      setPushDevicesStale(true);
+    }
+  };
+
+  const forgetPushDevice = (id: string) =>
+    setPushDevices((prev) => (prev ? prev.filter((d) => d.id !== id) : prev));
+
+  const revokePushDevice = async (device: PushDeviceView) => {
+    setPushDeviceBusy(device.id);
+    try {
+      const res = await fetch(`/api/push/subscribe?id=${encodeURIComponent(device.id)}`, { method: 'DELETE' });
+      // 404 is not a failure: the row was already gone — the push service
+      // rejected it, or retention swept it — so say that rather than claim a
+      // revocation the user did not perform. Either way the row is gone
+      // server-side, so it is dropped locally before the refresh: a GET that
+      // then fails must not leave a revoked browser on screen, nor take the
+      // rest of the list down with it.
+      if (res.status === 404) {
+        forgetPushDevice(device.id);
+        await loadPushDevices();
+        flash(t.account.pushDeviceGone, true);
+        return;
+      }
+      if (!res.ok) throw new Error();
+      // Revoking the browser you are sitting at has to stop it locally too, or
+      // the silent re-subscribe on the next /account visit would hand the server
+      // the very row that was just deleted. Push off here means the switch is
+      // off here — the same switch that turned both halves on.
+      if (device.current) {
+        setBrowserNotificationsPref(false);
+        setBrowserNotif(false);
+        setPushActive(false);
+        await unregisterPushSubscription();
+      }
+      forgetPushDevice(device.id);
+      await loadPushDevices();
+      flash(t.account.pushDeviceRevoked);
+    } catch {
+      flash(t.account.pushDeviceRevokeFailed, true);
+    } finally {
+      setPushDeviceBusy(null);
+    }
+  };
+
   // Read-only, and no failure path that could be mistaken for "nobody entered
   // your account": a request that does not come back says so explicitly.
   const loadAccessHistory = async () => {
@@ -632,6 +721,10 @@ export function AccountSettings() {
           : t.account.availabilityNotAccepting}
     </Badge>
   );
+
+  // null (never loaded) and [] (loaded, none) render the same, so the section's
+  // visibility can be decided on the rows alone.
+  const pushDeviceRows = pushDevices ?? [];
 
   return (
     <div>
@@ -1075,6 +1168,70 @@ export function AccountSettings() {
                   ? t.account.pushNotificationsActive
                   : t.account.browserNotificationsHint}
             </p>
+          </div>
+        )}
+
+        {/* The browsers push actually reaches (#1716). Deliberately NOT nested in
+            the `browserNotifSupported` block above: a phone can hold a
+            subscription that a desktop browser without the Notification API must
+            still be able to see and switch off.
+
+            Two independent facts decide what shows here, and the GET reports
+            them separately: whether this deployment can still deliver push
+            (`enabled`), and whether this account has rows on record. Rows are
+            shown whenever they exist — a list whose entire purpose is "see and
+            revoke what you granted" is worth least if it is only there while
+            everything works, and a deployment that lost its VAPID keys would
+            otherwise strand subscriptions their owner can neither see nor
+            revoke. The section is hidden only when push is off AND there is
+            nothing on record: nothing to revoke, and nothing that could arrive. */}
+        {(pushDevicesEnabled || pushDeviceRows.length > 0) && (
+          <div className="mt-4 pt-4 border-t border-gray-100" data-testid="push-devices">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.account.pushDevices}</h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-lg">{t.account.pushDevicesHint}</p>
+            {!pushDevicesEnabled && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-2 max-w-lg" data-testid="push-devices-unavailable">
+                {t.account.pushDevicesUnavailable}
+              </p>
+            )}
+            {pushDevicesStale && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-2 max-w-lg" data-testid="push-devices-stale">
+                {t.account.pushDevicesStale}
+              </p>
+            )}
+            <div className="mt-3">
+              {pushDeviceRows.length === 0 ? (
+                <p className="text-sm text-gray-500" data-testid="no-push-devices">{t.account.noPushDevices}</p>
+              ) : (
+                <ul className="max-w-lg divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg">
+                  {pushDeviceRows.map((d) => (
+                    <li key={d.id} data-testid={`push-device-${d.id}`} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
+                          {/* d.label is server-derived from a fixed table, never the
+                              raw user-agent — see src/lib/deviceLabel.ts. */}
+                          {d.label || t.account.unknownBrowser}
+                          {d.current && <Badge variant="success" className="ml-2">{t.account.thisDevice}</Badge>}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {t.account.pushDeviceSeen
+                            .replace('{added}', relativeTime(d.createdAt, locale))
+                            .replace('{when}', relativeTime(d.lastSeenAt, locale))}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        loading={pushDeviceBusy === d.id}
+                        onClick={() => revokePushDevice(d)}
+                      >
+                        {t.account.revokePushDevice}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         )}
 

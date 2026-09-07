@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
 import { hasAcceptedContributorTerms } from '@/lib/contributorTerms';
 import { ContributorTermsGate } from '@/components/ContributorTermsGate';
+import { PortalProjectCreate, PortalProjectEdit } from '@/components/project/PortalProjectActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,9 +57,14 @@ export default async function PortalProjectsPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.projects.title}</h1>
-        <p className="text-gray-500 mt-1">{t.portal.projects.subtitle}</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.projects.title}</h1>
+          <p className="text-gray-500 mt-1">{t.portal.projects.subtitle}</p>
+        </div>
+        {/* A mentee starts their own project here (#2270); they own what they
+            create, and the card below then carries the pencil. */}
+        <PortalProjectCreate />
       </div>
 
       {projects.length === 0 ? (
@@ -68,6 +74,10 @@ export default async function PortalProjectsPage() {
           </div>
           <p className="text-gray-500 font-medium">{t.portal.projects.none}</p>
           <p className="text-sm text-gray-400 mt-1">{t.portal.projects.noneHint}</p>
+          {/* Two ways out of an empty list: start one, or join one. */}
+          <div className="mt-4 flex justify-center">
+            <PortalProjectCreate variant="outline" />
+          </div>
           {/* A mentee with no project can still find (and ask to join) a public
               one — the showcase accepts join requests from signed-in mentees. */}
           <Link
@@ -96,7 +106,14 @@ export default async function PortalProjectsPage() {
                     </p>
                   )}
                 </div>
-                <Badge variant={STATUS_VARIANT[p.status] ?? 'default'}>{statusLabel(p.status)}</Badge>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  {p.isOwner && (
+                    <Badge variant="info" data-testid={`portal-project-owned-${p.id}`}>
+                      {t.portal.projects.ownedBadge}
+                    </Badge>
+                  )}
+                  <Badge variant={STATUS_VARIANT[p.status] ?? 'default'}>{statusLabel(p.status)}</Badge>
+                </div>
               </div>
 
               {p.description && (
@@ -145,6 +162,15 @@ export default async function PortalProjectsPage() {
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
+
+              {/* Editing is the owner's, and only the owner's: everyone else on
+                  the project reaches the collaborative fields from the detail
+                  page. `isOwner` is derived server-side (see menteeProjects.ts). */}
+              {p.isOwner && (
+                <div className="mt-3 flex justify-end border-t border-gray-100 pt-3 dark:border-gray-800">
+                  <PortalProjectEdit project={p} />
+                </div>
+              )}
             </Card>
           ))}
         </div>

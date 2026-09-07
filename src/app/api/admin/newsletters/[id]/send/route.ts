@@ -58,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const me = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { email: true, role: true, preferredLanguage: true },
+      select: { email: true, role: true, orgId: true, preferredLanguage: true },
     });
     if (!me?.email) return NextResponse.json({ error: 'Your account has no e-mail address' }, { status: 400 });
 
@@ -75,6 +75,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // working unsubscribe here would let an admin silence themselves by
       // reflex while checking their own formatting.
       userId: null,
+      // Read from the row rather than from the session token, which can predate
+      // a move between organizations.
+      orgId: me.orgId,
     });
 
     try {

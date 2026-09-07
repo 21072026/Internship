@@ -14,6 +14,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
 import { interviewActiveKey } from '@/lib/interviewRequests';
+import { findActiveMentorship } from '@/lib/activeMentorship';
 
 export type MergeCounts = Record<string, number>;
 
@@ -32,8 +33,12 @@ export class MergeError extends Error {
       | 'org_mismatch'
       | 'not_mentee'
       | 'erased'
-      | 'linked_by_mentorship',
+      | 'linked_by_mentorship'
+      | 'active_mentor_conflict',
     message: string,
+    // Machine-readable specifics the route needs to make the refusal
+    // actionable — for `active_mentor_conflict`, WHICH two mentors clash.
+    public detail?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -102,6 +107,12 @@ async function mergeRelations(tx: Tx, survivorId: string, loserId: string, count
 // pairs that converge. There is NO @@unique([mentorId, menteeId]) on the model,
 // so the DB never complains — the dedupe here is semantic. The survivor is the
 // relation that already belonged to the primary (oldest as tiebreak).
+//
+// This only collapses relations that converge on the same PAIR. A duplicate
+// whose mentor DIFFERS used to be carried over ALONGSIDE the primary's — one
+// mentee, two active mentors, silently (#419). That case is refused upstream in
+// section 3a now, not deduped here: which of the two mentors is the real one is
+// a decision, not bookkeeping.
 async function repointRelationSide(tx: Tx, side: 'mentorId' | 'menteeId', duplicateId: string, primaryId: string, counts: MergeCounts) {
   const other = side === 'mentorId' ? 'menteeId' : 'mentorId';
   const dupRelations = await tx.mentorshipRelation.findMany({
@@ -433,6 +444,45 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
           await tx.conversation.update({ where: { id: convId }, data: { directKey: newKey } });
           add(counts, 'conversation.rekeyed', 1);
         }
+      }
+
+      // ── 3a. One mentee, at most one ACTIVE mentor (#419) ─────────────────
+      // Re-pointing menteeId carries the duplicate's relations onto the primary,
+      // and the dedupe below only collapses relations that converge on the SAME
+      // pair — so two ACTIVE relations with DIFFERENT mentors both survive, and
+      // the invariant is violated by a merge nobody was warned about. Two
+      // mentors each entering the same person is exactly the duplicate scenario,
+      // which makes this the most likely producer in practice.
+      //
+      // REFUSED, not auto-completed. Stamping `completedAt` on the losing
+      // relation is not bookkeeping: it closes the post-mentorship CV/document
+      // window (#854) on that mentor, flips the mentee's portal to an archive
+      // and closes their own write actions (menteeWriteClosed), makes them
+      // certificate-eligible for a mentorship that never finished, and stops an
+      // in-flight dormant-first-contact episode mid-way — irreversibly, and it
+      // destroys the one fact the admin needs. The human fix is for one mentor
+      // to close their relation through PUT /api/mentorship/[id], which writes a
+      // real StatusChange and an honest completedAt; then the merge runs clean.
+      // Nothing is lost by waiting — a merge is never urgent. Same stance as
+      // `linked_by_mentorship` above: refuse rather than guess.
+      //
+      // Inside the transaction, so the check and the merge are atomic and the
+      // throw rolls the whole merge back.
+      const [primaryActive, duplicateActive] = await Promise.all([
+        findActiveMentorship(tx, primaryId),
+        findActiveMentorship(tx, duplicateId),
+      ]);
+      if (primaryActive && duplicateActive && primaryActive.mentorId !== duplicateActive.mentorId) {
+        throw new MergeError(
+          'active_mentor_conflict',
+          'Both records have an active mentorship with a different mentor; close one of them first',
+          {
+            primaryMentorId: primaryActive.mentorId,
+            duplicateMentorId: duplicateActive.mentorId,
+            primaryRelationId: primaryActive.id,
+            duplicateRelationId: duplicateActive.id,
+          },
+        );
       }
 
       // ── 3. Mentorship relations (both sides, semantic dedupe) ────────────

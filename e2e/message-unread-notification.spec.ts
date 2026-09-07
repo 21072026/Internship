@@ -146,7 +146,10 @@ test('the push subscribe endpoint refuses anonymous callers and rejects junk', a
       return res.status;
     });
     expect([400, 503]).toContain(status);
-    expect(await prisma.pushSubscription.count()).toBe(0);
+    // Scoped to this spec's own user: push-devices.spec.ts seeds subscription
+    // rows of its own, and a global count would read them from a parallel
+    // worker and fail for a reason that has nothing to do with this assertion.
+    expect(await prisma.pushSubscription.count({ where: { user: { email: mentorEmail } } })).toBe(0);
   } finally {
     await cleanupByEmail(mentorEmail);
   }

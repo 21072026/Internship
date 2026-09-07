@@ -104,6 +104,20 @@
       "issue": "#1419"
     },
     {
+      "model": "ProgramCost",
+      "minRows": 4,
+      "target": 4,
+      "screen": "/admin/analytics/roi — the cost side of the ROI report",
+      "issue": "#1892"
+    },
+    {
+      "model": "Placement",
+      "minRows": 1,
+      "target": 3,
+      "screen": "/admin/analytics/roi — placement value; more arrive once #1765 stamps placements from the pipeline",
+      "issue": "#1765"
+    },
+    {
       "model": "User",
       "where": { "role": "SOURCE" },
       "label": "User(role=SOURCE)",

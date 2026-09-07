@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Programme economics and a deterministic ROI model** (#1892). New `ProgramCost` (integer minor units + ISO 4217, additive, cohort-scoped) and `Placement` value/fee columns, both tenant-scoped and registered in `TENANT_MODELS`. `src/lib/roi.ts` is the single ROI model in the tree — pure, Prisma-free (so the public calculator can import it), every intermediate exposed as a `steps[]` entry, coaching relations excluded from `placementCount`, and a mixed-currency window returns a typed error instead of a guessed rate. Admin-only `/api/admin/program-costs` write path, demo-seed coverage and a 20-case unit suite (`npm run test:roi`, wired into CI).",
+  "notes": {
+    "en": ["Programme costs and placement value can now be recorded, and the ROI figures show every step of the calculation."],
+    "tr": ["Program maliyetleri ve yerleştirme değeri artık kaydedilebiliyor; yatırım getirisi rakamları hesabın her adımını gösteriyor."],
+    "de": ["Programmkosten und Vermittlungswert lassen sich jetzt erfassen, und die ROI-Zahlen zeigen jeden Rechenschritt."]
+  }
+}

@@ -158,6 +158,8 @@ async function apply(mapped) {
     let created = 0,
       updated = 0,
       relCreated = 0;
+    // Rows refused because the mentee already has an ACTIVE mentor elsewhere.
+    const skippedActiveMentor = [];
     for (const r of mapped) {
       const relCompanyId = await companyId(r.project);
       const data = {
@@ -178,6 +180,25 @@ async function apply(mapped) {
           await prisma.user.create({
             data: { ...data, email: r.email, password: '!imported-no-login' },
           }));
+      // One mentee, at most one ACTIVE mentor (#419). The idempotency lookup
+      // below stays scoped to --owner on purpose: widening it would let an
+      // import as a different owner silently STEAL an existing relation, which
+      // is worse than what it used to do. So the invariant is asserted
+      // separately, before the create branch.
+      //
+      // Duplicated from src/lib/activeMentorship.ts — which is the source of
+      // truth — because tsconfig excludes scripts/ and a .mjs file cannot
+      // import a @/lib TS module. Same compromise every prisma/backfill-*.mjs
+      // already lives with.
+      const activeElsewhere = await prisma.mentorshipRelation.findFirst({
+        where: { menteeId: user.id, status: 'ACTIVE', mentorId: { not: owner.id } },
+        orderBy: { startDate: 'asc' },
+        select: { id: true, mentorId: true },
+      });
+      if (activeElsewhere) {
+        skippedActiveMentor.push({ email: r.email, mentorId: activeElsewhere.mentorId });
+        continue;
+      }
       const rel = await prisma.mentorshipRelation.findFirst({
         where: { mentorId: owner.id, menteeId: user.id },
       });
@@ -191,6 +212,7 @@ async function apply(mapped) {
           data: {
             mentorId: owner.id,
             menteeId: user.id,
+            orgId: owner.orgId,
             pipelineStatus: r.pipelineStatus,
             ...(relCompanyId ? { companyId: relCompanyId } : {}),
           },
@@ -199,6 +221,13 @@ async function apply(mapped) {
       }
     }
     console.log(`\nApplied: users created=${created} updated=${updated}; relations created=${relCreated}`);
+    if (skippedActiveMentor.length > 0) {
+      console.log(`\nSKIPPED — already has an active mentor (${skippedActiveMentor.length}):`);
+      for (const s of skippedActiveMentor) console.log(`  ${s.email} (active mentor ${s.mentorId})`);
+      // A partially applied import must not exit 0: this is a manual --apply
+      // run by a human who needs to see that some rows did not land.
+      process.exitCode = 1;
+    }
   } finally {
     await prisma.$disconnect();
   }
