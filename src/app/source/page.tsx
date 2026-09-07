@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { SkillsField } from '@/components/ui/SkillsField';
 import { useT } from '@/i18n/client';
 
 interface Mentee {
@@ -23,7 +24,9 @@ export default function SourcePortal() {
   const t = useT();
   const [mentees, setMentees] = useState<Mentee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ fullName: '', email: '', university: '', department: '', skills: '' });
+  const [form, setForm] = useState({ fullName: '', email: '', university: '', department: '' });
+  // A list, not a comma-joined string (@/lib/skills, #2314).
+  const [skills, setSkills] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
@@ -41,11 +44,12 @@ export default function SourcePortal() {
     setSaving(true); setError(''); setOk('');
     try {
       const res = await fetch('/api/source/mentees', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, skills }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t.common.error);
-      setForm({ fullName: '', email: '', university: '', department: '', skills: '' });
+      setForm({ fullName: '', email: '', university: '', department: '' });
+      setSkills([]);
       setOk(t.sourcePortal.added);
       await load();
     } catch (err) {
@@ -73,7 +77,7 @@ export default function SourcePortal() {
             <Input label={t.sourcePortal.university} value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })} />
             <Input label={t.sourcePortal.department} value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
           </div>
-          <Input label={t.sourcePortal.skills} hint={t.sourcePortal.skillsHint} value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} />
+          <SkillsField label={t.sourcePortal.skills} hint={t.sourcePortal.skillsHint} value={skills} onChange={setSkills} />
           <Button type="submit" loading={saving}>{t.sourcePortal.submit}</Button>
         </form>
       </Card>

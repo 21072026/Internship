@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { SkillsField } from '@/components/ui/SkillsField';
 import { useT } from '@/i18n/client';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
@@ -18,7 +19,6 @@ const step1Schema = z.object({
 });
 
 const step2Schema = z.object({
-  skills: z.string().optional(),
   interests: z.string().max(2000).optional(),
 });
 
@@ -57,6 +57,8 @@ export function MentorOnboardingForm() {
   const [weekday, setWeekday] = useState('1');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
+  // Skills are a list, not a comma-joined string — see @/lib/skills (#2314).
+  const [skills, setSkills] = useState<string[]>([]);
   const [slotError, setSlotError] = useState('');
   const [savingSlot, setSavingSlot] = useState(false);
 
@@ -76,13 +78,13 @@ export function MentorOnboardingForm() {
           const seed = {
             fullName: user.fullName || '',
             bio: user.bio || '',
-            skills: Array.isArray(user.skills) ? user.skills.join(', ') : '',
             interests: user.interests || '',
             mentorCapacity: user.mentorCapacity ?? undefined,
           };
           setAllData(seed);
+          setSkills(Array.isArray(user.skills) ? user.skills : []);
           step1Form.reset({ fullName: seed.fullName, bio: seed.bio });
-          step2Form.reset({ skills: seed.skills, interests: seed.interests });
+          step2Form.reset({ interests: seed.interests });
           step3Form.reset({ mentorCapacity: seed.mentorCapacity as number | undefined });
         }
         setSlots(availabilityBody.slots ?? []);
@@ -107,10 +109,7 @@ export function MentorOnboardingForm() {
   });
 
   const saveProfile = async () => {
-    const skillsArray = (allData.skills || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const skillsArray = skills;
 
     const res = await fetch('/api/profile', {
       method: 'PUT',
@@ -253,12 +252,12 @@ export function MentorOnboardingForm() {
       {currentStep === 1 && (
         <form onSubmit={handleStep2} className="space-y-4">
           <h2 className="text-xl font-semibold text-gray-900">{t.onboarding.mentor.stepExpertise}</h2>
-          <Input
+          <SkillsField
             label={t.onboarding.skills}
-            placeholder="e.g. React, Python, Data Analysis"
-            hint="Separate multiple skills with commas"
-            {...step2Form.register('skills')}
-            error={step2Form.formState.errors.skills?.message}
+            placeholder={t.profileForm.skillsPlaceholder}
+            hint={t.profileForm.skillsHint}
+            value={skills}
+            onChange={setSkills}
           />
           <Input
             label={t.profileForm.interests}

@@ -8,6 +8,7 @@
 // clear "not configured" response. Nothing here runs without both.
 
 import Anthropic from '@anthropic-ai/sdk';
+import { capSkills } from '@/lib/skills';
 
 // A generation that has not answered in a minute is not going to.
 const AI_TIMEOUT_MS = 60_000;
@@ -89,6 +90,9 @@ export async function aiExtractFromText(text: string): Promise<AiCvSuggestions> 
     linkedinUrl: parsed.linkedinUrl ?? '',
     githubUrl: parsed.githubUrl ?? '',
     portfolioUrl: parsed.portfolioUrl ?? '',
-    skills: Array.isArray(parsed.skills) ? parsed.skills : [],
+    // Split and capped: a model asked for "canonical skill names" still
+    // occasionally answers with one comma-joined line or a whole phrase, and
+    // this list is offered to the user as one-click chips (@/lib/skills, #2314).
+    skills: capSkills(Array.isArray(parsed.skills) ? parsed.skills : []),
   };
 }

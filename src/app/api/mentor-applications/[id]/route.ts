@@ -15,6 +15,7 @@ import {
   sendMentorApplicationApprovedEmail,
   sendMentorApplicationRejectedEmail,
 } from '@/services/emailService';
+import { capSkills } from '@/lib/skills';
 
 // Admin decide endpoint for #904 mentor applications (#933): take into review,
 // approve (creates or upgrades the MENTOR account), or reject. Mirrors the
@@ -201,7 +202,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
                 // overwrite what the person already curated on their profile.
                 skills: Array.isArray(existingUser.skills) && existingUser.skills.length > 0
                   ? undefined
-                  : ((application.expertise ?? []) as Prisma.InputJsonValue),
+                  // Re-capped on the way in: rows created before #2314 can
+                  // hold one over-long blob, and this is the moment it would
+                  // become a mentor's profile.
+                  : (capSkills(application.expertise as string[] | null) as Prisma.InputJsonValue),
               },
               select: {
                 id: true, role: true, email: true, fullName: true, orgId: true,

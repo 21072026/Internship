@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -36,6 +37,9 @@ const updateProfileSchema = z.object({
   university: z.string().optional(),
   department: z.string().optional(),
   graduationYear: z.number().int().nullable().optional(),
+  // Bounded below rather than here: the caps live in `@/lib/skills` (one copy
+  // for the client and the server), and a refusal has to carry a code the form
+  // can turn into "split this one, it reads like a sentence" (#2314).
   skills: z.array(z.string()).optional(),
   languages: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
   skillLevels: z.record(z.string(), z.number().int().min(1).max(5)).optional(),
@@ -293,6 +297,19 @@ export async function PUT(request: Request) {
       }
 
       const { cvUrl, birthDate, ...rest } = parsed.data;
+
+      // Skills: split whatever arrived (a client that still comma-joins, an
+      // API caller, an old cached bundle), then refuse what only the person
+      // typing can fix. Storing a truncated half-sentence would be worse than
+      // saying no — see docs/skills-input.md.
+      if (rest.skills !== undefined) {
+        const skillParse = parseSkills(rest.skills);
+        const blocking = blockingSkillIssue(skillParse.issues);
+        if (blocking) {
+          return NextResponse.json(skillErrorBody(blocking), { status: 400 });
+        }
+        rest.skills = skillParse.skills;
+      }
 
       // Read the switches back only when this write touches them; every other
       // profile save keeps its single query.

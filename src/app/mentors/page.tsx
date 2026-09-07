@@ -12,6 +12,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Users, AlertTriangle } from 'lucide-react';
 import type { MentorAvailabilityStatus } from '@/lib/mentorAvailability';
+import { clipSkillLabel } from '@/lib/skills';
 
 interface DirectoryMentor {
   id: string;
@@ -217,8 +218,8 @@ export default function MentorDirectoryPage() {
                     <p className="text-xs font-medium text-gray-500 mb-1">{t.mentorDirectory.skillsLabel}</p>
                     <div className="flex flex-wrap gap-1">
                       {mentor.skills.map((skill) => (
-                        <Badge key={skill} variant="info" className="text-xs">
-                          {skill}
+                        <Badge key={skill} variant="info" title={skill} className="max-w-full text-xs">
+                          {clipSkillLabel(skill)}
                         </Badge>
                       ))}
                     </div>

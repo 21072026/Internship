@@ -285,6 +285,21 @@ workaround, #636, and it compiled on every PR push).
   mentorun tek satırı dokuz mentee ile temas sayılsa listeyi hepsi için birden susturur.
   Etkileşim **sayaçları** ("Toplam Etkileşim", `/mentor/interactions`) hâlâ yalnızca
   `InteractionLog` satırlarını sayar: orası bir kayıt defteri, değişen şey tazelik.
+- **Beceri listeleri tek kuraldan geçer** ([`docs/skills-input.md`](docs/skills-input.md),
+  #2314): bölme, tekilleştirme ve iki limit (**40 beceri × 60 karakter**; iş talepleri
+  `REQUISITION_SKILL_LIMITS` ile 50 × 100) yalnızca `src/lib/skills.ts`'te yaşar ve her
+  yazma yolu oradan okur. Beceri girilen **her** alan paylaşılan `SkillsField` chip
+  editörünü kullanır: yapıştırmayı `onPaste` ile **panodan** okur, çünkü tek satırlık bir
+  `<input>`'a yapıştırılan çok satırlı liste satır sonlarını tarayıcıda kaybeder — CV'den
+  kopyalanan bir liste böyle tek bir 300 karakterlik "beceri" olarak kaydolmuştu. Düz bir
+  `<Input>` + `split(',')` geri gelirse hata da geri gelir. Karşısında kendi profilini
+  düzenleyen bir insan olan yollar (`/api/profile`, `/api/users/[id]`) sınırı aşan yazmayı
+  `code: 'too_long' | 'too_many'` ile **reddeder**; bir beceri alanı yüzünden düşmemesi
+  gerekenler (herkese açık başvuru, mentor başvurusu, SOURCE girişi, kayıt birleştirme, AI
+  çıkarımı) kayıplı `capSkills`'i kullanır. `prisma/skill-split.mjs` kuralın düz ESM
+  aynasıdır (backfill sunucuda Node 20 ile çalışır, TS import edemez) ve
+  `scripts/test/skills.test.mjs` bir korpusla ikisini karşılaştırır — birini değiştiren
+  aynı commit'te diğerini de değiştirir.
 - **Bir mentee, en fazla bir aktif mentor** ([`docs/one-active-mentor.md`](docs/one-active-mentor.md),
   EPIC F / #419): the invariant is enforced by `src/lib/activeMentorship.ts` and **every**
   write path calls it — no hand-rolled `findFirst`. A duplicate merge whose two records have

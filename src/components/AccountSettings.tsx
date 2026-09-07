@@ -28,6 +28,7 @@ import type { TrustedDeviceView } from '@/lib/trustedDevice';
 import type { PushDeviceView } from '@/lib/pushDevices';
 import { IMPERSONATION_SESSION_MAX_MS, type ImpersonationSession } from '@/lib/impersonationHistory';
 import { interpolate } from '@/lib/notificationText';
+import { SkillsField } from '@/components/ui/SkillsField';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -135,7 +136,8 @@ export function AccountSettings() {
   const [density, setDensity] = useState<Density>('comfortable');
   const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
   const [role, setRole] = useState('');
-  const [skills, setSkills] = useState('');
+  // A list, not a comma-joined string (@/lib/skills, #2314).
+  const [skills, setSkills] = useState<string[]>([]);
   const [capacity, setCapacity] = useState('');
   const [savingExpertise, setSavingExpertise] = useState(false);
   // #941: mentor's own "I can take a new mentee" preference. Kept as the raw
@@ -209,7 +211,7 @@ export function AccountSettings() {
         setAccent(resolveAccent(user.accentColor));
         setRole(user.role ?? '');
         setTimezone(user.timezone ?? '');
-        setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
+        setSkills(Array.isArray(user.skills) ? user.skills : []);
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
         setAcceptingMentees(user.acceptingMentees ?? null);
         setActiveMenteeCount(typeof user.activeMenteeCount === 'number' ? user.activeMenteeCount : 0);
@@ -355,7 +357,7 @@ export function AccountSettings() {
     e.preventDefault();
     setSavingExpertise(true);
     try {
-      const skillsArr = skills.split(',').map((x) => x.trim()).filter(Boolean);
+      const skillsArr = skills;
       const res = await fetch('/api/profile', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -782,7 +784,7 @@ export function AccountSettings() {
           <CardHeader><CardTitle>{t.account.expertiseSection}</CardTitle></CardHeader>
           <form onSubmit={saveExpertise} className="space-y-4 max-w-lg">
             <div>
-              <Input label={t.account.expertise} hint={t.account.expertiseHint} value={skills} onChange={(e) => setSkills(e.target.value)} />
+              <SkillsField label={t.account.expertise} hint={t.account.expertiseHint} value={skills} onChange={setSkills} testId="account-skills" />
             </div>
             <Input label={t.account.capacity} type="number" min={0} hint={t.account.capacityHint} value={capacity} onChange={(e) => setCapacity(e.target.value)} />
 

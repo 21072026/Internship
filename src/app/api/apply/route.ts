@@ -12,6 +12,7 @@ import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
+import { capSkills } from '@/lib/skills';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
 // "not right now" (acceptingMentees=false), or when a set mentorCapacity is
@@ -53,7 +54,9 @@ const schema = z.object({
   city: z.string().optional(),
   university: z.string().optional(),
   department: z.string().optional(),
-  skills: z.string().optional(),
+  // A list from the current form, a comma-joined string from an older cached
+  // bundle or a hand-rolled POST. Both are split by `capSkills` (#2314).
+  skills: z.union([z.string(), z.array(z.string())]).optional(),
 });
 
 // POST — public application: creates a mentee linked to the mentor, emails the
@@ -107,7 +110,10 @@ export async function POST(request: Request) {
       city: city || null,
       university: university || null,
       department: department || null,
-      skills: skills ? skills.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      // The lossy variant on purpose: a public application must not be
+      // refused over a skills field, so an over-long entry is shortened
+      // rather than rejected.
+      skills: capSkills(skills),
     },
   });
 

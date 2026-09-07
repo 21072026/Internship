@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { CvManager } from '@/components/CvManager';
+import { SkillsField } from '@/components/ui/SkillsField';
 import { useT } from '@/i18n/client';
 
 // Graduation-year bounds: allow well before 2020, cap at this year + 5.
@@ -27,7 +28,6 @@ const step2Schema = z.object({
 });
 
 const step3Schema = z.object({
-  skills: z.string().min(1, 'Please add at least one skill'),
   cvUrl: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
 });
 
@@ -46,6 +46,9 @@ export function OnboardingForm() {
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState('');
   const [initialCv, setInitialCv] = useState<string | null>(null);
+  // Skills are a list, not a comma-joined string — see @/lib/skills (#2314).
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillsError, setSkillsError] = useState('');
 
   const step1Form = useForm<Step1Data>({
     resolver: zodResolver(step1Schema),
@@ -77,17 +80,17 @@ export function OnboardingForm() {
           university: user.university || '',
           department: user.department || '',
           graduationYear: user.graduationYear || undefined,
-          skills: Array.isArray(user.skills) ? user.skills.join(', ') : '',
           cvUrl: user.cvUrl || '',
         };
         setAllData(seed);
+        setSkills(Array.isArray(user.skills) ? user.skills : []);
         step1Form.reset({ fullName: seed.fullName, phone: seed.phone });
         step2Form.reset({
           university: seed.university,
           department: seed.department,
           graduationYear: seed.graduationYear as number | undefined,
         });
-        step3Form.reset({ skills: seed.skills, cvUrl: seed.cvUrl });
+        step3Form.reset({ cvUrl: seed.cvUrl });
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,14 +108,16 @@ export function OnboardingForm() {
 
   const handleStep3 = step3Form.handleSubmit(async (data) => {
     const finalData = { ...allData, ...data };
+    if (skills.length === 0) {
+      setSkillsError(t.onboarding.skillsRequired);
+      return;
+    }
+    setSkillsError('');
     setLoading(true);
     setError('');
 
     try {
-      const skillsArray = data.skills
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const skillsArray = skills;
 
       const res = await fetch('/api/profile', {
         method: 'PUT',
@@ -252,13 +257,13 @@ export function OnboardingForm() {
       {currentStep === 2 && (
         <form onSubmit={handleStep3} className="space-y-4">
           <h2 className="text-xl font-semibold text-gray-900">{t.onboarding.skillsAndCv}</h2>
-          <Input
+          <SkillsField
             label={t.onboarding.skills}
-            required
-            placeholder="e.g. React, Python, Data Analysis"
-            hint="Separate multiple skills with commas"
-            {...step3Form.register('skills')}
-            error={step3Form.formState.errors.skills?.message}
+            placeholder={t.profileForm.skillsPlaceholder}
+            hint={t.profileForm.skillsHint}
+            value={skills}
+            onChange={(next) => { setSkills(next); if (next.length > 0) setSkillsError(''); }}
+            error={skillsError || undefined}
           />
           <Input
             label={t.onboarding.cvUrl}

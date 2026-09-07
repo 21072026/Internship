@@ -12,6 +12,7 @@ import { roleHome } from '@/lib/roleHome';
 import { sendRoleChangeEmail } from '@/services/emailService';
 import { isStageTransition } from '@/lib/stageChange';
 import { getLastContacts } from '@/lib/lastContact';
+import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -240,8 +241,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
 
       // Mentor expertise (skills) — admin can populate so skill-match works.
+      // Same rule as the profile route: split flexibly, then refuse the two
+      // things only a human can fix (@/lib/skills, #2314).
       if (Array.isArray(body.skills) && body.skills.every((s: unknown) => typeof s === 'string')) {
-        data.skills = [...new Set((body.skills as string[]).map((s) => s.trim()).filter(Boolean))];
+        const skillParse = parseSkills(body.skills as string[]);
+        const blocking = blockingSkillIssue(skillParse.issues);
+        if (blocking) return NextResponse.json(skillErrorBody(blocking), { status: 400 });
+        data.skills = skillParse.skills;
       }
 
       // Role conversion (#1243): a mentee graduates into mentoring, a mentor

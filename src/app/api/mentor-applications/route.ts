@@ -7,6 +7,7 @@ import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { capSkills } from '@/lib/skills';
 import { sendMentorApplicationReceivedEmail } from '@/services/emailService';
 import type { Prisma } from '@prisma/client';
 
@@ -21,7 +22,9 @@ const applySchema = z.object({
   fullName: z.string().min(1).max(191),
   email: z.string().email(),
   phone: z.string().max(191).optional(),
-  expertise: z.string().optional(),
+  // A list from the current form, a comma-joined string from an older bundle
+  // — `capSkills` splits either (@/lib/skills, #2314).
+  expertise: z.union([z.string(), z.array(z.string())]).optional(),
   experience: z.string().max(TEXT_LIMITS.mentorApplicationExperience).optional(),
   motivation: z.string().max(TEXT_LIMITS.mentorApplicationMotivation).optional(),
   capacity: z.number().int().min(1).optional(),
@@ -86,7 +89,9 @@ export async function POST(request: Request) {
       fullName,
       email,
       phone: phone || null,
-      expertise: expertise ? expertise.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      // Capped rather than refused: an application is not the place to fail
+      // over a skills field, and this list becomes `User.skills` on approval.
+      expertise: capSkills(expertise),
       experience: experience || null,
       motivation: motivation || null,
       capacity: capacity ?? null,
