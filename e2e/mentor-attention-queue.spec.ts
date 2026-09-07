@@ -102,3 +102,117 @@ test('mentor dashboard surfaces a needs-attention queue for stale/overdue/unansw
     await cleanupByEmail(mentorEmail);
   }
 });
+
+// #2275: "contact" is not "a row in InteractionLog". A mentor exchanging
+// messages with a mentee in the app has been in touch, and the queue used to
+// say otherwise — which is what made an eleven-row queue meaningless. The two
+// edges worth an e2e run are the group-chat ones, because they pull in opposite
+// directions: somebody else's group message must NOT clear the flag, the
+// mentee's own group message must.
+test('in-app messages count as contact — 1:1 either way, group only when the mentee wrote it', async ({ page }) => {
+  const mentorEmail = uniqueEmail('contact-mentor');
+  const dmEmail = uniqueEmail('contact-dm-mentee');
+  const groupOtherEmail = uniqueEmail('contact-group-other');
+  const groupSelfEmail = uniqueEmail('contact-group-self');
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Contact Mentor');
+  const dmMentee = await seedUser(dmEmail, 'x', 'MENTEE', 'Direct Message Mentee');
+  const groupOtherMentee = await seedUser(groupOtherEmail, 'x', 'MENTEE', 'Group Silent Mentee');
+  const groupSelfMentee = await seedUser(groupSelfEmail, 'x', 'MENTEE', 'Group Poster Mentee');
+
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const relationFor = async (menteeId: string) => {
+    const relation = await prisma.mentorshipRelation.create({
+      data: { mentorId: mentor.id, menteeId, status: 'ACTIVE' },
+    });
+    // An open goal on every one of them, so "no open goal" cannot be the reason
+    // a row shows up and the assertions below are about contact only.
+    await prisma.goal.create({ data: { relationId: relation.id, title: 'Finish portfolio site' } });
+    return relation;
+  };
+
+  const dmRel = await relationFor(dmMentee.id);
+  const groupOtherRel = await relationFor(groupOtherMentee.id);
+  const groupSelfRel = await relationFor(groupSelfMentee.id);
+
+  // The mentorship's 1:1 thread, written by the MENTOR — the direction that was
+  // broken: reaching out is not the same as logging that you reached out.
+  const dmConversation = await prisma.conversation.create({
+    data: {
+      type: 'DIRECT',
+      directKey: [mentor.id, dmMentee.id].sort().join('|'),
+      participants: { create: [{ userId: mentor.id }, { userId: dmMentee.id }] },
+    },
+  });
+  await prisma.message.create({
+    data: {
+      conversationId: dmConversation.id,
+      relationId: dmRel.id,
+      senderId: mentor.id,
+      body: 'Sent you the interview prep list — have a look before Friday.',
+      createdAt: twoDaysAgo,
+    },
+  });
+
+  // One group chat holding both group mentees. The MENTOR posts in it: a
+  // broadcast, so it is contact with neither of them.
+  const groupConversation = await prisma.conversation.create({
+    data: {
+      type: 'GROUP',
+      participants: {
+        create: [{ userId: mentor.id }, { userId: groupOtherMentee.id }, { userId: groupSelfMentee.id }],
+      },
+    },
+  });
+  await prisma.message.create({
+    data: {
+      conversationId: groupConversation.id,
+      senderId: mentor.id,
+      body: 'Reminder for everyone: the cohort demo is next Tuesday.',
+      createdAt: twoDaysAgo,
+    },
+  });
+  // …and one of them answers in the same group. That is a sign of life.
+  await prisma.message.create({
+    data: {
+      conversationId: groupConversation.id,
+      senderId: groupSelfMentee.id,
+      body: 'Noted, I will be there.',
+      createdAt: twoDaysAgo,
+    },
+  });
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', mentorEmail);
+    await page.fill('input[type="password"]', 'MentorPass123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+
+    const queue = page.getByTestId('attention-queue');
+    // The group mentee who never wrote is the only one of the three still
+    // flagged — which also proves the queue rendered at all, so the two
+    // absence assertions below are not vacuously true.
+    const silentRow = queue.getByRole('link', { name: /Group Silent Mentee/ });
+    await expect(silentRow).toBeVisible({ timeout: 10_000 });
+    await expect(silentRow.getByText(/No recent contact/i)).toBeVisible();
+
+    // A 1:1 message from the mentor is contact: nothing left to flag.
+    await expect(queue.getByText('Direct Message Mentee', { exact: true })).toHaveCount(0);
+    // The mentee's own group post is contact too.
+    await expect(queue.getByText('Group Poster Mentee', { exact: true })).toHaveCount(0);
+  } finally {
+    const relationIds = [dmRel.id, groupOtherRel.id, groupSelfRel.id];
+    await prisma.message.deleteMany({
+      where: { conversationId: { in: [dmConversation.id, groupConversation.id] } },
+    });
+    await prisma.goal.deleteMany({ where: { relationId: { in: relationIds } } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: { in: relationIds } } });
+    await prisma.conversation.deleteMany({
+      where: { id: { in: [dmConversation.id, groupConversation.id] } },
+    });
+    await cleanupByEmail(dmEmail);
+    await cleanupByEmail(groupOtherEmail);
+    await cleanupByEmail(groupSelfEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});
