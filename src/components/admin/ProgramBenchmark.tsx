@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Lock, Gauge } from 'lucide-react';
+import { Gauge } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useT } from '@/i18n/client';
 
@@ -14,43 +13,24 @@ interface Benchmark {
 
 // Premium cross-program benchmark (Faz 2, #542) on the admin analytics page.
 // Compares your program's funnel conversion against an anonymized platform
-// average. Locked until premiumAnalytics is enabled. Only aggregate numbers are
-// ever shown — no other program is identifiable.
+// average. Only aggregate numbers are ever shown — no other program is
+// identifiable.
+//
+// Mounted only when the tenant holds the premium analytics tier; the locked
+// state is the page-level PremiumAnalyticsLocked panel, so this component no
+// longer discovers the gate by reading a 403 of its own (#1442).
 export function ProgramBenchmark() {
   const t = useT();
   const c = t.analytics;
   const [data, setData] = useState<Benchmark | null>(null);
-  const [locked, setLocked] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/admin/analytics/benchmark')
       .then(async (r) => {
-        if (r.status === 403) { setLocked(true); return; }
         if (r.ok) setData(await r.json());
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, []);
-
-  if (loading) return null;
-
-  if (locked) {
-    return (
-      <Card className="mt-6" data-testid="benchmark-locked">
-        <div className="flex items-start gap-3">
-          <Lock className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{c.benchmarkTitle}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{c.benchmarkLocked}</p>
-            <Link href="/admin/settings" className="text-sm text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block">
-              {c.cohortCompareUnlockCta}
-            </Link>
-          </div>
-        </div>
-      </Card>
-    );
-  }
 
   if (!data) return null;
 

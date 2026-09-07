@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Lock, Printer } from 'lucide-react';
+import { ArrowLeft, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocked';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
+import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
 import { formatDate } from '@/lib/relativeTime';
 
 interface Analytics {
@@ -35,52 +37,54 @@ const td = 'py-1.5 pr-4 text-sm border-b border-gray-100';
 // funnel, trends, mentor workload, cohort comparison and source conversion.
 // PDF is produced via the browser's print pipeline (#357 pattern — no
 // server-side binary). Locked until the premiumAnalytics setting is enabled.
+//
+// The entitlement is READ, not probed (#1442): the page asks
+// `/api/admin/analytics/entitlements` first and only then fetches the gated
+// reports, so an unentitled admin opening this URL gets the locked panel
+// without a single 4xx in the network log. The endpoints keep their own
+// server-side gate either way.
 export default function AnalyticsReportPage() {
   const t = useT();
   const locale = useLocale();
   const label = useStageLabel();
   const stages = useResolvedStages();
   const c = t.analytics;
+  const premium = usePremiumAnalytics();
   const [data, setData] = useState<Analytics | null>(null);
   const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
   const [sources, setSources] = useState<SourceRow[] | null>(null);
-  const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (premium !== true) return;
+    setLoading(true);
     Promise.all([
       fetch('/api/admin/analytics').then((r) => (r.ok ? r.json() : null)),
-      fetch('/api/admin/analytics/cohorts').then(async (r) => (r.status === 403 ? 'locked' : r.ok ? (await r.json()).cohorts : null)),
-      fetch('/api/admin/analytics/sources').then(async (r) => (r.status === 403 ? 'locked' : r.ok ? (await r.json()).sources : null)),
+      fetch('/api/admin/analytics/cohorts').then(async (r) => (r.ok ? (await r.json()).cohorts : null)),
+      fetch('/api/admin/analytics/sources').then(async (r) => (r.ok ? (await r.json()).sources : null)),
     ])
       .then(([a, co, so]) => {
-        if (co === 'locked' || so === 'locked') { setLocked(true); return; }
         setData(a);
         setCohorts(co ?? []);
         setSources(so ?? []);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [premium]);
 
-  if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
+  if (premium === null) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
 
-  if (locked) {
+  if (premium === false) {
     return (
       <div className="max-w-xl" data-testid="report-locked">
         <Link href="/admin/analytics" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline mb-4">
           <ArrowLeft className="h-4 w-4" /> {c.title}
         </Link>
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-6 flex items-start gap-3">
-          <Lock className="h-5 w-5 text-gray-400 mt-0.5" />
-          <div>
-            <p className="font-medium text-gray-900 dark:text-gray-100">{c.fullReportTitle}</p>
-            <p className="text-sm text-gray-500 mt-1">{c.cohortCompareLocked}</p>
-            <Link href="/admin/settings" className="text-sm text-blue-600 hover:underline mt-1 inline-block">{c.cohortCompareUnlockCta}</Link>
-          </div>
-        </div>
+        <PremiumAnalyticsLocked title={c.fullReportTitle} />
       </div>
     );
   }
+
+  if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
 
   if (!data) return <p className="text-center py-12 text-gray-400">{t.common.notFound}</p>;
 
