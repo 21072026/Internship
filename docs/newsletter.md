@@ -79,6 +79,31 @@ An opted-out recipient is **counted in `skippedCount` with no row written** —
 storing the address of someone who asked not to be mailed, in order to record
 not mailing them, is the wrong trade.
 
+### Branding is resolved per recipient
+
+One issue fans out across people who may belong to different organizations, so
+the brand is resolved from **each recipient's** `orgId` (#1667) — their tenant's
+name, logo and accent, exactly as every transactional template already does via
+`emailBrand()`. A single `getOrgBranding()` hoisted out of the send loop would
+be one query cheaper and would stamp whoever happened to be first onto everybody
+else's copy.
+
+`renderNewsletterFor({ orgId, brandCache })` takes a per-run
+`NewsletterBrandCache` so the fan-out still costs one lookup per *tenant* rather
+than one per recipient; the cache holds the in-flight promise, so the four
+recipients the pool has open at once share one query. It is created per dispatch
+run and never at module scope — branding edited between two issues has to show
+up in the second one. A recipient with no org gets the product default, which is
+what a single-tenant install has always sent.
+
+The admin preview and **Send me a test** pass the requesting admin's own org, so
+what they proofread is the brand their members will receive. The **archive**
+(`/newsletters`) renders the issue's fields natively rather than the mail HTML
+and therefore carries no brand header at all — which is the honest answer, since
+an archive URL has no recipient. And nothing here rewrites a sent issue:
+branding is applied at render time and never stored on the row, so an issue's
+immutability is untouched.
+
 Mail rides the **bulk** SMTP channel (`newsletter` is in `BULK_CATEGORIES`), so a
 spam complaint about career tips can never drag the password-reset mail's
 reputation down with it. Every message carries `List-Unsubscribe` and

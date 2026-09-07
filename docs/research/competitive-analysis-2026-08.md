@@ -637,7 +637,7 @@ the capability is evidenced in the corpus; it is not exhaustive where the whole 
 | Self-serve checkout | Mentorloop (Pro, in-app) | ❌ no billing surface of any kind | — |
 | Free tier for participants | Mentornity (≤10 users), Mentorloop (build-only), PushFar (individuals) | ✅ **free core by construction** — entitlements are default-deny by row presence | `src/lib/entitlements.ts:16-49` |
 | Evaluate the product without a sales call | Mentorloop and Mentornity only | ✅ public demo wiped and reseeded twice daily + a per-PR environment | `.github/workflows/demo-reset.yml`, `docs/DEMO.md` |
-| Per-tenant white-label branding | Guider, Mentornity, Graduway, Riipen, Together | 🟡 stored and applied to shells, 25 email templates and certificate PDFs; **not to pre-login or the accent palette** | `src/components/BrandWordmark.tsx:11-26`, `docs/white-label.md:31-40` |
+| Per-tenant white-label branding | Guider, Mentornity, Graduway, Riipen, Together | 🟡 stored and applied to shells, every transactional e-mail, the career newsletter (#1667) and certificate PDFs; **not to pre-login or the accent palette** | `src/components/BrandWordmark.tsx:11-26`, `docs/white-label.md` (§ Where it is applied today) |
 
 ---
 

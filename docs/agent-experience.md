@@ -6149,3 +6149,27 @@ oturum bunu eksik iş sanıp defteri de bozardı.
   yokken 5 spec düşüyor; `prisma db seed` sonrası **aynı 5 spec yine düşüyor**, bu kez
   "Too many attempts" ile — ve bu, gerçek bir auth regresyonu gibi okunuyor. `delete from
   AccountLockout` sonrası 9/9 yeşil. Önce seed et, sonra koş; sıra ters gittiyse kilidi sil.
+
+## 2026-09-07 — "Tek çağrıyı düzelt" dediğinde bile, çağrının **döngünün içinde** olması gerekiyor (#1667)
+
+Bülten markası tek bir `getOrgBranding(null)` yüzünden yok sayılıyordu. Düzeltmenin kolay
+görünen hâli, çağrıyı gönderim döngüsünün **dışına** alıp bir kez çözmek — ve o hâl, bir
+sayı birden fazla organizasyonun üyesine dağıldığı için ilk gelen kiracının markasını
+herkese basardı. Doğru yer alıcı başına; maliyeti de `orgId`'ye göre bir memo ile
+kiracı başına bir sorguya indiriyorsun. Memo'da **değeri değil promise'i** tutmak gerekiyor:
+havuz aynı anda dört alıcıyı açtığı için değer saklarsan dördü de aynı sorguyu yarıştırır.
+Memo çalıştırma başına, asla modül kapsamında — iki sayı arasında değişen marka ikincisinde
+görünmek zorunda.
+
+**İşin yarısı zaten shipping'di ve issue bunu bilmiyordu.** Beş maddelik listenin ikisi
+(`features.ts` beyaz etiket girdisi, `sso.ts`/`ssoProvisioning.ts` başlık yorumları) başka
+PR'larla çoktan gelmişti; `ssoHint` de üç dilde düzeltilmişti. Yazılmış bir issue'yu
+uygulamaya başlamadan önce her maddesini **kod üzerinde** doğrulamak, "yapıldı" diye
+raporlanan işten daha hızlı: aksi hâlde ya doğru olanı bozarsın ya da olmayan bir işi
+anlatırsın.
+
+**Bir dokümanı "güncelledim" demek yetmiyor, çürümeyecek şekilde yazmak gerekiyor.**
+`docs/white-label.md`'de eski metin "uygulanmıyor" diyordu; yerine hangi yüzeyin hangi
+`orgId`'den markalandığını veren bir tablo ve **bilinçli olarak markalanmayanların** adı
+geçen bir liste koydum. Bir araştırma dokümanı da o dosyaya `:31-40` satır aralığıyla
+bağlanıyordu — satır çapaları çürüyor, bölüm adı çürümüyor.
