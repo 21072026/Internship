@@ -6173,3 +6173,63 @@ anlatırsın.
 `orgId`'den markalandığını veren bir tablo ve **bilinçli olarak markalanmayanların** adı
 geçen bir liste koydum. Bir araştırma dokümanı da o dosyaya `:31-40` satır aralığıyla
 bağlanıyordu — satır çapaları çürüyor, bölüm adı çürümüyor.
+
+## 2026-09-07 — `main` yeşil görünürken canlıya hiçbir şey çıkmıyordu: CI'a değil `/api/health`'e bak
+
+Bir oturumda dört PR merge oldu ve **hiçbiri canlıya çıkmadı**. Prod `d752aba`'da, preview
+`94950ef`'te takılıydı; `origin/main` yedi merge ilerideydi ve her PR'ın tüm kontrolleri
+yeşildi. İki bağımsız sebep vardı ve ikisi de yapısal:
+
+- **Her topic PR ortamı taze veritabanı alıyor** (`internship_pr<N>`). Dolayısıyla `db push`'un
+  yalnızca *veri olan* bir tabloda reddedebileceği bir şema değişikliği, tanımı gereği tüm PR
+  kontrollerinden geçer. Vakası: #2249 `Setting`'in birincil anahtarını `key`'den
+  `id String @id @default(cuid())`'ye taşıdı; `db push` dolu bir tabloya *client tarafında*
+  default üreten zorunlu kolon ekleyemez ve `--accept-data-loss` bunu geçersiz kılmaz — bu bir
+  veri kaybı uyarısı değil, "bu adım bir değer üretemez".
+- **Arıza uyarı maili de düşüyor** (runner'dan SMTP'ye `ETIMEDOUT`), yani başarısız deploy hiç
+  haber vermiyor.
+
+Ders: `main`'in canlıda olduğunu doğrulamanın tek yolu canlıya sormaktır.
+
+```bash
+curl -s https://interncrm.com/api/health | jq '{sha,version}'
+curl -s https://preview.interncrm.com/api/health | jq '{sha,version}'
+git rev-parse --short origin/main
+```
+
+**Bir nav linki, sayfasından önce merge olursa tüm merge kapısını kırar.** #2284 header'a,
+footer'a ve landing bandına `/pricing` linki koydu; sayfa #1730'da gelecekti. App Router
+viewport'taki her `<Link>`'i prefetch ettiği için, sayfası olmayan rotanın prefetch'i doğrudan
+tarayıcı konsoluna 404 bastı — ve `smoke.spec.ts:30` ana sayfanın hiç konsol tanısı
+üretmemesini şart koşuyor. Sonuç: `012d03d2`'den sonra `main`'in kendisi ve ona rebase edilen
+her PR kırmızı. Kendi PR'ının kapısı neden yeşil kaldı: spec tıklamadan sonra
+`toHaveURL(/\/pricing$/)` kontrol ediyordu ve **URL hedef var olsun olmasın değişir.** Bir
+rotayı test ediyorsan URL'i değil, sayfanın geldiğini doğrula.
+
+**Eski bir PR'daki kırmızı zorunlu kontrol, çoğu zaman kusur değil bayat tabandır.** #2265'in
+`check:stage-keys` hatası, main'de #2267 ile çoktan düzeltilmiş bir satırdandı ve PR o commit'i
+içermiyordu; PR'ın kendi diff'i `src/` altına hiç dokunmuyordu. `gh pr update-branch <n>`
+yeterliydi. Bir kontrol düştüğünde ilk soru "bu dal main'in neresinden ayrıldı" olmalı.
+
+**`|| true` ile korunan bir deploy adımının çıktısını okumazsan, hiçbir şey yapmayan bir
+adımdan ayırt edilemez.** Aynı log `Error: Cannot find module '/app/scripts/backfill-requisitions.mjs'`
+gösteriyordu: runtime imajı builder'dan yalnızca `public`, `.next`, `node_modules`,
+`package.json` ve `prisma`'yı kopyalıyor — `scripts/` hiç yok. Adım "başarılı" oluyor, deploy
+yeşile dönüyor, backfill prod'da bir kez bile koşmamış (#1385). Deploy'da koşması gereken bir
+script `prisma/` altına konur; `prisma/backfill-setting-id.mjs` ve
+`prisma/check-active-mentor-duplicates.mjs` tam bu yüzden orada.
+
+**`db push`'un reddettiği bir geçiş için repoda hazır kalıp var:** `prisma/` altında bir
+*expand phase* script'i, `infra/deploy-prod.sh`'te asıl contract push'undan önce çağrılır —
+geçici bir *expand* şeması yazar (eski şekil + yeni nullable kolon), onu push eder, bir
+companion backfill kolonu doldurur, normal push da takası bitirir. DDL sıralamasını Prisma'nın
+kendisi üretir; elle yazılmış DDL'de FK'yı unique index'ten önce eklemek MySQL'e hiçbir şemanın
+bilmediği bir index bıraktığı için bu önemli. `information_schema` üzerinden guard'la, bir kez
+tamamlandıktan sonra no-op olsun.
+
+**Bir güvenlik/veri kısıtını canlı veriyi bilmeden eklemeye kalkma.** "Bir mentee, en fazla bir
+aktif mentor" kuralının DB backstop'u (#2286) bilinçli olarak ertelendi: veri hâlihazırda kuralı
+ihlal ediyorsa unique index `db push`'u tam olarak `Setting.id`'nin kırdığı gibi kırar. Onun
+yerine her deploy'da koşan, asla yazmayan, her zaman 0 dönen bir detektör gönderildi — ve
+korumalar canlıya çıktıktan *sonra* prod'da 20, preview'da 54 aktif ilişkide sıfır ihlal
+okundu. Sıra önemliydi: arka kapılar kapanmadan okunan temiz rapor hiçbir şey kanıtlamaz.
