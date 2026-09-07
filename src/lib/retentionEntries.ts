@@ -1,8 +1,13 @@
 import cron from 'node-cron';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
-import { getSettings, type SettingKey } from '@/lib/settings';
+import { getSetting, getSettings, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import {
+  RETAINED_NOTIFICATION_TYPES,
+  notificationRetentionCutoff,
+} from '@/lib/notificationRetention';
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
 import {
   RETENTION_ACTIVITY_ACTION,
@@ -12,6 +17,7 @@ import {
   runRetention,
   type RetentionContext,
   type RetentionEntry,
+  type RetentionOutcome,
   type RetentionRunResult,
 } from '@/lib/retentionPrune';
 
@@ -20,10 +26,10 @@ import {
 // `retentionPrune.ts` and is deliberately Prisma-free; this file is where the
 // policy meets the database.
 //
-// Four other tables are queued behind this file and each will arrive as ONE
-// more `registerRetention()` call with no new schedule: AuditLog (#1585),
-// Notification (#1646), DomainEvent (#1691) and Message (#2056, which masks
-// rather than deletes). The contract they follow is written down in
+// Notification (#1646) arrived exactly that way — one more entry, no new
+// schedule. Three tables are still queued behind this file and each will arrive
+// the same way: AuditLog (#1585), DomainEvent (#1691) and Message (#2056, which
+// masks rather than deletes). The contract they follow is written down in
 // docs/pii-access-lifecycle.md.
 //
 // WHERE THE WINDOWS COME FROM. Each one is a decision with a reason attached,
@@ -211,6 +217,126 @@ async function pruneFinishedJobs(ctx: RetentionContext) {
   return { deleted: processed, capped };
 }
 
+/** The configured window for one org, falling back to the code default. */
+async function notificationWindowFor(orgId: string | null): Promise<number> {
+  const fallback = Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10);
+  try {
+    const parsed = Number.parseInt(await getSetting('notificationRetentionDays', orgId), 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * In-app notification rows (#1646).
+ *
+ * THE WINDOW IS RESOLVED PER ORG, INSIDE THIS FUNCTION. The runner resolves one
+ * window per entry and hands it down as `ctx.cutoff`; that is right for the
+ * telemetry tables, which are instance-wide, and wrong here — a notification
+ * belongs to a user, a user belongs to a tenant, and each tenant sets its own
+ * window. Reading the setting once at the top would apply whichever org
+ * happened to be first to everybody (#1561). `ctx.cutoff` is therefore
+ * deliberately unused below; `ctx.now` is not, because every cutoff in a run
+ * must come off the same clock.
+ *
+ * Two rails, neither of which any setting can lower:
+ *   1. an UNREAD row is never deleted — it is still the notification the person
+ *      has not seen, and an over-eager window must not be able to empty a bell
+ *      somebody is about to open;
+ *   2. nothing younger than NOTIFICATION_RETENTION_FLOOR_DAYS is deleted.
+ * A third, narrower one is RETAINED_NOTIFICATION_TYPES. All three are stated,
+ * with their reasoning, in `src/lib/notificationRetention.ts`.
+ */
+export async function pruneNotifications(ctx: RetentionContext): Promise<RetentionOutcome> {
+  // Users with no org (a single-tenant installation, and anybody not bound to
+  // one) resolve against the global settings layer — that is the `null` scope,
+  // and it is a scope like any other from here on.
+  const orgs = await prisma.organization.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
+  const scopes: (string | null)[] = [...orgs.map((o) => o.id), null];
+
+  // ONE SELECT PER DISTINCT WINDOW, NOT ONE PER TENANT. Resolving the setting is
+  // per scope and must stay that way (#1561); the QUERY does not have to be.
+  // Every scope that lands on the same cutoff is swept together, so an instance
+  // where nobody overrode the default — the normal case, however many orgs it
+  // has — walks the index once a night instead of once per org. What the loop
+  // costs is not hypothetical: the rows this sweep may never delete (unread
+  // ones, the retained types, anything belonging to a keep-forever tenant) stay
+  // inside the scanned range for good, so every extra pass re-walks a prefix
+  // that only grows.
+  const groups = new Map<number, { cutoff: Date; orgIds: string[]; includeNull: boolean }>();
+  let keepForever = 0;
+
+  for (const orgId of scopes) {
+    const cutoff = notificationRetentionCutoff(ctx.now, await notificationWindowFor(orgId));
+    if (!cutoff) {
+      keepForever += 1;
+      continue;
+    }
+    const group = groups.get(cutoff.getTime()) ?? { cutoff, orgIds: [], includeNull: false };
+    if (orgId === null) group.includeNull = true;
+    else group.orgIds.push(orgId);
+    groups.set(cutoff.getTime(), group);
+  }
+
+  let deleted = 0;
+  let capped = false;
+
+  for (const group of groups.values()) {
+    const budget = ctx.budget - deleted;
+    if (budget <= 0) {
+      capped = true;
+      break;
+    }
+
+    // Notification has no orgId of its own; it is tenant data through its
+    // owner, which is where the scope comes from. `orgId: { in: [] }` matches
+    // nothing and `in` never matches NULL, so the two halves are separate
+    // branches rather than one clause.
+    const owners: Prisma.NotificationWhereInput[] = [];
+    if (group.orgIds.length > 0) owners.push({ user: { orgId: { in: group.orgIds } } });
+    if (group.includeNull) owners.push({ user: { orgId: null } });
+
+    const where: Prisma.NotificationWhereInput = {
+      createdAt: { lt: group.cutoff },
+      // Rail 1. Never an unread row, at any age.
+      read: true,
+      type: { notIn: [...RETAINED_NOTIFICATION_TYPES] },
+      OR: owners,
+    };
+
+    const outcome = await pruneInBatches({
+      batchSize: ctx.batchSize,
+      budget,
+      selectIds: async (take) =>
+        (
+          await prisma.notification.findMany({
+            where,
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
+            take,
+          })
+        ).map((r) => r.id),
+      handleBatch: async (ids) =>
+        (await prisma.notification.deleteMany({ where: { id: { in: ids } } })).count,
+    });
+
+    deleted += outcome.processed;
+    capped = capped || outcome.capped;
+  }
+
+  return {
+    deleted,
+    capped,
+    // Terse on purpose: `formatRetentionSummary` puts this in the nightly
+    // `retention.pruned` row, which shares ActivityLog.detail's 191 characters
+    // with every other entry's counts. It is the only thing that tells an
+    // operator "this window is switched off here" apart from "it ran and found
+    // nothing" — both of which are otherwise `notification=0`, i.e. nothing.
+    note: keepForever > 0 ? `off:${keepForever}/${scopes.length}` : undefined,
+  };
+}
+
 /**
  * The built-in policy, in one place.
  *
@@ -266,6 +392,19 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
       });
       return { deleted, capped };
     },
+  },
+  {
+    key: 'notification',
+    // Declared so the summary line, and an operator reading this list, can see
+    // which knob drives it. The number the runner derives from it is the GLOBAL
+    // window and is reporting only — `pruneNotifications` re-resolves the
+    // setting per org and ignores `ctx.cutoff`, because one window per instance
+    // would hand the first tenant's choice to every other tenant (#1561).
+    settingKey: 'notificationRetentionDays',
+    defaultDays: Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10),
+    reason:
+      'A bell entry is a rendered sentence about a person plus a link to their record — the same category of personal data EmailLog is pruned for, and until #1646 the one table nobody ever deleted from. 180 days matches PageView, the other per-user history table, so the product defends one number rather than two. An unread row, and anything younger than 30 days, is never touched whatever the setting says; the consent and impersonation notices (RETAINED_NOTIFICATION_TYPES) are never touched at all.',
+    run: pruneNotifications,
   },
 ];
 

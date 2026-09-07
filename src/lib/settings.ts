@@ -118,6 +118,23 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // In-app notification rows (#1646). Unlike the four telemetry windows above
+  // this one IS on the settings form, because it is the one an org actually has
+  // an opinion about: a notification is a rendered sentence about a person plus
+  // a link to their record — the same kind of data EmailLog is pruned for — and
+  // how long a bell keeps its history is a programme decision, not an
+  // infrastructure one.
+  //
+  // 180 days, matching PageView: half a year is far longer than anybody scrolls
+  // back through a bell, and it is the window this product already publishes for
+  // the other per-user history table, so there is one number to defend rather
+  // than two. `0` means keep forever (the pre-#1646 behaviour, chosen
+  // explicitly rather than by accident).
+  //
+  // Two rails live in the prune itself and no setting can lower them: an UNREAD
+  // row is never deleted, and nothing younger than
+  // NOTIFICATION_RETENTION_FLOOR_DAYS (30) is deleted whatever this says.
+  notificationRetentionDays: '180',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
