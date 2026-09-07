@@ -9,6 +9,7 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { notify } from '@/lib/notify';
+import { capSkills } from '@/lib/skills';
 
 // The source a SOURCE user represents (their own sourceId).
 async function ownSourceId(userId: string): Promise<string | null> {
@@ -54,7 +55,8 @@ const schema = z.object({
   email: z.string().email(),
   university: z.string().max(160).optional(),
   department: z.string().max(160).optional(),
-  skills: z.string().max(500).optional(),
+  // A list from the current form, a comma-joined string from an older bundle.
+  skills: z.union([z.string().max(2000), z.array(z.string().max(2000)).max(200)]).optional(),
 });
 
 // POST — a source submits a new mentee. Created as an unassigned MENTEE tagged
@@ -82,7 +84,10 @@ export async function POST(request: Request) {
         sourceId,
         university: university || null,
         department: department || null,
-        skills: skills ? skills.split(',').map((s) => s.trim()).filter(Boolean) : [],
+        // Split flexibly and capped, never refused: a source typing somebody
+        // else's skills should not lose the whole submission over one entry
+        // (@/lib/skills, #2314).
+        skills: capSkills(skills),
         password,
       },
       select: { id: true, fullName: true, email: true, orgId: true },

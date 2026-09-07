@@ -10,6 +10,46 @@ Newest entries on top.
 
 ---
 
+## 2026-09-07 — The bug was in the browser, not in the parser (#2314)
+
+**A single-line `<input>` destroys a multi-line paste before any of your code runs.** The
+report was "one candidate's skills render as one giant badge", and the obvious fix — split
+on newlines too — would have fixed nothing: the browser had already joined the CV's lines
+with spaces by the time `onChange` fired, so the stored value had no separator left. Server
+validation and a migration are both too late for that class of bug. The clipboard is the
+only place the structure still exists (`onPaste` → `e.clipboardData.getData('text')`), which
+is *why* the field had to become a chip editor rather than gaining a better `split()`. When
+a data-quality report names a field, check what its **input element** does to the value
+before deciding where the fix goes.
+
+**Two limits, two different answers to "what now?".** A cap is only half a decision; the
+other half is refuse-or-truncate, and it is not global. A person editing their own profile
+can act on `code: 'too_long'`, so refusing is honest. A public application, a mentor
+application or a **duplicate merge** must not fail over a skills field, so those go through
+a lossy `capSkills`. Exporting both from one module (`parseSkills` reports, never mutates;
+`capSkills` shortens) kept eleven call sites from each inventing a policy.
+
+**A deploy backfill cannot import your TypeScript.** `infra/deploy-prod.sh` runs
+`node prisma/*.mjs` in a Node 20 container: no type stripping, no `@/` alias. The repo
+already lives with this split for `src/lib/plans.ts`, and the copy is only safe if
+something compares the two — a corpus run through **both** implementations inside the unit
+suite (`scripts/test/skills.test.mjs`) fails on the first divergence, which is cheaper than
+a CI script and impossible to forget.
+
+**You can verify a client component with no database.** The local `.env` here points at the
+shared preview DB (unreachable, and off-limits by policy), so `/portal/profile` was not
+loadable — but `/apply-as-mentor` renders with no DB query, and `javascript_tool` can
+dispatch a real `ClipboardEvent` with a `DataTransfer` at the field. That turned "the paste
+handler should work" into the actual 14-chip result, the counter text and the three refusal
+notices, in one call. Look for a public route that mounts the same component before
+concluding a UI change is unverifiable here.
+
+**`zsh` expands a leading `=`.** `echo ===` fails with `== not found` (the EQUALS option
+resolves `=word` to a command path), so the habitual `echo ===` separator between chained
+commands silently kills the whole line. Use `echo ---`.
+
+---
+
 ## 2026-09-07 — Widening a mechanical audit you cannot run (#1615)
 
 **Extract the rules before you copy the routes.** The phone-layout audit's four overflow

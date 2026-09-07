@@ -13,12 +13,14 @@ import { CvManager } from '@/components/CvManager';
 import { CvFeedback } from '@/components/CvFeedback';
 import { CvSuggestPanel } from '@/components/CvSuggestPanel';
 import { SkillRating } from '@/components/SkillRating';
+import { SkillsField } from '@/components/ui/SkillsField';
 import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
 import { useToast } from '@/components/ui/Toast';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { SKILL_LIMITS, parseSkills } from '@/lib/skills';
 import { FALLBACK_TIMEZONE, timeZoneOptions } from '@/lib/timezone';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
@@ -49,7 +51,6 @@ const profileSchema = z.object({
   university: z.string().optional(),
   department: z.string().optional(),
   graduationYear: z.coerce.number().int().min(2010).max(new Date().getFullYear() + 5).optional().or(z.literal(0)),
-  skills: z.string().optional(),
   languages: z.string().optional(),
   // Accept a full URL or an internal path (e.g. /api/cv/<id> set on upload).
   cvUrl: z.string().refine((v) => v === '' || /^https?:\/\//.test(v) || v.startsWith('/'), 'Please enter a valid URL').optional().or(z.literal('')),
@@ -103,30 +104,26 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
 
+  // Skills live outside react-hook-form: `SkillsField` owns a string[], which
+  // is the shape the API takes and the shape a paste has to survive as (#2314).
+  const [skills, setSkills] = useState<string[]>([]);
   const [skillLevels, setSkillLevels] = useState<Record<string, number>>({});
 
   const {
     register,
     handleSubmit,
     reset,
-    watch,
     setValue,
-    getValues,
     formState: { errors },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
   });
 
-  // Merge CV-suggested skills into the comma-separated skills field (dedup,
-  // case-insensitive), keeping the user's existing entries.
+  // Merge CV-suggested skills into the list, keeping the user's own entries.
+  // `parseSkills` does the dedup (Turkish-aware) and the splitting, so a
+  // suggestion that arrives as one comma-joined string still lands as skills.
   const applySuggestedSkills = (incoming: string[]) => {
-    const existing = (getValues('skills') || '').split(',').map((s) => s.trim()).filter(Boolean);
-    const seen = new Set(existing.map((s) => s.toLowerCase()));
-    const merged = [...existing];
-    for (const s of incoming) {
-      if (!seen.has(s.toLowerCase())) { merged.push(s); seen.add(s.toLowerCase()); }
-    }
-    setValue('skills', merged.join(', '), { shouldDirty: true });
+    setSkills((current) => parseSkills([...current, ...incoming]).skills.slice(0, SKILL_LIMITS.maxSkills));
   };
 
   useEffect(() => {
@@ -143,6 +140,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
           setAvatarUrl(user.avatarUrl || null);
           setFullName(user.fullName || '');
           setSkillLevels((user.skillLevels && typeof user.skillLevels === 'object') ? user.skillLevels : {});
+          setSkills(Array.isArray(user.skills) ? user.skills : []);
           reset({
             fullName: user.fullName,
             phone: user.phone || '',
@@ -152,7 +150,6 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
             university: user.university || '',
             department: user.department || '',
             graduationYear: user.graduationYear || 0,
-            skills: user.skills?.join(', ') || '',
             languages: user.languages?.join(', ') || '',
             // Only seed the manual input with an *external* link; internal
             // upload paths are managed by the CvManager, not shown here.
@@ -179,9 +176,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
     setSuccess(false);
 
     try {
-      const skillsArray = data.skills
-        ? data.skills.split(',').map((s) => s.trim()).filter(Boolean)
-        : [];
+      const skillsArray = skills;
       // Keep levels only for skills the user still lists.
       const levels = Object.fromEntries(
         skillsArray.filter((s) => skillLevels[s]).map((s) => [s, skillLevels[s]])
@@ -227,7 +222,18 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
       });
 
       if (!res.ok) {
-        const body = await res.json();
+        const body = await res.json().catch(() => ({}));
+        // The two skill refusals carry a code precisely so they can be shown
+        // in the reader's language instead of the route's English line
+        // (@/lib/apiErrorMessage's stance). Only reachable for a list stored
+        // before #2314 — the field itself refuses these before submit.
+        if (body.code === 'too_long' || body.code === 'too_many') {
+          throw new Error(
+            (body.code === 'too_long' ? t.skillsInput.tooLong : t.skillsInput.tooMany)
+              .replace('{max}', String(body.limit ?? SKILL_LIMITS.maxSkillLength))
+              .replace('{sample}', String(body.sample ?? ''))
+          );
+        }
         throw new Error(body.error || 'Failed to save');
       }
 
@@ -366,15 +372,15 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
           <div className="border-t border-gray-100 pt-4">
             <p className="text-sm font-semibold text-gray-700 mb-4">{role === 'MENTOR' ? t.profileForm.skills : t.profileForm.skillsCv}</p>
             <div className="space-y-4">
-              <Input
+              <SkillsField
                 label={t.profileForm.skills}
                 placeholder={t.profileForm.skillsPlaceholder}
                 hint={t.profileForm.skillsHint}
-                {...register('skills')}
-                error={errors.skills?.message}
+                value={skills}
+                onChange={setSkills}
               />
               {(() => {
-                const list = (watch('skills') || '').split(',').map((s) => s.trim()).filter(Boolean);
+                const list = skills;
                 if (list.length === 0) return null;
                 return (
                   <div>

@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { SkillsField } from '@/components/ui/SkillsField';
 import { Users, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -28,7 +29,8 @@ export default function MentorsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<MentorUser | null>(null);
-  const [skillsText, setSkillsText] = useState('');
+  // A list, not a comma-joined string (@/lib/skills, #2314).
+  const [skillsText, setSkillsText] = useState<string[]>([]);
   const [capacityText, setCapacityText] = useState('');
   const [saving, setSaving] = useState(false);
   // Archived = deactivated (isActive=false). Default view hides them, mirroring
@@ -51,7 +53,7 @@ export default function MentorsPage() {
 
   const openEdit = (m: MentorUser) => {
     setEditing(m);
-    setSkillsText((m.skills ?? []).join(', '));
+    setSkillsText(m.skills ?? []);
     setCapacityText(m.mentorCapacity != null ? String(m.mentorCapacity) : '');
   };
 
@@ -78,7 +80,7 @@ export default function MentorsPage() {
     if (!editing) return;
     setSaving(true);
     try {
-      const skills = skillsText.split(',').map((s) => s.trim()).filter(Boolean);
+      const skills = skillsText;
       const mentorCapacity = capacityText.trim() === '' ? null : Number(capacityText);
       await fetch(`/api/users/${editing.id}`, {
         method: 'PATCH',
@@ -220,12 +222,13 @@ export default function MentorsPage() {
             <h2 id="mentor-edit-title" className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">{t.mentors.editExpertise}</h2>
             <p className="text-sm text-gray-500 mb-4">{editing.fullName}</p>
             <div className="space-y-4">
-              <Input
+              <SkillsField
                 label={t.mentors.skillsLabel}
                 hint={t.mentors.skillsHint}
                 value={skillsText}
-                onChange={(e) => setSkillsText(e.target.value)}
+                onChange={setSkillsText}
                 placeholder="React, Node, AWS"
+                testId="mentor-skills"
               />
               <Input
                 label={t.mentors.capacityLabel}

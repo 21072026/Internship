@@ -20,6 +20,7 @@ import { Users, ExternalLink, Search, Filter, Download, Ghost } from 'lucide-rea
 import { LanguageBadge } from '@/components/LanguageBadge';
 import { TagFilter, TagChips, type TagOption } from '@/components/TagFilter';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { clipSkillLabel } from '@/lib/skills';
 
 interface Candidate {
   id: string;
@@ -644,7 +645,7 @@ export default function CandidatesPage() {
                     {candidate.skills.length > 0 && (
                       <div className="flex min-w-0 flex-wrap gap-1">
                         {candidate.skills.map((skill) => (
-                          <Badge key={skill} variant="info" className="max-w-full whitespace-normal break-words text-xs">{skill}</Badge>
+                          <Badge key={skill} variant="info" title={skill} className="max-w-full whitespace-normal break-words text-xs">{clipSkillLabel(skill)}</Badge>
                         ))}
                       </div>
                     )}
@@ -736,8 +737,8 @@ export default function CandidatesPage() {
                 {candidate.skills.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-4">
                     {candidate.skills.map((skill) => (
-                      <Badge key={skill} variant="info" className="text-xs">
-                        {skill}
+                      <Badge key={skill} variant="info" title={skill} className="text-xs">
+                        {clipSkillLabel(skill)}
                       </Badge>
                     ))}
                   </div>

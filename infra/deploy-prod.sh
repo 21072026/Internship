@@ -749,6 +749,15 @@ run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
 # org created after this ran.
 run_tool node prisma/backfill-org-subscription.mjs || true
 
+# Re-split skill lists stored as one blob before anything split them (#2314).
+# Every form used to write `skills.split(',')` from a single-line input, and a
+# browser drops the line breaks out of a multi-line paste — so a pasted CV list
+# landed as ONE 300-character "skill" that filled half the dashboard card it
+# rendered in. The rule is a fixed point, so this converges to a no-op; the
+# blobs whose separators were already gone are truncated to the cap and counted
+# in the output rather than guessed at.
+run_tool node prisma/backfill-skill-lists.mjs --apply || true
+
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
 # stopped and removed the running container BEFORE proving the new image works,

@@ -95,6 +95,14 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'what counts as contact: 1:1 yes, group only if the mentee wrote it (#2275)' },
   ],
   [
+    'src/lib/skills.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'one pasted CV list became one 300-character "skill" (#2314)',
+    },
+  ],
+  [
     'src/lib/plans.ts',
     { floor: 95, measured: 99.56, why: 'the plan -> feature matrix and its free-tier fallbacks (#1731)' },
   ],

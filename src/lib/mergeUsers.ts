@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
 import { interviewActiveKey } from '@/lib/interviewRequests';
 import { findActiveMentorship } from '@/lib/activeMentorship';
+import { capSkills } from '@/lib/skills';
 
 export type MergeCounts = Record<string, number>;
 
@@ -573,7 +574,11 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
       // (the duplicate's /api/…/<id> path dies with the row below).
       if (movedFiles.avatarFile && !primary.avatarUrl) data.avatarUrl = `/api/avatar/${primaryId}`;
       if (movedFiles.cvFile && !primary.cvUrl) data.cvUrl = `/api/cv/${primaryId}`;
-      data.skills = union(primary.skills, duplicate.skills) as unknown as Prisma.InputJsonValue;
+      // Two lists of at most 40 can union to 80, and a merge must not fail
+      // over a profile field — so the skills union is CAPPED, not refused
+      // (@/lib/skills, #2314). It also de-duplicates Turkish-aware, which the
+      // plain Set above cannot ("Yazılım" vs "yazilim").
+      data.skills = capSkills(union(primary.skills, duplicate.skills)) as unknown as Prisma.InputJsonValue;
       data.languages = union(primary.languages, duplicate.languages) as unknown as Prisma.InputJsonValue;
       const levels = {
         ...(typeof duplicate.skillLevels === 'object' && duplicate.skillLevels ? (duplicate.skillLevels as object) : {}),

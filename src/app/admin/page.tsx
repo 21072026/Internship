@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getServerDictionary } from '@/i18n/server';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { clipSkillLabel } from '@/lib/skills';
 
 async function getStats() {
   const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount] =
@@ -262,9 +263,12 @@ export default async function AdminDashboard() {
                   <p className="text-xs text-gray-500">{candidate.university || candidate.email}</p>
                 </div>
                 <div className="flex flex-wrap gap-1 max-w-[120px] justify-end">
+                  {/* Clipped, with the full text on hover: a row written
+                      before #2314 can still hold a whole CV paragraph, and this
+                      card is where that first destroyed the layout. */}
                   {(candidate.skills as string[]).slice(0, 2).map((skill) => (
-                    <Badge key={skill} variant="info" className="text-xs">
-                      {skill}
+                    <Badge key={skill} variant="info" title={skill} className="max-w-full text-xs">
+                      {clipSkillLabel(skill, 24)}
                     </Badge>
                   ))}
                   {(candidate.skills as string[]).length > 2 && (

@@ -9,6 +9,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
+import { SkillsField } from '@/components/ui/SkillsField';
 import { useT, useLocale } from '@/i18n/client';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
@@ -16,7 +17,6 @@ const applyMentorSchema = z.object({
   fullName: z.string().min(1),
   email: z.string().email(),
   phone: z.string().optional(),
-  expertise: z.string().min(1),
   experience: z.string().max(TEXT_LIMITS.mentorApplicationExperience).optional(),
   motivation: z.string().max(TEXT_LIMITS.mentorApplicationMotivation).optional(),
   capacity: z.string().optional(),
@@ -38,6 +38,9 @@ export function ApplyMentorForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  // Areas of expertise are a list, same rule as User.skills (@/lib/skills, #2314).
+  const [expertise, setExpertise] = useState<string[]>([]);
+  const [expertiseError, setExpertiseError] = useState(false);
   const renderedAt = useRef(Date.now());
 
   const {
@@ -47,6 +50,11 @@ export function ApplyMentorForm() {
   } = useForm<ApplyMentorData>({ resolver: zodResolver(applyMentorSchema) });
 
   const onSubmit = handleSubmit(async (data) => {
+    if (expertise.length === 0) {
+      setExpertiseError(true);
+      return;
+    }
+    setExpertiseError(false);
     setLoading(true);
     setError('');
 
@@ -58,7 +66,7 @@ export function ApplyMentorForm() {
           fullName: data.fullName,
           email: data.email,
           phone: data.phone || undefined,
-          expertise: data.expertise,
+          expertise,
           experience: data.experience || undefined,
           motivation: data.motivation || undefined,
           capacity: data.capacity ? Number(data.capacity) : undefined,
@@ -136,13 +144,14 @@ export function ApplyMentorForm() {
                 error={errors.email ? t.applyMentor.emailInvalid : undefined}
               />
               <Input label={t.applyMentor.phone} type="tel" autoComplete="tel" {...register('phone')} />
-              <Input
+              <SkillsField
                 label={t.applyMentor.expertise}
-                required
                 placeholder="React, Node.js, Product Management…"
                 hint={t.applyMentor.expertiseHint}
-                {...register('expertise')}
-                error={errors.expertise ? t.applyMentor.expertiseRequired : undefined}
+                value={expertise}
+                onChange={(next) => { setExpertise(next); if (next.length > 0) setExpertiseError(false); }}
+                error={expertiseError ? t.applyMentor.expertiseRequired : undefined}
+                testId="mentor-expertise"
               />
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">

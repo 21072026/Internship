@@ -4,6 +4,7 @@ import { use, useEffect, useState } from 'react';
 import { GraduationCap, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { SkillsField } from '@/components/ui/SkillsField';
 import { useT } from '@/i18n/client';
 
 export default function ApplyPage({ params }: { params: Promise<{ mentorId: string }> }) {
@@ -13,7 +14,10 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
   // Whether the link is open (#1188): a full or paused mentor's link explains
   // itself BEFORE any form is shown — never an empty form that fails on submit.
   const [accepting, setAccepting] = useState(true);
-  const [form, setForm] = useState({ fullName: '', email: '', phone: '', city: '', university: '', department: '', skills: '' });
+  const [form, setForm] = useState({ fullName: '', email: '', phone: '', city: '', university: '', department: '' });
+  // A list, not a comma-joined string: a pasted CV block has to survive the
+  // trip intact (@/lib/skills, #2314).
+  const [skills, setSkills] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -38,7 +42,7 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
       const res = await fetch('/api/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mentorId, ...form }),
+        body: JSON.stringify({ mentorId, ...form, skills }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
@@ -90,7 +94,7 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
                   <Input label={t.apply.university} value={form.university} onChange={(e) => set('university', e.target.value)} />
                   <Input label={t.apply.department} value={form.department} onChange={(e) => set('department', e.target.value)} />
                 </div>
-                <Input label={t.apply.skills} placeholder="React, Python…" value={form.skills} onChange={(e) => set('skills', e.target.value)} />
+                <SkillsField label={t.apply.skills} placeholder="React, Python…" value={skills} onChange={setSkills} />
                 <Button type="submit" className="w-full" size="lg" loading={sending}>
                   {t.apply.submit}
                 </Button>

@@ -12,6 +12,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import Link from 'next/link';
 import { useModalFocus } from '@/components/ui/useModalFocus';
+import { SkillsField } from '@/components/ui/SkillsField';
+import { splitSkillInput, REQUISITION_SKILL_LIMITS } from '@/lib/skills';
 
 type Company = { id: string; name: string };
 type Owner = { id: string; fullName: string; companyId: string | null };
@@ -87,7 +89,7 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
     event.preventDefault(); setSaving(true); setError('');
     const payload = {
       ...form, openings: Number(form.openings), filled: Number(form.filled),
-      requiredSkills: form.requiredSkills.split(',').map((s) => s.trim()).filter(Boolean),
+      requiredSkills: splitSkillInput(form.requiredSkills),
       description: form.description || null, city: form.city || null, workMode: form.workMode || null,
       startDate: form.startDate ? new Date(`${form.startDate}T00:00:00.000Z`).toISOString() : null,
       ownerId: form.ownerId || null,
@@ -144,7 +146,15 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
       <Input required label={r.requisitionTitle} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
       <div><label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">{r.description}</label><Textarea maxLength={2000} showCounter value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3"><Select label={r.status} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} options={STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))} /><Input required type="number" min={1} label={r.openings} value={form.openings} onChange={(e) => setForm({ ...form, openings: e.target.value })} /><Input required type="number" min={0} label={r.filled} value={form.filled} onChange={(e) => setForm({ ...form, filled: e.target.value })} /></div>
-      <Input label={r.requiredSkills} hint={r.skillsHint} value={form.requiredSkills} onChange={(e) => setForm({ ...form, requiredSkills: e.target.value })} />
+      <SkillsField
+        label={r.requiredSkills}
+        hint={r.skillsHint}
+        value={splitSkillInput(form.requiredSkills)}
+        onChange={(next) => setForm({ ...form, requiredSkills: next.join(', ') })}
+        max={REQUISITION_SKILL_LIMITS.maxSkills}
+        maxLength={REQUISITION_SKILL_LIMITS.maxSkillLength}
+        testId="requisition-skills"
+      />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3"><Input label={r.city} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /><Input label={r.workMode} value={form.workMode} onChange={(e) => setForm({ ...form, workMode: e.target.value })} /><Input type="date" label={r.startDate} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
       <Select label={r.owner} value={form.ownerId} onChange={(e) => setForm({ ...form, ownerId: e.target.value })} options={[{ value: '', label: r.noOwner }, ...availableOwners.map((o) => ({ value: o.id, label: o.fullName }))]} />
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setShowForm(false)}>{r.cancel}</Button><Button type="submit" loading={saving}>{r.save}</Button></div>

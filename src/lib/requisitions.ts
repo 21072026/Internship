@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { TEXT_LIMITS } from '@/lib/textLimits';
-import { transliterate } from '@/lib/transliterate';
+import { parseSkills, REQUISITION_SKILL_LIMITS } from '@/lib/skills';
 
 export const REQUISITION_STATUSES = ['DRAFT', 'OPEN', 'ON_HOLD', 'FILLED', 'CANCELLED'] as const;
 export type RequisitionStatus = (typeof REQUISITION_STATUSES)[number];
@@ -11,8 +11,10 @@ export const REQUISITION_LIMITS = {
   description: TEXT_LIMITS.companyDescription,
   city: 191,
   workMode: 191,
-  skills: 50,
-  skill: 100,
+  // One source for both sides — the editor reads these through
+  // `@/lib/skills`, which a client component may import (#2314).
+  skills: REQUISITION_SKILL_LIMITS.maxSkills,
+  skill: REQUISITION_SKILL_LIMITS.maxSkillLength,
   pageSize: 100,
 } as const;
 
@@ -44,18 +46,21 @@ export function protectedFields(body: unknown): string[] {
   return PROTECTED_REQUISITION_FIELDS.filter((field) => field in body);
 }
 
+/**
+ * A requisition's required skills, on the same splitting rule as a person's
+ * (`@/lib/skills`, #2314) but with this model's own, wider limits: 50 skills of
+ * up to 100 characters, because a job description legitimately names more and
+ * longer things than a profile does.
+ *
+ * Still throws `skill_too_long` rather than truncating — both callers catch it
+ * and answer 400, and a silently shortened requirement is a requirement nobody
+ * asked for.
+ */
 export function normalizeSkills(skills: string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const value of skills) {
-    const skill = value.trim();
-    if (!skill || seen.has(transliterate(skill).toLowerCase())) continue;
-    if (skill.length > REQUISITION_LIMITS.skill) throw new Error('skill_too_long');
-    seen.add(transliterate(skill).toLowerCase());
-    normalized.push(skill);
-  }
-
-  return normalized;
+  const limits = REQUISITION_SKILL_LIMITS;
+  const { skills: normalized, issues } = parseSkills(skills, limits);
+  if (issues.some((issue) => issue.code === 'too_long')) throw new Error('skill_too_long');
+  return normalized.slice(0, limits.maxSkills);
 }
 
 export function closedAtForStatus(status: string, previous: Date | null = null): Date | null {
