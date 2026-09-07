@@ -42,6 +42,17 @@ function projectRequested(name: string): boolean {
   );
 }
 const runsIsolation = process.env.E2E_ISOLATION === '1' || projectRequested('isolation');
+// Worker processes re-`require` this file too, but they are forked with their
+// OWN argv (pointing at Playwright's internal workerProcessEntry.js), not the
+// `--project=isolation` the top-level `playwright test` command was called
+// with — so `projectRequested('isolation')` silently comes back false in the
+// worker, the `isolation` project drops out of ITS project list, and the run
+// dies with "Project isolation not found in the worker process" before a
+// single spec executes. Stamping the decision into process.env here, in the
+// main process and before any worker is forked, means every worker inherits
+// the SAME answer via env (which forked children DO get a copy of) instead of
+// re-deriving a different one from argv (which they don't).
+if (runsIsolation) process.env.E2E_ISOLATION = '1';
 // An isolation run is an isolation run: the default project (and therefore the
 // default server) is dropped from the config unless the command line asks for
 // chromium by name. E2E_ISOLATION=1 used to leave the default project in place,

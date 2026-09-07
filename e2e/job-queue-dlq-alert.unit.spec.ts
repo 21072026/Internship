@@ -126,7 +126,11 @@ test('the queue counters are read only for a verified caller who asks for them',
   const calls = src.match(/jobQueueHealth\(\)/g) ?? [];
   expect(calls).toHaveLength(1);
   expect(src).toContain("params.get('jobs') === '1'");
-  expect(src).toContain('...(wantsJobs && access.verified ? { jobs: await jobQueueHealth() } : {})');
+  // The guard wraps across several lines in source (`?`/`{` on their own
+  // lines), so assert the pieces rather than one exact-formatted string —
+  // a reflow of the ternary shouldn't fail a test about WHO can read it.
+  expect(src).toContain('...(wantsJobs && access.verified');
+  expect(src).toContain('jobs: await jobQueueHealth(),');
 
   // `detail` is fail-open when HEALTH_TOKEN is unset — that is the bargain the
   // deploy drift gate needs. `verified` is not, and the counters ride on
