@@ -267,7 +267,7 @@ export default async function MentorDashboard() {
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100">
             <Link href="/mentor/interactions" className="text-sm text-blue-600 hover:underline">
-              View all interactions →
+              {t.mentor.viewAllInteractions} →
             </Link>
           </div>
         </Card>

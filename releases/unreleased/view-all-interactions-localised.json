@@ -1,0 +1,18 @@
+{
+  "bump": "patch",
+  "changelog": "- **The mentor dashboard's \"View all interactions →\" link, and the app shell's mobile drawer buttons, are translated** (#1377). `src/app/mentor/page.tsx` read every other string off `t.mentor.*` and then typed this one link as a JSX literal, so it stayed English in the Turkish and German UI — it is now `t.mentor.viewAllInteractions` (EN/TR/DE), with the `→` left outside the string to match the `t.mentor.viewDetails` link two panels up. A sweep of the rest of the mentor panel (`src/app/mentor/**` plus the components those pages mount) found no other hardcoded user-facing English, but it did turn up two in the shared app shell that renders around it: `ResponsiveShell`'s hamburger and drawer-close buttons carried `aria-label=\"Open menu\"` / `\"Close menu\"`, i.e. a screen reader announced them in English on every signed-in page of all five panels. Those move to a new `a11y.openMenu` / `a11y.closeMenu` pair — `publicNav` already had translations for the same two words, but that namespace belongs to the marketing header, so the signed-in shell gets its own rather than reaching across. `e2e/i18n-coverage.spec.ts` gains a mentor-dashboard case asserting the translated link in TR and DE and that the English literal is gone, because `npm run check:i18n` compares dictionary keys and can never see a string typed into JSX.",
+  "notes": {
+    "en": [
+      "The \"View all interactions\" link on the mentor dashboard is now translated into Turkish and German, like the rest of the page.",
+      "The mobile menu open and close buttons are announced in your own language by screen readers, on every page."
+    ],
+    "tr": [
+      "Mentor panosundaki \"Tüm etkileşimleri gör\" bağlantısı artık sayfanın kalanı gibi Türkçe ve Almanca görünüyor.",
+      "Mobil menüyü açma ve kapatma düğmeleri, her sayfada ekran okuyucular tarafından kendi dilinizde okunuyor."
+    ],
+    "de": [
+      "Der Link \"Alle Interaktionen ansehen\" im Mentor-Dashboard ist jetzt wie der Rest der Seite auf Türkisch und Deutsch übersetzt.",
+      "Die Schaltflächen zum Öffnen und Schließen des mobilen Menüs werden auf jeder Seite in deiner Sprache vorgelesen."
+    ]
+  }
+}

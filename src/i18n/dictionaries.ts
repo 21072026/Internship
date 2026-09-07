@@ -77,6 +77,13 @@ const en = {
     resultsShownOne: '1 result shown',
     noResultsShown: 'No results',
     scrollableColumns: 'Pipeline stage columns',
+    // The app shell's mobile drawer controls (components/ResponsiveShell.tsx),
+    // which were hardcoded English aria-labels until #1377. `publicNav` has a
+    // pair with the same wording, but that namespace belongs to the marketing
+    // header (landing/PublicHeader.tsx) — the signed-in shell reading out of it
+    // would couple two unrelated surfaces, so the shell gets its own.
+    openMenu: 'Open menu',
+    closeMenu: 'Close menu',
   },
   // Public accessibility conformance statement (#2035), rendered by
   // src/app/accessibility/page.tsx. Server-only: the page is a server
@@ -897,6 +904,7 @@ const en = {
     withMentee: 'with {name}',
     recentInteractions: 'Recent Interactions',
     latestInteractions: 'Your latest logged interactions',
+    viewAllInteractions: 'View all interactions',
     interactionWith: 'with {name}',
     noInteractionsYet: 'No interactions logged yet',
     exampleLog: 'Example',
@@ -4982,6 +4990,8 @@ const tr: Dict = {
     resultsShownOne: '1 sonuç gösteriliyor',
     noResultsShown: 'Sonuç yok',
     scrollableColumns: 'Pipeline aşama sütunları',
+    openMenu: 'Menüyü aç',
+    closeMenu: 'Menüyü kapat',
   },
   accessibility: {
     title: 'Erişilebilirlik',
@@ -5772,6 +5782,7 @@ const tr: Dict = {
     withMentee: '{name} ile',
     recentInteractions: 'Son Etkileşimler',
     latestInteractions: 'En son kaydettiğin etkileşimler',
+    viewAllInteractions: 'Tüm etkileşimleri gör',
     interactionWith: '{name} ile',
     noInteractionsYet: 'Henüz etkileşim kaydı yok',
     exampleLog: 'Örnek',
@@ -9781,6 +9792,8 @@ const de: Dict = {
     resultsShownOne: '1 Ergebnis angezeigt',
     noResultsShown: 'Keine Ergebnisse',
     scrollableColumns: 'Phasenspalten der Pipeline',
+    openMenu: 'Menü öffnen',
+    closeMenu: 'Menü schließen',
   },
   accessibility: {
     title: 'Barrierefreiheit',
@@ -10571,6 +10584,7 @@ const de: Dict = {
     withMentee: 'mit {name}',
     recentInteractions: 'Letzte Interaktionen',
     latestInteractions: 'Deine zuletzt protokollierten Interaktionen',
+    viewAllInteractions: 'Alle Interaktionen ansehen',
     interactionWith: 'mit {name}',
     noInteractionsYet: 'Noch keine Interaktionen protokolliert',
     exampleLog: 'Beispiel',

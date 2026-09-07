@@ -7,6 +7,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { MessagesButton } from '@/components/MessagesButton';
 import { BetaBadge } from '@/components/BetaBadge';
 import { JoinMeetingPill } from '@/components/JoinMeetingPill';
+import { useT } from '@/i18n/client';
 
 // App shell: sidebar is a static column on desktop and an off-canvas drawer
 // (with a hamburger top bar) on mobile.
@@ -23,6 +24,7 @@ export function ResponsiveShell({
   // product name when not provided.
   brand?: React.ReactNode;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
 
   return (
@@ -42,7 +44,7 @@ export function ResponsiveShell({
           <NotificationBell />
           {/* No negative margin: `-mr-2` pushed the icon 8px past the bar's px-4 and
               made the page 2px wider than a 320px phone (#936). */}
-          <button onClick={() => setOpen(true)} aria-label="Open menu" className="inline-flex min-h-11 min-w-11 items-center justify-center text-gray-600 hover:text-gray-900">
+          <button onClick={() => setOpen(true)} aria-label={t.a11y.openMenu} className="inline-flex min-h-11 min-w-11 items-center justify-center text-gray-600 hover:text-gray-900">
             <Menu className="h-6 w-6" />
           </button>
         </div>
@@ -62,7 +64,7 @@ export function ResponsiveShell({
       >
         <button
           onClick={() => setOpen(false)}
-          aria-label="Close menu"
+          aria-label={t.a11y.closeMenu}
           className="lg:hidden absolute top-1 right-1 z-10 inline-flex min-h-11 min-w-11 items-center justify-center text-gray-500 hover:text-gray-800"
         >
           <X className="h-5 w-5" />
