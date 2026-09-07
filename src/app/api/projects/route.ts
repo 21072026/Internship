@@ -9,6 +9,7 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { mergeTeam, internCount } from '@/lib/projectTeam';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
@@ -93,12 +94,34 @@ const schema = z.object({
   ownerCompanyId: z.string().optional().nullable(),
 });
 
-// POST — create a project. Admin may set any owner; a mentor always owns it.
+// Who may create a project (#2270). ADMIN may set any owner; a MENTOR or a
+// MENTEE always owns what they create. COMPANY and SOURCE are deliberately
+// absent: `canManageProject()` refuses `ownerType: 'COMPANY'` by design
+// (companies are read-only) and a `ProjectMember` row cannot hold a company, so
+// a company-created project would be unmanageable by its own creator; a SOURCE
+// has no project workflow and no `ProjectOwnerType` member of its own.
+const CAN_CREATE = new Set(['ADMIN', 'MENTOR', 'MENTEE']);
+
+// POST — create a project. Admin may set any owner; a mentor or mentee owns it.
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // A signed-in caller with the wrong role is forbidden, not unauthenticated —
+  // this used to answer 401 and send the client off to re-sign-in.
+  if (!CAN_CREATE.has(session.user.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  // The cheap brake on a write surface that is now open to the largest role
+  // population (#2270). Keyed on the user id, not the IP: mentees are students
+  // who share a campus/dorm NAT, and an IP-keyed bucket would let one person's
+  // burst lock out a whole cohort. Not a quota — the default counter store is
+  // per-process and resets on redeploy (see lib/rateLimit.ts).
+  const limited = enforceRateLimit(request, 'project-create', {
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+    subject: session.user.id,
+  });
+  if (limited) return limited;
   return withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
@@ -106,8 +129,14 @@ export async function POST(request: Request) {
 
   // Resolve & authorize ownership (no orphan projects).
   let owner;
-  if (session.user.role === 'MENTOR') {
-    owner = { ownerType: 'MENTOR' as const, ownerUserId: session.user.id, ownerCompanyId: null };
+  if (session.user.role === 'MENTOR' || session.user.role === 'MENTEE') {
+    // Self-owned, always: a client-supplied ownerType/ownerUserId/ownerCompanyId
+    // is ignored, so neither role can create a project owned by someone else.
+    owner = {
+      ownerType: session.user.role as 'MENTOR' | 'MENTEE',
+      ownerUserId: session.user.id,
+      ownerCompanyId: null,
+    };
   } else {
     // ADMIN ownership defaults to the acting admin when no user id is supplied.
     const ownerUserId = d.ownerType === 'ADMIN' ? d.ownerUserId || session.user.id : d.ownerUserId;
@@ -127,7 +156,12 @@ export async function POST(request: Request) {
       demoUrl: d.demoUrl || null,
       boardUrl: d.boardUrl || null,
       status: d.status ?? 'ACTIVE',
-      isPublic: d.isPublic ?? false,
+      // A mentee's own project starts private, whatever the request says
+      // (#2270): `isPublic` puts a project on the fully anonymous /projects
+      // showcase and into sitemap.xml, next to the owner's real full name. A
+      // mentee publishing their own work is a policy decision for the programme,
+      // not a side effect of opening self-service creation.
+      isPublic: session.user.role === 'MENTEE' ? false : d.isPublic ?? false,
       goals: d.goals || null,
       startDate: d.startDate ? new Date(d.startDate) : null,
       endDate: d.endDate ? new Date(d.endDate) : null,

@@ -325,10 +325,16 @@ async function main() {
       });
     }
 
-    // Status history so time-in-stage analytics have data
-    await prisma.statusChange.create({
-      data: { relationId: rel.id, fromStatus: 'APPLICATION_100', toStatus: m.stage, changedById: mentor.id, createdAt: new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000) },
-    });
+    // Status history so time-in-stage analytics have data. A mentee who is
+    // still on the first stage has not moved anywhere: seeding
+    // APPLICATION_100 → APPLICATION_100 for them is exactly the no-op row of
+    // #934, and it was the one the bug report reproduced against ("Deniz Demo
+    // · Stage history (1) · 100 · İlk temas → 100 · İlk temas").
+    if (m.stage !== 'APPLICATION_100') {
+      await prisma.statusChange.create({
+        data: { relationId: rel.id, fromStatus: 'APPLICATION_100', toStatus: m.stage, changedById: mentor.id, createdAt: new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000) },
+      });
+    }
 
     console.log(`created relation: ${m.fullName} → ${mentor.fullName} (${m.stage})`);
   }

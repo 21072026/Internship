@@ -40,14 +40,6 @@
     "hits": 2,
     "issue": "#1884"
   },
-  "src/lib/dormantFirstContact.ts": {
-    "hits": 1,
-    "issue": "#1880"
-  },
-  "src/lib/menteeOnboarding.ts": {
-    "hits": 1,
-    "issue": "#1634"
-  },
   "src/lib/outcomeComms.ts": {
     "hits": 2,
     "issue": "#1880"

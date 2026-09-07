@@ -171,6 +171,12 @@ export async function anonymizeUser(userId: string): Promise<void> {
     ...scrubFreeTextOps(userId, new Date()),
     // Revoke consents — nothing left to process on their behalf.
     prisma.userConsent.updateMany({ where: { userId }, data: { revokedAt: new Date() } }),
+    // And any outstanding password link. A hard delete takes these through the
+    // cascade; anonymise keeps the row, so a live SET_INITIAL token (7-day TTL,
+    // and every /apply account is issued one — #1780) would still set a
+    // password on the account that was just erased. `/api/auth/reset` checks
+    // only the token's own validity, not the state of the user behind it.
+    prisma.passwordResetToken.deleteMany({ where: { userId } }),
     prisma.user.update({
       where: { id: userId },
       data: {

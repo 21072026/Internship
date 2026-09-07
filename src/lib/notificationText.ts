@@ -27,7 +27,17 @@ export interface NotificationDict {
   };
 }
 
-function interpolate(template: string, values: Record<string, string>): string {
+/**
+ * Substitute `{placeholders}` in a dictionary template.
+ *
+ * Exported because it is the ONLY safe way to do this in the codebase, and any
+ * template fed a user-typed value needs it. `template.replace('{x}', value)`
+ * with a *string* replacement silently interprets `$&`, `$\``, `$'` and `$1`
+ * inside the value: an impersonation reason of "Refund $& duplicate" renders as
+ * "Refund {reason} duplicate", and "Ticket $' 12" loses the "Ticket" entirely.
+ * A function replacer, as used here, returns its string verbatim.
+ */
+export function interpolate(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (m, key) => (key in values ? values[key] : m));
 }
 

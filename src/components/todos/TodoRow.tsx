@@ -6,6 +6,7 @@ import { Archive, ArchiveRestore, Check, CheckCircle2, Circle, Pencil, Trash2, X
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import type { Locale } from '@/i18n/config';
 
 // One line of a to-do list (#1113).
@@ -76,6 +77,7 @@ export function TodoRow({
             if (e.key === 'Enter') { e.preventDefault(); save(); }
             if (e.key === 'Escape') setEditing(false);
           }}
+          maxLength={TEXT_LIMITS.todoTitle}
           data-testid={`todo-edit-input-${todo.id}`}
           className="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-1"
         />

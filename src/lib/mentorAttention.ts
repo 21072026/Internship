@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
+import { getLastContacts } from '@/lib/lastContact';
 import { getSetting } from '@/lib/settings';
 import { addUtcWeeks, firstFullUtcWeek, utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
@@ -27,7 +28,9 @@ export interface AttentionQueue {
 // A ranked "needs attention" list for a mentor's active mentees (EPIC: mentor
 // attention queue). Reuses the same inactivity threshold as the weekly email
 // digest (Setting.reminderDays, default 14) so the in-app view and the email
-// agree on what "stale" means.
+// agree on what "stale" means, and the same definition of *contact* as both
+// (lib/lastContact.ts): in-app messaging counts, so a mentor mid-conversation
+// with a mentee is never told they have not been in touch.
 export async function getAttentionItems(mentorId: string): Promise<AttentionQueue> {
   const reminderDays = parseInt(await getSetting('reminderDays'), 10) || 14;
   const now = Date.now();
@@ -42,7 +45,6 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
       startDate: true,
       stageDeadline: true,
       mentee: { select: { id: true, fullName: true } },
-      interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
       questions: { where: { answer: null }, select: { id: true } },
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
       goals: { where: { status: 'OPEN' }, select: { id: true } },
@@ -87,6 +89,10 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
     })),
   );
 
+  const lastContacts = await getLastContacts(
+    relations.map((r) => ({ id: r.id, menteeId: r.mentee.id })),
+  );
+
   const items: AttentionItem[] = [];
   let dormantCount = 0;
   for (const r of relations) {
@@ -95,7 +101,7 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
       continue;
     }
     const reasons: AttentionReason[] = [];
-    const last = r.interactions[0]?.date ?? null;
+    const last = lastContacts.get(r.id)?.at ?? null;
     const daysSince = last ? Math.floor((now - last.getTime()) / (24 * 60 * 60 * 1000)) : null;
 
     if (!last || last < staleCutoff) reasons.push('inactive');

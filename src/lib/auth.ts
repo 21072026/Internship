@@ -8,6 +8,7 @@ import { verifyTotpStep } from '@/lib/totp';
 import { headerSource, clientIp } from '@/lib/clientIp';
 import { guardProviders } from '@/lib/authGuard';
 import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/lib/accountLockout';
+import { IMPERSONATION_SESSION_MAX_MS } from '@/lib/impersonationHistory';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -391,7 +392,7 @@ export const authOptions: NextAuthOptions = {
         token.impersonatorId = u.impersonatorId ?? null;
         token.impersonatorName = u.impersonatorName ?? null;
         // Cap impersonation sessions; after this they auto-revert to the admin.
-        token.impersonationExpiresAt = u.impersonatorId ? Date.now() + 30 * 60 * 1000 : null;
+        token.impersonationExpiresAt = u.impersonatorId ? Date.now() + IMPERSONATION_SESSION_MAX_MS : null;
         // Millisecond mint time for "sign out of all devices" — finer than the
         // second-granular JWT `iat`, so a fresh login is never mistaken for a
         // pre-revocation token even within the same second.

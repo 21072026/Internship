@@ -287,6 +287,46 @@ ile değiştirilir.
 | `PushSubscription` | `pushSubscriptionStaleDays` | 180 gün | Şema yorumunun kendi deyimiyle "ölü ağırlık". Asıl temizlik push sağlayıcısının reddinde oluyor (`src/lib/webPush.ts`: 404/410 anında siler, 5 ardışık hatadan sonra da siler); bu girdi yalnızca hiç push gönderilmemiş satırı yakalar. |
 | `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
+| `Notification` | `notificationRetentionDays` | 180 gün | Bir bildirim satırı, biri hakkında yazılmış bir cümle ve kaydına giden bir link — `EmailLog`'un budanma gerekçesiyle aynı türden kişisel veri, ama #1646'ya kadar hiç silinmeyen tek tablo. 180 gün, diğer kullanıcı bazlı geçmiş tablosu olan `PageView` ile aynı; ürün iki sayı yerine bir sayı savunuyor. **Okunmamış satır silinmez**, 30 günden yeni satır silinmez, onay ve hesaba erişim bildirimleri hiç silinmez (aşağıya bakın). `0` = sonsuza kadar sakla. |
+| **Sahipsiz başvuru hesapları** (`User`) | `orphanApplicantGraceDays` | 90 gün | Kayıt defterindeki **tek kişisel hesap** girdisi ve tek satır silmeyen-anonimleştiren girdi. Yalnızca **global** katmandan okunur (koşu hiçbir kiracıya bağlı değildir), kiracıya özel bir satır yazılsa da çalışan pencere o olmaz. Ayrıntısı bu bölümün sonundaki "Sahipsiz başvuru hesapları (#1780)" başlığında. |
+
+### Bildirim penceresinin iki freni ve tek istisnası (#1646)
+
+`notificationRetentionDays`, yukarıdaki dördün aksine **yönetici ayar formunda**:
+bir zilin geçmişini ne kadar tuttuğu, hakkında fikri olan bir program kararı.
+Forma girilen bir sayı denetimden geçmeden gecelik işe ulaştığı için kural iki
+freni kodun içinde taşıyor ve hiçbir ayar bunları gevşetemez:
+
+1. **Okunmamış bir satır asla silinmez.** O hâlâ kişinin görmediği bildirim;
+   fazla hevesli bir pencere, birinin birazdan açacağı zili boşaltamamalı.
+2. **30 günden yeni hiçbir satır silinmez** (`NOTIFICATION_RETENTION_FLOOR_DAYS`).
+   Bu bir taban, varsayılan değil — en kötü yazım hatasını yaşanabilir kılan şey.
+
+Bir de tür bazlı istisna var (`RETAINED_NOTIFICATION_TYPES`,
+`src/lib/notificationRetention.ts`). Çoğu bildirim bir kolaylıktır: arkasındaki
+olgu başka bir satırda durur, bildirim ona giden işaretçidir. Şu üçü değil —
+onlarda **bildirimin kendisi**, kişiye bir şey söylediğimizin kaydı:
+
+- `retention.confirm` — KVKK/GDPR yeniden onay istemi. Link'i yenileme jetonunu
+  taşıdığı için yanıtlanmamış olanı hâlâ açık bir iş; aynı bildirimin e-posta
+  kopyası zaten 90 günde budanıyor ve `User.retentionReminderSentAt` yalnızca bir
+  tarih tutuyor, kişiye **ne sorulduğunu** gösteremiyor.
+- `impersonation.accessed` / `impersonation.accessedWithReason` — bir yöneticinin
+  hesaba girdiğinin şeffaflık bildirimi. Operatör tarafındaki karşılığı
+  (`impersonate.start`) `ActivityLog`'da duruyor ama oraya yalnızca yönetici
+  bakabiliyor: bu satır **hesap sahibinin tek kopyası**, ve öznesinin artık
+  göremediği bir şeffaflık bildirimi şeffaflık bildirimi olmaktan çıkar.
+
+`security.*` bildirimleri bilerek bu listede **değil**: karşılıkları güvenlik
+defterinde kendi (daha uzun) penceresiyle duruyor ve kullanıcıya giden kopya
+bilgilendirmedir — kullanılmış bir hakkı da verilmiş bir onayı da kaydetmez.
+Listeyi gerçekten tek kanıt olan satırların ötesine genişletmek, pencereyi
+sessizce kapatmak olurdu.
+
+Pencere **kiracı başına** çözülür: `pruneNotifications` org'ları tek tek dolaşır
+ve her biri için ayarı yeniden okur. Kayıt mekanizmasının girdi başına tek
+pencere çözen `resolveDays`'i telemetri tabloları için doğru, burada yanlış
+olurdu — ilk kiracının tercihi herkese uygulanırdı (#1561).
 
 ### Denetim kaydı silinmiyor — kimliklendiriciler siliniyor
 
@@ -319,19 +359,20 @@ prune modülü açılmıyor. Yeni bir tablo **tek bir `registerRetention()`
 
 ```ts
 registerRetention({
-  key: 'notification',
-  settingKey: 'notificationRetentionDays',
+  key: 'domainEvent',
+  settingKey: 'domainEventRetentionDays',
   defaultDays: 90,
   reason: 'Neden bu süre — bir cümle. Zorunlu.',
   run: async (ctx) => { /* ctx.cutoff, ctx.batchSize, ctx.budget */ return { deleted: n }; },
 });
 ```
 
-Girdi bir **fonksiyondur**, `{ tablo, tarih alanı }` tanımı değil. Sıradaki dört
-tablonun hiçbiri düz bir `deleteMany` değil: #1646 okunmamış bildirimi asla
-silmemeli, #2056 satırı silmiyor `deletedForEveryoneAt` ile **maskeliyor**,
-#1585'in kendi ayrı penceresi var, #1691 basit ama aynı kapıdan giriyor.
-Yalnızca `deleteMany` yapabilen bir tasarım bunların hiçbirini ifade edemezdi.
+Girdi bir **fonksiyondur**, `{ tablo, tarih alanı }` tanımı değil. Bu kapıdan
+geçen tabloların hiçbiri düz bir `deleteMany` değil: #1646 okunmamış bildirimi
+asla silmiyor ve pencereyi kiracı başına çözüyor, #2056 satırı silmiyor
+`deletedForEveryoneAt` ile **maskeliyor**, #1585'in kendi ayrı penceresi var,
+#1691 basit ama aynı kapıdan giriyor. Yalnızca `deleteMany` yapabilen bir
+tasarım bunların hiçbirini ifade edemezdi.
 
 Üç kural girdiden bağımsız olarak koşucunun garantisi:
 
@@ -367,3 +408,54 @@ bu ikisini ayırır.
 
 Elle çalıştırmak: `GET /api/cron?job=retention` (ADMIN). Toplu "hepsini
 çalıştır" çağrısının **içinde değil** — geri alınamaz iş, istenmeyi hak eder.
+
+### Sahipsiz başvuru hesapları (#1780)
+
+**Kural, tek cümleyle:** genel başvuru bağlantısının açtığı, mentorun
+reddettiği, hiç giriş yapılmamış ve başka hiçbir yaşam belirtisi taşımayan bir
+mentee hesabı, karardan **90 gün** sonra (`orphanApplicantGraceDays`) otomatik
+olarak **anonimleştirilir** — silinmez.
+
+Kuralın tek kaynağı [`src/lib/orphanApplicant.ts`](../src/lib/orphanApplicant.ts);
+gerekçesi ve her istisnası o dosyanın başlığında yazılı. Buradaki üç sınır
+tartışmaya kapalıdır:
+
+1. **Silme değil, anonimleştirme.** Kapanmış bir dönemin huni sayıları, raporu
+   üç ay sonra yeniden açan yöneticinin altında değişmemeli. Satır ve reddedilmiş
+   `MentorshipRequest` kalır; giden şey kişisel veridir. İşi
+   [`src/lib/accountErasure.ts`](../src/lib/accountErasure.ts)'in
+   `anonymizeUser()` fonksiyonu yapar — **ikinci bir silme yolu yok**, yönetici
+   düğmesi de aynı fonksiyonu çağırır.
+2. **Önce kuru koşu.** Otomatik ve geri alınamaz bir iş, önce görülebilmelidir:
+   `/admin/retention` sayfası her sahipsiz hesabı, başvuru tarihini, reddeden
+   mentoru ve **kaç gün kaldığını** listeler; sayfa ile gece koşusu aynı
+   `orphanApplicantWhere()` fonksiyonunu okur, dolayısıyla listelenen ile alınan
+   ayrışamaz. Yönetici o listeden hesabı hemen silebilir ya da (karar yanlışsa)
+   şifre belirleme bağlantısını yollayıp hesabı kurtarabilir. **Kurtarma
+   gerçekten kurtarır:** açık (kullanılmamış ve süresi dolmamış) bir şifre
+   bağlantısı olan hesabı gece koşusu almaz — bağlantı yaşadığı sürece (ilk
+   şifre bağlantısında 7 gün) geri sayım uzar ve satırın altında "Açık bir şifre
+   bağlantısı var — süresi dolana kadar temizlik bekler" notu görünür. Bu kural olmadan koşu, hesabı anonimleştirirken
+   `anonymizeUser()` az önce yollanan bağlantıyı da silerdi; başvuran ertesi gün
+   ölü bir bağlantıya tıklardı. Erteler, iptal etmez: kimsenin tıklamadığı bir
+   bağlantı terk edilmiş bir hesabı sonsuza kadar ayakta tutmamalı, yeniden
+   göndermek ise tek tık.
+   Bir koşuda en fazla **200 hesap** anonimleştirilir (en eskiden başlayarak);
+   ilk koşuda biriken bir liste varsa sayfa bunu ayrıca söyler, çünkü "800
+   hesap bu gece gidecek" ile "bu gece 200'ü gidecek" aynı cümle değildir.
+3. **Her yaşam belirtisi hesabı kuralın dışına çıkarır.** Rıza kaydı, etiket,
+   yüklenmiş CV veya belge, destek talebi, şirket ilgisi, mülakat talebi, proje
+   üyeliği, açılmış bir konuşma, başlamış onboarding, bekleyen/onaylanmış bir
+   başvuru, herhangi bir mentorluk ilişkisi, doğrulanmış e-posta, bir kez bile
+   giriş — tek biri yeter. Şüpheli durum hesabın **lehine** çözülür.
+
+Bu hesaplar neden mevcut saklama incelemesine düşmüyordu: o inceleme
+`User.consentAt` üzerine kuruluydu ve bir başvuru hesabında `consentAt` hiç
+oluşmuyor. Yani sonsuza kadar tutulan, hiçbir kuyrukta görünmeyen kişisel
+veriydi — saklama sınırı ihlali (GDPR m. 5(1)(e) / KVKK m. 4).
+
+Denetim izi: koşu, ortak `retention.pruned` satırına ek olarak kendi
+`retention.orphanApplicants` `ActivityLog` satırını bırakır (kaç hesap
+anonimleştirildi, kaçı hata verdi, hangi gün penceresiyle) — üründe bir kişinin
+verisini kendiliğinden silen tek iş bu olduğu için "hangi gece gitti?" sorusunun
+tek başına cevaplanabilmesi gerekiyor.

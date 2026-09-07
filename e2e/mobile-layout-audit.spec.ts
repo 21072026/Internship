@@ -181,7 +181,10 @@ test('phone width: the admin rows keep the person identifiable', { tag: '@smoke'
     await setLocale(page, 'tr');
     await signInAndSettle(page, adminEmail, pw, '/admin');
 
-    for (const path of ['/admin', '/admin/mentors', '/admin/activity']) {
+    // The mentor DETAIL page is in the loop because its header carries four
+    // controls with long Turkish labels since #2268 (capacity badge, message,
+    // view-as, convert) — the audit only ever measured the list (#1305).
+    for (const path of ['/admin', '/admin/mentors', `/admin/mentors/${mentor.id}`, '/admin/activity']) {
       await gotoSettled(page, path);
       await settle(page);
       expect(await auditLayout(page), `${path} at ${PHONE.width}px (tr)`).toEqual([]);

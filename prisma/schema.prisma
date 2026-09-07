@@ -205,6 +205,9 @@ model PipelineStage {
   orgId      String
   org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   key        String
+  /// A label the tenant actually typed, shown verbatim in every language — or
+  /// "" meaning "use the built-in localized label for this key" (#2268). Always
+  /// read it through resolvePipelineStages()/useResolvedStages(), never raw.
   label      String
   order      Int
   isTerminal Boolean      @default(false)
@@ -828,6 +831,18 @@ model Notification {
 
   @@index([userId])
   @@index([announcementId])
+  // The nightly retention sweep (#1646) selects the oldest out-of-window rows
+  // in bounded batches. Without an index every batch is a filesort over the
+  // whole table — the exact shape of load the batching exists to avoid.
+  //
+  // `read` LEADS, and it is not cosmetic: the sweep's predicate is
+  // `read = 1 AND createdAt < cutoff ORDER BY createdAt ASC`, and an unread row
+  // is never deleted at any age. On a bare `[createdAt]` those permanently
+  // undeletable rows sit inside the scanned range for good, so the prefix each
+  // batch walks grows every night instead of shrinking. With `read` as the
+  // equality prefix they are not in the range at all, and `createdAt` still
+  // supplies both the range and the ordering.
+  @@index([read, createdAt])
 }
 
 // One Web Push endpoint a user has granted us (#1464, #675 Kademe 2).
@@ -2727,6 +2742,9 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([actorId])
+  // "Who accessed my account" (#1587) reads this table by the *affected* user,
+  // not the actor — without this index that self-service list is a full scan.
+  @@index([targetId])
 }
 
 // Single-use, time-limited token to confirm a user's email address.

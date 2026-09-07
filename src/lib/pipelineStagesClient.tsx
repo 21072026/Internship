@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useContext } from 'react';
-import { defaultPipelineStages, stageLabel, onPathKeys, type ResolvedStage } from '@/lib/pipeline';
+import { createContext, useContext, useMemo } from 'react';
+import { defaultPipelineStages, localizeStageLabels, stageLabel, onPathKeys, type ResolvedStage } from '@/lib/pipeline';
 import { useLocale } from '@/i18n/client';
 
 // Client access to the viewer's tenant pipeline stages (#747, Slice B). The
@@ -9,7 +9,9 @@ import { useLocale } from '@/i18n/client';
 // built-in defaults) and provides them here; client components read them via the
 // hooks below. When null, we compute the canonical defaults in the *client*
 // locale, so default-stage labels stay localized while custom labels (a single
-// tenant-set string) render as-is.
+// tenant-set string) render as-is. A tenant that customized only SOME stages
+// gets the same treatment per row: the ones it never renamed are localized
+// here, the ones it did are rendered verbatim (#2268).
 
 const Ctx = createContext<ResolvedStage[] | null>(null);
 
@@ -27,7 +29,10 @@ export function PipelineStagesProvider({
 export function useResolvedStages(): ResolvedStage[] {
   const locale = useLocale();
   const ctx = useContext(Ctx);
-  return ctx && ctx.length > 0 ? ctx : defaultPipelineStages(locale);
+  return useMemo(
+    () => (ctx && ctx.length > 0 ? localizeStageLabels(ctx, locale) : defaultPipelineStages(locale)),
+    [ctx, locale],
+  );
 }
 
 // A label(key) resolver bound to the viewer's stages + locale.
