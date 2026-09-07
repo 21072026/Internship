@@ -4,7 +4,8 @@ import { getServerDictionary } from '@/i18n/server';
 import { VersionFooter } from '@/components/VersionFooter';
 import { APP_VERSION } from '@/lib/version';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from './links';
-import { IS_DEMO_MODE, DEMO_URL } from '@/lib/demoMode';
+import { IS_DEMO_MODE, demoUrl } from '@/lib/demoMode';
+import { DemoLink } from './DemoLink';
 
 /**
  * The one footer every public page wears (#1197). Only the landing had one
@@ -32,7 +33,11 @@ export async function PublicFooter() {
         { href: '/projects', label: n.showcase },
         { href: '/release-notes', label: n.whatsNew },
         // The demo links to itself from its own footer — hide it there.
-        ...(IS_DEMO_MODE ? [] : [{ href: DEMO_URL, label: n.demo, external: true }]),
+        // `demoPlacement` is what routes this one through DemoLink below, so
+        // the click is measured and the URL carries its own utm_content (#1391).
+        ...(IS_DEMO_MODE
+          ? []
+          : [{ href: demoUrl('footer'), label: n.demo, external: true, demoPlacement: 'footer' as const }]),
       ],
     },
     {
@@ -108,7 +113,17 @@ export async function PublicFooter() {
               <ul className="mt-3 space-y-2">
                 {col.links.map((l) => (
                   <li key={l.href}>
-                    {'external' in l && l.external ? (
+                    {'demoPlacement' in l && l.demoPlacement ? (
+                      <DemoLink
+                        href={l.href}
+                        placement={l.demoPlacement}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
+                      >
+                        {l.label}
+                      </DemoLink>
+                    ) : 'external' in l && l.external ? (
                       <a
                         href={l.href}
                         target="_blank"

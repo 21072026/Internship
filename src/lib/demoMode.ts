@@ -99,6 +99,54 @@ export const DEMO_PASSWORD = 'DemoPass123!';
 // those links — it has the banner instead). One constant so they can't drift.
 export const DEMO_URL = 'https://demo.interncrm.com';
 
+/**
+ * Which control sent the visitor to the demo.
+ *
+ * The demo is a *different origin*, so from the main site a click is an exit and
+ * from the demo's own analytics it is a visitor from nowhere. The placement is
+ * what lets the report answer "which of these links actually works" rather than
+ * only "someone left" (#1391).
+ *
+ * `features` has no call site today — the feature catalogue
+ * (`src/lib/features.ts`) carries a demo *card*, not a demo URL. It is named
+ * here so that whoever adds that link reaches for the helper instead of pasting
+ * a second URL.
+ */
+export type DemoLinkPlacement = 'hero' | 'cta' | 'footer' | 'features';
+
+/**
+ * The campaign tagging scheme for outbound demo links.
+ *
+ * `utm_source=crm` — the main CRM site is the referrer, as opposed to a
+ * newsletter, Show HN or a directory listing;
+ * `utm_medium=cta`  — an on-site button or link, not paid or mail;
+ * `utm_campaign=demo` — every route into the demo shares one campaign, so the
+ * report can total them and still split by `utm_content`;
+ * `utm_content=<placement>` — the individual control.
+ *
+ * These four values are a choice, not a standard: if the maintainer already tags
+ * campaigns differently elsewhere (an existing Plausible/GA report, a
+ * newsletter's links), correcting them here corrects every link in the app,
+ * which is the entire reason the strings live in one object.
+ */
+const DEMO_UTM = {
+  utm_source: 'crm',
+  utm_medium: 'cta',
+  utm_campaign: 'demo',
+} as const;
+
+/**
+ * `DEMO_URL` tagged for one call site. Built with URLSearchParams rather than
+ * string concatenation so the encoding is not ours to get wrong, and so a query
+ * string added to DEMO_URL later cannot produce a second `?`.
+ */
+export function demoUrl(placement: DemoLinkPlacement): string {
+  const url = new URL(DEMO_URL);
+  for (const [k, v] of Object.entries(DEMO_UTM)) url.searchParams.set(k, v);
+  url.searchParams.set('utm_content', placement);
+  return url.toString();
+}
+
 export const DEMO_ACCOUNTS: readonly { role: 'admin' | 'mentor' | 'mentee'; email: string }[] = [
   { role: 'admin', email: `admin.demo@${DEMO_DOMAIN}` },
   { role: 'mentor', email: `mentor.aylin@${DEMO_DOMAIN}` },
