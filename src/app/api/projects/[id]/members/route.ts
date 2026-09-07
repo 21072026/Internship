@@ -28,8 +28,20 @@ async function loadContext(id: string) {
   return project;
 }
 
-function canManageMembers(user: { id: string; role: string }, project: { members: { userId: string; role: string }[] }) {
+// Same test as `isProjectOwner()` (lib/projectAccess.ts), spelled out against
+// the already-loaded context instead of re-querying: an admin, an OWNER member,
+// or the legacy `ownerUserId` pointer. That last arm is not decoration — a
+// project whose OWNER member row was never backfilled (the demo set seeds
+// `ownerUserId` alone, and neither topic-deploy.sh nor demo-refresh.sh runs
+// backfill-project-members.mjs) still has a real owner, and /projects/[id]
+// derives `isLead` from exactly that pointer. Leaving it out rendered the
+// members panel for an owner whose every request to it answered 403.
+function canManageMembers(
+  user: { id: string; role: string },
+  project: { ownerUserId: string | null; members: { userId: string; role: string }[] }
+) {
   if (user.role === 'ADMIN') return true;
+  if (project.ownerUserId && project.ownerUserId === user.id) return true;
   return project.members.some((m) => m.userId === user.id && m.role === 'OWNER');
 }
 
@@ -69,10 +81,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // lowest-privilege role add any active mentee in the tenant — with no
     // relation check, a notification and a seat in the project group chat each
     // time. They grow their team through the join-request flow instead
-    // ([id]/join-requests), which the applicant starts.
+    // ([id]/join-requests), which the applicant starts — but only once the
+    // project is public, since a private one answers `not_public` to every
+    // request. A mentee-created project starts private and only an admin can
+    // publish it, so the message has to name that step: pointing them at join
+    // requests alone described a flow they could not reach.
     if (session.user.role === 'MENTEE') {
       return NextResponse.json(
-        { error: 'Approve a join request to add someone to your project', code: 'mentee_owner_invite' },
+        {
+          error:
+            'Approve a join request to add someone to your project — ask an admin to publish it to the showcase, or to add someone for you while it is private',
+          code: 'mentee_owner_invite',
+        },
         { status: 403 }
       );
     }
