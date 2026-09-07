@@ -212,6 +212,13 @@ jobs:
       # database every minute.
       - name: mysql watchdog probe logic
         run: bash infra/test/mysql-watchdog.test.sh
+      # The rolling two-replica deploy (#1701) has the same problem: it only
+      # runs on the server against docker, and its two load-bearing claims —
+      # replica 1 keeps the historical name/port, and REPLICAS=1 generates the
+      # same single-upstream routing bootstrap.sh writes — are the kind that
+      # quietly stop being true.
+      - name: replica rollout arithmetic + generated routing (#1701)
+        run: bash infra/test/replica-rollout.test.sh
       # The steps above each run ONE unit suite because each was added by the
       # incident it names. Nothing held the set together, so a suite whose rule
       # got refactored away could lose its assertions and stay green — the test

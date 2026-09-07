@@ -63,9 +63,18 @@ function startCron() {
   setTimeout(tryStart, BOOT_DELAY_MS).unref?.();
 }
 
-// Drains the reply mailbox over IMAP. Gated on the IMAP credentials, which live
-// only in production — two containers polling one mailbox would race over the
-// \Seen flag.
+// Drains the reply mailbox over IMAP. Started wherever the IMAP credentials are
+// configured; INBOUND_IMAP_ENABLED=0 is the kill switch.
+//
+// Two pollers on one mailbox race over the \Seen flag, so the bridge must have
+// exactly one owner. That used to rest on "the credentials only exist in
+// production, and production is one container" — a coincidence, not a guarantee,
+// and #1701 ends it by running two identically configured replicas. The owner is
+// now decided by the `'imap-bridge'` JobLease, taken inside
+// /api/inbound-email/poll (src/lib/jobs/lease.ts): every replica keeps ticking,
+// and the ones that do not hold the lease get a quiet 200 and open no IMAP
+// connection. The gate lives in the route rather than here because this file
+// must stay dependency-free — see the header.
 function startMailBridge() {
   const configured = process.env.INBOUND_IMAP_HOST && process.env.INBOUND_IMAP_USER && process.env.INBOUND_IMAP_PASS;
   if (!configured || process.env.INBOUND_IMAP_ENABLED === '0') return;

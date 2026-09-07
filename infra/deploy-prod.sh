@@ -19,7 +19,9 @@
 #   4. seed-templates + seed-goal-templates + backfill-project-members
 #      + backfill-sso-plan (all idempotent)
 #   5. swap the internship-crm container (host networking, port 3200, restart
-#      unless-stopped) — byte-for-byte the flags deploy.yml uses
+#      unless-stopped) — byte-for-byte the flags deploy.yml uses. With
+#      REPLICAS>1 the replicas are swapped ONE AT A TIME, each drained out of
+#      the reverse-proxy pool first (#1701)
 #   6. health-check http://127.0.0.1:3200 and prune old images
 #
 # SECRETS never live in the repo. They are read from an env file on the server
@@ -55,6 +57,36 @@
 # ENV
 #   DEPLOY_SHA    the commit the image was built from. Only needed when the
 #                 checkout can't be trusted to be that commit; defaults to HEAD.
+#
+# REPLICAS (#1701)
+#   REPLICAS=1 (the default) is EXACTLY this script as it was: one container
+#   named $CONTAINER on $PORT, one `docker stop`/`docker run`, no reverse-proxy
+#   call at all. Nothing below behaves differently until somebody asks for a
+#   second replica, which is the point — a deploy path is the worst place to
+#   find out that a refactor changed something.
+#
+#   REPLICAS=2 runs two containers per environment and rolls the deploy through
+#   them one at a time: drain replica 1 out of the proxy pool, swap it,
+#   health-assert it, put it back, THEN touch replica 2. A failed health check
+#   aborts with the other replica still serving the previous image, so a bad
+#   release can never take both. Replica 1 keeps the historical name and port
+#   (`internship-crm` on 3200) — everything else on the box addresses it that
+#   way, from the env-file capture above to the drift gate's /api/health read,
+#   and renaming it would be a second unrelated change riding along on a deploy.
+#   Replica k>1 is `${CONTAINER}-k` on $PORT + (k-1)*REPLICA_PORT_STRIDE.
+#
+#   REPLICA_PORT_STRIDE  (default 10)  prod: 3200, 3210 — preview: 3201, 3211
+#   DRAIN_TIMEOUT_S      (default 25)  SIGTERM grace before SIGKILL while
+#                                      draining a replica (docker's own default
+#                                      of 10 still applies at REPLICAS=1)
+#   ROUTE_HOST           the hostname the proxy serves; defaults to the host in
+#                        NEXTAUTH_URL
+#   ROUTER / CADDY_*     passed through to infra/server/replica-route.sh
+#
+#   Going back to one replica is a deploy with REPLICAS=1 plus
+#   `./infra/server/replica-route.sh --host <fqdn> --ports <port>`, which
+#   rewrites the single-upstream site file bootstrap.sh generates. Then remove
+#   the leftover container: `docker rm -f ${CONTAINER}-2`.
 #
 set -euo pipefail
 
@@ -157,15 +189,112 @@ health_curl() { # health_curl <url>
 # a published port. Default 'host' keeps prod behavior byte-for-byte.
 NETWORK="${NETWORK:-host}"
 if [ "$NETWORK" = host ]; then
-  APP_NET_ARGS=(--network=host)
-  APP_PORT_ARGS=(-e PORT="$PORT")
   TOOL_NET_ARGS=(--network=host)
 else
-  # bridge: reach the host DB via host.docker.internal, publish the app port.
-  APP_NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "$PORT:3000")
-  APP_PORT_ARGS=()
   TOOL_NET_ARGS=(--add-host=host.docker.internal:host-gateway)
 fi
+
+# --- Replicas (#1701) -------------------------------------------------------
+# One number decides the shape of everything below. At 1 this section
+# contributes a single container on a single port and no proxy call at all,
+# which is the behaviour this script has always had.
+REPLICAS="${REPLICAS:-1}"
+case "$REPLICAS" in
+  ''|*[!0-9]*|0) echo "ERROR: REPLICAS must be a positive integer (got '$REPLICAS')" >&2; exit 2 ;;
+esac
+REPLICA_PORT_STRIDE="${REPLICA_PORT_STRIDE:-10}"
+DRAIN_TIMEOUT_S="${DRAIN_TIMEOUT_S:-25}"
+# The hostname the reverse proxy serves. Derived from NEXTAUTH_URL rather than
+# hardcoded so preview and prod need no extra configuration.
+ROUTE_HOST="${ROUTE_HOST:-$(printf '%s' "${NEXTAUTH_URL:-}" | sed -E 's#^[a-zA-Z]+://##; s#/.*$##; s#:[0-9]+$##')}"
+
+# Replica 1 IS the historical container: same name, same port.
+replica_container() { # replica_container <index>
+  if [ "$1" = 1 ]; then printf '%s' "$CONTAINER"; else printf '%s-%s' "$CONTAINER" "$1"; fi
+}
+replica_port() { # replica_port <index>
+  printf '%s' "$(( PORT + (($1 - 1) * REPLICA_PORT_STRIDE) ))"
+}
+
+# The docker flags that differ per replica: the network mode and where the app
+# listens. For replica 1 this emits byte-for-byte the pair of arrays this script
+# used before REPLICAS existed (`--network=host -e PORT=3200`, or
+# `--add-host=... -p 3200:3000` on bridge networking).
+replica_net_args() { # replica_net_args <port>
+  if [ "$NETWORK" = host ]; then
+    printf '%s\0' --network=host -e PORT="$1"
+  else
+    # bridge: reach the host DB via host.docker.internal, publish the app port.
+    printf '%s\0' --add-host=host.docker.internal:host-gateway -p "$1:3000"
+  fi
+}
+
+# The interim scheduler guard (#1701, removed by #1676).
+#
+# The IMAP bridge is protected by a real lease: every replica polls and the ones
+# that do not hold `'imap-bridge'` quietly do nothing. The in-process CRON is
+# not, yet — its schedules are registered once at boot by
+# src/instrumentation.ts, so a lease taken at registration would be held by
+# whoever booted first and never renewed. Making each scheduled tick take the
+# `'scheduler'` lease needs the schedule registry, which is #1676's job.
+#
+# Until then the second replica runs with CRON_ENABLED=0 — the documented kill
+# switch, exactly as the canary already uses it, and NOT a second election
+# mechanism. The cost is honest and worth writing down: the scheduler is pinned
+# to replica 1, so while replica 1 is down (or mid-swap) reminders wait rather
+# than being sent by replica 2. Waiting is recoverable; sending every reminder
+# twice is not.
+replica_extra_env() { # replica_extra_env <index>
+  if [ "$1" = 1 ]; then
+    printf ''
+  else
+    printf '%s\0' -e CRON_ENABLED=0
+  fi
+}
+
+# Which replicas are actually up, as a port list — the pool the proxy should
+# hold right now. Asking docker rather than assuming is what makes the FIRST
+# two-replica deploy safe: replica 2 does not exist yet, so nothing is routed to
+# it until it has passed a health check.
+running_pool() {
+  local i=1 out="" name
+  while [ "$i" -le "$REPLICAS" ]; do
+    name="$(replica_container "$i")"
+    if [ "$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null || echo false)" = true ]; then
+      out="${out}$(replica_port "$i") "
+    fi
+    i=$((i + 1))
+  done
+  # Never hand the proxy an empty pool: an environment with nothing running is
+  # a 502 either way, and a site block with no upstream does not even validate.
+  [ -n "$out" ] || out="$(replica_port 1)"
+  printf '%s' "${out% }"
+}
+
+pool_without() { # pool_without <port> — the running pool minus one replica
+  local keep="" p
+  for p in $(running_pool); do
+    [ "$p" = "$1" ] || keep="${keep}${p} "
+  done
+  printf '%s' "${keep% }"
+}
+
+# Point the proxy at a set of ports. A no-op at REPLICAS=1: a single-container
+# environment is routed by bootstrap.sh, and this script must not touch a vhost
+# it does not own.
+route_pool() { # route_pool <ports>
+  [ "$REPLICAS" -gt 1 ] || return 0
+  local ports="$1"
+  if [ -z "$ports" ]; then
+    warn "refusing to hand the proxy an empty upstream pool — leaving the routing as it is"
+    return 0
+  fi
+  if [ -z "$ROUTE_HOST" ]; then
+    echo "ERROR: cannot route replicas — ROUTE_HOST is empty and NEXTAUTH_URL gave no host." >&2
+    return 1
+  fi
+  "$REPO_DIR/infra/server/replica-route.sh" --host "$ROUTE_HOST" --ports "$ports"
+}
 
 run_tool() { # run a one-off tool container against the DB (network per $NETWORK)
   docker run --rm "${TOOL_NET_ARGS[@]}" -e DATABASE_URL="$DATABASE_URL" "$IMAGE" "$@"
@@ -300,28 +429,47 @@ if [ "$ROLLBACK" = "1" ]; then
     echo "       environment that has not deployed since #961 shipped has none yet." >&2
     exit 1
   }
-  log "Rolling $CONTAINER back to $PREV_TAG"
-  docker stop "$CONTAINER" 2>/dev/null || true
-  docker rm   "$CONTAINER" 2>/dev/null || true
-  docker run -d \
-    --name "$CONTAINER" \
-    "${APP_NET_ARGS[@]}" \
-    --restart=unless-stopped \
-    "${APP_PORT_ARGS[@]}" \
-    "${APP_ENV_ARGS[@]}" \
-    "$PREV_TAG" >/dev/null
-  # No sha to assert against: the point of a rollback is that we want whatever
-  # the previous image serves. Report it so the operator can see where they are.
-  if ! check_health "http://127.0.0.1:$PORT/api/health?db=1" "$CONTAINER" any; then
-    echo "ERROR: the rollback target is ALSO unhealthy. This host needs hands." >&2
-    exit 1
+  # Every replica goes back, one at a time and in the same order as a forward
+  # deploy. NOT rolled through the proxy pool: a rollback is what you run when
+  # the release is already broken, so the fastest possible path back to the
+  # previous image beats a graceful one — and at REPLICAS=1 this is the single
+  # container it always was.
+  ROLLBACK_INDEX=1
+  while [ "$ROLLBACK_INDEX" -le "$REPLICAS" ]; do
+    RB_NAME="$(replica_container "$ROLLBACK_INDEX")"
+    RB_PORT="$(replica_port "$ROLLBACK_INDEX")"
+    mapfile -d '' -t RB_NET_ARGS < <(replica_net_args "$RB_PORT")
+    RB_EXTRA_ENV=()
+    mapfile -d '' -t RB_EXTRA_ENV < <(replica_extra_env "$ROLLBACK_INDEX")
+    log "Rolling $RB_NAME back to $PREV_TAG on :$RB_PORT"
+    docker stop "$RB_NAME" 2>/dev/null || true
+    docker rm   "$RB_NAME" 2>/dev/null || true
+    docker run -d \
+      --name "$RB_NAME" \
+      "${RB_NET_ARGS[@]}" \
+      --restart=unless-stopped \
+      "${APP_ENV_ARGS[@]}" \
+      ${RB_EXTRA_ENV[@]+"${RB_EXTRA_ENV[@]}"} \
+      -e REPLICA_ID="$RB_NAME" \
+      "$PREV_TAG" >/dev/null
+    # No sha to assert against: the point of a rollback is that we want whatever
+    # the previous image serves. Report it so the operator can see where they are.
+    if ! check_health "http://127.0.0.1:$RB_PORT/api/health?db=1" "$RB_NAME" any; then
+      echo "ERROR: the rollback target is ALSO unhealthy on $RB_NAME. This host needs hands." >&2
+      exit 1
+    fi
+    ROLLBACK_INDEX=$((ROLLBACK_INDEX + 1))
+  done
+  if [ "$REPLICAS" -gt 1 ]; then
+    route_pool "$(running_pool)" || warn "rolled back, but the proxy pool could not be rewritten — check the routing by hand"
   fi
+  
   # The state file drives the forward-only guard. A rollback is a deliberate
   # move backwards, so record what is actually live — otherwise the next deploy
   # compares against a commit that is no longer serving.
   mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
   printf '%s\n' "$SERVED_SHA" > "$STATE_FILE" 2>/dev/null || true
-  log "Rolled back — $CONTAINER is up at :$PORT serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
+  log "Rolled back — ${REPLICAS} replica(s) up from :$PORT serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
   exit 0
 fi
 
@@ -663,34 +811,101 @@ if [ -n "$OUTGOING_IMAGE" ] && [ "$OUTGOING_IMAGE" != "$IMAGE" ]; then
     || warn "could not tag $OUTGOING_IMAGE as $PREV_TAG — no rollback target for this deploy"
 fi
 
-log "Restarting $CONTAINER on :$PORT"
-docker stop "$CONTAINER" 2>/dev/null || true
-docker rm   "$CONTAINER" 2>/dev/null || true
-docker run -d \
-  --name "$CONTAINER" \
-  "${APP_NET_ARGS[@]}" \
-  --restart=unless-stopped \
-  "${APP_PORT_ARGS[@]}" \
-  "${APP_ENV_ARGS[@]}" \
-  "$IMAGE"
-
-# ── 6. Health check + prune ──────────────────────────────────────────────────
-# Probe /api/health?db=1 rather than the root page: the root answers 200 from a
-# container with a broken DATABASE_URL, and it says nothing about WHICH build is
-# running. Both matter, because deploy-prod.yml's drift gate keys its
-# "already current — nothing to deploy" decision off this same endpoint's `sha`.
-# A container serving a stale image that happens to report the right sha would
-# make the gate skip every future build.
+# Swap ONE replica and prove it (#1701).
 #
-# The canary already proved this image; this is the same assertion against the
-# container users actually reach. If it fails now, the rollback target tagged
-# above is what puts the previous release back: ./infra/deploy-prod.sh --rollback
-log "Health check http://127.0.0.1:$PORT/api/health?db=1"
-if ! check_health "http://127.0.0.1:$PORT/api/health?db=1" "$CONTAINER" "${GIT_SHA:0:7}"; then
-  echo "       Roll back with: CONTAINER=$CONTAINER ./infra/deploy-prod.sh --rollback" >&2
-  exit 1
+# Same three steps the single-container deploy always did — stop, run,
+# health-assert — with the health check now part of the function rather than a
+# separate stage, because with two replicas it is the thing that decides
+# whether the second one is touched at all.
+#
+# `?db=1` rather than the root page: the root answers 200 from a container with
+# a broken DATABASE_URL, and it says nothing about WHICH build is running. Both
+# matter, because deploy-prod.yml's drift gate keys its "already current —
+# nothing to deploy" decision off this same endpoint's `sha`. A container
+# serving a stale image that happens to report the right sha would make the gate
+# skip every future build.
+swap_replica() { # swap_replica <index>
+  local index="$1" name port
+  name="$(replica_container "$index")"
+  port="$(replica_port "$index")"
+  local -a net_args extra_env
+  mapfile -d '' -t net_args < <(replica_net_args "$port")
+  extra_env=()
+  mapfile -d '' -t extra_env < <(replica_extra_env "$index")
+
+  log "Restarting $name on :$port (replica ${index}/${REPLICAS})"
+  if [ "$REPLICAS" -gt 1 ]; then
+    # Longer SIGTERM grace than docker's default 10s: the replica is out of the
+    # pool at this point, so the time is spent finishing requests and
+    # background work that is already in flight rather than on downtime. At
+    # REPLICAS=1 the plain `docker stop` below keeps the historical timing.
+    docker stop -t "$DRAIN_TIMEOUT_S" "$name" 2>/dev/null || true
+  else
+    docker stop "$name" 2>/dev/null || true
+  fi
+  docker rm "$name" 2>/dev/null || true
+  # REPLICA_ID names the process in the lease table and on /api/health. It comes
+  # AFTER the shared env list on purpose — docker takes the last `-e` for a key.
+  docker run -d \
+    --name "$name" \
+    "${net_args[@]}" \
+    --restart=unless-stopped \
+    "${APP_ENV_ARGS[@]}" \
+    ${extra_env[@]+"${extra_env[@]}"} \
+    -e REPLICA_ID="$name" \
+    "$IMAGE"
+
+  log "Health check http://127.0.0.1:$port/api/health?db=1"
+  check_health "http://127.0.0.1:$port/api/health?db=1" "$name" "${GIT_SHA:0:7}"
+}
+
+# ── 6. Roll through the replicas, one at a time ──────────────────────────────
+# The canary already proved this image boots and reaches the database; this is
+# the same assertion against the containers users actually reach.
+#
+# At REPLICAS=1 the loop runs once and no routing call is made at all — the
+# deploy is exactly what it was. Above 1, each replica is taken OUT of the proxy
+# pool before it is touched and put back only once it has answered with the sha
+# just built, so traffic is served throughout by whichever replicas are still
+# in the pool. If a replica fails its check the script stops right there, with
+# that replica drained and the untouched ones still serving the previous image:
+# a bad release cannot take both.
+# Pre-flight, deliberately BEFORE the first container is touched: a box whose
+# proxy this script cannot drive must fail the deploy while everything is still
+# serving, not halfway through the roll. The pool it writes is the set that is
+# already running, so on the very first two-replica deploy nothing is routed to
+# the replica that does not exist yet.
+if [ "$REPLICAS" -gt 1 ]; then
+  route_pool "$(running_pool)" || {
+    echo "ERROR: the reverse proxy could not be configured for $REPLICAS replicas." >&2
+    echo "       NOTHING was swapped — the environment is still serving the previous release." >&2
+    exit 1
+  }
 fi
-log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
+
+REPLICA_INDEX=1
+while [ "$REPLICA_INDEX" -le "$REPLICAS" ]; do
+  THIS_PORT="$(replica_port "$REPLICA_INDEX")"
+  if [ "$REPLICAS" -gt 1 ]; then
+    log "Draining replica $REPLICA_INDEX (:$THIS_PORT) out of the pool"
+    route_pool "$(pool_without "$THIS_PORT")" || warn "could not drain :$THIS_PORT from the pool — swapping it anyway, in-flight requests may see a retry"
+  fi
+  if ! swap_replica "$REPLICA_INDEX"; then
+    echo "ERROR: replica $REPLICA_INDEX failed its health check." >&2
+    if [ "$REPLICAS" -gt 1 ]; then
+      echo "       It is OUT of the proxy pool and the remaining replica(s) are still serving" >&2
+      echo "       the previous release. No further replica was touched." >&2
+    fi
+    echo "       Roll back with: CONTAINER=$CONTAINER REPLICAS=$REPLICAS ./infra/deploy-prod.sh --rollback" >&2
+    exit 1
+  fi
+  if [ "$REPLICAS" -gt 1 ]; then
+    route_pool "$(running_pool)" || warn "replica $REPLICA_INDEX is healthy but could not be routed back into the pool"
+    log "Replica $REPLICA_INDEX OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
+  fi
+  REPLICA_INDEX=$((REPLICA_INDEX + 1))
+done
+log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped} on ${REPLICAS} replica(s)"
 
 # Record the commit now live in this container so the next deploy can enforce
 # forward-only progress (see the guard above).
@@ -698,4 +913,4 @@ mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
 printf '%s\n' "$GIT_SHA" > "$STATE_FILE" 2>/dev/null || true
 
 prune_images "$IMAGE" "$PREV_TAG"
-log "Done — $CONTAINER is up at :$PORT (${GIT_SHA:0:7})"
+log "Done — ${REPLICAS} replica(s) up from :$PORT (${GIT_SHA:0:7})"

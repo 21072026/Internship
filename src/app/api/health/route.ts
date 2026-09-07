@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getEmailHealth } from '@/lib/emailHealth';
 import { jobQueueHealth, retentionHealth } from '@/lib/jobs/health';
+import { leaseSnapshot, replicaName } from '@/lib/jobs/lease';
 import { rateLimitStoreHealth } from '@/lib/rateLimit';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { verifySmtpConnection } from '@/services/emailService';
@@ -80,6 +81,20 @@ async function resolveAccess(request: Request, needsProof: boolean): Promise<Hea
   return { detail: !expected, verified: false };
 }
 
+/**
+ * The lease table as it stands: name, holder, whether THIS replica is the
+ * holder, and whether the lease is still live. Never a reason to fail the
+ * health check — an environment that has never run two replicas has no rows at
+ * all, and a database that cannot answer is already reported by `?db=1`.
+ */
+async function readLeases() {
+  try {
+    return await leaseSnapshot();
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: Request) {
   const started = Date.now();
   const params = new URL(request.url).searchParams;
@@ -97,7 +112,16 @@ export async function GET(request: Request) {
   // counters rather than the fail-open detail path: "the limiter is degraded"
   // is exactly the hint an attacker wants before a credential-stuffing run.
   const wantsLimits = params.get('limits') === '1';
-  const access = await resolveAccess(request, wantsJobs || wantsLimits);
+  // Who holds each single-owner lease right now (#1701). Two replicas serve
+  // every environment, and "which one is running the scheduler / the mail
+  // bridge?" has to be answerable from outside the box — this is what the
+  // multi-replica drill in docs/disaster-recovery.md reads, and what #1607's
+  // operations console will read. It is TWO indexed primary-key lookups, so it
+  // sits behind the same opt-in + proof of identity as the queue counters
+  // rather than on the fail-open detail path: an anonymous probe still issues
+  // no query at all and stays inside its k6 latency budget.
+  const wantsLeases = params.get('leases') === '1';
+  const access = await resolveAccess(request, wantsJobs || wantsLimits || wantsLeases);
 
   let db: 'ok' | 'error' | 'skipped' = 'skipped';
   if (wantsDb) {
@@ -160,6 +184,15 @@ export async function GET(request: Request) {
         : {}),
       // Opt-in with ?limits=1, and only for a verified caller — see above.
       ...(wantsLimits && access.verified ? { rateLimitStore: rateLimitStoreHealth() } : {}),
+      // WHICH replica answered. Costs nothing (one env read) and it is the
+      // first thing you need when two containers are behind one proxy: without
+      // it, two consecutive requests that disagree are indistinguishable from
+      // one flapping container. It rides the existing detail gate — the name is
+      // a container name, never a hostname an attacker could reach directly.
+      replica: replicaName(),
+      // Opt-in with ?leases=1 + proof of identity. Read from the JobLease rows
+      // themselves, so there is no parallel record to drift.
+      ...(wantsLeases && access.verified ? { leases: await readLeases() } : {}),
       uptimeMs: Math.round(process.uptime() * 1000),
       responseMs: Date.now() - started,
       timestamp: new Date().toISOString(),

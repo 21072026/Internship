@@ -67,6 +67,14 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'scan cap / truncated-result reporting (#1820)' },
   ],
   [
+    'src/lib/jobs/lease.ts',
+    {
+      floor: 90,
+      measured: 94.44,
+      why: 'one owner for the scheduler and the IMAP bridge across replicas (#1701)',
+    },
+  ],
+  [
     'src/lib/rateLimitRedis.ts',
     { floor: 85, measured: 86.67, why: 'shared-store transport and its outage fallback (#1696)' },
   ],
