@@ -605,6 +605,10 @@ const en = {
     loadFailed: 'Failed to load data',
     assignSubmit: 'Assign',
     assignFailed: 'The mentorship could not be created.',
+    planLimitReached:
+      'Plan limit reached: {usage}/{limit} active mentorships on the {plan} plan. Existing mentees are unaffected — upgrade to add more.',
+    requestAlreadyDecided: 'This request has already been decided.',
+    invalidMentor: 'That mentor cannot be assigned.',
   },
   companiesPage: {
     title: 'Companies',
@@ -5377,6 +5381,10 @@ const tr: Dict = {
     loadFailed: 'Veriler yüklenemedi',
     assignSubmit: 'Ata',
     assignFailed: 'Mentorluk oluşturulamadı.',
+    planLimitReached:
+      'Plan sınırına ulaşıldı: {plan} planında {usage}/{limit} aktif mentorluk. Mevcut mentee’ler etkilenmez — daha fazlası için planı yükseltin.',
+    requestAlreadyDecided: 'Bu talep zaten karara bağlandı.',
+    invalidMentor: 'Bu mentor atanamaz.',
   },
   companiesPage: {
     title: 'Şirketler',
@@ -10072,6 +10080,10 @@ const de: Dict = {
     loadFailed: 'Daten konnten nicht geladen werden',
     assignSubmit: 'Zuweisen',
     assignFailed: 'Die Mentorschaft konnte nicht erstellt werden.',
+    planLimitReached:
+      'Plangrenze erreicht: {usage}/{limit} aktive Mentorschaften im {plan}-Plan. Bestehende Mentees sind nicht betroffen — für mehr bitte upgraden.',
+    requestAlreadyDecided: 'Diese Anfrage wurde bereits entschieden.',
+    invalidMentor: 'Dieser Mentor kann nicht zugewiesen werden.',
   },
   companiesPage: {
     title: 'Unternehmen',

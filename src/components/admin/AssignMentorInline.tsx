@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
+import { mentorshipAssignmentError } from '@/lib/mentorshipAssignmentError';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { MATCH_DISMISS_REASONS, type MatchDismissReason } from '@/lib/matchFeedback';
@@ -166,8 +167,9 @@ export function AssignMentorInline({
       const d = await res.json().catch(() => ({}));
       // Keyed on the body's `code`, not the status (#419): a second 409 reason
       // on this route would otherwise render as "already has an active mentor",
-      // which would be a lie.
-      setErr(d.code === 'already_mentored' ? a.alreadyAssigned : t.common.error);
+      // which would be a lie. The plan gate's 403 gets its own sentence rather
+      // than the generic error line (#2283 follow-up).
+      setErr(mentorshipAssignmentError(t, d, t.common.error));
     } catch {
       setErr(t.common.error);
     } finally {

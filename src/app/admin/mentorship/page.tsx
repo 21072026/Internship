@@ -1,5 +1,6 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
+import { mentorshipAssignmentError } from "@/lib/mentorshipAssignmentError";
 import Link from "next/link";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -153,11 +154,11 @@ export default function MentorshipPage() {
         // Switch on the body's `code`, never on the status: 409 is
         // already_mentored (#419) today but the route also answers 403 for the
         // plan gate, and a future 409 may mean something else. The server's
-        // `error` string is English literal text and is never rendered.
+        // `error` string is English literal text and is never rendered — the
+        // shared resolver translates every code this route can answer,
+        // including the plan gate's quota sentence (#2283 follow-up).
         const body = await res.json().catch(() => ({}));
-        setFormError(
-          body.code === 'already_mentored' ? t.assignMentor.alreadyAssigned : t.mentorships.assignFailed
-        );
+        setFormError(mentorshipAssignmentError(t, body, t.mentorships.assignFailed));
         return;
       }
       await fetchRelations();

@@ -80,7 +80,9 @@ export async function decideMentorshipRequest(opts: {
       },
     });
     if (!mentor || !mentor.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
-      return { status: 400, body: { error: 'Invalid mentor' } };
+      // Carries a code so the queue UI can name the reason; without one it
+      // rendered as the generic error line (#2283 follow-up).
+      return { status: 400, body: { error: 'Invalid mentor', code: 'invalid_mentor' } };
     }
     // One mentee, at most one ACTIVE mentor (#419). Cheap pre-flight; the real
     // guard runs inside the transaction below. Both refusals now share one body
