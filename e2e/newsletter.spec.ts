@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { canonicalNewsletterContent, normalizeNewsletterContent } from '../src/lib/newsletter';
+import { newNewsletterBrandCache, renderNewsletterFor } from '../src/lib/newsletterDispatch';
 
 /**
  * The newsletter module (#1469).
@@ -165,4 +167,101 @@ test('the unsubscribe page works with no session and refuses a forged token', as
   // No token at all is an explanation, not a broken button.
   await gotoSettled(page, '/newsletter/unsubscribe');
   await expect(page.getByTestId('newsletter-unsub')).toHaveCount(0);
+});
+
+test("one issue brands every copy with that recipient's own tenant", async ({ page }) => {
+  // The bug this pins (#1667): the newsletter resolved branding once, with a
+  // hard-coded `null`, so a tenant that had set a name, logo and accent still
+  // received the product default — and had the call merely been hoisted out of
+  // the send loop instead, everybody would have received whichever tenant
+  // happened to be first. Two branded orgs in one render pass is the only shape
+  // that catches both mistakes.
+  const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const alpha = await prisma.organization.create({
+    data: {
+      slug: `nl-brand-alpha-${suffix}`,
+      name: 'NL Alpha Org',
+      brandName: 'Alpha Careers',
+      brandColor: '#a1050b',
+      brandLogoUrl: 'https://alpha.example.com/logo.png',
+    },
+  });
+  const beta = await prisma.organization.create({
+    data: { slug: `nl-brand-beta-${suffix}`, name: 'NL Beta Org', brandName: 'Beta Talent', brandColor: '#0b7a05' },
+  });
+  const adminEmail = uniqueEmail('nl-brand-admin');
+  const admin = await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Brand Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: alpha.id } });
+
+  try {
+    const variants = normalizeNewsletterContent({
+      en: {
+        subject: 'Branded issue',
+        intro: 'One issue, rendered for three different readers.',
+        tips: [{ emoji: '🎯', title: 'Read the whole ad', body: 'Twice.' }],
+      },
+    });
+    const canonical = canonicalNewsletterContent(variants);
+    expect(canonical).not.toBeNull();
+
+    // One cache for the whole fan-out, exactly as dispatchNewsletter builds it.
+    const brandCache = newNewsletterBrandCache();
+    const render = (orgId: string | null) =>
+      renderNewsletterFor({
+        variants,
+        canonical: canonical!,
+        audience: 'MENTEE',
+        role: 'MENTEE',
+        preferredLanguage: 'en',
+        userId: null,
+        orgId,
+        brandCache,
+      });
+
+    const forAlpha = await render(alpha.id);
+    const forBeta = await render(beta.id);
+    const forNoOrg = await render(null);
+
+    // Each copy carries its own tenant's name, logo and accent…
+    expect(forAlpha.html).toContain('Alpha Careers');
+    expect(forAlpha.html).toContain('https://alpha.example.com/logo.png');
+    expect(forAlpha.html).toContain('#a1050b');
+    expect(forBeta.html).toContain('Beta Talent');
+    expect(forBeta.html).toContain('#0b7a05');
+
+    // …and nothing of the other tenant's, which is the leak worth asserting.
+    expect(forAlpha.html).not.toContain('Beta Talent');
+    expect(forAlpha.html).not.toContain('#0b7a05');
+    expect(forBeta.html).not.toContain('Alpha Careers');
+    expect(forBeta.html).not.toContain('alpha.example.com');
+
+    // A reader with no org still gets the unchanged product default: the
+    // wordmark and the product blue `accentOf()` falls back to.
+    expect(forNoOrg.html).toContain('Internship CRM');
+    expect(forNoOrg.html).toContain('#2563eb');
+    expect(forNoOrg.html).not.toContain('Alpha Careers');
+
+    // The memo is keyed by org, not by recipient: three brands, three lookups,
+    // and a second reader in Alpha's org adds none.
+    expect(brandCache.size).toBe(3);
+    const alphaAgain = await render(alpha.id);
+    expect(brandCache.size).toBe(3);
+    expect(alphaAgain.html).toBe(forAlpha.html);
+
+    // The composer preview goes through the same renderer, so an admin
+    // proofreading an issue sees the brand their own members will receive
+    // rather than the product default.
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
+    await gotoSettled(page, '/admin/newsletters');
+    const preview = await page.request.post('/api/admin/newsletters/preview', {
+      data: { content: { en: { subject: 'Branded issue', intro: 'Preview me.', tips: [{ emoji: '🎯', title: 'A tip', body: 'Short.' }] } }, audience: 'MENTEE', asRole: 'MENTEE', locale: 'en' },
+    });
+    expect(preview.ok()).toBe(true);
+    const body = await preview.json();
+    expect(body.html).toContain('Alpha Careers');
+    expect(body.html).toContain('#a1050b');
+  } finally {
+    await cleanupByEmail(adminEmail);
+    await prisma.organization.deleteMany({ where: { id: { in: [alpha.id, beta.id] } } });
+  }
 });

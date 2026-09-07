@@ -66,36 +66,47 @@ enum PipelineStatus {
 // enforces isolation yet, so behaviour is unchanged. Enforcement (query
 // filtering, per-org uniqueness) lands in a later, guarded slice.
 model Organization {
-  id             String   @id @default(cuid())
-  name           String
-  slug           String   @unique
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
   // Per-tenant plan tier (#547). Limits per plan live in src/lib/orgPlans.ts
   // (client-safe catalogue), not the DB. New tenants start on FREE; the
   // backfilled legacy "default" org is grandfathered to ENTERPRISE (unlimited)
   // so single-tenant production is never constrained. Limits are advisory in
   // this phase (surfaced as usage-vs-limit), not hard-enforced.
-  plan           OrgPlan  @default(FREE)
+  plan             OrgPlan  @default(FREE)
   // White-label branding (#546). All optional — when null the app falls back to
   // its own defaults (see src/lib/branding.ts). These are stored per tenant and
   // resolved once per-tenant chrome application lands (needs tenant resolution,
   // the #543 enforcement slice); until then they are managed but not applied to
   // the live single-tenant UI.
-  brandName      String?
-  brandLogoUrl   String?  @db.Text
-  brandColor     String?
-  supportEmail   String?
+  brandName        String?
+  brandLogoUrl     String?  @db.Text
+  brandColor       String?
+  supportEmail     String?
   // Enterprise SSO config (#545). All optional; nothing is active until
   // ssoEnabled is true AND a valid config is present (see src/lib/sso.ts).
   // Actual assertion handling requires the tenant's IdP metadata and a SAML
   // library — see docs/sso-saml.md; this stores/validates the config and gates
   // the (documented, not-yet-wired) auth code path.
-  ssoEnabled     Boolean  @default(false)
-  ssoProvider    String? // 'saml' | 'oidc'
-  ssoIssuer      String? // IdP entity ID / issuer
-  ssoEntryPoint  String?  @db.Text // IdP SSO sign-in URL
-  ssoCertificate String?  @db.Text // IdP x509 signing certificate (PEM)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  ssoEnabled       Boolean  @default(false)
+  ssoProvider      String? // 'saml' | 'oidc'
+  ssoIssuer        String? // IdP entity ID / issuer
+  ssoEntryPoint    String?  @db.Text // IdP SSO sign-in URL
+  ssoCertificate   String?  @db.Text // IdP x509 signing certificate (PEM)
+  // Billing identity (#1731, epic #1727). All optional and additive: the
+  // Organization is the ONE billing subject (a Company is a role inside it),
+  // and this is where the invoice is addressed. Nothing here talks to Stripe
+  // yet — `stripeCustomerId` is the column the later checkout task fills, kept
+  // unique so one customer can never be attached to two tenants.
+  stripeCustomerId String?  @unique
+  billingEmail     String?
+  vatId            String?
+  // ISO-3166 alpha-2 ("DE", "TR"). Decides VAT treatment, so it is stored,
+  // never inferred from an IP or a locale.
+  billingCountry   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   users                User[]
   sources              Source[]
@@ -118,6 +129,10 @@ model Organization {
   apiKeys              ApiKey[]
   matchFeedback        MatchFeedback[]
   settings             Setting[]
+  programCosts         ProgramCost[]
+  placements           Placement[]
+  subscription         Subscription?
+  orgEntitlements      OrgEntitlement[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -430,6 +445,8 @@ model User {
   suggestedAsMentor                 MatchFeedback[]               @relation("MatchFeedbackMentor")
   matchFeedbackActions              MatchFeedback[]               @relation("MatchFeedbackActor")
   guidanceStates                    UserGuidanceState[]
+  createdProgramCosts               ProgramCost[]                 @relation("ProgramCostCreatedBy")
+  placements                        Placement[]                   @relation("PlacementMentee")
 
   @@index([role])
   @@index([referredById])
@@ -1196,6 +1213,7 @@ model Company {
   offers            Offer[]
   requisitions      Requisition[]
   interviewRequests InterviewRequest[]
+  placements        Placement[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -1852,7 +1870,8 @@ model Cohort {
   term      String?
   createdAt DateTime      @default(now())
 
-  relations MentorshipRelation[]
+  relations    MentorshipRelation[]
+  programCosts ProgramCost[]
 }
 
 model CompanyNeed {
@@ -1924,6 +1943,7 @@ model MentorshipRelation {
   offers                Offer[]
   weeklyReports         WeeklyReport[]
   weeklyReportReminders WeeklyReportReminder[]
+  placement             Placement?
 
   @@index([status])
   @@index([pipelineStatus])
@@ -3074,4 +3094,255 @@ model Job {
   /// claim query `status=PENDING AND runAt<=now`, which is the hottest one this
   /// table will ever serve.
   @@index([orgId, status, runAt])
+}
+
+// ── Programme economics ──────────────────────────────────────────────────────
+//
+// "What did this programme return?" was unanswerable at the data layer: 88
+// models and not one cost, fee or value column (#1892). These two models are
+// the smallest honest economics record that can produce an ROI number — costs
+// on one side, placement value on the other. The arithmetic itself lives in
+// src/lib/roi.ts, which never imports Prisma.
+//
+// MONEY IS ALWAYS AN INTEGER IN MINOR UNITS plus an ISO 4217 code. No Float,
+// no Decimal-as-string. A `Float` column would make every sum in the ROI report
+// depend on binary rounding, and a report whose total changes with the order of
+// its rows is worse than no report. The `Minor` suffix on every money column is
+// deliberate and load-bearing: it says "4500 is €45.00, not €4500". Minor units
+// rather than "cents" because zero-decimal currencies (JPY, KRW) have no cents
+// — how many minor units make a major one follows from the currency code, and
+// only the presentation layer needs to know.
+
+// One line of programme spend, in one currency, over one period.
+//
+// ADDITIVE BY CONSTRUCTION: an ROI window's cost side is the SUM of the rows
+// whose period overlaps it. There is no "total" column to keep in step, no
+// recomputation on write, and correcting a figure is editing or deleting one
+// row. That is also why the period is two dates rather than a month key — a
+// platform subscription billed annually and a mentor's time logged for one week
+// are the same shape here.
+model ProgramCost {
+  id    String       @id @default(cuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // The programme this spend belongs to. `Cohort` IS the programme today;
+  // #1622 promotes it to `Program` and this column moves with it under the new
+  // name. NULL means an org-wide cost that no single cohort owns (the platform
+  // subscription, the coordinator's salary) — those still count against every
+  // programme's ROI, which is why the column is nullable rather than required.
+  cohortId String?
+  cohort   Cohort? @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+
+  // PLATFORM | STAFF | MENTOR_TIME | EVENT | OTHER. Free String, not an enum:
+  // the same reasoning as PipelineStage (#747) — a tenant's chart of accounts
+  // is theirs, and an enum makes adding a category a schema change. The known
+  // keys and their labels live in src/lib/roi.ts + the `roi` i18n block.
+  category String @db.VarChar(40)
+  label    String @db.VarChar(200)
+
+  // Minor units. A refund or a correction is a NEGATIVE amount rather than a
+  // deleted row, so the ledger keeps its history; the ROI sum is additive
+  // either way.
+  amountMinor Int
+  currency    String @db.VarChar(3)
+
+  // Inclusive period the spend covers. `@db.Date` (not DateTime) on purpose: a
+  // cost belongs to a day, not to an instant, so it must not shift by a
+  // timezone offset when it is read back on another continent.
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  note String? @db.Text
+
+  createdById String?
+  createdBy   User?   @relation("ProgramCostCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Tenant-leading, like every other TENANT_MODELS entry. The report's only
+  // query is "this org's costs overlapping this window", in that order.
+  @@index([orgId, periodStart])
+  @@index([orgId, category])
+  @@index([cohortId])
+}
+
+// The value side: one placement, and what it was worth.
+//
+// SCOPE NOTE (#1892 / #1765). #1765 owns this record — the stamping from
+// src/lib/stageChange.ts, the reversal rule, the invoice states and the
+// /admin/placements ledger are all its work and are deliberately NOT here.
+// This PR creates the table early because the ROI model has nowhere to attach
+// value otherwise, and #1892 says so explicitly: add the value fields in the PR
+// that creates `Placement`, do not stand up a parallel model. #1765 extends
+// these columns (attribution, feeModel, invoiceState, invoiceRef, reversedAt,
+// creditedMentorId, sourceId) — all additive, none of them a rename.
+//
+// The fee columns are named `feeMinor` / `feeCurrency` rather than #1765's
+// sketched `feeAmountCents`, so every money column in the tree reads the same
+// way and none of them claims that every currency has cents.
+model Placement {
+  id    String       @id @default(cuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // One placement per relation. A re-hire after a re-match is a new relation,
+  // so it is a new placement — which is also what keeps `placementCount` from
+  // counting the same hire twice.
+  relationId String             @unique
+  relation   MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  menteeId String
+  mentee   User   @relation("PlacementMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  // Plain id, not a FK — the same reasoning as Offer.requisitionId: the
+  // accounting record must stay readable even if the offer it came from is
+  // edited away.
+  offerId String?
+
+  placedAt DateTime
+
+  // What the placement was worth, to whoever the report is for. NULL means
+  // "not recorded" and is NOT the same as zero: the ROI model falls back to the
+  // documented assumption set for a null and reports how many placements it had
+  // to assume for, so an estimate can never be mistaken for a measurement.
+  valueMinor    Int?
+  valueCurrency String? @db.VarChar(3)
+
+  // OFFER_COMP | MANUAL | ORG_DEFAULT — where the number above came from, so
+  // the screen can say. OFFER_COMP defaulting waits on #1851 (structured
+  // compensation on Offer); the only source Offer carries today is a free-text
+  // note, and parsing money out of prose is exactly the guess this model
+  // refuses to make.
+  valueSource String? @db.VarChar(20)
+
+  // The success fee the programme charges for this placement, when it bills
+  // that way. Kept separate from `valueMinor` and never folded into it: the two
+  // accrue to different parties, and adding them double-counts one hire.
+  feeMinor    Int?
+  feeCurrency String? @db.VarChar(3)
+
+  note String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, placedAt])
+  @@index([companyId])
+  @@index([menteeId])
+}
+
+// ── Commercial spine (#1731, epic #1727) ─────────────────────────────────────
+//
+// What a tenant is paying for. Until now the whole commercial state of an
+// Organization was one enum column (`plan OrgPlan`), which cannot express a
+// customer id, a billing period, a trial, an interval or a single feature
+// granted outside the plan — so every non-standard deal had to be modelled as
+// "put them on ENTERPRISE and hope".
+//
+// `Organization.plan` and `src/lib/orgPlans.ts` are deliberately LEFT IN PLACE
+// and still authoritative for the four planGate call sites. This slice lands
+// the storage and the plan→feature matrix (`src/lib/plans.ts`) without changing
+// any behaviour; migrating the gates onto it is a later task in the epic.
+//
+// `planKey`, `status` and `interval` are Strings, not enums, for the same
+// reason `MentorshipRelation.pipelineStatus` is (#747): this repo deploys with
+// `prisma db push --accept-data-loss`, which resolves a MySQL ENUM change as
+// DROP + CREATE. Packaging changes more often than the schema should, and a
+// per-PR topic environment pushes against its own fresh database — so the
+// destructive diff would look perfectly healthy on the PR and only bite
+// production. The legal values live in src/lib/plans.ts.
+model Subscription {
+  id String @id @default(cuid())
+
+  // One live subscription per tenant, hence @unique. A superseded subscription
+  // is not kept here as a second row: history belongs in the billing provider
+  // (and later in an event log), not in the row the app reads on every request.
+  orgId String @unique
+
+  // A key from PLANS in src/lib/plans.ts ('community' | 'program' | …), stored
+  // as text so repackaging needs no migration. An unknown value resolves to the
+  // free tier rather than to unlimited access (see resolveEntitlements()).
+  planKey String @default("community")
+
+  // TRIALING | ACTIVE | PAST_DUE | CANCELED | INCOMPLETE — see
+  // SUBSCRIPTION_STATUSES in src/lib/plans.ts, which also decides which of them
+  // still carry the plan's features.
+  status String @default("ACTIVE")
+
+  // MONTHLY | YEARLY. Decides which published price applies; it is not a
+  // discount of its own (the annual saving is baked into the yearly price).
+  interval String @default("MONTHLY")
+
+  // The period the tenant has paid for. Nullable because a free/community
+  // subscription has no period at all, and because the authority for these
+  // dates is the billing provider, which is not wired up yet.
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  trialEndsAt        DateTime?
+
+  // Set when the customer has cancelled but keeps access to the end of the
+  // period. Access is decided by `status`, never by this flag alone.
+  cancelAtPeriodEnd Boolean @default(false)
+
+  // The published 50% education/non-profit discount. It lives on the
+  // subscription because it is a property of the DEAL: re-deriving it per
+  // screen from a domain, a country or an org name would make two screens
+  // disagree about what the customer pays.
+  educationDiscount Boolean @default(false)
+
+  // Filled by the later Stripe task; unique so one provider subscription can
+  // never be linked to two tenants.
+  stripeSubscriptionId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+// A feature granted to a tenant OUTSIDE its plan: a pilot, a goodwill unlock,
+// a paid add-on (the AI pack), a contractual exception. Row presence = feature
+// on, mirroring the CompanyEntitlement convention (#517) so nothing new has to
+// be learned — but keyed on the ORG, because white-label, SSO and the AI pack
+// belong to the customer running the programme, not to a company in its talent
+// pool.
+//
+// A grant only ever ADDS to what the plan already includes; there is no
+// negative grant. Revoking is deleting the row, and taking away something the
+// plan sells is a plan change.
+model OrgEntitlement {
+  id    String @id @default(cuid())
+  orgId String
+
+  // A key from PREMIUM_FEATURES (src/lib/entitlementsCatalog.ts), stored as
+  // text so adding a feature needs no migration.
+  feature String
+
+  // Who granted it. Deliberately NOT a foreign key (same as Tag.createdById):
+  // the audit trail of a commercial exception must outlive the admin account
+  // that created it.
+  grantedById String?
+
+  // Why it was granted — the sentence a future admin needs in order to decide
+  // whether the exception is still justified.
+  note String? @db.Text
+
+  // Optional end date for a time-boxed grant. Enforced by the resolver in
+  // src/lib/subscription.ts, which drops expired rows before handing the set
+  // to the pure matrix; nothing deletes them, so the history stays readable.
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, feature])
+  @@index([orgId])
 }

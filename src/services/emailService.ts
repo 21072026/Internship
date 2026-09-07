@@ -2213,6 +2213,17 @@ export async function sendDormantCheckIns(now = new Date()) {
 
   let sent = 0;
   let checked = 0;
+  // The cap is per PERSON, not per relation. It is spent on the RELATION
+  // (dormantNudgeCount), so a mentee holding two ACTIVE mentorships would get
+  // FOUR "still interested?" mails out of two independent two-nudge budgets —
+  // and the second one already told them we would not write again, which
+  // docs/dormant-first-contacts.md declares non-negotiable on sender-reputation
+  // grounds. Two ACTIVE relations for one mentee is the bug being closed in
+  // #419; the guards there stop NEW violations and touch no existing rows, so
+  // until the data is clean this is what keeps the promise. One tick only —
+  // relations dormant on different days still nudge on different days. The real
+  // fix is the invariant, not this set.
+  const nudgedMentees = new Set<string>();
   for (const relation of relations) {
     if (sent >= DORMANT_NUDGE_MAX_PER_RUN) break;
     checked += 1;
@@ -2235,6 +2246,8 @@ export async function sendDormantCheckIns(now = new Date()) {
       continue;
     }
 
+    if (nudgedMentees.has(relation.mentee.id)) continue;
+
     // Claim before sending, guarded on the count we read: two overlapping ticks
     // (or a retried container) can then never write the same person twice. A
     // mid-send failure loses one nudge, which is the far better failure than
@@ -2244,6 +2257,7 @@ export async function sendDormantCheckIns(now = new Date()) {
       data: { dormantNudgeCount: count + 1, dormantNudgeSentAt: now },
     });
     if (claimed.count === 0) continue;
+    nudgedMentees.add(relation.mentee.id);
 
     const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
       ? (relation.mentee.preferredLanguage as Locale)

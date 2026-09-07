@@ -189,7 +189,11 @@ export default async function HomePage() {
             {L.heroTitle} <span className="text-blue-600">{L.heroAccent}</span>
           </h1>
           <p className="text-lg sm:text-xl text-gray-600 mb-6 max-w-2xl mx-auto">{L.heroSubtitle}</p>
-          <p className="text-base text-gray-700 font-medium max-w-2xl mx-auto">{L.heroModel}</p>
+          {/* `heroModel` used to sit right here, where the one sentence that
+              answers "what does this cost me" was a grey paragraph among five.
+              It is now the headline of its own band further down the page
+              (#1732); the badge above still carries the short form, so the hero
+              has not lost the promise. */}
           <p className="mt-4 text-sm text-gray-500">
             {L.becomeMentor}{' '}
             <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="become-mentor-link">
@@ -363,6 +367,38 @@ export default async function HomePage() {
             </Link>
           </div>
           <p className="mt-3 text-center text-xs text-gray-500 max-w-xl mx-auto">{L.audCompanyCtaNote}</p>
+        </div>
+      </section>
+
+      {/* Free core (#1732) — the price answer, placed right after the three
+          audience sections have made their case and before "how it works".
+          `heroModel` is the headline verbatim: it is existing shipped copy (it
+          used to be a hero sub-line), so promoting it here changes where the
+          promise is read, not what it claims. The band's only CTA is /pricing.
+
+          Dark mode: `bg-green-50` is retinted by globals.css and the
+          `text-green-*` descendants are already covered by the green compound
+          override there, so this needs no new rule. Deliberately no
+          `bg-green-100` chip inside — that one stays light in dark mode while
+          the override would still lighten its text to green-300. */}
+      <section
+        className="py-14 px-4 bg-green-50 border-y border-green-200"
+        data-testid="landing-free-core"
+      >
+        <div className="max-w-3xl mx-auto text-center">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-green-700">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            {L.freeCoreBadge}
+          </p>
+          <h2 className="mt-4 text-2xl sm:text-3xl font-bold text-gray-900 leading-snug">{L.heroModel}</h2>
+          <p className="mt-4 text-base text-gray-600 leading-relaxed">{L.freeCoreBody}</p>
+          <Link
+            href="/pricing"
+            data-testid="free-core-pricing-cta"
+            className="mt-8 inline-flex items-center justify-center gap-2 bg-green-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-green-700 transition-colors"
+          >
+            {L.freeCoreCta} <ArrowRight className="h-5 w-5" />
+          </Link>
         </div>
       </section>
 

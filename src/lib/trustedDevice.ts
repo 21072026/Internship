@@ -24,6 +24,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { clientIp, type HeaderSource } from '@/lib/clientIp';
 import { REMEMBER_COOKIES } from '@/lib/rememberCookie';
+import { deviceLabel } from '@/lib/deviceLabel';
 
 /** Idle lifetime: an untouched remembered device is forgotten after 30 days. */
 export const REMEMBER_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -45,6 +46,11 @@ const MAX_DEVICES_PER_USER = 10;
 
 const UA_MAX = 512;
 
+// Re-exported so every existing `@/lib/trustedDevice` caller keeps its import;
+// the table itself now lives in a pure module shared with the push device list
+// (#1716), because both /account lists must name a device the same way.
+export { deviceLabel };
+
 /** The remember-me cookie on the current request, whichever spelling it uses. */
 export async function readRememberToken(): Promise<string | null> {
   const store = await cookies();
@@ -63,34 +69,6 @@ function newToken(): string {
   // 32 bytes of CSPRNG output — the whole security of the cookie rests here,
   // so it is never derived from anything user-controlled or guessable.
   return randomBytes(32).toString('base64url');
-}
-
-/**
- * "Chrome on Windows" from a user-agent string — enough for someone to
- * recognise their own devices in the account page, and nothing more. A
- * deliberately small table rather than a UA-parsing dependency: a wrong guess
- * costs a slightly odd label, never access.
- */
-export function deviceLabel(userAgent?: string | null): string | null {
-  const ua = (userAgent || '').slice(0, UA_MAX);
-  if (!ua) return null;
-  const browser =
-    /Edg\//.test(ua) ? 'Edge'
-    : /OPR\/|Opera/.test(ua) ? 'Opera'
-    : /SamsungBrowser/.test(ua) ? 'Samsung Internet'
-    : /Firefox\//.test(ua) ? 'Firefox'
-    : /Chrome\//.test(ua) ? 'Chrome'
-    : /Safari\//.test(ua) ? 'Safari'
-    : null;
-  const os =
-    /iPhone|iPad|iPod/.test(ua) ? 'iOS'
-    : /Android/.test(ua) ? 'Android'
-    : /Mac OS X|Macintosh/.test(ua) ? 'macOS'
-    : /Windows/.test(ua) ? 'Windows'
-    : /Linux/.test(ua) ? 'Linux'
-    : null;
-  if (browser && os) return `${browser} on ${os}`;
-  return browser || os;
 }
 
 export interface IssuedDevice {

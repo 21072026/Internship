@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import webpush from 'web-push';
 
 /**
  * E2E config.
@@ -86,6 +87,18 @@ export const E2E_ALERT_EMAIL_TO = 'ops-alert@e2e.local';
 // Shared with e2e/meeting-end.spec.ts. Unset, /api/webhooks/jaas answers 404
 // to everything and the live-room assertions would be vacuous.
 export const E2E_JAAS_WEBHOOK_SECRET = 'e2e-jaas-webhook-secret';
+// Shared with e2e/push-devices.spec.ts (#1716). `pushConfigured()` is false
+// without VAPID keys, and with it false the /account push device list hides
+// itself — the section is deliberately not shown on a deployment that can never
+// fill it — so the spec would assert against nothing.
+//
+// GENERATED per run rather than hard-coded: this is a real P-256 private key
+// (web-push refuses anything else at `setVapidDetails` time, so a placeholder
+// string would leave push "unconfigured" again), and a private key belongs in
+// no repository, throwaway or not. Nothing is ever delivered with it — no spec
+// creates a real browser subscription, so no `webpush.sendNotification` call
+// leaves the machine.
+const e2eVapid = webpush.generateVAPIDKeys();
 // Shared with e2e/google-calendar.spec.ts (#709). The Google OAuth token
 // exchange and the Calendar write cannot be driven against real Google without
 // a Cloud project and a human at a consent screen — which is why that slice sat
@@ -222,6 +235,11 @@ export default defineConfig({
           // routes are a 404 on preview and production.
           E2E_ERROR_ROUTES: '1',
           JAAS_WEBHOOK_SECRET: E2E_JAAS_WEBHOOK_SECRET,
+          // Web Push (#1464/#1716): makes `pushConfigured()` true so the account
+          // page renders its push device list. Keys are generated above, per run.
+          VAPID_PUBLIC_KEY: e2eVapid.publicKey,
+          VAPID_PRIVATE_KEY: e2eVapid.privateKey,
+          VAPID_SUBJECT: 'mailto:e2e@e2e.local',
           // Google Calendar (#709): credentials that only mean anything to the
           // local stub above, plus the master switch the integration is gated
           // on. Production ships with GOOGLE_CALENDAR_ENABLED unset.
