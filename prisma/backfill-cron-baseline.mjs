@@ -35,7 +35,9 @@ const prisma = new PrismaClient();
 const BASELINE_KEY = 'cronBaselineAt';
 
 async function main() {
-  const existing = await prisma.setting.findUnique({ where: { key: BASELINE_KEY } });
+  // The GLOBAL layer (orgId = NULL) — this baseline is platform-wide, not one
+  // tenant's setting (#1553).
+  const existing = await prisma.setting.findFirst({ where: { orgId: null, key: BASELINE_KEY } });
   if (existing) {
     console.log(`backfill-cron-baseline: already applied at ${existing.value} — skipping.`);
     return;
@@ -59,7 +61,7 @@ async function main() {
     data: { deadlineReminderSentAt: now },
   });
 
-  await prisma.setting.create({ data: { key: BASELINE_KEY, value: now.toISOString() } });
+  await prisma.setting.create({ data: { orgId: null, key: BASELINE_KEY, value: now.toISOString() } });
 
   console.log(
     `backfill-cron-baseline: baselined ${digested.count} undigested message(s) and ` +

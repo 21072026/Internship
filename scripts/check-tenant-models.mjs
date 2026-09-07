@@ -34,14 +34,12 @@ const ORG_CONTEXT_FILE = 'src/lib/orgContext.ts';
 // entry needs a written reason, so that an intentional omission is a
 // code-review conversation and is distinguishable from a forgotten one.
 //
-// An exemption is only granted against a schema someone has actually read.
-// `Setting` is deliberately NOT listed here even though it is coming: it has no
-// `orgId` column today (#1551 adds one, and #1557 records that its legacy rows
-// will stay NULL as the global fallback layer), while #1560 says it "must be
-// registered but behaves specially". Pre-granting the exemption would keep this
-// guard green on the day the column lands and the register-vs-exempt decision
-// would never get made. Better that it fails then, loudly, against the real
-// schema.
+// An exemption is only granted against a schema someone has actually read. That
+// is what happened with `Setting`: #1553 gave it an `orgId`, this guard failed
+// against the real shape, and the call was made — it is REGISTERED, not exempt.
+// Its readers/writers (src/lib/settings.ts) clear the tenant context for their
+// own queries so the global (orgId = NULL) fallback row stays reachable; the
+// registration is what keeps every *other* `prisma.setting` caller scoped.
 //
 // `Organization` is different: it is the tenant itself and can never grow an
 // `orgId`, so the entry is permanent documentation rather than a standing

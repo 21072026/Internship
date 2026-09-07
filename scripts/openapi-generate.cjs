@@ -631,7 +631,11 @@ function classifyAuth(text, ctx = {}) {
   }
   if (denied.length && hasSession) notes.push(`Rejects these roles outright: ${denied.join(', ')}.`);
 
-  if (/authenticateApiKey\s*\(/.test(text)) classes.push('api-key');
+  // `withApiKey(` is the /api/v1 door (#1546): it authenticates the key, checks
+  // its scope and binds its organisation, so a route that calls it never calls
+  // `authenticateApiKey` itself. Missing it here would classify the public API
+  // as needing no credential at all.
+  if (/\b(?:authenticateApiKey|withApiKey)\s*\(/.test(text)) classes.push('api-key');
 
   // Shared secret in a request header, compared in constant time.
   //

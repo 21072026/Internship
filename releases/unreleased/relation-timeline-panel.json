@@ -1,0 +1,21 @@
+{
+  "bump": "minor",
+  "changelog": "- **One chronological timeline per mentorship pairing** (#1702). A new `RelationTimeline` panel on the admin candidate detail page and the mentor's mentee detail screen merges stage moves, interactions, meetings, goals, weekly reports, offers and mentor-private notes into a single newest-first list, each row typed by kind with its own icon and a localized label (EN/TR/DE). The merge happens once on the server in `src/lib/relationTimeline.ts`, behind `GET /api/mentorship/[id]/timeline` — not as four client fetches the component interleaves — so the ordering, the cursor and the per-viewer redaction are all one decision. Each source is queried on the column that says when the thing *happened* rather than when the row was written (`Meeting.scheduledAt` before `createdAt`, `Goal.completedAt` before `createdAt`, `Offer.decidedAt ?? sentAt ?? createdAt`); because Prisma cannot ORDER BY a coalesce, each of those pairs is split into disjoint queries, which also guarantees one row never emits two entries and keeps the (date, id) cursor a total order. Visibility follows what each role can already reach elsewhere: a mentee's list drops `RelationNote` entirely, drops DRAFT offers and drops the drop-off reason text on a stage move, while an admin and the relation's mentor see everything. The list pages by cursor with an explicit \"load older entries\" button and states its own end, so a short list is never a silently truncated one; the cursor is passed to each request as a parameter rather than captured in a callback, so paging moves forward instead of re-serving the first page, and a page that fails to load says so under the button rather than replacing the entries already on screen. Loading, error and empty states are explicit.",
+  "notes": {
+    "en": [
+      "Candidate and mentee detail screens now carry a Timeline panel: stage moves, interactions, meetings, goals, weekly reports and offers in one chronological list instead of four places to look.",
+      "Filter the timeline by type, and load older entries a page at a time — the panel tells you when you have reached the beginning of the history.",
+      "Mentees see their own timeline without the mentor's private notes or unsent offers."
+    ],
+    "tr": [
+      "Aday ve mentee detay ekranlarına Zaman çizelgesi paneli eklendi: aşama geçişleri, görüşmeler, toplantılar, hedefler, haftalık raporlar ve teklifler dört ayrı yer yerine tek bir kronolojik listede.",
+      "Zaman çizelgesini türe göre filtreleyebilir, daha eski kayıtları sayfa sayfa yükleyebilirsin — geçmişin başına ulaştığında panel bunu açıkça söylüyor.",
+      "Mentee'ler kendi zaman çizelgelerini mentörün özel notları ve gönderilmemiş teklifler olmadan görür."
+    ],
+    "de": [
+      "Die Detailseiten für Kandidaten und Mentees haben jetzt eine Zeitleiste: Phasenwechsel, Interaktionen, Meetings, Ziele, Wochenberichte und Angebote in einem chronologischen Verlauf statt an vier Stellen.",
+      "Die Zeitleiste lässt sich nach Art filtern und seitenweise weiter in die Vergangenheit laden — das Panel sagt dir, wenn du den Anfang des Verlaufs erreicht hast.",
+      "Mentees sehen ihren eigenen Verlauf ohne die privaten Notizen des Mentors und ohne unversendete Angebote."
+    ]
+  }
+}

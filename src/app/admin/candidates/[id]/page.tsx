@@ -28,6 +28,7 @@ import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { OfferManagementPanel } from '@/components/OfferManagementPanel';
+import { RelationTimeline } from '@/components/RelationTimeline';
 import { ReferrerPicker } from '@/components/ReferrerPicker';
 import { TagEditor } from '@/components/TagEditor';
 import { encodeReferrer, referrerLabel } from '@/lib/referrer';
@@ -540,6 +541,9 @@ export default function AdminMenteeDetailPage() {
             </div>
           )}
         </Card>
+        {/* The merged history (#1702) sits directly under the relation card: the
+            stage-history list above stays, this adds everything around it. */}
+        {rel && <RelationTimeline relationId={rel.id} />}
         {rel && (
           <OfferManagementPanel
             relationId={rel.id}
