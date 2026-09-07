@@ -41,11 +41,27 @@ function projectRequested(name: string): boolean {
   );
 }
 const runsIsolation = process.env.E2E_ISOLATION === '1' || projectRequested('isolation');
-// The default server is skipped only when the command line selects the
-// isolation project and nothing else. E2E_ISOLATION=1 on its own adds the
-// isolation server without taking the default one away, because a run that has
-// not filtered by project still executes the chromium specs.
-const runsDefault = !projectRequested('isolation') || projectRequested('chromium');
+// An isolation run is an isolation run: the default project (and therefore the
+// default server) is dropped from the config unless the command line asks for
+// chromium by name. E2E_ISOLATION=1 used to leave the default project in place,
+// which meant `E2E_ISOLATION=1 playwright test --grep …` started TWO `next dev`
+// processes in the same working directory. Next has no per-port `distDir`, so
+// both compile into `.next/` and overwrite each other's build manifests and
+// webpack cache — intermittent 404s on /_next/static/chunks/* and ENOENT
+// renames from whichever server loses the race, which reads as a flaky app
+// rather than a config problem.
+const runsDefault = projectRequested('chromium') || !runsIsolation;
+
+if (runsIsolation && runsDefault) {
+  // The only way to reach this is to name both projects explicitly (or set
+  // E2E_ISOLATION=1 and pass --project=chromium). Refuse rather than start the
+  // colliding pair described above: run the two suites as two commands.
+  throw new Error(
+    'The `chromium` and `isolation` projects each need their own Next server started from this ' +
+      'working directory, and two of them would compile into the same .next/ directory. Run them ' +
+      'as separate commands: `npm run test:e2e` and `npm run test:e2e:isolation`.'
+  );
+}
 
 if (runsIsolation && externalBase) {
   // Fail loudly rather than silently testing the wrong thing: the whole point
@@ -104,13 +120,19 @@ export default defineConfig({
     storageState: './e2e/.state/consent.json',
   },
   projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-      // e2e/isolation/** belongs to the `isolation` project below; those specs
-      // assert cross-tenant behaviour that only holds with the flag on.
-      testIgnore: '**/isolation/**',
-    },
+    // Dropped for an isolation run, so `E2E_ISOLATION=1 playwright test` (no
+    // --project) cannot point 1000+ specs at a :3000 that was never started.
+    ...(runsDefault
+      ? [
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'] },
+          // e2e/isolation/** belongs to the `isolation` project below; those specs
+          // assert cross-tenant behaviour that only holds with the flag on.
+          testIgnore: '**/isolation/**',
+        },
+      ]
+      : []),
     ...(runsIsolation
       ? [
         {

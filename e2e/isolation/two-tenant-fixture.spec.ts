@@ -4,8 +4,12 @@ import {
   seedTwoTenants,
   signInAsTenantActor,
   remainingTenantRows,
+  TENANT_RELATION_STAGE,
+  TENANT_STAGE_COUNT,
   type TwoTenants,
 } from '../helpers/tenants';
+import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { prisma as appPrisma } from '@/lib/prisma';
 
 /**
  * The fixture's own tests (#1566).
@@ -27,6 +31,8 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await tenants?.cleanup();
   await prisma.$disconnect();
+  // resolvePipelineStages() runs on the app's own client, not the helper's.
+  await appPrisma.$disconnect();
 });
 
 test('both tenants are fully populated and separate', async () => {
@@ -54,16 +60,48 @@ test('both tenants are fully populated and separate', async () => {
     expect(await prisma.company.count({ where: { orgId } })).toBe(1);
     expect(await prisma.mentorshipRelation.count({ where: { orgId } })).toBe(1);
     expect(await prisma.tag.count({ where: { orgId } })).toBe(1);
-    expect(await prisma.pipelineStage.count({ where: { orgId } })).toBe(1);
     expect(await prisma.invitationToken.count({ where: { orgId } })).toBe(1);
     expect(await prisma.offer.count({ where: { orgId } })).toBe(1);
+
+    // PipelineStage is the one model seeded as a set: the whole canonical
+    // catalogue, relabelled for this tenant.
+    expect(await prisma.pipelineStage.count({ where: { orgId } })).toBe(TENANT_STAGE_COUNT);
   }
 
-  // The two tenants hold the SAME pipeline stage key. `@@unique([orgId, key])`
+  // The two tenants hold the SAME pipeline stage keys. `@@unique([orgId, key])`
   // means that is legal, and it is the shape a scoping bug shows up in: a lookup
   // by key alone resolves to whichever row the database happened to return.
+  // Distinct rows, distinct labels — so a leaked column is recognisable.
   expect(orgA.stage.key).toBe(orgB.stage.key);
   expect(orgA.stage.id).not.toBe(orgB.stage.id);
+  expect(orgA.stage.label).not.toBe(orgB.stage.label);
+});
+
+test('each tenant’s relation sits on a stage that tenant actually has', async () => {
+  // The fixture's least obvious way to be useless. `resolvePipelineStages()`
+  // returns a tenant's own PipelineStage rows *instead of* the built-in
+  // catalogue as soon as one row exists, and every stage-driven screen
+  // (/mentor/board, /admin's pipeline overview, the funnel) iterates exactly
+  // that set. Seed a tenant a stage catalogue that does not contain its own
+  // relation's stage and both tenants render empty everywhere — at which point
+  // the leak matrix asserts "A cannot see B's relation" against a board that
+  // has no cards in it at all, and passes without reading a single row.
+  //
+  // Asserted through the app's own resolver rather than by re-listing the keys,
+  // so the day the fixture or the resolver changes, this is what says so.
+  for (const tenant of [tenants.orgA, tenants.orgB]) {
+    const stages = await resolvePipelineStages(tenant.org.id);
+    const relation = await prisma.mentorshipRelation.findUniqueOrThrow({
+      where: { id: tenant.relation.id },
+      select: { pipelineStatus: true },
+    });
+    expect(relation.pipelineStatus).toBe(TENANT_RELATION_STAGE);
+    expect(
+      stages.map((s) => s.key),
+      `tenant ${tenant.label}'s relation is on a stage its own catalogue does not contain — ` +
+        'every board and pipeline view renders it as empty'
+    ).toContain(relation.pipelineStatus);
+  }
 });
 
 test('every actor in both tenants can sign in', async ({ page }) => {
@@ -94,7 +132,7 @@ test('cleanup() leaves nothing behind', async () => {
   expect(await remainingTenantRows(orgIds)).toEqual({
     offer: 2,
     tag: 2,
-    pipelineStage: 2,
+    pipelineStage: 2 * TENANT_STAGE_COUNT,
     invitationToken: 2,
     mentorshipRelation: 2,
     user: 8,

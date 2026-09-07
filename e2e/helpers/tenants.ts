@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './db';
 import { signInAsFreshUser } from './auth';
 import { roleHome } from '../../src/lib/roleHome';
+import { defaultPipelineStages } from '../../src/lib/pipeline';
 
 /**
  * Two fully populated tenants, for tests that run against a server with
@@ -22,9 +23,12 @@ import { roleHome } from '../../src/lib/roleHome';
  *
  * WHAT IT SEEDS
  *   Two organizations (`iso-a-<stamp>` / `iso-b-<stamp>`), each with an ADMIN, a
- *   MENTOR, a MENTEE and a COMPANY actor plus one row in every model the leak
+ *   MENTOR, a MENTEE and a COMPANY actor plus a row in every model the leak
  *   matrix will probe: Company, MentorshipRelation, Tag, PipelineStage,
- *   InvitationToken and Offer. The two tenants are deliberately symmetric —
+ *   InvitationToken and Offer. `PipelineStage` is the one seeded as a *set*
+ *   rather than a single row — the canonical catalogue, relabelled per tenant,
+ *   because a lone custom stage would empty every board (see the comment on the
+ *   seed itself). The two tenants are deliberately symmetric —
  *   every assertion the next task writes can be run in both directions, and a
  *   filter that happens to be right only for the tenant that was seeded first
  *   fails in one of them.
@@ -48,6 +52,21 @@ import { roleHome } from '../../src/lib/roleHome';
 
 /** The password every seeded actor signs in with. */
 export const TENANT_PASSWORD = 'IsoTenant123!';
+
+/**
+ * The stage each tenant's relation sits on.
+ *
+ * Mid-pipeline on purpose: a relation parked in the first stage is what the
+ * dormant sweep targets and a terminal one is finished — neither is the
+ * ordinary in-progress row the boards and the leak matrix are about. It is a
+ * key of the canonical catalogue, and `seedTenant()` gives every tenant that
+ * whole catalogue, so the stage is always one the tenant can actually render
+ * (see the comment on the PipelineStage seed).
+ */
+export const TENANT_RELATION_STAGE = 'INTERNSHIP_IN_PROGRESS_450';
+
+/** How many `PipelineStage` rows each tenant gets. */
+export const TENANT_STAGE_COUNT = defaultPipelineStages().length;
 
 export type TenantRole = 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY';
 
@@ -74,6 +93,12 @@ export type SeededTenant = {
   company: { id: string; name: string };
   relation: { id: string };
   tag: { id: string; name: string };
+  /**
+   * This tenant's own row for {@link TENANT_RELATION_STAGE} — the stage its
+   * relation sits on. The tenant holds the whole canonical catalogue
+   * ({@link TENANT_STAGE_COUNT} rows); this is the one the boards put the
+   * relation in.
+   */
   stage: { id: string; key: string; label: string };
   invitation: { id: string; token: string; email: string };
   offer: { id: string; position: string };
@@ -117,7 +142,20 @@ export async function remainingTenantRows(orgIds: string[]): Promise<Record<stri
   return Object.fromEntries(entries);
 }
 
+/**
+ * What has been written so far, recorded as it is written.
+ *
+ * `seedTwoTenants()` is many creates and no transaction, so a failure halfway
+ * through leaves rows nobody will ever delete: the caller's `tenants` is never
+ * assigned and its `afterAll` runs `tenants?.cleanup()`, which is a no-op on
+ * `undefined`. The scratch record is what lets the failure path clean up
+ * anyway: each id and address is recorded before (or as soon as) the row
+ * exists, so whatever the seed managed to write is in it when it throws.
+ */
+type SeedScratch = { orgIds: string[]; emails: string[] };
+
 async function seedActor(
+  scratch: SeedScratch,
   orgId: string,
   prefix: string,
   role: TenantRole,
@@ -125,6 +163,7 @@ async function seedActor(
   companyId?: string
 ): Promise<TenantActor> {
   const email = uniqueEmail(prefix);
+  scratch.emails.push(email);
   const user = await seedUser(email, TENANT_PASSWORD, role, fullName);
   await prisma.user.update({
     where: { id: user.id },
@@ -133,11 +172,17 @@ async function seedActor(
   return { id: user.id, email, fullName, role, password: TENANT_PASSWORD, landing: roleHome(role) };
 }
 
-async function seedTenant(label: string, slugPrefix: string, stamp: string): Promise<SeededTenant> {
+async function seedTenant(
+  scratch: SeedScratch,
+  label: string,
+  slugPrefix: string,
+  stamp: string
+): Promise<SeededTenant> {
   const name = `Iso ${label}`;
   const org = await prisma.organization.create({
     data: { name: `${name} Org ${stamp}`, slug: `${slugPrefix}-${stamp}` },
   });
+  scratch.orgIds.push(org.id);
 
   // The company comes first: the COMPANY actor points at it, and the offer
   // needs both it and the relation.
@@ -145,16 +190,52 @@ async function seedTenant(label: string, slugPrefix: string, stamp: string): Pro
     data: { orgId: org.id, name: `${name} Company ${stamp}`, industry: 'Software' },
   });
 
-  const admin = await seedActor(org.id, `iso-${slugPrefix}-admin`, 'ADMIN', `${name} Admin`);
-  const mentor = await seedActor(org.id, `iso-${slugPrefix}-mentor`, 'MENTOR', `${name} Mentor`);
-  const mentee = await seedActor(org.id, `iso-${slugPrefix}-mentee`, 'MENTEE', `${name} Mentee`);
+  const admin = await seedActor(scratch, org.id, `iso-${slugPrefix}-admin`, 'ADMIN', `${name} Admin`);
+  const mentor = await seedActor(scratch, org.id, `iso-${slugPrefix}-mentor`, 'MENTOR', `${name} Mentor`);
+  const mentee = await seedActor(scratch, org.id, `iso-${slugPrefix}-mentee`, 'MENTEE', `${name} Mentee`);
   const companyUser = await seedActor(
+    scratch,
     org.id,
     `iso-${slugPrefix}-company`,
     'COMPANY',
     `${name} Company User`,
     company.id
   );
+
+  // The tenant's pipeline, seeded as the CANONICAL stage set relabelled per
+  // tenant — not as one lone custom row.
+  //
+  // `PipelineStage` is one of the models the leak matrix probes, so each tenant
+  // needs rows of its own. But `resolvePipelineStages()` (src/lib/pipelineStages.ts)
+  // returns a tenant's rows *instead of* the built-in catalogue the moment one
+  // exists, so writing a single `ISO_STAGE` row would quietly make both tenants
+  // custom-pipeline orgs whose entire catalogue is that one stage — a catalogue
+  // that does not contain the stage the relation below sits on. Every
+  // stage-driven screen (`/mentor/board`, `/admin`'s pipeline overview, the
+  // funnel) iterates the resolved stages, so both tenants would render one
+  // empty column and the leak matrix would report "A cannot see B" in both
+  // directions without ever having read a row. Seeding the whole catalogue
+  // keeps the relation visible, keeps the two tenants symmetric, and still
+  // exercises the custom-stage path.
+  //
+  // The keys are the canonical ones and therefore IDENTICAL in both tenants,
+  // which is the point: `@@unique([orgId, key])` makes that legal, and it is the
+  // shape a scoping bug shows up in — a lookup by key alone resolves to
+  // whichever row the database happened to return. The labels are prefixed per
+  // tenant, so B's wording appearing on A's board is a visible leak.
+  await prisma.pipelineStage.createMany({
+    data: defaultPipelineStages().map((s) => ({
+      orgId: org.id,
+      key: s.key,
+      label: `${name} · ${s.label}`,
+      order: s.order,
+      isTerminal: s.isTerminal,
+      isOffPath: s.isOffPath,
+    })),
+  });
+  const stage = await prisma.pipelineStage.findFirstOrThrow({
+    where: { orgId: org.id, key: TENANT_RELATION_STAGE },
+  });
 
   const relation = await prisma.mentorshipRelation.create({
     data: {
@@ -163,10 +244,7 @@ async function seedTenant(label: string, slugPrefix: string, stamp: string): Pro
       menteeId: mentee.id,
       companyId: company.id,
       status: 'ACTIVE',
-      // Mid-pipeline: a relation parked in the first stage is what the dormant
-      // sweep targets and a terminal one is finished — neither is the ordinary
-      // in-progress row the boards and the leak matrix are about.
-      pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450',
+      pipelineStatus: TENANT_RELATION_STAGE,
       startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     },
   });
@@ -175,21 +253,8 @@ async function seedTenant(label: string, slugPrefix: string, stamp: string): Pro
     data: { orgId: org.id, name: `${name} Tag ${stamp}`, color: '#2563eb', createdById: admin.id },
   });
 
-  // A single custom stage, keyed per tenant. Two tenants must be able to hold
-  // the SAME stage key without colliding (`@@unique([orgId, key])`), so the key
-  // is deliberately not stamped — that is part of what the fixture proves.
-  const stage = await prisma.pipelineStage.create({
-    data: {
-      orgId: org.id,
-      key: 'ISO_STAGE',
-      label: `${name} Stage`,
-      order: 0,
-      isTerminal: false,
-      isOffPath: false,
-    },
-  });
-
   const invitationEmail = uniqueEmail(`iso-${slugPrefix}-invite`);
+  scratch.emails.push(invitationEmail);
   const invitation = await prisma.invitationToken.create({
     data: {
       orgId: org.id,
@@ -236,16 +301,39 @@ async function seedTenant(label: string, slugPrefix: string, stamp: string): Pro
  */
 export async function seedTwoTenants(): Promise<TwoTenants> {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-  const orgA = await seedTenant('A', 'iso-a', stamp);
-  const orgB = await seedTenant('B', 'iso-b', stamp);
-  const orgIds = [orgA.org.id, orgB.org.id];
+  // Seeding is not a transaction, and a caller that never received a handle
+  // cannot tear anything down: `beforeAll` rejects, `tenants` stays undefined
+  // and `afterAll`'s `tenants?.cleanup()` does nothing. So a partial seed
+  // removes its own rows before the error is rethrown — otherwise a stale
+  // Prisma client or a dropped connection halfway through tenant B leaves an
+  // orphan organization, up to eight `iso-*@e2e.local` users and their rows in
+  // the database for good, with no failure that names the leak.
+  const scratch: SeedScratch = { orgIds: [], emails: [] };
+  try {
+    const orgA = await seedTenant(scratch, 'A', 'iso-a', stamp);
+    const orgB = await seedTenant(scratch, 'B', 'iso-b', stamp);
+    const orgIds = [orgA.org.id, orgB.org.id];
 
-  return {
-    orgA,
-    orgB,
-    orgIds,
-    cleanup: () => cleanupTenants([orgA, orgB]),
-  };
+    return {
+      orgA,
+      orgB,
+      orgIds,
+      cleanup: () => cleanupTenants([orgA, orgB]),
+    };
+  } catch (error) {
+    // Best effort, and deliberately silent: the seeding failure is the one the
+    // caller must see, so a teardown that also fails must not replace it.
+    await removeSeededRows(scratch).catch(() => {});
+    throw error;
+  }
+}
+
+/** Teardown for fully seeded tenants; see {@link removeSeededRows}. */
+async function cleanupTenants(tenants: SeededTenant[]): Promise<void> {
+  await removeSeededRows({
+    orgIds: tenants.map((t) => t.org.id),
+    emails: tenants.flatMap((t) => [...t.actors.map((a) => a.email), t.invitation.email]),
+  });
 }
 
 /**
@@ -256,9 +344,13 @@ export async function seedTwoTenants(): Promise<TwoTenants> {
  * leaves half a tenant behind. Every step is explicit and every delete is
  * scoped to the seeded org ids, so it can never reach a row this fixture did
  * not create.
+ *
+ * Driven by ids and addresses rather than by handles, so the failure path in
+ * `seedTwoTenants()` can call it with whatever a partial seed managed to
+ * create, and the happy path can call it with the full set.
  */
-async function cleanupTenants(tenants: SeededTenant[]): Promise<void> {
-  const orgIds = tenants.map((t) => t.org.id);
+async function removeSeededRows({ orgIds, emails }: SeedScratch): Promise<void> {
+  if (orgIds.length === 0 && emails.length === 0) return;
   const orgFilter = { orgId: { in: orgIds } };
 
   // 1. Rows that reference a user, a relation or a company.
@@ -272,10 +364,7 @@ async function cleanupTenants(tenants: SeededTenant[]): Promise<void> {
   // 2. The users. cleanupByEmail also drops their invitation tokens (matched by
   //    address, which the org-scoped delete above would miss if a spec created
   //    one of its own) and their brute-force lockouts, which carry no FK.
-  for (const tenant of tenants) {
-    for (const actor of tenant.actors) await cleanupByEmail(actor.email);
-    await cleanupByEmail(tenant.invitation.email);
-  }
+  for (const email of emails) await cleanupByEmail(email);
   // Anything a spec added to a tenant — or a user whose delete above was
   // swallowed — must not survive into the organization delete, which would then
   // fail on the foreign key and leave the tenant behind.
