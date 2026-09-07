@@ -9,6 +9,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { goalLinkFor } from '@/lib/projectGoalLink';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
 import { defaultLocale } from '@/i18n/config';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // A task may be created from free text (`title`) or from the template pool
 // (`templateIds`) — the latter is the "send the standard goals to the person who
@@ -23,7 +24,7 @@ import { defaultLocale } from '@/i18n/config';
 // round after round. The pool is now only what someone put there on purpose.
 const schema = z
   .object({
-    title: z.string().min(1).max(300).optional(),
+    title: z.string().min(1).max(TEXT_LIMITS.todoTitle).optional(),
     templateIds: z.array(z.string().min(1)).max(50).optional(),
     assigneeId: z.string().min(1).nullable().optional(),
   })

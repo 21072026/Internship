@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import type { Locale } from '@/i18n/config';
 import { TodoRow, type Todo } from '@/components/todos/TodoRow';
 
@@ -134,6 +135,7 @@ export function PersonTodos({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); assign(); } }}
             placeholder={t.todos.assignPlaceholder.replace('{name}', name)}
+            maxLength={TEXT_LIMITS.todoTitle}
             data-testid="assign-todo-input"
             className="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-1"
           />
