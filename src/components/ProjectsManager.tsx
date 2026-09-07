@@ -1,11 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2, Inbox } from 'lucide-react';
@@ -13,6 +10,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import type { TeamMember } from '@/lib/projectTeam';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { ProjectForm } from '@/components/project/ProjectForm';
 import { scrollBehavior } from '@/lib/motion';
 
 interface Task {
@@ -48,36 +46,20 @@ interface Project {
   _count?: { relations: number; joinRequests?: number };
 }
 
-// Sentinel for "this project has no IP question" — distinct from '' (platform
-// default), which is what an unset contributorTermsKey means.
-const TERMS_NONE = '__none__';
-
 const STATUS_VARIANT: Record<ProjectStatus, 'success' | 'info' | 'default' | 'warning'> = {
   DRAFT: 'warning', ACTIVE: 'success', COMPLETED: 'info', ARCHIVED: 'default', CANCELLED: 'default',
 };
-const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUrl: '', boardUrl: '', status: 'ACTIVE', isPublic: false, goals: '', startDate: '', endDate: '', contributorTerms: '' };
 
 export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const t = useT();
   const locale = useLocale();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ ...blank });
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [termsKeys, setTermsKeys] = useState<{ key: string; version: string }[]>([]);
   // Card-first screen (#615): the create/edit form lives in a panel that only
-  // opens via "Add project" or a card's edit action.
+  // opens via "Add project" or a card's edit action. The form itself is shared
+  // with the portal now (#2270) — see components/project/ProjectForm.tsx.
   const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  // Only the owner picker needs a directory here now; the member pickers moved
-  // to the project page with the panel.
-  const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
-  const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
-  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
-  const [ownerType, setOwnerType] = useState('ADMIN');
-  const [ownerUserId, setOwnerUserId] = useState('');
-  const [ownerCompanyId, setOwnerCompanyId] = useState('');
+  const [editing, setEditing] = useState<Project | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -89,100 +71,15 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    fetch('/api/users?view=picker').then((r) => (r.ok ? r.json() : { users: [] }))
-      .then((d) => {
-        const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
-        setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));
-        setMentees(users.filter((u) => u.role === 'MENTEE'));
-      })
-      .catch(() => {});
-    if (!isAdmin) return;
-    fetch('/api/companies').then((r) => r.json()).then((d) => setCompanies(d.companies ?? []));
-  }, [isAdmin]);
 
-  const reset = () => { setForm({ ...blank }); setEditingId(null); setEditingOwner(true); setOwnerType('ADMIN'); setOwnerUserId(''); setOwnerCompanyId(''); setShowForm(false); };
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true); setError('');
-    try {
-      const payload: Record<string, unknown> = {
-        description: form.description,
-        technologies: form.technologies.split(',').map((s) => s.trim()).filter(Boolean),
-        repoUrl: form.repoUrl,
-        demoUrl: form.demoUrl,
-        boardUrl: form.boardUrl,
-        goals: form.goals,
-      };
-      // Owner-protected fields (#619) — the server rejects them from
-      // non-owners, so a limited editor simply doesn't send them.
-      if (editingOwner || !editingId) {
-        Object.assign(payload, {
-          name: form.name,
-          status: form.status,
-          isPublic: form.isPublic,
-          startDate: form.startDate || null,
-          endDate: form.endDate || null,
-          // One control, three meanings (#1026): '' = platform default,
-          // TERMS_NONE = don't ask at all, anything else = that document.
-          contributorTermsRequired: form.contributorTerms !== TERMS_NONE,
-          contributorTermsKey: form.contributorTerms === TERMS_NONE ? '' : form.contributorTerms,
-        });
-      }
-      // Admin sets/changes ownership (create or transfer-on-edit), preserving
-      // the "exactly one owner" invariant.
-      if (isAdmin) {
-        payload.ownerType = ownerType;
-        // ADMIN ownership is always the acting admin (no admin picker in this UI);
-        // using a stale ownerUserId from a previous MENTOR owner would fail
-        // server validation ("Invalid owner").
-        if (ownerType === 'COMPANY') payload.ownerCompanyId = ownerCompanyId;
-        else if (ownerType === 'MENTOR') payload.ownerUserId = ownerUserId;
-        else if (ownerType === 'MENTEE') payload.ownerUserId = ownerUserId;
-        else payload.ownerUserId = meId; // ADMIN → acting admin
-      }
-      const url = editingId ? `/api/projects/${editingId}` : '/api/projects';
-      const res = await fetch(url, {
-        method: editingId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
-      reset();
-      await load();
-    } catch (e2) {
-      setError(e2 instanceof Error ? e2.message : 'Failed');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const reset = () => { setEditing(null); setShowForm(false); };
 
   const [meId, setMeId] = useState('');
   useEffect(() => { fetch('/api/profile').then((r) => r.json()).then(({ user }) => user && setMeId(user.id)); }, []);
-  // The terms documents this installation has (#1026). Empty list is fine — the
-  // picker then offers only the platform default and "don't ask".
-  useEffect(() => {
-    fetch('/api/contributor-terms/keys')
-      .then((r) => (r.ok ? r.json() : { keys: [] }))
-      .then((d) => setTermsKeys(d.keys ?? []))
-      .catch(() => {});
-  }, []);
 
   const edit = (p: Project) => {
+    setEditing(p);
     setShowForm(true);
-    setEditingId(p.id);
-    setEditingOwner(isOwnerOf(p));
-    setForm({
-      name: p.name, description: p.description ?? '', technologies: p.technologies.join(', '),
-      repoUrl: p.repoUrl ?? '', demoUrl: p.demoUrl ?? '', boardUrl: p.boardUrl ?? '', status: p.status, isPublic: p.isPublic,
-      goals: p.goals ?? '', startDate: p.startDate ? p.startDate.slice(0, 10) : '', endDate: p.endDate ? p.endDate.slice(0, 10) : '',
-      contributorTerms: p.contributorTermsRequired === false ? TERMS_NONE : (p.contributorTermsKey ?? ''),
-    });
-    setOwnerType(p.ownerType);
-    setOwnerUserId(p.ownerUser?.id ?? '');
-    setOwnerCompanyId(p.ownerCompany?.id ?? '');
     window.scrollTo({ top: 0, behavior: scrollBehavior() });
   };
 
@@ -220,7 +117,11 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   // Owner-only fields (#619): non-owner mentor members get a limited form.
   const isOwnerOf = (p: Project) =>
     isAdmin || p.ownerUser?.id === meId || (p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER');
-  const [editingOwner, setEditingOwner] = useState(true);
+  // The pencil used to render on every card. Harmless while this screen was
+  // admin/mentor-only (their list is what they own or are on), but the form it
+  // opens saves through an API that answers 403 to a stranger — so it is gated
+  // on the same test the server applies: owner, or a member of the project.
+  const canEdit = (p: Project) => isOwnerOf(p) || (p.members ?? []).some((m) => m.user.id === meId);
 
   return (
     <>
@@ -238,89 +139,15 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {showForm && (
-      <Card className="mb-6 max-w-3xl">
-        <CardHeader><CardTitle>{editingId ? t.projects.editProject : t.projects.newProject}</CardTitle></CardHeader>
-        {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
-        <form onSubmit={submit} className="space-y-3">
-          <Input label={t.projects.name} required disabled={!editingOwner && !!editingId} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          {!editingOwner && !!editingId && <p className="text-xs text-gray-400 -mt-2">{t.projects.ownerOnlyHint}</p>}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.projects.description}</label>
-            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={3} maxLength={5000} showCounter />
-          </div>
-          <Input label={t.projects.technologies} hint={t.projects.techHint} value={form.technologies} onChange={(e) => setForm({ ...form, technologies: e.target.value })} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input label={t.projects.repoUrl} type="url" placeholder="https://github.com/..." value={form.repoUrl} onChange={(e) => setForm({ ...form, repoUrl: e.target.value })} />
-            <Input label={t.projects.demoUrl} type="url" placeholder="https://..." value={form.demoUrl} onChange={(e) => setForm({ ...form, demoUrl: e.target.value })} />
-            <Input label={t.projects.boardUrl} type="url" placeholder="https://github.com/users/you/projects/2" hint={t.projects.boardUrlHint} value={form.boardUrl} onChange={(e) => setForm({ ...form, boardUrl: e.target.value })} />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Select label={t.projects.status} disabled={!editingOwner && !!editingId} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
-              options={[
-                { value: 'DRAFT', label: t.projects.draft },
-                { value: 'ACTIVE', label: t.projects.active },
-                { value: 'COMPLETED', label: t.projects.completed },
-                { value: 'ARCHIVED', label: t.projects.archived },
-                { value: 'CANCELLED', label: t.projects.cancelled },
-              ]} />
-            <label className="flex items-center gap-2 text-sm text-gray-700 mt-7">
-              <input type="checkbox" disabled={!editingOwner && !!editingId} checked={form.isPublic} onChange={(e) => setForm({ ...form, isPublic: e.target.checked })} />
-              {t.projects.isPublic}
-            </label>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input label={t.projects.startDate} type="date" disabled={!editingOwner && !!editingId} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-            <Input label={t.projects.endDate} type="date" disabled={!editingOwner && !!editingId} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-          </div>
-          <div>
-            <Select
-              label={t.contributorTerms.projectTermsTitle}
-              data-testid="project-terms-select"
-              disabled={!editingOwner && !!editingId}
-              value={form.contributorTerms}
-              onChange={(e) => setForm({ ...form, contributorTerms: e.target.value })}
-              options={[
-                { value: '', label: t.contributorTerms.projectTermsDefault },
-                ...termsKeys
-                  .filter((k) => k.key !== 'default')
-                  .map((k) => ({ value: k.key, label: `${k.key} (v${k.version})` })),
-                { value: TERMS_NONE, label: t.contributorTerms.projectTermsNone },
-              ]} />
-            <p className="mt-1 text-xs text-gray-500">{t.contributorTerms.projectTermsHint}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.projects.goals}</label>
-            <Textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })}
-              rows={2} maxLength={5000} showCounter />
-          </div>
-
-          {isAdmin && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-gray-100 pt-3">
-              {editingId && <p className="sm:col-span-2 text-xs text-gray-500">{t.projects.transferHint}</p>}
-              <Select label={t.projects.owner} value={ownerType} onChange={(e) => { setOwnerType(e.target.value); setOwnerUserId(''); setOwnerCompanyId(''); }}
-                options={[{ value: 'ADMIN', label: t.projects.ownerAdmin }, { value: 'MENTOR', label: t.projects.ownerMentor }, { value: 'MENTEE', label: t.projects.ownerMentee }, { value: 'COMPANY', label: t.projects.ownerCompany }]} />
-              {ownerType === 'MENTOR' && (
-                <Select label={t.projects.ownerMentor} value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)}
-                  options={[{ value: '', label: '—' }, ...mentors.map((m) => ({ value: m.id, label: m.fullName }))]} />
-              )}
-              {ownerType === 'MENTEE' && (
-                <Select label={t.projects.ownerMentee} value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)}
-                  options={[{ value: '', label: '—' }, ...mentees.map((m) => ({ value: m.id, label: m.fullName }))]} />
-              )}
-              {ownerType === 'COMPANY' && (
-                <Select label={t.projects.ownerCompany} value={ownerCompanyId} onChange={(e) => setOwnerCompanyId(e.target.value)}
-                  options={[{ value: '', label: '—' }, ...companies.map((c) => ({ value: c.id, label: c.name }))]} />
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <Button type="submit" loading={saving}>{editingId ? t.projects.save : t.projects.create}</Button>
-            <Button type="button" variant="outline" onClick={reset}>{t.common.cancel}</Button>
-          </div>
-        </form>
-      </Card>
+        <ProjectForm
+          project={editing}
+          canEditProtected={!editing || isOwnerOf(editing)}
+          showOwnerPicker={isAdmin}
+          showTermsPicker
+          meId={meId}
+          onSaved={async () => { reset(); await load(); }}
+          onCancel={reset}
+        />
       )}
 
       <h2 className="text-sm font-medium text-gray-500 mb-3">{t.projects.allProjects} {loading ? '' : `(${projects.length})`}</h2>
@@ -409,7 +236,9 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                     {canManageMembers(p) && (
                       <a href={`/projects/${p.id}`} aria-label={t.projects.manageOwners} data-testid="manage-owners" className="p-2 text-gray-400 hover:text-blue-600"><Users2 className="h-4 w-4" /></a>
                     )}
-                    <button onClick={() => edit(p)} aria-label={t.projects.editProject} className="p-2 text-gray-400 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>
+                    {canEdit(p) && (
+                      <button onClick={() => edit(p)} aria-label={t.projects.editProject} className="p-2 text-gray-400 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>
+                    )}
                     {isOwnerOf(p) && (
                       <button onClick={() => remove(p)} aria-label={t.projects.deleteProject} className="p-2 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     )}

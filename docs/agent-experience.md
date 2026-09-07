@@ -6012,3 +6012,46 @@ birim koşucusu `.ts` dosyalarını doğrudan import ediyor, ama `src/lib/pipeli
 "Playwright altında, #1598 bekliyor" diyor). Saf yardımcıları yine de doğrulamak için
 `/tmp`'ye kopyalayıp import satırını `sed`'le göreceli hale getirdim: 30 saniye, ve üç
 dilin çıktısını gözle gördüm. Veritabanı olmadan da saf mantık kanıtlanabilir.
+
+## 2026-09-07 — Mentee kendi projesini açıyor: doğru soyutlama zaten oradaydı (#2270)
+
+**Rol string'i ile sahiplik kontrolü aynı dosyada yan yana yaşıyorsa, "yetkiyi genişlet"
+işinin çoğu silme işidir.** `projectAccess.ts`'in beş yardımcısı (`canViewProject`,
+`canManageProject`, `isProjectOwner`, `isProjectMember`, `resolveOwner`) baştan
+**rol-kör** yazılmış: bir MENTEE proje sahibi `PUT /api/projects/[id]`'de sahibe özel alan
+kümesinin tamamını bugün de düzenliyor, `[id]/tasks`, `[id]/task-templates` ve
+`[id]/join-requests` de çalışıyor. Kilitleyen şey yalnızca `session.user.role === 'MENTEE'`
+karşılaştırması yapan **üç** guard'dı. Yani "mentee proje yönetebilsin" işi yeni bir yetki
+modeli değil, üç literal'in kaldırılmasıydı — ve o üç yer, admin'in bugün yaratabildiği
+mentee-sahipli projelerde **canlı hata**ydı, yeni özellik iskelesi değil. Guard'ları
+genişletmeden önce dosyanın hangi deyimi kullandığını sayın.
+
+**Rol literal'ini silerken "kimin hakkını daralttım?" diye sorun.** `project-tasks/[taskId]`
+DELETE'te önerilen sadeleştirme `!lead && task.assigneeId !== me` idi; bu, o düğmeye her
+zaman sahip olan **mentor üyelerden** hak alıyordu. Doğru diff `!lead &&` eklemek, literal'i
+bırakmaktı: mentee sahip açılıyor, mentor üye aynen kalıyor. Genişletme PR'ında sessiz bir
+daraltma en kolay gözden kaçan regresyondur.
+
+**Formu tek mount noktasından çıkarmak, "mentee için de göster"den daha güvenli.**
+`ProjectsManager` (436 satır) formu ve listeyi ortak state ile iç içe tutuyordu; form
+`src/components/project/ProjectForm.tsx`'e taşınıp hangi kontrolün görüneceği **prop**
+oldu (`showOwnerPicker`/`showTermsPicker`/`showVisibility`/`canEditProtected`). Bunu
+"ProjectsManager'ı portalda da mount et" ile yapmak üç sızıntı demekti: mentee'ye owner
+seçici, `TERMS_NONE` ile proje düzeyindeki IP kapısını kapatma imkânı ve `isPublic` ile
+anonim vitrine + `sitemap.xml`'e kendi adıyla çıkma. DOM'u (label'lar, `project-terms-select`,
+"Create"/"Save") harfiyen korumak sekiz spec'i kırmızıya döndürmeden taşımanın bedeli.
+
+**Sahiplik görünürlüğü `ownerUserId`'den okunmalı, üye satırının yan etkisinden değil.**
+`BUILDERS.project.MENTEE` kapsamında `ownerUserId` kolu yoktu; mentee kendi gizli projesini
+yalnızca OWNER `ProjectMember` satırı yaşadığı sürece görüyordu — `POST /api/projects`
+o satırı aynı `create()` içinde attığı için mutlu yol çalışıyor, ama seeder/backfill/üye
+silme sonrası sahip projeyi id ile düzenleyebilirken listesinde göremiyor. Yeni spec bunu
+üye satırını silip `GET /api/projects`'i tekrar sorarak kanıtlıyor; testi yazmasaydım diff'ten
+"gereksiz" diye düşecek satır tam olarak buydu.
+
+**Lokal e2e reçetesi hâlâ çalışıyor ve tek doğru yol:** ana checkout'un `.env`'i
+**paylaşılan preview DB'sine** bakıyor, dolayısıyla Playwright'ı öyle koşmak preview verisine
+yazmak demek. `DATABASE_URL="mysql://e2e:e2epass@127.0.0.1:3306/internship_e2e"` kabuktan
+export edilir (Next `.env`'i process env'in üzerine yazmaz), `prisma db push
+--accept-data-loss` + `npm run build`, sonra `CI=1 npx playwright test` — prod build'e karşı
+136/136 smoke yeşil, yeni spec dahil.
