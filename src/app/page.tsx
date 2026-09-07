@@ -3,7 +3,7 @@ import {
   GraduationCap, ArrowRight, ArrowDown, CheckCircle, Users, Building2, Briefcase,
   Github, ShieldCheck, Languages, ScrollText, Code2, FlaskConical,
 } from 'lucide-react';
-import { IS_DEMO_MODE, DEMO_URL } from '@/lib/demoMode';
+import { IS_DEMO_MODE, demoUrl } from '@/lib/demoMode';
 import { getFeatures } from '@/lib/features';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
@@ -12,6 +12,7 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
+import { DemoLink } from '@/components/landing/DemoLink';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
 import { TawkChat } from '@/components/TawkChat';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
@@ -202,13 +203,16 @@ export default async function HomePage() {
           </p>
           {!IS_DEMO_MODE && (
             <div className="mt-8">
-              <a
-                href={DEMO_URL}
-                data-testid="hero-demo-cta"
+              {/* Same-tab on purpose (unchanged): the demo is the destination,
+                  not a side trip. */}
+              <DemoLink
+                href={demoUrl('hero')}
+                placement="hero"
+                testId="hero-demo-cta"
                 className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
               >
                 <FlaskConical className="h-5 w-5" /> {L.demoCta}
-              </a>
+              </DemoLink>
               <p className="mt-3 text-xs text-gray-500 max-w-md mx-auto">{L.demoCtaNote}</p>
             </div>
           )}
@@ -642,9 +646,14 @@ export default async function HomePage() {
           {!IS_DEMO_MODE && (
             <p className="mt-4 text-sm text-blue-100">
               {L.demoCtaInline}{' '}
-              <a href={DEMO_URL} data-testid="cta-demo-link" className="text-white underline hover:text-blue-50 font-medium">
+              <DemoLink
+                href={demoUrl('cta')}
+                placement="cta"
+                testId="cta-demo-link"
+                className="text-white underline hover:text-blue-50 font-medium"
+              >
                 {L.demoCta}
-              </a>
+              </DemoLink>
             </p>
           )}
           <p className="mt-2 text-xs text-blue-100">{L.ctaFootnote}</p>
