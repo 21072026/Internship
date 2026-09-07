@@ -63,11 +63,31 @@ export const SKILL_LIMITS = {
  */
 const SEPARATORS = new Set([',', ';', '\n', '\r', '\t', '•', '·', '|']);
 
-/** Bullets and numbering a CV paste carries in front of each line. */
-const LIST_MARKER = /^(?:[-*–—•·]+\s*|\d{1,2}[.)]\s+)/;
+/**
+ * Bullets and numbering a CV paste carries in front of each line.
+ *
+ * Every quantifier is BOUNDED. A `+` followed by `\s*` on a value that comes
+ * straight from a request body is what CodeQL's `js/polynomial-redos` is for,
+ * and no real list marker is five bullets long anyway.
+ */
+const LIST_MARKER = /^(?:[-*–—•·]{1,4}[ \t]{0,4}|\d{1,2}[.)][ \t]{1,4})/;
 
-/** Punctuation left dangling once a line is cut out of prose. */
-const TRAILING_PUNCTUATION = /[.,;:·•|\s]+$/;
+/**
+ * Punctuation left dangling once a line is cut out of prose.
+ *
+ * Trimmed by walking backwards rather than with `/[.,;:·•|\s]+$/`: an anchored
+ * `+` over a class that includes whitespace is quadratic on a long run of tabs
+ * that does not reach the end of the string (`js/polynomial-redos`, CodeQL
+ * high on the first draft of this file), and the loop is linear and says the
+ * same thing.
+ */
+const TRAILING_PUNCTUATION = new Set(['.', ',', ';', ':', '·', '•', '|', ' ', '\t', '\n', '\r', '\f', '\v']);
+
+function trimTrailingPunctuation(value: string): string {
+  let end = value.length;
+  while (end > 0 && TRAILING_PUNCTUATION.has(value[end - 1])) end--;
+  return value.slice(0, end);
+}
 
 /**
  * Split raw field text into candidate skills.
@@ -105,12 +125,8 @@ export function splitSkillInput(raw: string): string[] {
  * `skillKey`.
  */
 export function normalizeSkillName(value: string): string {
-  return value
-    .replace(LIST_MARKER, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(TRAILING_PUNCTUATION, '')
-    .trim();
+  const collapsed = value.replace(LIST_MARKER, '').replace(/\s+/g, ' ').trim();
+  return trimTrailingPunctuation(collapsed).trim();
 }
 
 /**

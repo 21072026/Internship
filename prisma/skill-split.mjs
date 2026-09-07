@@ -20,16 +20,21 @@ export const SKILL_LIMITS = {
 };
 
 const SEPARATORS = new Set([',', ';', '\n', '\r', '\t', '•', '·', '|']);
-const LIST_MARKER = /^(?:[-*–—•·]+\s*|\d{1,2}[.)]\s+)/;
-const TRAILING_PUNCTUATION = /[.,;:·•|\s]+$/;
+// Bounded quantifiers and a backwards walk, for the same reason as the
+// TypeScript original: an anchored `+` over a class containing whitespace is
+// polynomial-ReDoS material on a request-supplied value.
+const LIST_MARKER = /^(?:[-*–—•·]{1,4}[ \t]{0,4}|\d{1,2}[.)][ \t]{1,4})/;
+const TRAILING_PUNCTUATION = new Set(['.', ',', ';', ':', '·', '•', '|', ' ', '\t', '\n', '\r', '\f', '\v']);
+
+function trimTrailingPunctuation(value) {
+  let end = value.length;
+  while (end > 0 && TRAILING_PUNCTUATION.has(value[end - 1])) end--;
+  return value.slice(0, end);
+}
 
 export function normalizeSkillName(value) {
-  return value
-    .replace(LIST_MARKER, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(TRAILING_PUNCTUATION, '')
-    .trim();
+  const collapsed = value.replace(LIST_MARKER, '').replace(/\s+/g, ' ').trim();
+  return trimTrailingPunctuation(collapsed).trim();
 }
 
 export function splitSkillInput(raw) {
