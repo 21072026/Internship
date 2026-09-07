@@ -182,12 +182,19 @@ export function JourneyTracker({
                       The future badge deliberately drops `dark:bg-gray-800`:
                       globals.css already remaps `bg-gray-100` to #374151 under
                       html.dark, and that flat rule wins anyway. Keeping the
-                      variant only implied a control that did not exist. */}
+                      variant only implied a control that did not exist.
+
+                      The done badge is green-700, not green-500 (#1299): its
+                      white check mark on green-500 measured 2.28:1, under the
+                      3:1 that WCAG 1.4.11 asks of a meaningful glyph. axe's
+                      color-contrast rule never saw it because the mark is an
+                      SVG, not text — the same shade the free-core CTA and the
+                      meeting-join button now use. */}
                   <span
                     data-testid="journey-stage-badge"
                     data-stage-state={done ? 'done' : current ? 'current' : 'future'}
                     className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] ${
-                      done ? 'bg-green-500 text-white' : current ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:!text-gray-200'
+                      done ? 'bg-green-700 text-white' : current ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:!text-gray-200'
                     }`}
                   >
                     {done ? <Check className="h-3 w-3" /> : i + 1}

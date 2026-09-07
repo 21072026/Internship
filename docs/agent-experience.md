@@ -6233,3 +6233,109 @@ ihlal ediyorsa unique index `db push`'u tam olarak `Setting.id`'nin kırdığı 
 yerine her deploy'da koşan, asla yazmayan, her zaman 0 dönen bir detektör gönderildi — ve
 korumalar canlıya çıktıktan *sonra* prod'da 20, preview'da 54 aktif ilişkide sıfır ihlal
 okundu. Sıra önemliydi: arka kapılar kapanmadan okunan temiz rapor hiçbir şey kanıtlamaz.
+
+## 2026-09-07 — Yeşil bir kapı, ölçülmüş bir kapı demek değil (#1299)
+
+`e2e/a11y-baseline.json`'ın on altı anahtarı da `{}` ve `docs/a11y-audit.md`
+"serious: 0" diyordu; issue'nun saydığı altı düğümün altısı da gerçekten
+düzeltilmişti (#1336/#1482, #2131). Buna rağmen aynı kural aynı sayfalara geri
+gelmişti. İki sebep, ikisi de tekrar edecek türden:
+
+- **Kapı, kendinden önceki adım kırmızıysa hiç koşmuyor.** `e2e.yml`'de
+  "Accessibility regression gate" adımı `--grep` dışında ve koşulsuz, ama smoke
+  adımından **sonra**. #2284'ün smoke adımı düştüğü için (landing'de `/pricing`
+  404'ü — rota hiç yok) iş oracıkta bitti ve kapı hiç çalışmadı; o PR ile birlikte
+  `bg-green-600 text-white` (3.30:1) bir CTA main'e girdi. Bir kapının "her
+  push'ta koşuyor" olması, önündeki adımların yeşil olmasına bağlı.
+- **axe yalnızca render edilebileni ölçüyor.** Rozetler ve koşullu CTA'lar
+  (okunmamış bildirim sayacı, bekleyen teklif rozeti, eksik-belge butonu)
+  tarayıcının ince fixture'larında hiç var olmuyor; SVG bir onay işareti ise
+  `color-contrast` kuralının konusu değil (1.4.11'in konusu). Baseline'ın boş
+  olması "bu sayfada ihlal yok" değil, "bu fixture'da görülen ihlal yok" demek.
+
+**Statik ölçüm, tarayıcısız bir kapta gerçekten mümkün.** Tailwind paletini
+`tailwindcss/colors.js`'ten okuyup className string'lerinden `text-white` +
+`bg-<hue>-<shade>` çiftini çıkarmak, DB'siz ve tarayıcısız on dört ihlali bir
+saniyede buldu — ve `scripts/check-contrast.mjs` olarak kaldığı için önündeki
+adım düşse bile atlanamıyor. Kaçırdığım tuzaklar: `dark:bg-gray-100
+dark:text-gray-900` gibi tam ters çevirmelerde koyu arka planı beyaz yazıyla
+ölçmek yanlış pozitif veriyor, ve kendi düzeltmesini yorumda anlatan dosyalar
+(`green-500 2.28:1`) yorumlar temizlenmezse kendi kapısını kırmızıya çeviriyor.
+
+**Bir lint script'ini kendi düzelttiği dosyalarla sınamak (gerçek ders).**
+Yazdığım kapı, düzelttiği on dört yerin on üçünü yakalıyordu — biri hariç, ve o
+biri en kötü orandı. Sebep: regex tek satırlık **bir** string literal'ini
+tarıyordu, ama bu ağaçtaki koşullu düğme şöyle yazılıyor: `text-white` template
+literal'in statik metninde, arka plan bir alt satırda `${cond ? '…' : '…'}`
+içinde. Ölçüm yöntemi basit ve tekrar kullanılabilir: **diff'teki her dosyayı tek
+tek eski haline döndür, kapıyı çalıştır, yakalıyor mu diye bak.** "Yeşil" değil,
+"neyi görüyor" sorusunun cevabı bu. Bunu `scripts/test/contrast-guard.test.mjs`
+olarak sabitledim; ters yönü de: className'in tamamını tek torbaya atarsan
+`active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'` gibi çok yaygın
+sekme kalıbını hayali 1.02:1 ile kırmızıya çekiyorsun. Bir kapının yanlış alarmı
+kaçırdığından daha pahalı — insanlar onu baypas etmeyi öğreniyor. Bu yüzden
+kural "beyaz yazı **koşulsuzsa**, o bölgedeki her arka planı ölç" oldu.
+
+**`stripComments` yazacaksan string durumunu takip et.** Yorumları silen saf bir
+lexer, `href="https://…"` içindeki `//`'yi satır yorumu sanıp satırın kalanını —
+yani peşinden gelen className'i — siliyor. `src/` bugün bu şekle denk gelmiyordu,
+ama href'in className'den önce yazılması olağan JSX; sınadığım fixture'da
+attribute sırasını değiştirmek ihlali görünmezden görünüre çeviriyordu.
+
+**Tailwind'in orta tonları beyaz yazı için tasarlanmamış.** amber-500 2.15:1,
+green-500 2.28:1, amber-600 3.19:1, green-600 3.30:1, red-500 3.76:1 — hepsi AA
+altı. Eşik olarak uygulamanın kendi `bg-blue-600` birincil düğmesini (5.17:1)
+almak, "bir ton koyulaştır"ı tartışmadan çıkarıyor: red-600, amber-700, green-700.
+
+## 2026-09-07 — Uzun süren bir dalın altından main'in çekilmesi (#1299 review)
+
+İnceleme, kodun rengiyle ilgili tek bir hata bulmadı (ölçülen bütün oranlar
+yeniden üretildi) ama dalın **bayat** olduğunu buldu — ve bu, doğru koddan daha
+pahalıya geliyordu. Dal `012d03d` üzerine kuruluydu; ben yazarken `871b1ab`
+(#2296) landing'deki free-core CTA'sını **silmişti**. Sonuç: `src/app/page.tsx`
+çatışması, artık hiçbir yerde render edilmeyen bir `data-testid`'i bekleyen yeni
+bir e2e testi, ve o CTA'yı anlatan bir release fragment'i + doküman anlatısı.
+İki tarafa da çözmek kırıktı: main'e doğru çözersen test sonsuza kadar kırmızı,
+dala doğru çözersen main'in bilerek kaldırdığı `/pricing` prefetch 404'ünü geri
+getiriyorsun. Dersler:
+
+- **Bir testi bağlayacağın düğümü, `origin/main`'de var mı diye kontrol et** —
+  kendi çalışma kopyanda değil. `git grep <testid> origin/main -- src e2e`.
+  Yerine `/rsvp/<token>` sayfasının onayla/reddet çiftini seçtim: hesapsız
+  erişilebiliyor ve düzeltilen iki tonu (green-700 + red-600) tek sayfada
+  taşıyor — kaybettiğim kapsamdan fazlası.
+- **Push'tan önce `git merge-tree --write-tree origin/main HEAD`.** Çatışmayı
+  CI'a veya insana bulduran şey bu tek komutla önceden görünür; `git fetch` de
+  gerekiyor, yoksa bayatlığı hiç fark etmiyorsun.
+- **Yalnızca kodu değil, kodu anlatan her şeyi taşı.** Fragment'in
+  `changelog`/`notes` metni, `docs/` anlatısı ve CI adımının yorumu artık var
+  olmayan bir düğmeyi anlatıyordu; "on beş" sayısı da on dörde düşmüştü.
+
+## 2026-09-07 — Üretilen bir dosyanın üretilen yarısına not yazmak (#1299 review)
+
+`docs/a11y-audit.md`'nin başında büyük harflerle "manuel işaretçinin ÜSTÜNE elle
+yazma" diyor; ben de #1299 notunu tam oraya, 35. satıra yazmışım. `renderReport()`
+işaretçiye kadar olan her şeyi değiştiriyor (`e2e/a11y-scan.spec.ts`'te
+`manualSection()` yalnızca işaretçiden sonrasını geri koyuyor) — yani notu,
+issue'nun bir sonraki kişiye önerdiği `A11Y_UPDATE_BASELINE=1 …` komutu
+sessizce siliyordu. Bilerek **ertelenmiş** bulguların tek kaydı olan bir not,
+üretilen yarıda yaşayamaz. İşaretçinin altına kendi `##` bölümü olarak taşıdım ve
+neden orada olduğunu bölümün ilk paragrafına yazdım. Genel kural: bir dosyaya not
+eklemeden önce o dosyayı **kimin yazdığını** bul (`grep -rn "<dosya adı>" e2e/
+scripts/`), "GENERATED" başlığını okuduğunu varsayma.
+
+## 2026-09-07 — Paylaşılan kabuk bileşenleri iki kez render ediliyor (#1299 review)
+
+`ResponsiveShell` `NotificationBell`'i (ve `MessagesButton`, `JoinMeetingPill`'i)
+**iki kez** basıyor: `lg:hidden` mobil çubukta ve `hidden lg:flex` masaüstü
+şeridinde — ve mobil olan DOM'da önce geliyor. Playwright'ın `Desktop Chrome`
+viewport'u (1280×720) `lg`'nin üstünde, dolayısıyla `getByTestId(...).first()`
+**görünmeyen** düğümü seçiyor ve `toBeVisible()` 15 saniyelik action timeout'una
+kadar bekleyip düşüyor. Daha sinsi olanı: axe'ın `color-contrast` kuralı
+`display:none` düğümleri atlıyor, yani bare selector'ı axe'a verirsen test
+**hiçbir şey ölçmeden yeşil** kalabiliyor. Depoda çözümü zaten vardı —
+`e2e/upcoming-meeting.spec.ts:76`, `[data-testid="…"]:visible` — ama yazarken
+aramamıştım. Aynı şey `/admin/candidates`'te farklı bir sebeple geçerli (her aday
+mobil + masaüstü listesinde iki kez); orada çözüm `candidate-card-<id>`'ye
+daraltmak. **Kural: paylaşılan kabuktaki bir bileşene testid ile bağlanırken
+önce `grep -c "<Bileşen />" src/components/ResponsiveShell.tsx`.**

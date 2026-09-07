@@ -85,7 +85,7 @@ export function AdminNav() {
                 data-testid="mentor-applications-badge"
                 title={t.mentorApplicationsAdmin.pendingBadge.replace('{count}', String(pendingApplications))}
                 aria-label={t.mentorApplicationsAdmin.pendingBadge.replace('{count}', String(pendingApplications))}
-                className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-red-500 dark:!text-white"
+                className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-red-600 dark:!text-white"
               >
                 {pendingApplications > 9 ? '9+' : pendingApplications}
               </span>
@@ -95,7 +95,7 @@ export function AdminNav() {
                 data-testid="admin-offers-badge"
                 title={t.offersAdmin.outstandingBadge.replace('{count}', String(outstandingOffers))}
                 aria-label={t.offersAdmin.outstandingBadge.replace('{count}', String(outstandingOffers))}
-                className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-amber-500 dark:!text-white"
+                className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-amber-700 dark:!text-white"
               >
                 {outstandingOffers > 9 ? '9+' : outstandingOffers}
               </span>

@@ -34,7 +34,7 @@ export function ContributorTermsGate({
       <Link
         href={`/onboarding/contributor-terms?next=${encodeURIComponent(next)}`}
         data-testid="contributor-terms-gate-cta"
-        className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+        className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800"
       >
         {cta}
         <ArrowRight className="h-4 w-4" />

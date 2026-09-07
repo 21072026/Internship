@@ -143,7 +143,7 @@ export default async function MessagesInboxPage() {
             <p className="text-xs text-gray-400 mt-0.5">{t.support.pinnedHint}</p>
           </div>
           {supportUnread > 0 && (
-            <span className="ml-1 shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center">
+            <span className="ml-1 shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center">
               {supportUnread > 9 ? '9+' : supportUnread}
             </span>
           )}
@@ -194,7 +194,7 @@ export default async function MessagesInboxPage() {
                     <p className={`text-xs truncate mt-0.5 ${th.unread > 0 ? 'text-gray-700' : 'text-gray-400'}`}>{preview}</p>
                   </div>
                   {th.unread > 0 && (
-                    <span className="ml-1 shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center">
+                    <span className="ml-1 shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center">
                       {th.unread > 9 ? '9+' : th.unread}
                     </span>
                   )}

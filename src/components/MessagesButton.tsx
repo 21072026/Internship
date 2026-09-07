@@ -58,7 +58,7 @@ export function MessagesButton() {
       {unread > 0 && (
         <span
           data-testid="messages-unread-badge"
-          className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center"
+          className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center"
         >
           {unread > 9 ? '9+' : unread}
         </span>

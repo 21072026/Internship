@@ -90,12 +90,14 @@ export default function RsvpPage({ params }: { params: Promise<{ token: string }
                 <div className="mt-6 flex justify-center gap-3">
                   <button
                     onClick={() => respond('yes')}
-                    className="bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-green-700"
+                    data-testid="rsvp-accept"
+                    className="bg-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-green-800"
                   >
                     {t.rsvp.yes}
                   </button>
                   <button
                     onClick={() => respond('no')}
+                    data-testid="rsvp-decline"
                     className="bg-red-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-red-700"
                   >
                     {t.rsvp.no}

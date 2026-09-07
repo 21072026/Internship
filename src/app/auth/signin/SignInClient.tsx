@@ -259,7 +259,7 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
                   data-testid={`demo-login-${a.role}`}
                   onClick={() => demoSignIn(a.email)}
                   disabled={demoLoading !== null}
-                  className="rounded-lg bg-amber-600 text-white text-sm font-semibold py-2.5 px-2 hover:bg-amber-700 transition-colors disabled:opacity-60"
+                  className="rounded-lg bg-amber-700 text-white text-sm font-semibold py-2.5 px-2 hover:bg-amber-800 transition-colors disabled:opacity-60"
                 >
                   {demoLoading === a.email ? '…' : t.demo.roles[a.role]}
                 </button>

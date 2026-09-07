@@ -88,7 +88,7 @@ export function UpcomingMeetingBanner() {
             rel="noopener noreferrer"
             data-testid="upcoming-meeting-join"
             className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white sm:w-auto ${
-              meeting.ongoing ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
+              meeting.ongoing ? 'bg-green-700 hover:bg-green-800' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             <Video className="h-4 w-4" /> {t.upcomingMeeting.join}
