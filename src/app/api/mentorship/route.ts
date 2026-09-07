@@ -14,6 +14,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { daysInStage } from '@/lib/stageClock';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -92,15 +93,51 @@ export async function GET(request: Request) {
           // Same idea for the clock they read (#1210): the scheduler previews
           // the picked time on every selected mentee's zone before inviting.
           timezone: true,
+          // Only to derive `stageClockPaused` below — destructured out before
+          // the response, so the pool date itself reaches no client (#1724).
+          reEngageAt: true,
         },
       },
       company: { select: { id: true, name: true, industry: true } },
       _count: { select: { interactions: true } },
+      // The stage clock (#1724). Only the newest move is needed — the shared
+      // helper takes the latest `createdAt` and falls back to `startDate` —
+      // so this stays one extra row per relation, not the whole audit trail.
+      statusChanges: { orderBy: { createdAt: 'desc' as const }, take: 1, select: { createdAt: true } },
     };
+
+    // `stageDeadline` already rides along on every row (the query uses
+    // `include`, so all scalars are selected); `daysInStage` is derived here so
+    // the board, the mentee list and the aging report cannot drift apart. The
+    // audit row itself is dropped again — the clients only need the number, and
+    // the caller's own scope is not widened by either field.
+    //
+    // `stageClockPaused` is the re-engagement pool (#834) reaching the chip: a
+    // mentee with an agreed "we'll write in September" date is not a queue
+    // anybody is late on, which is why the admin aging report already drops
+    // them from its breach list. The pool date is read here and thrown away —
+    // only the boolean ships, and only to the two roles that can already list
+    // the pool through GET /api/re-engagement, so COMPANY and SOURCE callers
+    // see exactly the payload they saw before.
+    const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
+    const withStageClock = <
+      T extends { startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
+    >(
+      rows: T[]
+    ) =>
+      rows.map(({ statusChanges, mentee, ...rest }) => {
+        const { reEngageAt, ...menteeRest } = mentee;
+        return {
+          ...rest,
+          mentee: menteeRest,
+          daysInStage: daysInStage({ startDate: rest.startDate, statusChanges }),
+          ...(seesPool ? { stageClockPaused: reEngageAt != null } : {}),
+        };
+      });
 
     if (!pageParam) {
       const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });
-      return NextResponse.json({ relations });
+      return NextResponse.json({ relations: withStageClock(relations) });
     }
 
     const [total, relations] = await Promise.all([
@@ -114,7 +151,7 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    return NextResponse.json({ relations, total, page, pageSize });
+    return NextResponse.json({ relations: withStageClock(relations), total, page, pageSize });
     });
   } catch (error) {
     console.error('Get mentorships error:', error);

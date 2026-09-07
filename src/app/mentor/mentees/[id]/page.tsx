@@ -37,6 +37,8 @@ import { apiErrorMessage } from '@/lib/apiErrorMessage';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
+import { StageClockChip } from '@/components/StageClockChip';
+import { daysInStage } from '@/lib/stageClock';
 
 interface InteractionLog {
   id: string;
@@ -52,6 +54,14 @@ interface RelationDetail {
   status: string;
   pipelineStatus: string;
   startDate: string;
+  // The org's per-stage SLA deadline, when one is configured (lib/stageSla.ts).
+  // `daysInStage` is derived client-side here from `statusChanges` below — this
+  // route already returns the full audit trail, so the shared helper can read
+  // the same "since the last recorded move, else since the relation started".
+  stageDeadline: string | null;
+  // The mentee is in the re-engagement pool (#834) — the clock shows, but it
+  // can never read as a breach. Derived server-side; see the route.
+  stageClockPaused?: boolean;
   completedAt: string | null;
   mentor: { fullName: string };
   mentee: {
@@ -232,7 +242,17 @@ export default function MenteeDetailPage() {
             </Link>
           </div>
           <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:min-w-[240px] sm:items-end">
-            <StatusBadge status={relation.status} />
+            <div className="flex items-center gap-2">
+              <StatusBadge status={relation.status} />
+              <StageClockChip
+                testId="stage-clock-detail"
+                daysInStage={daysInStage(relation)}
+                stageDeadline={relation.stageDeadline}
+                pipelineStatus={relation.pipelineStatus}
+                relationStatus={relation.status}
+                paused={relation.stageClockPaused}
+              />
+            </div>
             <div className="w-full">
               <Select
                 label={t.mentor.pipelineStage}

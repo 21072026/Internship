@@ -220,6 +220,10 @@ html.dark .bg-green-50.text-green-500,
 html.dark .bg-green-50 .text-green-500 { color: #86efac; } /* green-300 */
 html.dark .bg-red-50.text-red-700,
 html.dark .bg-red-50 .text-red-700,
+/* Same element, not only a descendant: the admin board's overdue chip is a
+   single <span class="bg-red-50 text-red-600">, and the compound form was
+   missing from this list — so that one chip was dark-on-dark (#1724). */
+html.dark .bg-red-50.text-red-600,
 html.dark .bg-red-50 .text-red-600,
 html.dark .bg-red-50.text-red-800,
 html.dark .bg-red-50 .text-red-800,

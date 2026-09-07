@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { ArchivedNotice } from '@/components/ArchivedNotice';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
+import { daysInStage } from '@/lib/stageClock';
 
 // ACTIVE, else the latest COMPLETED one shown as an archive (#1408).
 async function getMenteeRelation(menteeId: string) {
@@ -30,6 +31,9 @@ async function getMenteeRelation(menteeId: string) {
         orderBy: { date: 'desc' },
         take: 5,
       },
+      // The stage clock (#1724) — newest recorded move only; `stageDeadline` is
+      // a scalar and already comes along with the `include`.
+      statusChanges: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
     },
   });
   return pickMenteeRelation(relations);
@@ -53,7 +57,13 @@ export default async function PortalJourneyPage() {
 
       {relation && (
         <div className="mb-6">
-          <JourneyTracker status={relation.pipelineStatus} />
+          <JourneyTracker
+            status={relation.pipelineStatus}
+            /* An archived (COMPLETED) mentorship has no running clock — see
+               StageClockChip for the same rule on the mentor's side. */
+            daysInStage={isArchived ? null : daysInStage(relation)}
+            stageDeadline={relation.stageDeadline?.toISOString() ?? null}
+          />
         </div>
       )}
 
