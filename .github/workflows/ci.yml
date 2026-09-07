@@ -74,6 +74,14 @@ jobs:
       # thing that looks (#1696).
       - name: rate limits are shared, and fall back safely (#1696)
         run: npm run test:rate-limit-store
+      # src/lib/roi.ts is the one ROI implementation in the tree — the admin
+      # report and the public calculator both compute through it, so a wrong
+      # number reaches a prospect's browser. Money arithmetic typechecks
+      # perfectly while being wrong: a coaching relation counted as a hire, a
+      # division by zero rendered as Infinity, two currencies silently added
+      # (#1892).
+      - name: the ROI model is deterministic and refuses to guess (#1892)
+        run: npm run test:roi
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # An API-key request has no session, so nothing resolves a tenant for it

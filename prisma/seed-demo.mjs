@@ -646,6 +646,87 @@ async function main() {
     '(the insurance form and the university letter stay unfulfilled on purpose)'
   );
 
+  // ---------------------------------------------------------------------------
+  // Programme economics (#1892): the cost lines and the placement value behind
+  // /admin/analytics/roi. Without these the ROI screen — one of the screens
+  // this product is differentiated on — demos as an empty state on every topic
+  // environment, which is exactly the failure the fidelity gate (#2063) exists
+  // to catch.
+  //
+  // MONEY IS IN MINOR UNITS (see src/lib/roi.ts): 120_000 is EUR 1,200.00.
+  // Deliberately placed after the org backfill above — ProgramCost.orgId and
+  // Placement.orgId are REQUIRED columns.
+  // ---------------------------------------------------------------------------
+
+  // Six months of a small programme, in the shape a coordinator would actually
+  // file it: a platform subscription, one part-time coordinator, mentor time
+  // that IS invoiced, and two events. Amounts are round and modest on purpose —
+  // a demo that shows a EUR 400k programme reads as a mock-up.
+  const COST_PERIOD = { start: new Date(Date.UTC(2026, 0, 1)), end: new Date(Date.UTC(2026, 5, 30)) };
+  const PROGRAM_COSTS = [
+    { category: 'PLATFORM', label: 'InternCRM subscription (H1)', amountMinor: 120_000 },
+    { category: 'STAFF', label: 'Programme coordinator (40%, H1)', amountMinor: 1_800_000 },
+    { category: 'MENTOR_TIME', label: 'Invoiced mentor hours (H1)', amountMinor: 540_000 },
+    { category: 'EVENT', label: 'Kick-off and demo day', amountMinor: 240_000 },
+  ];
+  let costsCreated = 0;
+  for (const cost of PROGRAM_COSTS) {
+    const existing = await prisma.programCost.findFirst({
+      where: { orgId: defaultOrg.id, label: cost.label },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await prisma.programCost.create({
+      data: {
+        orgId: defaultOrg.id,
+        cohortId: cohort.id,
+        category: cost.category,
+        label: cost.label,
+        amountMinor: cost.amountMinor,
+        currency: 'EUR',
+        periodStart: COST_PERIOD.start,
+        periodEnd: COST_PERIOD.end,
+      },
+    });
+    costsCreated++;
+  }
+
+  // The value side. ONLY relations that actually reached a hired stage get a
+  // placement — the demo must not teach the wrong definition of the word, and
+  // #1504 makes "what counts as a placement" one shared rule. #1765 owns
+  // stamping these from the pipeline; here they are written directly, which is
+  // why the seed only ever creates the ones the stages already justify.
+  const PLACED_STAGES = ['HIRED_660', 'EMPLOYED_700'];
+  let placementsCreated = 0;
+  for (const relation of demoRelations.filter((r) => PLACED_STAGES.includes(r.pipelineStatus))) {
+    const existing = await prisma.placement.findFirst({ where: { relationId: relation.id }, select: { id: true } });
+    if (existing) continue;
+    const related = await prisma.mentorshipRelation.findUnique({
+      where: { id: relation.id },
+      select: { companyId: true, startDate: true },
+    });
+    await prisma.placement.create({
+      data: {
+        orgId: relation.orgId ?? defaultOrg.id,
+        relationId: relation.id,
+        menteeId: relation.menteeId,
+        companyId: related?.companyId ?? null,
+        placedAt: new Date(Date.now() - 21 * DAY_MS),
+        // A junior first-year salary, entered by hand: #1851 has not landed, so
+        // there is no structured compensation on the Offer to derive it from
+        // and the seed says MANUAL rather than pretending otherwise.
+        valueMinor: 4_200_000,
+        valueCurrency: 'EUR',
+        valueSource: 'MANUAL',
+        feeMinor: 89_000,
+        feeCurrency: 'EUR',
+        note: 'Synthetic demo placement.',
+      },
+    });
+    placementsCreated++;
+  }
+  console.log(`programme economics: ${costsCreated} cost line(s), ${placementsCreated} placement(s) created`);
+
   // Contributor terms (#1025, #1026). The demo set portrays projects that have
   // been running for a while, and someone who has been on a project for months
   // has long since accepted its terms — so the realistic demo state is accepted,

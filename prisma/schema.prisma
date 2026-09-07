@@ -118,6 +118,8 @@ model Organization {
   apiKeys              ApiKey[]
   matchFeedback        MatchFeedback[]
   settings             Setting[]
+  programCosts         ProgramCost[]
+  placements           Placement[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -427,6 +429,8 @@ model User {
   suggestedAsMentor                 MatchFeedback[]               @relation("MatchFeedbackMentor")
   matchFeedbackActions              MatchFeedback[]               @relation("MatchFeedbackActor")
   guidanceStates                    UserGuidanceState[]
+  createdProgramCosts               ProgramCost[]                 @relation("ProgramCostCreatedBy")
+  placements                        Placement[]                   @relation("PlacementMentee")
 
   @@index([role])
   @@index([referredById])
@@ -1175,6 +1179,7 @@ model Company {
   offers            Offer[]
   requisitions      Requisition[]
   interviewRequests InterviewRequest[]
+  placements        Placement[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -1831,7 +1836,8 @@ model Cohort {
   term      String?
   createdAt DateTime      @default(now())
 
-  relations MentorshipRelation[]
+  relations    MentorshipRelation[]
+  programCosts ProgramCost[]
 }
 
 model CompanyNeed {
@@ -1903,6 +1909,7 @@ model MentorshipRelation {
   offers                Offer[]
   weeklyReports         WeeklyReport[]
   weeklyReportReminders WeeklyReportReminder[]
+  placement             Placement?
 
   @@index([status])
   @@index([pipelineStatus])
@@ -3050,4 +3057,144 @@ model Job {
   /// claim query `status=PENDING AND runAt<=now`, which is the hottest one this
   /// table will ever serve.
   @@index([orgId, status, runAt])
+}
+
+// ── Programme economics ──────────────────────────────────────────────────────
+//
+// "What did this programme return?" was unanswerable at the data layer: 88
+// models and not one cost, fee or value column (#1892). These two models are
+// the smallest honest economics record that can produce an ROI number — costs
+// on one side, placement value on the other. The arithmetic itself lives in
+// src/lib/roi.ts, which never imports Prisma.
+//
+// MONEY IS ALWAYS AN INTEGER IN MINOR UNITS plus an ISO 4217 code. No Float,
+// no Decimal-as-string. A `Float` column would make every sum in the ROI report
+// depend on binary rounding, and a report whose total changes with the order of
+// its rows is worse than no report. The `Minor` suffix on every money column is
+// deliberate and load-bearing: it says "4500 is €45.00, not €4500". Minor units
+// rather than "cents" because zero-decimal currencies (JPY, KRW) have no cents
+// — how many minor units make a major one follows from the currency code, and
+// only the presentation layer needs to know.
+
+// One line of programme spend, in one currency, over one period.
+//
+// ADDITIVE BY CONSTRUCTION: an ROI window's cost side is the SUM of the rows
+// whose period overlaps it. There is no "total" column to keep in step, no
+// recomputation on write, and correcting a figure is editing or deleting one
+// row. That is also why the period is two dates rather than a month key — a
+// platform subscription billed annually and a mentor's time logged for one week
+// are the same shape here.
+model ProgramCost {
+  id    String       @id @default(cuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // The programme this spend belongs to. `Cohort` IS the programme today;
+  // #1622 promotes it to `Program` and this column moves with it under the new
+  // name. NULL means an org-wide cost that no single cohort owns (the platform
+  // subscription, the coordinator's salary) — those still count against every
+  // programme's ROI, which is why the column is nullable rather than required.
+  cohortId String?
+  cohort   Cohort? @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+
+  // PLATFORM | STAFF | MENTOR_TIME | EVENT | OTHER. Free String, not an enum:
+  // the same reasoning as PipelineStage (#747) — a tenant's chart of accounts
+  // is theirs, and an enum makes adding a category a schema change. The known
+  // keys and their labels live in src/lib/roi.ts + the `roi` i18n block.
+  category String @db.VarChar(40)
+  label    String @db.VarChar(200)
+
+  // Minor units. A refund or a correction is a NEGATIVE amount rather than a
+  // deleted row, so the ledger keeps its history; the ROI sum is additive
+  // either way.
+  amountMinor Int
+  currency    String @db.VarChar(3)
+
+  // Inclusive period the spend covers. `@db.Date` (not DateTime) on purpose: a
+  // cost belongs to a day, not to an instant, so it must not shift by a
+  // timezone offset when it is read back on another continent.
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  note String? @db.Text
+
+  createdById String?
+  createdBy   User?   @relation("ProgramCostCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Tenant-leading, like every other TENANT_MODELS entry. The report's only
+  // query is "this org's costs overlapping this window", in that order.
+  @@index([orgId, periodStart])
+  @@index([orgId, category])
+  @@index([cohortId])
+}
+
+// The value side: one placement, and what it was worth.
+//
+// SCOPE NOTE (#1892 / #1765). #1765 owns this record — the stamping from
+// src/lib/stageChange.ts, the reversal rule, the invoice states and the
+// /admin/placements ledger are all its work and are deliberately NOT here.
+// This PR creates the table early because the ROI model has nowhere to attach
+// value otherwise, and #1892 says so explicitly: add the value fields in the PR
+// that creates `Placement`, do not stand up a parallel model. #1765 extends
+// these columns (attribution, feeModel, invoiceState, invoiceRef, reversedAt,
+// creditedMentorId, sourceId) — all additive, none of them a rename.
+//
+// The fee columns are named `feeMinor` / `feeCurrency` rather than #1765's
+// sketched `feeAmountCents`, so every money column in the tree reads the same
+// way and none of them claims that every currency has cents.
+model Placement {
+  id    String       @id @default(cuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // One placement per relation. A re-hire after a re-match is a new relation,
+  // so it is a new placement — which is also what keeps `placementCount` from
+  // counting the same hire twice.
+  relationId String             @unique
+  relation   MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  menteeId String
+  mentee   User   @relation("PlacementMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  // Plain id, not a FK — the same reasoning as Offer.requisitionId: the
+  // accounting record must stay readable even if the offer it came from is
+  // edited away.
+  offerId String?
+
+  placedAt DateTime
+
+  // What the placement was worth, to whoever the report is for. NULL means
+  // "not recorded" and is NOT the same as zero: the ROI model falls back to the
+  // documented assumption set for a null and reports how many placements it had
+  // to assume for, so an estimate can never be mistaken for a measurement.
+  valueMinor    Int?
+  valueCurrency String? @db.VarChar(3)
+
+  // OFFER_COMP | MANUAL | ORG_DEFAULT — where the number above came from, so
+  // the screen can say. OFFER_COMP defaulting waits on #1851 (structured
+  // compensation on Offer); the only source Offer carries today is a free-text
+  // note, and parsing money out of prose is exactly the guess this model
+  // refuses to make.
+  valueSource String? @db.VarChar(20)
+
+  // The success fee the programme charges for this placement, when it bills
+  // that way. Kept separate from `valueMinor` and never folded into it: the two
+  // accrue to different parties, and adding them double-counts one hire.
+  feeMinor    Int?
+  feeCurrency String? @db.VarChar(3)
+
+  note String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, placedAt])
+  @@index([companyId])
+  @@index([menteeId])
 }

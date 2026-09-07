@@ -76,6 +76,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // → code-default fallback chain needs to read a row this filter would hide;
   // they compute the org themselves from the bound context instead.
   'Setting',
+  // Programme economics (#1892). What a tenant spends and what a placement was
+  // worth is among the most commercially sensitive data in the product — one
+  // org must never be able to read, let alone edit, another's cost lines or
+  // fee figures. Both carry a REQUIRED orgId, so unlike the phase-1 models
+  // there is no null-org fallback row to reason about.
+  'ProgramCost',
+  'Placement',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.
