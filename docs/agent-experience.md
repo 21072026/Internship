@@ -5868,3 +5868,38 @@ reddettiği şeyi** anlatmalı, sonraki issue'yu değil.
 **Metin taramasının sınırını guard'ın kendi başlığına yaz.** Yorum satırına alınmış bir
 çağrı hâlâ çağrı sayılır; `import { dispatchWebhook as fire }` kaçar. Bunlar grep şeklindeki
 bir guard'ın bedeli — ama yazılmamışsa, bir sonraki okuyucu guard'ı olduğundan güçlü sanar.
+
+## 2026-09-07 — Bir protokolü, tarayıcı olmadan da doğrulayabilirsin (#1936)
+
+**Playwright koşamadığın bir konteynerde bile kripto yolunu gerçekten test et.** Bu turda
+ne veritabanı ne tarayıcı vardı, ama `node_modules` vardı: sahte IdP'nin ürettiği imzalı
+SAML assertion'ını, uygulamanın **kendi** node-saml ayarlarıyla (`samlForOrg`'un birebir
+kopyası) doğrulayan tek dosyalık bir betik yazmak 10 dakika sürdü ve altı senaryonun
+altısını da (kabul + beş ret) yerinde kanıtladı. "E2E koşamıyorum" demek "hiçbir şeyi
+doğrulayamıyorum" demek değil — spec'in *tarayıcı* yarısı doğrulanmamış kalır, protokol
+yarısı kalmaz. Betiği commit'lemeden sil; PR gövdesinde hangi yarının koşmadığını açıkça yaz.
+
+**Sertifikayı Node içinde üret; ne `openssl`'e ne de depoya yaslan.** Node bir RSA anahtar
+çifti üretir ama kendinden imzalı X.509 üretmez, IdP'ler de çıplak public key değil
+sertifika verir. Elle DER yazmak (~60 satır: SEQUENCE/OID/UTCTime/BIT STRING) düşündüğümden
+kolay çıktı ve `new crypto.X509Certificate(pem)` yanlışsa açılışta patlıyor. Alternatifler
+daha kötü: `openssl` binary'si her katkıcının makinesinde yok, "atılabilir" bile olsa depoya
+konan özel anahtar public repo'da bulgudur.
+
+**Negatif testin yanına mutlaka bir kontrol koy.** "Süresi geçmiş assertion reddedildi"
+cümlesi, harness bozuksa da doğrudur. Her ret senaryosunun hemen öncesine, tek bir bayrak
+farkıyla üretilmiş ve uygulamanın **kabul etmesi gereken** bir assertion koydum. Aynı
+mantıkla: sahte IdP'ye ACS adresini ve audience'ı test söylemesin — uygulamanın kendi
+`AuthnRequest`'inden okusun. Yoksa `NEXTAUTH_URL`/`baseURL` uyuşmazlığı bütün negatifleri
+"yanlış nedenle" yeşil gösterir.
+
+**Bir kontrol stub'lamayı zorlaştırıyorsa, kontrolü değil stub'ı düzelt — ya da yazma
+sınırının arkasından tohumla.** `validateSsoConfig()` https olmayan entry point'i haklı
+olarak reddediyor, stub ise TLS konuşmuyor. Doğru hamle kuralı gevşetmek değil, kiracı
+satırını Prisma ile doğrudan yazmak ve **neden** böyle yapıldığını spec'in içine yazmaktır.
+
+**Henüz var olmayan bir özelliğin testini silme, kendi kendini açacak şekilde yaz.**
+OIDC turu `test.skip(!SSO_IMPLEMENTED_PROVIDERS.includes('oidc'), …)` ile duruyor: #1929
+'oidc'yi listeye eklediği gün test kendiliğinden koşmaya başlıyor. Gövdesini protokolden
+bağımsız tut (henüz olmayan callback yoluna bel bağlama), yoksa açıldığı gün yanlış
+nedenle kırmızı olur.

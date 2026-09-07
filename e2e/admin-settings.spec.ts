@@ -39,7 +39,7 @@ test('admin saves system settings and bulk-imports mentees from CSV', async ({ p
     expect(a?.role).toBe('MENTEE');
   } finally {
     await prisma.user.deleteMany({ where: { email: { in: [importedA, importedB] } } });
-    await prisma.setting.deleteMany({ where: { key: { in: ['reminderDays', 'supportEmail', 'weeklyDigest'] } } });
+    await prisma.setting.deleteMany({ where: { orgId: null, key: { in: ['reminderDays', 'supportEmail', 'weeklyDigest'] } } });
     await cleanupByEmail(adminEmail);
   }
 });

@@ -14,16 +14,18 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Smoke / functional (E2E)** | App boots, auth works, core pages render without errors | `e2e/*.spec.ts` (Playwright) | CI (`e2e.yml`) on every PR |
 | **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics, status messages (4.1.3), reflow at 320px; OS media preferences (reduced motion, increased contrast, forced colors) | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/live-region.spec.ts`, `e2e/mobile-layout-audit.spec.ts`, `e2e/a11y-media-preferences.spec.ts` | with E2E |
 | **Security** | Headers, IDOR/RBAC, rate limiting, 2FA, login hardening | `e2e/security-headers.spec.ts`, `e2e/authz-idor.spec.ts`, `e2e/idor-hardening.spec.ts`, `e2e/rate-limit.spec.ts`, `e2e/login-security.spec.ts`, `e2e/two-factor-*.spec.ts` | with E2E |
+| **Protocol round trips against a stub** | Third-party protocols we cannot reach from CI, driven end to end against a local server that speaks the real wire format: Google Calendar OAuth, and SAML/OIDC SSO with signed assertions and ID tokens | `e2e/support/google-mock.mjs` + `e2e/google-calendar.spec.ts`, `e2e/support/idp-mock.mjs` + `e2e/sso-roundtrip.spec.ts` | with E2E (the SAML happy path is `@smoke`) |
 | **XSS / injection** | User input is escaped, never executed as HTML/JS | `e2e/xss-injection.spec.ts` | with E2E |
 | **Responsive / mobile** | Layout at small viewports | `e2e/mobile.spec.ts`, `e2e/users-responsive.spec.ts` | with E2E |
 | **PWA / offline** | Manifest, service worker, offline page | `e2e/pwa.spec.ts`, `e2e/offline-page.spec.ts` | with E2E |
 | **Health probe** | `/api/health` liveness + optional DB readiness | `e2e/health.spec.ts` | with E2E |
+| **Tenant isolation** | One tenant cannot read another's rows, against a server that really has `MT_ENFORCE_ISOLATION=true` | `e2e/isolation/*.spec.ts` (the `isolation` Playwright project) | its own job in `e2e-full.yml` (**4× a day**) + `npm run test:e2e:isolation` locally |
 | **Stress / load** | Latency percentiles, throughput, error rate under sustained concurrency | `scripts/stress-test.mjs` | **weekly cron**, Mon 02:30 UTC (`stress.yml`) + on demand |
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 | **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) beyond the ten call sites the script lists by name and count; those ten move onto `emit()` when #1693 lands (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
 
-The first ten are **functional / correctness** tests: given an input, is the output
+The first eleven are **functional / correctness** tests: given an input, is the output
 right? The two load rows are **non-functional**: the app may be correct yet too slow or
 fragile under load — those catch that. They are not redundant with each other.
 The final two rows are neither: they never run the app, they read the source tree and the
@@ -32,12 +34,125 @@ demo data and assert a rule about their *shape*.
 the k6 scenario adds a *ramp* (where does latency start to bend?), *per-endpoint*
 budgets, and a threshold engine that names exactly which budget broke.
 
+## Stub servers for third-party protocols
+
+Two integrations cannot be reached from CI at all: Google Calendar needs a Cloud
+project and a human at a consent screen, and Enterprise SSO needs somebody's
+identity provider. Both are covered the same way — a small Node server under
+`e2e/support/` that speaks the real wire format, started by the `webServer`
+array in `playwright.config.ts`:
+
+| Stub | Speaks | Driven by |
+|------|--------|-----------|
+| `e2e/support/google-mock.mjs` | Google's OAuth token/revoke endpoints and the Calendar API | `e2e/google-calendar.spec.ts` (endpoints are redirected with env vars) |
+| `e2e/support/idp-mock.mjs` | SAML 2.0 (redirect + HTTP-POST bindings, signed assertions) and OIDC (discovery, JWKS, authorize, token) | `e2e/sso-roundtrip.spec.ts` (the IdP endpoint is per-tenant config, so the spec seeds it into the org row) |
+
+Rules of thumb when adding one:
+
+- **Generate key material at start-up, never commit it.** `idp-mock.mjs` mints an
+  RSA key pair and a self-signed X.509 certificate on boot and hands the
+  certificate to the spec over HTTP; the spec stores it on the tenant exactly as
+  a customer would paste in their IdP's.
+- **Never weaken the app to make the stub work.** If a check makes the round trip
+  hard to stub, that check is the feature — make the stub more faithful instead.
+  (`sso-roundtrip` seeds the tenant row directly rather than through the admin
+  API, because `validateSsoConfig()` rightly refuses a non-https entry point and
+  the stub serves plain HTTP.)
+- **Cover the refusals, with a control.** A harness that only proves the happy
+  path lets every check regress. Each negative case in `sso-roundtrip` is
+  preceded by an otherwise-identical assertion the app must *accept*, so a
+  broken harness cannot masquerade as working security.
+- **Say what the stub does not prove.** See the caveat sections of
+  [`docs/sso-saml.md`](sso-saml.md), [`docs/sso-oidc.md`](sso-oidc.md) and
+  [`docs/google-calendar.md`](google-calendar.md).
+
 ## Async UI states
 
 Use `AsyncSection` for new asynchronous lists and panels: loading, error and empty are distinct states.
 Loading must never render the empty state, and errors should offer a retry when the caller can reload.
 The component owns presentation only; fetching, state and retry behavior stay in the caller.
 Choose the smallest matching `list`, `card` or `stats` skeleton variant.
+
+## Tenant isolation: the `isolation` Playwright project (#1566)
+
+```bash
+npm run test:e2e:isolation      # = playwright test --project=isolation
+```
+
+**What it proves.** Multi-tenancy has one criterion — a signed-in member of tenant A
+never sees a row belonging to tenant B — and it can only be proved against a server
+that is actually enforcing it. The isolation tests written before this project could
+not: `e2e/tenant-isolation.spec.ts` sets `process.env.MT_ENFORCE_ISOLATION` inside the
+*Playwright* process (the app never reads that), and `e2e/org-isolation.spec.ts` calls
+`orgScoped()` by hand and checks what Prisma returns. Both pass against a server that
+leaks everything. This project boots its own Next server on **port 3010** with
+`MT_ENFORCE_ISOLATION=true` in its env and points `baseURL` at it, so every assertion
+under `e2e/isolation/` is a statement about the running application's HTTP surface.
+
+**The default project keeps the flag off.** Around 150 specs assume the single-tenant
+behaviour the flag switches off, and the flag is still un-flipped in production
+(`docs/tenant-isolation.md`). So `e2e/isolation/**` is `testIgnore`d by the default
+`chromium` project, and the isolation server is only started when the run asks for that
+project — an ordinary `npm run test:e2e` and the CI smoke gate never pay for a second
+`next start`. Three consequences worth knowing:
+
+- `playwright test` with **no** `--project` runs the default suite only; the isolation
+  project is not in the config unless it was selected (or `E2E_ISOLATION=1` is set).
+- The two projects are **mutually exclusive in one run**, and asking for both
+  (`--project=isolation --project=chromium`, or `E2E_ISOLATION=1 --project=chromium`)
+  throws with an explanation. Each needs its own Next server started from this working
+  directory, and Next has no per-port `distDir`: two of them compile into the same
+  `.next/` and overwrite each other's build manifests and webpack cache, which surfaces
+  as intermittent `/_next/static/chunks/*` 404s rather than as a config problem. Run them
+  as two commands. `E2E_ISOLATION=1` on its own therefore means *isolation only* — the
+  default project is dropped from the config, so an IDE runner or a `--grep` that selects
+  an isolation spec gets exactly one server.
+- `BASE_URL=… npm run test:e2e:isolation` **throws** rather than running. A deployed
+  environment's flag is whatever it is (today: off), and testing enforcement against a
+  server that does not enforce is worse than not testing it.
+
+**Where it runs.** `e2e-full.yml` has an `isolation` job beside the four shards: same
+4×/day cadence, same drift gate, and its JSON report is named
+`e2e-json-shard-isolation` so a red isolation run reaches the same Turkish summary email
+(`E2E_EXPECTED_REPORTS` counts it as the fifth report, so a job that crashes before
+writing one is caught too). It is deliberately **not** in the PR gate: that gate is the
+`@smoke` subset, and a second `next build` + `next start` per PR for a project that only
+guards a flag which is still off in production is not worth the wall clock.
+
+**The two-tenant fixture.** `e2e/helpers/tenants.ts` → `seedTwoTenants()` creates two
+organizations (`iso-a-<stamp>` / `iso-b-<stamp>`), each with an ADMIN, MENTOR, MENTEE and
+COMPANY actor and a row in every model the leak matrix probes — `Company`,
+`MentorshipRelation`, `Tag`, `PipelineStage`, `InvitationToken`, `Offer`. It returns typed
+handles (`tenants.orgA.company.id`, `tenants.orgB.admin`, …), `signInAsTenantActor(page,
+actor)` for signing in as any of them, and a `cleanup()` that deletes everything in
+foreign-key order (child rows → users → companies → organizations). Always call it from
+`afterAll`. Seeding is not transactional, so a failure partway through tears down
+whatever it had already created before rethrowing — a `beforeAll` that rejects never
+hands the spec a `cleanup()` to call.
+
+`PipelineStage` is the one model seeded as a **set** rather than a single row: each
+tenant gets the whole canonical catalogue (`defaultPipelineStages()`), relabelled with
+its own prefix. `resolvePipelineStages()` returns a tenant's rows *instead of* the
+built-in catalogue as soon as one exists, so a lone custom stage would make both tenants
+custom-pipeline orgs whose catalogue does not contain the stage their own relation sits
+on — every board, funnel and pipeline bar renders empty, and a leak assertion against two
+empty boards passes in both directions without reading a row. The keys stay canonical and
+therefore identical across the two tenants (which is the point — `@@unique([orgId, key])`
+allows it, and a lookup by key alone is exactly how a scoping bug shows up); only the
+labels differ, so B's wording on A's board is a visible leak.
+
+Only some of those models are enforced today: `TENANT_MODELS` in `src/lib/orgContext.ts`
+is the set the Prisma middleware auto-scopes, and `npm run check:tenant-models` (#1560)
+pins the rest in its `PENDING_REGISTRATION` ratchet. Of what the fixture seeds, `User`,
+`Company` and `MentorshipRelation` are enforced; `Tag`, `PipelineStage`, `InvitationToken`
+and `Offer` are seeded but **not yet** — they are registered in #1559. A leak found on one
+of those four is a documented gap, not a fresh regression.
+
+**Writing a new isolation spec.** Put it in `e2e/isolation/`, seed with
+`seedTwoTenants()`, and assert in **both** directions (A must not see B *and* B must not
+see A) — a filter accidentally pinned to one tenant passes one direction. Do not add
+`@smoke` to anything there: the PR gate runs the default project, where these specs are
+excluded and would not run anyway.
 
 ## Stress / load test
 

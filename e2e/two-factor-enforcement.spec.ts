@@ -1,15 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setGlobalSetting } from './helpers/db';
 
 // The require2fa Setting is global and the CI DB is shared across tests, so this
 // spec MUST restore it to 'off' no matter what — otherwise every later admin
 // login would be redirected to the setup gate and cascade-fail.
 async function setPolicy(value: string) {
-  await prisma.setting.upsert({
-    where: { key: 'require2fa' },
-    create: { key: 'require2fa', value },
-    update: { value },
-  });
+  await setGlobalSetting('require2fa', value);
 }
 
 test.afterAll(async () => {
