@@ -18,6 +18,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Responsive / mobile** | Layout at small viewports | `e2e/mobile.spec.ts`, `e2e/users-responsive.spec.ts` | with E2E |
 | **PWA / offline** | Manifest, service worker, offline page | `e2e/pwa.spec.ts`, `e2e/offline-page.spec.ts` | with E2E |
 | **Health probe** | `/api/health` liveness + optional DB readiness | `e2e/health.spec.ts` | with E2E |
+| **Tenant isolation** | One tenant cannot read another's rows, against a server that really has `MT_ENFORCE_ISOLATION=true` | `e2e/isolation/*.spec.ts` (the `isolation` Playwright project) | its own job in `e2e-full.yml` (**4× a day**) + `npm run test:e2e:isolation` locally |
 | **Stress / load** | Latency percentiles, throughput, error rate under sustained concurrency | `scripts/stress-test.mjs` | **weekly cron**, Mon 02:30 UTC (`stress.yml`) + on demand |
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
@@ -38,6 +39,87 @@ Use `AsyncSection` for new asynchronous lists and panels: loading, error and emp
 Loading must never render the empty state, and errors should offer a retry when the caller can reload.
 The component owns presentation only; fetching, state and retry behavior stay in the caller.
 Choose the smallest matching `list`, `card` or `stats` skeleton variant.
+
+## Tenant isolation: the `isolation` Playwright project (#1566)
+
+```bash
+npm run test:e2e:isolation      # = playwright test --project=isolation
+```
+
+**What it proves.** Multi-tenancy has one criterion — a signed-in member of tenant A
+never sees a row belonging to tenant B — and it can only be proved against a server
+that is actually enforcing it. The isolation tests written before this project could
+not: `e2e/tenant-isolation.spec.ts` sets `process.env.MT_ENFORCE_ISOLATION` inside the
+*Playwright* process (the app never reads that), and `e2e/org-isolation.spec.ts` calls
+`orgScoped()` by hand and checks what Prisma returns. Both pass against a server that
+leaks everything. This project boots its own Next server on **port 3010** with
+`MT_ENFORCE_ISOLATION=true` in its env and points `baseURL` at it, so every assertion
+under `e2e/isolation/` is a statement about the running application's HTTP surface.
+
+**The default project keeps the flag off.** Around 150 specs assume the single-tenant
+behaviour the flag switches off, and the flag is still un-flipped in production
+(`docs/tenant-isolation.md`). So `e2e/isolation/**` is `testIgnore`d by the default
+`chromium` project, and the isolation server is only started when the run asks for that
+project — an ordinary `npm run test:e2e` and the CI smoke gate never pay for a second
+`next start`. Three consequences worth knowing:
+
+- `playwright test` with **no** `--project` runs the default suite only; the isolation
+  project is not in the config unless it was selected (or `E2E_ISOLATION=1` is set).
+- The two projects are **mutually exclusive in one run**, and asking for both
+  (`--project=isolation --project=chromium`, or `E2E_ISOLATION=1 --project=chromium`)
+  throws with an explanation. Each needs its own Next server started from this working
+  directory, and Next has no per-port `distDir`: two of them compile into the same
+  `.next/` and overwrite each other's build manifests and webpack cache, which surfaces
+  as intermittent `/_next/static/chunks/*` 404s rather than as a config problem. Run them
+  as two commands. `E2E_ISOLATION=1` on its own therefore means *isolation only* — the
+  default project is dropped from the config, so an IDE runner or a `--grep` that selects
+  an isolation spec gets exactly one server.
+- `BASE_URL=… npm run test:e2e:isolation` **throws** rather than running. A deployed
+  environment's flag is whatever it is (today: off), and testing enforcement against a
+  server that does not enforce is worse than not testing it.
+
+**Where it runs.** `e2e-full.yml` has an `isolation` job beside the four shards: same
+4×/day cadence, same drift gate, and its JSON report is named
+`e2e-json-shard-isolation` so a red isolation run reaches the same Turkish summary email
+(`E2E_EXPECTED_REPORTS` counts it as the fifth report, so a job that crashes before
+writing one is caught too). It is deliberately **not** in the PR gate: that gate is the
+`@smoke` subset, and a second `next build` + `next start` per PR for a project that only
+guards a flag which is still off in production is not worth the wall clock.
+
+**The two-tenant fixture.** `e2e/helpers/tenants.ts` → `seedTwoTenants()` creates two
+organizations (`iso-a-<stamp>` / `iso-b-<stamp>`), each with an ADMIN, MENTOR, MENTEE and
+COMPANY actor and a row in every model the leak matrix probes — `Company`,
+`MentorshipRelation`, `Tag`, `PipelineStage`, `InvitationToken`, `Offer`. It returns typed
+handles (`tenants.orgA.company.id`, `tenants.orgB.admin`, …), `signInAsTenantActor(page,
+actor)` for signing in as any of them, and a `cleanup()` that deletes everything in
+foreign-key order (child rows → users → companies → organizations). Always call it from
+`afterAll`. Seeding is not transactional, so a failure partway through tears down
+whatever it had already created before rethrowing — a `beforeAll` that rejects never
+hands the spec a `cleanup()` to call.
+
+`PipelineStage` is the one model seeded as a **set** rather than a single row: each
+tenant gets the whole canonical catalogue (`defaultPipelineStages()`), relabelled with
+its own prefix. `resolvePipelineStages()` returns a tenant's rows *instead of* the
+built-in catalogue as soon as one exists, so a lone custom stage would make both tenants
+custom-pipeline orgs whose catalogue does not contain the stage their own relation sits
+on — every board, funnel and pipeline bar renders empty, and a leak assertion against two
+empty boards passes in both directions without reading a row. The keys stay canonical and
+therefore identical across the two tenants (which is the point — `@@unique([orgId, key])`
+allows it, and a lookup by key alone is exactly how a scoping bug shows up); only the
+labels differ, so B's wording on A's board is a visible leak.
+
+Only some of those models are enforced today: `TENANT_MODELS` in `src/lib/orgContext.ts`
+is the set the Prisma middleware auto-scopes, and `npm run check:tenant-models` (#1560)
+pins the rest in its `PENDING_REGISTRATION` ratchet. Of what the fixture seeds, `User`,
+`Company` and `MentorshipRelation` are enforced; `Tag`, `PipelineStage`, `InvitationToken`
+and `Offer` are seeded but **not yet** — they are registered in #1559. A leak found on one
+of those four is a documented gap, not a fresh regression.
+
+**Writing a new isolation spec.** Put it in `e2e/isolation/`, seed with
+`seedTwoTenants()`, and assert in **both** directions (A must not see B *and* B must not
+see A) — a filter accidentally pinned to one tenant passes one direction. Do not add
+`@smoke` to anything there: the PR gate runs the default project, where these specs are
+excluded and would not run anyway.
 
 ## Stress / load test
 
