@@ -33,8 +33,26 @@ export default function AdminSettingsPage() {
   const [blindReview, setBlindReview] = useState(false);
   const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
   const [premiumAnalytics, setPremiumAnalytics] = useState(false);
+  // Monthly AI call budget (#1625). A real, enforced setting — the AI gate
+  // refuses calls once the month's pool is spent — that until now had no UI at
+  // all, so it could only be changed with an API call or a DB write. The limit
+  // resolves per tenant like every other setting, but the counter behind it
+  // does not: `AiUsage` has no `orgId`, so the pool is installation-wide (see
+  // docs/ai.md). The hint says that rather than promising a per-org budget.
+  const [aiMonthlyQuota, setAiMonthlyQuota] = useState('200');
+  // What the API resolved for this field (tenant row → global row → code
+  // default). The quota is posted ONLY when it differs from this: a PUT writes
+  // the caller's own layer, so posting an untouched inherited value would pin a
+  // tenant override at the operator's current number, and the operator's later
+  // changes to the global budget would then never reach that tenant.
+  const [loadedQuota, setLoadedQuota] = useState('200');
+  // Set when the box holds something the API's `\d{1,6}` would reject (empty is
+  // the common one — clearing the box is how anybody retypes a number). Without
+  // this the whole PUT 400s and every other change on the form is discarded.
+  const [quotaError, setQuotaError] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [csv, setCsv] = useState('');
   const [importing, setImporting] = useState(false);
@@ -125,6 +143,8 @@ export default function AdminSettingsPage() {
       setSelfRegistration(settings.selfRegistration ?? 'auto');
       setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
       setPremiumAnalytics(settings.premiumAnalytics === 'true');
+      setAiMonthlyQuota(settings.aiMonthlyQuota ?? '200');
+      setLoadedQuota(settings.aiMonthlyQuota ?? '200');
       setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
       setBlindReview(settings.blindReview === 'true');
     }
@@ -133,13 +153,29 @@ export default function AdminSettingsPage() {
 
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavingSettings(true); setFlash(null);
+    setFlash(null); setSaveError(null); setQuotaError(null);
+    // The API validates the quota with /^\d{1,6}$/ and rejects the WHOLE
+    // payload on a miss, so an unusable number is caught here and reported on
+    // the field instead — the rest of the form still saves.
+    const quota = aiMonthlyQuota.trim();
+    const quotaChanged = quota !== loadedQuota;
+    if (quotaChanged && !/^\d{1,6}$/.test(quota)) {
+      setQuotaError(t.settings.aiMonthlyQuotaInvalid);
+      return;
+    }
+    setSavingSettings(true);
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false' }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}) }),
       });
-      if (res.ok) setFlash(t.settings.saved);
+      // A failure used to be silent: the page only reacted to `ok`, so a
+      // rejected payload looked exactly like a successful save while every
+      // change on the form was dropped.
+      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); }
+      else setSaveError(t.settings.saveFailed);
+    } catch {
+      setSaveError(t.settings.saveFailed);
     } finally {
       setSavingSettings(false);
     }
@@ -178,6 +214,7 @@ export default function AdminSettingsPage() {
       </div>
 
       {flash && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">✓ {flash}</div>}
+      {saveError && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" data-testid="settings-save-error">{saveError}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
@@ -256,6 +293,9 @@ export default function AdminSettingsPage() {
               </label>
               <p className="text-xs text-gray-500 mt-1">{t.settings.premiumAnalyticsHint}</p>
             </div>
+            {/* max 999999 mirrors the API's `\d{1,6}` regex, which stays the
+                authority — the number attribute only keeps the form honest. */}
+            <Input label={t.settings.aiMonthlyQuota} type="number" min={0} max={999999} step={1} value={aiMonthlyQuota} onChange={(e) => { setAiMonthlyQuota(e.target.value); setQuotaError(null); }} hint={t.settings.aiMonthlyQuotaHint} error={quotaError ?? undefined} data-testid="ai-monthly-quota" />
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">
