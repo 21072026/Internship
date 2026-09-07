@@ -638,6 +638,12 @@ run_tool node prisma/push-company-interest-expand.mjs
 log "backfill CompanyInterest deterministic scope keys"
 run_tool node prisma/backfill-company-interest-scope.mjs
 
+log "prisma db push (Setting.id surrogate-key expand phase)"
+run_tool node prisma/push-setting-id-expand.mjs
+
+log "backfill Setting surrogate ids"
+run_tool node prisma/backfill-setting-id.mjs
+
 # ALSO before the push, not only after (#1288): when a previous half-applied
 # push has left a Json column filled with '' (the MariaDB longtext fill, see
 # the note below), the NEXT push can die before the post-push repair ever

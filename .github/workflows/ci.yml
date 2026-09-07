@@ -127,6 +127,24 @@ jobs:
       # directions — a typo'd entry never matches anything either.
       - name: every orgId model is registered with the tenant middleware (#1560)
         run: npm run check:tenant-models
+      # `prisma db push` does not merely warn about some schema steps, it
+      # REFUSES them on a table that already has rows — and `--accept-data-loss`
+      # does not cover that class. #2249 added `Setting.id String @id
+      # @default(cuid())`, which is additive in the schema, legal against the
+      # fresh database every topic env pushes to (#1185), and stalled every prod
+      # and preview deploy for 13 commits. Nothing the author could look at was
+      # red. This diffs the schema against the merge-base and names the step
+      # (#2298). It needs history: the checkout above is `fetch-depth: 0`, and
+      # the check FAILS CLOSED if it cannot resolve a base — "no base" must
+      # never read as "no problem". Its own assertions run under `npm run
+      # test:unit` (scripts/test/schema-push-safety.test.mjs).
+      - name: no schema step `db push` would refuse on a populated table (#2298)
+        env:
+          # The base commit GitHub itself resolved for this PR, so the check
+          # never has to guess which ref to diff against (empty on a push to
+          # main, where it falls back to origin/main and finds no diff).
+          SCHEMA_PUSH_SAFETY_BASE: ${{ github.event.pull_request.base.sha }}
+        run: npm run check:schema-push
       # `toLocaleDateString()` with no argument formats in the BROWSER's
       # language, so a fully-Turkish screen printed 8/25/2026 and an interview
       # slot carried no timezone at all (#1422). The tree is clean; this stops
