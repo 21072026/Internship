@@ -106,20 +106,37 @@ test.describe('release media', () => {
   /**
    * TEMPLATE — a clip, for a change where motion is the point.
    *
+   * THE RECORDING STARTS AT `newContext()`, NOT AT THE FIRST ACTION. Everything
+   * between that call and `page.close()` is in the file: the navigation, and —
+   * against `npm run dev` — the several seconds Next.js spends compiling the
+   * route on its first hit. That alone can push a 1.2s interaction past the
+   * five-second cap and get the fragment rejected by `check:release-fragments`
+   * with a message about the test being too long. So the route is warmed in the
+   * ordinary `page` fixture (a separate, unrecorded context) BEFORE the
+   * recording context exists.
+   *
    * `size` is the video's own resolution, kept well under the viewport: the
    * clip renders at 480px wide on the page, so recording a 1100px-wide desktop
-   * would only cost bytes. Everything the test does ends up in the file, so it
-   * does nothing but the one interaction worth showing — and stays under the
-   * five-second cap by staying short, not by trimming (which Playwright cannot
-   * do).
+   * would only cost bytes. Keep its aspect ratio equal to the viewport's, or
+   * Playwright letterboxes the picture inside the file; and crop the fragment's
+   * POSTER to roughly the same shape, since the poster is what a
+   * reduced-motion reader sees in the clip's place.
+   *
+   * Everything the test does ends up in the file, so it does nothing but the
+   * one interaction worth showing — and stays under the cap by staying short,
+   * not by trimming (which Playwright cannot do).
    */
-  test('clip: a short interaction on the release-notes page', async ({ browser }) => {
+  test('clip: a short interaction on the release-notes page', async ({ browser, baseURL, page: warmup }) => {
+    await warmup.goto('/release-notes');
+
     const context = await browser.newContext({
+      // A hand-built context inherits NOTHING from the project's `use` — not
+      // the baseURL a relative goto() needs, and not the consent state that
+      // keeps the cookie banner out of the first frame of the recording.
+      baseURL,
+      storageState: path.join(__dirname, '.state', 'consent.json'),
       viewport: { width: 960, height: 600 },
       recordVideo: { dir: test.info().outputDir, size: { width: 640, height: 400 } },
-      // A hand-built context does not inherit the project's `use`, and without
-      // this the cookie banner would be the first thing in the recording.
-      storageState: path.join(__dirname, '.state', 'consent.json'),
     });
     const page = await context.newPage();
     try {

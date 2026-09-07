@@ -5895,7 +5895,47 @@ kendi özelliğini taşıyan bir dosyayla kanıtlanıyor.
 `<video>`'ya geçer. Duraklatılmış video hâlâ indiriliyor ve hâlâ bir video; poster ise
 CHANGELOG.md'nin ve WebM çözemeyen tarayıcının da ihtiyacı olan tek dosya.
 
-**Üretemediğin şeyi sahtesiyle doldurma.** Kabul kriteri "PR kendi özelliğini kullansın"
-diyordu; konteynerde tarayıcı ve veritabanı yok, yani gerçek bir ekran görüntüsü çıkmıyor.
-Elde çizilmiş bir PNG'yi "uygulamanın ekran görüntüsü" diye commit etmek mekanizmayı test
-etmez, sadece kaydı kirletir — fragment medyasız gitti ve PR gövdesinde nedeni yazıyor.
+**"Konteynerde tarayıcı yok" diye varsayma — önce dene.** Bu oturumun ilk yarısında
+fragment medyasız gitti, gerekçe "tarayıcı ve veritabanı yok" idi. İkisi de yanlış çıktı:
+`/opt/pw-browsers` altında bir chromium duruyor (beklenen revizyon numarasına symlink, ya da
+doğrudan `executablePath` — CLAUDE.md'nin anlattığı numara) ve **Prisma'ya dokunmayan
+sayfalar veritabanı olmadan açılıyor**: `DATABASE_URL` sahte bir dize olsa bile `next dev`
+kalkıyor, `/release-notes` ve `/features` 200 dönüyor (landing `/` dönmüyor, o public stats
+okuyor), çünkü bu sayfalar yalnızca `releaseNotes.ts` + fragment'leri okuyor.
+Yani gerçek bir element ekran görüntüsü alınabiliyordu; alındı, commit edildi ve "hep skip
+eden" üç render testi artık gerçekten koşuyor. Ders: bir kabul kriterini "ortam elvermiyor"
+diye atlamadan önce en ucuz denemeyi yap — sunucuyu kaldır, `curl` at.
+
+**Kendi özelliğini kullanan bir PR'ı iki geçişte yakala.** Poster, üstünde poster olan kartı
+göstermeli — ama fragment'e medya eklenmeden kart medyayı göstermiyor. Sıra: (1) kartı çek,
+(2) fragment'e `media` bloğunu ekle, (3) sunucuyu yeniden başlat (fragment'ler `next.config.js`
+içinde, config yükünde okunuyor — dosyayı değiştirmek dev'i tetiklemiyor), (4) artık resim
+taşıyan kartı yeniden çek. Tek özyineleme seviyesi, dürüst bir görsel.
+
+**Compaction çıktısını gerçekten çalıştırıp derle.** "Şablon dizesi doğru TypeScript üretiyor"
+iddiası ancak üretilen dosya `tsc` geçerse doğrudur: depoyu `/tmp`'ye kopyala, `release-compact.mjs`
+çalıştır, sonucun üstünde `npx tsc --noEmit` koştur. Beş dakika, ve compaction cron'unun
+haftalar sonra kıracağı bir hatayı PR içinde yakalıyor.
+
+**Üst düzey script kodu unit test edilemez.** `release-compact.mjs` import edildiği anda
+çalışan bir script; içindeki iki yazıcı fonksiyona hiçbir test erişemiyordu. Saf string üreten
+yardımcıları importlanabilir bir modüle (`release-media.cjs`) taşımak yeterli — script onları
+`require` ediyor, test de.
+
+**`recordVideo` kaydı `newContext()` ile başlar, ilk aksiyonla değil.** Dosyada navigasyon da
+var, `next dev`'in rotayı ilk isabet-te derlediği saniyeler de — tek başına 5 saniyelik WCAG
+sınırını patlatmaya yeter, üstelik hata mesajı "testi kısalt" diyerek yanlış yere baktırır.
+Rotayı **kayıt bağlamının dışında** ısıt. Ayrıca elle kurulan bir `browser.newContext()`
+projenin `use` ayarlarından **hiçbirini** miras almaz: `baseURL` de, `storageState` de elle
+verilmeli — yoksa göreli `goto()` patlar ve çerez bandı kaydın ilk karesi olur.
+
+**Poster ile klip iki ayrı çekim, iki ayrı şekil.** Still kırpılmış bir element, klip
+ölçeklenmiş bir viewport; poster'ın IHDR ölçüsünü `<video>`'ya vermek klibi kendi çerçevesinin
+ortasına küçültüyordu (`object-fit: contain`). Klibin kendi `PixelWidth`/`PixelHeight` değerini
+`Tracks > TrackEntry > Video`'dan okumak ~15 satır ve sorunu kökten bitiriyor.
+
+**"En az biri farklı olmalı" türü assertion'lar doğru veriyi kırar.** Üç dilde `alt` zorunlu
+olabilir; üçünün *farklı* olması zorunlu değildir — "Kanban", "Dashboard", "CV Upload" üç dilde
+aynı yazılır. Böyle bir assertion, kimsenin dokunmadığı bir sayfada zamanlanmış koşuyu
+kırmızıya çevirir. Dil geçişini kanıtlamak istiyorsan `<html lang>`'e bak, metinlerin
+birbirinden farklı olmasına değil.

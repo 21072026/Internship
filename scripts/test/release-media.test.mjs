@@ -24,7 +24,15 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { pngSize, webmDuration, validateMediaShape, resolveMediaAssets } = require('../release-media.cjs');
+const {
+  pngSize,
+  webmDuration,
+  webmVideoSize,
+  validateMediaShape,
+  resolveMediaAssets,
+  changelogMedia,
+  releaseNotesMedia,
+} = require('../release-media.cjs');
 const { resolveRelease } = require('../release-derive.cjs');
 
 // ------------------------------------------------------------------ fixtures
@@ -92,6 +100,13 @@ const ID = {
   duration: Buffer.from([0x44, 0x89]),
   cluster: Buffer.from([0x1f, 0x43, 0xb6, 0x75]),
   clusterTimecode: Buffer.from([0xe7]),
+  tracks: Buffer.from([0x16, 0x54, 0xae, 0x6b]),
+  trackEntry: Buffer.from([0xae]),
+  video: Buffer.from([0xe0]),
+  pixelWidth: Buffer.from([0xb0]),
+  pixelHeight: Buffer.from([0xba]),
+  displayWidth: Buffer.from([0x54, 0xb0]),
+  displayHeight: Buffer.from([0x54, 0xba]),
   void: Buffer.from([0xec]),
 };
 
@@ -114,10 +129,17 @@ const float64 = (value) => {
  *    Playwright recording can look like;
  *  - `padBytes`         -> a Void element, to build an over-the-cap file.
  */
-function makeWebm({ seconds = null, clusters = [], padBytes = 0 } = {}) {
+function makeWebm({ seconds = null, clusters = [], padBytes = 0, size = null, display = null } = {}) {
   const info = [el(ID.timecodeScale, uint(1_000_000))];
   if (seconds !== null) info.push(el(ID.duration, float64(seconds * 1000))); // ticks of 1 ms
   const body = [el(ID.info, Buffer.concat(info))];
+  if (size) {
+    // Tracks > TrackEntry > Video > PixelWidth/PixelHeight, which is where the
+    // clip's own picture size lives — a different shape from the poster's.
+    const video = [el(ID.pixelWidth, uint(size.width)), el(ID.pixelHeight, uint(size.height))];
+    if (display) video.push(el(ID.displayWidth, uint(display.width)), el(ID.displayHeight, uint(display.height)));
+    body.push(el(ID.tracks, el(ID.trackEntry, el(ID.video, Buffer.concat(video)))));
+  }
   for (const ms of clusters) body.push(el(ID.cluster, el(ID.clusterTimecode, uint(ms))));
   if (padBytes) body.push(el(ID.void, Buffer.alloc(padBytes)));
   return el(ID.segment, Buffer.concat(body));
@@ -325,4 +347,133 @@ test('a fragment WITHOUT media stays completely valid — media is never require
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// ------------------------------------------------- the clip's own picture size
+
+test('webmVideoSize reads PixelWidth/PixelHeight out of Tracks>TrackEntry>Video', () => {
+  assert.deepEqual(webmVideoSize(makeWebm({ seconds: 2, size: { width: 640, height: 400 } })), {
+    width: 640,
+    height: 400,
+  });
+});
+
+test('webmVideoSize prefers DisplayWidth/DisplayHeight — the size the picture should be SHOWN at', () => {
+  const webm = makeWebm({ seconds: 2, size: { width: 640, height: 480 }, display: { width: 854, height: 480 } });
+  assert.deepEqual(webmVideoSize(webm), { width: 854, height: 480 });
+});
+
+test('webmVideoSize reports nothing rather than guessing when the file declares no track', () => {
+  assert.equal(webmVideoSize(makeWebm({ seconds: 2 })), null);
+  assert.equal(webmVideoSize(Buffer.from('not a webm at all')), null);
+});
+
+test('a clip resolves with ITS OWN size, separate from the poster\'s', () => {
+  const root = makeRepo();
+  try {
+    // The two captures have unrelated shapes by construction: the poster is a
+    // cropped element, the clip a scaled viewport. Handing the poster's aspect
+    // ratio to the <video> laid the clip out letterboxed inside its own frame.
+    writeFileSync(path.join(root, 'public', 'release-media', 'demo.png'), makePng(1052, 300));
+    writeFileSync(
+      path.join(root, 'public', 'release-media', 'demo.webm'),
+      makeWebm({ seconds: 2, size: { width: 640, height: 400 } })
+    );
+    const resolved = resolveMediaAssets(root, 'demo.json', media({ video: 'release-media/demo.webm' }));
+    assert.equal(resolved.width, 1052);
+    assert.equal(resolved.height, 300);
+    assert.equal(resolved.videoWidth, 640);
+    assert.equal(resolved.videoHeight, 400);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a clip whose header declares no size still resolves — the poster is never guessed at', () => {
+  const root = makeRepo();
+  try {
+    writeFileSync(path.join(root, 'public', 'release-media', 'demo.png'), makePng(480, 270));
+    writeFileSync(path.join(root, 'public', 'release-media', 'demo.webm'), makeWebm({ seconds: 2 }));
+    const resolved = resolveMediaAssets(root, 'demo.json', media({ video: 'release-media/demo.webm' }));
+    assert.equal(resolved.width, 480);
+    assert.equal(resolved.videoWidth, undefined);
+    assert.equal(resolved.videoHeight, undefined);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ------------------------------------------------------- what compaction writes
+//
+// These two writers produce the PERMANENT record: the markdown that lands in
+// CHANGELOG.md and the TypeScript that lands in src/lib/releaseNotes.ts. The
+// compaction cron runs them long after the PR is merged, so a mistake here is
+// found by whoever happens to be reading a broken release page — which is why
+// they live in release-media.cjs (importable) rather than inside the top-level
+// compaction script (not importable).
+
+test('changelogMedia writes the POSTER as markdown, never the clip', () => {
+  const out = changelogMedia({ ...media({ video: 'release-media/demo.webm' }), width: 480, height: 270 });
+  assert.equal(out, '![The card](public/release-media/demo.png)\n\n');
+  assert.ok(!out.includes('.webm'), 'markdown cannot play a video');
+});
+
+test('changelogMedia escapes brackets in the alt so the image syntax cannot break', () => {
+  const out = changelogMedia({ poster: 'release-media/demo.png', alt: { en: 'The [new] card', tr: 'x', de: 'y' } });
+  assert.equal(out, '![The new card](public/release-media/demo.png)\n\n');
+});
+
+test('changelogMedia contributes nothing for a note without media', () => {
+  assert.equal(changelogMedia(undefined), '');
+  assert.equal(changelogMedia(null), '');
+});
+
+test('releaseNotesMedia emits a valid, indented entry carrying both sizes', () => {
+  const out = releaseNotesMedia({
+    poster: 'release-media/demo.png',
+    video: 'release-media/demo.webm',
+    alt,
+    width: 1052,
+    height: 300,
+    videoWidth: 640,
+    videoHeight: 400,
+  });
+  assert.equal(
+    out,
+    '    media: {\n' +
+      '      poster: "release-media/demo.png",\n' +
+      '      video: "release-media/demo.webm",\n' +
+      '      alt: {\n' +
+      '        en: "The card",\n' +
+      '        tr: "Kart",\n' +
+      '        de: "Die Karte",\n' +
+      '      },\n' +
+      '      width: 1052,\n' +
+      '      height: 300,\n' +
+      '      videoWidth: 640,\n' +
+      '      videoHeight: 400,\n' +
+      '    },\n'
+  );
+});
+
+test('releaseNotesMedia omits video and its size for a poster-only note', () => {
+  const out = releaseNotesMedia({ poster: 'release-media/demo.png', alt, width: 640, height: 130 });
+  assert.ok(!out.includes('video'), 'no video key, and no videoWidth/videoHeight either');
+  assert.match(out, /width: 640,/);
+  assert.match(out, /height: 130,/);
+});
+
+test('releaseNotesMedia produces TypeScript that actually parses, with the alt intact', () => {
+  // The generated text is spliced into a source file nobody re-reads by hand;
+  // a stray quote or a missing comma would only surface as a build failure on
+  // the compaction PR. Evaluate it as an object literal to prove it is valid.
+  const tricky = { en: 'A "quoted" card', tr: 'Bir \'tırnaklı\' kart', de: 'Eine Karte\nmit Zeilenumbruch' };
+  const out = releaseNotesMedia({ poster: 'release-media/demo.png', alt: tricky, width: 10, height: 20 });
+  const parsed = new Function(`return {\n${out}};`)();
+  assert.deepEqual(parsed.media.alt, tricky);
+  assert.equal(parsed.media.poster, 'release-media/demo.png');
+});
+
+test('releaseNotesMedia contributes nothing for a note without media', () => {
+  assert.equal(releaseNotesMedia(undefined), '');
 });

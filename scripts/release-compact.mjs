@@ -23,6 +23,9 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { FRAGMENT_DIR, resolveRelease } = require('./release-derive.cjs');
+// The two media writers (#2233) live in the media module so they can be unit
+// tested — this file is top-level script code and cannot be imported.
+const { changelogMedia, releaseNotesMedia } = require('./release-media.cjs');
 
 // The public repository, for the commit links in the changelog. Same URL as
 // src/components/landing/links.ts (a .mjs script cannot import the TS module).
@@ -64,35 +67,6 @@ const newestFirst = [...timeline].reverse();
 const pkgNext = pkgRaw.replace(`"version": "${pkg.version}"`, `"version": "${version}"`);
 if (pkgNext === pkgRaw) throw new Error(`could not find "version": "${pkg.version}" in package.json`);
 
-/** The poster as a markdown image, for the changelog section (#2233).
- *  ALWAYS the still, never the clip: CHANGELOG.md is markdown, and a repo-root
- *  relative path is what GitHub renders (and what a local checkout resolves).
- *  A note without media contributes nothing here. */
-function changelogMedia(entry) {
-  if (!entry.media) return '';
-  const alt = entry.media.alt?.en ?? '';
-  return `![${alt.replace(/[[\]]/g, '')}](public/${entry.media.poster})\n\n`;
-}
-
-/** The media block as it is written into releaseNotes.ts. The poster's pixel
- *  size was read from the file by scripts/release-media.cjs, so the permanent
- *  entry keeps reserving the right space long after the fragment is gone. */
-function releaseNotesMedia(media) {
-  if (!media) return '';
-  const line = (key, value) => `      ${key}: ${JSON.stringify(value)},\n`;
-  return (
-    '    media: {\n' +
-    line('poster', media.poster) +
-    (media.video ? line('video', media.video) : '') +
-    '      alt: {\n' +
-    ['en', 'tr', 'de'].map((locale) => `        ${locale}: ${JSON.stringify(media.alt[locale])},\n`).join('') +
-    '      },\n' +
-    (Number.isFinite(media.width) ? line('width', media.width) : '') +
-    (Number.isFinite(media.height) ? line('height', media.height) : '') +
-    '    },\n'
-  );
-}
-
 // 2. CHANGELOG.md — one section per fragment, newest first.
 const clPath = path.join(root, 'CHANGELOG.md');
 const cl = readFileSync(clPath, 'utf8');
@@ -106,7 +80,7 @@ const sections = newestFirst
     const meta = entry.sha
       ? `_Shipped ${entry.date} ${entry.time} UTC · commit [${entry.commit}](${REPO_URL}/commit/${entry.sha})_\n\n`
       : '';
-    return `## [${entry.version}] - ${entry.date || today}\n\n${meta}${entry.changelog.trim()}\n\n${changelogMedia(entry)}`;
+    return `## [${entry.version}] - ${entry.date || today}\n\n${meta}${entry.changelog.trim()}\n\n${changelogMedia(entry.media)}`;
   })
   .join('');
 const clNext = cl.slice(0, anchor) + sections + cl.slice(anchor);

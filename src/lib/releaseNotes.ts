@@ -15,6 +15,11 @@ import type { Locale } from '@/i18n/config';
  * to `public/` (always `release-media/<fragment-slug>.{png,webm}`); the pixel
  * size is read from the PNG at build time so the page reserves the space and
  * does not reflow when the image arrives.
+ *
+ * `videoWidth`/`videoHeight` are the CLIP's own size, read from the WebM, and
+ * are deliberately separate from the poster's: a still is a cropped element and
+ * a recording is a whole viewport, so the two have unrelated aspect ratios and
+ * sizing the <video> from the poster would letterbox the clip inside it.
  */
 export interface ReleaseMedia {
   poster: string;
@@ -22,6 +27,8 @@ export interface ReleaseMedia {
   alt: Record<Locale, string>;
   width?: number;
   height?: number;
+  videoWidth?: number;
+  videoHeight?: number;
 }
 
 export interface ReleaseNote {

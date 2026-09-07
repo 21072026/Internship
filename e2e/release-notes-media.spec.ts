@@ -24,6 +24,9 @@ async function setLocale(page: Page, locale: 'tr' | 'de') {
     document.cookie = `locale=${l};path=/`;
   }, locale);
   await page.goto('/release-notes');
+  // Prove the switch actually took: without this the alt assertions below
+  // would pass trivially by re-reading the English page three times.
+  await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
 
 test.describe('release-note media', () => {
@@ -86,16 +89,21 @@ test.describe('release-note media', () => {
         .first()
         .evaluate((el) => el.getAttribute('alt') ?? el.getAttribute('aria-label') ?? '');
 
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     const en = await describedIn();
     await setLocale(page, 'tr');
     const tr = await describedIn();
     await setLocale(page, 'de');
     const de = await describedIn();
 
+    // Every locale is served a described picture. Deliberately NOT "at least
+    // one of the three must differ": `media.alt` is required in all three
+    // languages but is not required to be three different sentences, and a
+    // perfectly legitimate alt — a proper noun, a bare UI label ("Kanban",
+    // "Dashboard", "CV Upload") — reads the same in EN/TR/DE. Asserting a
+    // difference here would turn correct data on an untouched page into a red
+    // scheduled run. That the page really is in three different languages is
+    // asserted above, on <html lang>.
     for (const text of [en, tr, de]) expect(text.trim()).toBeTruthy();
-    // Three locales are mandatory on the fragment, so at least one of them has
-    // to actually differ — identical strings would mean the alt is not localized
-    // (or that someone pasted the English into all three).
-    expect(new Set([en, tr, de]).size).toBeGreaterThan(1);
   });
 });

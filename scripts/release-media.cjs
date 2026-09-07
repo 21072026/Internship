@@ -70,16 +70,28 @@ function pngSize(buffer) {
 
 // --------------------------------------------------------------- EBML / WebM
 
-/** WebM is EBML. Only the four elements the duration depends on matter here. */
+/** WebM is EBML. Only the elements the duration and the picture size depend on
+ *  matter here. */
 const EL = {
   SEGMENT: 0x18538067,
   INFO: 0x1549a966,
   CLUSTER: 0x1f43b675,
+  TRACKS: 0x1654ae6b,
+  TRACK_ENTRY: 0xae,
+  VIDEO: 0xe0,
   TIMECODE_SCALE: 0x2ad7b1, // nanoseconds per tick; defaults to 1e6 (= 1ms)
   DURATION: 0x4489, // float, in ticks
   CLUSTER_TIMECODE: 0xe7, // uint, in ticks
+  PIXEL_WIDTH: 0xb0, // uint, inside Tracks>TrackEntry>Video
+  PIXEL_HEIGHT: 0xba,
+  DISPLAY_WIDTH: 0x54b0, // uint, the size the picture should be SHOWN at
+  DISPLAY_HEIGHT: 0x54ba,
 };
-const MASTERS = new Set([EL.SEGMENT, EL.INFO, EL.CLUSTER]);
+const MASTERS = new Set([EL.SEGMENT, EL.INFO, EL.CLUSTER, EL.TRACKS, EL.TRACK_ENTRY, EL.VIDEO]);
+/** Read only when the parent element is a Video master. These IDs are short —
+ *  PixelWidth is the single byte 0xB0 — so matching them anywhere in the file
+ *  would happily pick up an unrelated element's bytes. */
+const VIDEO_SIZE_IDS = new Set([EL.PIXEL_WIDTH, EL.PIXEL_HEIGHT, EL.DISPLAY_WIDTH, EL.DISPLAY_HEIGHT]);
 
 /**
  * One EBML variable-length integer. IDs keep their length marker (that is what
@@ -114,7 +126,7 @@ function readUint(buffer, start, end) {
   return value;
 }
 
-function scanEbml(buffer, start, end, state) {
+function scanEbml(buffer, start, end, state, parent = 0) {
   let pos = start;
   while (pos < end) {
     const id = readVint(buffer, pos, false);
@@ -128,8 +140,16 @@ function scanEbml(buffer, start, end, state) {
     // stop, since there is no sibling boundary to come back to.
     const contentEnd = size.unknown ? end : Math.min(end, cursor + size.value);
     if (MASTERS.has(id.value)) {
-      scanEbml(buffer, cursor, contentEnd, state);
+      scanEbml(buffer, cursor, contentEnd, state, id.value);
       if (size.unknown) return;
+    } else if (parent === EL.VIDEO && VIDEO_SIZE_IDS.has(id.value)) {
+      const value = readUint(buffer, cursor, contentEnd);
+      if (value > 0) {
+        if (id.value === EL.PIXEL_WIDTH) state.video.pixelWidth = value;
+        else if (id.value === EL.PIXEL_HEIGHT) state.video.pixelHeight = value;
+        else if (id.value === EL.DISPLAY_WIDTH) state.video.displayWidth = value;
+        else state.video.displayHeight = value;
+      }
     } else if (id.value === EL.TIMECODE_SCALE) {
       const scale = readUint(buffer, cursor, contentEnd);
       if (scale > 0) state.timecodeScale = scale;
@@ -145,6 +165,35 @@ function scanEbml(buffer, start, end, state) {
   }
 }
 
+function newState() {
+  return { timecodeScale: 1_000_000, duration: null, lastCluster: 0, video: {} };
+}
+
+/**
+ * The clip's own picture size, or null when the file does not declare one.
+ *
+ * The page needs this because the POSTER and the CLIP are two different
+ * captures with unrelated shapes: the still is a cropped element
+ * (`locator.screenshot()`), the recording is a whole viewport scaled into
+ * `recordVideo.size`. Sizing the <video> from the poster's IHDR — which is what
+ * this originally did — laid the element out at the poster's aspect ratio and
+ * then `object-fit: contain` shrank the actual clip into the middle of it, so a
+ * note with a clip rendered visibly smaller than its own poster and snapped
+ * size the moment autoplay began.
+ *
+ * DisplayWidth/DisplayHeight win when present: that is the size the spec says
+ * the picture should be *shown* at (PixelWidth/Height may be padded to the
+ * codec's macroblock grid). Playwright's recordVideo writes only the pixel pair.
+ */
+function webmVideoSize(buffer) {
+  const state = newState();
+  scanEbml(buffer, 0, buffer.length, state);
+  const { pixelWidth, pixelHeight, displayWidth, displayHeight } = state.video;
+  if (displayWidth && displayHeight) return { width: displayWidth, height: displayHeight };
+  if (pixelWidth && pixelHeight) return { width: pixelWidth, height: pixelHeight };
+  return null;
+}
+
 /**
  * How long a WebM runs, in seconds, or null when the file says nothing about it.
  *
@@ -156,7 +205,7 @@ function scanEbml(buffer, start, end, state) {
  *      and never an over-estimate that would reject a legal clip.
  */
 function webmDuration(buffer) {
-  const state = { timecodeScale: 1_000_000, duration: null, lastCluster: 0 };
+  const state = newState();
   scanEbml(buffer, 0, buffer.length, state);
   const scaleSeconds = state.timecodeScale / 1_000_000_000;
   if (state.duration != null && Number.isFinite(state.duration) && state.duration > 0) {
@@ -246,7 +295,7 @@ function resolveMediaAssets(repoRoot, where, media) {
   const size = pngSize(readFileSync(posterPath));
   if (!size) throw new Error(`${where}: media.poster is not a readable PNG (${PUBLIC_DIR}/${media.poster})`);
 
-  const resolved = { ...media, width: size.width, height: size.height };
+  let resolved = { ...media, width: size.width, height: size.height };
 
   if (media.video) {
     const videoPath = path.join(publicRoot, media.video);
@@ -257,7 +306,8 @@ function resolveMediaAssets(repoRoot, where, media) {
     if (videoBytes > MAX_VIDEO_BYTES) {
       throw new Error(`${where}: media.video is ${kb(videoBytes)}, over the ${kb(MAX_VIDEO_BYTES)} cap`);
     }
-    const duration = webmDuration(readFileSync(videoPath));
+    const videoBytesBuffer = readFileSync(videoPath);
+    const duration = webmDuration(videoBytesBuffer);
     if (!duration) {
       throw new Error(
         `${where}: could not read a duration from ${PUBLIC_DIR}/${media.video} — ` +
@@ -267,12 +317,64 @@ function resolveMediaAssets(repoRoot, where, media) {
     if (duration.seconds > MAX_VIDEO_SECONDS + DURATION_EPSILON) {
       throw new Error(
         `${where}: media.video runs ${duration.seconds.toFixed(2)}s, over the ${MAX_VIDEO_SECONDS}s cap ` +
-          '(WCAG 2.2.2: longer auto-playing motion would need a pause control) — keep the capture test shorter'
+          '(WCAG 2.2.2: longer auto-playing motion would need a pause control) — the recording starts when the ' +
+          'BrowserContext is created, so navigate/warm the route OUTSIDE it and keep the recorded test short'
       );
     }
+    // The clip's own shape, so the page lays the <video> out at the aspect
+    // ratio of the thing it is going to play rather than the poster's.
+    const videoSize = webmVideoSize(videoBytesBuffer);
+    if (videoSize) resolved = { ...resolved, videoWidth: videoSize.width, videoHeight: videoSize.height };
   }
 
   return resolved;
+}
+
+// ------------------------------------------------------- compaction writers
+//
+// scripts/release-compact.mjs folds a fragment into CHANGELOG.md and
+// src/lib/releaseNotes.ts. Those two writers live HERE rather than in the
+// compaction script because the script is top-level code that runs on import —
+// a unit test cannot reach a function defined inside it, and until #2233 was
+// reviewed the generated markdown and the generated TypeScript were the only
+// part of this feature with no coverage at all. They are pure string builders:
+// no filesystem, no git, trivially testable.
+
+/**
+ * The poster as a markdown image, for a CHANGELOG.md section.
+ * ALWAYS the still, never the clip: CHANGELOG.md is markdown, and a repo-root
+ * relative path is what GitHub renders (and what a local checkout resolves).
+ * A note without media contributes nothing.
+ */
+function changelogMedia(media) {
+  if (!media) return '';
+  const alt = (media.alt && media.alt.en) || '';
+  return `![${alt.replace(/[[\]]/g, '')}](${PUBLIC_DIR}/${media.poster})\n\n`;
+}
+
+/**
+ * The media block as it is written into src/lib/releaseNotes.ts, indented to
+ * sit inside a release entry. The pixel sizes were read from the files by
+ * resolveMediaAssets(), so the permanent entry keeps reserving the right space
+ * long after the fragment is gone — the poster's for the still, and the clip's
+ * own for the <video>, which is a different shape.
+ */
+function releaseNotesMedia(media) {
+  if (!media) return '';
+  const line = (key, value) => `      ${key}: ${JSON.stringify(value)},\n`;
+  const dimension = (key) => (Number.isFinite(media[key]) ? line(key, media[key]) : '');
+  return (
+    '    media: {\n' +
+    line('poster', media.poster) +
+    (media.video ? line('video', media.video) : '') +
+    '      alt: {\n' +
+    LOCALES.map((locale) => `        ${locale}: ${JSON.stringify(media.alt[locale])},\n`).join('') +
+    '      },\n' +
+    dimension('width') +
+    dimension('height') +
+    (media.video ? dimension('videoWidth') + dimension('videoHeight') : '') +
+    '    },\n'
+  );
 }
 
 module.exports = {
@@ -284,6 +386,9 @@ module.exports = {
   MAX_VIDEO_SECONDS,
   pngSize,
   webmDuration,
+  webmVideoSize,
   validateMediaShape,
   resolveMediaAssets,
+  changelogMedia,
+  releaseNotesMedia,
 };

@@ -234,7 +234,12 @@ workaround, #636, and it compiled on every PR push).
   Verify with the `dark-mode`/`landing-cta-dark` e2e specs or a computed-style check.
 - **Claude Code web containers:** run `npm install` first (deps aren't preinstalled). If
   Playwright's pinned browser build is missing under `/opt/pw-browsers`, symlink the
-  installed build into the expected version directory instead of `playwright install`.
+  installed build into the expected version directory instead of `playwright install` (or
+  pass its path as `executablePath`). A missing database is **not** by itself a reason to
+  skip a browser check: `next dev` starts with a dummy `DATABASE_URL`, and any page that
+  does not touch Prisma still renders — `/release-notes` and `/features` do (the landing
+  page `/` does not; it reads public stats). That is enough to capture release media
+  (#2233) or verify a static public page for real, rather than assuming you cannot.
 - **Work is tracked on a GitHub Project board** (Epics #5–#11, stories #12+). Move the issue
   to the matching column as you work.
 - Co-author trailer on commits: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.

@@ -97,6 +97,20 @@ npm run test:e2e:media -- --grep "poster"   # just one
   whole viewport, for the whole test**. Playwright cannot crop to an element or
   trim to the interesting seconds, so do not try: keep the capture test minimal,
   so the whole test *is* the content, and set `recordVideo.size` modestly.
+- **Recording starts at `browser.newContext()`, not at your first action.** The
+  navigation is in the file, and against `npm run dev` so is the several seconds
+  Next.js spends compiling the route on its first hit — enough on its own to
+  blow the five-second cap and get the fragment rejected. Warm the route in
+  another page/context *before* creating the recording context (the clip
+  template does exactly that), and remember a hand-built context inherits
+  nothing from `use` — pass `baseURL` and `storageState` yourself.
+- **Match the shapes.** Keep `recordVideo.size` at the viewport's aspect ratio
+  (otherwise Playwright letterboxes the picture inside the file), and crop the
+  poster to roughly the same shape as the clip. The poster is what a
+  reduced-motion reader sees *instead of* the clip and what shows in the moment
+  before autoplay begins; the page sizes the `<video>` from the clip's own
+  dimensions, so wildly different shapes make the picture jump when playback
+  starts.
 - Captures are **light theme only** — two themes would mean two files per note.
   The page frames the picture in a visible border and pins a white background,
   so a light capture still reads as *a screenshot* on the dark page.
@@ -116,7 +130,7 @@ header for the size, the EBML header for the duration) and fails on:
 | the referenced file exists under `public/` | A broken image on a page that must always render |
 | poster ≤ **150 KB** | A cropped element screenshot is 40-80 KB; the cap catches a full-page capture pasted in by mistake |
 | clip ≤ **1.5 MB** | Bounded repo growth — the media is committed, not uploaded off-site |
-| clip ≤ **5 seconds** | WCAG 2.2.2: longer auto-playing motion would need a pause control on every card |
+| clip ≤ **5 seconds** | WCAG 2.2.2: longer auto-playing motion would need a pause control on every card (recording starts at `newContext()` — a cold route compile counts) |
 | `alt` in all of EN/TR/DE | Same rule as `notes` — the picture carries meaning, so its description is localized |
 
 Why committed to `public/` rather than object storage: R2 exists here for
@@ -134,7 +148,9 @@ and stale media is never a CI failure.
 ### Where it ends up
 
 - `/release-notes` — at most 480px wide, rounded, framed, with localized `alt`
-  and the poster's own pixel size set so the list does not reflow. With a clip:
+  and the picture's own pixel size set so the list does not reflow (the
+  poster's on the `<img>`, the clip's own on the `<video>` — they are two
+  different captures with two different shapes). With a clip:
   `autoplay loop muted playsinline`, poster as the fallback, and under
   `prefers-reduced-motion: reduce` the **poster** renders and the video is never
   mounted at all.

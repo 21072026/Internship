@@ -32,7 +32,11 @@ import type { ReleaseMedia } from '@/lib/releaseNotes';
  *
  * `width`/`height` come from the PNG header at build time
  * (scripts/release-media.cjs), so the card reserves the space and the list does
- * not jump when the image arrives.
+ * not jump when the image arrives. The <video> gets the CLIP's own
+ * `videoWidth`/`videoHeight` instead — a poster is a cropped element and a
+ * recording is a whole viewport, so handing the poster's aspect ratio to the
+ * <video> laid it out too short and `object-fit: contain` then shrank the
+ * playing clip into the middle of its own frame.
  */
 export function ReleaseNoteMedia({ media, locale }: { media: ReleaseMedia; locale: Locale }) {
   const alt = media.alt[locale] || media.alt[defaultLocale];
@@ -48,7 +52,13 @@ export function ReleaseNoteMedia({ media, locale }: { media: ReleaseMedia; local
     return () => query.removeEventListener('change', apply);
   }, [media.video]);
 
-  const dimensions = media.width && media.height ? { width: media.width, height: media.height } : {};
+  const posterSize = media.width && media.height ? { width: media.width, height: media.height } : {};
+  const videoSize =
+    media.videoWidth && media.videoHeight
+      ? { width: media.videoWidth, height: media.videoHeight }
+      : /* An older entry compacted before the clip's size was read: no size at
+           all beats the poster's wrong one, which would letterbox the clip. */
+        {};
 
   return (
     <figure
@@ -67,12 +77,12 @@ export function ReleaseNoteMedia({ media, locale }: { media: ReleaseMedia; local
           playsInline
           poster={posterUrl}
           aria-label={alt}
-          {...dimensions}
+          {...videoSize}
         >
           <source src={`/${media.video}`} type="video/webm" />
           {/* Shown by a browser with no <video> at all; a browser that has
               <video> but cannot decode WebM keeps the poster above. */}
-          <img src={posterUrl} alt={alt} className="block h-auto w-full" {...dimensions} />
+          <img src={posterUrl} alt={alt} className="block h-auto w-full" {...posterSize} />
         </video>
       ) : (
         <img
@@ -82,7 +92,7 @@ export function ReleaseNoteMedia({ media, locale }: { media: ReleaseMedia; local
           loading="lazy"
           decoding="async"
           className="block h-auto w-full"
-          {...dimensions}
+          {...posterSize}
         />
       )}
     </figure>
