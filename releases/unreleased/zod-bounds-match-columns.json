@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Two zod upper bounds were wider than their column** (#1433). `Company.name` had no `max()` at all and `ProjectTask.title` was capped at 300 against `VARCHAR(191)`, so a long paste passed validation and died as a Prisma P2000 — a 500 in the company modal, and an empty-bodied 500 with no UI feedback at all when adding a to-do. `TEXT_LIMITS` gains `companyName`, `companyAddress` and `todoTitle`, used in the server schema, the client schema and the `maxLength` prop; `POST /api/todos` is wrapped so it can never answer without a JSON body, and a failed add now raises a toast. `e2e/text-limits-columns.unit.spec.ts` checks each constant against the column width parsed from `prisma/schema.prisma` and asserts rejection at exactly one character over.",
+  "notes": {
+    "en": [
+      "Long company names and long to-do titles now stop at the field's limit with a clear message, instead of failing with \"Internal server error\" — or, when adding a to-do, failing with no message at all."
+    ],
+    "tr": [
+      "Uzun şirket adları ve uzun yapılacak başlıkları artık \"Internal server error\" ile düşmek yerine alanın sınırında anlaşılır bir uyarıyla duruyor — yapılacak eklerken hiçbir şey söylemeden başarısız olma durumu da bitti."
+    ],
+    "de": [
+      "Lange Firmennamen und lange Aufgabentitel stoppen jetzt mit einem verständlichen Hinweis an der Feldgrenze, statt mit „Internal server error“ zu scheitern — und beim Hinzufügen einer Aufgabe scheitert nichts mehr kommentarlos."
+    ]
+  }
+}

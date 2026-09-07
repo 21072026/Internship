@@ -8,6 +8,9 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useT, useLocale } from '@/i18n/client';
+import { useToast } from '@/components/ui/Toast';
+import { useCharacterCounter } from '@/hooks/useCharacterCounter';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { TodoRow, todoText, type Todo } from '@/components/todos/TodoRow';
 
 // One person's whole to-do list (#1113).
@@ -22,6 +25,7 @@ import { TodoRow, todoText, type Todo } from '@/components/todos/TodoRow';
 export function MyTodos({ myId }: { myId: string }) {
   const t = useT();
   const locale = useLocale();
+  const toast = useToast();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [open, setOpen] = useState<Todo[]>([]);
   const [archive, setArchive] = useState<Todo[]>([]);
@@ -57,7 +61,12 @@ export function MyTodos({ myId }: { myId: string }) {
       await load();
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : t.common.error);
+      // Say it out loud (#1433). The inline line below the list is easy to miss
+      // — it sits under the archive toggle — and adding a to-do that failed on
+      // the server used to look exactly like adding one that worked.
+      const message = e instanceof Error ? e.message : t.common.error;
+      setError(message);
+      toast(message, 'error');
       return false;
     } finally {
       setBusy('');
@@ -84,6 +93,10 @@ export function MyTodos({ myId }: { myId: string }) {
   const claim = (todo: Todo) => call(`/api/project-tasks/${todo.id}`, 'PATCH', { assigneeId: myId }, todo.id);
 
   const doneCount = useMemo(() => todos.filter((x) => x.done).length, [todos]);
+  // ProjectTask.title is VARCHAR(191). The counter only appears once the draft
+  // is close to that, so the box stays quiet for the one-line to-dos that are
+  // the normal case, and the limit is visible exactly when it starts to matter.
+  const draftCounter = useCharacterCounter(draft, TEXT_LIMITS.todoTitle);
 
   if (loading) {
     return (
@@ -108,14 +121,30 @@ export function MyTodos({ myId }: { myId: string }) {
 
         {!showArchive && (
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-              placeholder={t.todos.addPlaceholder}
-              data-testid="todo-input"
-              className="w-full min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-1"
-            />
+            <div className="relative w-full min-w-0 sm:flex-1">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+                placeholder={t.todos.addPlaceholder}
+                maxLength={TEXT_LIMITS.todoTitle}
+                data-testid="todo-input"
+                className="w-full min-w-0 rounded-lg border border-gray-300 px-3 py-2 pr-16 text-sm dark:border-gray-700 dark:bg-gray-900"
+              />
+              {draftCounter.state !== 'normal' && (
+                <span
+                  data-testid="todo-input-counter"
+                  data-counter-state={draftCounter.state}
+                  className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 select-none text-xs font-medium ${
+                    draftCounter.state === 'error'
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                  }`}
+                >
+                  {draftCounter.display}
+                </span>
+              )}
+            </div>
             <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" loading={busy === 'add'} onClick={add} data-testid="todo-add">
               <Plus className="mr-1 h-3.5 w-3.5" /> {t.todos.add}
             </Button>

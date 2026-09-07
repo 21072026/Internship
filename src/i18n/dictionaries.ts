@@ -643,6 +643,8 @@ const en = {
   },
   companyForm: {
     name: 'Company Name',
+    // Shown when a field runs past what the column can hold (#1433).
+    tooLong: 'At most {max} characters',
     industry: 'Industry',
     industryPlaceholder: 'e.g. Technology, Finance',
     contactEmail: 'Contact Email',
@@ -5281,6 +5283,7 @@ const tr: Dict = {
   },
   companyForm: {
     name: 'Şirket Adı',
+    tooLong: 'En fazla {max} karakter',
     industry: 'Sektör',
     industryPlaceholder: 'ör. Teknoloji, Finans',
     contactEmail: 'İletişim E-postası',
@@ -9849,6 +9852,7 @@ const de: Dict = {
   },
   companyForm: {
     name: 'Firmenname',
+    tooLong: 'Höchstens {max} Zeichen',
     industry: 'Branche',
     industryPlaceholder: 'z. B. Technologie, Finanzen',
     contactEmail: 'Kontakt-E-Mail',

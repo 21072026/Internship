@@ -7,13 +7,13 @@ import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const companySchema = z.object({
-  name: z.string().min(1, 'Company name is required'),
+  name: z.string().min(1, 'Company name is required').max(TEXT_LIMITS.companyName),
   description: z.string().max(TEXT_LIMITS.companyDescription).optional(),
   contactEmail: z.string().email('Invalid contact email').optional().or(z.literal('')),
   industry: z.string().optional(),
   logoUrl: z.string().url().or(z.literal('')).optional(),
   size: z.string().max(40).optional(),
-  address: z.string().max(300).optional(),
+  address: z.string().max(TEXT_LIMITS.companyAddress).optional(),
   quota: z.number().int().min(0).max(10000).nullable().optional(),
   needs: z
     .array(

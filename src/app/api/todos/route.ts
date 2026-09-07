@@ -7,6 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { notify } from '@/lib/notify';
 import { resolveTemplateTitle, serializeTaskTemplate, taskTemplateSelect } from '@/lib/goalTemplates';
 import { defaultLocale } from '@/i18n/config';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // One person's to-do list, whole (#1113).
 //
@@ -162,7 +163,7 @@ export async function GET(request: Request) {
 
 const createSchema = z
   .object({
-    title: z.string().trim().min(1).max(300).optional(),
+    title: z.string().trim().min(1).max(TEXT_LIMITS.todoTitle).optional(),
     // Shared-pool templates to hand over, straight from a person's list — no
     // project needed. The to-do keeps a reference, so the wording stays live.
     templateIds: z.array(z.string().min(1)).max(50).optional(),
@@ -179,70 +180,79 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  return await withTenantScope(session, async () => {
-    const parsed = createSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  // Everything below is wrapped (#1433): an unhandled throw here left Next to
+  // answer with a 500 that had NO BODY, so the client's `res.json()` failed too
+  // and the add silently did nothing. A 500 now always carries JSON, which is
+  // what every other create endpoint already did.
+  try {
+    return await withTenantScope(session, async () => {
+      const parsed = createSchema.safeParse(await request.json().catch(() => null));
+      if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-    const viewerId = session.user.id;
-    const assigneeId = parsed.data.assigneeId ?? viewerId;
-    if (!(await mayReach(session.user, assigneeId))) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const rows: { title: string; templateId: string | null }[] = [];
-    if (parsed.data.templateIds?.length) {
-      // Only the shared pool is reachable here — a project's own templates are
-      // handed out from that project, where the assignee is a member.
-      const templates = await prisma.projectTaskTemplate.findMany({
-        where: { id: { in: parsed.data.templateIds }, projectId: null, archivedAt: null },
-        select: { id: true, title: true, translations: true },
-      });
-      for (const tpl of templates) {
-        rows.push({ title: resolveTemplateTitle(tpl, defaultLocale), templateId: tpl.id });
+      const viewerId = session.user.id;
+      const assigneeId = parsed.data.assigneeId ?? viewerId;
+      if (!(await mayReach(session.user, assigneeId))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-      if (templates.length > 0) {
-        await prisma.projectTaskTemplate.updateMany({
-          where: { id: { in: templates.map((t) => t.id) } },
-          data: { useCount: { increment: 1 } },
+
+      const rows: { title: string; templateId: string | null }[] = [];
+      if (parsed.data.templateIds?.length) {
+        // Only the shared pool is reachable here — a project's own templates are
+        // handed out from that project, where the assignee is a member.
+        const templates = await prisma.projectTaskTemplate.findMany({
+          where: { id: { in: parsed.data.templateIds }, projectId: null, archivedAt: null },
+          select: { id: true, title: true, translations: true },
         });
+        for (const tpl of templates) {
+          rows.push({ title: resolveTemplateTitle(tpl, defaultLocale), templateId: tpl.id });
+        }
+        if (templates.length > 0) {
+          await prisma.projectTaskTemplate.updateMany({
+            where: { id: { in: templates.map((t) => t.id) } },
+            data: { useCount: { increment: 1 } },
+          });
+        }
       }
-    }
-    if (parsed.data.title) rows.push({ title: parsed.data.title, templateId: null });
-    if (rows.length === 0) return NextResponse.json({ error: 'Nothing to create' }, { status: 400 });
+      if (parsed.data.title) rows.push({ title: parsed.data.title, templateId: null });
+      if (rows.length === 0) return NextResponse.json({ error: 'Nothing to create' }, { status: 400 });
 
-    const created = [];
-    for (const row of rows) {
-      created.push(
-        await prisma.projectTask.create({
-          data: {
-            title: row.title,
-            templateId: row.templateId,
-            assigneeId,
-            createdById: viewerId,
-            projectId: null,
-          },
-          select: listSelect,
-        })
+      const created = [];
+      for (const row of rows) {
+        created.push(
+          await prisma.projectTask.create({
+            data: {
+              title: row.title,
+              templateId: row.templateId,
+              assigneeId,
+              createdById: viewerId,
+              projectId: null,
+            },
+            select: listSelect,
+          })
+        );
+      }
+
+      if (assigneeId !== viewerId) {
+        const language = (
+          await prisma.user.findUnique({ where: { id: assigneeId }, select: { preferredLanguage: true } })
+        )?.preferredLanguage;
+        const first = created[0] as Row;
+        const firstTitle = first.template ? resolveTemplateTitle(first.template, language) : first.title;
+        await notify(
+          assigneeId,
+          created.length === 1 ? 'project.newTodo' : 'project.newTodos',
+          created.length === 1 ? { title: firstTitle } : { count: created.length },
+          '/todos'
+        );
+      }
+
+      return NextResponse.json(
+        { todos: (created as Row[]).map((r) => serialize(r, session.user, assigneeId)) },
+        { status: 201 }
       );
-    }
-
-    if (assigneeId !== viewerId) {
-      const language = (
-        await prisma.user.findUnique({ where: { id: assigneeId }, select: { preferredLanguage: true } })
-      )?.preferredLanguage;
-      const first = created[0] as Row;
-      const firstTitle = first.template ? resolveTemplateTitle(first.template, language) : first.title;
-      await notify(
-        assigneeId,
-        created.length === 1 ? 'project.newTodo' : 'project.newTodos',
-        created.length === 1 ? { title: firstTitle } : { count: created.length },
-        '/todos'
-      );
-    }
-
-    return NextResponse.json(
-      { todos: (created as Row[]).map((r) => serialize(r, session.user, assigneeId)) },
-      { status: 201 }
-    );
-  });
+    });
+  } catch (error) {
+    console.error('Create to-do error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }

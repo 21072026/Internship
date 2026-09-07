@@ -27,8 +27,12 @@ export const TEXT_LIMITS = {
   interactionNotes: 5000,
   /** InteractionLog.subject — VARCHAR(191) */
   interactionSubject: 191,
+  /** Company.name — VARCHAR(191) */
+  companyName: 191,
   /** Company.description — @db.Text */
   companyDescription: 2000,
+  /** Company.address — VARCHAR(191) */
+  companyAddress: 191,
   /** MentorshipRequest.message — @db.Text */
   mentorshipRequestMessage: 1000,
   /** Public contact form message — Message.body, @db.Text */
@@ -81,6 +85,13 @@ export const TEXT_LIMITS = {
   newsletterCtaLabel: 60,
   /** Call-to-action target — same width as Announcement.link */
   newsletterCtaUrl: 500,
+  /**
+   * ProjectTask.title — VARCHAR(191). One column, three writers: a to-do you
+   * write yourself (`/api/todos`), a project task, and a rename
+   * (`/api/project-tasks/[taskId]`). All three capped at 300 before #1433, so
+   * a 250-character paste passed validation and died as a P2000 in the driver.
+   */
+  todoTitle: 191,
   /** InvitationToken.label — the inviter's private note, VARCHAR(191) */
   invitationLabel: 120,
   /** InvitationToken.email — VARCHAR(191) */
