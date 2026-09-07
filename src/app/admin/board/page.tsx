@@ -18,6 +18,13 @@ import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { isStageOverdue } from '@/lib/stageClock';
+import {
+  DEFAULT_BOARD_WIP_LIMIT,
+  isOverWipLimit,
+  isWipSaturated,
+  resolveWipLimit,
+  type WipColumn,
+} from '@/lib/boardWip';
 
 interface Relation {
   id: string;
@@ -32,10 +39,6 @@ interface Relation {
   _count: { interactions: number };
 }
 
-// Soft work-in-progress limit: a column holding more than this many candidates
-// gets an amber count so bottlenecks stand out. Advisory only — never blocks.
-const WIP_LIMIT = 8;
-
 // Admin kanban across ALL mentorship relations (every mentor's mentees).
 // Stages are grouped into three collapsible phases so 13 columns don't sprawl.
 export default function AdminBoardPage() {
@@ -46,6 +49,13 @@ export default function AdminBoardPage() {
   const toast = useToast();
   const narrow = useIsNarrow();
   const [relations, setRelations] = useState<Relation[]>([]);
+  // Work-in-progress limits (#1439). Was a hardcoded 8 here, which every column
+  // of a large pipeline breached — so the limit is configuration now: the
+  // org-wide `boardWipLimit` setting, overridable per stage, and switchable off.
+  // Both come from the one endpoint that already answers "what applies to this
+  // stage"; the rule that combines them lives in src/lib/boardWip.ts.
+  const [wipDefault, setWipDefault] = useState<number | null>(DEFAULT_BOARD_WIP_LIMIT);
+  const [wipPerStage, setWipPerStage] = useState<Record<string, number | null>>({});
   // moveTo is also called much later from a toast's "Undo", where the closed-over
   // `relations` would be stale — read the live list through a ref instead.
   const relationsRef = useRef<Relation[]>([]);
@@ -68,6 +78,28 @@ export default function AdminBoardPage() {
     setRelations(data.relations ?? []);
     setLoading(false);
   }, []);
+
+  // Advisory decoration on top of the board: a failed request leaves the
+  // resolved default in place rather than blanking the board or retrying.
+  const fetchWipLimits = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/stage-sla');
+      if (!res.ok) return;
+      const data = await res.json();
+      setWipDefault(data.defaultWipLimit ?? null);
+      setWipPerStage(
+        Object.fromEntries(
+          ((data.stages ?? []) as { key: string; wipLimit: number | null }[]).map((s) => [s.key, s.wipLimit ?? null])
+        )
+      );
+    } catch {
+      /* keep the default */
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchWipLimits();
+  }, [fetchWipLimits]);
 
   useEffect(() => {
     relationsRef.current = relations;
@@ -161,6 +193,20 @@ export default function AdminBoardPage() {
         (!q || r.mentee.fullName.toLowerCase().includes(q) || r.mentor.fullName.toLowerCase().includes(q))
     );
 
+  // Every column as the WIP rule sees it — counted AFTER the search filter, so
+  // the chips and this agree about what is on screen.
+  const wipColumns: WipColumn[] = stages.map((s) => ({
+    status: s.key,
+    count: itemsFor(s.key).length,
+    limit: resolveWipLimit(s.key, wipDefault, wipPerStage),
+  }));
+  // When every column breaches, the amber chips have stopped comparing
+  // anything: they are replaced by one line that says the limit is wrong for
+  // this programme and links to where it is changed (#1439).
+  const wipSaturated = isWipSaturated(wipColumns);
+  const wipLimitFor = (status: string) =>
+    wipSaturated ? null : resolveWipLimit(status, wipDefault, wipPerStage);
+
   const toggleGroup = (key: PipelineGroupKey) =>
     setCollapsed((c) => ({ ...c, [key]: !c[key] }));
 
@@ -229,7 +275,14 @@ export default function AdminBoardPage() {
 
   const renderColumn = (status: string) => {
     const items = itemsFor(status);
-    const overLimit = items.length > WIP_LIMIT;
+    const limit = wipLimitFor(status);
+    const overLimit = isOverWipLimit({ status, count: items.length, limit });
+    // Says WHICH limit was passed, rather than "over the recommended limit" —
+    // with the number configurable per stage, a warning that does not name it
+    // cannot be acted on.
+    const wipWarning = overLimit
+      ? t.adminBoard.wipWarning.replace('{count}', String(items.length)).replace('{limit}', String(limit))
+      : undefined;
     return (
       <div
         key={status}
@@ -255,14 +308,19 @@ export default function AdminBoardPage() {
         <div className="flex items-center justify-between mb-3 px-1">
           <span data-testid={`board-column-title-${status}`} className="text-xs font-semibold text-gray-700">{label(status)}</span>
           <span
-            title={overLimit ? t.adminBoard.wipWarning : undefined}
+            /* Named so a test can read one column's count and its warning
+               without matching on the label text (#1346). */
+            data-testid={`board-column-count-${status}`}
+            title={wipWarning}
             className={`text-xs rounded-full px-2 py-0.5 border ${
               overLimit
                 ? 'text-amber-700 bg-amber-50 border-amber-300 font-semibold'
                 : 'text-gray-400 bg-white border-gray-200'
             }`}
           >
-            {items.length}{overLimit ? ` / ${WIP_LIMIT}` : ''}
+            {items.length}{overLimit ? ` / ${limit}` : ''}
+            {/* A `title` on a plain span reaches a mouse and nothing else. */}
+            {wipWarning && <span className="sr-only">{wipWarning}</span>}
           </span>
         </div>
 
@@ -337,6 +395,17 @@ export default function AdminBoardPage() {
         </div>
       ) : (
       <div data-testid="board-columns" className="space-y-5">
+        {wipSaturated && (
+          <div
+            data-testid="board-wip-saturated"
+            className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          >
+            {t.adminBoard.wipSaturated}{' '}
+            <Link href="/admin/settings" className="underline font-medium">
+              {t.adminBoard.wipSaturatedAction}
+            </Link>
+          </div>
+        )}
         {groups.map((group) => {
           const statuses = hideEmpty
             ? group.statuses.filter((s) => itemsFor(s).length > 0)

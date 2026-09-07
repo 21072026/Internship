@@ -155,6 +155,14 @@ model Organization {
 // still waited — the SLA measures their experience, not our working hours.
 // Business-day arithmetic would need a holiday calendar per country and per
 // org; calendar days can only ever fire the warning EARLIER, never later.
+//
+// Since #1439 the row carries a SECOND, independent per-stage number: the
+// board's work-in-progress limit. The two share a row because they answer the
+// same shape of question about the same stage ("how long may somebody wait
+// here", "how many people may pile up here") and an org configures them on one
+// screen — which is also why `days` had to become nullable: a stage may have a
+// WIP limit and no service level, or the other way round. A row with neither is
+// deleted by the endpoint rather than kept as an empty rule.
 // Free-form labels on a person (#887).
 //
 // NOT a replacement for Cohort or Source, and the distinction matters or the
@@ -205,7 +213,15 @@ model StageSla {
   // The stage this applies to. A plain key, not a relation: it must work for
   // an org that has no PipelineStage rows at all (i.e. uses the built-ins).
   stageKey  String
-  days      Int
+  /// Calendar days somebody may wait at this stage before the mentor is warned.
+  /// NULL = no service level here (the row then exists only for `wipLimit`).
+  days      Int?
+  /// Board work-in-progress limit for this stage (#1439): the column's count
+  /// turns amber above this many cards. NULL = inherit the org-wide
+  /// `boardWipLimit` setting; a stored 0 means "never warn about this stage",
+  /// which is a different statement and is why it is stored rather than
+  /// normalised away. The rule lives in src/lib/boardWip.ts.
+  wipLimit  Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
