@@ -61,9 +61,15 @@ export function PublicHeader({
     };
   }, [open]);
 
+  // One array drives both the `lg` nav bar and the mobile disclosure panel
+  // below, so a link added here is reachable on a phone by construction.
+  // Pricing sits next to "For companies" (#1732): the chrome offered Features /
+  // For companies / Showcase and never mentioned money, so a visitor who came
+  // for the number had nowhere to click.
   const links = [
     { href: '/features', label: n.features },
     { href: '/for-companies', label: n.forCompanies },
+    { href: '/pricing', label: n.pricing },
     { href: '/projects', label: n.showcase },
   ];
 
