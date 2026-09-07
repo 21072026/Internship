@@ -135,6 +135,17 @@ export const SETTING_DEFAULTS = {
   // row is never deleted, and nothing younger than
   // NOTIFICATION_RETENTION_FLOOR_DAYS (30) is deleted whatever this says.
   notificationRetentionDays: '180',
+  // Grace period, in days, before the retention sweep ANONYMIZES an orphan
+  // applicant account — a /apply account whose mentor declined and which shows
+  // no other sign of life (#1780). The rule itself, and why 90 days, live in
+  // src/lib/orphanApplicant.ts; the dry run an admin reads before it happens is
+  // /admin/retention. Same fallback contract as the windows above: 0, negative
+  // or unparseable falls back to the entry's default rather than erasing
+  // everything. Unlike the windows above it is read from the GLOBAL layer only:
+  // the sweep runs with no tenant bound and crosses every org in one pass, so a
+  // per-tenant override would be written and never read — the admin dry run
+  // reads the same layer deliberately, so its countdown is the one that fires.
+  orphanApplicantGraceDays: '90',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

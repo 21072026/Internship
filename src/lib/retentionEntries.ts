@@ -9,6 +9,13 @@ import {
   notificationRetentionCutoff,
 } from '@/lib/notificationRetention';
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
+import { anonymizeUser } from '@/lib/accountErasure';
+import {
+  ORPHAN_ANONYMIZE_PER_RUN,
+  ORPHAN_APPLICANT_GRACE_DAYS,
+  ORPHAN_GRACE_SETTING_KEY,
+  orphanApplicantWhere,
+} from '@/lib/orphanApplicant';
 import {
   RETENTION_ACTIVITY_ACTION,
   formatRetentionSummary,
@@ -338,6 +345,85 @@ export async function pruneNotifications(ctx: RetentionContext): Promise<Retenti
 }
 
 /**
+ * Anonymize orphan applicant accounts past the grace period (#1780).
+ *
+ * The only entry in the registry that touches a person's account rather than a
+ * telemetry table, so three things are different about it:
+ *
+ * 1. It ANONYMIZES, it never deletes. The declined `MentorshipRequest` and the
+ *    user row stay, so the funnel counts of a closed cycle do not move under an
+ *    admin who re-runs last quarter's report; what goes is the personal data on
+ *    and around the row.
+ * 2. It goes through `anonymizeUser` (src/lib/accountErasure.ts) — the same
+ *    function the admin erase button calls. There is deliberately no second
+ *    deletion path in this product, and this job does not become one.
+ * 3. Its selection rule is not "old rows in a table" but
+ *    `orphanApplicantWhere()`, which lives in ONE module and is what the admin
+ *    dry run at /admin/retention lists. What the sweep takes tonight is exactly
+ *    what that page showed as due — that is the whole safety story, and it is
+ *    why the two read the same function instead of two similar filters.
+ *
+ * Idempotent by construction: anonymizing rewrites the address into the
+ * `@erased.local` namespace, which the rule excludes, so a row cannot be picked
+ * up twice. A failure on one account is logged and the loop moves on rather
+ * than stalling the run behind it.
+ */
+async function anonymizeOrphanApplicants(ctx: RetentionContext) {
+  let failures = 0;
+  const { processed, capped } = await pruneInBatches({
+    batchSize: Math.min(ctx.batchSize, 25),
+    budget: Math.min(ctx.budget, ORPHAN_ANONYMIZE_PER_RUN),
+    selectIds: async (take) =>
+      (
+        await prisma.user.findMany({
+          where: orphanApplicantWhere(ctx.cutoff),
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) => {
+      let done = 0;
+      for (const id of ids) {
+        try {
+          await anonymizeUser(id);
+          done += 1;
+        } catch (e) {
+          // One account that cannot be anonymized (an FK the erasure path does
+          // not detach) must not stop the other 199. It stays in the list and
+          // is retried tomorrow; a run where every account fails returns 0 and
+          // the batch loop ends on its own rather than spinning.
+          failures += 1;
+          logger.error('Orphan applicant anonymization failed', { userId: id, error: String(e) });
+        }
+      }
+      return done;
+    },
+  });
+
+  // Its own audit row on top of the shared `retention.pruned` line: this is the
+  // only scheduled job in the product that erases a person's data, and "which
+  // night did that account go?" has to be answerable on its own.
+  if (processed > 0 || failures > 0) {
+    await logActivity({
+      action: 'retention.orphanApplicants',
+      level: failures > 0 ? 'warning' : 'info',
+      targetType: 'system',
+      detail: `anonymized=${processed} failed=${failures} graceDays=${ctx.retentionDays}`,
+    });
+  }
+
+  // Reported as `masked`, not `deleted`: nothing was removed, and the summary
+  // line an operator reads should not claim otherwise.
+  return {
+    deleted: 0,
+    masked: processed,
+    capped,
+    ...(failures > 0 ? { note: `${failures} failed` } : {}),
+  };
+}
+
+/**
  * The built-in policy, in one place.
  *
  * Registered at import time and keyed, so importing this module twice (the dev
@@ -376,6 +462,18 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A finished job is read for debugging within days, and the queue is the highest-churn table in the product. Thirty days covers "what ran last month?" and keeps the table small enough that the claim query stays fast. DEAD_LETTER and FAILED rows are never pruned.',
     run: pruneFinishedJobs,
+  },
+  {
+    key: 'orphanApplicant',
+    // Resolved from the GLOBAL settings row: `runRetentionPrune` calls
+    // `getSettings()` with no org bound and sweeps every tenant's rows in one
+    // pass, so a per-tenant override would be written and never read. The admin
+    // dry run reads the same layer for the same reason (#1780).
+    settingKey: ORPHAN_GRACE_SETTING_KEY,
+    defaultDays: ORPHAN_APPLICANT_GRACE_DAYS,
+    reason:
+      'The one entry that touches a person rather than a telemetry row: a /apply account whose mentor declined can never sign in, belongs to nobody, and has no consentAt for the consent-based review to anchor on — so it would otherwise be kept forever (GDPR Art. 5(1)(e)). Ninety days leaves a full quarter for a human to notice a wrong decision, and the account is ANONYMIZED rather than deleted so closed-cycle funnel counts stay stable. The rule, and every sign of life that excludes an account from it, is in src/lib/orphanApplicant.ts; /admin/retention lists exactly what the next run would take.',
+    run: anonymizeOrphanApplicants,
   },
   {
     key: 'emailLog',
