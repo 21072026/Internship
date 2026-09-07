@@ -26,9 +26,9 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 | **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) beyond the ten call sites the script lists by name and count; those ten move onto `emit()` when #1693 lands (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
 
-The first twelve are **functional / correctness** tests: given an input, is the output
-right? The two load rows are **non-functional**: the app may be correct yet too slow or
-fragile under load — those catch that. They are not redundant with each other.
+Every row above the two load rows is a **functional / correctness** test: given an input,
+is the output right? The two load rows are **non-functional**: the app may be correct yet
+too slow or fragile under load — those catch that. They are not redundant with each other.
 The final two rows are neither: they never run the app, they read the source tree and the
 demo data and assert a rule about their *shape*.
 `stress-test.mjs` is a flat hammer (fixed concurrency, one aggregate p95, weekly);
@@ -169,8 +169,9 @@ npm run test:unit:coverage   # the same, plus the per-module floor  (CI runs thi
 ```
 
 Anything that needs a rendered page, a session cookie or a Prisma query stays in `e2e/`
-under Playwright. The one awkward case is the eight `e2e/*.unit.spec.ts` files: they are
-pure, but they import through the `@/` alias, which is why they were written against
+under Playwright. The one awkward case is the `e2e/*.unit.spec.ts` files (16 of them at the
+time of writing, and the set keeps growing — count them, don't trust this sentence): they
+are pure, but they import through the `@/` alias, which is why they were written against
 Playwright's resolver. They will move to a real unit runner in #1598; until then they run
 in the browser suite and **contribute no coverage**.
 
@@ -210,6 +211,24 @@ size is pinned by an `EXPECTED_AWAITING` literal so a seventh unfloored module c
 appended quietly, and the moment one of those modules *is* exercised by the node runner
 the check **fails** and tells you which floor to write. That way the number lands in the
 same PR as the first test, instead of months later.
+
+**Exercised, not merely imported.** Importing a module runs its top-level code, and for a
+module that is mostly constant tables that alone scores high: a test that imports
+`src/lib/pipeline.ts` and asserts nothing covers 85% of its lines while calling none of
+its nine functions. Promoting *that* would pin an 85% floor the ratchet then forbids ever
+lowering — the gate would be certifying module loading as coverage, and the real pipeline
+suite would land under a floor it already satisfied. So a module is promoted only when at
+least one of its functions actually ran (a module that declares no functions at all is
+judged on lines), and only when the suggested floor clears a **25% minimum** — a floor
+below that can never fail while still reading as coverage on the table. A module that is
+imported but not exercised is reported as `loaded, not exercised`, keeps no floor, and
+**stays in `AWAITING_TESTS`**; that is a normal state for a module some other test
+transitively pulls in, and it is not a failure.
+
+Both lists are checked against the tree before the suite runs: an entry naming a file that
+no longer exists fails with its own message. A rename or a deletion has to be answered in
+the entry (and in `EXPECTED_AWAITING`), because otherwise a deleted module reads as "no
+tests yet" forever and a renamed one reads as coverage that a refactor deleted.
 
 The floor table is written to `$GITHUB_STEP_SUMMARY`, so a reviewer sees where every
 module stands on the PR's checks page without opening the log.
