@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, cleanupByEmail, uniqueEmail, setGlobalSetting } from './helpers/db';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -66,11 +66,7 @@ test('manual mode parks a self-registration for an admin', async ({ page }) => {
   const email = uniqueEmail('manualmentee');
   const password = 'MenteeSignup123!';
 
-  await prisma.setting.upsert({
-    where: { key: 'selfRegistration' },
-    create: { key: 'selfRegistration', value: 'manual' },
-    update: { value: 'manual' },
-  });
+  await setGlobalSetting('selfRegistration', 'manual');
 
   try {
     await page.goto('/auth/register');
@@ -100,11 +96,7 @@ test('manual mode parks a self-registration for an admin', async ({ page }) => {
   } finally {
     await cleanupByEmail(email);
     // Leave the shared DB on the default, or every later test inherits 'manual'.
-    await prisma.setting.upsert({
-      where: { key: 'selfRegistration' },
-      create: { key: 'selfRegistration', value: 'auto' },
-      update: { value: 'auto' },
-    });
+    await setGlobalSetting('selfRegistration', 'auto');
   }
 });
 

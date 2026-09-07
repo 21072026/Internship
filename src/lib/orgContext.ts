@@ -68,6 +68,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // outside any request scope, where the middleware does not engage, so they
   // still see the whole queue.
   'Job',
+  // Product settings (#1553). Registered so that any code touching
+  // `prisma.setting` directly can only ever see its own tenant's rows. The
+  // settings readers/writers in src/lib/settings.ts deliberately opt OUT (they
+  // run inside `runWithOrg(null, …)`), because the org → GLOBAL (orgId = NULL)
+  // → code-default fallback chain needs to read a row this filter would hide;
+  // they compute the org themselves from the bound context instead.
+  'Setting',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

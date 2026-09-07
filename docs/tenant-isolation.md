@@ -84,12 +84,12 @@ Two escape hatches live inside the script, and both require a written reason.
 `EXEMPT` is for a model that is deliberately never auto-scoped. Today it holds
 one name: `Organization`, which *is* the tenant rather than a row inside one and
 can never grow an `orgId` of its own. An exemption is only granted against a
-schema someone has read, so `Setting` is **not** pre-exempted even though its
-column is coming: when #1551 adds `orgId` to `Setting` this check will fail, and
-the register-vs-exempt call gets made then, against the real shape. (#1557
-records the intent — `Setting`'s legacy rows will stay `orgId = NULL` as the
-global fallback layer — but #1560 also says `Setting` must be *registered* and
-behave specially, and those two have to be reconciled with the column in hand.)
+schema someone has read. `Setting` is the worked example: it was deliberately
+left un-exempted while its column was still only planned, the check duly failed
+the day #1553 added `orgId`, and the call was then made against the real shape —
+**registered, not exempt**, with its own readers opting out (see
+[Settings: per-tenant with a global fallback](#settings-per-tenant-with-a-global-fallback-1553)
+below).
 
 `PENDING_REGISTRATION` is for a model that is known to be unprotected and is
 waiting on its own reviewed change — the eight models of #1559. It is a ratchet,
@@ -108,6 +108,53 @@ not an allowlist:
 
 So the guard's job while #1559 is open is to stop the set of unprotected models
 from *growing*, and to say on every run exactly which ones they are.
+
+### Settings: per-tenant with a global fallback (#1553)
+
+`Setting` is the one tenant model that must be able to read *outside* its tenant,
+and it is worth understanding before touching it.
+
+Eighteen product decisions — `require2fa`, `retentionMonths`, `aiMonthlyQuota`,
+`selfRegistration`, `blindReview`, the newsletter cadence — live in this one
+key/value table. It is now keyed by **(`orgId`, `key`)**:
+
+| `orgId` | meaning |
+|---------|---------|
+| a tenant id | that tenant's override |
+| `NULL` | the **global** layer: the platform-wide value every tenant inherits until it sets its own, and the only layer a single-tenant installation ever writes |
+
+Resolution is **org row → global row → `SETTING_DEFAULTS`**, and that rule lives
+in exactly one file, `src/lib/settings.ts`. Nothing else reads `prisma.setting`
+directly — `getSetting(key, orgId?)` / `getSettings(orgId?)` / `setSetting(key,
+value, orgId?)` are the whole surface. The org argument is optional: omitted, it
+resolves to the org bound by `withTenantScope()` (`currentOrgId()`), and to the
+global layer when no org is bound. That is what keeps the ~20 existing
+zero-argument call sites correct without changing any of them, and what makes a
+single-tenant deployment behave exactly as it did before.
+
+**The auto-filter had to be opted out of, on purpose.** `Setting` *is* registered
+in `TENANT_MODELS`, so any code that reaches for `prisma.setting` outside this
+module is scoped to its own tenant like everything else. But with enforcement on,
+that same middleware would rewrite the readers' query to `where: { orgId: <tenant> }`
+— which is precisely the filter that hides the `orgId = NULL` row and would turn
+step 2 of the chain into a silent "code default" for every tenant. So the queries
+in `settings.ts` run inside `runWithOrg(null, …)`, which clears the tenant context
+for the duration and lets the module see both layers. This is safe because the
+module computes the org itself, from the bound context, and never from request
+input: `PUT /api/admin/settings` passes no org at all, so a tenant admin can only
+ever write their own row.
+
+Uniqueness has a MySQL wrinkle worth knowing: the pair is enforced by
+`@@unique([orgId, key])`, and MySQL treats `NULL`s as distinct in a unique index.
+The constraint therefore binds the per-tenant rows only; the global layer stays
+single because `setSetting()` is its only writer and does a read-modify-write
+rather than a blind insert. (`upsert` is not an option either way — a compound
+unique cannot address a `NULL` component.)
+
+Existing rows keep `orgId = NULL` and go on working as the global layer;
+`prisma/backfill-organization.mjs` excludes `Setting` by name for exactly this
+reason. Stamping them with the `default` org would turn platform-wide defaults
+into one tenant's private settings and leave every other tenant with nothing.
 
 ### Per-route rollout status
 

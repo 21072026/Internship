@@ -117,6 +117,7 @@ model Organization {
   messageTemplates     MessageTemplate[]
   apiKeys              ApiKey[]
   matchFeedback        MatchFeedback[]
+  settings             Setting[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -1539,10 +1540,31 @@ model ApiKey {
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support
 // email). Values are stored as strings; callers parse as needed.
+//
+// Resolved per tenant with a global fallback (#1553) — the ONE place that rule
+// lives is src/lib/settings.ts; never read this table directly.
+//
+//   orgId = <tenant>  → that tenant's override
+//   orgId = NULL      → the GLOBAL layer, inherited by every tenant that has no
+//                       row of its own (and the only layer a single-tenant
+//                       installation ever writes)
+//
+// The natural key is (orgId, key), but a nullable column cannot be part of a
+// primary key, so the table carries a surrogate `id` and enforces the pair with
+// a unique index. MySQL treats NULLs as distinct in a unique index, so that
+// index constrains the per-tenant rows only; uniqueness of the global layer is
+// held by settings.ts being the single writer (read-modify-write, never a blind
+// insert).
 model Setting {
-  key       String   @id
+  id        String   @id @default(cuid())
+  orgId     String?
+  key       String
   value     String   @db.Text
   updatedAt DateTime @updatedAt
+
+  org Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, key])
 }
 
 enum ProjectStatus {
