@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Send, Clock, CheckCircle2, XCircle, ListChecks } from 'lucide-react';
+import { Send, Clock, CheckCircle2, XCircle, ListChecks, Repeat2, ShieldCheck } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { END_REASON_CODES } from '@/lib/relationLifecycle';
 import { useT } from '@/i18n/client';
 
 interface Gate { profile: boolean; cv: boolean; complete: boolean; missing: ('profile' | 'cv')[] }
@@ -19,6 +20,8 @@ interface RequestRow {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   message?: string | null;
   preferredMentor?: { id: string; fullName: string } | null;
+  /** Set when this request asks to replace a live pairing (#1801). */
+  replacesRelationId?: string | null;
   createdAt: string;
   decidedAt?: string | null;
 }
@@ -34,10 +37,22 @@ interface DirectoryMentor {
 // Mentee-side "request a mentor" panel (#590), shown on the portal dashboard
 // while the mentee has no active mentorship. One PENDING request at a time;
 // the latest decision stays visible.
-export function MentorshipRequestPanel() {
+//
+// RE-MATCH MODE (#1801): pass `rematchRelationId` and the same panel becomes
+// "ask for a different mentor" for a mentee who DOES have a live pairing —
+// collapsed behind a quiet link, reason category required, note optional. One
+// component rather than a second parallel form; the differences are the
+// endpoint, the required reason and the promise printed on it that the current
+// mentor is never shown what was written.
+export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationId?: string } = {}) {
   const t = useT();
   const q = t.mentorshipRequests;
+  const rm = t.rematchRequest;
   const dir = t.mentorDirectory;
+  const isRematch = !!rematchRelationId;
+  const [rematchOpen, setRematchOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
   // "Request this mentor" deep link (#1773): the directory card and the public
   // profile both link here as /portal?mentor=<id>. It only ever PRESELECTS the
   // picker below — POST /api/mentorship-requests re-validates the id against
@@ -126,8 +141,46 @@ export function MentorshipRequestPanel() {
   const requestedMentorMissing =
     Boolean(requestedMentorId) && requestedMentorChecked && !requestedMentor && !preferredMentorId;
   const selectedMentor = mentorOptions.find((m) => m.id === preferredMentorId);
-  const pending = requests.find((r) => r.status === 'PENDING');
+  // In re-match mode "pending" means a re-match open on THIS pairing, not any
+  // pending request the mentee happens to have.
+  const pending = isRematch
+    ? requests.find((r) => r.status === 'PENDING' && r.replacesRelationId === rematchRelationId)
+    : requests.find((r) => r.status === 'PENDING');
   const latest = requests[0];
+
+  const submitRematch = async () => {
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await fetch(`/api/mentorship/${encodeURIComponent(rematchRelationId!)}/rematch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason,
+          note: note.trim() || undefined,
+          preferredMentorId: preferredMentorId || undefined,
+        }),
+      });
+      if (res.ok) {
+        setReason('');
+        setNote('');
+        setPreferredMentorId('');
+        setRematchOpen(false);
+        await load();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        if (d.code === 'rate_limited') setErr(q.rateLimited);
+        else if (d.code === 'already_pending_rematch') setErr(rm.alreadyPending);
+        else if (d.code === 'reason_required' || d.code === 'invalid_reason') setErr(rm.reasonRequired);
+        else if (d.error === 'invalid_preferred_mentor') setErr(rm.invalidMentor);
+        else setErr(d.error || t.common.error);
+      }
+    } catch {
+      setErr(t.common.error);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -165,6 +218,90 @@ export function MentorshipRequestPanel() {
       setBusy(false);
     }
   };
+
+  // ── Re-match mode ──────────────────────────────────────────────────────────
+  // Its own testid, deliberately: `mentorship-request` still means "this mentee
+  // has no mentor yet", and an existing spec asserts that panel is absent once
+  // a pairing exists.
+  if (isRematch) {
+    return (
+      <Card className="mb-6" data-testid="rematch-request">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Repeat2 className="h-5 w-5 text-blue-600" />
+            <CardTitle>{rm.title}</CardTitle>
+          </div>
+        </CardHeader>
+        {pending ? (
+          <p
+            className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2"
+            data-testid="rematch-pending"
+          >
+            <Clock className="h-4 w-4" /> {rm.pendingInfo}
+          </p>
+        ) : !rematchOpen ? (
+          <>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{rm.intro}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setRematchOpen(true)} data-testid="rematch-open">
+              {rm.openCta}
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{rm.formIntro}</p>
+            <p
+              className="mb-3 flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700"
+              data-testid="rematch-privacy"
+            >
+              <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5" /> {rm.privacy}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+              <Select
+                label={rm.reasonLabel}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                options={[
+                  { value: '', label: rm.reasonNone },
+                  ...END_REASON_CODES.map((code) => ({ value: code, label: rm.reasons[code] })),
+                ]}
+                data-testid="rematch-reason"
+              />
+              <Select
+                label={rm.preferredMentorLabel}
+                value={preferredMentorId}
+                onChange={(e) => setPreferredMentorId(e.target.value)}
+                options={[
+                  { value: '', label: q.preferredMentorNone },
+                  ...mentorOptions.map((m) => ({ value: m.id, label: m.displayName || m.fullName })),
+                ]}
+                data-testid="rematch-preferred-mentor"
+              />
+            </div>
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={rm.notePlaceholder}
+              rows={3}
+              maxLength={2000}
+              showCounter
+              className="mb-2"
+              data-testid="rematch-note"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{rm.staysLive}</p>
+            {err && <p className="text-xs text-red-600 mb-2" data-testid="rematch-error">{err}</p>}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" loading={busy} disabled={!reason} onClick={submitRematch} data-testid="rematch-submit">
+                <Send className="h-4 w-4 mr-1" /> {rm.submit}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => { setRematchOpen(false); setErr(''); }} data-testid="rematch-cancel">
+                {t.common.cancel}
+              </Button>
+            </div>
+          </>
+        )}
+      </Card>
+    );
+  }
 
   return (
     <Card className="mb-6" data-testid="mentorship-request">

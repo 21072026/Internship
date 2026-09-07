@@ -63,6 +63,8 @@ interface RelationDetail {
   // can never read as a breach. Derived server-side; see the route.
   stageClockPaused?: boolean;
   completedAt: string | null;
+  /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
+  lifecycleState?: string | null;
   mentor: { fullName: string };
   mentee: {
     id: string;

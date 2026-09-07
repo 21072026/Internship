@@ -259,6 +259,20 @@ export default async function PortalDashboard({
         )}
       </Card>
 
+      {/* Re-match (#1801): a mentee with a LIVE pairing used to have no way to
+          say "this isn't working" — the `!relation || isArchived` gate above
+          hid the request panel from exactly the people who needed a way out,
+          and the only exit was an admin marking the relation COMPLETED, which
+          records a success that never happened. It sits directly under the
+          mentor card because that is where someone unhappy with their mentor
+          looks, and it stays collapsed behind a quiet link so it is reachable
+          without shouting at everyone whose pairing is fine. */}
+      {relation && !isArchived && (
+        <Suspense fallback={null}>
+          <MentorshipRequestPanel rematchRelationId={relation.id} />
+        </Suspense>
+      )}
+
       {/* Projects (#1114). Outside the mentorship card on purpose: a mentee can
           be a project member without an active relation, and hiding the card in
           that branch would reproduce the invisibility this fixes. */}

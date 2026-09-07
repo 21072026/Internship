@@ -1376,6 +1376,91 @@ export async function sendMentorshipRequestEmail({
   });
 }
 
+// --- Re-match (#1801) -------------------------------------------------------
+// Two mails, both localized to the recipient's own `User.preferredLanguage`.
+//
+// Neither one carries the mentee's reason code or their free-text note. The
+// admin mail is a nudge to open the queue (the reason lives behind the ADMIN
+// role, in the queue itself); the outgoing mentor's mail says the pairing ended
+// and nothing more — a candid reason only stays candid if it is not read back
+// by the person it is about.
+
+export async function sendRematchRequestedEmail({
+  to,
+  adminName,
+  menteeName,
+  orgId,
+  locale,
+  userId,
+}: {
+  to: string;
+  adminName?: string | null;
+  menteeName: string;
+  orgId?: string | null;
+  /** The admin's User.preferredLanguage. */
+  locale?: string | null;
+  userId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const R = getDictionary(resolved).notifications.rematchRequestedEmail;
+  await sendEmail({
+    to,
+    userId,
+    category: 'mentorship-request',
+    locale: resolved,
+    fromName: brand.name,
+    subject: R.subject.replace('{name}', menteeName),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(R.heading))}
+        ${adminName ? `<p>${esc(R.greeting.replace('{name}', adminName))}</p>` : ''}
+        <p>${esc(R.body.replace('{name}', menteeName))}</p>
+        <p style="color:#6b7280;font-size:14px;">${esc(R.privacy)}</p>
+        ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, esc(R.cta))}
+      </div>
+    `,
+  });
+}
+
+export async function sendRematchMentorNoticeEmail({
+  to,
+  mentorName,
+  menteeName,
+  orgId,
+  locale,
+  userId,
+}: {
+  to: string;
+  mentorName?: string | null;
+  menteeName: string;
+  orgId?: string | null;
+  /** The outgoing mentor's User.preferredLanguage. */
+  locale?: string | null;
+  userId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const R = getDictionary(resolved).notifications.rematchMentorEmail;
+  await sendEmail({
+    to,
+    userId,
+    category: 'mentorship-decision',
+    locale: resolved,
+    fromName: brand.name,
+    subject: R.subject.replace('{name}', menteeName),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(R.heading))}
+        ${mentorName ? `<p>${esc(R.greeting.replace('{name}', mentorName))}</p>` : ''}
+        <p>${esc(R.body.replace('{name}', menteeName))}</p>
+        <p>${esc(R.thanks)}</p>
+        ${ctaBlock(brand, `${appUrl()}/mentor`, esc(R.cta))}
+      </div>
+    `,
+  });
+}
+
 // --- Mentor applications (#904/#905/#933) -----------------------------------
 // The only transactional emails in this file localized to the recipient: the
 // applicant is never a signed-in User with an account-level language, so the

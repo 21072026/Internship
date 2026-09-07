@@ -3,7 +3,11 @@ import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { sendMentorshipDecisionEmail, sendMenteeAssignedEmail } from '@/services/emailService';
+import {
+  sendMentorshipDecisionEmail,
+  sendMenteeAssignedEmail,
+  sendRematchMentorNoticeEmail,
+} from '@/services/emailService';
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { resolveStartStage } from '@/lib/pipelineStages';
@@ -13,6 +17,7 @@ import {
   AlreadyMentoredError,
 } from '@/lib/activeMentorship';
 import { Prisma } from '@prisma/client';
+import { ENDED_REMATCHED } from '@/lib/relationLifecycle';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
 // so the mentor's own accept/reject step (#1188) shares one behavior: same
@@ -20,6 +25,13 @@ import { Prisma } from '@prisma/client';
 // The two callers differ only in authorization: an admin decides any request
 // with any mentor; a mentor decides only requests that name THEM as the
 // preferred mentor, and can only assign themself.
+//
+// Re-match requests (#1801) travel through here too — one decision service, not
+// a parallel copy. What they add: the mentee already has a live pairing (the one
+// being replaced), so approving must create the new relation AND close the old
+// one as ENDED_REMATCHED in the SAME transaction. Half of that applied is the
+// exact data corruption this workflow exists to remove: the mentee would end up
+// with two live mentors or with none.
 
 export interface DecisionResult {
   status: number;
@@ -47,6 +59,28 @@ export async function decideMentorshipRequest(opts: {
       status: true,
       menteeId: true,
       preferredMentorId: true,
+      // Re-match (#1801): the live pairing this request asks to replace. The
+      // mentee's `rematchReason`/`rematchNote` are deliberately NOT selected —
+      // nothing on this path needs them, and the outgoing mentor's notice below
+      // is built from names and dates only.
+      replacesRelationId: true,
+      replacesRelation: {
+        select: {
+          id: true,
+          status: true,
+          mentor: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              orgId: true,
+              preferredLanguage: true,
+              emailNotifications: true,
+              notificationPrefs: true,
+            },
+          },
+        },
+      },
       mentee: {
         select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
       },
@@ -56,6 +90,13 @@ export async function decideMentorshipRequest(opts: {
   if (restrictToPreferredMentorId && req.preferredMentorId !== restrictToPreferredMentorId) {
     // Same shape as not-found on purpose: a mentor probing other requests'
     // ids learns nothing about their existence.
+    return { status: 404, body: { error: 'Not found' } };
+  }
+  // A mentor-facing caller may not decide a re-match (#1801) even when it names
+  // them as the preferred replacement: approving one closes ANOTHER mentor's
+  // live pairing, which is an admin's call. Same not-found shape, and the same
+  // rule the mentor's inbox query already applies.
+  if (restrictToPreferredMentorId && req.replacesRelationId) {
     return { status: 404, body: { error: 'Not found' } };
   }
   if (req.status !== 'PENDING') {
@@ -84,16 +125,31 @@ export async function decideMentorshipRequest(opts: {
       // rendered as the generic error line (#2283 follow-up).
       return { status: 400, body: { error: 'Invalid mentor', code: 'invalid_mentor' } };
     }
+    // The pairing a re-match replaces, but only while it is still live: if it
+    // ended some other way in the meantime this is an ordinary approval and
+    // there is nothing left to close.
+    const replaced =
+      req.replacesRelation && req.replacesRelation.status === 'ACTIVE' ? req.replacesRelation : null;
+    // Re-matching into the same mentor is not a re-match.
+    if (replaced && replaced.mentor.id === mentorId) {
+      return { status: 400, body: { error: 'Pick a different mentor', code: 'same_mentor' } };
+    }
     // One mentee, at most one ACTIVE mentor (#419). Cheap pre-flight; the real
-    // guard runs inside the transaction below. Both refusals now share one body
-    // with POST /api/mentorship instead of hand-rolling a second sentence.
-    if (await findActiveMentorship(prisma, req.menteeId)) {
+    // guard runs inside the transaction below, and both refusals share one body
+    // with POST /api/mentorship. A re-match's OWN replaced pairing is expected
+    // to be live here — that is the point, the mentee keeps their mentor until
+    // the decision — so only some OTHER live pairing is a refusal (#1801).
+    const preflightActive = await findActiveMentorship(prisma, req.menteeId);
+    if (preflightActive && preflightActive.id !== replaced?.id) {
       return { status: 409, body: { ...ALREADY_MENTORED_ERROR } };
     }
 
     // Plan gate (#547): approving a request creates a new active relation.
+    // Skipped for a re-match — it swaps one live relation for another, so the
+    // tenant's active count is unchanged, and re-matching is free core either
+    // way. `gate.orgId` is still what the new relation is stamped with.
     const gate = await checkActiveRelationLimitForMentee(req.menteeId);
-    if (!gate.allowed) {
+    if (!replaced && !gate.allowed) {
       return { status: 403, body: planLimitError(gate) };
     }
 
@@ -123,12 +179,21 @@ export async function decideMentorshipRequest(opts: {
 
     // Interactive form (was an array `$transaction`) so the ACTIVE-mentor guard
     // sits INSIDE the transaction that writes (#419) — the pre-flight above ran
-    // before the plan gate, the availability count and resolveStartStage.
+    // before the plan gate, the availability count and resolveStartStage. The
+    // old pairing's close belongs to the same transaction (#1801): closed as
+    // ENDED_REMATCHED rather than COMPLETED so nothing downstream reads a
+    // re-match as a finished programme — no certificate, not a placement (see
+    // src/lib/relationLifecycle.ts). A failure anywhere in here rolls the whole
+    // thing back: the mentee is never left with two live mentors or with none.
     let relation;
     try {
       relation = await prisma.$transaction(async (tx) => {
         const active = await findActiveMentorship(tx, req.menteeId);
-        if (active) throw new AlreadyMentoredError(req.menteeId, active.id);
+        // Same exception as the pre-flight: the pairing this re-match replaces
+        // may still be live, any other one may not.
+        if (active && active.id !== replaced?.id) {
+          throw new AlreadyMentoredError(req.menteeId, active.id);
+        }
         const created = await tx.mentorshipRelation.create({
           data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus },
         });
@@ -140,6 +205,12 @@ export async function decideMentorshipRequest(opts: {
           where: { id: req.id, status: 'PENDING' },
           data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date() },
         });
+        if (replaced) {
+          await tx.mentorshipRelation.update({
+            where: { id: replaced.id },
+            data: { status: 'COMPLETED', completedAt: new Date(), lifecycleState: ENDED_REMATCHED },
+          });
+        }
         return created;
       });
     } catch (e) {
@@ -151,7 +222,12 @@ export async function decideMentorshipRequest(opts: {
       }
       throw e;
     }
-    await notify(req.menteeId, 'mentorship_request.approved', {}, '/portal');
+    await notify(
+      req.menteeId,
+      replaced ? 'mentorship_request.rematchApproved' : 'mentorship_request.approved',
+      {},
+      '/portal'
+    );
     // The mentor deciding their own queue doesn't need to be told about
     // themself — no echo (#886 rule).
     if (mentorId !== actorId) {
@@ -201,16 +277,53 @@ export async function decideMentorshipRequest(opts: {
         console.error('Mentee assignment email failed:', e);
       }
     }
+    // The outgoing mentor (#1801). They are told the pairing ended and who it
+    // was with — never WHY. `rematchReason` and `rematchNote` are not even read
+    // on this path (see the request's `select` above): a candid reason only
+    // stays candid if it is not read back by the person it is about, and a
+    // mentor who suspects it will be forwarded writes nothing candid either.
+    if (replaced) {
+      const outgoing = replaced.mentor;
+      await notify(
+        outgoing.id,
+        'mentorship_request.rematchMentorNotice',
+        { menteeName: req.mentee.fullName },
+        '/mentor'
+      );
+      if (
+        outgoing.email &&
+        emailAllowed(outgoing, 'mentorship') &&
+        emailGroupAllowedForCategory(outgoing, 'mentorship-decision')
+      ) {
+        try {
+          await sendRematchMentorNoticeEmail({
+            to: outgoing.email,
+            mentorName: outgoing.fullName,
+            menteeName: req.mentee.fullName,
+            orgId: outgoing.orgId,
+            locale: outgoing.preferredLanguage,
+            userId: outgoing.id,
+          });
+        } catch (e) {
+          console.error('Re-match mentor notice email failed:', e);
+        }
+      }
+    }
     await logActivity({
       action: 'mentorship_request.decided',
       actorId,
       actorEmail: actorEmail ?? null,
       targetType: 'mentorship_request',
       targetId: req.id,
-      detail: `approved · mentor ${mentorId}`,
+      detail: replaced
+        ? `approved · re-match · mentor ${mentorId} · replaced relation ${replaced.id}`
+        : `approved · mentor ${mentorId}`,
       request,
     });
-    return { status: 200, body: { ok: true, relationId: relation.id, warnings } };
+    return {
+      status: 200,
+      body: { ok: true, relationId: relation.id, replacedRelationId: replaced?.id ?? null, warnings },
+    };
   }
 
   await prisma.mentorshipRequest.update({
@@ -223,10 +336,19 @@ export async function decideMentorshipRequest(opts: {
     actorEmail: actorEmail ?? null,
     targetType: 'mentorship_request',
     targetId: req.id,
-    detail: 'rejected',
+    detail: req.replacesRelationId ? `rejected · re-match · relation ${req.replacesRelationId}` : 'rejected',
     request,
   });
-  await notify(req.menteeId, 'mentorship_request.rejected', {}, '/portal');
+  // Rejecting a re-match changes nothing about the existing pairing — it stays
+  // live, and the mentee is told exactly that rather than "your request could
+  // not be approved", which would read as having been cut loose. The outgoing
+  // mentor is not notified at all: nothing happened to them.
+  await notify(
+    req.menteeId,
+    req.replacesRelationId ? 'mentorship_request.rematchRejected' : 'mentorship_request.rejected',
+    {},
+    '/portal'
+  );
   if (
     req.mentee.email &&
     emailAllowed(req.mentee, 'mentorship') &&

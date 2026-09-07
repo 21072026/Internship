@@ -45,6 +45,11 @@ export async function GET() {
           preferredField: true,
           preferredLanguages: true,
           preferredMentor: { select: { id: true, fullName: true } },
+          // The caller's OWN re-match requests (#1801) — their own words back,
+          // which is the one direction that is always fine. The mentor of the
+          // pairing being replaced never reaches this handler.
+          replacesRelationId: true,
+          rematchReason: true,
           createdAt: true,
           decidedAt: true,
         },

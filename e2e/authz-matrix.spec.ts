@@ -192,3 +192,47 @@ test('COMPANY and SOURCE cannot read a foreign relation\'s interaction log', { t
     expect(ids, `${role} must not see the foreign relation`).not.toContain(foreignRelationId);
   }
 });
+
+/**
+ * Re-match privacy (#1801), as a matrix case rather than a comment: the mentee
+ * writes candidly about their mentor, so the mentor must not be able to read it
+ * back — not through their own inbox, not through the admin queue. The admin
+ * side of the same assertion is what keeps this from passing vacuously.
+ */
+test('the outgoing mentor cannot read the mentee\'s re-match reason', { tag: '@smoke' }, async ({ page }) => {
+  const secret = `rematch-secret-${Date.now()}`;
+  const req = await prisma.mentorshipRequest.create({
+    data: {
+      menteeId: users.MENTEE.id,
+      preferredMentorId: users.MENTOR.id,
+      replacesRelationId: ownRelationId,
+      rematchReason: 'no_fit',
+      rematchNote: secret,
+    },
+  });
+  try {
+    await signInAsFreshUser(page, emails.MENTOR, PASSWORD, LANDING.MENTOR);
+    // The mentor's own inbox excludes re-match requests entirely, even one that
+    // names them as the preferred replacement.
+    const inbox = await page.request.get('/api/mentor/applications');
+    expect(inbox.status()).toBe(200);
+    expect(await inbox.text(), 'a mentor must never read a re-match note').not.toContain(secret);
+    // And they cannot decide it either — same not-found shape as any other
+    // request they have no business touching.
+    const decide = await page.request.put('/api/mentor/applications', {
+      data: { requestId: req.id, action: 'accept' },
+    });
+    expect(decide.status()).toBe(404);
+    const queue = await page.request.get('/api/admin/mentorship-requests');
+    expect([401, 403]).toContain(queue.status());
+
+    // The admin queue is the one place it IS readable — otherwise the check
+    // above would pass on a note nobody stored.
+    await signInAsFreshUser(page, emails.ADMIN, PASSWORD, LANDING.ADMIN);
+    const adminQueue = await page.request.get('/api/admin/mentorship-requests');
+    expect(adminQueue.status()).toBe(200);
+    expect(await adminQueue.text()).toContain(secret);
+  } finally {
+    await prisma.mentorshipRequest.deleteMany({ where: { id: req.id } });
+  }
+});
