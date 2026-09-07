@@ -103,6 +103,24 @@ person's rate limit will throttle everyone.
 `0` disables the header entirely — right for a container reached directly, and
 what `playwright.config.ts` sets for the e2e webServer.
 
+### Where the rate-limit counters live (`RATE_LIMIT_REDIS_URL`, #1696)
+
+Counts are per-process unless `RATE_LIMIT_REDIS_URL` is set. That is fine while
+each environment is one container, and it is the deliberate default for a
+self-hosted install — but **the moment an environment runs two replicas, set it
+in that environment's env file** or every limit becomes twice as generous (five
+sign-in attempts per container, not per attacker) and a redeploy zeroes them.
+Value is `redis://…` or `rediss://…`; the store is used for counting only,
+nothing durable lives there, so it needs no persistence or backup.
+
+The limiter **fails open**: an unreachable store means it logs once and counts
+in memory until the store returns — never a 500, never a locked-out user. Check
+which state a box is in with an admin session or the health token:
+`curl -sH "X-Health-Token: $HEALTH_TOKEN" 'https://…/api/health?limits=1' | jq .rateLimitStore`
+→ `{ "backend": "shared", "degraded": false, … }`. `"backend": "memory"` on a
+multi-replica environment is a misconfiguration, and `"degraded": true` means
+the limits are per-process right now.
+
 ### One-time server setup this requires
 - The stock `include /etc/nginx/conf.d/*.conf;` must be active (default on Plesk).
   These hostnames are **not** Plesk-managed domains (only the apex/`preview` are),

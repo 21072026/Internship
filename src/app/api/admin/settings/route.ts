@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { getSettings, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { getSettings, setSetting, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 
-// GET — current settings (with defaults filled in).
+// GET — current settings for the caller's tenant, resolved org row → global row
+// → code default (see src/lib/settings.ts).
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  return NextResponse.json({ settings: await getSettings() });
+  return withTenantScope(session, async () => NextResponse.json({ settings: await getSettings() }));
 }
 
 const schema = z.object({
@@ -33,7 +34,12 @@ const schema = z.object({
   newsletterSendHour: z.string().regex(/^(?:[0-9]|1[0-9]|2[0-3])$/).optional(),
 });
 
-// PUT — upsert one or more settings.
+// PUT — write one or more settings for the CALLER'S OWN tenant.
+//
+// The layer written is never taken from the request body: `setSetting` derives it
+// from the org bound by `withTenantScope` below (and falls back to the global row
+// when no org is bound, which is what a single-tenant installation does today),
+// so tenant B's admin cannot reach tenant A's row no matter what it posts.
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -41,12 +47,12 @@ export async function PUT(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-  const entries = Object.entries(parsed.data).filter(([k]) => k in SETTING_DEFAULTS) as [SettingKey, string][];
-  await Promise.all(
-    entries.map(([key, value]) =>
-      prisma.setting.upsert({ where: { key }, create: { key, value }, update: { value } })
-    )
-  );
-  await logActivity({ action: 'settings.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
-  return NextResponse.json({ settings: await getSettings() });
+  return withTenantScope(session, async () => {
+    const entries = Object.entries(parsed.data).filter(([k]) => k in SETTING_DEFAULTS) as [SettingKey, string][];
+    // Sequential on purpose: two writes for the same (org, key) must not race
+    // the read-modify-write inside setSetting into a duplicate row.
+    for (const [key, value] of entries) await setSetting(key, value);
+    await logActivity({ action: 'settings.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
+    return NextResponse.json({ settings: await getSettings() });
+  });
 }

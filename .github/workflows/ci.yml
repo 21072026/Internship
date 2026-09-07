@@ -67,8 +67,23 @@ jobs:
       # claims to be complete (#1820).
       - name: mentor directory reports a truncated scan exactly (#1820)
         run: npm run test:mentor-directory
+      # Rate limits are a security control on ~30 endpoints, and both ways of
+      # getting the shared store wrong are invisible in a browser: counting
+      # per-process again (every limit doubles per replica) or letting a store
+      # outage reach the caller (nobody signs in). These assertions are the only
+      # thing that looks (#1696).
+      - name: rate limits are shared, and fall back safely (#1696)
+        run: npm run test:rate-limit-store
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
+      # An API-key request has no session, so nothing resolves a tenant for it
+      # and the tenant middleware treats that as "do not scope": a /api/v1 route
+      # that authenticates a key and then queries reads every organisation's
+      # rows while looking ordinary (#1546). withApiKey() is the one door where
+      # expiry, revocation, scope and the org binding are decided; this keeps
+      # every route behind it.
+      - name: the public API is entered through one door (#1546)
+        run: npm run check:api-key-routes
       # MentorApplication.adminNote is private admin commentary; an e-mail
       # template that rendered it would show an applicant what an admin wrote
       # about them. Nothing in the type system says so, so a file-level guard

@@ -12,6 +12,66 @@ import { defineConfig, devices } from '@playwright/test';
 const externalBase = process.env.BASE_URL;
 const PORT = 3000;
 const localURL = `http://localhost:${PORT}`;
+
+// ── The `isolation` project (#1566) ──────────────────────────────────────────
+// A SECOND app server, on its own port, booted with MT_ENFORCE_ISOLATION=true.
+//
+// WHY A SECOND SERVER. Playwright's `webServer` is a config-level option, not a
+// per-project one, so "a project whose server has the flag on" can only mean
+// "an extra server the project points its baseURL at". The alternative — a
+// single server with the flag on — is not available to us: roughly 150 specs
+// assume the single-tenant behaviour the flag switches off, and the flag itself
+// is still un-flipped in production (docs/tenant-isolation.md). The default
+// project therefore keeps the flag OFF and its results are unchanged.
+//
+// The project (and its server) is only assembled when the run actually asks for
+// it, so `npm run test:e2e` and the CI smoke gate never pay for a second
+// `next start`. Everything under e2e/isolation/ belongs to it and is excluded
+// from the default project below — a spec there would otherwise run twice, once
+// against a server that does not enforce anything.
+export const ISOLATION_PORT = 3010;
+export const ISOLATION_URL = `http://localhost:${ISOLATION_PORT}`;
+
+// `--project=isolation` and `--project isolation` are both spellings Playwright
+// accepts, and E2E_ISOLATION=1 covers a caller who selects it some other way
+// (`--grep`, an IDE runner) and still needs the server.
+function projectRequested(name: string): boolean {
+  return process.argv.some(
+    (arg, i) => arg === `--project=${name}` || (arg === '--project' && process.argv[i + 1] === name)
+  );
+}
+const runsIsolation = process.env.E2E_ISOLATION === '1' || projectRequested('isolation');
+// An isolation run is an isolation run: the default project (and therefore the
+// default server) is dropped from the config unless the command line asks for
+// chromium by name. E2E_ISOLATION=1 used to leave the default project in place,
+// which meant `E2E_ISOLATION=1 playwright test --grep …` started TWO `next dev`
+// processes in the same working directory. Next has no per-port `distDir`, so
+// both compile into `.next/` and overwrite each other's build manifests and
+// webpack cache — intermittent 404s on /_next/static/chunks/* and ENOENT
+// renames from whichever server loses the race, which reads as a flaky app
+// rather than a config problem.
+const runsDefault = projectRequested('chromium') || !runsIsolation;
+
+if (runsIsolation && runsDefault) {
+  // The only way to reach this is to name both projects explicitly (or set
+  // E2E_ISOLATION=1 and pass --project=chromium). Refuse rather than start the
+  // colliding pair described above: run the two suites as two commands.
+  throw new Error(
+    'The `chromium` and `isolation` projects each need their own Next server started from this ' +
+      'working directory, and two of them would compile into the same .next/ directory. Run them ' +
+      'as separate commands: `npm run test:e2e` and `npm run test:e2e:isolation`.'
+  );
+}
+
+if (runsIsolation && externalBase) {
+  // Fail loudly rather than silently testing the wrong thing: the whole point
+  // of this project is a server WE started with the flag on, and a deployed
+  // environment's flag is whatever it is (today: off, everywhere).
+  throw new Error(
+    'The `isolation` Playwright project boots its own server with MT_ENFORCE_ISOLATION=true ' +
+      'and cannot run against a deployed BASE_URL. Unset BASE_URL and try again.'
+  );
+}
 // Shared with e2e/health.spec.ts, which asserts both sides of the token gate.
 export const E2E_HEALTH_TOKEN = 'e2e-health-token';
 // Shared with e2e/inbound-email.spec.ts. CI serves a production build, and
@@ -34,6 +94,15 @@ export const E2E_JAAS_WEBHOOK_SECRET = 'e2e-jaas-webhook-secret';
 // signing, token sealing, refresh, event create/patch/delete, revoke.
 export const E2E_GOOGLE_MOCK_PORT = 4599;
 const googleMock = `http://127.0.0.1:${E2E_GOOGLE_MOCK_PORT}`;
+// Shared with e2e/sso-roundtrip.spec.ts (#1936). Enterprise SSO had no
+// end-to-end coverage at all — the only recipe was a human clicking through the
+// public mocksaml.com, which CI cannot depend on. This stub IdP signs real SAML
+// assertions (and issues OIDC ID tokens, ready for #1929) with a key pair it
+// generates at start-up, so the app's verification path runs for real and can
+// also be handed assertions that are deliberately wrong. Unlike the Google
+// stub, the app needs no env pointing at it: a tenant's IdP endpoint is stored
+// per organization, so the spec seeds the port into the org row it creates.
+export const E2E_IDP_MOCK_PORT = 4600;
 
 export default defineConfig({
   testDir: './e2e',
@@ -60,16 +129,34 @@ export default defineConfig({
     storageState: './e2e/.state/consent.json',
   },
   projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-      // e2e/release-media.spec.ts is a capture PRODUCER, not a test (#2233): it
-      // writes PNG/WebM files into public/release-media/. It must never run in
-      // the PR gate or the scheduled full suite — a run there would rewrite
-      // committed bytes on an unrelated change — so the default project ignores
-      // it and the project below only exists when an author asks for it.
-      testIgnore: /release-media\.spec\.ts/,
-    },
+    // Dropped for an isolation run, so `E2E_ISOLATION=1 playwright test` (no
+    // --project) cannot point 1000+ specs at a :3000 that was never started.
+    ...(runsDefault
+      ? [
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'] },
+          // Two exclusions, for two different reasons:
+          //   e2e/isolation/** belongs to the `isolation` project below (#1566);
+          //     those specs assert cross-tenant behaviour that only holds with
+          //     MT_ENFORCE_ISOLATION on.
+          //   e2e/release-media.spec.ts is a capture PRODUCER, not a test (#2233):
+          //     it writes PNG/WebM into public/release-media/, so a run in the PR
+          //     gate or the scheduled suite would rewrite committed bytes on an
+          //     unrelated change.
+          testIgnore: ['**/isolation/**', '**/release-media.spec.ts'],
+        },
+      ]
+      : []),
+    ...(runsIsolation
+      ? [
+        {
+          name: 'isolation',
+          testMatch: '**/isolation/**/*.spec.ts',
+          use: { ...devices['Desktop Chrome'], baseURL: ISOLATION_URL },
+        },
+      ]
+      : []),
     ...(process.env.CAPTURE_RELEASE_MEDIA
       ? [
         {
@@ -81,15 +168,26 @@ export default defineConfig({
       : []),
   ],
   // Only spin up the app locally; when BASE_URL targets a deployed env, skip it.
+  // `runsDefault` / `runsIsolation` keep each run to the servers it needs: an
+  // ordinary run never boots the isolation server, and `--project=isolation`
+  // never boots the default one.
   webServer: externalBase
     ? undefined
     : [
+      ...(runsDefault ? [
       {
         command: `node e2e/support/google-mock.mjs`,
         url: `${googleMock}/__state`,
         reuseExistingServer: !process.env.CI,
         timeout: 30_000,
         env: { GOOGLE_MOCK_PORT: String(E2E_GOOGLE_MOCK_PORT) },
+      },
+      {
+        command: `node e2e/support/idp-mock.mjs`,
+        url: `http://127.0.0.1:${E2E_IDP_MOCK_PORT}/__state`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+        env: { IDP_MOCK_PORT: String(E2E_IDP_MOCK_PORT) },
       },
       {
         command: process.env.CI ? 'npm run start' : 'npm run dev',
@@ -135,5 +233,31 @@ export default defineConfig({
           GOOGLE_CALENDAR_API_BASE: `${googleMock}/calendar/v3`,
         },
       },
+      ] : []),
+      ...(runsIsolation ? [
+      {
+        // The same app, on its own port, with tenant isolation ENFORCED (#1566).
+        // Deliberately lean: none of the stubs the default server wires up
+        // (Google Calendar, the inbound-mail secret, the throwing error routes)
+        // are involved in a cross-tenant read, and every one of them is another
+        // way for this server to differ from the default one for a reason that
+        // has nothing to do with the flag.
+        command: process.env.CI ? 'npm run start' : 'npm run dev',
+        url: ISOLATION_URL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        env: {
+          MT_ENFORCE_ISOLATION: 'true',
+          PORT: String(ISOLATION_PORT),
+          // NextAuth builds its callback URLs from this; left at the default
+          // server's origin, the post-sign-in redirect walks off this server
+          // and the spec signs in to the wrong one.
+          NEXTAUTH_URL: ISOLATION_URL,
+          TRUSTED_PROXY_COUNT: '0',
+          SMTP_USER: '',
+          SMTP_BULK_USER: '',
+        },
+      },
+      ] : []),
     ],
 });

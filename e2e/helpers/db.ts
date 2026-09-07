@@ -24,6 +24,16 @@ export const prisma = new PrismaClient();
  * `page.waitForURL` timeout in `signInAsFreshUser`, pointing at the wait rather
  * than at the address (#2043).
  */
+// Write a Setting row in the GLOBAL layer (orgId = NULL) — the layer a
+// single-tenant test server reads, and the fallback every tenant inherits
+// (#1553). Deliberately a read-modify-write: the natural key (orgId, key)
+// contains a nullable column, so `upsert` cannot address the NULL row.
+export async function setGlobalSetting(key: string, value: string) {
+  const existing = await prisma.setting.findFirst({ where: { orgId: null, key } });
+  if (existing) await prisma.setting.update({ where: { id: existing.id }, data: { value } });
+  else await prisma.setting.create({ data: { orgId: null, key, value } });
+}
+
 export function uniqueEmail(prefix: string) {
   const slug = prefix.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '') || 'e2e';
   return `${slug}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@e2e.local`;

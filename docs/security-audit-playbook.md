@@ -170,6 +170,7 @@ regresyondur**:
 | API anahtarı saklama | SHA-256 hash'li (`src/lib/apiKey.ts`) — token saklamada örnek alınmalı |
 | Oturum çerezi | `httpOnly` + `SameSite=Lax` |
 | Login brute-force | **E-posta** anahtarlı limit → XFF spoof'undan etkilenmiyor (bilinçli tasarım, koruyun) |
+| Hız sınırı sayacı (#1696) | `RATE_LIMIT_REDIS_URL` **ayarlıysa** sayaç replikalar arasında ortak; ayarlı değilse süreç başına (tek konteyner için doğru varsayılan). Sızma testinde bunu önce doğrulayın — çok replikalı bir ortamda `memory` görmek, ölçtüğünüz her limitin replika sayısı kadar cömert olduğu anlamına gelir: `GET /api/health?limits=1` → `rateLimitStore` (admin oturumu veya `HEALTH_TOKEN`). `degraded: true` ise depo o an erişilemiyor ve sınırlayıcı **bilinçli olarak açık kalıyor** (kimse girişten kilitlenmesin diye) — bu bir bulgu değil, kayıtlı bir tasarım kararı; kalıcı olması bir bulgudur |
 | Inbound e-posta | Gönderenin thread katılımcısı olması ayrıca doğrulanıyor + `timingSafeEqual` |
 | Prisma sorgu kurulumu | Uygulama kodunda ham SQL yok; hiçbir doğrulanmamış gövde alanı `where`'e girmiyor — `npm run check:query-scalars` bunu CI'da tutuyor (§8) |
 | Giden `fetch` (SSRF) | Sunucu tarafındaki iki çağrı yeri de `assertPublicHttpsUrl`'den geçiyor: `src/lib/webhooks.ts` ve `src/lib/certificatePdf.ts` |
@@ -219,8 +220,15 @@ Bir sonraki turda buradan başlayın:
 
 - **Yük / DoS davranışı** — `npm run test:stress` var ama güvenlik açısından
   koşulmadı.
-- **SAML SSO akışı** — `mocksaml.com` ile uçtan uca test edilebilir
-  (bkz. `agent-experience.md`, 2026-07-24 girdisi); bu turda kod okumasıyla yetinildi.
+- ~~**SAML SSO akışı**~~ — **artık CI'da koşuyor (#1936).** `e2e/sso-roundtrip.spec.ts`,
+  yerel bir sahte IdP'ye (`e2e/support/idp-mock.mjs`, anahtar çifti açılışta üretilir)
+  karşı tam turu sürüyor: giriş → IdP → ACS → oturum, `@smoke` etiketli. Olumsuz
+  senaryolar da kapsamda: güvenilmeyen anahtarla imzalanmış, kurcalanmış, imzasız,
+  süresi geçmiş ve yanlış `Audience` taşıyan assertion'lar ile tekrar kullanılan
+  `SsoLoginGrant` — hepsi `/auth/signin?error=sso_failed` ile bitiyor, 500 yok, oturum
+  yok. **Kapsam dışı kalan:** gerçek bir IdP (Okta/Entra/Google) ile canlı tur ve
+  `ssoIssuer`'ın `idpIssuer` olarak pinlenmemesi (bağlayıcı olan sertifika pinlemesi —
+  bkz. `docs/sso-saml.md`).
 - **Google Calendar OAuth** — env'de dormant, test edilmedi.
 - **AI uçları** (`/api/cv/[userId]/extract-ai`, `interview-prep`) — prompt injection
   yüzeyi hiç incelenmedi. Kullanıcı CV'si model'e giriyor; bu ayrı bir tehdit sınıfı.

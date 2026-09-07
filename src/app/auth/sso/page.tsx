@@ -23,6 +23,7 @@ export default function SsoStartPage() {
           Enter your organization code to continue to your identity provider.
         </p>
         <input
+          data-testid="sso-slug-input"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
           placeholder="organization-code"
@@ -31,6 +32,7 @@ export default function SsoStartPage() {
         />
         <button
           type="submit"
+          data-testid="sso-continue"
           disabled={!slug.trim()}
           className="w-full rounded-lg bg-blue-600 text-white py-2.5 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
         >
