@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
 import { interviewActiveKey } from '@/lib/interviewRequests';
 
@@ -145,7 +146,11 @@ test.describe.serial('Interview request form (note + proposed slots)', () => {
     const approved = await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'approve' } });
     expect(approved.status()).toBe(200);
 
-    await page.goto('/mentor/interview-requests');
+    // login() above only waits for the URL to leave /auth/signin, not for a
+    // full settle (see gotoSettled's doc comment) — the mentor's own
+    // post-login redirect can still be in flight and race this goto
+    // ("interrupted by another navigation").
+    await gotoSettled(page, '/mentor/interview-requests');
     const queue = page.getByTestId('mentor-interview-requests');
     await expect(queue.getByText('Please interview this candidate soon.')).toBeVisible();
     // The one proposed slot from the first test renders under its own heading —
