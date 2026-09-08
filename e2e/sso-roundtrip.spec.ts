@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 import { E2E_IDP_MOCK_PORT } from '../playwright.config';
 import { SSO_IMPLEMENTED_PROVIDERS, SSO_OIDC_UNSUPPORTED, validateSsoConfig } from '../src/lib/sso';
 
@@ -299,7 +300,11 @@ test('SAML: a consumed SsoLoginGrant cannot be replayed into a second session', 
     // Second use, from a browser with no session: a leaked or logged grant URL
     // must be inert. Only the session cookie is dropped — a blanket
     // clearCookies() would also drop the seeded cookie-consent state.
-    await page.goto('about:blank');
+    // `/auth/sso/complete` redirects client-side once the session poll above
+    // observes it, so a plain goto here can race that still-in-flight
+    // navigation ("interrupted by another navigation to /portal") — the same
+    // shape gotoSettled exists to absorb elsewhere (see its doc comment).
+    await gotoSettled(page, 'about:blank');
     await page.context().clearCookies({ name: /next-auth\.session-token/ });
     await page.goto(`/auth/sso/complete?token=${token}`);
     await page.waitForURL(/\/(auth\/signin|auth\/error|api\/auth\/error)/, { timeout: 30_000 });
