@@ -18,9 +18,11 @@ test('mentee sets a skill level with the star rating and it persists', async ({ 
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
     await page.goto('/portal/profile');
-    // Enter a skill so its rating row appears.
-    const skills = page.locator('input[name="skills"]');
-    await skills.fill('React');
+    // Enter a skill so its rating row appears (the SkillsField chip editor, #2314 —
+    // a plain `input[name="skills"]` no longer exists on this page).
+    const skillsInput = page.getByTestId('skills-field-input');
+    await skillsInput.fill('React');
+    await skillsInput.press('Enter');
     // React's rating group; click the 4/5 star.
     const group = page.getByRole('radiogroup', { name: 'React' });
     await expect(group).toBeVisible({ timeout: 10_000 });

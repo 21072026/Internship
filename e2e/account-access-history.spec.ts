@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 // #1587 — "Who accessed my account". Impersonation has always written the audit
 // rows; the account holder simply could not read them. This walks the whole
@@ -64,7 +64,10 @@ test('a mentee sees who impersonated their account, when and why', async ({ page
 
     // Now the mentee themselves — the whole point of the feature.
     await signInAsFreshUser(page, menteeEmail, 'MenteePass123!', '/portal');
-    await page.goto('/account');
+    // signInAsFreshUser only waits for the URL, not a full settle — the portal's
+    // own post-login redirect can still be in flight, racing this goto (see
+    // gotoSettled's doc comment in helpers/auth.ts).
+    await gotoSettled(page, '/account');
     const own = page.getByTestId('access-history-card');
     await expect(own).toBeVisible({ timeout: 10_000 });
     await expect(own.getByTestId('no-access-history')).toHaveCount(0);
