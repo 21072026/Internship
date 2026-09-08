@@ -10,6 +10,71 @@ Newest entries on top.
 
 ---
 
+## 2026-09-08 — A new column on `MentorshipRelation` is public to mentors by default (#2289)
+
+Roughly forty route files read relations with Prisma **`include`**, and `include` selects
+*every* scalar. So `endReasonNote` — an admin's candid free text about why a pairing ended —
+would have shipped straight to the mentor it was about, on `GET /api/mentorship` alone,
+with no guard failing and no test noticing. #1801 makes "the outgoing mentor is never shown
+the reason" a rule, so the column had to go: the reason stays as a coarse **code** on the
+relation (the same kind of fact `StatusChange.reasonCode` already exposes there) and the
+prose lives in the `ActivityLog` entry, which only admins read. **Rule: before adding a
+column to a model that mentors or mentees can read, ask who receives it — the answer is
+"everyone with an `include`", not "whoever I wrote a `select` for."** `Offer.compensationNote`
+is the precedent to copy, comment and all.
+
+## 2026-09-08 — Guards can forbid the obvious next line before you write it (#2289)
+
+A new write path that creates a relation "obviously" wants
+`dispatchWebhook('mentorship.created')`. `npm run check:events` caps direct dispatcher call
+sites at **ten**, and an eleventh is a red build (#1697) — so the obvious line is a CI
+failure, discovered by grepping the guard rather than by pushing. Same shape as
+`check:schema-push` and `check:tenant-models`. **Rule: when a change adds a new route, a new
+model column or a new background writer, read the `check:*` script that owns that surface
+FIRST** — `package.json`'s scripts block is the index, and each guard's header explains what
+it refuses and why. Cheaper than a round trip, and the refusal is usually the right design
+advice.
+
+## 2026-09-08 — The Playwright browser symlink: the layout, exactly (#2289)
+
+CLAUDE.md says "symlink the installed build into the expected version directory";
+`docs/security-audit-playbook.md` says that does not work and to pass `executablePath`.
+Both are half right — what was missing is the inner path. Playwright 1.61 wanted
+`/opt/pw-browsers/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`;
+the installed 1194 build keeps its binary at `chromium_headless_shell-1194/chrome-linux/headless_shell`
+(the resources live beside it, so the whole directory has to be reachable). This works, and
+needs no `executablePath`:
+
+```bash
+S=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux
+D=/opt/pw-browsers/chromium_headless_shell-1234
+mkdir -p $D/chrome-headless-shell-linux64
+for f in $S/*; do ln -sf "$f" $D/chrome-headless-shell-linux64/; done
+ln -sf $S/headless_shell $D/chrome-headless-shell-linux64/chrome-headless-shell
+touch $D/INSTALLATION_COMPLETE $D/DEPENDENCIES_VALIDATED
+```
+
+Two details do the work: the target is the **`chrome-linux/` subdirectory**, not the build
+root, and the binary is **renamed** in the link. With that, `npx playwright test` runs the
+real suite in this container — which is how the transactional half of #2289 got verified
+instead of assumed.
+
+## 2026-09-08 — 13 local `@smoke` failures were an unseeded database (#2289)
+
+`npx playwright test --grep @smoke` came back 126/139 on a fresh local MariaDB, and every
+failure was a spec that signs in as the **seeded** admin (`admin@example.com` /
+`ChangeMe123!` — `e2e/smoke.spec.ts`, `auth`, `invite`, `pipeline`, `offers`, …). Specs that
+seed their own users all passed. `npx prisma db seed` with `SEED_ADMIN_*` in `.env` turned
+12 of the 13 green. **Rule: seed the admin before reading anything into a local smoke run** —
+`db push` alone gives you a schema, not a fixture.
+
+The 13th (`admin pages load without server errors`, a `next-auth` `CLIENT_FETCH_ERROR` on
+`/admin` under `next dev`) reproduced **identically on `origin/main`**: `git checkout
+origin/main && npx prisma generate && npx playwright test --grep "<the one test>"`, three
+minutes, and it settles "did I break this?" with evidence instead of a hunch. CI's own
+smoke job was green on the branch. **Rule: before believing a local e2e failure is yours,
+re-run that one test on the merge base.**
+
 ## 2026-09-07 — The bug was in the browser, not in the parser (#2314)
 
 **A single-line `<input>` destroys a multi-line paste before any of your code runs.** The
