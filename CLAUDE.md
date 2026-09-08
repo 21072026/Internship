@@ -330,6 +330,20 @@ workaround, #636, and it compiled on every PR push).
   `prisma/check-active-mentor-duplicates.mjs` line) reading clean on prod AND shared preview —
   a `db push --accept-data-loss` that fails on the constraint is a failed deploy. Read the doc
   before touching any of it; the sequencing is the load-bearing part.
+- **Mentör değişimi tek bir işlemdir** ([`docs/mentor-transfer.md`](docs/mentor-transfer.md),
+  #2289): bir mentee'nin mentörünü değiştirmenin yolu `POST /api/mentorship/[id]/transfer`
+  (admin) — "tamamlandı işaretle, sonra yeniden ata" **değil**; o yol olmayan bir başarıyı
+  kayda geçiriyor ve iki istek arasında değişmez kural (#419) yanlış oluyor. Kuralın tek
+  yeri `src/lib/mentorTransfer.ts`: sonucu **veri** belirler — eşleştirmede hiçbir kayıt
+  yoksa (`src/lib/relationHistory.ts`) `mentorId` **yerinde** düzeltilir (yanlış atama);
+  varsa eşleştirme `ENDED_REASSIGNED` olarak kapanır ve `previousRelationId` ile zincirlenen
+  yeni ilişki **aynı aşamayı** taşır. **Hiçbir alt kayıt taşınmaz** — `InteractionLog`'un
+  yazar kolonu yok, atıf yalnızca `relation.mentorId` üzerinden kurulur, dolayısıyla geçmişi
+  olan bir ilişkinin mentörünü yerinde değiştirmek eski mentörün emeğini yenisine yazar.
+  Gerekçe ilişkide **yalnızca kod** olarak durur (`endReasonCode`); serbest metin sadece
+  admin'in okuduğu `ActivityLog` kaydına gider, çünkü birçok okuma yolu ilişkinin tüm
+  skalerlerini mentöre/mentee'ye döndürüyor ve #1801 gerekçenin hakkında olan kişiye geri
+  okunmamasını kural yapıyor.
 - **Single-owner background work** (`src/lib/jobs/lease.ts`, #1701): anything that
   must run **once per environment** rather than once per process takes a `JobLease`
   — one row per lease name, a TTL, and a takeover by conditional `UPDATE`. Today

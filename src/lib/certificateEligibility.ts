@@ -1,5 +1,5 @@
 import type { ResolvedStage } from './pipeline';
-import { isRematched } from './relationLifecycle';
+import { endedByMentorChange } from './relationLifecycle';
 
 export interface EligibilityRelation {
   status: string;
@@ -18,11 +18,11 @@ export interface EligibilityRelation {
 // If neither signal is available (custom pipeline without that key, relation
 // still ACTIVE), the certificate action stays hidden rather than guessing.
 export function canIssueCertificate(relation: EligibilityRelation, stages: ResolvedStage[]): boolean {
-  // A pairing closed by a re-match (#1801) is COMPLETED in the `status` column
-  // because it is no longer live — but nothing was completed. Issuing an
-  // internship certificate off it would print the fake success the re-match
-  // workflow exists to stop being recorded.
-  if (isRematched(relation)) return false;
+  // A pairing the mentee left — their own re-match (#1801) or an admin transfer
+  // (#2289) — is COMPLETED in the `status` column because it is no longer live,
+  // but nothing was completed. Issuing an internship certificate off it would
+  // print exactly the fake success those workflows exist to stop recording.
+  if (endedByMentorChange(relation)) return false;
   if (relation.status === 'COMPLETED') return true;
   const completedStage = stages.find((s) => s.key === 'INTERNSHIP_COMPLETED_490');
   const currentStage = stages.find((s) => s.key === relation.pipelineStatus);

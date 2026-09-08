@@ -1,7 +1,8 @@
 import type { ClientDictionary } from '@/i18n/dictionaries';
 
 /**
- * One reader for "why was this assignment refused?" — #2283 follow-up.
+ * One reader for "why was this assignment (or mentor change) refused?" —
+ * #2283 follow-up, extended by #2289.
  *
  * The assignment surfaces stopped rendering the server's English `error`
  * literal (correct: it is developer text, never translated). But they each
@@ -35,6 +36,19 @@ export function mentorshipAssignmentError(
       return t.mentorships.requestAlreadyDecided;
     case 'invalid_mentor':
       return t.mentorships.invalidMentor;
+    // The mentor-change refusals (#2289). Same family, same reader: a transfer
+    // is an assignment that also closes something, and giving it its own
+    // switch is how three call sites drifted apart the first time.
+    case 'same_mentor':
+    case 'self_mentor':
+      return t.changeMentor.sameMentor;
+    case 'inactive_relation':
+      return t.changeMentor.inactive;
+    case 'reason_required':
+    case 'invalid_reason':
+      return t.changeMentor.reasonRequired;
+    case 'note_required':
+      return t.changeMentor.noteRequired;
     default:
       return fallback;
   }
