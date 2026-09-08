@@ -617,6 +617,42 @@ const en = {
     requestAlreadyDecided: 'This request has already been decided.',
     invalidMentor: 'That mentor cannot be assigned.',
   },
+  // Admin-initiated mentor change (#2289). The voice is the ADMIN's — the
+  // mentee's own first-person reasons live in `rematchRequest.reasons`, and the
+  // two lists are not interchangeable even where the codes overlap.
+  changeMentor: {
+    action: 'Change mentor',
+    title: 'Change mentor',
+    context: 'Mentee: {mentee} · current mentor: {mentor}',
+    hint: 'One step, one record. If nothing has been logged under this pairing yet, the mentor is corrected in place. If it has a history, the pairing is closed as “mentor changed” — never as completed — and the new one continues on the same pipeline stage. Notes, logs and messages stay with the pairing they were written under.',
+    newMentor: 'New mentor',
+    selectNewMentor: 'Select the new mentor…',
+    reason: 'Reason',
+    selectReason: 'Choose a reason…',
+    note: 'Note',
+    notePlaceholder: 'For the record — required for “Something else”',
+    privacy: 'The reason and the note are recorded for the team — the note only in the admin audit log. Neither mentor is shown them in the app; the outgoing mentor is only told that the pairing ended.',
+    submit: 'Change mentor',
+    failed: 'The mentor could not be changed.',
+    reasonRequired: 'Please choose a reason.',
+    noteRequired: 'Please write a note for “Something else”.',
+    sameMentor: 'That is already this mentee’s mentor.',
+    inactive: 'This mentorship is no longer active — reload the page.',
+    correctedResult: 'Corrected — {mentee} is now with {mentor}. The pairing had nothing logged under it, so nothing was closed.',
+    transferredResult: '{mentee} was handed over to {mentor} on the same pipeline stage. The previous pairing is closed as “mentor changed” and keeps its history.',
+    reasons: {
+      mentor_unavailable: 'The mentor is unavailable',
+      no_fit: 'Not a good fit',
+      changed_goals: 'The mentee’s goals changed',
+      wrong_assignment: 'Wrong assignment — the wrong person was picked',
+      mentee_request: 'The mentee asked for a change',
+      other: 'Something else',
+    },
+    alreadyMentoredOffer: '{mentor} already mentors this person. Change their mentor instead of opening a second mentorship.',
+    changeInstead: 'Change mentor instead',
+    badgeReassigned: 'Mentor changed',
+    dismiss: 'Dismiss',
+  },
   companiesPage: {
     title: 'Companies',
     subtitle: 'Manage partner companies and their internship needs',
@@ -1978,6 +2014,11 @@ const en = {
       'mentorship_request.rematchApproved': 'You have been matched with a new mentor — your previous mentorship is now closed.',
       'mentorship_request.rematchRejected': 'Your request for a different mentor was reviewed. Your current mentorship continues for now.',
       'mentorship_request.rematchMentorNotice': 'Your mentorship with {menteeName} has ended — they are continuing with another mentor.',
+      // Admin mentor change (#2289). Three rows, because the three people are
+      // told three different true things — and none of them the reason.
+      'mentorship.mentorChanged': 'Your mentor has changed — {mentorName} is now your mentor.',
+      'mentorship.reassignedAway': 'Your mentorship with {menteeName} has ended — they are continuing with another mentor.',
+      'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your mentee.',
       'application.received': '{name} applied to be your mentee.',
       'mentorship.connected': '{name} joined through your invitation — you are now connected.',
       'mentorship.autoLinkSkipped':
@@ -5642,6 +5683,42 @@ const tr: Dict = {
     requestAlreadyDecided: 'Bu talep zaten karara bağlandı.',
     invalidMentor: 'Bu mentor atanamaz.',
   },
+  // Admin tarafından mentör değişimi (#2289). Ses tonu ADMIN'in — mentee'nin
+  // birinci tekil gerekçeleri `rematchRequest.reasons` içinde yaşar ve kodlar
+  // örtüşse bile iki liste birbirinin yerine kullanılmaz.
+  changeMentor: {
+    action: 'Mentörü değiştir',
+    title: 'Mentörü değiştir',
+    context: 'Mentee: {mentee} · mevcut mentör: {mentor}',
+    hint: 'Tek adım, tek kayıt. Bu eşleştirmeye henüz hiçbir şey işlenmemişse mentör yerinde düzeltilir. Geçmişi varsa eşleştirme “mentör değişti” olarak kapatılır — asla “tamamlandı” olarak değil — ve yenisi aynı pipeline aşamasından devam eder. Notlar, kayıtlar ve mesajlar yazıldıkları eşleştirmede kalır.',
+    newMentor: 'Yeni mentör',
+    selectNewMentor: 'Yeni mentörü seç…',
+    reason: 'Gerekçe',
+    selectReason: 'Bir gerekçe seç…',
+    note: 'Not',
+    notePlaceholder: 'Kayda geçmesi için — “Başka bir şey” seçildiyse zorunlu',
+    privacy: 'Gerekçe ve not ekip için kaydedilir — not yalnızca admin denetim kaydında durur. Uygulamada iki mentöre de gösterilmez; giden mentöre sadece eşleştirmenin sona erdiği söylenir.',
+    submit: 'Mentörü değiştir',
+    failed: 'Mentör değiştirilemedi.',
+    reasonRequired: 'Lütfen bir gerekçe seç.',
+    noteRequired: '“Başka bir şey” için bir not yaz.',
+    sameMentor: 'Bu kişi zaten bu mentee’nin mentörü.',
+    inactive: 'Bu mentorluk artık aktif değil — sayfayı yenile.',
+    correctedResult: 'Düzeltildi — {mentee} artık {mentor} ile. Eşleştirmeye hiçbir kayıt işlenmemişti, bu yüzden hiçbir şey kapatılmadı.',
+    transferredResult: '{mentee}, aynı pipeline aşamasında {mentor} kişisine devredildi. Önceki eşleştirme “mentör değişti” olarak kapandı ve geçmişini koruyor.',
+    reasons: {
+      mentor_unavailable: 'Mentör müsait değil',
+      no_fit: 'Uyum sağlanamadı',
+      changed_goals: 'Mentee’nin hedefleri değişti',
+      wrong_assignment: 'Yanlış atama — yanlış kişi seçilmiş',
+      mentee_request: 'Mentee değişiklik istedi',
+      other: 'Başka bir şey',
+    },
+    alreadyMentoredOffer: 'Bu kişinin mentörü zaten {mentor}. İkinci bir mentorluk açmak yerine mentörünü değiştir.',
+    changeInstead: 'Bunun yerine mentörü değiştir',
+    badgeReassigned: 'Mentör değişti',
+    dismiss: 'Kapat',
+  },
   companiesPage: {
     title: 'Şirketler',
     subtitle: 'Partner şirketleri ve staj ihtiyaçlarını yönet',
@@ -6971,6 +7048,11 @@ const tr: Dict = {
       'mentorship_request.rematchApproved': 'Yeni bir mentorla eşleştirildin — önceki mentorluğun kapatıldı.',
       'mentorship_request.rematchRejected': 'Farklı mentor talebin incelendi. Mevcut mentorluğun şimdilik devam ediyor.',
       'mentorship_request.rematchMentorNotice': '{menteeName} ile mentorluğun sona erdi — başka bir mentorla devam ediyor.',
+      // Admin mentör değişimi (#2289). Üç satır, çünkü üç kişiye üç ayrı doğru
+      // söylenir — ve hiçbirine gerekçe söylenmez.
+      'mentorship.mentorChanged': 'Mentörün değişti — artık mentörün {mentorName}.',
+      'mentorship.reassignedAway': '{menteeName} ile mentorluğun sona erdi — başka bir mentörle devam ediyor.',
+      'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin mentee’in değil.',
       'application.received': '{name} mentee’n olmak için başvurdu.',
       'mentorship.connected': '{name} davetinle katıldı — artık bağlantıdasınız.',
       'mentorship.autoLinkSkipped':
@@ -10586,6 +10668,42 @@ const de: Dict = {
     requestAlreadyDecided: 'Diese Anfrage wurde bereits entschieden.',
     invalidMentor: 'Dieser Mentor kann nicht zugewiesen werden.',
   },
+  // Mentorwechsel durch die Administration (#2289). Die Stimme ist die der
+  // ADMINISTRATION — die Ich-Begründungen der Mentees stehen in
+  // `rematchRequest.reasons`; die beiden Listen sind nicht austauschbar.
+  changeMentor: {
+    action: 'Mentor wechseln',
+    title: 'Mentor wechseln',
+    context: 'Mentee: {mentee} · aktueller Mentor: {mentor}',
+    hint: 'Ein Schritt, ein Eintrag. Wurde zu dieser Zuordnung noch nichts erfasst, wird der Mentor direkt korrigiert. Gibt es eine Historie, wird die Zuordnung als „Mentor gewechselt“ geschlossen — nie als abgeschlossen — und die neue führt dieselbe Pipeline-Stufe fort. Notizen, Protokolle und Nachrichten bleiben bei der Zuordnung, unter der sie entstanden sind.',
+    newMentor: 'Neuer Mentor',
+    selectNewMentor: 'Neuen Mentor auswählen…',
+    reason: 'Grund',
+    selectReason: 'Grund auswählen…',
+    note: 'Notiz',
+    notePlaceholder: 'Für den Eintrag — bei „Etwas anderes“ erforderlich',
+    privacy: 'Grund und Notiz werden für das Team festgehalten — die Notiz nur im Admin-Audit-Log. In der App bekommt sie keiner der beiden Mentoren zu sehen; dem bisherigen Mentor wird nur mitgeteilt, dass die Zuordnung beendet ist.',
+    submit: 'Mentor wechseln',
+    failed: 'Der Mentor konnte nicht gewechselt werden.',
+    reasonRequired: 'Bitte einen Grund auswählen.',
+    noteRequired: 'Bitte eine Notiz für „Etwas anderes“ schreiben.',
+    sameMentor: 'Diese Person ist bereits der Mentor dieses Mentees.',
+    inactive: 'Dieses Mentoring ist nicht mehr aktiv — bitte die Seite neu laden.',
+    correctedResult: 'Korrigiert — {mentee} ist jetzt bei {mentor}. Zur Zuordnung war nichts erfasst, es wurde also nichts geschlossen.',
+    transferredResult: '{mentee} wurde auf derselben Pipeline-Stufe an {mentor} übergeben. Die bisherige Zuordnung ist als „Mentor gewechselt“ geschlossen und behält ihre Historie.',
+    reasons: {
+      mentor_unavailable: 'Der Mentor ist nicht verfügbar',
+      no_fit: 'Es passt nicht zusammen',
+      changed_goals: 'Die Ziele des Mentees haben sich geändert',
+      wrong_assignment: 'Falsche Zuweisung — die falsche Person ausgewählt',
+      mentee_request: 'Der Mentee hat um einen Wechsel gebeten',
+      other: 'Etwas anderes',
+    },
+    alreadyMentoredOffer: '{mentor} betreut diese Person bereits. Wechsle den Mentor, statt ein zweites Mentoring anzulegen.',
+    changeInstead: 'Stattdessen Mentor wechseln',
+    badgeReassigned: 'Mentor gewechselt',
+    dismiss: 'Schließen',
+  },
   companiesPage: {
     title: 'Unternehmen',
     subtitle: 'Partnerunternehmen und ihren Praktikumsbedarf verwalten',
@@ -11915,6 +12033,12 @@ const de: Dict = {
       'mentorship_request.rematchApproved': 'Du wurdest einem neuen Mentor zugeordnet — dein bisheriges Mentoring ist abgeschlossen.',
       'mentorship_request.rematchRejected': 'Deine Anfrage nach einem anderen Mentor wurde geprüft. Dein aktuelles Mentoring läuft vorerst weiter.',
       'mentorship_request.rematchMentorNotice': 'Dein Mentoring mit {menteeName} ist beendet — die Person setzt es mit einem anderen Mentor fort.',
+      // Mentorwechsel durch die Administration (#2289). Drei Zeilen, weil den
+      // drei Beteiligten drei verschiedene Wahrheiten gesagt werden — und
+      // keinem davon der Grund.
+      'mentorship.mentorChanged': 'Dein Mentor hat sich geändert — {mentorName} ist jetzt dein Mentor.',
+      'mentorship.reassignedAway': 'Dein Mentoring mit {menteeName} ist beendet — die Person setzt es mit einem anderen Mentor fort.',
+      'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Mentee.',
       'application.received': '{name} hat sich als dein Mentee beworben.',
       'mentorship.connected': '{name} ist über deine Einladung beigetreten — ihr seid jetzt verbunden.',
       'mentorship.autoLinkSkipped':

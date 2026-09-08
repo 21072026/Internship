@@ -1962,6 +1962,29 @@ model MentorshipRelation {
   // certified) as a successful completion. Keys live in
   // src/lib/relationLifecycle.ts.
   lifecycleState          String?
+  // Why the pairing ended, as picked by the person who ended it (#2289): a code
+  // from src/lib/relationLifecycle.ts (ADMIN_END_REASON_CODES). Nullable and
+  // never backfilled — a relation closed before this column existed, or closed
+  // as an honest COMPLETED, carries none.
+  //
+  // A CODE, and deliberately no free-text column beside it. Several read paths
+  // return a relation's scalars to the mentor or the mentee (they use Prisma
+  // `include`, which selects every column), so prose stored here would reach
+  // the very person it is about — #1801 makes "the outgoing mentor is never
+  // shown the reason" a rule, and a candid note only stays candid if it is not
+  // read back. A coarse code is the same kind of fact `StatusChange.reasonCode`
+  // already exposes on those paths; the admin's free-text elaboration lives in
+  // the ActivityLog entry, which only admins read.
+  endReasonCode           String?
+  // The pairing this one continues (#2289). Set on the relation CREATED by a
+  // mentor transfer, pointing at the one that was closed as ENDED_REASSIGNED —
+  // so the incoming mentor's blank page has a readable predecessor and the
+  // mentee's history is reachable instead of merely still existing somewhere.
+  // NOTHING is moved between the two: every child row (interactions,
+  // evaluations, notes, messages) stays on the relation it was written under,
+  // because re-pointing `relationId` would re-attribute the outgoing mentor's
+  // work to the incoming one — InteractionLog has no author column of its own.
+  previousRelationId      String?
 
   mentor                User                   @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                   @relation("MenteeRelations", fields: [menteeId], references: [id])
@@ -1982,10 +2005,15 @@ model MentorshipRelation {
   weeklyReportReminders WeeklyReportReminder[]
   placement             Placement?
   rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
+  previousRelation      MentorshipRelation?    @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
+  // At most one successor in practice (a closed relation is transferred once),
+  // but the FK cannot express that, so Prisma types it as a list.
+  nextRelations         MentorshipRelation[]   @relation("RelationChain")
 
   @@index([status])
   @@index([lifecycleState])
   @@index([pipelineStatus])
+  @@index([previousRelationId])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
