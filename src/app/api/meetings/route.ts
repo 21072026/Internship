@@ -10,7 +10,7 @@ import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
-import { generateMeetingLink } from '@/lib/meetingContext';
+import { resolveMeetingLink } from '@/lib/meetingContext';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
@@ -161,7 +161,11 @@ export async function POST(request: Request) {
     // same room, so the video link is generated once (Jitsi, no account needed)
     // when the organizer didn't paste one. The per-person RSVP token stays
     // unique — each participant confirms attendance individually.
-    const link = meetLink || generateMeetingLink({ inviteeCount: relations.length, orgId: session.user.orgId });
+    const link = await resolveMeetingLink({
+      pastedLink: meetLink,
+      inviteeCount: relations.length,
+      orgId: session.user.orgId,
+    });
 
     // Guests are resolved once for the whole batch: they are invited to the
     // shared room, not to each relation. Anyone with an account is dropped here

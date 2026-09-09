@@ -7,12 +7,19 @@
 // and the `Permissions-Policy` allowlist in next.config.js — widening one
 // without the other yields an empty box or a call with no camera.
 //
-// `8x8.vc` is our JaaS tenant (#1237), used for one-on-one calls when
-// configured; `meet.jit.si` carries everything else — group/bulk meetings and
-// recurring series (JaaS bills per monthly active user, so the tenant is
-// reserved for 1:1 calls — see src/lib/meetingRoom.ts), links created before
-// the JaaS switch, and environments with no JaaS credentials (local dev, CI).
+// `8x8.vc` is our JaaS tenant (#1237), used while the month's participant
+// allowance has room for the call (see src/lib/meetingRoom.ts); `meet.jit.si`
+// carries everything else — rooms created once the allowance is spent, links
+// created before the JaaS switch, and environments with no JaaS credentials
+// (local dev, CI).
 export const EMBEDDABLE_MEETING_HOSTS = ['meet.jit.si', '8x8.vc'];
+
+// The public Jitsi instance. Embeddable, free, needs no account — and it HANGS
+// UP AN EMBEDDED CALL AFTER ABOUT FIVE MINUTES ("Embedding meet.jit.si is only
+// meant for demo purposes"). The same room opened in a browser tab has no such
+// limit, which is what makes the warning below actionable rather than an
+// apology.
+export const FREE_MEETING_HOST = 'meet.jit.si';
 
 // True when the link can safely be embedded. Meet/Zoom/Teams all send
 // X-Frame-Options and would render an empty box, so the UI has to offer
@@ -24,6 +31,24 @@ export function isEmbeddableMeetingLink(link: string | null | undefined): boolea
     if (url.protocol !== 'https:') return false;
     const host = url.hostname.toLowerCase();
     return EMBEDDABLE_MEETING_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when this link is a room on the public Jitsi instance — the host with
+ * the five-minute embedded-call cutoff (#2011).
+ *
+ * Client-safe and deliberately host-shaped rather than "is this one of ours":
+ * a link created months ago, before the JaaS tenant existed, is exactly as
+ * cut-off-prone as one created a minute ago, and both must warn.
+ */
+export function isFreeInstanceMeetingLink(link: string | null | undefined): boolean {
+  if (!link) return false;
+  try {
+    const host = new URL(link).hostname.toLowerCase();
+    return host === FREE_MEETING_HOST || host.endsWith(`.${FREE_MEETING_HOST}`);
   } catch {
     return false;
   }

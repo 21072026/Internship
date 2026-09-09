@@ -2570,6 +2570,42 @@ model MeetingRoomState {
   updatedAt    DateTime @updatedAt
 }
 
+// Our own count of JaaS monthly active participants (#2011).
+//
+// JaaS bills — and caps a free tenant — on distinct participants per calendar
+// month, and the provider's dashboard is the only place that number used to
+// exist. That made "is the 25-participant allowance actually the constraint?"
+// unanswerable from anything we own, so the routing was a guess dressed up as a
+// rule. One row per (period, participant) written from the JaaS webhook feed
+// makes it a number: `COUNT(*) WHERE period = ?` is the MAU.
+//
+// IDENTITY-MINIMAL BY CONSTRUCTION. The webhook carries `{ id, name }`; only a
+// keyed hash of the id is stored here and the name is dropped on the floor. The
+// hash is not reversible to a person by anyone reading this table, and it is
+// salted per deployment (lib/jaasAllowance.ts), so the same participant in two
+// deployments does not correlate. Nothing joins this table to a User.
+model JaasMonthlyParticipant {
+  id String @id @default(cuid())
+
+  /// The calendar month, UTC, 'YYYY-MM' — the same period vocabulary the
+  /// billing meter uses (lib/meteringRules.ts), so the two can be read side by
+  /// side without converting anything.
+  period String @db.VarChar(7)
+
+  /// HMAC-SHA256 of the JaaS participant id, hex. Never the id, never the name.
+  participantHash String @db.VarChar(64)
+
+  /// When this participant was first seen in this month. There is deliberately
+  /// no "last seen": the metered unit is "was active at all", and a rolling
+  /// timestamp would turn a counter into an attendance log.
+  firstSeenAt DateTime @default(now())
+
+  /// The insert is an upsert on this pair, which is what makes the row count a
+  /// DISTINCT count without a GROUP BY.
+  @@unique([period, participantHash])
+  @@index([period])
+}
+
 // Audit trail of pipeline stage changes for a mentorship.
 model StatusChange {
   id          String   @id @default(cuid())

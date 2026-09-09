@@ -1,0 +1,21 @@
+{
+  "bump": "minor",
+  "changelog": "- **Group calls stop dying at five minutes — honest routing, and we count our own JaaS allowance** (#2011). The video host used to be picked by `inviteeCount === 1`: the JaaS tenant was reserved for pairs to protect a 25-monthly-active-participant free allowance nobody in the codebase could measure, so every project meeting, every bulk schedule and — via `inviteeCount: null` — every recurring series was routed *by construction* to public `meet.jit.si`, which hangs up an embedded call after about five minutes, with nothing warning anyone it was about to happen. Three changes. (1) `resolveMeetingLink()` replaces the four direct `generateMeetingLink()` calls and routes any room — 1:1, group, bulk, series — to the tenant while its projected head-count still fits the allowance; a spent allowance degrades a 1:1 to the public instance rather than failing to start. (2) `FreeRoomWarning` renders above the embedded call whenever the room is a `meet.jit.si` one, before anyone joins, in EN/TR/DE, naming the cutoff and the escape from it (the same room in a browser tab has no limit, and the button is in the warning). (3) The allowance is counted from data we own: `JaasMonthlyParticipant` is one row per (UTC month, participant) written from the existing `PARTICIPANT_JOINED` webhook — an HMAC of the participant id and nothing else, no names, no join to a `User` — surfaced on `/admin/integrations` as \"N / 25 monthly active participants\" via `GET /api/admin/integrations/jaas-usage`. The limit is `JAAS_MONTHLY_ACTIVE_LIMIT` (default 25, `0` = never use the tenant), not a literal in a component. Nothing here gates a call: video stays free-core, over-allowance is an announced degradation, and an unset tenant, a broken key or an unreadable database all resolve to a public room. `src/lib/meetingRoom.ts`'s reasoning comment now describes the shipped rule instead of the retired one.",
+  "notes": {
+    "en": [
+      "Group meetings and recurring calls now use the same video room as one-on-one calls, so a team call no longer gets cut off after a few minutes.",
+      "If a call does have to run on the free public room, the meeting panel says so before anyone joins — and offers to open the same room in a browser tab, where there is no time limit.",
+      "Admins can see this month's video usage on the integrations page: how many participants have joined a call, out of the monthly allowance. No names are stored."
+    ],
+    "tr": [
+      "Grup toplantıları ve tekrarlayan görüşmeler artık birebir görüşmelerle aynı video odasını kullanıyor; ekip görüşmesi birkaç dakika sonra kesilmiyor.",
+      "Bir görüşme yine de ücretsiz herkese açık odada çalışmak zorunda kalırsa, görüşme paneli bunu kimse katılmadan önce söylüyor ve aynı odayı süre sınırı olmayan bir tarayıcı sekmesinde açmayı öneriyor.",
+      "Yöneticiler bu ayın video kullanımını entegrasyonlar sayfasında görebiliyor: aylık kotanın ne kadarına karşılık kaç katılımcı görüşmeye katıldı. Hiçbir isim saklanmıyor."
+    ],
+    "de": [
+      "Gruppenbesprechungen und wiederkehrende Gespräche nutzen jetzt denselben Videoraum wie Einzelgespräche — ein Teamgespräch wird nicht mehr nach wenigen Minuten getrennt.",
+      "Muss ein Gespräch doch im freien öffentlichen Raum stattfinden, sagt das Besprechungsfenster das, bevor jemand beitritt, und bietet an, denselben Raum in einem Browser-Tab ohne Zeitlimit zu öffnen.",
+      "Administratorinnen sehen die Videonutzung des Monats auf der Integrationsseite: wie viele Teilnehmende an einem Gespräch teilgenommen haben, gemessen am monatlichen Kontingent. Es werden keine Namen gespeichert."
+    ]
+  }
+}
