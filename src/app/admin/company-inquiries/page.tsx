@@ -7,7 +7,8 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
-import { Building2, Mail, Phone } from 'lucide-react';
+import { ConvertInquiryModal, type ConvertibleInquiry } from '@/components/admin/ConvertInquiryModal';
+import { Building2, Mail, Phone, UserPlus } from 'lucide-react';
 
 interface InquiryRow {
   id: string;
@@ -21,6 +22,12 @@ interface InquiryRow {
   createdAt: string;
   handledAt: string | null;
   handledBy: { fullName: string } | null;
+  // Set once the enquiry has been converted into a Company + an invited COMPANY
+  // login (#1863). The enquiry stays in the list either way — it is the record
+  // of where the relationship came from — but it links to what it became instead
+  // of offering to create a second one.
+  convertedAt: string | null;
+  convertedCompany: { id: string; name: string } | null;
 }
 
 const STATUS_TABS = ['NEW', 'CONTACTED', 'CLOSED', 'ALL'] as const;
@@ -40,6 +47,7 @@ export default function CompanyInquiriesPage() {
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_TABS)[number]>('NEW');
   const [rows, setRows] = useState<InquiryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [converting, setConverting] = useState<ConvertibleInquiry | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -103,7 +111,23 @@ export default function CompanyInquiriesPage() {
                     {r.handledBy ? ` · ${a.handledBy.replace('{name}', r.handledBy.fullName)}` : ''}
                   </p>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                  {/* Offered on every enquiry that has not been converted yet,
+                      including a manually closed one: a lead that went cold and
+                      came back is exactly the case where somebody would
+                      otherwise re-key it by hand on three screens. A converted
+                      enquiry gets the link below instead, and the server refuses
+                      a second conversion regardless of what this renders. */}
+                  {!r.convertedCompany && (
+                    <button
+                      onClick={() => setConverting({ id: r.id, companyName: r.companyName, contactName: r.contactName, email: r.email })}
+                      data-testid={`convert-inquiry-${r.id}`}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:underline"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      {a.convert.action}
+                    </button>
+                  )}
                   {r.status !== 'CONTACTED' && (
                     <button onClick={() => setStatus(r.id, 'CONTACTED')} className="text-sm text-blue-600 hover:underline">
                       {a.markContacted}
@@ -126,12 +150,30 @@ export default function CompanyInquiriesPage() {
                     <Phone className="h-4 w-4 text-gray-400" />{r.phone}
                   </p>
                 )}
+                {r.convertedCompany && (
+                  <p
+                    data-testid={`inquiry-converted-${r.id}`}
+                    className="flex flex-wrap items-center gap-2 bg-green-50 text-green-800 rounded-lg px-3 py-2"
+                  >
+                    <Building2 className="h-4 w-4" />
+                    {a.convert.convertedTo.replace('{company}', r.convertedCompany.name)}
+                    <a href="/admin/companies" className="text-blue-600 hover:underline">{a.convert.openCompany}</a>
+                  </p>
+                )}
                 {r.openRoles && <p className="text-gray-700"><span className="text-gray-500">{a.openRoles}:</span> {r.openRoles}</p>}
                 {r.message && <p className="text-gray-600 whitespace-pre-wrap border-l-2 border-gray-200 pl-3">{r.message}</p>}
               </div>
             </Card>
           ))}
         </div>
+      )}
+
+      {converting && (
+        <ConvertInquiryModal
+          inquiry={converting}
+          onClose={() => setConverting(null)}
+          onConverted={load}
+        />
       )}
     </div>
   );

@@ -1231,6 +1231,10 @@ model Company {
   requisitions      Requisition[]
   interviewRequests InterviewRequest[]
   placements        Placement[]
+  // The enquiries this company was created from (#1863). A list rather than a
+  // single row because nothing stops a second enquiry from the same company
+  // later being linked to the account it already has.
+  fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -1372,32 +1376,46 @@ enum CompanyInquiryStatus {
 // stored (rather than only emailed) so a request cannot quietly go missing in
 // an inbox, and so an admin can see what is still unanswered.
 model CompanyInquiry {
-  orgId       String?
-  org         Organization?        @relation(fields: [orgId], references: [id])
-  id          String               @id @default(cuid())
-  companyName String
-  contactName String
-  email       String
-  phone       String?
+  orgId              String?
+  org                Organization?        @relation(fields: [orgId], references: [id])
+  id                 String               @id @default(cuid())
+  companyName        String
+  contactName        String
+  email              String
+  phone              String?
   // Roles they are hiring for, and anything else they typed.
-  openRoles   String?              @db.Text
-  message     String?              @db.Text
+  openRoles          String?              @db.Text
+  message            String?              @db.Text
   // Preferred UI language ('en' | 'tr' | 'de') — the language they read the
   // page in, so a reply can be written in it.
-  locale      String?
-  status      CompanyInquiryStatus @default(NEW)
+  locale             String?
+  status             CompanyInquiryStatus @default(NEW)
   // When they accepted the privacy terms — set server-side on submit.
-  consentAt   DateTime?
-  handledAt   DateTime?
-  handledById String?
-  note        String?              @db.Text
-  createdAt   DateTime             @default(now())
+  consentAt          DateTime?
+  handledAt          DateTime?
+  handledById        String?
+  note               String?              @db.Text
+  createdAt          DateTime             @default(now())
+  // What this enquiry BECAME (#1863). An admin converts a warm lead into a real
+  // Company plus an invited COMPANY login in one action; these two columns are
+  // the record of that. Their presence is also the idempotence key: the convert
+  // endpoint claims the enquiry with a conditional UPDATE on
+  // `convertedCompanyId: null`, so a double-click (or two admins on the same
+  // row) produces one Company and one invitation, and the loser gets a
+  // 409 `already_converted` naming what it already became.
+  //
+  // The enquiry itself is never deleted — it is the record of where the
+  // relationship came from — so this is a link, not a replacement.
+  convertedCompanyId String?
+  convertedAt        DateTime?
 
-  handledBy User? @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+  handledBy        User?    @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+  convertedCompany Company? @relation("ConvertedFromInquiry", fields: [convertedCompanyId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([email])
   @@index([orgId])
+  @@index([convertedCompanyId])
 }
 
 enum MentorApplicationStatus {
@@ -2568,6 +2586,13 @@ model InvitationToken {
   // this to itself; an admin picks the mentor in the invite form.
   mentorId     String?
   menteeId     String?
+  // The company an invited COMPANY user belongs to (#1863). A COMPANY account
+  // is useless without it — every company-side screen reads `User.companyId` —
+  // and registration has no other way to learn it, since the invitee only
+  // supplies a name and a password. Carried here for the same reason `orgId` is:
+  // the fact is known when the invitation is minted and must survive until it is
+  // consumed, possibly days later. Only ever set on a `role = COMPANY` row.
+  companyId    String?
   // The project the invitee should join on registration, if any.
   projectId    String?
   // Lifecycle timestamps (nullable — each set once, the first time it happens):
