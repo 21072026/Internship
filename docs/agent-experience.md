@@ -6582,3 +6582,71 @@ hatanın en pahalı hâli. `e2e/robots-sitemap.spec.ts` listedeki her route'u
 public sayfa = üç kayıt** — `src/app/<route>/page.tsx`, `PublicHeader`/
 `PublicFooter` girişi ve `src/app/sitemap.ts`. Bir de dördüncüsü:
 `src/lib/features.ts` (CLAUDE.md'nin feature-catalogue disiplini).
+
+## 2026-09-09 — Sonuçlanmış bir check kendini yeniden değerlendirmez
+
+**Kırmızının sebebi base dalıysa, base düzelince PR yeşile dönmez.** Bir check run
+sonuçlandıktan sonra kendini yeniden değerlendirmiyor: main'deki hatayı gideren commit
+merge olduğunda o PR'ın check'i olduğu gibi kırmızı kalıyor, auto-merge de "başarısız
+zorunlu kontrol" gördüğü için hiç tetiklenmiyor. Bu turda iki PR tam bu yüzden saatlerce
+öylece bekledi — ikisinin de diff'i doğruydu, eksik olan tek şey **yeni bir commit**'ti.
+Dolayısıyla auto-merge'ü açmak bir dalı "teslim edilmiş" saymak için yetmiyor: kapının
+kırmızı olduğu bir PR'da hiçbir zamanlayıcı devreye girmiyor, birinin bir şey push etmesi
+gerekiyor.
+
+**Düzeltme başkasının dalındaysa `main`'i o dala merge et, rebase etme.** Merge commit'i
+karşı ajanın çalışma kopyasını geçerli bırakıyor; rebase ise sha'ları değiştirip hâlâ o
+dalda çalışan oturumun altından zemini çekiyor (`--force-with-lease` ile bile). Kendi
+dalında serbestsin — orada rebase daha temiz bir geçmiş bırakıyor.
+
+**Kendi diff'ini suçlamadan önce base'e bak.** Kırmızı `Playwright smoke`'un sebebi bu
+turda benim değişikliğim değil main'di (#2284'ün `/pricing` prefetch 404'ü, bu dosyada
+2026-09-07 altında anlatılıyor). Teşhisin en ucuz hâli logu okumaktan da önce geliyor:
+**başka bir base üzerinde duran, konusu tamamen alakasız bir PR'ın aynı check'ine bak** —
+o da aynı satırda kırmızıysa sorun senin dalında değil. Bu, "log oku → hipotez kur →
+yerelde koştur" turunun tamamını atlatıyor.
+
+## 2026-09-09 — Liste biçimli çatışmada birleşim doğru, blok sınırında yanlış
+
+**Kardeş PR'lar aynı listelere birer satır ekliyor; orada "hangisi kazanır" sorusu yok.**
+Bu partide altı PR `ci.yml`'e bir adım, `package.json`'a bir script, `TENANT_MODELS`'a bir
+model, coverage `FLOORS`'a bir dosya ve `CLAUDE.md`'ye bir madde ekliyordu — hepsi ikili
+olarak çatışıyor ve her seferinde doğru çözüm iki tarafı da tutmak. Bunu bir kural olarak
+uygulamak turu hızlandırıyor.
+
+**Ama aynı refleks bir blok sınırının üstünden geçerse yapıyı bozuyor.** `prisma/schema.prisma`
+içinde çatışma iki modelin arasına düştüğünde kör birleşim bir **kapanış süslü parantezini**
+yuttu; semptom ise şemayla ilgisi belli olmayan bir yığın `tsc` hatası oldu ("Property
+'<model>' does not exist on type 'PrismaClient'"). O hataya inanıp kodda model aramak boşa
+giden zaman: `npx prisma validate` aynı şeyi tek satırda ve doğru yerde söylüyor. **Kural:
+Prisma modelinin yokluğundan şikâyet eden bir tsc hatasında önce şemayı doğrula** — %90
+oranı senin kodun değil, çözdüğün çatışmanın kendisi.
+
+## 2026-09-09 — Yeniden üretilemeyen bir CI hatasında teori değil ortam kur
+
+**Üç makul hipotezin üçü de yanlıştı.** axe job'undaki bir `waitForURL` timeout'u için
+sırasıyla e-posta küçük harfe çevirme, bir rate limit ve onboarding yönlendirmesini
+suçladım; hiçbiri değildi. Konteynerde MariaDB'yi kaldırıp gerçek bir Chromium'la spec'i
+koşturmak **on dakika** sürdü ve cevabı yerinde verdi. Hipotez üretmek bedava görünüyor
+ama her turu bir push + CI beklemesi kadar pahalı; ortamı kurmak bir kez ödenip her
+hipotezi saniyeler içinde eleyen bir maliyet.
+
+**Ve cevap zaten sorunun kendisi değildi.** Ortam ayağa kalkınca görülen iki şey vardı:
+timeout'u çözen commit **ölmüş bir ajanın worktree'sinde push edilmemiş** duruyordu, ve
+altında asıl bulgu — klavyeyle erişilemeyen bir kaydırma konteyneri — timeout'un hiç
+konusu olmayan bir kusur olarak bekliyordu. Yani "hatayı yeniden üret" adımı yalnızca
+teşhis değil, kapsam denetimi: rapor edilen semptomu kovalarken yanındaki gerçek kusuru
+görmenin tek yolu ortamın gerçekten çalışması.
+
+## 2026-09-09 — Mükerrer iş, kaybeden PR'da açıkça yazılır
+
+**Claim yorumu gerekli ama yeterli değil; ikinci bakılacak yer açık PR listesi.** Bu turda
+#2045 ve #2075 claim yorumları *yazılmış olmasına rağmen* iki kez yapıldı, çünkü karşı
+oturum issue'lara baktı ve **açık pull request'lere bakmadı** — iş PR'a çıkmışken issue
+üzerinde hâlâ görünür bir işaret yoktu. İşe başlamadan önce ikisini birlikte oku.
+
+**Mükerrer bir PR ortaya çıktığında bunu kaybeden PR'ın üstüne yaz.** İki dal aynı işi
+yapıyorsa, merge olanın neyi kapsadığını (ve varsa senin dalında olup onda olmayanı)
+kaybeden PR'a yorum olarak düşmek, kapatma kararını merge anında keşfedilen bir çatışma
+olmaktan çıkarıp okunabilir bir kayda çeviriyor. Sessizce kapatmak ya da öylece bırakmak,
+aynı işi üçüncü kez yapacak oturumun elinden tek ipucunu alıyor.
