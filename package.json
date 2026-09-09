@@ -80,7 +80,7 @@
     "next": "^15.5.24",
     "next-auth": "^4.24.7",
     "node-cron": "^3.0.3",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^9.1.1",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "react": "^19.2.8",
