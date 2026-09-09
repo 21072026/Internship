@@ -38,12 +38,26 @@
  *     ALREADY indexed, so an alias that folds to one of them is redundant and
  *     the checker rejects it — that is what keeps the list from growing noise.
  *   - `adjacent` is "close enough that a person who has one is worth showing
- *     for the other", authored in ONE direction and made symmetric by
- *     `buildSkillIndex`. It is deliberately unweighted: the matcher (#1819)
- *     owns scoring, and a weight guessed here would be a number nobody
+ *     for the other". It is an UNDIRECTED relation: `buildSkillIndex`
+ *     symmetrises it, so writing an edge under one entry, under the other, or
+ *     under both are all the same graph and none of them is wrong. (Of the 179
+ *     edges below, 125 happen to be written from both ends and 54 from one —
+ *     that difference carries no meaning, which is exactly why the index does
+ *     not preserve it. Write it wherever it reads best; the unit test asserts
+ *     the result is symmetric.) It is deliberately unweighted: the matcher
+ *     (#1819) owns scoring, and a weight guessed here would be a number nobody
  *     measured. Competing tools (`aws` ↔ `azure`) count as near-neighbours;
  *     spoken languages have no neighbours at all, and an empty list is a valid
  *     answer.
+ *   - AN UMBRELLA TERM IS AN ALIAS ONLY IF THIS VOCABULARY HOLDS NO COMPETING
+ *     PRODUCT UNDER IT. "NoSQL" was an alias of `mongodb`, which is how a
+ *     Redis or Elasticsearch engineer — both in this list, both NoSQL — gets
+ *     tagged as a MongoDB engineer. When the umbrella has competitors here it
+ *     belongs as its own entry (adjacent to each of them) or nowhere; when it
+ *     has none in this vocabulary ("Version Control" → `git`,
+ *     "Containerization" → `docker`) the alias is the honest answer and is
+ *     kept. Resolving to a near-miss is worse than resolving to nothing: free
+ *     text stays free text, a wrong key is a wrong claim on a CV.
  *
  * DEPENDENCY-FREE ON PURPOSE
  *
@@ -115,8 +129,14 @@ export const SKILL_CATEGORIES: readonly SkillCategoryMeta[] = [
  * umbrella terms it lacked and the handful of skills that appear verbatim in
  * real profile data — "Power BI", "Microsoft Excel", "Entity Framework Core",
  * "Generative AI / AI Tools", "Data Analysis", "Git / GitHub", "REST API / API
- * Development" all come out of the pasted CV blob quoted at the top of
- * `skills.ts`, which is why those exact strings are aliases here.
+ * Development", "SQL / PostgreSQL", "C# / .NET" and "Swagger / API Testing"
+ * all come out of the pasted CV blob quoted at the top of `skills.ts`, which
+ * is why those exact strings are aliases here.
+ *
+ * One line of that blob is deliberately left unresolvable: "Java C# / .NET"
+ * names three skills on one line, because the CV had no separator there. It is
+ * not an alias of any of them — claiming it is `csharp` would silently drop
+ * the other two, and one malformed line is not a vocabulary entry.
  *
  * Kept small and defensible on purpose: a hundred entries somebody curated are
  * worth more than three hundred guesses, and every alias below is a spelling
@@ -223,7 +243,11 @@ export const SKILL_SEED: readonly SkillEntry[] = [
     key: 'csharp',
     labelEn: 'C#', labelTr: 'C#', labelDe: 'C#',
     category: 'language',
-    aliases: ['C Sharp'],
+    // "C# / .NET" is one line in the real pasted CV (see skills.ts's header):
+    // the person means both, and a resolver returns one key, so it lands on
+    // the MORE SPECIFIC of the two — `csharp` keeps the language and reaches
+    // `.NET` through adjacency, while the reverse would lose the language.
+    aliases: ['C Sharp', 'C# / .NET', 'C#/.NET'],
     adjacent: ['dotnet', 'entity-framework', 'backend'],
   },
   {
@@ -450,6 +474,17 @@ export const SKILL_SEED: readonly SkillEntry[] = [
     adjacent: ['graphql', 'backend'],
   },
   {
+    key: 'swagger',
+    labelEn: 'Swagger / OpenAPI', labelTr: 'Swagger / OpenAPI', labelDe: 'Swagger / OpenAPI',
+    category: 'backend',
+    // "Swagger / API Testing" is a verbatim line from the pasted CV, and the
+    // tool had no entry at all — a REST developer's most common second skill
+    // resolved to nothing. `swagger` rather than `openapi` as the key because
+    // that is what people write; both are indexed either way.
+    aliases: ['OpenAPI', 'Swagger / API Testing', 'API Testing', 'API Dokümantasyonu'],
+    adjacent: ['rest', 'qa-testing', 'backend'],
+  },
+  {
     key: 'graphql',
     labelEn: 'GraphQL', labelTr: 'GraphQL', labelDe: 'GraphQL',
     category: 'backend',
@@ -513,7 +548,10 @@ export const SKILL_SEED: readonly SkillEntry[] = [
     key: 'postgresql',
     labelEn: 'PostgreSQL', labelTr: 'PostgreSQL', labelDe: 'PostgreSQL',
     category: 'database',
-    aliases: ['Postgres', 'PSQL', 'Postgre'],
+    // "SQL / PostgreSQL" is another verbatim line from that CV. Same rule as
+    // "C# / .NET": the more specific key wins, and `sql` is one adjacency hop
+    // away. (Deliberately NOT on `sql`, which would throw the product away.)
+    aliases: ['Postgres', 'PSQL', 'Postgre', 'SQL / PostgreSQL'],
     adjacent: ['sql', 'prisma'],
   },
   {
@@ -527,7 +565,10 @@ export const SKILL_SEED: readonly SkillEntry[] = [
     key: 'mongodb',
     labelEn: 'MongoDB', labelTr: 'MongoDB', labelDe: 'MongoDB',
     category: 'database',
-    aliases: ['Mongo', 'Mongo DB', 'NoSQL'],
+    // NOT 'NoSQL': see the umbrella rule in the house style above. Redis and
+    // Elasticsearch are in this vocabulary and are also NoSQL stores, so
+    // "NoSQL" → mongodb would tag a Redis engineer as a MongoDB engineer.
+    aliases: ['Mongo', 'Mongo DB'],
     adjacent: ['nodejs', 'database-management'],
   },
   {

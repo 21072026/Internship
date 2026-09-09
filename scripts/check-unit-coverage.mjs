@@ -67,6 +67,14 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'scan cap / truncated-result reporting (#1820)' },
   ],
   [
+    'src/lib/skillSeed.ts',
+    {
+      floor: 90,
+      measured: 100.0,
+      why: 'the fold + adjacency symmetry every skill filter normalises to (#1816). NOTE: most of this file is the vocabulary TABLE, so the line score is generous by construction — the real guards are check:skills on the data and the behavioural assertions in scripts/test/skill-vocabulary.test.mjs. The floor is here so a refactor of the index functions cannot land uncovered.',
+    },
+  ],
+  [
     'src/lib/jobs/lease.ts',
     {
       floor: 90,

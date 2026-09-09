@@ -9,6 +9,7 @@
 
 import mammoth from 'mammoth';
 import { PDFParse } from 'pdf-parse';
+import { SKILL_VOCABULARY } from '@/lib/cvSkillVocabulary';
 
 export interface CvSuggestions {
   phone?: string;
@@ -18,18 +19,10 @@ export interface CvSuggestions {
   skills: string[];
 }
 
-// A pragmatic vocabulary of common tech/role skills. Matching against a known
-// list keeps precision high (no free-text guessing). Extend as needed.
-export const SKILL_VOCABULARY: string[] = [
-  'JavaScript', 'TypeScript', 'Python', 'Java', 'C#', 'C++', 'C', 'Go', 'Rust', 'Ruby', 'PHP', 'Kotlin', 'Swift', 'Scala',
-  'React', 'Next.js', 'Vue', 'Angular', 'Svelte', 'Node.js', 'Express', 'Django', 'Flask', 'FastAPI', 'Spring', 'Spring Boot', '.NET', 'Laravel', 'Rails',
-  'HTML', 'CSS', 'Tailwind', 'Sass', 'Redux', 'GraphQL', 'REST', 'tRPC',
-  'SQL', 'MySQL', 'PostgreSQL', 'MariaDB', 'MongoDB', 'Redis', 'SQLite', 'Prisma', 'Elasticsearch',
-  'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'Terraform', 'Ansible', 'Linux', 'Nginx', 'CI/CD', 'Git', 'GitHub Actions',
-  'TensorFlow', 'PyTorch', 'Pandas', 'NumPy', 'scikit-learn', 'Machine Learning', 'Data Science', 'NLP',
-  'Figma', 'Jira', 'Agile', 'Scrum', 'Kanban',
-  'English', 'German', 'Turkish', 'French', 'Spanish',
-];
+// The matching vocabulary lives in its own dependency-free module so scripts
+// and unit tests can read it without pulling in mammoth/pdf-parse (#1816).
+// Re-exported here so `SKILL_VOCABULARY` keeps its historical import path.
+export { SKILL_VOCABULARY } from '@/lib/cvSkillVocabulary';
 
 /** Extract plain text from a CV buffer based on its content type. */
 export async function extractCvText(data: Buffer, contentType: string): Promise<string> {
