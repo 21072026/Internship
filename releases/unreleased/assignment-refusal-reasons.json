@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Assignment refusals name their reason again** (#2283 follow-up). Switching the three assignment surfaces onto the response `code` had collapsed every refusal but `already_mentored` into a generic line, so an admin at their plan cap was told only \"The mentorship could not be created.\" One resolver, `src/lib/mentorshipAssignmentError.ts`, now translates `plan_limit_reached` (with usage/limit/plan), `already_decided` and the newly coded `invalid_mentor`; unknown codes still fall back to the generic sentence. The concurrency spec in `e2e/one-active-mentor.spec.ts` stopped asserting `[201, 409]` — a guarantee the shipped code does not make until the unique index lands — and asserts instead that every request is answered 201/409 and that the rows on disk match the answers.",
-  "notes": {
-    "en": ["When an assignment is refused, the reason is shown — including which plan limit you hit and that upgrading lifts it."],
-    "tr": ["Bir atama reddedildiğinde gerekçesi gösteriliyor — hangi plan sınırına takıldığınız ve planı yükseltmenin bunu açtığı dahil."],
-    "de": ["Wird eine Zuweisung abgelehnt, wird der Grund angezeigt — auch, welche Plangrenze erreicht ist und dass ein Upgrade sie aufhebt."]
-  }
-}

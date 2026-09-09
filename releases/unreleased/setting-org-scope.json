@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Settings are per-tenant with a global fallback** (#1553). `Setting` is re-keyed to (`orgId`, `key`) — a surrogate `id` plus `@@unique([orgId, key])` — and resolves org row → global row (`orgId = NULL`) → `SETTING_DEFAULTS`. The rule lives only in `src/lib/settings.ts` (`getSetting`/`getSettings`/`setSetting`, org argument optional and defaulting to the request's bound tenant), so the existing zero-argument call sites are unchanged. `PUT /api/admin/settings` is wrapped in `withTenantScope` and writes only the caller's own org. `Setting` is registered in `TENANT_MODELS`; its own readers run inside `runWithOrg(null, …)` because the auto-filter would otherwise hide the global fallback row. Legacy rows stay `orgId = NULL` as the global layer. **Dangerous under `db push`** — the primary-key change is resolved as DROP + CREATE, so it needs `prisma migrate deploy` (#1515) before it reaches a database that holds real settings.",
-  "notes": {
-    "en": ["Each organisation can now hold its own settings — 2FA policy, data retention, AI quota — falling back to the platform defaults for anything it has not set."],
-    "tr": ["Her kuruluş artık kendi ayarlarını tutabiliyor — 2FA politikası, veri saklama süresi, AI kotası — ve kendi belirlemediği her ayar için platform varsayılanına düşüyor."],
-    "de": ["Jede Organisation kann jetzt eigene Einstellungen führen — 2FA-Richtlinie, Aufbewahrungsdauer, KI-Kontingent — und fällt für alles Übrige auf die Plattform-Standards zurück."]
-  }
-}
