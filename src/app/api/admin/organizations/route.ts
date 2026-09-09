@@ -10,6 +10,13 @@ import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
+import { IS_DEMO_MODE } from '@/lib/demoMode';
+import {
+  applySsoEnforcement,
+  countExemptAdmins,
+  countSweepableUsers,
+  ssoEnforcementBlockers,
+} from '@/lib/ssoEnforcement';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -51,6 +58,28 @@ export async function GET() {
     },
   });
 
+  // What the enforcement toggle needs to be honest about before it is pressed
+  // (#1950): how many break-glass admins exist (the anti-lockout interlock) and
+  // how many sessions the flip would end. Two grouped queries for the whole
+  // page rather than two per row.
+  const orgIds = orgs.map((o) => o.id);
+  const [exemptAdminRows, sweepableRows] = orgIds.length
+    ? await Promise.all([
+        prisma.user.groupBy({
+          by: ['orgId'],
+          where: { orgId: { in: orgIds }, role: 'ADMIN', isActive: true, ssoExempt: true },
+          _count: { _all: true },
+        }),
+        prisma.user.groupBy({
+          by: ['orgId'],
+          where: { orgId: { in: orgIds }, ssoExempt: false },
+          _count: { _all: true },
+        }),
+      ])
+    : [[], []];
+  const exemptAdmins = new Map(exemptAdminRows.map((r) => [r.orgId, r._count._all]));
+  const sweepable = new Map(sweepableRows.map((r) => [r.orgId, r._count._all]));
+
   return NextResponse.json({
     plans: ORG_PLAN_KEYS,
     // Lets the admin screen hide what this account cannot use. Presentation
@@ -85,6 +114,11 @@ export async function GET() {
           spEntityId: spEntityId(o.slug),
           acsUrl: acsUrl(o.slug),
           metadataUrl: metadataUrl(o.slug),
+          // Enforced SSO (#1950): the flag, plus the two numbers the admin
+          // screen needs to name the consequence before anyone presses it.
+          ssoEnforced: o.ssoEnforced,
+          exemptAdmins: exemptAdmins.get(o.id) ?? 0,
+          sessionsToEnd: sweepable.get(o.id) ?? 0,
         },
         createdAt: o.createdAt,
         counts: {
@@ -165,6 +199,10 @@ const patchSchema = z.object({
   ssoIssuer: z.string().max(500).optional(),
   ssoEntryPoint: z.string().max(2000).optional(),
   ssoCertificate: z.string().max(20000).optional(),
+  // Enforced SSO (#1950). Separate from ssoEnabled on purpose: "our IdP works"
+  // and "nothing but our IdP may work" are different promises, and only the
+  // second one ends live sessions.
+  ssoEnforced: z.boolean().optional(),
 });
 
 function orNull(v: string | undefined): string | null | undefined {
@@ -220,7 +258,7 @@ export async function PATCH(request: Request) {
 
   const {
     id, plan, brandName, brandLogoUrl, brandColor, supportEmail,
-    ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate,
+    ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoEnforced,
   } = parsed.data;
 
   // Ownership is settled BEFORE the target row is touched: a 404-after-403
@@ -266,8 +304,9 @@ export async function PATCH(request: Request) {
   }
 
   const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
-    ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined;
-  const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate]);
+    ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined ||
+    ssoEnforced !== undefined;
+  const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoEnforced]);
   if (touchesSso && !clearsSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
     return featureLocked('SSO_SAML');
   }
@@ -313,16 +352,82 @@ export async function PATCH(request: Request) {
     };
     const err = validateSsoConfig(effective);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
+
+    // The public demo shares ONE tenant between every visitor, and enforcing
+    // SSO there would sign all of them out and leave the door open only to
+    // whoever granted themselves the exemption first. The middleware's demo
+    // block list works on pathnames and cannot see this field, so the refusal
+    // lives here — the branding and SSO *config* on this endpoint stay
+    // demonstrable, which is the point of the demo.
+    if (ssoEnforced === true && IS_DEMO_MODE) {
+      return NextResponse.json(
+        { error: 'Enforcing SSO would sign every demo visitor out', code: 'demo_blocked' },
+        { status: 403 }
+      );
+    }
+
+    // ── Enforced SSO: the anti-lockout interlock (#1950) ────────────────────
+    // Not optional and not advisory. A tenant that switches enforcement on with
+    // a misconfigured IdP and no exempt admin has no way back into its own
+    // account except our database console — so the two conditions are checked
+    // against the config this request LEAVES the org on, which is what lets an
+    // operator enable SSO and enforce it in a single save.
+    if (ssoEnforced === true && !existing.ssoEnforced) {
+      const blockers = await ssoEnforcementBlockers(id, { ...effective, plan: effectivePlan });
+      if (blockers.length) {
+        return NextResponse.json(
+          {
+            code: 'sso_enforcement_blocked',
+            blockers,
+            exemptAdmins: await countExemptAdmins(id),
+            error:
+              blockers.includes('SSO_NOT_ACTIVE')
+                ? 'SSO must be active for this organization before it can be enforced'
+                : 'At least one active administrator must hold a break-glass SSO exemption before SSO can be enforced',
+          },
+          { status: 400 }
+        );
+      }
+    }
+    if (ssoEnforced !== undefined) data.ssoEnforced = ssoEnforced;
   }
 
   if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
 
+  // Counted before the flip, while the sweep has not yet stamped anyone: this
+  // is what the confirmation dialog promised the admin.
+  const willSweep = ssoEnforced === true && !existing.ssoEnforced;
+  const sweepPreview = willSweep ? await countSweepableUsers(id) : 0;
+
   const organization = await prisma.organization.update({ where: { id }, data });
+
+  // The sweep on flip. Turning enforcement on has to END the sessions that were
+  // obtained by password — otherwise every one of them keeps working for
+  // another 12 hours and the tenant's "we enforce SSO" is false for the rest of
+  // the day. `applySsoEnforcement` stamps sessionsValidFrom AND revokes the
+  // trusted devices (the hard rule: neither half works alone) in bounded
+  // batches, then writes one audited `sso.enforced` row with the count.
+  //
+  // Runs only on the OFF → ON edge, so re-saving an already-enforcing tenant
+  // does not sign its users out again; running it twice would be harmless
+  // anyway, but a no-op save should be a no-op.
+  let sessionsEnded = 0;
+  if (willSweep) {
+    sessionsEnded = await applySsoEnforcement(
+      id,
+      { id: session.user.id, email: session.user.email ?? null },
+      request
+    );
+  }
+
   await logActivity({
     // SSO config lives behind this endpoint, so a change to it can redirect
     // authentication itself — warning rather than info when that is touched.
     action: 'org.updated',
-    level: 'ssoEnabled' in data || 'ssoIssuer' in data || 'ssoEntryPoint' in data ? 'warning' : 'info',
+    level:
+      'ssoEnabled' in data || 'ssoIssuer' in data || 'ssoEntryPoint' in data || 'ssoEnforced' in data
+        ? 'warning'
+        : 'info',
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
     targetType: 'organization',
@@ -330,5 +435,5 @@ export async function PATCH(request: Request) {
     detail: Object.keys(data).join(', '),
     request,
   });
-  return NextResponse.json({ organization });
+  return NextResponse.json({ organization, sessionsEnded, sweepPreview });
 }
