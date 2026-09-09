@@ -308,14 +308,21 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
               error={errors.password?.message}
             />
             {show2fa && (
-              <Input
-                label={t.auth.twoFactorCode}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="123456"
-                autoFocus
-                {...register('totp')}
-              />
+              <div>
+                <Input
+                  label={t.auth.twoFactorCode}
+                  // Deliberately NOT inputMode="numeric" (#1542): the same field
+                  // now also takes a recovery code, which contains letters, and
+                  // a numeric keyboard on iOS cannot type them at all — the one
+                  // credential you need on the day your phone is gone would be
+                  // unenterable on a phone.
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  autoFocus
+                  {...register('totp')}
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t.auth.twoFactorRecoveryHint}</p>
+              </div>
             )}
             <label className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300 select-none">
               <input

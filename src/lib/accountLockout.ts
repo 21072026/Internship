@@ -19,7 +19,12 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
-export type LockoutReason = 'password' | 'totp';
+// 'recovery' is the 2FA recovery-code door (#1542): a third stage, with its own
+// row, because it is a second way past the second factor and must not spend —
+// or be spent by — the authenticator's allowance. A failed recovery attempt is
+// still ALSO recorded against 'totp', so the recovery path cannot be used to
+// brute-force around that bucket; see the comment in auth.ts.
+export type LockoutReason = 'password' | 'totp' | 'recovery';
 
 // How long a tripped bucket stays locked. Same length as the counting window,
 // so the durable behaviour matches what the in-memory limiter always did.

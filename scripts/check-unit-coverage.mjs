@@ -150,6 +150,14 @@ const FLOORS = new Map([
       why: 'an external feed never overwrites what a human typed unless the tenant says so (#1943/#1965)',
     },
   ],
+  [
+    'src/lib/recoveryCodeFormat.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the stored hash is taken over the normalised code, so changing normalisation invalidates every printed code (#1542)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────
