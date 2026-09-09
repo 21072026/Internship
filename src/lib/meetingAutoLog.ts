@@ -140,6 +140,9 @@ export async function logEndedMeetingInteractions(meetingId: string): Promise<nu
           scheduledAt: ended.scheduledAt,
           relationId: { not: null },
           interaction: { is: null },
+          // A sibling that was called off (#1980) did not happen just because
+          // someone ended the row next to it.
+          status: 'SCHEDULED',
         },
         select: loggableSelect,
         take: SIBLING_BATCH,
@@ -169,6 +172,10 @@ export async function sweepMeetingInteractionLogs(now: Date = new Date()) {
       relationId: { not: null },
       interaction: { is: null },
       rsvp: { not: 'DECLINED' },
+      // A meeting that was called off did not happen (#1980) — writing "the
+      // scheduled meeting took place" into a mentee's own history would be a
+      // false record, the same reason a DECLINED invitation is skipped.
+      status: 'SCHEDULED',
       scheduledAt: { not: null, gte: lookback, lte: cutoff },
       // An explicitly ended meeting is logged on the click; it reaches the
       // sweep only when that write failed, which is exactly what a second

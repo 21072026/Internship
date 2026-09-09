@@ -70,6 +70,12 @@ export async function GET() {
         meetLink: true,
         rsvp: true,
         endedAt: true,
+        // Called off (#1980), with the reason the organiser gave. Every reader
+        // of this list has to be able to tell a meeting that is on from one
+        // that is not — the portal drops the cancelled ones, the mentor and
+        // admin surfaces mark them.
+        status: true,
+        cancelReason: true,
         createdAt: true,
         // The token belongs to the mentee the meeting was written for — it is
         // the same credential their invite e-mail carries, and the portal's
@@ -168,6 +174,12 @@ export async function POST(request: Request) {
       ...(session.user.email ? [session.user.email] : []),
     ]);
 
+    // The shared identity of this one schedule (#1980). Every row written below
+    // carries it, so a later "cancel this meeting" can ask whether it means this
+    // invitee or the whole session — a bulk schedule fans out into one row per
+    // invitee sharing a single room, and there was no way to name that group.
+    const batchKey = randomBytes(12).toString('hex');
+
     let created = 0;
     // The row the guests hang off — the first one written in this batch.
     let guestHostMeetingId: string | null = null;
@@ -183,6 +195,7 @@ export async function POST(request: Request) {
           meetLink: link,
           rsvpToken,
           createdById: session.user.id,
+          batchKey,
         },
       });
       guestHostMeetingId ??= meeting.id;

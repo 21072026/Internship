@@ -15,6 +15,10 @@ export const WEBHOOK_EVENTS = [
   'interaction.logged',
   'evaluation.added',
   'meeting.scheduled',
+  // A meeting moved, or was called off (#1980). An integration mirroring the
+  // calendar needs both, or its copy keeps the time nobody is coming at.
+  'meeting.rescheduled',
+  'meeting.cancelled',
   // Every assigned interviewer has submitted (or an admin closed the panel):
   // the scores are now comparable (#824).
   'interview_panel.completed',
