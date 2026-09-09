@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
 import { verifyTotpStep } from '@/lib/totp';
+import { consumeRecoveryCode, looksLikeRecoveryCode, recoveryCodeStatus } from '@/lib/recoveryCodes';
+import { notifyEvent } from '@/lib/notifications/router';
 import { headerSource, clientIp } from '@/lib/clientIp';
 import { guardProviders } from '@/lib/authGuard';
 import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/lib/accountLockout';
@@ -37,6 +39,18 @@ const AUTH_USER_SELECT = {
   twoFactorSecret: true,
   lastTotpStep: true,
 } as const;
+
+/**
+ * The recovery-code door's OWN allowance (#1542): five failures per hour.
+ *
+ * Not the TOTP numbers, and not a share of them. A failed recovery attempt is
+ * charged to the TOTP bucket as well, which is what keeps the second door from
+ * being a way around the 5-per-15-minute limit; this bucket is the other half —
+ * a longer window, so guessing paced to stay under the TOTP limit still hits a
+ * wall. Five is generous for someone reading codes off paper and far below what
+ * a ~38-bit code needs to stay out of reach.
+ */
+const RECOVERY_FAIL_LIMIT = { limit: 5, windowMs: 60 * 60 * 1000 } as const;
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -179,10 +193,47 @@ export const authOptions: NextAuthOptions = {
           // fumbling their code shouldn't consume the password allowance, and
           // an attacker past the password shouldn't get a fresh one.
           const totpKey = `totp-fail:${email}`;
+          const recoveryKey = `2fa-recovery-fail:${email}`;
           const step = verifyTotpStep(user.twoFactorSecret, code);
           const replayed = step !== null && user.lastTotpStep !== null && step <= user.lastTotpStep;
 
-          if (step === null || replayed) {
+          // The second door (#1542): a submission that is not a live TOTP code
+          // may still be a recovery code, for the person whose authenticator is
+          // gone. Only a submission SHAPED like one is tried — a 6-digit TOTP
+          // code can never normalise to eight alphabet characters — so a
+          // fumbled authenticator code is not charged to the recovery bucket,
+          // and a replayed TOTP code stays a replayed TOTP code.
+          const recoveryAttempt = step === null && !replayed && looksLikeRecoveryCode(code);
+          let recovered = false;
+
+          if (recoveryAttempt) {
+            // A SECOND bucket on top of the TOTP one, not instead of it.
+            //   - Sharing the TOTP bucket is what makes the recovery path
+            //     unable to brute-force AROUND the 5-per-15-minute limit: every
+            //     failure below is recorded there too.
+            //   - Having its own is what stops it INHERITING that allowance. A
+            //     recovery code is a second door to the account, and its window
+            //     is deliberately four times longer, so someone spreading
+            //     guesses out to stay under the TOTP limit still runs out here.
+            const recoveryLocked = await getActiveLockout(email, 'recovery');
+            if (recoveryLocked) {
+              await logActivity({
+                action: 'auth.login_locked',
+                level: 'warning',
+                actorEmail: user.email,
+                actorId: user.id,
+                detail: `recovery locked until ${recoveryLocked.lockedUntil.toISOString()}`,
+                request: origin,
+              });
+              throw new Error('Too many attempts. Please try again later.');
+            }
+            if (!rateLimit(recoveryKey, RECOVERY_FAIL_LIMIT).ok) {
+              throw new Error('Too many attempts. Please try again later.');
+            }
+            recovered = await consumeRecoveryCode(user.id, code);
+          }
+
+          if (!recovered && (step === null || replayed)) {
             const within = rateLimit(totpKey, { limit: 5, windowMs: 15 * 60 * 1000 });
             const locked = await recordFailedAttempt({
               email,
@@ -192,32 +243,76 @@ export const authOptions: NextAuthOptions = {
               limit: 5,
               ip,
             });
+            // A wrong recovery code burns an attempt in BOTH buckets: the
+            // shared TOTP one above (no bypass) and its own, longer one here.
+            const recoveryLocked = recoveryAttempt
+              ? await recordFailedAttempt({
+                  email,
+                  userId: user.id,
+                  orgId: user.orgId,
+                  reason: 'recovery',
+                  limit: RECOVERY_FAIL_LIMIT.limit,
+                  windowMs: RECOVERY_FAIL_LIMIT.windowMs,
+                  ip,
+                })
+              : null;
             await logActivity({
-              action: 'auth.totp_failed',
+              action: recoveryAttempt ? 'auth.recovery_failed' : 'auth.totp_failed',
               level: 'warning',
               actorEmail: user.email,
               actorId: user.id,
-              detail: replayed ? 'code already used' : 'invalid code',
+              detail: recoveryAttempt
+                ? 'unknown or spent recovery code'
+                : replayed
+                  ? 'code already used'
+                  : 'invalid code',
               request: origin,
             });
             // Same message either way — which of the two it was is the
-            // attacker's business to guess, not ours to confirm.
+            // attacker's business to guess, not ours to confirm. That includes
+            // not saying whether the submission was read as a recovery code:
+            // the form asks for one thing and refuses one thing.
             throw new Error(
-              within.ok && !locked ? 'Invalid authenticator code' : 'Too many attempts. Please try again later.'
+              within.ok && !locked && !recoveryLocked
+                ? 'Invalid authenticator code'
+                : 'Too many attempts. Please try again later.'
             );
           }
 
-          // Burn the step so the same code can't be used again inside the
-          // ±1-step acceptance window.
-          // `select` here is not cosmetic: an unqualified update() returns the
-          // whole row, which would re-introduce the Json-column read that
-          // AUTH_USER_SELECT exists to avoid.
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { lastTotpStep: step },
-            select: { id: true },
-          });
-          clearRateLimit(totpKey);
+          if (recovered) {
+            // A recovery sign-in is a security event, not a routine one: it is
+            // exactly what an attacker holding a printed code would do. So it
+            // is audited at `warning` and the account holder is told, whatever
+            // their notification preferences say (the event sits in an
+            // essential e-mail group). `lastTotpStep` is deliberately left
+            // alone — no TOTP step was consumed, and writing one would move the
+            // replay floor the authenticator still relies on.
+            const { remaining } = await recoveryCodeStatus(user.id);
+            await logActivity({
+              action: '2fa.recovery_used',
+              level: 'warning',
+              actorEmail: user.email,
+              actorId: user.id,
+              detail: `${remaining} recovery code(s) left`,
+              request: origin,
+            });
+            await notifyEvent(user.id, 'security.recoveryCodeUsed', { remaining: String(remaining) });
+            clearRateLimit(recoveryKey);
+            clearRateLimit(totpKey);
+          } else {
+            // A live, unreplayed TOTP code — the ordinary path.
+            // Burn the step so the same code can't be used again inside the
+            // ±1-step acceptance window.
+            // `select` here is not cosmetic: an unqualified update() returns the
+            // whole row, which would re-introduce the Json-column read that
+            // AUTH_USER_SELECT exists to avoid.
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { lastTotpStep: step },
+              select: { id: true },
+            });
+            clearRateLimit(totpKey);
+          }
         }
 
         // Fully authenticated — now the failure counter can be reset. Both

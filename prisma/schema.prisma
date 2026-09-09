@@ -475,6 +475,7 @@ model User {
   guidanceStates                    UserGuidanceState[]
   createdProgramCosts               ProgramCost[]                 @relation("ProgramCostCreatedBy")
   placements                        Placement[]                   @relation("PlacementMentee")
+  twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
 
   @@index([role])
   @@index([referredById])
@@ -2712,6 +2713,38 @@ model TrustedDevice {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+// Single-use 2FA recovery codes (#1542).
+//
+// The way back in when the authenticator is gone. Without this, an organisation
+// that turns `require2fa` on has no answer for a lost phone except an admin
+// editing MySQL by hand — which is why the setting was frightening to switch on.
+//
+// Only the HASH is stored, exactly like a password or an API key: the plaintext
+// set is shown once at enrolment and is not recoverable from here afterwards.
+// `usedAt` is what makes a code single-use, and it is stamped by a CONDITIONAL
+// update (`where: { id, usedAt: null }`) so two tabs racing on the same code
+// cannot both spend it — one of them writes 0 rows and is refused.
+//
+// Tenant data (it is a credential for one tenant's user), so it carries `orgId`
+// and is registered in TENANT_MODELS. Like AccountLockout, rows are written from
+// paths that run outside any tenant scope — the sign-in consume has no session
+// yet — so the writers stamp `orgId` from the owning User row themselves rather
+// than relying on the middleware.
+model TwoFactorRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId     String?
+  // HMAC-SHA-256 of the normalised code, keyed by the server secret — never the
+  // code. See src/lib/recoveryCodes.ts for why an HMAC and not a bare digest.
+  codeHash  String
+  // Null while the code is still spendable; the instant it was consumed after.
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // Durable brute-force lockout (#1541).

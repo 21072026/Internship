@@ -243,6 +243,12 @@ export const NOTIFICATION_EVENTS = [
   { key: 'security.passwordResetStarted', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.adminSignedOutAll', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.accountUnlocked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Somebody got past the second factor without the authenticator (#1542).
+  // `immediate` and in an essential group for the same reason as the
+  // impersonation rows above: it is a disclosure, not a notification. If the
+  // person reading it did not do it, the printed codes are in someone else's
+  // hands and every minute counts.
+  { key: 'security.recoveryCodeUsed', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['remaining'] },
   { key: 'role_changed.toMentor', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentee', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
 ] as const satisfies readonly NotificationEventDef[];
