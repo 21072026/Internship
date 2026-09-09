@@ -36,6 +36,13 @@
 #   # on the server, from a checkout of the repo:
 #   sudo ENV_FILE=/etc/internship-crm/prod.env ./infra/deploy-prod.sh
 #
+#   # the SECOND product from the SAME image and the SAME database — its own
+#   # container, port and env file, and APP_PRODUCT is what makes it the
+#   # marketing CRM (src/lib/product.ts). Unset APP_PRODUCT stays internship,
+#   # so the line above is unchanged:
+#   sudo CONTAINER=marketing-crm PORT=3201 APP_PRODUCT=marketing \
+#        ENV_FILE=/etc/internship-crm/marketing.env ./infra/deploy-prod.sh
+#
 #   # or straight from your laptop over SSH:
 #   ssh user@server 'cd /path/to/Internship && ENV_FILE=/etc/internship-crm/prod.env ./infra/deploy-prod.sh'
 #
@@ -178,6 +185,7 @@ app_env_args() {
     -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
     -e NEXTAUTH_URL="$NEXTAUTH_URL" \
     -e NEXT_PUBLIC_APP_URL="$NEXTAUTH_URL" \
+    -e APP_PRODUCT="${APP_PRODUCT:-}" \
     -e SMTP_HOST="${SMTP_HOST:-}" \
     -e SMTP_PORT="${SMTP_PORT:-}" \
     -e SMTP_USER="${SMTP_USER:-}" \

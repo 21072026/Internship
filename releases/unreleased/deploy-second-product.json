@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Deploy a second product from the same image**: `infra/deploy-prod.sh` passes `APP_PRODUCT` through `app_env_args()` (the single list both containers share) and documents the marketing invocation — `CONTAINER=marketing-crm PORT=3201 APP_PRODUCT=marketing ENV_FILE=…/marketing.env`. Unset stays internship, so the existing deploy is unchanged."
+}
