@@ -39,6 +39,19 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # The starter skill vocabulary is the thing every skill filter will
+      # normalise to, and every way of breaking it is invisible to TypeScript:
+      # the fields are all `string`, so a duplicated key, an alias two skills
+      # both claim, an adjacency pointing at a renamed key or an empty Turkish
+      # label all compile. They surface as a picker with two "React" rows or a
+      # lookup that resolves to whichever entry came first (#1816).
+      - name: skill vocabulary is well-formed (#1816)
+        run: npm run check:skills
+      # …and the behaviour the data exists for: the four spellings of one skill
+      # collapsing to one key, and adjacency authored one-way coming out
+      # symmetric.
+      - name: skill vocabulary index (#1816)
+        run: npm run test:skill-vocabulary
       # A hardcoded stage key ('HIRED_660', …) type-checks, passes every test on
       # the default seed, and only misbehaves for a tenant that renamed its
       # stages — which no test tenant does. That invisibility is why the bug
