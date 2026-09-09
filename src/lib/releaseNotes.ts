@@ -65,6 +65,937 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.181.0-beta',
+    date: '2026-09-08',
+    time: '08:11',
+    commit: '2bc8f58',
+    highlights: {
+      en: [
+        "You can change a mentee's mentor in one step: pick the new mentor and a reason. If nothing was logged under the pairing yet the mentor is simply corrected; otherwise it is handed over — closed as \"mentor changed\" rather than completed, and the new mentorship continues on the same pipeline stage.",
+      ],
+      tr: [
+        "Bir mentee'nin mentörünü tek adımda değiştirebilirsin: yeni mentörü ve bir gerekçe seç. Eşleştirmeye henüz hiçbir şey işlenmemişse mentör yalnızca düzeltilir; işlenmişse devredilir — \"tamamlandı\" değil \"mentör değişti\" olarak kapanır ve yeni mentorluk aynı pipeline aşamasından devam eder.",
+      ],
+      de: [
+        "Du kannst den Mentor eines Mentees in einem Schritt wechseln: neuen Mentor und Grund auswählen. Wurde zur Zuordnung noch nichts erfasst, wird der Mentor einfach korrigiert; andernfalls wird übergeben — geschlossen als „Mentor gewechselt“ statt als abgeschlossen, und das neue Mentoring führt dieselbe Pipeline-Stufe fort.",
+      ],
+    },
+  },
+  {
+    version: '0.180.0-beta',
+    date: '2026-09-07',
+    time: '21:33',
+    commit: '9a4b9e5',
+    highlights: {
+      en: [
+        "Skills are now entered as separate chips: type one and press Enter, or paste a whole list — commas, semicolons and line breaks are all split for you, so a list copied out of your CV no longer arrives as one giant skill.",
+        "The field tells you what it did and where it stops: how many skills you have of the 40 allowed, that a paste became N skills, and why an entry that reads like a sentence was not accepted (a skill can be up to 60 characters).",
+        "Existing profiles are cleaned up automatically where the list can still be split; long candidate and mentor lists now stay readable on cards, with the full text on hover.",
+      ],
+      tr: [
+        "Beceriler artık ayrı ayrı etiketler olarak giriliyor: birini yaz ve Enter'a bas ya da listenin tamamını yapıştır — virgül, noktalı virgül ve satır sonları senin için bölünür, böylece CV'den kopyalanan liste tek bir dev beceri olarak gelmez.",
+        "Alan ne yaptığını ve nerede durduğunu söylüyor: izin verilen 40 becerinin kaçını kullandığın, yapıştırdığın metnin kaç beceriye bölündüğü ve cümleye benzeyen bir girdinin neden kabul edilmediği (bir beceri en fazla 60 karakter).",
+        "Mevcut profiller, liste hâlâ bölünebiliyorsa otomatik olarak düzeltiliyor; uzun aday ve mentor listeleri kartlarda artık okunur kalıyor, tam metin ise imleçle görünüyor.",
+      ],
+      de: [
+        "Skills werden jetzt als einzelne Chips erfasst: einen eintippen und Enter drücken — oder eine ganze Liste einfügen. Kommas, Semikolons und Zeilenumbrüche werden für dich getrennt, sodass eine aus dem Lebenslauf kopierte Liste nicht mehr als ein einziger riesiger Skill ankommt.",
+        "Das Feld sagt, was es getan hat und wo es aufhört: wie viele der 40 erlaubten Skills belegt sind, in wie viele Skills ein Einfügen aufgeteilt wurde und warum ein Eintrag, der sich wie ein Satz liest, nicht übernommen wurde (ein Skill darf bis zu 60 Zeichen haben).",
+        "Bestehende Profile werden automatisch bereinigt, soweit die Liste noch trennbar ist; lange Kandidaten- und Mentorenlisten bleiben auf Karten lesbar, der vollständige Text erscheint beim Überfahren.",
+      ],
+    },
+  },
+  {
+    version: '0.179.0-beta',
+    date: '2026-09-07',
+    time: '19:18',
+    commit: '6db605a',
+    highlights: {
+      en: [
+        "Pricing is now a page, not a conversation: interncrm.com/pricing lists every plan, band, admin-seat count, overage rate, add-on and published discount, in English, Turkish and German.",
+        "The free core is stated as a structure rather than a promise — the only thing we meter is the active matched pair, so mentors and mentees cannot be billed, and the page names the nine capabilities that are never metered at any tier.",
+        "Going over your band is deliberately cheaper per pair than the plan itself, and the page publishes the rule behind the rate instead of only the number — so you can check it rather than take our word for it.",
+        "Pricing has its own entry in the site menu and the footer again, and the landing page's free-core band links straight to it.",
+      ],
+      tr: [
+        "Fiyatlandırma artık bir sayfa, bir görüşme değil: interncrm.com/pricing tüm paketleri, bantları, yönetici koltuklarını, aşım ücretini, ek paketleri ve ilan edilmiş indirimleri İngilizce, Türkçe ve Almanca listeliyor.",
+        "Ücretsiz çekirdek bir vaat değil bir yapı olarak yazıldı — ölçtüğümüz tek şey aktif eşleşmiş çift olduğu için mentor ve mentee faturalanamaz; sayfa hiçbir pakette ölçülmeyen dokuz yeteneği tek tek sayıyor.",
+        "Bandı aşmak, çift başına bilinçli olarak paketin kendisinden daha ucuz; sayfa yalnızca rakamı değil ücretin arkasındaki kuralı da yayınlıyor — yani sözümüze güvenmek yerine hesabı kendiniz yapabilirsiniz.",
+        "Fiyatlandırma yeniden site menüsünde ve alt bilgide kendi bağlantısına sahip; açılış sayfasındaki ücretsiz çekirdek şeridi de doğrudan oraya gidiyor.",
+      ],
+      de: [
+        "Preise sind jetzt eine Seite und kein Gespräch: interncrm.com/pricing listet jeden Plan, jedes Band, die Admin-Plätze, die Überschreitungsgebühr, alle Zusatzpakete und die veröffentlichten Rabatte — auf Englisch, Türkisch und Deutsch.",
+        "Der kostenlose Kern steht als Struktur da, nicht als Versprechen: abgerechnet wird ausschließlich das aktive zusammengeführte Paar, Mentoren und Mentees können also gar nicht abgerechnet werden — und die Seite benennt die neun Funktionen, die in keinem Plan abgerechnet werden.",
+        "Ein Paar über dem Band ist bewusst günstiger als der Plan selbst, und die Seite veröffentlicht die Regel hinter der Gebühr statt nur die Zahl — Sie können sie also nachrechnen.",
+        "Die Preise haben wieder einen eigenen Eintrag im Seitenmenü und in der Fußzeile, und das Band zum kostenlosen Kern auf der Startseite verlinkt direkt dorthin.",
+      ],
+    },
+  },
+  {
+    version: '0.178.4-beta',
+    date: '2026-09-07',
+    time: '18:47',
+    commit: '80d3292',
+    highlights: {
+      en: [
+        "The \"View all interactions\" link on the mentor dashboard is now translated into Turkish and German, like the rest of the page.",
+        "The mobile menu open and close buttons are announced in your own language by screen readers, on every page.",
+      ],
+      tr: [
+        "Mentor panosundaki \"Tüm etkileşimleri gör\" bağlantısı artık sayfanın kalanı gibi Türkçe ve Almanca görünüyor.",
+        "Mobil menüyü açma ve kapatma düğmeleri, her sayfada ekran okuyucular tarafından kendi dilinizde okunuyor.",
+      ],
+      de: [
+        "Der Link \"Alle Interaktionen ansehen\" im Mentor-Dashboard ist jetzt wie der Rest der Seite auf Türkisch und Deutsch übersetzt.",
+        "Die Schaltflächen zum Öffnen und Schließen des mobilen Menüs werden auf jeder Seite in deiner Sprache vorgelesen.",
+      ],
+    },
+  },
+  {
+    version: '0.178.2-beta',
+    date: '2026-09-07',
+    time: '18:47',
+    commit: '93708d2',
+    highlights: {
+      en: [
+        "The board's column limit — the count that turns amber when candidates pile up in a stage — is now yours to set: one number for the whole board under Settings, or a different limit for each stage next to its service level.",
+        "A stage can be exempted with a 0, and setting the board number to 0 switches the warnings off completely. A first-contact column is meant to be deep, and nothing about the warning ever blocked a move.",
+        "If every column is over its limit the board now says so once, with a link to change it, instead of turning all thirteen columns amber — and a column's warning tells you which limit it passed.",
+      ],
+      tr: [
+        "Panodaki sütun limiti — bir aşamada adaylar biriktiğinde turuncuya dönen sayaç — artık senin belirlediğin bir sayı: Ayarlar'dan pano için tek bir değer ya da her aşamanın hizmet seviyesinin yanında ona özel bir limit.",
+        "Bir aşamayı 0 yazarak muaf tutabilirsin; pano sayısını 0 yapmak uyarıları tamamen kapatır. İlk temas sütununun derin olması normaldir ve bu uyarı hiçbir zaman bir kartın taşınmasını engellemedi.",
+        "Her sütun limitinin üzerindeyse pano artık on üç sütunu birden turuncuya boyamak yerine bunu tek bir satırda söylüyor ve limiti değiştireceğin yere bağlantı veriyor — ayrıca bir sütunun uyarısı hangi limiti aştığını yazıyor.",
+      ],
+      de: [
+        "Das Spaltenlimit des Boards — die Zahl, die bernsteinfarben wird, wenn sich Kandidaten in einer Phase stauen — legst du jetzt selbst fest: eine Zahl für das ganze Board in den Einstellungen oder ein eigenes Limit je Phase, direkt neben deren Service-Level.",
+        "Eine Phase lässt sich mit einer 0 ausnehmen, und eine 0 als Board-Zahl schaltet die Warnungen vollständig ab. Eine Erstkontakt-Spalte darf tief sein, und die Warnung hat noch nie einen Phasenwechsel blockiert.",
+        "Liegt jede Spalte über ihrem Limit, sagt das Board das jetzt einmal — mit einem Link zum Ändern — statt alle dreizehn Spalten bernsteinfarben zu färben. Und die Warnung einer Spalte nennt das Limit, das sie überschritten hat.",
+      ],
+    },
+  },
+  {
+    version: '0.178.1-beta',
+    date: '2026-09-07',
+    time: '18:47',
+    commit: '0859f0f',
+    highlights: {
+      en: [
+        "The analytics screen no longer produces failed requests and console errors when the premium reporting tier is off, and says in one panel that cohort comparison, source conversion and the cross-program benchmark belong to that tier.",
+      ],
+      tr: [
+        "Premium raporlama katmanı kapalıyken analitik ekranı artık başarısız istek ve konsol hatası üretmiyor; cohort karşılaştırması, kaynak dönüşümü ve programlar arası kıyaslamanın bu katmana dahil olduğunu tek bir panelde söylüyor.",
+      ],
+      de: [
+        "Die Analytik-Seite erzeugt bei abgeschalteter Premium-Berichtsebene keine fehlgeschlagenen Anfragen und Konsolenfehler mehr und erklärt in einem einzigen Hinweis, dass Cohort-Vergleich, Quellen-Konversion und der programmübergreifende Benchmark zu dieser Ebene gehören.",
+      ],
+    },
+  },
+  {
+    version: '0.178.0-beta',
+    date: '2026-09-07',
+    time: '13:39',
+    commit: '316077b',
+    highlights: {
+      en: [
+        "A release note can now carry a small screenshot, or a short clip, of the screen that changed.",
+      ],
+      tr: [
+        "Sürüm notları artık değişen ekranın küçük bir görüntüsünü ya da kısa bir klibini taşıyabiliyor.",
+      ],
+      de: [
+        "Eine Release-Notiz kann jetzt einen kleinen Screenshot oder einen kurzen Clip des geänderten Bildschirms zeigen.",
+      ],
+    },
+    media: {
+      poster: "release-media/release-note-media.png",
+      alt: {
+        en: "A release note on the release notes page, with a small framed screenshot under its highlight.",
+        tr: "Sürüm notları sayfasındaki bir sürüm notu; öne çıkan maddesinin altında çerçeveli küçük bir ekran görüntüsü var.",
+        de: "Eine Release-Notiz auf der Release-Notes-Seite, mit einem kleinen gerahmten Screenshot unter ihrem Highlight.",
+      },
+      width: 640,
+      height: 246,
+    },
+  },
+  {
+    version: '0.177.1-beta',
+    date: '2026-09-07',
+    time: '13:36',
+    commit: '197fd3c',
+    highlights: {
+      en: [
+        "Green, amber and red buttons and unread-count badges are a shade darker, so their white labels now meet the contrast level WCAG AA requires — in bright sunlight too.",
+        "The language tag on candidate cards was too faint to read in either light or dark mode and is now legible in both.",
+        "The completed-stage check mark in your progress tracker is easier to make out.",
+      ],
+      tr: [
+        "Yeşil, turuncu ve kırmızı düğmeler ile okunmamış sayaç rozetleri bir ton koyulaştı; üzerlerindeki beyaz yazılar artık WCAG AA'nın istediği kontrastı sağlıyor — güneş altında da.",
+        "Aday kartlarındaki dil etiketi hem açık hem koyu temada okunamayacak kadar soluktu; artık ikisinde de okunuyor.",
+        "İlerleme takipçinizde tamamlanan aşamayı gösteren onay işareti daha belirgin.",
+      ],
+      de: [
+        "Grüne, orangefarbene und rote Schaltflächen sowie die Zähler für Ungelesenes sind eine Stufe dunkler — ihre weiße Schrift erreicht damit den von WCAG AA geforderten Kontrast, auch bei hellem Sonnenlicht.",
+        "Die Sprachmarkierung auf Kandidatenkarten war im hellen wie im dunklen Modus zu blass und ist jetzt in beiden lesbar.",
+        "Das Häkchen für abgeschlossene Phasen in der Fortschrittsanzeige ist deutlicher zu erkennen.",
+      ],
+    },
+  },
+  {
+    version: '0.177.0-beta',
+    date: '2026-09-07',
+    time: '13:36',
+    commit: '11b789a',
+    highlights: {
+      en: [
+        "Links to the public demo now say which button you came from, so we can tell which one is worth keeping — and the click is only measured if you accepted analytics cookies.",
+      ],
+      tr: [
+        "Herkese açık demoya giden bağlantılar artık hangi düğmeden geldiğinizi belirtiyor; böylece hangisinin işe yaradığını görebiliyoruz — tıklama yalnızca analiz çerezlerini kabul ettiyseniz ölçülüyor.",
+      ],
+      de: [
+        "Links zur öffentlichen Demo geben jetzt an, von welcher Schaltfläche Sie kommen — so lässt sich erkennen, welche wirklich funktioniert; gemessen wird der Klick nur, wenn Sie Analyse-Cookies akzeptiert haben.",
+      ],
+    },
+  },
+  {
+    version: '0.176.0-beta',
+    date: '2026-09-07',
+    time: '13:36',
+    commit: '512b319',
+    highlights: {
+      en: [
+        "Your mentee list has a search box: type part of a name, e-mail address or university to find someone instantly.",
+        "Filter the mentee list by mentorship status (active or completed) and by pipeline stage, and save a filter combination you use often.",
+        "The mentor board has the same search box — non-matching cards disappear and each column's count updates with them.",
+        "Searching ignores accents, so \"Sahin\" finds \"Şahin\" and \"Muller\" finds \"Müller\".",
+        "Dormant first contacts are still findable by name: if your search only matches someone the dormant filter is hiding, the screen offers to show them instead of claiming nobody matched.",
+      ],
+      tr: [
+        "Mentee listenize arama kutusu eklendi: bir ismin, e-posta adresinin veya üniversitenin bir parçasını yazarak aradığınız kişiyi anında bulun.",
+        "Mentee listesini mentorluk durumuna (aktif veya tamamlandı) ve pipeline aşamasına göre süzebilir, sık kullandığınız filtre bileşimini kaydedebilirsiniz.",
+        "Mentor panosunda da aynı arama kutusu var — eşleşmeyen kartlar kaybolur ve sütun sayıları buna göre güncellenir.",
+        "Arama Türkçe harfleri görmezden gelir: \"Sahin\" yazınca \"Şahin\", \"Isik\" yazınca \"Işık\" bulunur.",
+        "Pasif ilk temaslar isimle hâlâ bulunabilir: aramanız yalnızca pasif filtresinin gizlediği birine uyuyorsa, ekran \"eşleşme yok\" demek yerine onu göstermeyi teklif eder.",
+      ],
+      de: [
+        "Ihre Mentee-Liste hat ein Suchfeld: Geben Sie einen Teil eines Namens, einer E-Mail-Adresse oder einer Hochschule ein, um jemanden sofort zu finden.",
+        "Filtern Sie die Mentee-Liste nach Mentoring-Status (aktiv oder abgeschlossen) und nach Pipeline-Phase — und speichern Sie eine Filterkombination, die Sie häufig nutzen.",
+        "Das Mentor-Board hat dasselbe Suchfeld — nicht passende Karten verschwinden, und die Anzahl je Spalte wird mit ihnen aktualisiert.",
+        "Die Suche ignoriert Akzente: \"Muller\" findet \"Müller\" und \"Sahin\" findet \"Şahin\".",
+        "Inaktive Erstkontakte bleiben über die Namenssuche erreichbar: Wenn Ihre Suche nur auf jemanden passt, den der Inaktiv-Filter ausblendet, bietet der Bildschirm an, ihn anzuzeigen, statt zu behaupten, es gäbe keine Treffer.",
+      ],
+    },
+  },
+  {
+    version: '0.175.1-beta',
+    date: '2026-09-07',
+    time: '13:36',
+    commit: '1a6cdfe',
+    highlights: {
+      en: [
+        "Admins can now see and change the monthly AI call limit on the system settings page — until now it could only be changed through the API. The limit counts calls across the whole installation, which the field explains.",
+        "The per-organisation pipeline stage editor is fully translated into Turkish and German, including the paid-plan notice and its save and reset messages.",
+        "The system settings page now says when a save failed instead of looking as if it had worked.",
+      ],
+      tr: [
+        "Yöneticiler aylık AI çağrı sınırını artık sistem ayarları sayfasından görebiliyor ve değiştirebiliyor — bugüne kadar yalnızca API üzerinden değiştirilebiliyordu. Sınırın kurulumun tamamı için sayıldığı da alanın açıklamasında yazıyor.",
+        "Organizasyon bazlı pipeline aşama editörü, ücretli plan uyarısı ile kaydetme ve sıfırlama mesajları dahil olmak üzere tamamen Türkçe ve Almanca.",
+        "Sistem ayarları sayfası, kaydetme başarısız olduğunda bunu artık söylüyor — eskiden kaydedilmiş gibi görünüyordu.",
+      ],
+      de: [
+        "Administratoren können das monatliche KI-Aufrufkontingent jetzt auf der Seite mit den Systemeinstellungen sehen und ändern — bisher war das nur über die API möglich. Dass das Kontingent für die gesamte Installation gilt, erklärt das Feld selbst.",
+        "Der Editor für die Pipeline-Phasen einer Organisation ist vollständig auf Türkisch und Deutsch verfügbar, samt Hinweis zum kostenpflichtigen Plan sowie den Speicher- und Zurücksetzen-Meldungen.",
+        "Die Seite mit den Systemeinstellungen sagt jetzt, wenn ein Speichern fehlgeschlagen ist, statt erfolgreich zu wirken.",
+      ],
+    },
+  },
+  {
+    version: '0.175.0-beta',
+    date: '2026-09-07',
+    time: '13:32',
+    commit: '1b01d02',
+    highlights: {
+      en: [
+        "If a mentorship is not working for you, you can now ask the programme team for a different mentor straight from your portal — pick a reason, add a note if you want, and your current mentorship keeps running normally until the team decides.",
+        "Your current mentor is never shown your reason or your note. Once a new mentor is in place they are simply told the mentorship has ended.",
+        "Admins see re-match requests at the top of the mentorship request queue, with the current mentor and the stated reason, and can filter to just those — plus a running count of how many mentorships ended in a re-match.",
+      ],
+      tr: [
+        "Bir mentorluk sana uymuyorsa artık portalından doğrudan program ekibinden farklı bir mentor isteyebilirsin — bir sebep seç, istersen not ekle; ekip karar verene kadar mevcut mentorluğun normal şekilde devam eder.",
+        "Mevcut mentoruna gerekçen de notun da hiçbir zaman gösterilmez. Yeni mentor atandığında ona yalnızca mentorluğun sona erdiği bildirilir.",
+        "Yöneticiler yeniden eşleşme taleplerini mentorluk talep kuyruğunun en üstünde, mevcut mentor ve belirtilen sebeple birlikte görür, yalnızca onları filtreleyebilir ve kaç mentorluğun yeniden eşleşmeyle bittiğini takip edebilir.",
+      ],
+      de: [
+        "Wenn ein Mentoring für dich nicht funktioniert, kannst du jetzt direkt aus deinem Portal einen anderen Mentor beim Programmteam anfragen — Grund wählen, optional eine Notiz ergänzen; dein aktuelles Mentoring läuft bis zur Entscheidung ganz normal weiter.",
+        "Deinem aktuellen Mentor werden weder dein Grund noch deine Notiz gezeigt. Sobald ein neuer Mentor feststeht, erfährt er lediglich, dass das Mentoring beendet ist.",
+        "Admins sehen Neu-Matching-Anfragen ganz oben in der Warteschlange — mit aktuellem Mentor und angegebenem Grund —, können danach filtern und sehen, wie viele Mentorings mit einem Neu-Matching endeten.",
+      ],
+    },
+  },
+  {
+    version: '0.173.0-beta',
+    date: '2026-09-07',
+    time: '12:04',
+    commit: '012d03d',
+    highlights: {
+      en: [
+        "Pricing now has its own entry in the site menu — on desktop and on a phone — and in the footer, so the price is one click from any public page.",
+        "The landing page carries a dedicated free-core band: mentors and mentees stay free, with no card and no seat count, and it links straight to the pricing details.",
+      ],
+      tr: [
+        "Fiyatlandırma artık site menüsünde — masaüstünde ve telefonda — ve alt bilgide kendi bağlantısına sahip; böylece fiyat her genel sayfadan bir tık uzakta.",
+        "Açılış sayfasına ayrı bir \"ücretsiz çekirdek\" şeridi eklendi: mentor ve mentee tarafı ücretsiz kalıyor, kart ve koltuk sayısı yok; şerit doğrudan fiyat ayrıntılarına bağlanıyor.",
+      ],
+      de: [
+        "Die Preise haben jetzt einen eigenen Eintrag im Seitenmenü — am Desktop und am Telefon — und in der Fußzeile, sodass der Preis von jeder öffentlichen Seite einen Klick entfernt ist.",
+        "Die Startseite trägt ein eigenes Band zum kostenlosen Kern: Mentoren und Mentees bleiben kostenlos, ohne Karte und ohne Platzzählung, und es verlinkt direkt auf die Preisdetails.",
+      ],
+    },
+  },
+  {
+    version: '0.172.3-beta',
+    date: '2026-09-07',
+    time: '12:04',
+    commit: '5774cad',
+    highlights: {
+      en: [
+        "The career newsletter now carries your organisation's name, logo and accent colour, like every other e-mail the app sends. Readers who belong to no organisation keep the standard look.",
+        "The white-label card under Organizations no longer claims branding is waiting to be switched on — it says where your branding actually appears, and the one place it does not yet.",
+      ],
+      tr: [
+        "Kariyer bülteni artık uygulamanın gönderdiği diğer tüm e-postalar gibi kurumunuzun adını, logosunu ve vurgu rengini taşıyor. Hiçbir kuruma bağlı olmayan okuyucular standart görünümü almayı sürdürüyor.",
+        "Organizasyonlar sayfasındaki beyaz etiket kartı artık markanın devreye alınmayı beklediğini söylemiyor; markanızın gerçekte nerede göründüğünü ve henüz görünmediği tek yeri yazıyor.",
+      ],
+      de: [
+        "Der Karriere-Newsletter trägt jetzt Namen, Logo und Akzentfarbe eurer Organisation — wie jede andere E-Mail der App. Leser ohne Organisation behalten das Standard-Erscheinungsbild.",
+        "Die White-Label-Karte unter Organisationen behauptet nicht länger, das Branding warte noch auf die Freischaltung: Sie nennt, wo euer Branding tatsächlich erscheint, und die eine Stelle, wo noch nicht.",
+      ],
+    },
+  },
+  {
+    version: '0.172.2-beta',
+    date: '2026-09-07',
+    time: '11:44',
+    commit: '5047513',
+    highlights: {
+      en: [
+        "When an assignment is refused, the reason is shown — including which plan limit you hit and that upgrading lifts it.",
+      ],
+      tr: [
+        "Bir atama reddedildiğinde gerekçesi gösteriliyor — hangi plan sınırına takıldığınız ve planı yükseltmenin bunu açtığı dahil.",
+      ],
+      de: [
+        "Wird eine Zuweisung abgelehnt, wird der Grund angezeigt — auch, welche Plangrenze erreicht ist und dass ein Upgrade sie aufhebt.",
+      ],
+    },
+  },
+  {
+    version: '0.172.1-beta',
+    date: '2026-09-07',
+    time: '11:04',
+    commit: '0e74340',
+    highlights: {
+      en: [
+        "A candidate can no longer end up with two mentors at once by accident: an invitation link that pre-selects a candidate who already has a mentor now creates nothing instead of quietly adding a second mentorship, and it no longer tells the candidate they were connected to someone they were not.",
+        "Merging two records for the same person is refused when each one has a different active mentor — it names both mentors and asks you to close one of the two mentorships first, rather than silently deciding for you which mentor is the real one.",
+        "Assignment refusals are now shown in your own language instead of an English message from the server, and admins can check whether any candidate already ended up with more than one active mentor.",
+      ],
+      tr: [
+        "Bir aday artık kazara aynı anda iki mentöre sahip olamıyor: zaten mentörü olan bir adayı ön-seçen bir davet bağlantısı, sessizce ikinci bir mentorluk eklemek yerine hiçbir şey oluşturmuyor ve adaya bağlanmadığı biriyle bağlandığını söylemiyor.",
+        "Aynı kişiye ait iki kaydın birleştirilmesi, her birinin farklı bir aktif mentörü varsa reddediliyor — hangi mentörün gerçek olduğuna sizin yerinize karar vermek yerine iki mentörün adını veriyor ve önce mentorluklardan birini kapatmanızı istiyor.",
+        "Atama ret mesajları artık sunucudan gelen İngilizce metin yerine kendi dilinizde gösteriliyor ve yöneticiler herhangi bir adayın birden fazla aktif mentöre sahip olup olmadığını kontrol edebiliyor.",
+      ],
+      de: [
+        "Ein Kandidat kann nicht mehr versehentlich zwei Mentoren gleichzeitig haben: Ein Einladungslink, der einen Kandidaten mit bereits vorhandenem Mentor vorauswählt, legt jetzt nichts an, statt still eine zweite Mentorschaft hinzuzufügen — und teilt dem Kandidaten nicht mehr mit, er sei mit jemandem verbunden, mit dem er es nicht ist.",
+        "Das Zusammenführen zweier Datensätze derselben Person wird abgelehnt, wenn beide einen unterschiedlichen aktiven Mentor haben — es nennt beide Mentoren und bittet dich, zuerst eine der beiden Mentorschaften zu schließen, statt still für dich zu entscheiden, welcher Mentor der richtige ist.",
+        "Ablehnungen bei der Zuweisung erscheinen jetzt in deiner Sprache statt als englische Servermeldung, und Admins können prüfen, ob ein Kandidat doch mehr als einen aktiven Mentor bekommen hat.",
+      ],
+    },
+  },
+  {
+    version: '0.171.0-beta',
+    date: '2026-09-07',
+    time: '10:38',
+    commit: '5c07895',
+    highlights: {
+      en: [
+        "Your account page now lists every browser that receives push notifications — \"Chrome on Android\", when it was added and when it was last seen — with the one you are using marked.",
+        "You can revoke a single browser instead of turning notifications off everywhere.",
+        "A browser can also drop off the list on its own when its subscription expires, and the page says so rather than pretending you revoked it.",
+        "If push notifications are switched off on the server, the browsers you granted are still listed so you can revoke them — the page says nothing is being delivered instead of showing you an empty screen.",
+      ],
+      tr: [
+        "Hesap sayfan artık anlık bildirim alan her tarayıcıyı listeliyor — \"Chrome on Android\", ne zaman eklendiği ve en son ne zaman görüldüğü — kullandığın tarayıcı işaretli olarak.",
+        "Bildirimleri her yerde kapatmak yerine tek bir tarayıcıyı kaldırabilirsin.",
+        "Bir tarayıcının aboneliği kendiliğinden de sona erebilir; sayfa bunu, sen kaldırmışsın gibi göstermek yerine olduğu gibi söylüyor.",
+        "Sunucuda anlık bildirim kapalıysa izin verdiğin tarayıcılar yine de listelenir ve kaldırılabilir — sayfa boş bir ekran göstermek yerine gönderim yapılmadığını söyler.",
+      ],
+      de: [
+        "Deine Kontoseite listet jetzt jeden Browser auf, der Push-Benachrichtigungen erhält — \"Chrome on Android\", wann er hinzugefügt und wann er zuletzt gesehen wurde — der gerade genutzte ist markiert.",
+        "Du kannst einen einzelnen Browser widerrufen, statt Benachrichtigungen überall abzuschalten.",
+        "Ein Browser kann auch von selbst aus der Liste verschwinden, wenn sein Abonnement abläuft — die Seite sagt das, statt einen Widerruf durch dich vorzutäuschen.",
+        "Sind Push-Benachrichtigungen auf dem Server abgeschaltet, werden die von dir freigegebenen Browser trotzdem aufgelistet und lassen sich widerrufen — die Seite sagt, dass nichts zugestellt wird, statt eine leere Ansicht zu zeigen.",
+      ],
+    },
+  },
+  {
+    version: '0.170.0-beta',
+    date: '2026-09-07',
+    time: '10:27',
+    commit: '94911c0',
+    highlights: {
+      en: [
+        "Programme costs and placement value can now be recorded, and the ROI figures show every step of the calculation.",
+      ],
+      tr: [
+        "Program maliyetleri ve yerleştirme değeri artık kaydedilebiliyor; yatırım getirisi rakamları hesabın her adımını gösteriyor.",
+      ],
+      de: [
+        "Programmkosten und Vermittlungswert lassen sich jetzt erfassen, und die ROI-Zahlen zeigen jeden Rechenschritt.",
+      ],
+    },
+  },
+  {
+    version: '0.169.1-beta',
+    date: '2026-09-07',
+    time: '10:04',
+    commit: 'dd8993e',
+    highlights: {
+      en: [
+        "Messages you exchange in the app now count as contact: a mentee you have been messaging is no longer flagged \"No recent contact\", and the mentee card's \"last contact\" counts from your last message as well as from a logged interaction.",
+        "The daily reminder email and the weekly digest use the same rule, so they no longer chase you about mentees you are already talking to.",
+        "Group chats are treated as the broadcasts they are: another person's group message is not contact with you — but a mentee posting in a group themselves counts, because it shows they are still there.",
+      ],
+      tr: [
+        "Uygulama içindeki yazışmalar artık temas sayılıyor: mesajlaştığınız bir mentee'ye artık \"Yakın zamanda temas yok\" denmiyor ve mentee kartındaki \"son temas\", etkileşim kaydı kadar son mesajınızdan da sayılıyor.",
+        "Günlük hatırlatma e-postası ve haftalık özet aynı kuralı kullanıyor; hâlihazırda konuştuğunuz mentee'ler için sizi artık sıkıştırmıyorlar.",
+        "Grup sohbetleri olduğu gibi, yani bir yayın olarak değerlendiriliyor: başkasının grup mesajı sizinle temas değildir — ama mentee'nin gruba kendi yazdığı mesaj sayılır, çünkü orada olduğunu gösterir.",
+      ],
+      de: [
+        "Nachrichten in der App zählen jetzt als Kontakt: Ein Mentee, mit dem Sie geschrieben haben, wird nicht mehr mit \"Kein Kontakt in letzter Zeit\" markiert, und der \"letzte Kontakt\" auf der Mentee-Karte zählt auch ab Ihrer letzten Nachricht, nicht nur ab einem erfassten Kontakt.",
+        "Die tägliche Erinnerungs-E-Mail und die Wochenübersicht verwenden dieselbe Regel und mahnen Sie deshalb nicht mehr zu Mentees, mit denen Sie ohnehin im Gespräch sind.",
+        "Gruppenchats werden als das behandelt, was sie sind — eine Rundnachricht: Die Gruppennachricht einer anderen Person ist kein Kontakt mit Ihnen. Schreibt ein Mentee selbst in eine Gruppe, zählt das dagegen, denn es zeigt, dass er noch da ist.",
+      ],
+    },
+  },
+  {
+    version: '0.169.0-beta',
+    date: '2026-09-07',
+    time: '08:10',
+    commit: 'd88c140',
+    highlights: {
+      en: [
+        "Mentees can start their own project from the portal and fully manage it — they own what they create, and the project starts private.",
+        "Whoever owns a project can now manage it, whatever their role: the member list, the project to-dos and every field are the owner's.",
+      ],
+      tr: [
+        "Mentee'ler portaldan kendi projesini başlatıp baştan sona yönetebiliyor — açtığı projenin sahibi kendisi olur ve proje gizli başlar.",
+        "Bir projenin sahibi, rolü ne olursa olsun onu yönetiyor: üye listesi, proje yapılacakları ve tüm alanlar sahibin.",
+      ],
+      de: [
+        "Mentees starten ihr eigenes Projekt jetzt selbst im Portal und verwalten es vollständig — wer es anlegt, besitzt es, und das Projekt startet privat.",
+        "Wer ein Projekt besitzt, verwaltet es auch — unabhängig von der Rolle: Mitgliederliste, To-dos und alle Felder gehören dem Owner.",
+      ],
+    },
+  },
+  {
+    version: '0.168.3-beta',
+    date: '2026-09-07',
+    time: '07:06',
+    commit: '316ebda',
+    highlights: {
+      en: [
+        "Pipeline stage names are shown in your own language again, even for organizations whose stages were saved through the stage editor.",
+        "A mentor's profile now has the same \"send a message\" and \"view as this user\" shortcuts as a candidate's.",
+      ],
+      tr: [
+        "Pipeline aşama adları yeniden kendi dilinizde görünüyor — aşama düzenleyicisinden kaydedilmiş kurumlarda da.",
+        "Mentor profilinden doğrudan mesaj gönderebilir ve o kullanıcı gibi girebilirsiniz.",
+      ],
+      de: [
+        "Pipeline-Phasennamen erscheinen wieder in deiner eigenen Sprache — auch bei Organisationen, deren Phasen über den Phasen-Editor gespeichert wurden.",
+        "Das Mentor-Profil bietet nun die gleichen Verknüpfungen \"Nachricht senden\" und \"Als dieser Nutzer ansehen\" wie ein Kandidatenprofil.",
+      ],
+    },
+  },
+  {
+    version: '0.168.1-beta',
+    date: '2026-09-07',
+    time: '04:50',
+    commit: '85f9d40',
+    highlights: {
+      en: [
+        "Applications that a mentor declined no longer linger as accounts nobody owns: they are marked as orphan applicants on the candidate list and can be filtered out of it.",
+        "The data-retention page now lists every orphan applicant account with the date it applied, who declined it and how many days remain before it is anonymised automatically — so you can always see what will be removed before anything is.",
+        "Each of those rows can be erased on the spot, or rescued by sending the applicant a set-password link if the decline was a mistake — while that link is live the account is held back from the automatic clean-up, and the row says so.",
+      ],
+      tr: [
+        "Mentorun reddettiği başvurular artık sahipsiz hesap olarak ortalıkta kalmıyor: aday listesinde \"sahipsiz başvuru\" olarak işaretleniyor ve tek tuşla süzülebiliyor.",
+        "Veri saklama sayfası her sahipsiz başvuru hesabını başvuru tarihi, reddeden mentor ve otomatik anonimleştirmeye kaç gün kaldığıyla listeliyor — yani hiçbir şey silinmeden önce neyin silineceğini görebiliyorsunuz.",
+        "Bu satırlardaki hesabı oradan hemen silebilir ya da karar yanlışsa başvurana şifre belirleme bağlantısı göndererek kurtarabilirsiniz — bağlantı geçerli olduğu sürece hesap otomatik temizliğe girmez ve satır bunu söyler.",
+      ],
+      de: [
+        "Von Mentoren abgelehnte Bewerbungen bleiben nicht länger als herrenlose Konten zurück: In der Kandidatenliste sind sie als verwaiste Bewerbungen gekennzeichnet und lassen sich gezielt herausfiltern.",
+        "Die Aufbewahrungsseite listet jetzt jedes verwaiste Bewerberkonto mit Bewerbungsdatum, ablehnendem Mentor und den verbleibenden Tagen bis zur automatischen Anonymisierung — Sie sehen also immer vorher, was entfernt wird.",
+        "Jede dieser Zeilen lässt sich direkt löschen — oder retten, indem Sie der Bewerberin oder dem Bewerber einen Link zum Passwort-Setzen schicken, falls die Ablehnung ein Fehler war; solange dieser Link gültig ist, bleibt das Konto von der automatischen Bereinigung ausgenommen, und die Zeile weist darauf hin.",
+      ],
+    },
+  },
+  {
+    version: '0.168.0-beta',
+    date: '2026-09-07',
+    time: '04:50',
+    commit: '1530ff2',
+    highlights: {
+      en: [
+        "Your account page now has an \"Account access history\": if support staff ever signed in to your account to help with a problem, you can see who it was, when, how long they stayed and why.",
+        "The list is permanent and read-only — nobody, not even an administrator, can remove a line from it, and when it is long enough to be paged it tells you how many entries there are in total.",
+        "When nobody has ever entered your account, the card says so plainly.",
+        "A visit that has not been closed yet is described as exactly that — the card never tells you a session ended when it may still be going on.",
+      ],
+      tr: [
+        "Hesap sayfana \"Hesap erişim geçmişi\" eklendi: destek ekibinden biri bir sorununu çözmek için hesabına giriş yaptıysa kimin girdiğini, ne zaman, ne kadar süreyle ve hangi gerekçeyle girdiğini görebilirsin.",
+        "Liste kalıcı ve salt okunur — yöneticiler dahil hiç kimse bu listeden bir satır silemez; liste sayfalanacak kadar uzunsa toplamda kaç kayıt olduğunu da söyler.",
+        "Hesabına hiç kimse girmemişse kart bunu açıkça söylüyor.",
+        "Henüz kapatılmamış bir ziyaret tam olarak öyle anlatılır — kart, sürüyor olabilecek bir oturum için \"sona erdi\" demez.",
+      ],
+      de: [
+        "Deine Kontoseite hat jetzt einen \"Zugriffsverlauf\": Wenn sich Support-Mitarbeitende jemals in deinem Konto angemeldet haben, um ein Problem zu lösen, siehst du, wer das war, wann, wie lange und warum.",
+        "Die Liste ist dauerhaft und schreibgeschützt — niemand, auch keine Administratorin und kein Administrator, kann eine Zeile daraus entfernen; ist sie lang genug für eine Seitenaufteilung, nennt sie zusätzlich die Gesamtzahl der Einträge.",
+        "Hat noch nie jemand dein Konto betreten, sagt die Karte das klar und deutlich.",
+        "Ein Besuch, der noch nicht beendet wurde, wird genau so beschrieben — die Karte behauptet nie, eine Sitzung sei beendet, wenn sie noch laufen könnte.",
+      ],
+    },
+  },
+  {
+    version: '0.167.3-beta',
+    date: '2026-09-07',
+    time: '04:36',
+    commit: '06a7279',
+    highlights: {
+      en: [
+        "Long company names, addresses, industries, logo URLs and to-do titles now stop at the field's limit with a clear message, instead of failing with \"Internal server error\" — or, when adding a to-do, failing with no message at all.",
+      ],
+      tr: [
+        "Uzun şirket adları, adresler, sektörler, logo adresleri ve yapılacak başlıkları artık \"Internal server error\" ile düşmek yerine alanın sınırında anlaşılır bir uyarıyla duruyor — yapılacak eklerken hiçbir şey söylemeden başarısız olma durumu da bitti.",
+      ],
+      de: [
+        "Lange Firmennamen, Adressen, Branchen, Logo-Adressen und Aufgabentitel stoppen jetzt mit einem verständlichen Hinweis an der Feldgrenze, statt mit „Internal server error“ zu scheitern — und beim Hinzufügen einer Aufgabe scheitert nichts mehr kommentarlos.",
+      ],
+    },
+  },
+  {
+    version: '0.167.2-beta',
+    date: '2026-09-07',
+    time: '04:35',
+    commit: '1777d3b',
+    highlights: {
+      en: [
+        "Setting a candidate to the stage they are already in no longer writes a history entry — and no longer restarts their \"days in stage\" counter.",
+      ],
+      tr: [
+        "Bir adayı zaten bulunduğu aşamaya almak artık geçmişe kayıt düşmüyor ve \"aşamada geçen gün\" sayacını yeniden başlatmıyor.",
+      ],
+      de: [
+        "Wird eine Kandidatin auf die Stufe gesetzt, in der sie bereits ist, entsteht kein Verlaufseintrag mehr — und der Zähler \"Tage in der Stufe\" beginnt nicht von vorn.",
+      ],
+    },
+  },
+  {
+    version: '0.167.0-beta',
+    date: '2026-09-07',
+    time: '04:35',
+    commit: '0313c22',
+    highlights: {
+      en: [
+        "Notifications no longer pile up forever: read ones older than the retention window are removed each night, while unread ones — and anything from the last 30 days — always stay.",
+        "Administrators can set how long the notification history is kept, in days, on the settings page (0 keeps it forever).",
+        "The notifications page now has a search box that filters your history as you type.",
+        "The notification search now explains what it can search — notifications that carry their own text, such as announcements — instead of silently returning nothing.",
+      ],
+      tr: [
+        "Bildirimler artık sonsuza kadar birikmiyor: saklama süresinden eski olan okunmuş bildirimler her gece siliniyor; okunmamış olanlar ve son 30 güne ait olanlar her hâlükârda kalıyor.",
+        "Yöneticiler bildirim geçmişinin kaç gün saklanacağını ayarlar sayfasından belirleyebiliyor (0 girilirse hiç silinmiyor).",
+        "Bildirimler sayfasına, yazdıkça geçmişi süzen bir arama kutusu eklendi.",
+        "Bildirim araması artık neyi arayabildiğini açıklıyor: kendi metnini taşıyan bildirimleri, örneğin duyuruları — sessizce boş sonuç dönmek yerine.",
+      ],
+      de: [
+        "Benachrichtigungen sammeln sich nicht mehr endlos an: gelesene Benachrichtigungen, die älter als die Aufbewahrungsfrist sind, werden jede Nacht gelöscht — ungelesene und alles aus den letzten 30 Tagen bleiben immer erhalten.",
+        "Administratoren legen auf der Einstellungsseite fest, wie viele Tage der Benachrichtigungsverlauf aufbewahrt wird (0 bewahrt ihn dauerhaft auf).",
+        "Die Benachrichtigungsseite hat jetzt ein Suchfeld, das den Verlauf beim Tippen filtert.",
+        "Die Benachrichtigungssuche erklärt jetzt, was sie durchsuchen kann — Benachrichtigungen mit eigenem Text, etwa Ankündigungen — statt kommentarlos nichts zurückzugeben.",
+      ],
+    },
+  },
+  {
+    version: '0.166.0-beta',
+    date: '2026-09-07',
+    time: '02:44',
+    commit: '3e888c0',
+    highlights: {
+      en: [
+        "Mentor board cards now show how long each mentee has been in their current stage, and turn red when the stage is past its deadline.",
+        "The same clock appears on your mentee list and on a mentee's detail page.",
+        "Hired candidates, finished mentorships and people you have agreed to write to later never show as late.",
+        "Mentees can see how long they have been at their current stage, what comes next, and — when there is one — the date their mentor is working towards.",
+      ],
+      tr: [
+        "Mentor panosundaki kartlar artık her mentee'nin mevcut aşamada kaç gündür beklediğini gösteriyor; aşamanın son tarihi geçtiğinde kırmızıya dönüyor.",
+        "Aynı sayaç mentee listende ve mentee detay sayfasında da var.",
+        "İşe alınanlar, tamamlanmış mentorluklar ve \"sonra yazacağız\" dediğiniz kişiler hiçbir zaman gecikmiş görünmüyor.",
+        "Mentee'ler bulundukları aşamada kaç gündür olduklarını, sırada ne olduğunu ve varsa mentörlerinin hedeflediği tarihi görebiliyor.",
+      ],
+      de: [
+        "Karten auf dem Mentor-Board zeigen jetzt, wie lange ein Mentee schon in seiner aktuellen Phase ist — rot, sobald die Frist der Phase abgelaufen ist.",
+        "Dieselbe Anzeige gibt es in deiner Mentee-Liste und auf der Detailseite eines Mentees.",
+        "Eingestellte Kandidaten, abgeschlossene Mentorings und Personen, die ihr bewusst später wieder anschreibt, gelten nie als überfällig.",
+        "Mentees sehen, seit wann sie in ihrer aktuellen Phase sind, was als Nächstes kommt und — falls vorhanden — bis wann ihr Mentor den nächsten Schritt plant.",
+      ],
+    },
+  },
+  {
+    version: '0.165.0-beta',
+    date: '2026-09-07',
+    time: '02:24',
+    commit: '3cdc4b1',
+    highlights: {
+      en: [
+        "Candidate and mentee detail screens now carry a Timeline panel: stage moves, interactions, meetings, goals, weekly reports and offers in one chronological list instead of four places to look.",
+        "Filter the timeline by type, and load older entries a page at a time — the panel tells you when you have reached the beginning of the history.",
+        "Mentees see their own timeline without the mentor's private notes or unsent offers.",
+      ],
+      tr: [
+        "Aday ve mentee detay ekranlarına Zaman çizelgesi paneli eklendi: aşama geçişleri, görüşmeler, toplantılar, hedefler, haftalık raporlar ve teklifler dört ayrı yer yerine tek bir kronolojik listede.",
+        "Zaman çizelgesini türe göre filtreleyebilir, daha eski kayıtları sayfa sayfa yükleyebilirsin — geçmişin başına ulaştığında panel bunu açıkça söylüyor.",
+        "Mentee'ler kendi zaman çizelgelerini mentörün özel notları ve gönderilmemiş teklifler olmadan görür.",
+      ],
+      de: [
+        "Die Detailseiten für Kandidaten und Mentees haben jetzt eine Zeitleiste: Phasenwechsel, Interaktionen, Meetings, Ziele, Wochenberichte und Angebote in einem chronologischen Verlauf statt an vier Stellen.",
+        "Die Zeitleiste lässt sich nach Art filtern und seitenweise weiter in die Vergangenheit laden — das Panel sagt dir, wenn du den Anfang des Verlaufs erreicht hast.",
+        "Mentees sehen ihren eigenen Verlauf ohne die privaten Notizen des Mentors und ohne unversendete Angebote.",
+      ],
+    },
+  },
+  {
+    version: '0.163.0-beta',
+    date: '2026-09-07',
+    time: '01:32',
+    commit: 'aa257b2',
+    highlights: {
+      en: [
+        "Each organisation can now hold its own settings — 2FA policy, data retention, AI quota — falling back to the platform defaults for anything it has not set.",
+      ],
+      tr: [
+        "Her kuruluş artık kendi ayarlarını tutabiliyor — 2FA politikası, veri saklama süresi, AI kotası — ve kendi belirlemediği her ayar için platform varsayılanına düşüyor.",
+      ],
+      de: [
+        "Jede Organisation kann jetzt eigene Einstellungen führen — 2FA-Richtlinie, Aufbewahrungsdauer, KI-Kontingent — und fällt für alles Übrige auf die Plattform-Standards zurück.",
+      ],
+    },
+  },
+  {
+    version: '0.161.2-beta',
+    date: '2026-09-07',
+    time: '01:32',
+    commit: '5e5cb40',
+    highlights: {
+      en: [
+        "API keys are now checked on every request: an expired or revoked key is refused, and a key is refused outright when it lacks the scope an endpoint requires instead of quietly returning an empty result.",
+        "The public API returns only the data of the organisation the key belongs to.",
+        "Each key now has its own request allowance, so one integration's traffic no longer uses up another's.",
+      ],
+      tr: [
+        "API anahtarları artık her istekte denetleniyor: süresi dolmuş veya iptal edilmiş anahtar reddediliyor, uç noktanın istediği kapsama sahip olmayan anahtar da sessizce boş sonuç almak yerine doğrudan geri çevriliyor.",
+        "Herkese açık API yalnızca anahtarın ait olduğu organizasyonun verisini döndürüyor.",
+        "Her anahtarın kendi istek hakkı var; bir entegrasyonun trafiği artık bir diğerinin hakkını tüketmiyor.",
+      ],
+      de: [
+        "API-Schlüssel werden jetzt bei jeder Anfrage geprüft: Ein abgelaufener oder widerrufener Schlüssel wird abgewiesen, und ein Schlüssel ohne die vom Endpunkt geforderte Berechtigung wird ebenfalls abgewiesen, statt stillschweigend ein leeres Ergebnis zu liefern.",
+        "Die öffentliche API liefert nur noch Daten der Organisation, zu der der Schlüssel gehört.",
+        "Jeder Schlüssel hat jetzt sein eigenes Anfragekontingent, sodass der Verkehr einer Integration nicht mehr das Kontingent einer anderen aufbraucht.",
+      ],
+    },
+  },
+  {
+    version: '0.161.1-beta',
+    date: '2026-09-06',
+    time: '22:27',
+    commit: '94950ef',
+    highlights: {
+      en: [
+        "Invitations, password resets, verification emails, meeting invites and reminders and the digest emails now arrive in your language, not only in English — dates and times included.",
+        "When you invite someone you choose the language of the invitation — it defaults to yours, and a resend repeats it.",
+      ],
+      tr: [
+        "Davetler, şifre sıfırlama, doğrulama e-postaları, toplantı davetleri ile hatırlatmaları ve özet e-postaları artık yalnızca İngilizce değil, tarih ve saatleriyle birlikte sizin dilinizde geliyor.",
+        "Birini davet ederken davetin dilini siz seçiyorsunuz — varsayılan olarak sizinki gelir ve tekrar gönderimlerde aynı dil kullanılır.",
+      ],
+      de: [
+        "Einladungen, Passwort-Zurücksetzungen, Bestätigungsmails, Termineinladungen und -erinnerungen sowie die Übersichts-Mails kommen jetzt in deiner Sprache statt nur auf Englisch – Datum und Uhrzeit inklusive.",
+        "Beim Einladen wählst du die Sprache der Einladung — voreingestellt ist deine, und beim erneuten Senden wird sie wiederholt.",
+      ],
+    },
+  },
+  {
+    version: '0.160.0-beta',
+    date: '2026-09-06',
+    time: '22:27',
+    commit: '8f8e32f',
+    highlights: {
+      en: [
+        "A page that fails now shows a translated, branded screen with a Try again button and a way back to your own dashboard — instead of a blank browser error.",
+        "Slow pages fade in a placeholder shaped like the content, so the layout no longer jumps when it loads.",
+      ],
+      tr: [
+        "Bir sayfa hata verdiğinde artık çevrilmiş, kendi tasarımımıza uygun bir ekran çıkıyor: \"Tekrar dene\" düğmesi ve kendi paneline dönüş yolu ile — boş bir tarayıcı hatası yerine.",
+        "Yavaş açılan sayfalarda içeriğin şeklinde bir yer tutucu görünüyor, böylece sayfa yüklendiğinde yerinden oynamıyor.",
+      ],
+      de: [
+        "Schlägt eine Seite fehl, erscheint jetzt ein übersetzter Bildschirm im gewohnten Design – mit „Erneut versuchen“ und einem Weg zurück zum eigenen Dashboard statt einer leeren Browser-Fehlermeldung.",
+        "Langsame Seiten zeigen einen Platzhalter in der Form des Inhalts, sodass das Layout beim Laden nicht mehr springt.",
+      ],
+    },
+  },
+  {
+    version: '0.159.2-beta',
+    date: '2026-09-06',
+    time: '22:27',
+    commit: '9d6d006',
+    highlights: {
+      en: [
+        "If your organisation renamed or replaced the pipeline stages, a newly assigned mentee now appears in your first stage instead of a stage your board does not have.",
+        "Mentees left on the old default stage that your pipeline does not contain are moved to your first stage, and the move is recorded in their status history. Anyone you have already moved through the pipeline stays exactly where you put them.",
+      ],
+      tr: [
+        "Kuruluşunuz hat aşamalarını yeniden adlandırdıysa veya değiştirdiyse, yeni eşleştirilen bir danışan artık panonuzda olmayan bir aşamada değil, kendi ilk aşamanızda görünüyor.",
+        "Hattınızda bulunmayan eski varsayılan aşamada kalmış danışanlar ilk aşamanıza taşınır ve bu taşıma durum geçmişlerine kaydedilir. Hat boyunca kendi elinizle ilerlettiğiniz kişiler bıraktığınız aşamada kalır.",
+      ],
+      de: [
+        "Wenn Ihre Organisation die Pipeline-Stufen umbenannt oder ersetzt hat, erscheint ein neu zugewiesener Mentee jetzt in Ihrer ersten Stufe statt in einer Stufe, die es auf Ihrem Board gar nicht gibt.",
+        "Mentees, die auf der alten Standardstufe zurückblieben, die es in Ihrer Pipeline nicht gibt, werden in Ihre erste Stufe verschoben — die Verschiebung wird in ihrem Statusverlauf festgehalten. Wen Sie selbst bereits weitergeschoben haben, der bleibt genau dort, wo Sie ihn hingestellt haben.",
+      ],
+    },
+  },
+  {
+    version: '0.159.0-beta',
+    date: '2026-09-06',
+    time: '20:21',
+    commit: '84249ef',
+    highlights: {
+      en: [
+        "Mentor directory cards and mentor profiles now have a \"Request this mentor\" button that takes you straight to the request form with that mentor already selected.",
+      ],
+      tr: [
+        "Mentor dizini kartlarına ve mentor profillerine \"Bu mentoru iste\" düğmesi eklendi: seni doğrudan, o mentorun önceden seçili olduğu talep formuna götürür.",
+      ],
+      de: [
+        "Mentorenkarten im Verzeichnis und Mentorenprofile haben jetzt die Schaltfläche \"Diesen Mentor anfragen\" — sie führt direkt zum Anfrageformular, in dem dieser Mentor bereits ausgewählt ist.",
+      ],
+    },
+  },
+  {
+    version: '0.158.6-beta',
+    date: '2026-09-06',
+    time: '20:19',
+    commit: 'f19687a',
+    highlights: {
+      en: [
+        "Saving a review note on a mentor application no longer erases the rejection reason — notes and reasons are now two separate fields, and both are shown in the review screen with the note marked as internal. Applications rejected before the split show their stored text under a label that does not claim to know whether it is the reason or a note, because for those rows the CRM genuinely cannot tell.",
+      ],
+      tr: [
+        "Bir mentor başvurusuna inceleme notu kaydetmek artık ret nedenini silmiyor — not ve ret nedeni ayrı iki alan oldu; ikisi de inceleme ekranında görünüyor ve not \"dahili\" olarak işaretleniyor. Ayrımdan önce reddedilen başvurularda saklanan metin, ret nedeni mi yoksa not mu olduğunu iddia etmeyen bir başlık altında gösteriliyor; çünkü o kayıtlarda CRM bunu gerçekten ayırt edemiyor.",
+      ],
+      de: [
+        "Eine Prüfnotiz zu einer Mentor-Bewerbung löscht den Ablehnungsgrund nicht mehr — Notiz und Grund sind jetzt zwei getrennte Felder, beide werden in der Prüfansicht angezeigt und die Notiz ist als intern gekennzeichnet. Bei Bewerbungen, die vor der Trennung abgelehnt wurden, erscheint der gespeicherte Text unter einer Bezeichnung, die offenlässt, ob es der Grund oder eine Notiz ist — das CRM kann das dort nicht unterscheiden.",
+      ],
+    },
+  },
+  {
+    version: '0.158.5-beta',
+    date: '2026-09-06',
+    time: '20:18',
+    commit: 'f64b99e',
+    highlights: {
+      en: [
+        "The offline screen, the public demo link and the API documentation now point at interncrm.com instead of the retired crm.ersah.in address.",
+      ],
+      tr: [
+        "Çevrimdışı ekranı, herkese açık demo bağlantısı ve API dokümantasyonu artık kullanımdan kaldırılan crm.ersah.in yerine interncrm.com adresini gösteriyor.",
+      ],
+      de: [
+        "Die Offline-Seite, der Link zur öffentlichen Demo und die API-Dokumentation verweisen jetzt auf interncrm.com statt auf die stillgelegte Adresse crm.ersah.in.",
+      ],
+    },
+  },
+  {
+    version: '0.158.4-beta',
+    date: '2026-09-06',
+    time: '19:55',
+    commit: '6c19d77',
+    highlights: {
+      en: [
+        "Dates and times now follow the language you picked in the app, so a Turkish or German interface no longer shows dates in US format.",
+        "Proposed interview times say which timezone they are in, and use the timezone saved on your profile.",
+        "Times are shown on a 24-hour clock everywhere, so the same appointment no longer reads 16:30 on one screen and 4:30 PM on the next.",
+      ],
+      tr: [
+        "Tarih ve saatler artık uygulamada seçtiğiniz dile göre gösteriliyor; Türkçe arayüzde tarihler ABD biçiminde görünmüyor.",
+        "Önerilen mülakat saatleri hangi saat diliminde olduklarını yazıyor ve profilinizde kayıtlı saat dilimini kullanıyor.",
+        "Saatler her ekranda 24 saat biçiminde gösteriliyor; aynı randevu bir yerde 16:30, başka bir yerde 4:30 PM görünmüyor.",
+      ],
+      de: [
+        "Datums- und Zeitangaben richten sich jetzt nach der in der App gewählten Sprache — eine deutsche Oberfläche zeigt keine US-Datumsformate mehr.",
+        "Vorgeschlagene Interviewtermine nennen ihre Zeitzone und verwenden die in Ihrem Profil gespeicherte Zeitzone.",
+        "Uhrzeiten erscheinen überall im 24-Stunden-Format – derselbe Termin steht nicht mehr auf einem Bildschirm als 16:30 und auf dem nächsten als 4:30 PM.",
+      ],
+    },
+  },
+  {
+    version: '0.158.3-beta',
+    date: '2026-09-06',
+    time: '19:55',
+    commit: '8ad2fe7',
+    highlights: {
+      en: [
+        "A delete or contact log that the server rejects now shows a red error in your own language instead of a green \"done\" — and the list is refreshed to match what the server actually kept.",
+      ],
+      tr: [
+        "Sunucunun reddettiği bir silme veya iletişim kaydı artık yeşil \"tamam\" yerine kendi dilinizde kırmızı bir hata gösteriyor; liste de sunucuda gerçekten duran kayıtlara göre yenileniyor.",
+      ],
+      de: [
+        "Wird ein Löschen oder ein Kontakteintrag vom Server abgelehnt, erscheint jetzt ein roter Fehler in deiner Sprache statt einer grünen Erfolgsmeldung – und die Liste wird auf den tatsächlichen Stand des Servers aktualisiert.",
+      ],
+    },
+  },
+  {
+    version: '0.158.2-beta',
+    date: '2026-09-06',
+    time: '19:54',
+    commit: 'b05f633',
+    highlights: {
+      en: [
+        "Mentors can now log a phone call or a WhatsApp conversation — the interaction type menu offers all five channels, fully translated.",
+      ],
+      tr: [
+        "Mentorlar artık telefon görüşmesi ve WhatsApp yazışması da kaydedebiliyor — etkileşim türü menüsü beş kanalın hepsini, tamamen Türkçe olarak sunuyor.",
+      ],
+      de: [
+        "Mentorinnen und Mentoren können jetzt auch Anrufe und WhatsApp-Gespräche protokollieren — das Menü für den Interaktionstyp bietet alle fünf Kanäle, vollständig übersetzt.",
+      ],
+    },
+  },
+  {
+    version: '0.157.4-beta',
+    date: '2026-09-06',
+    time: '18:53',
+    commit: 'ec4a4d5',
+    highlights: {
+      en: [
+        "Mentees can now see interaction subjects in their interaction history and recent journey activity.",
+      ],
+      tr: [
+        "Mentee'ler artık etkileşim geçmişinde ve yolculuktaki son etkinliklerde etkileşim başlıklarını görebilir.",
+      ],
+      de: [
+        "Mentees sehen jetzt die Betreffzeilen von Interaktionen im Verlauf und in den neuesten Aktivitäten ihrer Journey.",
+      ],
+    },
+  },
+  {
+    version: '0.157.3-beta',
+    date: '2026-09-06',
+    time: '18:53',
+    commit: 'cd33f4c',
+    highlights: {
+      en: [
+        "White-label branding and SAML single sign-on can now only be configured on a plan that includes them — and a downgrade no longer risks your saved settings: they are kept, simply become inactive until you upgrade again, and you can still remove them at any time.",
+      ],
+      tr: [
+        "White-label markalama ve SAML tek oturum açma artık yalnızca bu özellikleri içeren planlarda yapılandırılabiliyor; plan düşerse kayıtlı ayarlarınız silinmiyor, yalnızca pasifleşiyor ve yükseltmede geri geliyor — istediğiniz zaman da kaldırabiliyorsunuz.",
+      ],
+      de: [
+        "White-Label-Branding und SAML-Single-Sign-on lassen sich jetzt nur noch in Plänen konfigurieren, die sie enthalten — und eine Herabstufung löscht nichts: Die gespeicherten Einstellungen bleiben erhalten, sind nur inaktiv, bis Sie wieder hochstufen, und lassen sich jederzeit entfernen.",
+      ],
+    },
+  },
+  {
+    version: '0.157.2-beta',
+    date: '2026-09-06',
+    time: '18:50',
+    commit: 'be6e469',
+    highlights: {
+      en: [
+        "Grey secondary text — inbox previews, timestamps, card details and status lines — is darker and now readable at the contrast level WCAG AA requires.",
+        "Green and amber status text on the admin settings page is darker for the same reason.",
+        "The small person icon in each inbox row is easier to hit on a touchscreen.",
+      ],
+      tr: [
+        "Gri ikincil yazılar — gelen kutusu önizlemeleri, zaman damgaları, kart ayrıntıları ve durum satırları — koyulaştırıldı; artık WCAG AA'nın istediği kontrast seviyesinde okunuyor.",
+        "Yönetici ayarları sayfasındaki yeşil ve turuncu durum yazıları da aynı nedenle koyulaştırıldı.",
+        "Gelen kutusundaki küçük kişi simgesine dokunmatik ekranda dokunmak kolaylaştı.",
+      ],
+      de: [
+        "Grauer Sekundärtext — Posteingangs-Vorschauen, Zeitstempel, Kartendetails und Statuszeilen — ist dunkler und erreicht jetzt den von WCAG AA geforderten Kontrast.",
+        "Die grünen und orangefarbenen Statustexte auf der Administrator-Einstellungsseite sind aus demselben Grund dunkler.",
+        "Das kleine Personensymbol in jeder Posteingangszeile lässt sich auf dem Touchscreen leichter treffen.",
+      ],
+    },
+  },
+  {
+    version: '0.157.1-beta',
+    date: '2026-09-06',
+    time: '18:46',
+    commit: '62fc60e',
+    highlights: {
+      en: [
+        "The mentor directory now says how many mentors it is showing out of how many exist — and warns you when a search could not cover the whole list, instead of quietly leaving mentors out.",
+      ],
+      tr: [
+        "Mentor dizini artık kaç mentordan kaçını gösterdiğini söylüyor — ve bir arama listenin tamamını kapsayamadığında mentorları sessizce dışarıda bırakmak yerine seni uyarıyor.",
+      ],
+      de: [
+        "Das Mentorenverzeichnis zeigt jetzt, wie viele von wie vielen Mentoren angezeigt werden — und warnt dich, wenn eine Suche nicht die ganze Liste erfassen konnte, statt Mentoren stillschweigend wegzulassen.",
+      ],
+    },
+  },
+  {
+    version: '0.157.0-beta',
+    date: '2026-09-06',
+    time: '18:46',
+    commit: '424e0b8',
+    highlights: {
+      en: [
+        "Your account settings now show a \"Connected calendars\" card that tells you which calendar account is connected, when it last synced, and warns you with a Reconnect button when the connection has stopped working.",
+        "The card no longer claims a calendar is healthy when the installation has switched that provider off, and a disconnect that fails now says so instead of pretending it worked.",
+      ],
+      tr: [
+        "Hesap ayarlarında artık \"Bağlı takvimler\" kartı var: hangi takvim hesabının bağlı olduğunu, en son ne zaman eşitlendiğini gösteriyor ve bağlantı çalışmayı bıraktığında \"Yeniden bağlan\" düğmesiyle seni uyarıyor.",
+        "Kurulumda ilgili sağlayıcı kapatıldığında kart artık takvimi \"çalışıyor\" gibi göstermiyor; başarısız olan bir bağlantı kaldırma işlemi de olmuş gibi davranmak yerine durumu açıkça söylüyor.",
+      ],
+      de: [
+        "In den Kontoeinstellungen gibt es jetzt die Karte \"Verbundene Kalender\": Sie zeigt, welches Kalenderkonto verbunden ist und wann zuletzt synchronisiert wurde — und warnt mit einer Schaltfläche \"Erneut verbinden\", sobald die Verbindung nicht mehr funktioniert.",
+        "Die Karte behauptet nicht mehr, ein Kalender sei in Ordnung, wenn der Anbieter in dieser Installation abgeschaltet ist — und ein fehlgeschlagenes Trennen wird als solches gemeldet, statt als erledigt zu gelten.",
+      ],
+    },
+  },
+  {
+    version: '0.156.25-beta',
+    date: '2026-09-06',
+    time: '18:39',
+    commit: '07631c4',
+    highlights: {
+      en: [
+        "The \"Try the live demo\" links work again — they pointed at the old demo address after the server move.",
+      ],
+      tr: [
+        "\"Canlı demoyu deneyin\" bağlantıları yeniden çalışıyor — sunucu taşındıktan sonra eski demo adresini gösteriyorlardı.",
+      ],
+      de: [
+        "Die \"Live-Demo testen\"-Links funktionieren wieder — sie zeigten nach dem Serverumzug noch auf die alte Demo-Adresse.",
+      ],
+    },
+  },
+  {
     version: '0.156.0-beta',
     date: '2026-09-03',
     time: '21:55',
