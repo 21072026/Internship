@@ -13,6 +13,7 @@ import { DENSITY_CLASS, resolveDensity } from '@/lib/density';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
 import { SystemThemeSync } from '@/components/SystemThemeSync';
+import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { appleSplashLinks } from '@/lib/appleSplash';
 
 export const metadata: Metadata = {
@@ -104,6 +105,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Keeps a `system` theme preference following the OS while the tab
             is open (#2078). Renders nothing. */}
         <SystemThemeSync />
+        {/* Registers /sw.js on every route, signed in or not (#1550) — the
+            offline fallback and the install prompt used to exist only behind
+            login. Renders nothing. */}
+        <ServiceWorkerRegistrar />
         <Providers locale={locale} dict={dict}>
           {/* Public demo (#966) — above everything, on every route, so a visitor
               never mistakes the demo for their own tenant. */}

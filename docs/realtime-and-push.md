@@ -123,8 +123,11 @@ no-op olur, `/api/push/subscribe` 503 verir ve uygulama eskisi gibi davranır.
 - `src/lib/pushDevices.ts` — `/account`'taki cihaz listesi (#1716).
 - `src/lib/deviceLabel.ts` — user-agent → "Chrome on Android". `trustedDevice.ts`
   ile **ortak** tablo; iki liste aynı cihazı aynı kelimelerle adlandırsın diye.
-- `public/sw.js` — `push`, `notificationclick`, `pushsubscriptionchange`.
+- `public/sw.js` — `push`, `notificationclick`, `pushsubscriptionchange` (aynı
+  dosyadaki `fetch`/`message` handler'ları için bkz. § 4).
 - `src/lib/pushNotifications.ts` — tarayıcı tarafı abone ol/çık.
+- `src/components/ServiceWorkerRegistrar.tsx` — `/sw.js` kaydı (root layout'tan,
+  her ziyaretçi için).
 
 ### Cihaz listesi (#1716)
 
@@ -182,6 +185,52 @@ abonelik, az önce silinen satırı sunucuya geri verirdi. Geçersiz kılınacak
   sessizce yeniden doğrulanır.
 - Bildirimler kategori tercihine saygı duyar (`notificationPrefs.messages`) —
   `/account`'ta mesaj bildirimlerini kapatan kişi push de almaz.
+
+## 4. Service worker önbelleği yalnızca herkese açık baytları tutar (#1550)
+
+Cache API **tarayıcı profiline** bağlıdır, hesaba değil. Yani service worker'ın
+sakladığı her şey, o cihazda bir sonraki giren kişinin de okuyabildiği şeydir.
+v3 worker'ı aynı kaynaktan gelen **her** GET'i tek bir önbelleğe yazıyordu —
+kimlik doğrulamalı JSON dâhil — ve çıkışta hiçbir şey silinmiyordu; paylaşılan
+bir cihazda çevrimdışı bir gezinme başka bir hesabın yanıtıyla karşılanabiliyordu.
+
+Kural **istek ve yanıt** üzerinden karar verir, rota listesi üzerinden değil: bir
+liste yalnızca yazıldığı gündeki rotaları kapsar, sonradan eklenen uç sessizce
+eski davranışı miras alır (`mayCacheRequest` / `mayCacheResponse`, `public/sw.js`).
+
+| Önbelleğe **girmez** | Önbelleğe **girer** |
+|---|---|
+| `/api/` altındaki her şey (yanıt, eklenen oturum çerezine göre değişir) | `/_next/static/*`, ikonlar, manifest |
+| `Authorization` başlığı taşıyan istek | `/offline` (install sırasında precache) |
+| Sunucunun `Cache-Control: private/no-store` ya da `Vary: Cookie` dediği yanıt — yani kimlik doğrulamalı **sayfa** render'ı da | Sunucunun önbelleklenebilir dediği herkese açık sayfa |
+| `ok` olmayan yanıt (404/500) | |
+
+Aynı kapı **okuma** yolunda da uygulanır: yazmayacağımız bir isteği önbellekten
+de yanıtlamayız — eski bir worker sürümünün bıraktığı satır olsa bile — ve arama
+`caches.match()` ile tüm origin'de değil, yalnızca kendi önbelleğimizde yapılır.
+
+**Çıkışta temizlik.** `CACHE` adı `internship-crm-v4`'e yükseltildi; `activate`
+adı farklı olan her önbelleği sildiği için hâlihazırda kurulu istemciler v3'ün
+tuttuğu her şeyi bırakır. Ayrıca worker'a `{ type: 'PURGE_CACHE' }` mesajı gelince
+**tüm** önbellekler silinir ve yalnızca herkese açık precache (`/offline`,
+`/icon.svg`) yeniden tohumlanır. Mesajı `signOutEverywhere()`
+(`src/lib/signOutClient.ts`) atar ve yönlendirmeden **önce** ack'i bekler;
+kontrol eden worker yoksa silmeyi sayfa kendisi yapar. Oturumu geçersiz kılan
+yeni bir yol eklerken bunu unutmayın: çerezi düşürüp önbelleği bırakmak, işin
+yarısıdır.
+
+**Kayıt herkese açıktır.** `/sw.js` kaydı `InstallAppButton`'dan alınıp
+`ServiceWorkerRegistrar`'a (root `layout.tsx`) taşındı: buton yalnızca giriş
+yapılmış rol kenar çubuklarında duruyordu, dolayısıyla landing sayfasındaki
+ziyaretçi ne çevrimdışı kabuğu ne de `beforeinstallprompt`'u görüyordu.
+
+**Doğrulama.** `scripts/test/service-worker-cache.test.mjs` — `public/sw.js`'i
+sahte bir worker scope'unda çalıştırıp fetch handler'a sentetik istekler verir
+(tarayıcı ve veritabanı gerekmez, her PR'da koşar; `npm run test:service-worker`).
+`e2e/sw-cache-scoping.spec.ts` — canlı worker ile: giriş yapmadan kaydolur,
+`/api/` satırı oluşmaz, çıkış her şeyi siler. Süitin geri kalanı service
+worker'ları **blokluyor** (`playwright.config.ts`), bu yüzden `serviceWorkers:
+'allow'` yalnızca o dosyada.
 
 ## Yük testi notu
 

@@ -9,10 +9,16 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-// "Install app" entry for the sidebar. Registers the service worker, then:
+// "Install app" entry for the sidebar:
 // - Chrome/Edge/Android: shows a button wired to the install prompt.
 // - iOS Safari (no prompt API): shows a tappable "Add to Home Screen" hint.
 // - Already installed (standalone): renders nothing.
+//
+// The service worker is NOT registered here any more (#1550): this component is
+// only mounted in the signed-in role sidebars, so the registration never
+// happened for a visitor who had not logged in — no offline shell, and no
+// `beforeinstallprompt` on the public pages. `ServiceWorkerRegistrar`, mounted
+// from the root layout, owns it now.
 export function InstallAppButton() {
   const t = useT();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
@@ -21,11 +27,6 @@ export function InstallAppButton() {
   const [showIosHint, setShowIosHint] = useState(false);
 
   useEffect(() => {
-    // Register the service worker.
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
-
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true;
