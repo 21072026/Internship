@@ -127,8 +127,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // Send now. A DRAFT is armed first — `dispatchNewsletter` only accepts
   // SCHEDULED/SENDING, which is what keeps the cron away from drafts.
+  // `armedHere` records that WE armed it, so a quota refusal below can put the
+  // row back exactly where the request found it.
+  let armedHere = false;
   if (issue.status === 'DRAFT') {
     await prisma.newsletter.update({ where: { id }, data: { status: 'SCHEDULED', scheduledAt: new Date() } });
+    armedHere = true;
   } else if (issue.status !== 'SCHEDULED') {
     return NextResponse.json({ error: `A ${issue.status.toLowerCase()} newsletter cannot be sent again`, status: issue.status }, { status: 409 });
   }
@@ -142,9 +146,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
 
   const dispatch = await dispatchNewsletter(id);
-  // Over the month's broadcast band: nothing was sent and the issue is still
-  // sendable, so this is a 403 the admin can act on rather than a silent no-op
-  // reported as success (#1754).
-  if (dispatch.quota) return NextResponse.json(broadcastQuotaError(dispatch.quota), { status: 403 });
+  // Over the month's broadcast band: nothing was sent, and nothing must be sent
+  // later either (#1754). A refusal puts the row back where the request found
+  // it — a DRAFT we armed a moment ago goes back to DRAFT, because leaving it
+  // SCHEDULED with `scheduledAt` in the past means the cron mails on its next
+  // tick the very issue the admin was just told had not been sent.
+  //
+  // An issue that was ALREADY SCHEDULED is left alone on purpose: the admin
+  // chose that date, and silently unscheduling it would be its own surprise.
+  // The refusal copy has to say which of the two happened, or "nothing was
+  // sent" reads as "nothing will be sent" in a case where it still will.
+  if (dispatch.quota) {
+    if (armedHere) {
+      await prisma.newsletter.update({ where: { id }, data: { status: 'DRAFT', scheduledAt: null } });
+    }
+    return NextResponse.json(
+      { ...broadcastQuotaError(dispatch.quota), status: armedHere ? 'DRAFT' : 'SCHEDULED', stillScheduled: !armedHere },
+      { status: 403 }
+    );
+  }
   return NextResponse.json({ ok: !dispatch.noop, dispatch });
 }

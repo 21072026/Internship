@@ -47,6 +47,7 @@ test('a broadcast over the month band is refused whole and sends nothing', async
 
   const text = `E2E quota announcement ${Date.now().toString(36)}`;
   const inAppText = `E2E quota in-app ${Date.now().toString(36)}`;
+  const newsletterSubject = `E2E quota issue ${Date.now().toString(36)}`;
 
   try {
     await signIn(page, adminEmail, pw, '/admin');
@@ -84,7 +85,36 @@ test('a broadcast over the month band is refused whole and sends nothing', async
     const inAppRow = await prisma.announcement.findFirst({ where: { text: inAppText } });
     expect(inAppRow).not.toBeNull();
     expect(inAppRow?.emailedCount).toBe(0);
+
+    // ── 3. A refused "send now" is DISARMED, not left queued ────────────────
+    // `scheduledAt` for a send-now is `new Date()`, so an issue left SCHEDULED
+    // after the 403 is due: the cron would mail, unattended, the very issue the
+    // admin was told had not been sent. The row must come back as a DRAFT.
+    const refusedIssue = await page.request.post('/api/admin/newsletters', {
+      data: {
+        audience: 'MENTEE',
+        action: 'send',
+        content: {
+          en: {
+            subject: newsletterSubject,
+            intro: 'Quota intro sentence.',
+            tips: [{ emoji: '💡', title: 'Only tip', body: 'One line.' }],
+          },
+        },
+      },
+    });
+    expect(refusedIssue.status()).toBe(403);
+    const issueBody = await refusedIssue.json();
+    expect(issueBody.code).toBe('broadcast_quota_exceeded');
+    expect(issueBody.status).toBe('DRAFT');
+    const issueRow = await prisma.newsletter.findFirst({ where: { subject: newsletterSubject } });
+    expect(issueRow?.status).toBe('DRAFT');
+    expect(issueRow?.scheduledAt).toBeNull();
+    expect(issueRow?.sentCount).toBe(0);
+    expect(await prisma.newsletterSend.count({ where: { newsletterId: issueRow!.id } })).toBe(0);
   } finally {
+    await prisma.newsletterSend.deleteMany({ where: { newsletter: { subject: newsletterSubject } } });
+    await prisma.newsletter.deleteMany({ where: { subject: newsletterSubject } });
     await prisma.announcement.deleteMany({ where: { text: { in: [text, inAppText] } } });
     await prisma.setting.deleteMany({ where: { orgId: org.id } });
     await cleanupByEmail(adminEmail);

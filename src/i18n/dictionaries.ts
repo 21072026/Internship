@@ -3400,6 +3400,8 @@ const en = {
     usage: 'Broadcast e-mail: {used} of {limit} recipients used this month. The meter resets on {date}.',
     unlimited: 'Broadcast e-mail: this plan has no monthly recipient cap.',
     blocked: 'Nothing was sent. This broadcast needs {requested} recipients, but only {remaining} of your {limit} for this month are left ({used} already used). The meter resets on {date}.',
+    keptDraft: 'The issue is waiting as a draft — nothing will go out on its own. Send it again once the meter allows.',
+    stillScheduled: 'The issue is still scheduled for the date you picked, and will be sent then if the meter allows.',
   },
   announcements: {
     title: 'Announcements',
@@ -8414,6 +8416,8 @@ const tr: Dict = {
     usage: 'Toplu e-posta: bu ay {limit} alıcının {used} tanesi kullanıldı. Sayaç {date} tarihinde sıfırlanıyor.',
     unlimited: 'Toplu e-posta: bu planda aylık alıcı sınırı yok.',
     blocked: 'Hiçbir gönderim yapılmadı. Bu toplu gönderim {requested} alıcı gerektiriyor; bu ay için ayrılan {limit} alıcının yalnızca {remaining} tanesi kaldı ({used} tanesi kullanıldı). Sayaç {date} tarihinde sıfırlanıyor.',
+    keptDraft: 'Sayı taslak olarak bekliyor — kendiliğinden hiçbir şey gönderilmeyecek. Sayaç izin verdiğinde yeniden gönder.',
+    stillScheduled: 'Sayı seçtiğin tarih için planlı kalmaya devam ediyor; o gün sayaç izin verirse gönderilecek.',
   },
   announcements: {
     title: 'Duyurular',
@@ -13408,6 +13412,8 @@ const de: Dict = {
     usage: 'Rundmails: {used} von {limit} Empfängern in diesem Monat verbraucht. Der Zähler wird am {date} zurückgesetzt.',
     unlimited: 'Rundmails: In diesem Tarif gibt es keine monatliche Empfängergrenze.',
     blocked: 'Es wurde nichts gesendet. Diese Rundmail benötigt {requested} Empfänger, von Ihren {limit} für diesen Monat sind aber nur noch {remaining} frei ({used} bereits verbraucht). Der Zähler wird am {date} zurückgesetzt.',
+    keptDraft: 'Die Ausgabe wartet als Entwurf — von allein wird nichts versendet. Senden Sie sie erneut, sobald der Zähler es erlaubt.',
+    stillScheduled: 'Die Ausgabe bleibt für das von Ihnen gewählte Datum geplant und wird dann gesendet, sofern der Zähler es erlaubt.',
   },
   announcements: {
     title: 'Ankündigungen',

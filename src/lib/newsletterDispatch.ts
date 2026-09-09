@@ -265,11 +265,25 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   // and undeletable (docs/newsletter.md): the skipped tenant could never
   // receive it. Refusing whole keeps the issue re-sendable once the month rolls
   // over, the plan changes or the operator raises the cap.
+  //
+  // A RESUME IS NEVER METERED. When `issue.status` is already 'SENDING' this
+  // call is finishing a run the quota already authorised, and it can never mail
+  // more than that authorisation covered. Metering it again would also
+  // double-count: `checkBroadcastQuota` reads NewsletterSend rows in the
+  // window, which by then include this issue's own delivered half, so
+  // `used + requested` exceeds what was actually asked for. And the refusal
+  // above returns BEFORE the claim — which leaves a SCHEDULED issue exactly as
+  // it was, but leaves a resumed one stuck in SENDING: half-delivered,
+  // un-editable and un-cancellable, the precise outcome this ordering exists to
+  // prevent.
+  const resuming = issue.status === 'SENDING';
   const quotaByOrg = new Map<string, number>();
-  for (const user of recipients) {
-    if (!user.orgId) continue; // no tenant resolves → unmetered, like planGate
-    if (!emailGroupAllowedForCategory(user, 'newsletter')) continue;
-    quotaByOrg.set(user.orgId, (quotaByOrg.get(user.orgId) ?? 0) + 1);
+  if (!resuming) {
+    for (const user of recipients) {
+      if (!user.orgId) continue; // no tenant resolves → unmetered, like planGate
+      if (!emailGroupAllowedForCategory(user, 'newsletter')) continue;
+      quotaByOrg.set(user.orgId, (quotaByOrg.get(user.orgId) ?? 0) + 1);
+    }
   }
   for (const [orgId, requested] of quotaByOrg) {
     const quota = await checkBroadcastQuota({ orgId, requested });

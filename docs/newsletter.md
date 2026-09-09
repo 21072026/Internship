@@ -106,13 +106,35 @@ Three properties are load-bearing:
   instead.)
 - **The check happens before the audience is expanded, and refuses whole.**
   `dispatchNewsletter` resolves the recipients and evaluates every tenant in
-  them *before* it claims the issue, so a refusal leaves the row exactly as it
-  was: still `SCHEDULED`, so the 15-minute cron sends it by itself once the band
-  allows, and still editable or cancellable by a human. It is **all-or-nothing
-  per issue** — if any tenant in the audience would cross its band the whole
-  issue waits, rather than being sent to the tenants that fit. Excluding one
-  would mark the issue `SENT`, and a sent issue is immutable and undeletable:
-  the skipped tenant could never receive it.
+  them *before* it claims the issue, so a refusal never leaves a half-delivered
+  row behind, and the issue stays editable and cancellable by a human. It is
+  **all-or-nothing per issue** — if any tenant in the audience would cross its
+  band the whole issue waits, rather than being sent to the tenants that fit.
+  Excluding one would mark the issue `SENT`, and a sent issue is immutable and
+  undeletable: the skipped tenant could never receive it.
+- **A refusal DISARMS what the refusal armed.** `scheduledAt` for a *send now*
+  is `new Date()`, so an issue left `SCHEDULED` after a 403 is due — the
+  15-minute cron would mail, unattended, exactly the issue the admin was told
+  had not been sent, and pressing Send again (the natural response to a
+  refusal) would arm a second one that also delivers. So both send-now paths
+  (`POST /api/admin/newsletters` with `action: 'send'`, and
+  `POST /api/admin/newsletters/[id]/send`) put the row back to `DRAFT` with
+  `scheduledAt` cleared when the quota refuses, and only for a row **they**
+  armed in that request: an issue the admin had already scheduled for a date
+  keeps that date, because that queueing was a human decision and the band will
+  very likely have reset by then. The 403 carries `status` and `stillScheduled`
+  so the composer can say which of the two happened. The content is always
+  kept — throwing away what the admin just wrote because the meter is full
+  would be its own kind of data loss.
+- **A resume is never metered.** When `dispatchNewsletter` is called on an issue
+  already in `SENDING` it is finishing a run the quota authorised once. Metering
+  it again would not just be a second toll on one decision: `checkBroadcastQuota`
+  derives usage from `NewsletterSend` rows in the window, which by then include
+  this issue's own delivered half — so a large issue could meter itself over its
+  own band and refuse. And because the refusal returns *before* the claim, a
+  `SCHEDULED` issue is left as it was but a resumed one would be stranded in
+  `SENDING`: half delivered, un-editable and un-cancellable, with the cron
+  refusing it again on every tick.
 - **Free core is never metered.** 1:1 messages, notifications,
   verification/invitation/reset mail, meeting invitations and reminders, weekly
   and mentor digests, dormant check-ins — none of them appear in

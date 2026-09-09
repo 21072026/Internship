@@ -35,6 +35,15 @@ export interface BroadcastQuotaRefusal {
   requested: number;
   remaining: number | null;
   resetsAt: string;
+  /**
+   * What became of the issue, on the two newsletter send-now paths. A refusal
+   * DISARMS what it armed, so this is `'DRAFT'` when the send-now created or
+   * armed the row, and `'SCHEDULED'` (with `stillScheduled`) when the admin had
+   * queued it for a date of their own and that date was left alone. An
+   * announcement refusal writes no row at all and sends neither field.
+   */
+  status?: 'DRAFT' | 'SCHEDULED';
+  stillScheduled?: boolean;
 }
 
 export const BROADCAST_QUOTA_CODE = 'broadcast_quota_exceeded';
@@ -101,12 +110,19 @@ export function useBroadcastQuotaMessage() {
   return useCallback(
     (body: unknown): string | null => {
       if (!isBroadcastQuotaRefusal(body)) return null;
-      return t.broadcastQuota.blocked
+      const blocked = t.broadcastQuota.blocked
         .replace('{requested}', String(body.requested))
         .replace('{remaining}', String(body.remaining ?? 0))
         .replace('{limit}', String(body.limit ?? 0))
         .replace('{used}', String(body.used))
         .replace('{date}', formatDate(body.resetsAt, locale));
+      // "Nothing was sent" is only half the answer for a newsletter: the admin
+      // needs to know whether the issue is now waiting as a draft or still
+      // queued for the date they picked. Nothing is appended when the route
+      // sends neither field (an announcement, which stores nothing at all).
+      if (body.stillScheduled) return `${blocked} ${t.broadcastQuota.stillScheduled}`;
+      if (body.status === 'DRAFT') return `${blocked} ${t.broadcastQuota.keptDraft}`;
+      return blocked;
     },
     [t, locale],
   );

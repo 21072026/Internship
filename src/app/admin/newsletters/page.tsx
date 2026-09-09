@@ -216,9 +216,11 @@ export default function AdminNewslettersPage() {
       const res = await fetch('/api/admin/newsletters', { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // Over the month's broadcast band: nothing was sent. The issue itself
-        // was saved, so the history refresh below still has something to show
-        // and it can go out once the meter allows it.
+        // Over the month's broadcast band: nothing was sent. The issue itself is
+        // kept — but as a DRAFT, never left armed, or the cron would mail it
+        // unattended after we said it had not been sent. The refusal sentence
+        // says so (`status` in the 403 body), and the history refresh below
+        // shows the draft.
         setError(quotaMessage(data) ?? data?.details?.formErrors?.[0] ?? data?.error ?? n.errorGeneric);
         await Promise.all([fetchHistory(), refreshQuota()]);
         return null;
