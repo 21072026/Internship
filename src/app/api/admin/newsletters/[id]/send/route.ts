@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { sendEmail } from '@/services/emailService';
+import { broadcastQuotaError } from '@/lib/broadcastQuota';
 import {
   NEWSLETTER_EMAIL_CATEGORY,
   canonicalNewsletterContent,
@@ -33,6 +34,15 @@ const schema = z.object({
  * NewsletterSend row either: a test is not a delivery to the audience, and
  * putting it in the record would make "who received issue X" wrong. EmailLog
  * still has it, which is the right place for "did this message leave".
+ *
+ * A test copy is NOT metered against the broadcast quota (#1754): it is one
+ * mail to the requesting admin's own verified address, and making careful
+ * proofreading cost audience would be the wrong incentive.
+ *
+ * When the quota refuses a **send now**, this returns 403 and nothing is sent.
+ * A draft that was armed a few lines above stays SCHEDULED on purpose — the
+ * dispatch cron then sends it by itself as soon as the band allows, instead of
+ * making the admin remember to come back.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -132,5 +142,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
 
   const dispatch = await dispatchNewsletter(id);
+  // Over the month's broadcast band: nothing was sent and the issue is still
+  // sendable, so this is a 403 the admin can act on rather than a silent no-op
+  // reported as success (#1754).
+  if (dispatch.quota) return NextResponse.json(broadcastQuotaError(dispatch.quota), { status: 403 });
   return NextResponse.json({ ok: !dispatch.noop, dispatch });
 }

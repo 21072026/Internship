@@ -7,6 +7,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { getOrgBranding } from '@/lib/orgBranding';
 import type { ResolvedBranding } from '@/lib/branding';
 import { getSetting } from '@/lib/settings';
+import { checkBroadcastQuota, type BroadcastQuotaCheck } from '@/lib/broadcastQuota';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, type Locale } from '@/i18n/config';
 import { sendEmail } from '@/services/emailService';
@@ -71,6 +72,12 @@ export interface NewsletterDispatchResult {
   /** True when the issue was already sent, canceled, or still a draft. */
   noop?: boolean;
   reason?: string;
+  /**
+   * Set only when `reason` is `'broadcast_quota_exceeded'`: the band of the
+   * first tenant in the audience that would be crossed, so the route can return
+   * a 403 the admin can act on instead of a bare refusal (#1754).
+   */
+  quota?: BroadcastQuotaCheck;
 }
 
 /** The mail chrome for one recipient's language. */
@@ -226,17 +233,11 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     return { newsletterId, recipients: 0, sent: 0, failed: 0, skipped: 0, noop: true, reason: 'empty_content' };
   }
 
-  // Claim it. `status: 'SCHEDULED'` in the filter makes this a compare-and-set,
-  // so a second concurrent tick finds 0 rows and walks away. A resumed run
-  // (already SENDING) is claimed by the second branch.
-  const claimed = await prisma.newsletter.updateMany({
-    where: { id: newsletterId, status: issue.status },
-    data: { status: 'SENDING' },
-  });
-  if (claimed.count === 0) {
-    return { newsletterId, recipients: 0, sent: 0, failed: 0, skipped: 0, noop: true, reason: 'claimed_elsewhere' };
-  }
-
+  // The audience is resolved BEFORE the issue is claimed, because the broadcast
+  // quota below has to see the whole recipient count while nothing has happened
+  // yet: a refusal must leave the issue exactly as it was (still SCHEDULED, so
+  // the cron retries it and a human can still edit or cancel it), and a claimed
+  // row that then refuses to send would be stuck in SENDING for good.
   const roles = audienceRoles(issue.audience as NewsletterAudience);
   const users = (await prisma.user.findMany({
     where: { isActive: true, role: { in: roles as ('MENTEE' | 'MENTOR')[] } },
@@ -247,6 +248,61 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   const already = new Set(
     (await prisma.newsletterSend.findMany({ where: { newsletterId }, select: { email: true } })).map((r) => r.email)
   );
+
+  const recipients = users.filter((u) => u.email && !already.has(u.email));
+
+  // ── Broadcast quota (#1754) ────────────────────────────────────────────────
+  // Counted per tenant, over the recipients that would ACTUALLY be mailed —
+  // someone who opted out is skipped below and costs the sending domain
+  // nothing, so metering them would refuse sends that were never going to
+  // happen. A resumed run only ever asks for what is left to send, so finishing
+  // a half-delivered issue is never blocked by the half already delivered.
+  //
+  // ALL-OR-NOTHING PER ISSUE, deliberately. If any tenant in the audience would
+  // cross its band, the whole issue is refused and nothing is sent — rather
+  // than sending to the tenants that fit and skipping the one that does not.
+  // Excluding a tenant would mark the issue SENT, and a sent issue is immutable
+  // and undeletable (docs/newsletter.md): the skipped tenant could never
+  // receive it. Refusing whole keeps the issue re-sendable once the month rolls
+  // over, the plan changes or the operator raises the cap.
+  const quotaByOrg = new Map<string, number>();
+  for (const user of recipients) {
+    if (!user.orgId) continue; // no tenant resolves → unmetered, like planGate
+    if (!emailGroupAllowedForCategory(user, 'newsletter')) continue;
+    quotaByOrg.set(user.orgId, (quotaByOrg.get(user.orgId) ?? 0) + 1);
+  }
+  for (const [orgId, requested] of quotaByOrg) {
+    const quota = await checkBroadcastQuota({ orgId, requested });
+    if (quota.allowed) continue;
+    logger.warning('Newsletter refused by the broadcast quota', {
+      newsletterId,
+      orgId,
+      used: quota.used,
+      limit: quota.limit,
+      requested,
+    });
+    return {
+      newsletterId,
+      recipients: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      noop: true,
+      reason: 'broadcast_quota_exceeded',
+      quota,
+    };
+  }
+
+  // Claim it. `status: 'SCHEDULED'` in the filter makes this a compare-and-set,
+  // so a second concurrent tick finds 0 rows and walks away. A resumed run
+  // (already SENDING) is claimed by the second branch.
+  const claimed = await prisma.newsletter.updateMany({
+    where: { id: newsletterId, status: issue.status },
+    data: { status: 'SENDING' },
+  });
+  if (claimed.count === 0) {
+    return { newsletterId, recipients: 0, sent: 0, failed: 0, skipped: 0, noop: true, reason: 'claimed_elsewhere' };
+  }
 
   const attachments = issue.image
     ? [{
@@ -264,7 +320,6 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   // someone who asked not to be mailed, in order to record not mailing them,
   // is the wrong trade.
   let skipped = 0;
-  const recipients = users.filter((u) => u.email && !already.has(u.email));
   // One memo for the whole fan-out; see NewsletterBrandCache.
   const brandCache = newNewsletterBrandCache();
 

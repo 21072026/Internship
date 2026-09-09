@@ -17,6 +17,7 @@ import {
   writtenNewsletterLocales,
 } from '@/lib/newsletter';
 import { dispatchNewsletter } from '@/lib/newsletterDispatch';
+import { broadcastQuotaError } from '@/lib/broadcastQuota';
 
 /**
  * Newsletter issues: the history, and creating one (#1469).
@@ -226,6 +227,15 @@ export async function POST(request: Request) {
   // Sent inline so the admin sees the real tallies on the button they pressed,
   // the same way the announcement broadcast reports its own fan-out.
   const dispatch = action === 'send' ? await dispatchNewsletter(created.id) : null;
+
+  // Over the month's broadcast band (#1754): nothing was sent. The issue itself
+  // is kept — it is a legitimate SCHEDULED issue with a real audience, and
+  // throwing away what the admin just wrote because the meter is full would be
+  // its own kind of data loss — so the 403 names the figures and the issue goes
+  // out by itself once the band allows it.
+  if (dispatch?.quota) {
+    return NextResponse.json({ ...broadcastQuotaError(dispatch.quota), id: created.id }, { status: 403 });
+  }
 
   return NextResponse.json(
     {

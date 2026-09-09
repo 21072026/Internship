@@ -79,6 +79,56 @@ An opted-out recipient is **counted in `skippedCount` with no row written** —
 storing the address of someone who asked not to be mailed, in order to record
 not mailing them, is the wrong trade.
 
+### The broadcast quota
+
+`src/lib/broadcastQuota.ts` (#1754). Every tenant sends from the **same domain**,
+so a burst of complaints against one org's blast costs everybody else their inbox
+placement — the same constraint that makes the dormant sweep send no third mail
+ever. A newsletter issue and an announcement e-mail therefore share **one monthly
+recipient band per organization**.
+
+| | |
+|---|---|
+| Window | the calendar month, in **UTC** |
+| Band | `min(`plan's `monthlyBroadcastRecipients`, operator setting`)` |
+| Setting | `broadcastMonthlyRecipients` — `''` (default) = follow the plan; a number can only **tighten** it, never lift it, in any layer |
+| Metered | `announcement`, `newsletter` — the two entries of `BROADCAST_EMAIL_CATEGORIES` |
+| Refusal | `403` with `code: 'broadcast_quota_exceeded'` plus `limit` / `used` / `requested` / `remaining` / `resetsAt` |
+
+Three properties are load-bearing:
+
+- **Usage is derived, never counted.** The month-to-date figure is read from rows
+  that already exist — `NewsletterSend` rows for the recipient's org, and
+  `Announcement.emailedCount` for announcements sent by one of the org's admins.
+  A counter of its own could drift from what was really sent, and the whole
+  point of a refusal is that the number it names is true. (`EmailLog` has no
+  `orgId` yet — that is #1556 — which is why attribution goes through these two
+  instead.)
+- **The check happens before the audience is expanded, and refuses whole.**
+  `dispatchNewsletter` resolves the recipients and evaluates every tenant in
+  them *before* it claims the issue, so a refusal leaves the row exactly as it
+  was: still `SCHEDULED`, so the 15-minute cron sends it by itself once the band
+  allows, and still editable or cancellable by a human. It is **all-or-nothing
+  per issue** — if any tenant in the audience would cross its band the whole
+  issue waits, rather than being sent to the tenants that fit. Excluding one
+  would mark the issue `SENT`, and a sent issue is immutable and undeletable:
+  the skipped tenant could never receive it.
+- **Free core is never metered.** 1:1 messages, notifications,
+  verification/invitation/reset mail, meeting invitations and reminders, weekly
+  and mentor digests, dormant check-ins — none of them appear in
+  `BROADCAST_EMAIL_CATEGORIES`, so none of them can be refused. Nor can the
+  in-app half of an announcement (a bell notification is not mail, so an
+  announcement sent without the e-mail box ticked spends nothing), nor **Send me
+  a test copy** — one mail to the admin's own verified address, because making
+  careful proofreading cost audience would be the wrong incentive.
+  `e2e/broadcast-quota.spec.ts` asserts all of this with the band at 0.
+
+It is a check, not a lock: two admins pressing Send in the same second can both
+pass it and overshoot the band by at most the smaller of the two sends. Because
+usage is derived from the rows that were actually written, the next check sees
+the overshoot and refuses — which is a better trade than serialising every
+broadcast behind a row lock for a limit whose purpose is a monthly average.
+
 ### Branding is resolved per recipient
 
 One issue fans out across people who may belong to different organizations, so

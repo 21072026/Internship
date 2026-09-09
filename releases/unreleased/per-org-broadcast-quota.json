@@ -1,0 +1,21 @@
+{
+  "bump": "minor",
+  "changelog": "- **Per-org broadcast sending quota** (#1754). Announcement e-mails and newsletter issues now share one monthly recipient band per organization: `min(plan's monthlyBroadcastRecipients, the new broadcastMonthlyRecipients setting)`, over the calendar month in UTC. `src/lib/broadcastQuota.ts` is the single source — the metered set is the one exported `BROADCAST_EMAIL_CATEGORIES` constant (`announcement`, `newsletter`), month-to-date usage is derived from rows that already exist (`NewsletterSend`, `Announcement.emailedCount`) rather than a counter that can drift, and the check runs before the audience is expanded so an over-band send is refused whole with a 403 naming limit/used/requested/remaining/resetsAt. `dispatchNewsletter` evaluates the quota before claiming the issue, so a refusal leaves it SCHEDULED and re-sendable; `GET /api/admin/broadcast-quota` feeds a \"used X of Y this month\" line on both composers. The operator setting can only tighten a plan's band, never lift it. Free core is untouched and asserted with the band at zero: 1:1 messages, notifications, verification/invitation/reset mail, meeting invitations and reminders, digests, dormant check-ins, in-app-only announcements and newsletter test copies are never metered.",
+  "notes": {
+    "en": [
+      "Announcement e-mails and newsletters now share a monthly recipient allowance per organization, shown on both composers as \"used X of Y this month\".",
+      "A broadcast that would cross the allowance is refused in full — never delivered by half — and says how many recipients are left and when the meter resets.",
+      "One-to-one messages, notifications, invitations, password resets and meeting reminders are never counted and keep working even when the allowance is used up."
+    ],
+    "tr": [
+      "Duyuru e-postaları ve bültenler artık kuruluş başına aylık bir alıcı hakkını paylaşıyor; her iki oluşturma ekranında bu ay kaç alıcının kullanıldığı yazıyor.",
+      "Hakkı aşacak bir toplu gönderim yarısı gitmiş halde bırakılmaz, tümüyle reddedilir — kaç alıcı kaldığını ve sayacın ne zaman sıfırlanacağını söyler.",
+      "Birebir mesajlar, bildirimler, davetler, şifre sıfırlama ve toplantı hatırlatmaları hiçbir zaman sayılmaz; hak tükendiğinde de çalışmaya devam eder."
+    ],
+    "de": [
+      "Ankündigungs-E-Mails und Newsletter teilen sich jetzt ein monatliches Empfängerkontingent pro Organisation, das in beiden Editoren als \"X von Y in diesem Monat verbraucht\" erscheint.",
+      "Eine Rundmail, die das Kontingent überschreiten würde, wird vollständig abgelehnt — nie zur Hälfte ausgeliefert — und nennt die restlichen Empfänger sowie den Zeitpunkt der Zurücksetzung.",
+      "Einzelnachrichten, Benachrichtigungen, Einladungen, Passwort-Zurücksetzungen und Terminerinnerungen werden nie gezählt und funktionieren auch bei ausgeschöpftem Kontingent weiter."
+    ]
+  }
+}

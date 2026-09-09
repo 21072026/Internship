@@ -55,6 +55,14 @@ export default function AdminSettingsPage() {
   const [boardWipLimit, setBoardWipLimit] = useState(String(DEFAULT_BOARD_WIP_LIMIT));
   const [loadedWipLimit, setLoadedWipLimit] = useState(String(DEFAULT_BOARD_WIP_LIMIT));
   const [wipLimitError, setWipLimitError] = useState<string | null>(null);
+  // Monthly broadcast recipient cap (#1754). Empty = follow the plan's own
+  // band; a number can only TIGHTEN it, never lift it, so a tenant admin
+  // editing this box cannot raise anybody's ceiling. Same load/post dance as
+  // the two above: posting an untouched inherited value would pin a tenant
+  // override at the operator's current number.
+  const [broadcastQuota, setBroadcastQuota] = useState('');
+  const [loadedBroadcastQuota, setLoadedBroadcastQuota] = useState('');
+  const [broadcastQuotaError, setBroadcastQuotaError] = useState<string | null>(null);
   // Set when the box holds something the API's `\d{1,6}` would reject (empty is
   // the common one — clearing the box is how anybody retypes a number). Without
   // this the whole PUT 400s and every other change on the form is discarded.
@@ -159,13 +167,16 @@ export default function AdminSettingsPage() {
       setLoadedWipLimit(wip);
       setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
       setBlindReview(settings.blindReview === 'true');
+      const broadcast = settings.broadcastMonthlyRecipients ?? '';
+      setBroadcastQuota(broadcast);
+      setLoadedBroadcastQuota(broadcast);
     }
   }, []);
   useEffect(() => { load(); }, [load]);
 
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null);
+    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null); setBroadcastQuotaError(null);
     // The API validates the quota with /^\d{1,6}$/ and rejects the WHOLE
     // payload on a miss, so an unusable number is caught here and reported on
     // the field instead — the rest of the form still saves.
@@ -183,16 +194,25 @@ export default function AdminSettingsPage() {
       setWipLimitError(t.settings.boardWipLimitInvalid);
       return;
     }
+    // The broadcast cap is the one field where EMPTY is a legal value — it
+    // means "no override, follow the plan" — so only a non-empty non-number is
+    // reported on the field.
+    const broadcast = broadcastQuota.trim();
+    const broadcastChanged = broadcast !== loadedBroadcastQuota;
+    if (broadcastChanged && broadcast !== '' && !/^\d{1,7}$/.test(broadcast)) {
+      setBroadcastQuotaError(t.settings.broadcastQuotaInvalid);
+      return;
+    }
     setSavingSettings(true);
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
       // change on the form was dropped.
-      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); setLoadedWipLimit(wip); }
+      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); }
       else setSaveError(t.settings.saveFailed);
     } catch {
       setSaveError(t.settings.saveFailed);
@@ -319,6 +339,12 @@ export default function AdminSettingsPage() {
             {/* max 9999 mirrors the API's `\d{1,4}`; the per-stage override for
                 this number is a row in the stage editor further down. */}
             <Input label={t.settings.boardWipLimit} type="number" min={0} max={9999} step={1} value={boardWipLimit} onChange={(e) => { setBoardWipLimit(e.target.value); setWipLimitError(null); }} hint={t.settings.boardWipLimitHint} error={wipLimitError ?? undefined} data-testid="board-wip-limit" />
+            {/* Empty is a legal value here (follow the plan's band), so this
+                is a text box rather than a number one — a `type="number"`
+                input reports a cleared field as '' too, but reports a typo the
+                same way, and the two must not be indistinguishable for a field
+                whose empty state has its own meaning. */}
+            <Input label={t.settings.broadcastQuota} type="text" inputMode="numeric" value={broadcastQuota} onChange={(e) => { setBroadcastQuota(e.target.value); setBroadcastQuotaError(null); }} hint={t.settings.broadcastQuotaHint} error={broadcastQuotaError ?? undefined} data-testid="broadcast-monthly-recipients" />
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">
