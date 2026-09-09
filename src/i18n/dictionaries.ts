@@ -1685,6 +1685,12 @@ const en = {
       freeRoomHint:
         'If the room will not open at all, the same room also exists on the free server. Opening it also copies its link — share it with the participants so everyone lands in the same call.',
       openFreeRoom: 'Continue in the free room',
+      // #2011 — said before the call, not discovered five minutes into it.
+      freeRoomWarning:
+        'This room is on the free public server, which hangs up a call embedded in this panel after about five minutes. Open it in a browser tab instead — the same room, with no time limit.',
+      freeRoomGroupWarning:
+        'Group calls in this panel run on the free public server, which hangs up an embedded call after about five minutes. Open the room in a browser tab — the same room, with no time limit — or use your own meeting link for a longer session.',
+      freeRoomWarningAction: 'Open the room in a browser tab',
     },
     notesWindow: {
       open: 'Notes window',
@@ -3163,6 +3169,20 @@ const en = {
     googleNotConfigured: 'Setup required',
     googleSetupHint: 'Add a Google OAuth client (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) — see docs/google-calendar.md.',
     googleReadyHint: 'OAuth client detected. Complete the connect wiring per docs/google-calendar.md, then users can link their calendar.',
+    // #2011 — the video allowance, counted from our own webhook feed.
+    videoAllowance: 'Video allowance',
+    videoAllowanceDesc:
+      'Distinct people who joined a call on our video tenant this month. Counted here, from the events the provider sends us — not read off their dashboard.',
+    videoAllowanceCount: '{used} / {limit} monthly active participants',
+    videoAllowancePeriod: 'Calendar month {period} (UTC).',
+    videoAllowanceRemaining: '{n} participants left before new rooms move to the free public server.',
+    videoAllowanceSpent:
+      'The allowance is spent: new rooms are created on the free public server, and everyone joining one is told before the call that an embedded call there is cut off after about five minutes. No call is refused.',
+    videoAllowanceUnconfigured:
+      'No video tenant is configured, so every room is on the free public server. Nothing is counted, and the number above stays at zero.',
+    videoAllowanceUnmetered:
+      'The tenant is configured but its webhook feed is not, so nothing can be counted yet — the zero above is “not measured”, not “nothing used”. Set JAAS_WEBHOOK_SECRET to start counting.',
+    videoAllowancePrivacy: 'No names are stored: one keyed hash per participant per month, and nothing that links back to an account.',
     // Connector health board (#2008) — one row per integration.
     health: 'Connector health',
     healthDesc: 'The state of every integration, derived from what each connector already records.',
@@ -3599,7 +3619,7 @@ const en = {
       menteeInsights: { t: 'Your own activity, shown to you', d: 'The activity summary a mentee’s mentor and programme team read is also theirs to read, on their own page in the portal: goals, meetings, interactions, stage moves and messages, plus time on site and visited pages while activity tracking is on. No comparison to anyone else, no score, and never a paid feature.' },
       talentPool: { t: 'Talent pool & alerts (Premium)', d: 'Companies search a consent-based talent pool, see verified candidate cards, and get alerts when a candidate matches an open position.' },
       requisitions: { t: 'Requisition management', d: 'Admins and company teams create structured hiring requests, track openings and filled positions, assign owners and manage status.' },
-      videoCalls: { t: 'Video calls in the app', d: 'Start a call with a mentee, a project team or a chat in one click and hold it in a side panel next to their record, on our own Jitsi tenant \u2014 no accounts, no install, and no time limit. The link is emailed to everyone invited and works in any browser.' },
+      videoCalls: { t: 'Video calls in the app', d: 'Start a call with a mentee, a project team or a chat in one click and hold it in a side panel next to their record, on our own Jitsi tenant \u2014 no accounts, no install, and no time limit. If a call has to fall back to the free public room, the panel says so before anyone joins, with a one-click way to keep talking. The link is emailed to everyone invited and works in any browser.' },
       demo: { t: 'Public live demo', d: 'A writable demo instance with shared accounts and fully synthetic data: click through the pipeline, log interactions and create projects. Resets twice a day; nothing you type is real or kept.' },
       publicProfiles: { t: 'Shareable public profiles', d: 'Mentees and mentors can opt in to a public, PII-free profile page — and when its link is shared on LinkedIn, WhatsApp or Slack, it unfurls into a branded card with name, role, location and top skills.' },
       interviewRequests: { t: 'Shortlists & interview approvals', d: 'Companies shortlist candidates per requisition and request interviews; the program team or assigned mentor reviews each request before scheduling.' },
@@ -4976,7 +4996,7 @@ const en = {
       anthropic: { purpose: 'AI-assisted CV reading and the AI assistant features.', data: 'Text extracted from an uploaded CV, and the prompt built around it.', location: 'Anthropic’s API.', basis: 'Anthropic’s commercial terms, held by the operator.' },
       googleCalendar: { purpose: 'Mirroring in-app meetings into a user’s own Google Calendar.', data: 'Meeting title, description, start and end time, attendee addresses, and that user’s OAuth tokens.', location: 'Google.', basis: 'Google’s API terms, held by the operator.' },
       jaas: { purpose: 'Hosted video rooms for one-to-one meetings.', data: 'Display name, room identifier and the live audio and video stream.', location: '8x8’s JaaS infrastructure.', basis: '8x8’s JaaS terms, held by the operator.' },
-      jitsiPublic: { purpose: 'The default video room when JaaS is not configured, the fallback when a JaaS call cannot start, and the permanent home of group and recurring meetings.', data: 'Display name, room identifier and the live audio and video stream.', location: '8x8’s public instance.', basis: 'Public-service terms only — no contract.' },
+      jitsiPublic: { purpose: 'The default video room when JaaS is not configured, the fallback when a JaaS call cannot start, and where any meeting is held once the month’s JaaS participant allowance is used up.', data: 'Display name, room identifier and the live audio and video stream.', location: '8x8’s public instance.', basis: 'Public-service terms only — no contract.' },
       webPush: { purpose: 'Background notifications for new messages with the app closed. The service is chosen by the subscriber’s browser, not by us.', data: 'The push endpoint the browser issued, an encrypted payload, and the contact address identifying the sender.', location: 'The browser vendor’s push service — Google, Mozilla or Apple.', basis: 'None available: the protocol gives the sender no counterparty. Payloads are encrypted to the subscriber’s own keys.' },
       plausible: { purpose: 'Pageview measurement on public marketing pages only. One anonymous click event is added when a visitor opens the public demo: the position of the link on the page, and nothing about the person.', data: 'Pageview URL, referrer, coarse device and browser data. Cookieless.', location: 'Operator-chosen; defaults to plausible.io, and is self-hostable.', basis: 'Plausible’s DPA, held by the operator — or none needed when self-hosted.' },
       posthog: { purpose: 'Pageview measurement on public marketing pages only. Autocapture, session recording and local storage are forced off in code. One anonymous click event is added when a visitor opens the public demo: the position of the link on the page, and nothing about the person.', data: 'Pageview URL, referrer, coarse device and browser data.', location: 'Operator-chosen; the shipped default is PostHog’s EU region.', basis: 'PostHog’s DPA, held by the operator.' },
@@ -6736,6 +6756,12 @@ const tr: Dict = {
       freeRoomHint:
         'Oda hiç açılmıyorsa aynı oda ücretsiz sunucuda da mevcut. Açtığınızda linki de kopyalanır — katılımcılarla paylaşın, herkes aynı görüşmede buluşur.',
       openFreeRoom: 'Ücretsiz odada devam et',
+      // #2011 — görüşme kesildikten sonra değil, başlamadan önce söylenir.
+      freeRoomWarning:
+        'Bu oda ücretsiz herkese açık sunucuda; bu panele gömülü bir görüşmeyi yaklaşık beş dakika sonra kapatıyor. Bunun yerine tarayıcı sekmesinde aç — aynı oda, süre sınırı olmadan.',
+      freeRoomGroupWarning:
+        'Bu paneldeki grup görüşmeleri ücretsiz herkese açık sunucuda çalışıyor; gömülü görüşmeyi yaklaşık beş dakika sonra kapatıyor. Odayı tarayıcı sekmesinde aç — aynı oda, süre sınırı olmadan — ya da uzun bir oturum için kendi toplantı bağlantını kullan.',
+      freeRoomWarningAction: 'Odayı tarayıcı sekmesinde aç',
     },
     notesWindow: {
       open: 'Not penceresi',
@@ -8174,6 +8200,20 @@ const tr: Dict = {
     googleNotConfigured: 'Kurulum gerekli',
     googleSetupHint: 'Bir Google OAuth istemcisi ekle (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) — bkz. docs/google-calendar.md.',
     googleReadyHint: 'OAuth istemcisi algılandı. docs/google-calendar.md içindeki bağlanma adımlarını tamamla; sonra kullanıcılar takvimlerini bağlayabilir.',
+    // #2011 — video kotası, kendi webhook akışımızdan sayılıyor.
+    videoAllowance: 'Video kotası',
+    videoAllowanceDesc:
+      'Bu ay video kiracımızdaki bir görüşmeye katılan farklı kişi sayısı. Sağlayıcının panosundan okunmuyor; bize gönderdiği olaylardan burada sayılıyor.',
+    videoAllowanceCount: '{used} / {limit} aylık aktif katılımcı',
+    videoAllowancePeriod: '{period} takvim ayı (UTC).',
+    videoAllowanceRemaining: 'Yeni odalar ücretsiz herkese açık sunucuya geçmeden önce {n} katılımcı kaldı.',
+    videoAllowanceSpent:
+      'Kota doldu: yeni odalar ücretsiz herkese açık sunucuda açılıyor ve katılan herkese, gömülü görüşmenin yaklaşık beş dakikada kesildiği görüşmeden önce söyleniyor. Hiçbir görüşme reddedilmiyor.',
+    videoAllowanceUnconfigured:
+      'Yapılandırılmış bir video kiracısı yok, dolayısıyla her oda ücretsiz herkese açık sunucuda. Hiçbir şey sayılmıyor ve yukarıdaki sayı sıfırda kalıyor.',
+    videoAllowanceUnmetered:
+      'Kiracı yapılandırılmış ama webhook akışı değil; bu yüzden henüz hiçbir şey sayılamıyor — yukarıdaki sıfır “ölçülmedi” demek, “hiç kullanılmadı” değil. Saymaya başlamak için JAAS_WEBHOOK_SECRET değerini ayarla.',
+    videoAllowancePrivacy: 'Hiçbir isim saklanmıyor: katılımcı başına ayda tek bir anahtarlı özet ve hesaba geri bağlanan hiçbir şey yok.',
     health: 'Bağlayıcı sağlığı',
     healthDesc: 'Her entegrasyonun durumu — bağlayıcının zaten tuttuğu kayıttan türetiliyor.',
     stateOk: 'Sağlıklı',
@@ -8608,7 +8648,7 @@ const tr: Dict = {
       menteeInsights: { t: 'Kendi etkinliğin, sana da gösteriliyor', d: 'Bir mentee’nin mentorunun ve program ekibinin okuduğu etkinlik özetini artık kendisi de portaldaki kendi sayfasında okuyor: hedefler, toplantılar, etkileşimler, aşama değişimleri ve mesajlar; etkinlik takibi açıkken sitede geçen süre ve gezilen sayfalar. Başkalarıyla kıyaslama yok, puan yok ve asla ücretli bir özellik değil.' },
       talentPool: { t: 'Yetenek havuzu & bildirimler (Premium)', d: 'Şirketler rıza temelli yetenek havuzunda arama yapar, doğrulanmış aday kartlarını görür ve açık pozisyona uyan aday çıkınca bildirim alır.' },
       requisitions: { t: 'İş talebi yönetimi', d: 'Yöneticiler ve şirket ekipleri yapılandırılmış işe alım talepleri oluşturur, kontenjan ve dolulukları izler, sorumlu atar ve durumu yönetir.' },
-      videoCalls: { t: 'Uygulama içinde görüntülü görüşme', d: 'Bir mentee, proje ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kişinin kaydının yanındaki yan panelde kendi Jitsi kiracımızda açılır \u2014 hesap yok, kurulum yok, süre sınırı yok. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
+      videoCalls: { t: 'Uygulama içinde görüntülü görüşme', d: 'Bir mentee, proje ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kişinin kaydının yanındaki yan panelde kendi Jitsi kiracımızda açılır \u2014 hesap yok, kurulum yok, süre sınırı yok. Görüşme ücretsiz herkese açık odaya düşmek zorunda kalırsa panel bunu kimse katılmadan önce söyler ve konuşmayı sürdürmenin tek tıklık yolunu verir. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
       demo: { t: 'Herkese açık canlı demo', d: 'Ortak hesaplar ve tamamen sentetik verilerle yazılabilir bir demo ortamı: süreçte gezinin, görüşme kaydı girin, proje oluşturun. Günde iki kez sıfırlanır; yazdığınız hiçbir şey gerçek değildir ve saklanmaz.' },
       publicProfiles: { t: 'Paylaşılabilir herkese açık profiller', d: 'Mentee ve mentörler isterlerse kişisel veri içermeyen herkese açık bir profil sayfası açabilir — linki LinkedIn, WhatsApp veya Slack’te paylaşıldığında isim, rol, konum ve öne çıkan becerileri gösteren markalı bir karta dönüşür.' },
       interviewRequests: { t: 'Kısa liste ve mülakat onayları', d: 'Şirketler adayları iş talebi bazında kısa listeye alıp mülakat ister; program ekibi veya atanmış mentor her talebi planlamadan önce değerlendirir.' },
@@ -9970,7 +10010,7 @@ const tr: Dict = {
       anthropic: { purpose: 'Yapay zekâ destekli CV okuma ve yapay zekâ asistan özellikleri.', data: 'Yüklenen bir CV’den çıkarılan metin ve çevresinde kurulan istem.', location: 'Anthropic’in API’si.', basis: 'İşleticinin taraf olduğu Anthropic ticari şartları.' },
       googleCalendar: { purpose: 'Uygulama içi toplantıları kullanıcının kendi Google Takvimi’ne yansıtmak.', data: 'Toplantı başlığı, açıklaması, başlangıç ve bitiş saati, katılımcı adresleri ve o kullanıcının OAuth token’ları.', location: 'Google.', basis: 'İşleticinin taraf olduğu Google API şartları.' },
       jaas: { purpose: 'Bire bir toplantılar için barındırılan video odaları.', data: 'Görünen ad, oda kimliği ve canlı ses ile video akışı.', location: '8x8’in JaaS altyapısı.', basis: 'İşleticinin taraf olduğu 8x8 JaaS şartları.' },
-      jitsiPublic: { purpose: 'JaaS yapılandırılmadığında varsayılan video odası, JaaS çağrısı başlayamadığında yedek, ayrıca grup ve tekrar eden toplantıların kalıcı yeri.', data: 'Görünen ad, oda kimliği ve canlı ses ile video akışı.', location: '8x8’in herkese açık örneği.', basis: 'Yalnızca kamuya açık hizmet şartları — sözleşme yok.' },
+      jitsiPublic: { purpose: 'JaaS yapılandırılmadığında varsayılan video odası, JaaS çağrısı başlayamadığında yedek, ayrıca ayın JaaS katılımcı kotası dolduğunda her toplantının yapıldığı yer.', data: 'Görünen ad, oda kimliği ve canlı ses ile video akışı.', location: '8x8’in herkese açık örneği.', basis: 'Yalnızca kamuya açık hizmet şartları — sözleşme yok.' },
       webPush: { purpose: 'Uygulama kapalıyken yeni mesajlar için arka plan bildirimleri. Hizmeti biz değil, abonenin tarayıcısı seçer.', data: 'Tarayıcının verdiği push uç noktası, şifreli yük ve göndereni tanımlayan iletişim adresi.', location: 'Tarayıcı üreticisinin push hizmeti — Google, Mozilla veya Apple.', basis: 'Yok: protokol gönderene bir muhatap sunmaz. Yükler abonenin kendi anahtarlarına şifrelenir.' },
       plausible: { purpose: 'Yalnızca herkese açık tanıtım sayfalarında sayfa görüntüleme ölçümü. Buna ek olarak, bir ziyaretçi herkese açık demoyu açtığında tek bir anonim tıklama olayı gönderilir: bağlantının sayfadaki yeri ve kişiye dair hiçbir şey.', data: 'Sayfa URL’si, yönlendiren, kaba cihaz ve tarayıcı verisi. Çerezsiz.', location: 'İşletici seçer; varsayılan plausible.io ve kendi sunucunuzda barındırılabilir.', basis: 'İşleticinin taraf olduğu Plausible DPA’sı — kendi sunucunuzda barındırıldığında gerekmez.' },
       posthog: { purpose: 'Yalnızca herkese açık tanıtım sayfalarında sayfa görüntüleme ölçümü. Otomatik yakalama, oturum kaydı ve yerel depolama kodda kapalıya zorlanır. Buna ek olarak, bir ziyaretçi herkese açık demoyu açtığında tek bir anonim tıklama olayı gönderilir: bağlantının sayfadaki yeri ve kişiye dair hiçbir şey.', data: 'Sayfa URL’si, yönlendiren, kaba cihaz ve tarayıcı verisi.', location: 'İşletici seçer; hazır gelen varsayılan PostHog’un AB bölgesidir.', basis: 'İşleticinin taraf olduğu PostHog DPA’sı.' },
@@ -11721,6 +11761,12 @@ const de: Dict = {
       freeRoomHint:
         'Wenn sich der Raum gar nicht öffnet: Denselben Raum gibt es auch auf dem freien Server. Beim Öffnen wird sein Link mitkopiert — teilen Sie ihn mit den Teilnehmenden, damit alle im selben Gespräch landen.',
       openFreeRoom: 'Im freien Raum fortfahren',
+      // #2011 — vor dem Gespräch gesagt, nicht nach fünf Minuten entdeckt.
+      freeRoomWarning:
+        'Dieser Raum liegt auf dem freien öffentlichen Server, der ein in dieses Panel eingebettetes Gespräch nach etwa fünf Minuten beendet. Öffne ihn stattdessen in einem Browser-Tab — derselbe Raum, ohne Zeitlimit.',
+      freeRoomGroupWarning:
+        'Gruppengespräche in diesem Panel laufen auf dem freien öffentlichen Server, der ein eingebettetes Gespräch nach etwa fünf Minuten beendet. Öffne den Raum in einem Browser-Tab — derselbe Raum, ohne Zeitlimit — oder nutze für eine längere Sitzung deinen eigenen Meeting-Link.',
+      freeRoomWarningAction: 'Raum in einem Browser-Tab öffnen',
     },
     notesWindow: {
       open: 'Notizfenster',
@@ -13160,6 +13206,20 @@ const de: Dict = {
     googleNotConfigured: 'Einrichtung erforderlich',
     googleSetupHint: 'Einen Google-OAuth-Client hinzufügen (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) — siehe docs/google-calendar.md.',
     googleReadyHint: 'OAuth-Client erkannt. Die Verbindungslogik gemäß docs/google-calendar.md abschließen; danach können Nutzer ihren Kalender verbinden.',
+    // #2011 — das Videokontingent, aus unserem eigenen Webhook-Feed gezählt.
+    videoAllowance: 'Videokontingent',
+    videoAllowanceDesc:
+      'Verschiedene Personen, die diesen Monat an einem Gespräch auf unserem Video-Tenant teilgenommen haben. Hier aus den Ereignissen gezählt, die der Anbieter uns schickt — nicht aus seinem Dashboard abgelesen.',
+    videoAllowanceCount: '{used} / {limit} monatlich aktive Teilnehmende',
+    videoAllowancePeriod: 'Kalendermonat {period} (UTC).',
+    videoAllowanceRemaining: 'Noch {n} Teilnehmende, bevor neue Räume auf den freien öffentlichen Server wechseln.',
+    videoAllowanceSpent:
+      'Das Kontingent ist aufgebraucht: Neue Räume entstehen auf dem freien öffentlichen Server, und allen Teilnehmenden wird vor dem Gespräch gesagt, dass ein eingebettetes Gespräch dort nach etwa fünf Minuten beendet wird. Kein Gespräch wird abgelehnt.',
+    videoAllowanceUnconfigured:
+      'Es ist kein Video-Tenant konfiguriert, also liegt jeder Raum auf dem freien öffentlichen Server. Es wird nichts gezählt, und die Zahl oben bleibt bei null.',
+    videoAllowanceUnmetered:
+      'Der Tenant ist konfiguriert, sein Webhook-Feed jedoch nicht — deshalb kann noch nichts gezählt werden: Die Null oben heißt „nicht gemessen“, nicht „nichts verbraucht“. Setze JAAS_WEBHOOK_SECRET, um mit dem Zählen zu beginnen.',
+    videoAllowancePrivacy: 'Es werden keine Namen gespeichert: ein geschlüsselter Hash pro Teilnehmendem und Monat, und nichts, was auf ein Konto zurückführt.',
     health: 'Konnektor-Zustand',
     healthDesc: 'Der Zustand jeder Integration — abgeleitet aus dem, was jeder Konnektor ohnehin aufzeichnet.',
     stateOk: 'Gesund',
@@ -13594,7 +13654,7 @@ const de: Dict = {
       menteeInsights: { t: 'Deine eigene Aktivität, dir gezeigt', d: 'Die Aktivitätsübersicht, die Mentor und Programmteam über einen Mentee lesen, liest der Mentee jetzt auch selbst — auf einer eigenen Seite im Portal: Ziele, Meetings, Interaktionen, Phasenwechsel und Nachrichten, dazu Verweildauer und besuchte Seiten, solange das Aktivitäts-Tracking an ist. Kein Vergleich mit anderen, keine Punkte, und nie eine Bezahlfunktion.' },
       talentPool: { t: 'Talent-Pool & Benachrichtigungen (Premium)', d: 'Unternehmen durchsuchen einen einwilligungsbasierten Talent-Pool, sehen verifizierte Kandidatenkarten und werden bei passenden Kandidaten benachrichtigt.' },
       requisitions: { t: 'Stellenanforderungen verwalten', d: 'Admins und Unternehmensteams erstellen strukturierte Personalbedarfe, verfolgen offene und besetzte Stellen, weisen Verantwortliche zu und verwalten den Status.' },
-      videoCalls: { t: 'Videoanrufe in der App', d: 'Starte mit einem Klick einen Anruf mit einem Mentee, einem Projektteam oder einem Chat \u2014 er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
+      videoCalls: { t: 'Videoanrufe in der App', d: 'Starte mit einem Klick einen Anruf mit einem Mentee, einem Projektteam oder einem Chat \u2014 er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Muss ein Anruf auf den freien öffentlichen Raum ausweichen, sagt das Panel das, bevor jemand beitritt, samt Ein-Klick-Weg zum Weiterreden. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
       demo: { t: 'Öffentliche Live-Demo', d: 'Eine beschreibbare Demo-Instanz mit gemeinsamen Konten und vollständig synthetischen Daten: durch die Pipeline klicken, Interaktionen erfassen, Projekte anlegen. Wird zweimal täglich zurückgesetzt; nichts davon ist echt oder bleibt erhalten.' },
       publicProfiles: { t: 'Teilbare öffentliche Profile', d: 'Mentees und Mentoren können sich für eine öffentliche Profilseite ohne personenbezogene Daten entscheiden — wird ihr Link auf LinkedIn, WhatsApp oder Slack geteilt, entfaltet er sich zu einer Karte mit Name, Rolle, Ort und Top-Skills.' },
       interviewRequests: { t: 'Shortlists & Interviewfreigaben', d: 'Unternehmen setzen Kandidaten je Stellenanforderung auf die Shortlist und fragen Interviews an; Programmteam oder zuständiger Mentor prüfen jede Anfrage vor der Planung.' },
@@ -14957,7 +15017,7 @@ const de: Dict = {
       anthropic: { purpose: 'KI-gestütztes Lesen von Lebensläufen und die KI-Assistenzfunktionen.', data: 'Aus einem hochgeladenen Lebenslauf extrahierter Text und der darum gebaute Prompt.', location: 'Die API von Anthropic.', basis: 'Kommerzielle Bedingungen von Anthropic, geschlossen vom Betreiber.' },
       googleCalendar: { purpose: 'Spiegeln von Terminen aus der App in den eigenen Google-Kalender einer Nutzerin.', data: 'Titel, Beschreibung, Beginn und Ende, Adressen der Teilnehmenden sowie die OAuth-Tokens dieser Nutzerin.', location: 'Google.', basis: 'Google-API-Bedingungen, geschlossen vom Betreiber.' },
       jaas: { purpose: 'Gehostete Videoräume für Eins-zu-eins-Termine.', data: 'Anzeigename, Raumkennung und der Live-Audio- und Videostream.', location: 'Die JaaS-Infrastruktur von 8x8.', basis: '8x8-JaaS-Bedingungen, geschlossen vom Betreiber.' },
-      jitsiPublic: { purpose: 'Der Standard-Videoraum, wenn JaaS nicht konfiguriert ist, der Rückfallweg, wenn ein JaaS-Anruf nicht startet, und die dauerhafte Heimat von Gruppen- und Serienterminen.', data: 'Anzeigename, Raumkennung und der Live-Audio- und Videostream.', location: 'Die öffentliche Instanz von 8x8.', basis: 'Nur die Bedingungen eines öffentlichen Dienstes — kein Vertrag.' },
+      jitsiPublic: { purpose: 'Der Standard-Videoraum, wenn JaaS nicht konfiguriert ist, der Rückfallweg, wenn ein JaaS-Anruf nicht startet, und der Ort jedes Termins, sobald das monatliche JaaS-Teilnehmerkontingent aufgebraucht ist.', data: 'Anzeigename, Raumkennung und der Live-Audio- und Videostream.', location: 'Die öffentliche Instanz von 8x8.', basis: 'Nur die Bedingungen eines öffentlichen Dienstes — kein Vertrag.' },
       webPush: { purpose: 'Hintergrundbenachrichtigungen für neue Nachrichten bei geschlossener App. Den konkreten Dienst wählt der Browser der abonnierenden Person, nicht wir.', data: 'Der vom Browser ausgestellte Push-Endpunkt, eine verschlüsselte Nutzlast und die Kontaktadresse, die den Absender ausweist.', location: 'Der Push-Dienst des Browserherstellers — Google, Mozilla oder Apple.', basis: 'Keine: Das Protokoll bietet dem Absender keinen Vertragspartner. Nutzlasten sind auf die Schlüssel der abonnierenden Person verschlüsselt.' },
       plausible: { purpose: 'Messung von Seitenaufrufen ausschließlich auf öffentlichen Marketingseiten. Hinzu kommt ein anonymes Klickereignis, wenn ein Besucher die öffentliche Demo öffnet: die Position des Links auf der Seite und nichts über die Person.', data: 'Seiten-URL, Referrer, grobe Geräte- und Browserdaten. Ohne Cookies.', location: 'Vom Betreiber gewählt; Voreinstellung plausible.io, selbst hostbar.', basis: 'AVV von Plausible, geschlossen vom Betreiber — beim Selbsthosten nicht nötig.' },
       posthog: { purpose: 'Messung von Seitenaufrufen ausschließlich auf öffentlichen Marketingseiten. Autocapture, Sitzungsaufzeichnung und lokale Speicherung sind im Code hart abgeschaltet. Hinzu kommt ein anonymes Klickereignis, wenn ein Besucher die öffentliche Demo öffnet: die Position des Links auf der Seite und nichts über die Person.', data: 'Seiten-URL, Referrer, grobe Geräte- und Browserdaten.', location: 'Vom Betreiber gewählt; die ausgelieferte Voreinstellung ist die EU-Region von PostHog.', basis: 'AVV von PostHog, geschlossen vom Betreiber.' },

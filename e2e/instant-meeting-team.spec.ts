@@ -136,6 +136,58 @@ test('a meeting started from a group chat drops its link into that chat', async 
   }
 });
 
+// #2011 — the honest half. CI runs with no JAAS_* credentials, so every room
+// the server hands out here is a public meet.jit.si room, which is exactly the
+// case that used to fail silently: the panel opened, the standup ran, and five
+// minutes later the embedded call hung up on everyone with no warning at any
+// point. The warning must be on screen BEFORE anyone joins.
+test('a group call on the free room says so before anyone joins', async ({ page }) => {
+  const starterEmail = uniqueEmail('warn-starter');
+  const starter = await seedUser(starterEmail, 'MentorPass123', 'MENTOR', 'Warn Starter');
+  const one = await seedUser(uniqueEmail('warn-one'), 'x', 'MENTEE', 'Warn One');
+  const two = await seedUser(uniqueEmail('warn-two'), 'x', 'MENTEE', 'Warn Two');
+  // Three people, so the room is a group room and not a pair.
+  const conversation = await prisma.conversation.create({
+    data: {
+      type: 'GROUP',
+      participants: { create: [{ userId: starter.id }, { userId: one.id }, { userId: two.id }] },
+    },
+  });
+
+  try {
+    await signInAndSettle(page, starterEmail, 'MentorPass123', '/mentor');
+    await page.goto(`/messages/c/${conversation.id}`);
+
+    // The thread header renders a desktop and a mobile start button, so take
+    // the one this viewport actually shows rather than the first in the DOM.
+    await page.locator('[data-testid="start-meeting-conversation"]:visible').click();
+    await page.getByTestId('instant-meeting-topic').fill('Standup');
+    await page.getByTestId('instant-meeting-confirm').click();
+
+    await expect(page.getByTestId('meeting-side-panel')).toBeVisible({ timeout: 15_000 });
+    const warning = page.locator('[data-testid="meeting-free-room-warning"]:visible');
+    await expect(warning).toBeVisible();
+    // Not just a shrug: the escape from the cutoff is the same room in a tab,
+    // and the button for it is inside the warning.
+    await expect(warning.locator('[data-testid="meeting-free-room-warning-open"]')).toHaveAttribute(
+      'href',
+      /^https:\/\/meet\.jit\.si\//
+    );
+
+    const meeting = await prisma.meeting.findFirst({ where: { conversationId: conversation.id } });
+    expect(meeting?.meetLink).toContain('meet.jit.si');
+  } finally {
+    await prisma.meeting.deleteMany({ where: { conversationId: conversation.id } });
+    await prisma.message.deleteMany({ where: { conversationId: conversation.id } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [starter.id, one.id, two.id] } } });
+    await prisma.conversationParticipant.deleteMany({ where: { conversationId: conversation.id } });
+    await prisma.conversation.deleteMany({ where: { id: conversation.id } });
+    await cleanupByEmail(two.email);
+    await cleanupByEmail(one.email);
+    await cleanupByEmail(starterEmail);
+  }
+});
+
 test('someone outside the chat cannot start a meeting in it', async ({ page }) => {
   const outsiderEmail = uniqueEmail('gc-outsider');
   const outsider = await seedUser(outsiderEmail, 'MentorPass123', 'MENTOR', 'GC Outsider');

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { jaasConfig, JAAS_APP_ID_PREFIX } from '@/lib/jaas';
+import { recordJaasParticipant } from '@/lib/jaasAllowance';
 
 // POST — event feed from the JaaS tenant (console → Webhooks). This is what
 // turns the dashboard banner's guess ("assumed to run 60 minutes") into real
@@ -117,6 +118,15 @@ export async function POST(request: Request) {
     case 'PARTICIPANT_JOINED': {
       const joined = participantFrom(parsed.data.data);
       if (!joined) break;
+      // The one place we can see a JaaS monthly-active participant (#2011).
+      // 8x8 meters distinct participants per calendar month and caps a free
+      // tenant on that number, and the only other copy of it is their
+      // dashboard — so the routing rule had to guess at an allowance nobody
+      // here could measure. Only a keyed hash of the id is kept and the display
+      // name is dropped; see lib/jaasAllowance.ts. Awaited so a burst of joins
+      // cannot outrun the upsert, but it can never fail the event: the helper
+      // swallows its own errors.
+      await recordJaasParticipant(joined.id);
       const state = await prisma.meetingRoomState.findUnique({ where: { room }, select: { participants: true } });
       const list = asParticipants(state?.participants).filter((p) => p.id !== joined.id);
       list.push(joined);
