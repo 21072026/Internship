@@ -41,6 +41,7 @@
     "test:schema-push": "node --test scripts/test/schema-push-safety.test.mjs",
     "test:contrast-guard": "node --test scripts/test/contrast-guard.test.mjs",
     "test:metering": "node --test --experimental-strip-types scripts/test/metering.test.mjs",
+    "test:notification-catalog": "node --test --experimental-strip-types scripts/test/notification-catalog.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:api-key-routes": "node scripts/check-api-key-routes.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
