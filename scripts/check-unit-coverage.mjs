@@ -162,6 +162,14 @@ const FLOORS = new Map([
       why: 'an inbound x-request-id is honoured, but never into a forged log line (#1601)',
     },
   ],
+  [
+    'src/lib/recoveryCodeFormat.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the stored hash is taken over the normalised code, so changing normalisation invalidates every printed code (#1542)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────

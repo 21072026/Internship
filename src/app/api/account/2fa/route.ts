@@ -6,6 +6,11 @@ import { z } from 'zod';
 import { generateSecret, verifyTotp, otpauthUrl } from '@/lib/totp';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import {
+  clearRecoveryCodes,
+  generateRecoveryCodes,
+  recoveryCodeStatus,
+} from '@/lib/recoveryCodes';
 
 // GET — current 2FA status. Readable while impersonating (it is the account's
 // security posture, which an admin looking at the account may legitimately see);
@@ -15,12 +20,24 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
   const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { twoFactorEnabled: true } });
-  return NextResponse.json({ enabled: !!user?.twoFactorEnabled });
+  // Counts, never codes (#1542). The plaintext existed once, at enrolment; the
+  // account page can only ever learn how many are left — which is the thing the
+  // user actually needs to know, because a spent or exhausted set is invisible
+  // otherwise and they would discover it on the day they need it.
+  const codes = await recoveryCodeStatus(session.user.id);
+  return NextResponse.json({
+    enabled: !!user?.twoFactorEnabled,
+    recoveryCodes: {
+      total: codes.total,
+      remaining: codes.remaining,
+      generatedAt: codes.generatedAt?.toISOString() ?? null,
+    },
+  });
   });
 }
 
 const schema = z.object({
-  action: z.enum(['setup', 'enable', 'disable']),
+  action: z.enum(['setup', 'enable', 'disable', 'regenerate-codes']),
   code: z.string().optional(),
 });
 
@@ -60,8 +77,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid authenticator code' }, { status: 400 });
     }
     await prisma.user.update({ where: { id: session.user.id }, data: { twoFactorEnabled: true } });
+    // Minted here rather than on request: a second factor with no way back in
+    // is the trap this feature exists to close, and a user who has to go and
+    // find a "generate codes" button is a user who never has any.
+    const recoveryCodes = await generateRecoveryCodes(session.user.id);
     await logActivity({ action: '2fa.enable', actorId: session.user.id, actorEmail: session.user.email ?? null });
-    return NextResponse.json({ enabled: true });
+    // The one and only response that carries the plaintext.
+    return NextResponse.json({ enabled: true, recoveryCodes });
+  }
+
+  if (action === 'regenerate-codes') {
+    if (!user.twoFactorEnabled) return NextResponse.json({ error: 'Enable 2FA first' }, { status: 400 });
+    // Deliberately NOT gated on a fresh authenticator code, unlike `disable`.
+    // The person who most needs a new set is the one who just signed in with a
+    // recovery code because their authenticator is gone — asking them for a
+    // TOTP code would lock the door behind them and leave the account with a
+    // dwindling set it can never refill. The session itself is the proof: they
+    // are through the second factor (by either route), they are not being
+    // impersonated (refused above), and the old set dies with this call.
+    const recoveryCodes = await generateRecoveryCodes(session.user.id);
+    await logActivity({
+      action: '2fa.recovery_codes_regenerated',
+      level: 'warning',
+      actorId: session.user.id,
+      actorEmail: session.user.email ?? null,
+    });
+    return NextResponse.json({ recoveryCodes });
   }
 
   // disable — require a valid code to turn it off.
@@ -70,6 +111,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid authenticator code' }, { status: 400 });
   }
   await prisma.user.update({ where: { id: session.user.id }, data: { twoFactorEnabled: false, twoFactorSecret: null } });
+  // The codes are part of the second factor, so they go with it — leaving them
+  // behind would keep a set of live credentials for a factor nobody checks any
+  // more, and re-enabling 2FA later would silently inherit them.
+  await clearRecoveryCodes(session.user.id);
   await logActivity({ action: '2fa.disable', level: 'warning', actorId: session.user.id, actorEmail: session.user.email ?? null });
   return NextResponse.json({ enabled: false });
   });

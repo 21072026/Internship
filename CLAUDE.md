@@ -291,6 +291,18 @@ workaround, #636, and it compiled on every PR push).
   revokes sessions (sets `sessionsValidFrom`) **must** also call `revokeAllTrustedDevices()`,
   or the browser signs itself straight back in; and any new sign-out control must go through
   `signOutEverywhere()` rather than NextAuth's `signOut()`.
+- **2FA recovery codes** ([`docs/two-factor-recovery.md`](docs/two-factor-recovery.md), #1542):
+  enabling 2FA mints **ten single-use codes**, returned by that one response and never
+  again — only an HMAC of each is stored (`src/lib/recoveryCodes.ts`; the format rules,
+  including what keeps a 6-digit code out of the recovery bucket, are dependency-free and
+  unit-tested in `recoveryCodeFormat.ts`). Four things are load-bearing if you touch this:
+  consumption is a **conditional** `updateMany` (`where: { id, usedAt: null }`), so two tabs
+  cannot spend the same code; a failed recovery attempt is charged to **both** the `totp`
+  bucket (no brute-force *around* the 5/15min limit) and its own `recovery` lockout stage
+  (so the second door does not *inherit* the first one's allowance); a recovery sign-in must
+  leave `lastTotpStep` alone (it is the TOTP replay floor, #865); and no endpoint may return
+  a code after enrolment — `GET /api/account/2fa` answers with counts. Admin-side 2FA reset
+  is a separate task (#1543).
 - **Pasif ilk temaslar** (`docs/dormant-first-contacts.md`, #1499/#1508): biri pipeline'ın
   ilk aşamasında takılı, kendisine yazılmış ve 14 gündür yanıt vermemişse "pasif" sayılır —
   mentor kuyruğundan ve hatırlatma e-postasından düşer, `dormantSince` damgalanır ve

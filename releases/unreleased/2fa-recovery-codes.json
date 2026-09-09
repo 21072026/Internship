@@ -1,0 +1,21 @@
+{
+  "bump": "minor",
+  "changelog": "- **2FA recovery codes: minted at enrolment, shown once, spent once** (#1542). Turning on two-factor authentication had no way back: a user who lost their phone was locked out until somebody edited MySQL by hand, which is the real reason `require2fa` was frightening to switch on. Enabling 2FA now returns **ten single-use recovery codes** in that one response and never again — the new `TwoFactorRecoveryCode` table stores only `HMAC-SHA-256(NEXTAUTH_SECRET, '2fa-recovery:' + normalised code)`, because a ~38-bit code behind a bare digest is enumerable offline from a database dump, and bcrypt is deliberately avoided on the verify side (ten cost-12 comparisons per attempt is a DoS lever on the sign-in path; a work factor protects low-entropy human input, which CSPRNG output is not). At sign-in, a submission that is not a live TOTP code and is *shaped* like a recovery code is tried as one, timing-safe against every unused row, and consumed by a conditional `updateMany` (`where: { id, usedAt: null }`) so two tabs cannot both spend it. Rate limiting is two buckets rather than one: a failed recovery attempt is charged to the existing `totp` bucket (5/15min, so the second door is not a way to brute-force *around* the authenticator's limit) **and** to its own new `recovery` lockout stage (5/60min, so it does not *inherit* that allowance and a slow-paced guesser still runs out). A successful recovery sign-in writes `2fa.recovery_used` at `warning`, notifies the owner through the new essential-group `security.recoveryCodeUsed` event, and leaves `lastTotpStep` untouched so the TOTP replay floor (#865) is unaffected. `POST /api/account/2fa` gains `regenerate-codes` — deliberately *not* gated on a fresh authenticator code, since the person who needs it most is the one who just signed in with a recovery code — `disable` clears the set, `GET` reports remaining/total counts and never a code, and the account card shows the set once with copy/download plus a permanent remaining count. Impersonation is refused exactly as for the existing 2FA mutations. The format rules (unambiguous 27-character alphabet, dash-insensitive normalisation, and the shape test that keeps a 6-digit code out of the recovery bucket) live in the dependency-free `src/lib/recoveryCodeFormat.ts` under a 95% coverage floor; the sign-in-and-no-reuse promises are covered by `e2e/two-factor-recovery.spec.ts`. Design notes: `docs/two-factor-recovery.md`.",
+  "notes": {
+    "en": [
+      "Turning on two-factor authentication now gives you ten recovery codes. Keep them somewhere safe — if you ever lose your authenticator app, one of them signs you in.",
+      "Each code works exactly once, the codes are shown only when they are created, and your account page always tells you how many are left and lets you generate a new set.",
+      "Signing in with a recovery code sends you a notification straight away, so you find out immediately if it was not you."
+    ],
+    "tr": [
+      "İki faktörlü doğrulamayı açtığında artık on kurtarma kodu veriliyor. Güvenli bir yere sakla — doğrulayıcı uygulamanı kaybedersen bunlardan biri seni içeri alır.",
+      "Her kod yalnızca bir kez çalışır, kodlar sadece üretildikleri anda gösterilir ve hesap sayfan kaç kod kaldığını her zaman söyler, istediğinde yeni bir set üretir.",
+      "Kurtarma koduyla giriş yapıldığında sana hemen bildirim gider; bu sen değilsen anında haberin olur."
+    ],
+    "de": [
+      "Wenn du die Zwei-Faktor-Authentifizierung aktivierst, bekommst du jetzt zehn Wiederherstellungscodes. Bewahre sie sicher auf — falls du deine Authenticator-App verlierst, bringt dich einer davon hinein.",
+      "Jeder Code funktioniert genau einmal, die Codes werden nur bei ihrer Erstellung angezeigt, und deine Kontoseite zeigt immer, wie viele noch übrig sind, und erzeugt auf Wunsch einen neuen Satz.",
+      "Eine Anmeldung mit einem Wiederherstellungscode löst sofort eine Benachrichtigung aus, damit du es umgehend erfährst, wenn das nicht du warst."
+    ]
+  }
+}
