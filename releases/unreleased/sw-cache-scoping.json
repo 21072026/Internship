@@ -1,0 +1,18 @@
+{
+  "bump": "patch",
+  "changelog": "- **The service worker no longer caches authenticated responses, and now registers for signed-out visitors** (#1550). Two defects in `public/sw.js`. (1) SECURITY: the v3 worker wrote *every* same-origin GET to one shared cache — authenticated JSON included — with no per-account scoping and no purge on sign-out, so on a shared device an offline navigation could be answered out of another account's response. The fetch handler now decides per request rather than per route (a route list only covers the routes that existed when it was written): nothing under `/api/`, nothing carrying an `Authorization` header, and nothing the server marked `Cache-Control: private/no-store` or `Vary: Cookie` is ever written — which keeps authenticated *documents* out too — and the same gate applies on the read path, so a stale entry left by an older worker is not served either. `CACHE` is bumped to `internship-crm-v4` so `activate` drops what installed clients already hold, and a new `PURGE_CACHE` message empties every cache (re-seeding only the public `/offline` + icon precache); `signOutEverywhere()` posts it and awaits the ack before redirecting, deleting the caches from the page itself when no worker answers. The `/api/realtime/` and `text/event-stream` exclusions from #1464 are untouched, as is push. (2) PWA: registration lived in `InstallAppButton`, which is only mounted in the signed-in role sidebars, so public pages got no worker, no offline fallback and no install prompt — it moves to `ServiceWorkerRegistrar`, mounted from the root layout. Covered by `scripts/test/service-worker-cache.test.mjs` (the fetch handler evaluated in a fake worker scope — no browser, runs on every PR) and `e2e/sw-cache-scoping.spec.ts` (a live worker: registers while signed out, no `/api/` entry, sign-out empties the cache).",
+  "notes": {
+    "en": [
+      "Fixed: on a shared device, pages the app had stored for offline use could be shown to the next person signing in. The app now stores only public files, and signing out clears everything it stored.",
+      "The offline page and the \"install app\" prompt now also work before you sign in."
+    ],
+    "tr": [
+      "Düzeltildi: paylaşılan bir cihazda uygulamanın çevrimdışı kullanım için sakladığı sayfalar, sonra giriş yapan kişiye gösterilebiliyordu. Uygulama artık yalnızca herkese açık dosyaları saklıyor ve çıkış yapıldığında sakladığı her şeyi siliyor.",
+      "Çevrimdışı sayfası ve \"uygulamayı yükle\" önerisi artık giriş yapmadan önce de çalışıyor."
+    ],
+    "de": [
+      "Behoben: Auf einem gemeinsam genutzten Gerät konnten für die Offline-Nutzung gespeicherte Seiten der nächsten anmeldenden Person angezeigt werden. Die App speichert jetzt nur noch öffentliche Dateien, und beim Abmelden wird alles Gespeicherte gelöscht.",
+      "Die Offline-Seite und der Hinweis \"App installieren\" funktionieren jetzt auch schon vor der Anmeldung."
+    ]
+  }
+}
