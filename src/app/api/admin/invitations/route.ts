@@ -25,9 +25,12 @@ import {
 //   1. Role. `InvitationToken` rows name people who have not signed up yet;
 //      only an ADMIN may read the org's whole list. (`/api/invite`'s GET is the
 //      "my own invitations" view for everybody else and is left as it was.)
-//   2. Tenant. `InvitationToken` carries `orgId` but is NOT in TENANT_MODELS
-//      (src/lib/orgContext.ts), so the central middleware does not scope it —
-//      the `where` is wrapped in orgScoped() by hand, every time.
+//   2. Tenant. `InvitationToken` IS in TENANT_MODELS since #1559, so with
+//      `MT_ENFORCE_ISOLATION=true` the central middleware scopes these queries
+//      too. The `where` stays wrapped in orgScoped() by hand anyway: that is
+//      the only filter with the flag OFF, which is every deployment today. Both
+//      read `resolveOrgId(session)`, so the hand filter and the injected one are
+//      the same value and can never contradict each other.
 //   3. Status. Derived in src/lib/invitationStatus.ts, never re-implemented
 //      here, so the badge, the filter, the counts and the export agree.
 

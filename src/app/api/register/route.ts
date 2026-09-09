@@ -96,6 +96,15 @@ export async function POST(request: Request) {
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
 
     if (token) {
+      // BY TOKEN, unauthenticated, with NO tenant context bound — and it has to
+      // stay that way. `InvitationToken` is registered in TENANT_MODELS since
+      // #1559, so a wrapped route's lookup would be narrowed to the caller's
+      // org; a registrant has no session and therefore no org, which is exactly
+      // the "no context ⇒ do not scope" case the middleware early-returns on.
+      // The token is the only thing the invitee holds, and the row's own `orgId`
+      // (read below into `invitedOrgId`) is what assigns them their tenant. Do
+      // not "fix" this by wrapping the handler: the invitation would become
+      // unusable to the person it was sent to.
       const invitation = await prisma.invitationToken.findUnique({ where: { token } });
       if (!invitation) {
         return NextResponse.json({ error: 'Invalid invitation token' }, { status: 400 });

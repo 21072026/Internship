@@ -34,15 +34,14 @@ import { defaultPipelineStages } from '../../src/lib/pipeline';
  *   fails in one of them.
  *
  * WHICH OF THOSE MODELS ARE ACTUALLY ENFORCED TODAY
- *   Only some. `TENANT_MODELS` (`src/lib/orgContext.ts`) is the set the Prisma
- *   middleware auto-scopes; `scripts/check-tenant-models.mjs` (#1560) pins the
- *   rest in its `PENDING_REGISTRATION` ratchet. Of what this fixture seeds:
- *     enforced by the middleware   User, Company, MentorshipRelation
- *     seeded but NOT yet enforced  Tag, PipelineStage, InvitationToken, Offer
- *   The unenforced four are seeded on purpose. They are exactly where a leak is
- *   expected today, so a spec that probes them is documenting a known gap
- *   (#1559 registers them), not reporting a fresh regression — and the day they
- *   are registered, the rows the assertions need are already here.
+ *   All of them, since #1559. `TENANT_MODELS` (`src/lib/orgContext.ts`) is the
+ *   set the Prisma middleware auto-scopes, and every model this fixture seeds —
+ *   User, Company, MentorshipRelation, Tag, PipelineStage, InvitationToken,
+ *   Offer — is in it. `scripts/check-tenant-models.mjs` (#1560) fails the build
+ *   if one ever falls back out. So a leak a spec finds here is a REGRESSION, not
+ *   the documented gap it would have been before: Tag, PipelineStage,
+ *   InvitationToken and Offer were seeded while still unenforced precisely so
+ *   the rows would already be here on the day they were registered.
  *
  * SYNTHETIC ONLY. Everything is minted per run with a random stamp, and
  * `cleanup()` removes it again in FK order. Nothing here reads or copies real

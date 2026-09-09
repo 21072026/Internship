@@ -142,12 +142,15 @@ therefore identical across the two tenants (which is the point — `@@unique([or
 allows it, and a lookup by key alone is exactly how a scoping bug shows up); only the
 labels differ, so B's wording on A's board is a visible leak.
 
-Only some of those models are enforced today: `TENANT_MODELS` in `src/lib/orgContext.ts`
-is the set the Prisma middleware auto-scopes, and `npm run check:tenant-models` (#1560)
-pins the rest in its `PENDING_REGISTRATION` ratchet. Of what the fixture seeds, `User`,
-`Company` and `MentorshipRelation` are enforced; `Tag`, `PipelineStage`, `InvitationToken`
-and `Offer` are seeded but **not yet** — they are registered in #1559. A leak found on one
-of those four is a documented gap, not a fresh regression.
+Every model the fixture seeds is enforced since #1559: `TENANT_MODELS` in
+`src/lib/orgContext.ts` is the set the Prisma middleware auto-scopes, and `User`,
+`Company`, `MentorshipRelation`, `Tag`, `PipelineStage`, `InvitationToken` and `Offer` are
+all in it. `npm run check:tenant-models` (#1560) fails the build if a model with an
+`orgId` ever falls out of that set again, so a leak found here is a regression rather than
+a known gap. The eight registrations of #1559 also have their own direct-Prisma proof in
+`e2e/tenant-models-registered.spec.ts` (default project): each model is read with **no**
+tenant filter inside `runWithOrg()`, in both directions, which is the only assertion that
+distinguishes "the middleware scoped it" from "the handler happened to filter".
 
 **Writing a new isolation spec.** Put it in `e2e/isolation/`, seed with
 `seedTwoTenants()`, and assert in **both** directions (A must not see B *and* B must not

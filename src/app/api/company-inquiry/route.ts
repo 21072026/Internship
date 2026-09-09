@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { notify } from '@/lib/notify';
@@ -49,8 +50,25 @@ export async function POST(request: Request) {
   const tooFast = typeof renderedAt === 'number' && Date.now() - renderedAt < 3000;
   if (website || tooFast) return NextResponse.json({ ok: true });
 
+  // WHICH TENANT A PUBLIC ENQUIRY BELONGS TO (#1559).
+  //
+  // This form has no session, so nothing binds a tenant context and the
+  // middleware injects nothing here — `CompanyInquiry` being registered in
+  // TENANT_MODELS changes reads, not this create. The org therefore has to be
+  // decided in this handler, and the answer today is the DEFAULT org: there is
+  // no host/subdomain→org resolution yet (see `resolveOrgId` in
+  // src/lib/orgScope.ts), so the enquiry has no tenant signal to read, and this
+  // is the same call `/api/register` makes for an uninvited sign-up (#1272).
+  //
+  // Deliberately NOT left NULL as a super-admin triage queue: the admin list
+  // (/api/admin/company-inquiries) runs inside withTenantScope, so with
+  // isolation on a NULL-org row would match no tenant and disappear from the
+  // only screen that shows it — the "row left at orgId = NULL vanishes from the
+  // product" failure docs/tenant-isolation.md warns about. When host-based
+  // tenancy lands, this is the line that resolves the real tenant.
   const inquiry = await prisma.companyInquiry.create({
     data: {
+      orgId: await defaultOrgId(),
       companyName,
       contactName,
       email,
