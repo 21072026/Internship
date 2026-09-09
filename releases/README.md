@@ -242,6 +242,30 @@ Two causes, chained — and both are now designed against:
   emails through `scripts/send-alert-email.mjs`, like `e2e-full`, `k6-load`,
   `stress` and `backup-verify`.
 
+It happened again anyway, 2026-09-05..09: four runs pushed a correct branch and
+were refused at `gh pr create` ("GitHub Actions is not permitted to create or
+approve pull requests"), 65 fragments piled up, and nobody noticed for three
+days — the annotation was right but lived in a run log nobody opens, and the
+alert e-mail was itself broken (`ETIMEDOUT` to SMTP from a GitHub runner,
+#2322). So the failure path no longer relies on anyone reading a log (#2323):
+
+- **It opens an issue.** `scripts/release-compact-alert.mjs stuck` opens — or,
+  on the next failed run, **updates in place** — one issue labelled
+  `release-compact-stuck`, naming the branch, the fragment count, the version
+  and a one-click compare link to open the PR from. It updates rather than
+  duplicates because the workflow fires daily, and it comments again only when
+  the count or version actually moved. As soon as a compaction PR exists, the
+  same script (`resolved`) closes the issue. All of it is best effort: if even
+  the issue cannot be filed, the `::error::` annotation still goes out and the
+  run still fails.
+- **It needs no new secret and no new repo permission** beyond `issues: write`
+  on the workflow's own `GITHUB_TOKEN`. Whether Actions may open a *pull
+  request* — the setting, or a `RELEASE_BOT_TOKEN` — stays a maintainer
+  decision, asked in #2323.
+- **`npm run check:release-fragments` names who acts.** Its backlog warning
+  used to end "Not a problem with this PR", which was true and got it skipped
+  by every reviewer; it now points at the maintainer and #2323.
+
 To compact by hand at any time — no secret needed, and the right move if the
 scheduled run is red:
 
