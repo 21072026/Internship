@@ -8,7 +8,6 @@ import { prisma } from '@/lib/prisma';
 import { canManageMeeting } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { pushMeetingInBackground, removeMeeting } from '@/lib/googleCalendarSync';
-import { dispatchWebhook } from '@/lib/webhooks';
 
 // The three verbs a meeting never had (#1980).
 //
@@ -245,13 +244,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           }),
         },
       });
-      await dispatchWebhook('meeting.cancelled', {
-        id: row.id,
-        title: row.title,
-        scheduledAt: row.scheduledAt ? row.scheduledAt.toISOString() : null,
-        reason: cancelReason?.trim() || null,
-        count: ids.length,
-      });
+      // `meeting.cancelled` is REGISTERED in WEBHOOK_EVENTS by this PR, but it is
+      // deliberately not dispatched from here. `scripts/check-events.mjs` (#1697)
+      // caps direct callers of the webhook dispatcher at the ten that predate it,
+      // and that cap may only be lowered — an event has to leave through `emit()`
+      // (#1693), which is not in the tree yet. Registering the name now means the
+      // spine has something to raise the moment it lands; dispatching it from the
+      // handler would be the eleventh door.
+      //
       // Telling the participants is #1982's half of this story; the state and
       // the calendar are this one's.
       return NextResponse.json({ ok: true, status: 'CANCELLED', changed: ids.length });
@@ -313,15 +313,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       pushMeetingInBackground(updated, mirrorAudience(updated));
     }
 
-    if (when) {
-      await dispatchWebhook('meeting.rescheduled', {
-        id: row.id,
-        title: moved[0]?.title ?? row.title,
-        previousScheduledAt: row.scheduledAt ? row.scheduledAt.toISOString() : null,
-        scheduledAt: when.toISOString(),
-        count: moved.length,
-      });
-    }
+    // `meeting.rescheduled` is registered, not dispatched — same reason as the
+    // cancel branch above (#1697's ratchet; the door is `emit()`, #1693).
 
     const head = moved[0] ?? row;
     return NextResponse.json({
