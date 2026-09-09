@@ -38,6 +38,10 @@ export async function GET(request: Request) {
         id: true, companyName: true, contactName: true, email: true, phone: true,
         openRoles: true, message: true, status: true, createdAt: true, handledAt: true,
         handledBy: { select: { fullName: true } },
+        // What the enquiry became, if it was converted (#1863) — the row shows a
+        // link to the account instead of offering to create a second one.
+        convertedAt: true,
+        convertedCompany: { select: { id: true, name: true } },
       },
     });
     const newCount = await prisma.companyInquiry.count({ where: { status: 'NEW' } });

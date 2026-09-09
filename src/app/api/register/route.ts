@@ -93,6 +93,11 @@ export async function POST(request: Request) {
     // later, keep speaking the language the invitee was first addressed in —
     // instead of dropping them into English the moment they register.
     let invitationLocale: string | null = null;
+    // The company an invited COMPANY user belongs to (#1863). A COMPANY account
+    // without it signs in to nothing — every company-side screen reads
+    // `User.companyId` — and the invitee has no way to supply it, so it rides on
+    // the invitation from the moment the conversion minted it.
+    let invitedCompanyId: string | null = null;
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
 
     if (token) {
@@ -133,6 +138,25 @@ export async function POST(request: Request) {
       referredById = invitation.invitedById;
       invitedOrgId = invitation.orgId;
       invitationLocale = isLocale(invitation.locale) ? invitation.locale : null;
+      invitedCompanyId = invitation.companyId;
+      // A COMPANY invitation without a company that still exists cannot make a
+      // usable account: every company-side screen reads `User.companyId`, and
+      // `User.companyId` has a foreign key — so a pointer to a company an admin
+      // has since deleted from /admin/companies would fail this insert with a
+      // constraint error the invitee can do nothing about. Refuse it here, in
+      // the invitation's own language of refusals, so they are told to ask for a
+      // new invitation instead of hitting a 500.
+      if (invitation.role === 'COMPANY') {
+        const company = invitedCompanyId
+          ? await prisma.company.findUnique({ where: { id: invitedCompanyId }, select: { id: true } })
+          : null;
+        if (!company) {
+          return NextResponse.json(
+            { error: 'This invitation is no longer valid — ask for a new one' },
+            { status: 400 }
+          );
+        }
+      }
       autoLink = { mentorId: invitation.mentorId, menteeId: invitation.menteeId, projectId: invitation.projectId };
     } else {
       // An open registration may still carry a referral link.
@@ -173,7 +197,7 @@ export async function POST(request: Request) {
     const orgId = invitedOrgId ?? (await defaultOrgId());
 
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId, preferredLanguage: invitationLocale ?? parsed.data.locale ?? null },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId, preferredLanguage: invitationLocale ?? parsed.data.locale ?? null, companyId: role === 'COMPANY' ? invitedCompanyId : null },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
     });
 
