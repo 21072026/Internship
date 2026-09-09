@@ -2320,6 +2320,19 @@ enum RsvpStatus {
   DECLINED
 }
 
+// Is this meeting still on? (#1980)
+//
+// Deliberately two values, not four. "Happened" is `endedAt` and "declined" is
+// `rsvp` — both already exist and mean something narrower than a status would;
+// folding them in here would give the same fact two homes. CANCELLED is the one
+// thing the schema could not say: the meeting was called off, so it must drop
+// out of the banner, the reminder, the calendar and the auto-log without the
+// row (and its notes and interaction log) being destroyed.
+enum MeetingStatus {
+  SCHEDULED
+  CANCELLED
+}
+
 // A scheduled meeting, with a video link and an emailed RSVP (responded to via
 // a public token link).
 //
@@ -2331,35 +2344,55 @@ enum RsvpStatus {
 // MySQL can't express "exactly one of three" as a CHECK, so the rule lives in
 // src/lib/meetingContext.ts and every write path goes through it.
 model Meeting {
-  id             String     @id @default(cuid())
+  id                  String        @id @default(cuid())
   // Nullable since #1051: project/conversation meetings have no relation.
-  relationId     String?
-  projectId      String?
-  conversationId String?
-  title          String
+  relationId          String?
+  projectId           String?
+  conversationId      String?
+  title               String
   // Optional: a meeting with a set time expects an RSVP and gets reminders; a
   // meeting with no time (null) is just a shared link — no RSVP, no reminder.
-  scheduledAt    DateTime?
+  scheduledAt         DateTime?
   // The clock the organizer picked `scheduledAt` on (IANA zone), captured at
   // creation (#1210). `scheduledAt` is an instant and is enough to render the
   // time for anyone, but not to say *which* reading was the one agreed on — and
   // the organizer's profile zone can't stand in for it, since it changes when
   // they travel. Null for meetings created before this and for the odd caller
   // that sends no zone; both fall back to the organizer's profile zone.
-  timeZone       String?
-  meetLink       String?
-  rsvp           RsvpStatus @default(PENDING)
-  rsvpToken      String     @unique
-  createdById    String
-  reminderSentAt DateTime?
-  createdAt      DateTime   @default(now())
+  timeZone            String?
+  meetLink            String?
+  rsvp                RsvpStatus    @default(PENDING)
+  rsvpToken           String        @unique
+  createdById         String
+  reminderSentAt      DateTime?
+  createdAt           DateTime      @default(now())
   // Null for manually scheduled meetings; set for auto-generated series instances.
-  seriesId       String?
+  seriesId            String?
   // "This meeting is over" — set when any participant marks it ended, which
   // hides the dashboard banner for everyone instead of letting the assumed
   // 60-minute window run out. Null = never marked; the window still applies.
-  endedAt        DateTime?
-  endedById      String?
+  endedAt             DateTime?
+  endedById           String?
+  // Called off, not held and not deleted (#1980). Every reader that answers
+  // "is there a meeting?" — the dashboard banner, the reminder cron, the
+  // calendar, the ICS feed, the auto-log sweep — filters CANCELLED out, while
+  // the row itself survives so the notes and the interaction log written in it
+  // keep their anchor.
+  status              MeetingStatus @default(SCHEDULED)
+  cancelledAt         DateTime?
+  cancelledById       String?
+  cancelReason        String?       @db.Text
+  // "This meeting moved" — answerable without joining an audit table, which is
+  // what the change mail and the .ics SEQUENCE both need.
+  rescheduledAt       DateTime?
+  previousScheduledAt DateTime?
+  // The shared identity of ONE bulk schedule. POST /api/meetings writes one row
+  // per invitee sharing a single room link, so "cancel this meeting" is
+  // ambiguous without it: with a batch key the caller can say `scope: 'batch'`
+  // and mean the whole session. Null on every row written before this and on
+  // any single-row path — a null batch means "just this row", never "all the
+  // nulls".
+  batchKey            String?
 
   relation     MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: Cascade)
   project      Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -2374,6 +2407,7 @@ model Meeting {
   @@index([projectId])
   @@index([conversationId])
   @@index([seriesId])
+  @@index([batchKey])
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
