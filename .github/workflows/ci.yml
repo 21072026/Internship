@@ -138,6 +138,16 @@ jobs:
       # renders it literally to that locale's readers only (#1710).
       - name: the notification catalogue matches the dictionary (#1710)
         run: npm run test:notification-catalog
+      # The roster feed applies an HR export to real people every night, and the
+      # four properties it promises are all invisible to the type system and to a
+      # browser test: a row that did not change must not be written at all, a
+      # crash mid-batch must resume from the checkpoint instead of re-applying
+      # the chunks that committed, the same file applied twice must change
+      # nothing the second time, and a feed for one tenant must not be able to
+      # read or write another tenant's row. Every one of those typechecks
+      # perfectly while being wrong (#1965).
+      - name: the roster diff, resume and tenant isolation (#1965)
+        run: npm run test:roster-ingest
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # An API-key request has no session, so nothing resolves a tenant for it

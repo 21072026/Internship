@@ -105,6 +105,17 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // relying on the middleware, so the row is right either way; the registration
   // is what keeps every *reader* of the ledger scoped to its own tenant.
   'NotificationDelivery',
+  // The scheduled roster feed (#1965). A feed carries a tenant's HR export and
+  // its runs carry, row by row, who is in that tenant's roster — so all three
+  // are tenant property. Registered rather than exempt even though the ingest
+  // binds its own org explicitly with `runWithOrg(feed.orgId, …)` (a cron job
+  // has no session to resolve one from): the explicit binding is what makes the
+  // *background* run scoped, and the registration is what keeps every other
+  // reader — an admin screen listing runs, a support query — inside its own
+  // tenant.
+  'RosterFeed',
+  'RosterRun',
+  'RosterRowResult',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.
