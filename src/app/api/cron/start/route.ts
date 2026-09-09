@@ -4,6 +4,7 @@ import { initCronJobs } from '@/services/emailService';
 import { initNewsletterCron } from '@/lib/newsletterDispatch';
 import { initDeadLetterAlertCron } from '@/lib/jobs/dlqAlert';
 import { initRetentionCron } from '@/lib/retentionEntries';
+import { initUsageRollupCron } from '@/lib/jobs/usageRollup';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -42,5 +43,10 @@ export async function POST(request: Request) {
   // window it took over — and because the mail service should not be the owner
   // of the product's data-retention policy.
   initRetentionCron();
+  // The nightly billing rollup (#1750). Registered here for the same reason as
+  // the three above — and because the meter must not be owned by the mail
+  // service. It ports to the leader-elected scheduler (#1676) as a plain
+  // handler, timer and all.
+  initUsageRollupCron();
   return NextResponse.json({ ok: true, started: true });
 }

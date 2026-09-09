@@ -363,6 +363,21 @@ workaround, #636, and it compiled on every PR push).
   the `'scheduler'` lease, `infra/deploy-prod.sh` runs replica ≥2 with
   `CRON_ENABLED=0` — an interim pin, not an election, and the reason two
   replicas cannot double-send today.
+- **One billing meter** (`docs/metering.md`, #1750): the billable unit is *"a relation in
+  ACTIVE state with any logged activity in the calendar month; paused, benched and completed
+  pairs are not counted"* — the sentence we publish, and the header comment of
+  `src/lib/meteringRules.ts` (the rule, dependency-free + unit-tested) whose queries live in
+  `src/lib/metering.ts`. Do **not** write a second count of active pairs: `planGate`'s
+  `countActiveRelations()` is *capacity* (a plan cap, no activity requirement) and
+  `activeMatchedPairs()` is *usage* — anything commercial reads the latter. Billable states
+  are ONE allowlist (`BILLABLE_RELATION_STATES`), so a later PAUSED/BENCHED state is excluded
+  without touching a query; month arithmetic is `currentPeriod()`/`periodRange()` (half-open,
+  UTC) and nowhere else; dormancy is deliberately never special-cased. History lives in
+  `UsageRollup` (unique `(orgId, metric, period)`), written by the nightly
+  `src/lib/jobs/usageRollup.ts` — computed metrics absolutely (so a re-run is idempotent),
+  counters only at the source. A request path never scans the activity tables; it reads the
+  rollup. **Video volume is reported, never gated** — no meeting path may return a 403 for a
+  metering reason.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

@@ -223,7 +223,7 @@ export async function POST(request: Request) {
 
     // A series' audience is derived from project membership at announce time
     // and can grow over the series' life — never a 1:1, so never a JaaS room.
-    const fixedLink = meetLink || generateMeetingLink({ inviteeCount: null });
+    const fixedLink = meetLink || generateMeetingLink({ inviteeCount: null, orgId: session.user.orgId });
     const series = await prisma.meetingSeries.create({
       data: {
         projectId,

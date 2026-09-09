@@ -118,6 +118,14 @@ const FLOORS = new Map([
       why: 'diacritic/dotless-ı folding — mentor search for Şahin/Müller/Işık (#1367)',
     },
   ],
+  [
+    'src/lib/meteringRules.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the billable unit: the definition, the UTC month boundary, the allowlist (#1750)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────
