@@ -362,6 +362,22 @@ test('an SSO-enforced tenant refuses every password door', { tag: '@smoke' }, as
       });
       expect(lastOne.status()).toBe(400);
       expect((await lastOne.json()).code).toBe('last_sso_exemption');
+
+      // ...and it cannot be walked around by switching the holder OFF instead.
+      // `countExemptAdmins` only counts ACTIVE admins, so a routine
+      // deactivation would remove the tenant's way back in exactly like a
+      // revocation, without looking like a security change to anyone. Issued
+      // by the SECOND admin, because the route refuses self-deactivation
+      // first and that refusal would hide this one.
+      const deactivated = await admin2Page.request.patch(`/api/users/${tenant.adminId}`, {
+        data: { isActive: false },
+      });
+      expect(deactivated.status()).toBe(400);
+      expect((await deactivated.json()).code).toBe('last_sso_exemption');
+      expect(
+        (await prisma.user.findUnique({ where: { id: tenant.adminId } }))!.isActive,
+        'a refused deactivation leaves the break-glass admin switched on'
+      ).toBe(true);
     } finally {
       await admin2Ctx.close();
     }

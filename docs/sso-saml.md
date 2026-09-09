@@ -147,7 +147,15 @@ is a per-tenant "no impersonation" setting, not a change to this rule.
    holds `ssoExempt`**. Without (b) a tenant with an expired IdP certificate has
    no way back into its own account except our database console. The same rule is
    enforced from the other end: `POST /api/admin/users/[id]/sso-exempt` refuses to
-   revoke the *last* exemption while the org is enforcing.
+   revoke the *last* exemption while the org is enforcing — **and from a third
+   direction**, `PATCH /api/users/[id]` refuses to set `isActive: false` on the
+   last exempt admin. `countExemptAdmins` counts only *active* admins, so
+   switching the holder off removes the way back in exactly like revoking the
+   exemption, except that it looks like routine offboarding and warns nobody.
+   All three refusals answer with `code: 'last_sso_exemption'`. Demoting an
+   admin is already impossible (`PATCH /api/users/[id]` only converts between
+   `MENTOR` and `MENTEE`) and there is no user-delete route, so those are the
+   three doors.
 2. **Fail-open on a broken IdP.** Enforcement only *applies* while
    `isSsoActive(org)` still holds. A plan downgrade (SSO_SAML is an Enterprise
    feature, #1742) or a config an admin broke would otherwise leave a tenant with
