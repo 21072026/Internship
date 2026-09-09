@@ -6582,3 +6582,92 @@ hatanın en pahalı hâli. `e2e/robots-sitemap.spec.ts` listedeki her route'u
 public sayfa = üç kayıt** — `src/app/<route>/page.tsx`, `PublicHeader`/
 `PublicFooter` girişi ve `src/app/sitemap.ts`. Bir de dördüncüsü:
 `src/lib/features.ts` (CLAUDE.md'nin feature-catalogue disiplini).
+
+## 2026-09-09 — Bir reddin ilk sorusu: bu istekte neyi kurdum, geri aldım mı?
+
+**"Hiçbir şey gönderilmedi" diyen bir cevap satırı gönderilebilir halde bırakıyorsa
+yalan söylüyor.** Kota reddi (#1754) bülten satırını `SCHEDULED` + `scheduledAt = new
+Date()` yani **vadesi gelmiş** halde bırakıyordu: 15 dakikalık cron, admin'e
+gönderilmediği söylenen sayıyı kendi başına yolluyordu — ve reddi gören insanın doğal
+tepkisi (tekrar Gönder) ikinci bir silahlı satır üretiyordu. Genel kural: bir 403/409
+yazmadan önce **o istekte hangi durumu kendin kurdun** diye sor ve yalnızca onu geri al;
+admin'in kendi seçtiği tarihe dokunmak da aynı derecede yanlış. Cevabın `status` alanı
+taşıması ("taslak olarak duruyor" / "hâlâ planlı") bu ayrımı arayüzde de görünür yapıyor.
+
+**Devam (resume) yolu asla ölçülmez.** Sayaç türetilmişse — bizde `NewsletterSend`
+satırları — pencerenin içinde **kendi teslim ettiği yarı** de var; büyük bir sayı kendini
+kendi bandının üstüne ölçüp reddedebiliyor. Ve red talep sahiplenmeden önce döndüğü için
+sonuç "SENDING'de asılı kalmak" oluyor: yarısı gitmiş, düzenlenemez, iptal edilemez, her
+tick'te yeniden reddedilen bir satır. Türetilmiş sayaçlarda idempotens sorusu "aynı işi
+iki kez ölçtüm mü" değil, **"ölçüm penceresi kendi çıktısını içeriyor mu"**.
+
+## 2026-09-09 — `permissions:` GITHUB_TOKEN'a verilir; adımın GH_TOKEN'ı PAT olabilir
+
+Compaction alarmı (#2323) `permissions: issues: write` istiyordu ve adım `GH_TOKEN:
+${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}` ile koşuyordu. Yani alarmın
+**tam olarak önerdiği** kurulumda (PAT'ı ekle) her `gh` çağrısı, issue kapsamı kimsenin
+söz vermediği bir PAT olarak koşuyor ve alarm susuyor. Çözüm ayrı bir değişken:
+`ISSUE_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}`, ve script'in onu tercih etmesi. **Kural:
+bir workflow'un `permissions:` bloğu yalnızca kendi GITHUB_TOKEN'ını büyütür; o izne
+dayanan adım başka bir kimlikle koşuyorsa izin hiç yok demektir.**
+
+**Ve bir alarm gözlemlediği tek nedeni "sebep" diye yazmamalı.** Aynı script issue
+gövdesine "GitHub Actions pull request açmaya izinli değil" cümlesini sabit yazıyordu,
+çünkü görülen dört koşu buydu. `gh pr create` süresi geçmiş bir PAT'ta, korumalı bir
+dalda ve tükenmiş GraphQL kotasında da patlıyor — her biri farklı bir düzeltme. Doğru
+biçim: stderr'i `2>"$RUNNER_TEMP/pr-create.err"` ile **yakala**, gövdede birebir alıntıla,
+bildiğin sebebi *tanı* (regex ile) ve eşleşmediğinde "bu o değil" diye söyle. Yanlış
+sebebi güvenle söyleyen alarm, okuyucuyu yanlış ayara gönderdiği için sessiz olandan
+kötü.
+
+## 2026-09-09 — Sabit kopyaya bakan test sonsuza kadar geçer
+
+`skillSeed.ts`'in "CV sözlüğünün her terimi kapsanıyor" testi, `cvParse.ts`'teki 76
+terimlik listenin **elle yazılmış kopyasına** bakıyordu: parser'a terim eklemek testi
+asla kırmazdı, yani kanıtladığını iddia ettiği kapsama sessizce doğru olmaktan çıkardı.
+Gerçek export'a bakmanın önündeki engel teknikti — `cvParse.ts` `mammoth`/`pdf-parse`'ı
+modül düzeyinde import ediyor, `scripts/test/` altındaki Node koşucusu onu yükleyemiyor.
+**Bu durumda listeyi bağımlılıksız kendi dosyasına çıkarmak (`cvSkillVocabulary.ts`) ve
+eski yoldan re-export etmek meşru bir refactor**, kopyayı korumak değil. Aynı desen
+`lastContactRule.ts` ve `skillSeed.ts`'te zaten var: kuralın verisi bağımlılıksız,
+sarmalayıcı uygulamaya bağlı.
+
+## 2026-09-09 — Belge veriyle çelişiyorsa düzeltilecek olan veri olmayabilir
+
+Sözlüğün ev kuralı "komşuluk TEK yönde yazılır" diyordu; 179 kenarın **125'i** iki
+yönden yazılmıştı ve `buildSkillIndex` hepsini nasılsa simetrikleştiriyordu. 125 girdiyi
+hiçbir şey kazandırmayan bir kurala uydurmak yerine invariant'ı gerçek haliyle yazdım:
+**yönsüz bir ilişki, yönlü ifade edilmiş**, nereye okunuyorsa oraya yazılır, sonucun
+simetrisini birim test tutuyor. Tersine, gerçekten yanlış olan veriyi kural olarak
+düzelttim: `NoSQL` alias'ı `mongodb`'ye çözülüyordu, oysa Redis ve Elasticsearch de bu
+sözlükte ve ikisi de NoSQL — yani bir Redis mühendisi MongoDB mühendisi olarak
+etiketleniyordu. Tek satırı silmek yerine testi kural yaptım: **bir şemsiye terim, ancak
+bu sözlükte altında rakip ürün yoksa alias olabilir** (`Version Control` → `git` bu testi
+geçiyor, kalıyor). Bir CV'de yanlış anahtar, serbest metinden kötüdür.
+
+## 2026-09-09 — "Zaten var mı?" sorusunu yalnızca User tablosuna sormak
+
+Talep→şirket dönüşümünde (#1863) mükerrer kontrolü `prisma.user.findUnique({ email })`
+idi. Ama dönüşümün ürettiği giriş, davet tüketilene kadar **User olmuyor**: aynı adresten
+gelen ikinci talep kontrolü geçiyor ve **ikinci bir Company** ile ona ait ikinci bir davet
+üretiyor; sonra hangi token önce kullanılırsa hesabın hangi kopyaya ait olduğuna o karar
+veriyor. Kural: "bu adres zaten ele alınmış mı" sorusunun cevabı hesaplarda değil,
+**hesap + uçuşta olan davetler** birleşiminde. Canlılık tanımı `/api/invite` ile aynı
+olmalı (kullanılmış / süresi geçmiş / iptal edilmiş bir davet canlı değildir, #2071),
+yoksa iptal etmek adresi serbest bırakmaz.
+
+**İkinci soru: bu düz kolonu hangi FK okuyor?** `InvitationToken.companyId` bilinçli
+olarak ilişkisiz bir yazı-bir-kez kolonu (modelin `mentorId`/`menteeId`/`projectId`
+konvansiyonu) — ama o üçünün aksine `User.companyId`'ye akıyor ve **orada foreign key
+var**. Admin, daveti canlıyken şirketi silince davetlinin kaydı, hakkında hiçbir şey
+yapamayacağı bir constraint 500'üne dönüşüyordu. Düz kolonların zararsızlığı, aktıkları
+yere bakmadan varsayılamaz.
+
+## 2026-09-09 — Dal değiştirdikten sonra `tsc`'nin route hataları gerçek değil
+
+Bir daldan diğerine geçtikten sonra `npx tsc --noEmit`, önceki dalın build'inden kalan
+`.next/types` yüzünden var olmayan route dosyalarını arıyor ("Cannot find module
+'../../src/app/api/.../route.js'"). Bunlar teşhis değil çöp: `rm -rf .next/types` (ya da
+bir `npm run build`) hepsini siliyor. Aynı sınıftan diğer tuzak: worktree'ler
+`node_modules`'ü paylaştığı için `npx prisma generate` **paylaşılan** client'ı yazıyor —
+alakasız bir dosyada beliren bir hataya inanmadan önce `prisma generate`'i yeniden koştur.
