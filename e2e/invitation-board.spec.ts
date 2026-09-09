@@ -11,10 +11,12 @@ test.afterAll(async () => {
 
 // #2071 — the invitation status board: filter, bulk re-invite, revoke.
 //
-// The board filters by `orgId` explicitly (InvitationToken is NOT in
-// TENANT_MODELS, so nothing scopes it centrally), which is why the fixtures
-// below are created with the signed-in admin's own orgId rather than through
-// the seedInvite helper — an org-less row is correctly invisible there.
+// The board filters by `orgId` explicitly — that hand filter is the only one
+// with MT_ENFORCE_ISOLATION off, which is every deployment today, even though
+// InvitationToken is registered in TENANT_MODELS since #1559 and the middleware
+// scopes the same queries once the flag is on. Which is why the fixtures below
+// are created with the signed-in admin's own orgId rather than through the
+// seedInvite helper — an org-less row is correctly invisible there.
 async function seedBoardInvite(
   email: string,
   orgId: string | null,

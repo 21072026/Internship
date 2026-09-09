@@ -239,12 +239,15 @@ workaround, #636, and it compiled on every PR push).
   registered only *looks* scoped. `npm run check:tenant-models` (in CI, #1560) compares the
   schema against the registry in both directions and fails on either kind of drift; a
   deliberate exception goes in the script's `EXEMPT` map with its reason, never in a comment
-  somewhere else. **It is not yet green-means-clean:** the eight models of #1559 are already
-  unprotected, and they sit in a `PENDING_REGISTRATION` ratchet that the check warns about
-  (a GitHub annotation in CI) instead of failing on — so the guard's job until #1559 lands is
-  to stop that set from *growing*. Its length is pinned by an `EXPECTED_PENDING` literal;
-  adding a name means moving the number in the same diff, and registering one means deleting
-  the entry (a stale entry fails the check).
+  somewhere else. **Green means clean since #1559:** every model with an `orgId` is now
+  registered and the `PENDING_REGISTRATION` ratchet is empty (`EXPECTED_PENDING = 0`). The
+  ratchet stays for the next model that must wait for its own reviewed change; its length is
+  pinned by that literal, so adding a name means moving the number in the same diff, and
+  registering one means deleting the entry (a stale entry fails the check). Registering a
+  model changes **writes** too — the middleware fills `orgId` in from the bound context —
+  so walk every create path, and remember that sessionless ones (register, invite
+  acceptance, the public company-inquiry form, crons, deploy backfills) bind no context at
+  all and must keep passing their own `orgId`.
 - **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
   (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
   assert exact landing strings (e.g. "Connect Talent with", "Everything you need",

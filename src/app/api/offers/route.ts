@@ -8,7 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { canSeeCompensation, isDeclineReasonCode, isOfferStatus } from '@/lib/offers';
 import { validateOfferRequisition } from '@/lib/requisitions';
-import { isIsolationEnforced, orgScoped, resolveOrgId } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
 
 // Fields every authorized caller may see. compensationNote is added on top of
 // this only for ADMIN / the offer's own MENTEE — see canSeeCompensation().
@@ -125,18 +125,17 @@ export async function GET(request: Request) {
     const relationId = sp.get('relationId') || undefined;
 
     const orgId = resolveOrgId(session);
-    // Offer is a child model, so it is deliberately absent from orgContext's
-    // TENANT_MODELS — the central middleware expects children to be reached
-    // through a scoped parent, and this handler queries Offer directly. The
-    // admin index (and the nav badge that reads its `total`) would therefore
-    // span every tenant, so scope it here, the same way the requisition lookup
-    // below already does. Gated on the enforcement flag like the middleware
-    // itself: with it off the deployment is single-tenant and must stay
-    // byte-for-byte unchanged, including for a legacy row whose orgId was never
-    // backfilled and which would otherwise vanish from the only screen listing it.
-    const where: Prisma.OfferWhereInput = role === 'ADMIN'
-      ? (isIsolationEnforced() ? orgScoped(adminFilters(sp), orgId) : adminFilters(sp))
-      : {};
+    // No hand-written orgId filter here since #1559: `Offer` is registered in
+    // orgContext's TENANT_MODELS, so the central middleware injects the bound
+    // tenant into this `where` itself. What stood here was
+    // `isIsolationEnforced() ? orgScoped(…, orgId) : …` — gated on the very flag
+    // the middleware is gated on, from the same `resolveOrgId(session)`, so it
+    // narrowed the query exactly when and how the middleware already does.
+    // Leaving it would mean two sources of truth for one filter; the one that
+    // cannot be forgotten wins. Flag off, the deployment is single-tenant and
+    // nothing scopes — including a legacy row whose orgId was never backfilled,
+    // which must not vanish from the only screen listing it.
+    const where: Prisma.OfferWhereInput = role === 'ADMIN' ? adminFilters(sp) : {};
     if (relationId) where.relationId = relationId;
 
     if (role !== 'ADMIN') {
@@ -239,6 +238,11 @@ export async function POST(request: Request) {
 
     const offer = await prisma.offer.create({
       data: {
+        // The offer inherits the tenant of the relation it hangs off, set
+        // EXPLICITLY rather than left to the middleware's injection (#1559):
+        // the relation is the thing that was authorised, and with the flag on
+        // its own lookup above is already scoped, so a relation from another
+        // tenant reads as "not found" and never reaches this create.
         orgId: relation.orgId,
         relationId,
         requisitionId: requisitionId || null,

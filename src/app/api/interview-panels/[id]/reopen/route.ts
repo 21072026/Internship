@@ -28,9 +28,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     if (!panel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // InterviewPanel is not in TENANT_MODELS, so the lookup by id above is not
-    // org-narrowed for us; assert the tenant before authorizing. No-op while
-    // MT_ENFORCE_ISOLATION is off.
+    // Belt and braces on the tenant. `InterviewPanel` is registered in
+    // TENANT_MODELS since #1559, so with MT_ENFORCE_ISOLATION on the lookup
+    // above is already org-narrowed and a foreign id reads as "not found". The
+    // assert stays because it is the only check with the flag OFF — which is
+    // every deployment today — and because it fails loudly rather than
+    // returning a row: a panel is per-candidate, and "wrong tenant" must never
+    // be indistinguishable from "authorized".
     assertSameOrg(panel.orgId, requireOrg(session));
 
     if (session.user.role !== 'ADMIN' && panel.createdById !== session.user.id) {
