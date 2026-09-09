@@ -18,6 +18,11 @@ import {
   validateAnnouncementImage,
 } from '@/lib/announcementImage';
 import { locales, type Locale } from '@/i18n/config';
+import {
+  BroadcastQuotaLine,
+  useBroadcastQuota,
+  useBroadcastQuotaMessage,
+} from '@/components/ui/BroadcastQuota';
 
 type Bodies = Partial<Record<Locale, string>>;
 
@@ -65,6 +70,10 @@ export default function AdminAnnouncementsPage() {
   const [editDropImage, setEditDropImage] = useState(false);
   const [rowBusy, setRowBusy] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  // The month's broadcast band (#1754). Shown next to the "also send by email"
+  // box, because that box is the only thing on this form that spends it.
+  const { quota, refreshQuota } = useBroadcastQuota();
+  const quotaMessage = useBroadcastQuotaMessage();
 
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -142,10 +151,20 @@ export default function AdminAnnouncementsPage() {
 
       const res = await fetch('/api/admin/announcements', { method: 'POST', body });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? t.common.error);
+      if (!res.ok) {
+        // Over the month's broadcast band: nothing was sent, and the composer
+        // keeps what was typed so it can go out once the meter allows it.
+        const blocked = quotaMessage(data);
+        if (blocked) {
+          setError(blocked);
+          await refreshQuota();
+          return;
+        }
+        throw new Error(data.error ?? t.common.error);
+      }
       setBodies({}); setLink(''); setEmail(false); clearImage();
       setResult(t.announcements.sent.replace('{n}', String(data.recipients)));
-      await fetchHistory();
+      await Promise.all([fetchHistory(), refreshQuota()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
     } finally {
@@ -346,10 +365,16 @@ export default function AdminAnnouncementsPage() {
               )}
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />
-              {t.announcements.alsoEmail}
-            </label>
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />
+                {t.announcements.alsoEmail}
+              </label>
+              {/* Only the e-mail half spends the band — an in-app-only
+                  announcement is never metered — so the line lives here rather
+                  than at the top of the form. */}
+              {email && <BroadcastQuotaLine quota={quota} />}
+            </div>
             <Button type="submit" loading={sending}>{t.announcements.send}</Button>
           </form>
         </Card>

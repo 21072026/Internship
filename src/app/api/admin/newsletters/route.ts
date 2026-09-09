@@ -17,6 +17,7 @@ import {
   writtenNewsletterLocales,
 } from '@/lib/newsletter';
 import { dispatchNewsletter } from '@/lib/newsletterDispatch';
+import { broadcastQuotaError } from '@/lib/broadcastQuota';
 
 /**
  * Newsletter issues: the history, and creating one (#1469).
@@ -226,6 +227,26 @@ export async function POST(request: Request) {
   // Sent inline so the admin sees the real tallies on the button they pressed,
   // the same way the announcement broadcast reports its own fan-out.
   const dispatch = action === 'send' ? await dispatchNewsletter(created.id) : null;
+
+  // Over the month's broadcast band (#1754): nothing was sent, and nothing must
+  // be sent later either. The issue is KEPT — throwing away what the admin just
+  // wrote because the meter is full would be its own kind of data loss — but it
+  // is put back to DRAFT rather than left armed.
+  //
+  // Leaving it SCHEDULED was the bug: `scheduledAt` for a send-now is `new
+  // Date()`, so a refusal the admin was told "nothing was sent" about would be
+  // picked up and mailed by the cron on its next tick, unattended. Worse, the
+  // natural response to a refusal — press send again — created a SECOND armed
+  // issue that would also eventually deliver. A refusal now leaves exactly what
+  // the admin can see: a draft they can edit, delete, or send once the band
+  // allows it.
+  if (dispatch?.quota) {
+    await prisma.newsletter.update({
+      where: { id: created.id },
+      data: { status: 'DRAFT', scheduledAt: null },
+    });
+    return NextResponse.json({ ...broadcastQuotaError(dispatch.quota), id: created.id, status: 'DRAFT' }, { status: 403 });
+  }
 
   return NextResponse.json(
     {

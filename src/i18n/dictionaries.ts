@@ -3393,6 +3393,16 @@ const en = {
     unsubResubscribe: 'Actually, keep sending them',
     unsubResubscribed: 'Welcome back — the next issue will reach you.',
   },
+  // Broadcast sending quota (#1754). One block, read by BOTH composers — the
+  // announcement one and the newsletter one — because the band and the refusal
+  // are the same rule whichever surface hits it.
+  broadcastQuota: {
+    usage: 'Broadcast e-mail: {used} of {limit} recipients used this month. The meter resets on {date}.',
+    unlimited: 'Broadcast e-mail: this plan has no monthly recipient cap.',
+    blocked: 'Nothing was sent. This broadcast needs {requested} recipients, but only {remaining} of your {limit} for this month are left ({used} already used). The meter resets on {date}.',
+    keptDraft: 'The issue is waiting as a draft — nothing will go out on its own. Send it again once the meter allows.',
+    stillScheduled: 'The issue is still scheduled for the date you picked, and will be sent then if the meter allows.',
+  },
   announcements: {
     title: 'Announcements',
     emailSubject: 'Announcement',
@@ -3735,6 +3745,9 @@ const en = {
     boardWipLimit: 'Board column limit (WIP)',
     boardWipLimitHint: 'How many candidates a pipeline column may hold before its count turns amber on the board. It is a hint about where work is piling up and never blocks a move. 0 switches the warnings off completely. One number rarely fits every stage — a first-contact column is meant to be deep, while “introduction pending” holding forty people means forty people are waiting on us — so any stage can override it under “Stage service levels” below.',
     boardWipLimitInvalid: 'Enter a whole number between 0 and 9999.',
+    broadcastQuota: 'Monthly broadcast recipients',
+    broadcastQuotaHint: 'A cap on how many people your announcement e-mails and newsletter issues may reach in one calendar month, together. Leave it empty to use your plan’s own allowance. A number can only tighten that allowance, never raise it — every organisation sends from the same domain, so one blast that draws complaints costs everybody else their inbox placement. 0 switches broadcasts off entirely; one-to-one messages, notifications, invitations, password resets and meeting reminders are never counted and keep working. A send that would cross the cap is refused whole rather than delivered by half.',
+    broadcastQuotaInvalid: 'Enter a whole number, or leave it empty to follow your plan.',
     selfRegistration: 'Open sign-up',
     outcomeAutoSend: 'Outcome messages',
     blindReview: 'Blind interview review',
@@ -8399,6 +8412,13 @@ const tr: Dict = {
     unsubResubscribe: 'Aslında göndermeye devam edin',
     unsubResubscribed: 'Tekrar hoş geldin — bir sonraki sayı sana ulaşacak.',
   },
+  broadcastQuota: {
+    usage: 'Toplu e-posta: bu ay {limit} alıcının {used} tanesi kullanıldı. Sayaç {date} tarihinde sıfırlanıyor.',
+    unlimited: 'Toplu e-posta: bu planda aylık alıcı sınırı yok.',
+    blocked: 'Hiçbir gönderim yapılmadı. Bu toplu gönderim {requested} alıcı gerektiriyor; bu ay için ayrılan {limit} alıcının yalnızca {remaining} tanesi kaldı ({used} tanesi kullanıldı). Sayaç {date} tarihinde sıfırlanıyor.',
+    keptDraft: 'Sayı taslak olarak bekliyor — kendiliğinden hiçbir şey gönderilmeyecek. Sayaç izin verdiğinde yeniden gönder.',
+    stillScheduled: 'Sayı seçtiğin tarih için planlı kalmaya devam ediyor; o gün sayaç izin verirse gönderilecek.',
+  },
   announcements: {
     title: 'Duyurular',
     emailSubject: 'Duyuru',
@@ -8741,6 +8761,9 @@ const tr: Dict = {
     boardWipLimit: 'Pano sütun limiti (WIP)',
     boardWipLimitHint: 'Bir pipeline sütunundaki aday sayısı bu değeri geçtiğinde panodaki sayaç turuncuya döner. Yalnızca “iş burada birikiyor” uyarısıdır; hiçbir kartın taşınmasını engellemez. 0 yazmak uyarıları tamamen kapatır. Tek bir sayı her aşamaya uymaz — ilk temas sütununun derin olması normaldir, ama “tanıştırma bekliyor” aşamasında kırk kişi varsa kırk kişi bizi bekliyordur — bu yüzden aşağıdaki “Aşama hizmet seviyeleri” bölümünde her aşama kendi limitini alabilir.',
     boardWipLimitInvalid: '0 ile 9999 arasında bir tam sayı gir.',
+    broadcastQuota: 'Aylık toplu gönderim alıcısı',
+    broadcastQuotaHint: 'Duyuru e-postalarının ve bülten sayılarının bir takvim ayı içinde toplamda kaç kişiye ulaşabileceğinin sınırı. Boş bırakırsan planının kendi hakkı geçerli olur. Girilen bir sayı bu hakkı yalnızca daraltabilir, asla yükseltemez — tüm kuruluşlar aynı alan adından gönderiyor, dolayısıyla şikâyet toplayan tek bir gönderim herkesin gelen kutusuna düşme şansına zarar verir. 0 toplu gönderimi tamamen kapatır; birebir mesajlar, bildirimler, davetler, şifre sıfırlama ve toplantı hatırlatmaları hiçbir zaman sayılmaz ve çalışmaya devam eder. Sınırı aşacak bir gönderim yarısı gitmiş halde bırakılmaz, tümüyle reddedilir.',
+    broadcastQuotaInvalid: 'Bir tam sayı gir ya da planını kullanmak için boş bırak.',
     selfRegistration: 'Açık kayıt',
     outcomeAutoSend: 'Sonuç mesajları',
     blindReview: 'Kör mülakat incelemesi',
@@ -13385,6 +13408,13 @@ const de: Dict = {
     unsubResubscribe: 'Doch weiter schicken',
     unsubResubscribed: 'Willkommen zurück — die nächste Ausgabe erreicht dich.',
   },
+  broadcastQuota: {
+    usage: 'Rundmails: {used} von {limit} Empfängern in diesem Monat verbraucht. Der Zähler wird am {date} zurückgesetzt.',
+    unlimited: 'Rundmails: In diesem Tarif gibt es keine monatliche Empfängergrenze.',
+    blocked: 'Es wurde nichts gesendet. Diese Rundmail benötigt {requested} Empfänger, von Ihren {limit} für diesen Monat sind aber nur noch {remaining} frei ({used} bereits verbraucht). Der Zähler wird am {date} zurückgesetzt.',
+    keptDraft: 'Die Ausgabe wartet als Entwurf — von allein wird nichts versendet. Senden Sie sie erneut, sobald der Zähler es erlaubt.',
+    stillScheduled: 'Die Ausgabe bleibt für das von Ihnen gewählte Datum geplant und wird dann gesendet, sofern der Zähler es erlaubt.',
+  },
   announcements: {
     title: 'Ankündigungen',
     emailSubject: 'Ankündigung',
@@ -13727,6 +13757,9 @@ const de: Dict = {
     boardWipLimit: 'Spaltenlimit des Boards (WIP)',
     boardWipLimitHint: 'Wie viele Kandidaten eine Pipeline-Spalte enthalten darf, bevor ihre Zahl auf dem Board bernsteinfarben wird. Es ist ein Hinweis darauf, wo sich Arbeit staut, und blockiert keinen Phasenwechsel. 0 schaltet die Warnungen vollständig ab. Eine einzige Zahl passt selten auf jede Phase — ein Trichtereingang darf tief sein, während vierzig Personen in „Vorstellung ausstehend“ vierzig Personen sind, die auf uns warten —, deshalb kann jede Phase sie unten unter „Service-Level je Phase“ überschreiben.',
     boardWipLimitInvalid: 'Gib eine ganze Zahl zwischen 0 und 9999 ein.',
+    broadcastQuota: 'Rundmail-Empfänger pro Monat',
+    broadcastQuotaHint: 'Eine Obergrenze dafür, wie viele Personen Ihre Ankündigungs-E-Mails und Newsletter-Ausgaben in einem Kalendermonat zusammen erreichen dürfen. Leer lassen, um das Kontingent Ihres Tarifs zu verwenden. Eine Zahl kann dieses Kontingent nur verringern, niemals erhöhen — alle Organisationen versenden über dieselbe Domain, deshalb kostet eine einzige Rundmail mit Beschwerden allen anderen die Zustellung in den Posteingang. 0 schaltet Rundmails vollständig ab; Einzelnachrichten, Benachrichtigungen, Einladungen, Passwort-Zurücksetzungen und Terminerinnerungen werden nie gezählt und funktionieren weiter. Ein Versand, der die Grenze überschreiten würde, wird vollständig abgelehnt statt zur Hälfte ausgeliefert.',
+    broadcastQuotaInvalid: 'Gib eine ganze Zahl ein oder lass das Feld leer, um dem Tarif zu folgen.',
     selfRegistration: 'Offene Registrierung',
     outcomeAutoSend: 'Ergebnis-Nachrichten',
     blindReview: 'Blinde Interview-Bewertung',

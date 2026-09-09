@@ -10,6 +10,8 @@ import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { checkBroadcastQuota, broadcastQuotaError } from '@/lib/broadcastQuota';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
 import {
@@ -177,6 +179,33 @@ export async function POST(request: Request) {
     select: { id: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
 
+  // Who would actually be MAILED — computed here, before anything is written,
+  // because that count is what the broadcast quota is measured against and a
+  // refusal must not leave an Announcement row (or a bell full of
+  // notifications) behind for a broadcast that never went out (#1754).
+  //
+  // The two conjuncts are the very same filter the send loop below applies, so
+  // the number the quota checks and the number of mails that leave cannot
+  // disagree.
+  const mailRecipients = email
+    ? users.filter((u) => u.email && emailAllowed(u, 'announcements') && emailGroupAllowedForCategory(u, 'announcement'))
+    : [];
+
+  // Only the e-mail half is metered. An announcement sent without the box
+  // ticked is in-app only — a bell notification costs the sending domain
+  // nothing — so it is never counted and never refused.
+  if (mailRecipients.length > 0) {
+    const quota = await checkBroadcastQuota({
+      orgId: resolveOrgId(session),
+      requested: mailRecipients.length,
+    });
+    if (!quota.allowed) {
+      // Refused WHOLE, before the first message: a half-delivered blast is
+      // worse than a refusal, and the admin gets the figures to act on.
+      return NextResponse.json(broadcastQuotaError(quota), { status: 403 });
+    }
+  }
+
   // The Announcement row is written BEFORE the fan-out, so every notification it
   // produces can carry its id (#1162) — that link is what lets a later edit
   // correct the copy already sitting in everyone's bell, and a delete take those
@@ -221,11 +250,13 @@ export async function POST(request: Request) {
       ? [{ filename: emailImageFilename(image.type), content: imageData, contentType: image.type, cid: IMAGE_CID }]
       : undefined;
     await Promise.all(
-      users
-        // Both conjuncts: the group check is what makes `emailed` truthful once
-        // people can unsubscribe from announcements. Without it the counter
-        // would keep counting mails that sendEmail() then declines to deliver.
-        .filter((u) => u.email && emailAllowed(u, 'announcements') && emailGroupAllowedForCategory(u, 'announcement'))
+      // The list the quota was checked against, not a second filter over
+      // `users`: two copies of "who gets mailed" is how a metered count and a
+      // delivered count start disagreeing. Both conjuncts of that filter (see
+      // above) are what make `emailed` truthful once people can unsubscribe
+      // from announcements — without the group check the counter would keep
+      // counting mails that sendEmail() then declines to deliver.
+      mailRecipients
         .map((u) => {
           const preferredLanguage = u.preferredLanguage ?? undefined;
           const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
