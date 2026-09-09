@@ -9,7 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { GraduationCap, FlaskConical } from 'lucide-react';
-import { AUTH_SERVICE_UNAVAILABLE, INTENTIONAL_AUTH_ERRORS } from '@/lib/authErrors';
+import { AUTH_SERVICE_UNAVAILABLE, AUTH_SSO_REQUIRED, INTENTIONAL_AUTH_ERRORS } from '@/lib/authErrors';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -45,6 +45,9 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   const [show2fa, setShow2fa] = useState(false);
   const [notice, setNotice] = useState('');
   const [needsVerify, setNeedsVerify] = useState(false);
+  // The tenant enforces SSO (#1950): the error box grows a link to /auth/sso,
+  // which is the only door still open for this account.
+  const [ssoRequired, setSsoRequired] = useState(false);
   const [resending, setResending] = useState(false);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
   // Off by default — staying signed in for 30 days is a decision about the
@@ -125,6 +128,7 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   const onSubmit = handleSubmit(async (data) => {
     setLoading(true);
     setError('');
+    setSsoRequired(false);
 
     const result = await signIn('credentials', {
       redirect: false,
@@ -145,6 +149,12 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
         // Offer to resend the verification link rather than a dead-end error.
         setNeedsVerify(true);
         setError(t.auth.emailNotVerified);
+      } else if (result.error === AUTH_SSO_REQUIRED) {
+        // The tenant has switched password sign-in off (#1950). The password is
+        // not wrong, it is retired — so say that, and offer the only door that
+        // is open rather than leaving the user to guess.
+        setSsoRequired(true);
+        setError(t.auth.ssoRequired);
       } else if (result.error === AUTH_SERVICE_UNAVAILABLE) {
         // Infrastructure, not credentials — the database is down or overloaded.
         // Say "try again shortly" without naming what is broken.
@@ -286,6 +296,15 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
                 >
                   {t.auth.resendVerification}
                 </button>
+              )}
+              {ssoRequired && (
+                <Link
+                  href="/auth/sso"
+                  data-testid="sso-required-link"
+                  className="mt-2 block font-medium text-blue-600 hover:underline"
+                >
+                  {t.auth.ssoRequiredCta}
+                </Link>
               )}
             </div>
           )}

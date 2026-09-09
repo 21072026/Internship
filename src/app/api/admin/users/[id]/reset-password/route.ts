@@ -7,6 +7,7 @@ import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
+import { isPasswordLoginBlocked, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
 
 // POST — admin triggers a password reset for any non-admin user: issues a
 // single-use reset token and emails the user a link.
@@ -37,6 +38,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (user.role === 'ADMIN' && user.id !== session.user.id) {
     return NextResponse.json(
       { error: 'Cannot reset another admin\'s password' },
+      { status: 400 }
+    );
+  }
+
+  // Enforced SSO (#1950). The reset endpoint would refuse the link anyway, so
+  // this is not the security boundary — it is the honest answer, given to the
+  // one person who can act on it. An admin who sends a reset and hears nothing
+  // will conclude that mail is broken; telling them the tenant has switched
+  // password sign-in off points them at the IdP instead.
+  if (await isPasswordLoginBlocked(user)) {
+    return NextResponse.json(
+      { error: SSO_REQUIRED_MESSAGE, code: SSO_REQUIRED_CODE },
       { status: 400 }
     );
   }

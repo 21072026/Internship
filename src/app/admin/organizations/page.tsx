@@ -33,6 +33,10 @@ interface Organization {
     spEntityId: string;
     acsUrl: string;
     metadataUrl: string;
+    // Enforced SSO (#1950).
+    ssoEnforced: boolean;
+    exemptAdmins: number;
+    sessionsToEnd: number;
   };
   createdAt: string;
   counts: {
@@ -280,6 +284,46 @@ export default function AdminOrganizationsPage() {
     }
   };
 
+  // Enforced SSO (#1950). Deliberately its own request rather than a field on
+  // the config form: switching it on ENDS every password session in the tenant,
+  // and an action with that consequence must be pressed on purpose, after a
+  // confirmation that names the number.
+  const toggleEnforcement = async (next: boolean) => {
+    const org = orgs.find((x) => x.id === ssoOrgId);
+    if (!org) return;
+    const question = next
+      ? t.organizations.ssoEnforceConfirm.replace('{count}', String(org.sso.sessionsToEnd))
+      : t.organizations.ssoRelaxConfirm;
+    if (!window.confirm(question)) return;
+    setSaving(true); setSsoMsg(null);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ssoOrgId, ssoEnforced: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const blockers: string[] = Array.isArray(data.blockers) ? data.blockers : [];
+        setSsoMsg(
+          blockers.includes('SSO_NOT_ACTIVE')
+            ? t.organizations.ssoEnforceNeedsActive
+            : blockers.includes('NO_EXEMPT_ADMIN')
+              ? t.organizations.ssoEnforceNeedsExempt
+              : data.error || t.common.error
+        );
+        return;
+      }
+      setSsoMsg(
+        next
+          ? t.organizations.ssoEnforceDone.replace('{count}', String(data.sessionsEnded ?? 0))
+          : t.organizations.ssoRelaxDone
+      );
+      await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const disableSso = async () => {
     if (!ssoOrgId) return;
     setSaving(true); setSsoMsg(null);
@@ -442,6 +486,26 @@ export default function AdminOrganizationsPage() {
                   {t.organizations.ssoEnable}
                 </label>
                 <Button type="submit" loading={saving} disabled={ssoLocked} data-testid="sso-save">{t.common.save}</Button>
+                {/* Enforcement is not part of the form above: it is saved on
+                    its own, immediately, because it ends live sessions. */}
+                <div data-testid="sso-enforce-block" className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">
+                  <label className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                    <input
+                      type="checkbox"
+                      data-testid="sso-enforced"
+                      disabled={ssoLocked || saving}
+                      checked={ssoOrg?.sso.ssoEnforced ?? false}
+                      onChange={(e) => toggleEnforcement(e.target.checked)}
+                    />
+                    {t.organizations.ssoEnforce}
+                  </label>
+                  <p className="text-xs text-amber-800">{t.organizations.ssoEnforceHint}</p>
+                  <p className="text-xs text-amber-800" data-testid="sso-enforce-readiness">
+                    {t.organizations.ssoExemptAdmins.replace('{count}', String(ssoOrg?.sso.exemptAdmins ?? 0))}
+                    {' · '}
+                    {t.organizations.ssoEnforceSessions.replace('{count}', String(ssoOrg?.sso.sessionsToEnd ?? 0))}
+                  </p>
+                </div>
               </>
             )}
           </form>

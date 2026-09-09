@@ -9,7 +9,7 @@ Bir bastırma dosyası yerine düz metin: gerekçe diğer güvenlik dokümanlar�
 yanında okunabilir kalıyor ve biri okuduğunda **hâlâ geçerli mi** diye sorması
 gerektiği belli oluyor.
 
-Son gözden geçirme: **2026-08-24** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
+Son gözden geçirme: **2026-09-09** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
 
 ## Açık bulgular
 
@@ -84,6 +84,44 @@ Kapatma gerekçesi olarak yukarıdaki üç madde yeterli; "used in tests" değil
 ⚠️ Yeni bir ek/görsel kompoziti aynı deseni kullanırsa aynı uyarı yeniden
 çıkar. O zaman da doğru cevap dosyayı buraya eklemek ve uyarıyı kapatmaktır —
 `<img>` bir blob URL'ini çalıştıramaz, bu değişmedi.
+
+## Bilerek yapılan tasarım tercihleri
+
+Bağımlılık ya da tarama bulgusu değil: bir güvenlik özelliğini yaparken bilerek
+verilmiş, dar kapsamlı bir taviz. Aynı sorular geçerli — neden, nerede, ne kadar.
+
+### `SSO_REQUIRED` bir adresin SSO zorunlu bir kiracıya ait olduğunu açık eder (#1950)
+
+**Ne:** Zorunlu SSO açık bir organizasyonun kullanıcısı parolayla giriş
+denediğinde `src/lib/auth.ts` bcrypt karşılaştırmasından **önce**
+`SSO_REQUIRED` fırlatıyor; giriş sayfası "kurumun tek oturum açmayı zorunlu
+kılıyor" diyor ve `/auth/sso` bağlantısını gösteriyor. Aynı bilgi
+`POST /api/auth/reset`, `/api/register` ve `PUT /api/account` yanıtlarında
+`code: "sso_required"` olarak dönüyor.
+
+**Taviz:** Giriş uç noktası bugüne kadar bilinmeyen e-posta ile yanlış parolayı
+aynı genel hatayla yanıtlıyordu, yani bir adresin kayıtlı olup olmadığını
+söylemiyordu. Bu yeni hata, SSO zorunlu kiracılar için o özelliği bozuyor:
+cevabı alan kişi hem adresin var olduğunu hem de hangi tür kiracıya ait
+olduğunu öğreniyor.
+
+**Neden kabul edildi:**
+- Alternatifi, parolası **doğru** olan bir kullanıcıya "e-posta veya parola
+  hatalı" demek. O kişi tekrar deniyor, hesabını kilitliyor ve destek arıyor —
+  yani yanlış cevap gerçek bir operasyonel maliyet üretiyor.
+- Açığa çıkan bilgi bir bit: "bu adres SSO zorunlu bir organizasyona ait".
+  Parola, oturum ya da yetki hakkında hiçbir şey vermiyor.
+- Aynı bilgi zaten büyük ölçüde kamuya açık: kiracının SP metadata uç noktası
+  (`/api/auth/sso/<slug>/metadata`) kimlik doğrulamasız yayında (#1931) ve
+  kurumsal SSO müşterinin kendi duyurduğu bir şey.
+- Kontrol, bcrypt'ten **önce** duruyor. Bu bilinçli: verdiğimiz söz "parolayla
+  giriş kapalı", "parolayla giriş genelde başarısız" değil — zorunlu bir
+  kiracının parola hash'i hiç karşılaştırılmıyor.
+
+**Kapsam:** Yalnızca `ssoEnforced` **ve** `isSsoActive()` doğru olan
+organizasyonlar. Muaf (`ssoExempt`) kullanıcılar ve zorunluluk uygulanmayan her
+kiracı eski genel hatayı almaya devam ediyor. Ayrıntılar:
+[`docs/sso-saml.md`](sso-saml.md) § *Enforced SSO*.
 
 ## Yeni bir istisna eklerken
 

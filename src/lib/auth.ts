@@ -9,6 +9,8 @@ import { headerSource, clientIp } from '@/lib/clientIp';
 import { guardProviders } from '@/lib/authGuard';
 import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/lib/accountLockout';
 import { IMPERSONATION_SESSION_MAX_MS } from '@/lib/impersonationHistory';
+import { AUTH_SSO_REQUIRED } from '@/lib/authErrors';
+import { isPasswordLoginBlocked } from '@/lib/ssoEnforcement';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -33,6 +35,9 @@ const AUTH_USER_SELECT = {
   pendingApproval: true,
   companyId: true,
   orgId: true,
+  // Break-glass exemption from the tenant's enforced SSO (#1950). A Boolean,
+  // never a Json column — see the warning above.
+  ssoExempt: true,
   twoFactorEnabled: true,
   twoFactorSecret: true,
   lastTotpStep: true,
@@ -94,6 +99,30 @@ export const authOptions: NextAuthOptions = {
           where: { email },
           select: AUTH_USER_SELECT,
         });
+
+        // Enforced SSO (#1950), checked BEFORE the bcrypt compare and before
+        // any other account state. Two reasons for that placement: the promise
+        // we make to a customer's security team is "password sign-in is off for
+        // our tenant", not "password sign-in usually fails" — so no password is
+        // ever compared against an enforced tenant's hash — and a cost-12
+        // compare is not spent on a login that could never succeed.
+        //
+        // The trade is that this confirms an address belongs to an SSO-enforced
+        // organization, which the generic error below deliberately avoids for
+        // everyone else. Narrow, deliberate, and written down in
+        // docs/security-exceptions.md; the alternative is telling a user with a
+        // perfectly correct password that it is wrong.
+        if (user && (await isPasswordLoginBlocked(user))) {
+          await logActivity({
+            action: 'auth.login_sso_required',
+            level: 'warning',
+            actorEmail: user.email,
+            actorId: user.id,
+            detail: 'password sign-in refused: the organization enforces SSO',
+            request: origin,
+          });
+          throw new Error(AUTH_SSO_REQUIRED);
+        }
 
         const isPasswordValid = user
           ? await bcrypt.compare(credentials.password, user.password)
@@ -250,6 +279,14 @@ export const authOptions: NextAuthOptions = {
     // consume that grant, so there's no need to read the session cookie.
     // A START grant becomes the target (carrying impersonatorId); a STOP grant
     // returns to the admin (no impersonatorId).
+    //
+    // Deliberately NOT subject to enforced SSO (#1950): no password is involved
+    // (the admin already holds a session, minted by the IdP in an enforced
+    // tenant), the grant is single-use and minted only by an admin-guarded
+    // route, the session is capped and every start/stop is audited. Refusing it
+    // would take support access away from exactly the tenants whose IdP is
+    // having a bad day. The decision is written down in docs/sso-saml.md — a
+    // door left open on purpose has to be a door someone can find.
     CredentialsProvider({
       id: 'impersonate',
       name: 'impersonate',
@@ -363,6 +400,15 @@ export const authOptions: NextAuthOptions = {
         // deactivated inside it.
         if (!user.isActive) {
           throw new Error('This account has been deactivated. Please contact an administrator.');
+        }
+        // Enforced SSO (#1950). The refresh route already refuses and drops the
+        // cookie; this is the second half of the same rule, for the same reason
+        // the isActive check above is repeated — the grant is a bearer token
+        // and the tenant can start enforcing inside its 60-second life. A
+        // remembered browser is the door that silently re-opens itself, so it
+        // is the one door that must be closed in both places.
+        if (await isPasswordLoginBlocked(user)) {
+          throw new Error(AUTH_SSO_REQUIRED);
         }
 
         return {

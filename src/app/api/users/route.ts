@@ -28,6 +28,11 @@ const SELECTS = {
     emailVerified: true,
     pendingApproval: true,
     password: true,
+    // Break-glass exemption from enforced SSO (#1950). A tenant that has
+    // switched password sign-in off needs to be able to SEE who can still use
+    // one — an exemption nobody can find is how a temporary back door becomes
+    // a permanent one.
+    ssoExempt: true,
   },
   // Admin mentor pickers (#942): a name plus what's needed to derive
   // availability. `activeMenteeCount` and `availability` are computed below,

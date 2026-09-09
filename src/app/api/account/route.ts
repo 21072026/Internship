@@ -10,6 +10,7 @@ import { hardDeleteUser } from '@/lib/accountErasure';
 import { withTenantScope } from '@/lib/orgContext';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { clearRememberCookies } from '@/lib/rememberCookie';
+import { isPasswordLoginBlocked, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
 
 const schema = z.object({
   email: z.string().email().optional(),
@@ -59,6 +60,14 @@ export async function PUT(request: Request) {
     }
 
     if (newPassword) {
+      // Enforced SSO (#1950): the fifth door. Setting a new password would put
+      // a working credential back on an account whose tenant has declared that
+      // none may exist — and the current-password check above proves nothing
+      // about that, since the old password is exactly what enforcement retired.
+      // The e-mail change beside it is left alone: it mints no session.
+      if (await isPasswordLoginBlocked(user)) {
+        return NextResponse.json({ error: SSO_REQUIRED_MESSAGE, code: SSO_REQUIRED_CODE }, { status: 400 });
+      }
       data.password = await bcrypt.hash(newPassword, 12);
       // Changing the password revokes every existing session (#868). The whole
       // point of changing it after a session is stolen is to lock the thief

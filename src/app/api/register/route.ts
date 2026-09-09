@@ -18,6 +18,7 @@ import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { resolveStartStage } from '@/lib/pipelineStages';
 import { logActivity } from '@/lib/activity';
 import { findActiveMentorship } from '@/lib/activeMentorship';
+import { isOrgEnforcingSso, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -195,6 +196,17 @@ export async function POST(request: Request) {
     // this, fail-closed org scoping (#1227) 403s an invited COMPANY user's
     // portal until the next deploy runs the backfill.
     const orgId = invitedOrgId ?? (await defaultOrgId());
+
+    // Enforced SSO (#1950). Registration sets a password, so it is a door: an
+    // invitation into an enforced tenant would otherwise mint a credential the
+    // tenant has declared must not exist. The account is not created at all —
+    // its user arrives through the IdP, which JIT-provisions them
+    // (`provisionSsoUser`). Checked against the org, not the user: the account
+    // being created cannot hold a break-glass exemption yet, and an admin
+    // granting one to an account that does not exist is not a flow.
+    if (await isOrgEnforcingSso(orgId)) {
+      return NextResponse.json({ error: SSO_REQUIRED_MESSAGE, code: SSO_REQUIRED_CODE }, { status: 400 });
+    }
 
     const user = await prisma.user.create({
       data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId, preferredLanguage: invitationLocale ?? parsed.data.locale ?? null, companyId: role === 'COMPANY' ? invitedCompanyId : null },

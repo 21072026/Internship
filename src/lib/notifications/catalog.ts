@@ -243,6 +243,11 @@ export const NOTIFICATION_EVENTS = [
   { key: 'security.passwordResetStarted', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.adminSignedOutAll', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.accountUnlocked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Enforced SSO's break-glass exemption (#1950). A disclosure like the rest of
+  // this block: the holder is the tenant's password back door, and an exemption
+  // its holder never heard about is the kind that is still there a year later.
+  { key: 'security.ssoExemptGranted', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.ssoExemptRevoked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentor', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentee', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
 ] as const satisfies readonly NotificationEventDef[];

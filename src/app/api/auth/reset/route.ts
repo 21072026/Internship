@@ -5,6 +5,12 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { passwordSchema } from '@/lib/password';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import {
+  isPasswordLoginBlockedForUserId,
+  SSO_REQUIRED_CODE,
+  SSO_REQUIRED_MESSAGE,
+} from '@/lib/ssoEnforcement';
+import { logActivity } from '@/lib/activity';
 
 const schema = z.object({
   token: z.string().min(1),
@@ -17,6 +23,12 @@ export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get('token') || '';
   const record = await prisma.passwordResetToken.findUnique({ where: { token } });
   const valid = !!record && !record.used && record.expiresAt > new Date();
+  // Enforced SSO (#1950): a link that will be refused on submit should say so
+  // on arrival, not after the user has picked a password. `valid: false` alone
+  // would read as "expired" and send them round the forgot-password loop again.
+  if (valid && (await isPasswordLoginBlockedForUserId(record!.userId))) {
+    return NextResponse.json({ valid: false, code: SSO_REQUIRED_CODE, error: SSO_REQUIRED_MESSAGE });
+  }
   return NextResponse.json({ valid });
 }
 
@@ -38,6 +50,25 @@ export async function POST(request: Request) {
 
     if (!record || record.used || record.expiresAt < new Date()) {
       return NextResponse.json({ error: 'This link is invalid or has expired' }, { status: 400 });
+    }
+
+    // Enforced SSO (#1950). Both purposes land here — a self-service RESET and
+    // the SET_INITIAL link a newly created account receives — so this one check
+    // closes both doors. Deliberately *before* the hash: an enforced tenant's
+    // password column is never rewritten, so there is nothing to fall back to
+    // if enforcement is later lifted by mistake.
+    if (await isPasswordLoginBlockedForUserId(record.userId)) {
+      await logActivity({
+        action: 'auth.reset_sso_required',
+        level: 'warning',
+        actorId: record.userId,
+        detail: `password ${record.purpose === 'SET_INITIAL' ? 'set' : 'reset'} refused: the organization enforces SSO`,
+        request,
+      });
+      return NextResponse.json(
+        { error: SSO_REQUIRED_MESSAGE, code: SSO_REQUIRED_CODE },
+        { status: 400 }
+      );
     }
 
     const hashed = await bcrypt.hash(password, 12);

@@ -5,6 +5,7 @@ import { logActivity } from '@/lib/activity';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { readRememberToken, rotateTrustedDevice } from '@/lib/trustedDevice';
 import { clearRememberCookies, setRememberCookies } from '@/lib/rememberCookie';
+import { isPasswordLoginBlockedForUserId, SSO_REQUIRED_CODE } from '@/lib/ssoEnforcement';
 
 /** How long the bridge token the browser immediately trades in stays usable. */
 const GRANT_TTL_MS = 60 * 1000;
@@ -46,6 +47,27 @@ export async function POST(request: Request) {
     // Expired, revoked, unknown or replayed — in every case this browser's
     // cookie is worthless now, so drop it instead of retrying on every visit.
     const res = NextResponse.json({ error: result.reason }, { status: 401 });
+    clearRememberCookies(res);
+    return res;
+  }
+
+  // Enforced SSO (#1950). This is the door that re-opens itself: a browser
+  // remembered before the tenant switched enforcement on would otherwise mint a
+  // fresh session on its next visit, and nobody would ever see a sign-in form.
+  // Refusing here (rather than only in the `remember` provider) also drops the
+  // cookie, so the browser stops trying and lands on the sign-in page, which
+  // tells it to go to the IdP.
+  if (await isPasswordLoginBlockedForUserId(result.userId)) {
+    await logActivity({
+      action: 'auth.remember_sso_required',
+      level: 'warning',
+      actorId: result.userId,
+      targetType: 'TrustedDevice',
+      targetId: result.deviceId,
+      detail: 'silent re-auth refused: the organization enforces SSO',
+      request,
+    });
+    const res = NextResponse.json({ error: SSO_REQUIRED_CODE }, { status: 401 });
     clearRememberCookies(res);
     return res;
   }

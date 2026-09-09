@@ -6650,3 +6650,36 @@ yapıyorsa, merge olanın neyi kapsadığını (ve varsa senin dalında olup ond
 kaybeden PR'a yorum olarak düşmek, kapatma kararını merge anında keşfedilen bir çatışma
 olmaktan çıkarıp okunabilir bir kayda çeviriyor. Sessizce kapatmak ya da öylece bırakmak,
 aynı işi üçüncü kez yapacak oturumun elinden tek ipucunu alıyor.
+
+## 2026-09-09 — Paylaşılan `node_modules` içinde `prisma generate` yarışıyor (#1950)
+
+Worktree'nin talimatı `ln -s /home/user/Internship/node_modules node_modules`.
+Şemaya iki kolon ekleyip `prisma generate` çalıştırdım, `npx tsc --noEmit`
+temiz geçti; dört dakika sonra aynı komut 24 hata verdi. Sebep: **başka bir
+oturum kendi şemasından generate etmiş ve paylaşılan `node_modules/.prisma`'yı
+üzerime yazmıştı.** Belirtisi, kendi eklediğin alanın `UserSelect`'te
+"does not exist" demesi — yani şema değişikliğini unutmuşsun gibi görünüyor.
+
+Çözüm `node_modules`'ü symlink olmaktan çıkarmak değil, **yalnız Prisma'yı**
+yerelleştirmek: `node_modules`'ü gerçek bir dizin yapıp kanonik kurulumdaki her
+girdiyi tek tek symlink'le, sonra `.prisma` ve `@prisma`'yı symlink yerine
+`cp -r` ile gerçek kopya olarak koy ve `prisma generate`'i öyle çalıştır.
+Üretici çıktısını çözdüğü `@prisma/client`'ın yanına yazdığı için, o iki dizin
+gerçek kopya olduğunda üretilen istemci worktree'ye ait oluyor ve komşu
+oturumlar birbirini ezmiyor (~83 MB, saniyeler sürüyor). **Kural: şemaya
+dokunan bir worktree oturumunda `.prisma` ve `@prisma` symlink kalmasın** — ve
+`tsc` bir kez geçtikten sonra "does not exist" hataları geri geldiyse, kendi
+diff'ini değil önce `grep -c <yeniAlan> node_modules/.prisma/client/index.d.ts`
+sonucunu kontrol et.
+
+## 2026-09-09 — Uzun bir dalın altından kayan tek şey birleştirme çakışması değil (#1950)
+
+Bayatlık kontrolü (`merge-tree --write-tree`) temiz dedi, yine de birleştirmeden
+sonra `npm run test:notification-catalog` kırmızıya döndü: bu dal uçarken main'e
+tipli bildirim kataloğu (#1710) inmişti ve sözlüğe eklediğim iki
+`notifications.events` anahtarının artık `src/lib/notifications/catalog.ts`'te
+karşılığı olması gerekiyordu. Metinsel çakışma yok, sözleşme çakışması var.
+**Kural: bayatlık kontrolü temiz çıksa bile, birleştirmeden sonra kapıların
+tamamını (`tsc`, `build`, `check:*` ve ilgili `test:*` betikleri) yeniden
+çalıştır** — özellikle diff'in dokunduğu alanda main'e yeni bir "her X'in bir Y
+kaydı olmalı" denetimi inmiş olabilir.
