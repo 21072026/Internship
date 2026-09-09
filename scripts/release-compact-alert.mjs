@@ -35,12 +35,29 @@
 //   COUNT           fragments folded into it
 //   VERSION         version those fragments ship as
 //   PR_NUMBER       the compaction PR (resolved mode only)
-//   GH_TOKEN        needs `issues: write`. The workflow grants that to its own
-//                   GITHUB_TOKEN; if RELEASE_BOT_TOKEN is set instead and that
-//                   PAT lacks the scope, every gh call here fails and the
-//                   script degrades to the annotation alone — which is also
-//                   the case where PR creation worked and none of this ran.
+//   PR_CREATE_ERROR whatever `gh pr create` actually printed on stderr. Quoted
+//                   verbatim in the issue and the annotation; see NEVER GUESS
+//                   THE CAUSE below.
+//   ISSUE_GH_TOKEN  the token to file the issue with — preferred over GH_TOKEN.
+//                   The workflow sets it to its own GITHUB_TOKEN, which is the
+//                   identity the `issues: write` permission was granted to.
+//                   GH_TOKEN in that step is `RELEASE_BOT_TOKEN || GITHUB_TOKEN`,
+//                   so in exactly the configuration the issue RECOMMENDS (add
+//                   the PAT) every gh call here would run as a PAT that may
+//                   well have no issues scope — the alert would be silent in
+//                   the one setup a maintainer had just been told to adopt.
+//                   Falls back to GH_TOKEN, then GITHUB_TOKEN.
 //   plus GITHUB_REPOSITORY / GITHUB_SERVER_URL / GITHUB_RUN_ID
+//
+// NEVER GUESS THE CAUSE
+//   The first version of this asserted one cause ("GitHub Actions is not
+//   permitted to create pull requests") in the issue body and the annotation,
+//   because that is what the four observed runs hit. But `gh pr create` fails
+//   for plenty of other reasons — an expired PAT, a branch protection rule, a
+//   rate-limited GraphQL quota, a network blip — and an alert that confidently
+//   names the wrong cause sends the reader to the wrong repository setting.
+//   So the real stderr is captured by the workflow and quoted here, and the
+//   familiar cause is offered as the LIKELY one, not the diagnosis.
 //
 // Pure message/state helpers are exported and unit-tested in
 // scripts/test/release-compact-alert.test.mjs — the text a human reads is the
@@ -81,13 +98,32 @@ export function compareUrl({ serverUrl, repo, branch }) {
   return `${serverUrl}/${repo}/compare/main...${encodeURIComponent(branch)}?expand=1`;
 }
 
+/** The stderr `gh pr create` printed, trimmed to something an issue body can
+ *  carry: the last few lines (gh puts its real message last), no blank lines,
+ *  and a hard cap so a pathological failure cannot post a megabyte. Returns
+ *  null when the workflow captured nothing, which is what an older workflow
+ *  revision or a crash before the redirect looks like. */
+export function formatCreateError(raw, { maxLines = 12, maxChars = 2000 } = {}) {
+  const lines = String(raw || '')
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim() !== '');
+  if (lines.length === 0) return null;
+  const kept = lines.slice(-maxLines).join('\n');
+  return kept.length > maxChars ? `…${kept.slice(-maxChars)}` : kept;
+}
+
+/** The one cause we have actually observed, recognised rather than assumed. */
+const ACTIONS_PR_REFUSAL = /not permitted to create( or approve)? pull requests/i;
+
 export function buildStuckIssue(ctx) {
   const { branch, count, version, repo, serverUrl, runUrl } = ctx;
   const title = `📓 Release compaction is stuck — ${count} fragment(s) waiting on a PR (${version})`;
+  const error = formatCreateError(ctx.createError);
+  const knownCause = error ? ACTIONS_PR_REFUSAL.test(error) : false;
   const body = [
     '`release-compact.yml` folded the pending release fragments and force-pushed them, then could',
-    '**not open the pull request**: GitHub Actions is not permitted to create pull requests in this',
-    'repository.',
+    '**not open the pull request**.',
     '',
     '**Nothing is lost and nothing needs rebuilding** — the branch is correct and current. The only',
     'missing step is the PR.',
@@ -99,6 +135,33 @@ export function buildStuckIssue(ctx) {
     `| Version they ship as | \`${version}\` |`,
     `| Last failed run | ${runUrl} |`,
     '',
+    '### What `gh pr create` said',
+    '',
+    // Verbatim, never paraphrased. The first version of this issue asserted
+    // one cause; `gh pr create` also fails on an expired PAT, a protected
+    // branch or an exhausted GraphQL quota, and naming the wrong one sends the
+    // reader to the wrong setting.
+    ...(error
+      ? ['```', error, '```', '']
+      : [
+          'The failing run captured no stderr — read it in the run log linked above. (A run from before',
+          'this trail existed, or a failure before the redirect, both look like this.)',
+          '',
+        ]),
+    ...(knownCause
+      ? [
+          'That is the cause this trail was built for: **GitHub Actions is not permitted to create pull',
+          'requests in this repository**, so the fix is the repository decision below.',
+          '',
+        ]
+      : error
+        ? [
+            'That is **not** the "Actions may not create pull requests" refusal this trail was built for,',
+            'so read it before reaching for the repository setting below — an expired `RELEASE_BOT_TOKEN`,',
+            'a branch protection rule and an exhausted GraphQL quota all land here too.',
+            '',
+          ]
+        : []),
     '### Open it by hand (this is the whole fix for today)',
     '',
     compareUrl({ serverUrl, repo, branch }),
@@ -109,8 +172,17 @@ export function buildStuckIssue(ctx) {
     '',
     '### Make it stop happening',
     '',
-    `That takes a repository setting, and an agent must not change one — ${MAINTAINER} picks between the`,
-    'two options in #2323 (allow Actions to create pull requests, or add a `RELEASE_BOT_TOKEN` secret).',
+    ...(knownCause || !error
+      ? [
+          `That takes a repository setting, and an agent must not change one — ${MAINTAINER} picks between the`,
+          'two options in #2323 (allow Actions to create pull requests, or add a `RELEASE_BOT_TOKEN` secret).',
+        ]
+      : [
+          'If the error above turns out to be the Actions PR restriction after all, the permanent fix is a',
+          `repository setting an agent must not change — ${MAINTAINER} picks between the two options in`,
+          '#2323 (allow Actions to create pull requests, or add a `RELEASE_BOT_TOKEN` secret). If it is',
+          'something else, fix that instead; this issue closes itself either way once a PR exists.',
+        ]),
     '',
     '### Why an issue and not just a log line',
     '',
@@ -134,22 +206,36 @@ export function buildStuckIssue(ctx) {
  *  break. */
 export function buildAnnotation(ctx) {
   const { branch, count, version, repo, serverUrl, issueUrl } = ctx;
+  // One line of the real stderr, not a guess at the cause. `%0A` is the only
+  // line break an annotation understands, so the error is squeezed onto one
+  // line rather than embedded as a block.
+  const error = formatCreateError(ctx.createError, { maxLines: 2, maxChars: 300 });
   const lines = [
-    `The branch ${branch} is pushed and correct (${count} fragment(s) -> ${version}), but creating the PR failed:`,
-    'GitHub Actions is not permitted to create pull requests in this repository.',
+    `The branch ${branch} is pushed and correct (${count} fragment(s) -> ${version}), but creating the PR failed.`,
+    error ? `gh said: ${error.replace(/\n/g, ' / ')}` : 'gh printed nothing this run — read the log above.',
     `Open it in one click: ${compareUrl({ serverUrl, repo, branch })}`,
     issueUrl
       ? `Tracked in ${issueUrl} — that issue closes itself when a compaction PR exists.`
       : 'Could not record it as an issue either (the token needs issues: write) — see #2323.',
-    `The permanent fix is a repository setting for ${MAINTAINER}, asked in #2323: allow Actions to create PRs, or add RELEASE_BOT_TOKEN.`,
+    `If it is the Actions PR restriction, the permanent fix is a repository setting for ${MAINTAINER}, asked in #2323: allow Actions to create PRs, or add RELEASE_BOT_TOKEN.`,
   ];
   return `::error title=Release compaction could not open its PR::${lines.join('%0A')}`;
 }
 
 // ── the gh plumbing ─────────────────────────────────────────────────────────
 
+/**
+ * Every gh call here runs as ISSUE_GH_TOKEN when the workflow set one. That is
+ * the plain GITHUB_TOKEN — the identity `permissions: issues: write` was
+ * granted to. Inheriting the step's GH_TOKEN instead would mean that in the
+ * very configuration this alert RECOMMENDS (set RELEASE_BOT_TOKEN) the alert
+ * runs as a PAT whose scopes nobody promised include issues, and a failure
+ * trail that is silent in the recommended setup is not a failure trail.
+ */
 function gh(args) {
-  return execFileSync('gh', args, { encoding: 'utf8' }).trim();
+  const token = process.env.ISSUE_GH_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  const env = token ? { ...process.env, GH_TOKEN: token, GITHUB_TOKEN: token } : process.env;
+  return execFileSync('gh', args, { encoding: 'utf8', env }).trim();
 }
 
 function findOpenAlert(repo) {
@@ -200,6 +286,7 @@ function context() {
     branch: process.env.COMPACT_BRANCH || 'bot/release-compact',
     count: process.env.COUNT || '?',
     version: process.env.VERSION || '(version not resolved)',
+    createError: process.env.PR_CREATE_ERROR || '',
   };
 }
 

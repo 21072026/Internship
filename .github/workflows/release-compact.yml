@@ -48,7 +48,11 @@ name: Compact release fragments
 # count, the version and the one-click manual step
 # (scripts/release-compact-alert.mjs), and CLOSES it again as soon as a
 # compaction PR exists. Updating rather than duplicating is deliberate: this
-# fires daily, and 30 identical issues would be its own kind of silence.
+# fires daily, and 30 identical issues would be its own kind of silence. The
+# alert quotes the stderr `gh pr create` really printed instead of asserting the
+# one cause we observed, and it files the issue as the workflow's own
+# GITHUB_TOKEN (the identity `issues: write` belongs to) rather than as a
+# RELEASE_BOT_TOKEN PAT that need not have that scope.
 # Nothing about the success path changed — the push, the force-push, the
 # arithmetic and the stamping are untouched.
 
@@ -115,6 +119,12 @@ jobs:
           # branch); only PR creation is forbidden to it. The preflight below
           # says so up front instead of leaving the GraphQL error to be decoded.
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+          # The failure trail files its issue as THIS token, not as GH_TOKEN
+          # above: `permissions: issues: write` was granted to the workflow's own
+          # GITHUB_TOKEN, and a RELEASE_BOT_TOKEN PAT need not carry that scope.
+          # Without this split the alert would go silent in exactly the setup the
+          # alert itself recommends adopting (#2323).
+          ISSUE_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HAS_PAT: ${{ secrets.RELEASE_BOT_TOKEN != '' && '1' || '0' }}
           VERSION: ${{ steps.compact.outputs.version }}
           COUNT: ${{ steps.compact.outputs.count }}
@@ -146,17 +156,24 @@ jobs:
             # dedented continuation line would close the YAML block scalar.
             # Single-quoted format string keeps the markdown backticks literal.
             BODY="$(printf 'Scheduled compaction (#1275): folds the pending `releases/unreleased/` fragments into `package.json`, `CHANGELOG.md` and `src/lib/releaseNotes.ts`, then deletes them — one release section per fragment, each with its own version, merge time and commit (#1457).\n\nThe displayed version does not change: builds already derived `%s` from base+fragments. This only makes the canonical files match what shipped.\n' "$VERSION")"
+            # stderr is captured, not just streamed: the alert quotes what gh
+            # ACTUALLY said rather than asserting the one cause we happened to
+            # observe (an expired PAT, a protected branch and an exhausted
+            # GraphQL quota all fail here too, and each needs a different fix).
+            # It is echoed back to the log as well so the run reads normally.
             if ! gh pr create \
                 --head "$BRANCH" \
                 --title "chore(release): compact fragments into ${VERSION}" \
-                --body "$BODY"; then
+                --body "$BODY" 2>"$RUNNER_TEMP/pr-create.err"; then
+              cat "$RUNNER_TEMP/pr-create.err" >&2 || true
               # The branch is pushed and correct; only the PR is missing. Leave
               # a trail a person actually encounters — an issue plus the
               # ::error:: annotation, both naming the branch, the count, the
-              # version and the manual step (#2323). Best effort: if even the
-              # issue cannot be filed, the annotation still goes out and this
-              # step still fails.
-              node scripts/release-compact-alert.mjs stuck \
+              # version, what gh said and the manual step (#2323). Best effort:
+              # if even the issue cannot be filed, the annotation still goes out
+              # and this step still fails.
+              PR_CREATE_ERROR="$(cat "$RUNNER_TEMP/pr-create.err" 2>/dev/null || true)" \
+                node scripts/release-compact-alert.mjs stuck \
                 || echo "::error title=Could not open the compaction PR::The branch ${BRANCH} is pushed and correct (${COUNT} fragment(s) -> ${VERSION}), but creating the PR failed and the failure could not be recorded as an issue either. Open the PR from ${BRANCH} manually; see #2323."
               exit 1
             fi

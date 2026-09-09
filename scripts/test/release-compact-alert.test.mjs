@@ -23,9 +23,13 @@ import {
   buildAnnotation,
   buildStuckIssue,
   compareUrl,
+  formatCreateError,
   parseState,
   shouldComment,
 } from '../release-compact-alert.mjs';
+
+const ACTIONS_REFUSAL =
+  'pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)';
 
 const ctx = {
   branch: 'bot/release-compact',
@@ -105,6 +109,55 @@ test('the annotation still stands on its own when the issue could not be filed',
   assert.match(line, /issues: write/);
   assert.match(line, /compare\/main/);
   assert.match(line, /#2323/);
+});
+
+test('the issue quotes what gh actually said, and does not assert the cause', () => {
+  // The first version of this hardcoded "Actions is not permitted to create
+  // pull requests" into the body. `gh pr create` also fails on an expired PAT,
+  // a protected branch and an exhausted GraphQL quota — each with a different
+  // fix — so an alert that names the wrong cause is worse than one that quotes.
+  const expired = 'pull request create failed: HTTP 401: Bad credentials (https://api.github.com/graphql)';
+  const { body } = buildStuckIssue({ ...ctx, createError: expired });
+  assert.match(body, /Bad credentials/, 'the real stderr must be in the body');
+  assert.match(body, /\*\*not\*\* the "Actions may not create pull requests" refusal/);
+  assert.equal(
+    /is not permitted to create pull\s+requests in this repository\*\*, so the fix is/.test(body),
+    false,
+    'an unrecognised error must not be reported as the known cause'
+  );
+});
+
+test('the familiar refusal is still named as the cause when that is what happened', () => {
+  const { body } = buildStuckIssue({ ...ctx, createError: ACTIONS_REFUSAL });
+  assert.match(body, /not permitted to create pull/);
+  assert.match(body, /so the fix is the repository decision below/);
+  assert.match(body, new RegExp(MAINTAINER.replace('@', '@')));
+});
+
+test('a run that captured no stderr says so instead of inventing one', () => {
+  const { body } = buildStuckIssue({ ...ctx, createError: '' });
+  assert.match(body, /captured no stderr/);
+  // With nothing to go on, the known cause is still the useful default guess —
+  // it is what every observed failure was — but it is offered, not diagnosed.
+  assert.match(body, /two options in #2323/);
+});
+
+test('formatCreateError keeps the tail, drops blank lines and caps the size', () => {
+  // gh prints its real message LAST, so a truncation must keep the end.
+  const noisy = Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n\n');
+  const out = formatCreateError(noisy, { maxLines: 3 });
+  assert.equal(out, 'line 37\nline 38\nline 39');
+  assert.equal(formatCreateError('   \n\n  '), null);
+  assert.equal(formatCreateError(undefined), null);
+  const huge = formatCreateError('x'.repeat(5000), { maxChars: 100 });
+  assert.equal(huge.length, 101, 'capped, with the ellipsis marker');
+  assert.ok(huge.startsWith('…'));
+});
+
+test('the annotation carries the real error on one line', () => {
+  const line = buildAnnotation({ ...ctx, issueUrl: null, createError: `first\n${ACTIONS_REFUSAL}` });
+  assert.equal(line.includes('\n'), false, 'a multi-line annotation is truncated by Actions');
+  assert.match(line, /gh said: .*not permitted to create/);
 });
 
 test('the alert label is a fixed string', () => {
