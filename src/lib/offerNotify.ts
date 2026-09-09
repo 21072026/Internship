@@ -103,6 +103,14 @@ export async function notifyOfferDecided(offerId: string, outcome: 'ACCEPTED' | 
 }
 
 // Expire SENT offers whose expiresAt has passed (#809), for the scheduled cron.
+//
+// PLATFORM-WIDE ON PURPOSE. `Offer` is registered in TENANT_MODELS (#1559), but
+// this runs from /api/cron, outside any request and therefore outside any tenant
+// context — so the middleware does not scope it and the sweep sees every
+// tenant's due offers. That is the required behaviour: one cron tick has to
+// expire every org's offers, and there is no session to resolve an org from. The
+// `updateMany` claim below is guarded by `status: 'SENT'`, not by a tenant, for
+// the same reason.
 // Idempotent the same way sendMeetingReminders() is: the status flip is
 // claimed with a guarded `updateMany` (status: 'SENT' in the where) BEFORE any
 // audit/notify/email — only the caller that wins the claim (count === 1) sends

@@ -8,6 +8,7 @@ import {
   type RealtimeEvent,
 } from '@/lib/realtimeBus';
 import { logger } from '@/lib/logger';
+import { withRequestScope } from '@/lib/requestContext';
 
 /**
  * Live message stream (#1464) — Server-Sent Events.
@@ -51,6 +52,14 @@ const CLIENT_RETRY_MS = 10_000;
 const MAX_STREAM_MS = 30 * 60_000;
 
 export async function GET(request: Request) {
+  // The context is bound around the whole handler, so the stream's own async
+  // callbacks (the heartbeat, the unread poll) inherit the request id too
+  // (#1601) — an SSE connection can log for half an hour, and every one of
+  // those lines belongs to the request the browser can name.
+  return withRequestScope(request, () => handleGet(request));
+}
+
+async function handleGet(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return new Response('Unauthorized', { status: 401 });
   const userId = session.user.id;

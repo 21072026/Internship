@@ -239,12 +239,15 @@ workaround, #636, and it compiled on every PR push).
   registered only *looks* scoped. `npm run check:tenant-models` (in CI, #1560) compares the
   schema against the registry in both directions and fails on either kind of drift; a
   deliberate exception goes in the script's `EXEMPT` map with its reason, never in a comment
-  somewhere else. **It is not yet green-means-clean:** the eight models of #1559 are already
-  unprotected, and they sit in a `PENDING_REGISTRATION` ratchet that the check warns about
-  (a GitHub annotation in CI) instead of failing on — so the guard's job until #1559 lands is
-  to stop that set from *growing*. Its length is pinned by an `EXPECTED_PENDING` literal;
-  adding a name means moving the number in the same diff, and registering one means deleting
-  the entry (a stale entry fails the check).
+  somewhere else. **Green means clean since #1559:** every model with an `orgId` is now
+  registered and the `PENDING_REGISTRATION` ratchet is empty (`EXPECTED_PENDING = 0`). The
+  ratchet stays for the next model that must wait for its own reviewed change; its length is
+  pinned by that literal, so adding a name means moving the number in the same diff, and
+  registering one means deleting the entry (a stale entry fails the check). Registering a
+  model changes **writes** too — the middleware fills `orgId` in from the bound context —
+  so walk every create path, and remember that sessionless ones (register, invite
+  acceptance, the public company-inquiry form, crons, deploy backfills) bind no context at
+  all and must keep passing their own `orgId`.
 - **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
   (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
   assert exact landing strings (e.g. "Connect Talent with", "Everything you need",
@@ -440,6 +443,18 @@ workaround, #636, and it compiled on every PR push).
   Escape, a backdrop tap **and the phone's back button** (it pushes a history entry while
   open and pops it again on close — keep that balance if you touch it). Non-image
   attachments still hand off to the browser, which is the right viewer for a PDF.
+- **One import engine, one parser** (`docs/roster-feed.md`, #1965/#2072): every importer in
+  the tree runs on `runImport({ parse, validate, resolve, apply })` in
+  `src/lib/importPreview.ts` and parses with its shared delimited parser (quoted embedded
+  newlines, CRLF, BOM, `;` for a German Excel export). Do not add a second parser or a
+  second dry-run engine: **a dry run is the same call with a writer that does not write**,
+  and a preview built in its own branch is a different program from the run it previews
+  (that is #1432). The scheduled roster feed is its first consumer — `src/lib/rosterIngest.ts`
+  (pure: transport, file hash, diff, resume protocol) plus `src/lib/rosterIngestStore.ts`
+  (the only Prisma-aware half: one transaction per chunk, the contiguous
+  `RosterRun.nextChunkIndex` checkpoint, and `runWithOrg(feed.orgId, …)` because a cron run
+  has no session). What an external system may overwrite on a user is decided in exactly one
+  place, `src/lib/externalSyncPolicy.ts`, shared with SSO sync.
 - **E2E locator pitfalls** (hit repeatedly): `AdminNav` renders its own sidebar
   `input[type="search"]` filter box present on every admin page — an unscoped
   `input[type="search"]` selector in a new test will hit that instead of a page-level search
@@ -475,3 +490,15 @@ workaround, #636, and it compiled on every PR push).
   is a signal to inspect first (`git log --oneline main..origin/main` and
   `origin/main..main`), not to force through. If the actual file contents match between the
   two tips, `git reset --hard origin/main` is safe.
+- **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
+  inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted
+  verbatim), forwards it to the handler and echoes it on **every** response, error responses
+  included. `src/lib/logger.ts` stamps `requestId` (and `orgId`) onto every line by itself, so
+  no caller passes it. Three rules: the value is carried by the `AsyncLocalStorage` in
+  `src/lib/requestContext.ts` — the same shape as `orgContext.ts`, do not add a second
+  mechanism; that file is **server-only** (`node:async_hooks`) and is reached from client-safe
+  code only through the `ambientRequestId()` seam in `requestId.ts`; and a handler binds it
+  with `withRequestScope(request, () => …)` **around** `withTenantScope`, so both contexts are
+  established at the top of the handler. Only the header is read — never the body, the other
+  headers or the query string, which carry PII. Not every handler binds it yet: wrap the one
+  you are touching if it logs.

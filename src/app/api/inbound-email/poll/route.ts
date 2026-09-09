@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { pollInboundMailbox, bridgeConfig } from '@/services/inboundMailBridge';
 import { logger } from '@/lib/logger';
+import { withRequestScope } from '@/lib/requestContext';
 import { holdsLease, leaseTtlMs, replicaId, IMAP_BRIDGE_LEASE } from '@/lib/jobs/lease';
 
 // IMAP needs real sockets — keep this handler off the edge runtime.
@@ -35,6 +36,12 @@ export const dynamic = 'force-dynamic';
 // caller learns nothing about the lease) and BEFORE `pollInboundMailbox()` —
 // the point is to not open the IMAP connection at all.
 export async function POST(request: Request) {
+  // Correlate the bridge's log lines with the one poll that produced them
+  // (#1601) — the tick is a request like any other.
+  return withRequestScope(request, () => handlePost(request));
+}
+
+async function handlePost(request: Request) {
   const expected = process.env.INBOUND_SECRET;
   if (!expected) return NextResponse.json({ error: 'Not configured' }, { status: 503 });
 

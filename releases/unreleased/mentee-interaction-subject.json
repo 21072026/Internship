@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Mentee interaction subjects** (#1421). Interaction subjects are now visible to mentees in their full interaction history and as the primary, truncation-safe line in recent journey interactions; entries without a subject retain their existing notes-only presentation.",
-  "notes": {
-    "en": ["Mentees can now see interaction subjects in their interaction history and recent journey activity."],
-    "tr": ["Mentee'ler artık etkileşim geçmişinde ve yolculuktaki son etkinliklerde etkileşim başlıklarını görebilir."],
-    "de": ["Mentees sehen jetzt die Betreffzeilen von Interaktionen im Verlauf und in den neuesten Aktivitäten ihrer Journey."]
-  }
-}

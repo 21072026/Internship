@@ -12,6 +12,15 @@ import { getLocale } from '@/i18n/server';
 // Per-tenant pipeline-stage management (#747). Admin-only; premium-gated (custom
 // stages require a paid plan). Phase A: label / order / color / on-path grouping
 // over the canonical keys — an org with no rows uses the built-in defaults.
+//
+// DELIBERATELY NOT WRAPPED IN withTenantScope. `PipelineStage` is registered in
+// TENANT_MODELS since #1559, and this is the one route that must be able to
+// write another tenant's stages: a super admin manages any org (#1535), and the
+// org is an explicit path parameter, not the caller's own. Binding the caller's
+// tenant here would narrow every query below to the super admin's own org and
+// break exactly that. The authorisation lives in requireAdminOrg() — a plain
+// ADMIN is refused unless `id` is their own org — and every query names
+// `orgId: id` itself, so nothing depends on the middleware either way.
 
 async function requireAdminOrg(id: string, route: string) {
   const session = await getServerSession(authOptions);

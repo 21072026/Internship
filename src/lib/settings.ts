@@ -159,6 +159,20 @@ export const SETTING_DEFAULTS = {
   // per-tenant override would be written and never read — the admin dry run
   // reads the same layer deliberately, so its countdown is the one that fires.
   orphanApplicantGraceDays: '90',
+  // Monthly cap on BROADCAST recipients — announcement e-mails and newsletter
+  // issues — for one org (#1754). The rule, and everything it deliberately does
+  // NOT meter, live in src/lib/broadcastQuota.ts.
+  //
+  // Default `''` = no override: the band is the plan's own
+  // `monthlyBroadcastRecipients` (src/lib/plans.ts — Community 250, Program
+  // 2 000, Program Plus 10 000, Enterprise unlimited), so an installation that
+  // configures nothing gets the published packaging rather than a number
+  // invented here. A value TIGHTENS that band and can never lift it, in either
+  // layer: a cap a tenant's own admin could raise would protect nobody else's
+  // deliverability, and every tenant shares one sending domain. `0` switches
+  // broadcasts off entirely — 1:1 messages, notifications and every lifecycle
+  // e-mail keep working, which is the point of metering only broadcasts.
+  broadcastMonthlyRecipients: '',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

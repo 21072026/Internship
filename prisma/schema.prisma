@@ -141,6 +141,7 @@ model Organization {
   settings             Setting[]
   programCosts         ProgramCost[]
   placements           Placement[]
+  rosterFeeds          RosterFeed[]
   subscription         Subscription?
   orgEntitlements      OrgEntitlement[]
   usageRollups         UsageRollup[]
@@ -417,6 +418,16 @@ model User {
   lastLoginAt             DateTime?
   // Last time the user was seen active (page-view heartbeat, consent-gated).
   lastSeenAt              DateTime?
+  // The HR system's own identifier for this person, when a roster feed carries
+  // one (#1965). Nullable and unbackfilled: only people who arrive through a
+  // feed keyed on EXTERNAL_ID ever have it. It is what makes an e-mail change
+  // readable as an update instead of a leaver plus a joiner - matching on the
+  // address alone cannot tell those apart, and #1966 would deprovision the
+  // "leaver". Not unique: the uniqueness that matters is per tenant, and MySQL
+  // treats NULLs in a unique index as distinct, so a composite unique over a
+  // nullable pair would stop de-duplicating anything at all (the same reasoning
+  // as Job.idempotencyKey).
+  externalId              String?       @db.VarChar(191)
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
@@ -485,6 +496,7 @@ model User {
 
   @@index([role])
   @@index([referredById])
+  @@index([orgId, externalId])
 }
 
 // Per-user state for in-product guidance surfaces (#2068): "I have seen this"
@@ -1249,6 +1261,10 @@ model Company {
   requisitions      Requisition[]
   interviewRequests InterviewRequest[]
   placements        Placement[]
+  // The enquiries this company was created from (#1863). A list rather than a
+  // single row because nothing stops a second enquiry from the same company
+  // later being linked to the account it already has.
+  fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -1390,32 +1406,46 @@ enum CompanyInquiryStatus {
 // stored (rather than only emailed) so a request cannot quietly go missing in
 // an inbox, and so an admin can see what is still unanswered.
 model CompanyInquiry {
-  orgId       String?
-  org         Organization?        @relation(fields: [orgId], references: [id])
-  id          String               @id @default(cuid())
-  companyName String
-  contactName String
-  email       String
-  phone       String?
+  orgId              String?
+  org                Organization?        @relation(fields: [orgId], references: [id])
+  id                 String               @id @default(cuid())
+  companyName        String
+  contactName        String
+  email              String
+  phone              String?
   // Roles they are hiring for, and anything else they typed.
-  openRoles   String?              @db.Text
-  message     String?              @db.Text
+  openRoles          String?              @db.Text
+  message            String?              @db.Text
   // Preferred UI language ('en' | 'tr' | 'de') — the language they read the
   // page in, so a reply can be written in it.
-  locale      String?
-  status      CompanyInquiryStatus @default(NEW)
+  locale             String?
+  status             CompanyInquiryStatus @default(NEW)
   // When they accepted the privacy terms — set server-side on submit.
-  consentAt   DateTime?
-  handledAt   DateTime?
-  handledById String?
-  note        String?              @db.Text
-  createdAt   DateTime             @default(now())
+  consentAt          DateTime?
+  handledAt          DateTime?
+  handledById        String?
+  note               String?              @db.Text
+  createdAt          DateTime             @default(now())
+  // What this enquiry BECAME (#1863). An admin converts a warm lead into a real
+  // Company plus an invited COMPANY login in one action; these two columns are
+  // the record of that. Their presence is also the idempotence key: the convert
+  // endpoint claims the enquiry with a conditional UPDATE on
+  // `convertedCompanyId: null`, so a double-click (or two admins on the same
+  // row) produces one Company and one invitation, and the loser gets a
+  // 409 `already_converted` naming what it already became.
+  //
+  // The enquiry itself is never deleted — it is the record of where the
+  // relationship came from — so this is a link, not a replacement.
+  convertedCompanyId String?
+  convertedAt        DateTime?
 
-  handledBy User? @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+  handledBy        User?    @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+  convertedCompany Company? @relation("ConvertedFromInquiry", fields: [convertedCompanyId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([email])
   @@index([orgId])
+  @@index([convertedCompanyId])
 }
 
 enum MentorApplicationStatus {
@@ -2586,6 +2616,13 @@ model InvitationToken {
   // this to itself; an admin picks the mentor in the invite form.
   mentorId     String?
   menteeId     String?
+  // The company an invited COMPANY user belongs to (#1863). A COMPANY account
+  // is useless without it — every company-side screen reads `User.companyId` —
+  // and registration has no other way to learn it, since the invitee only
+  // supplies a name and a password. Carried here for the same reason `orgId` is:
+  // the fact is known when the invitation is minted and must survive until it is
+  // consumed, possibly days later. Only ever set on a `role = COMPANY` row.
+  companyId    String?
   // The project the invitee should join on registration, if any.
   projectId    String?
   // Lifecycle timestamps (nullable — each set once, the first time it happens):
@@ -3627,5 +3664,180 @@ model NotificationDelivery {
   /// Tenant-leading, like every other model in TENANT_MODELS: without it an
   /// auto-scoped query under MT_ENFORCE_ISOLATION filters orgId row by row on
   /// top of one of the indexes above.
+  @@index([orgId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduled roster feed (#1963 / #1964 / #1965)
+//
+// A tenant's HR export, fetched on a schedule and turned into an accurate
+// roster. The engine is src/lib/rosterIngest.ts on top of the shared import
+// engine (src/lib/importPreview.ts); these three tables are the part of it that
+// has to survive a crash.
+//
+// NOTE ON OWNERSHIP: #1964 owns these models. They are created here because the
+// ingestion engine (#1965) has nowhere to keep its checkpoint otherwise, and
+// #1964 had not landed when this shipped — the same arrangement the issue
+// prescribes for src/lib/importPreview.ts. #1964 extends them (schedule
+// expression, last-error surfacing, the admin UI's counters); nothing here is a
+// rename.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum RosterTransport {
+  HTTPS
+  SFTP
+}
+
+enum RosterKeyField {
+  EMAIL
+  EXTERNAL_ID
+}
+
+enum RosterRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  NOOP
+}
+
+/// Mirrors `RowStatus` in src/lib/importPreview.ts, token for token. One
+/// vocabulary for every importer in the tree — a second one would let the same
+/// outcome be called two things on two screens.
+enum RosterRowStatus {
+  CREATE
+  UPDATE
+  UNCHANGED
+  SKIP
+  ERROR
+}
+
+/// One configured feed for one tenant.
+model RosterFeed {
+  id    String       @id @default(cuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  name      String          @db.VarChar(120)
+  transport RosterTransport @default(HTTPS)
+  enabled   Boolean         @default(false)
+
+  /// HTTPS transport. Checked by assertPublicHttpsUrl() before every fetch: the
+  /// URL is tenant-supplied and fetched from the server's network position.
+  url String? @db.Text
+
+  /// SFTP transport.
+  sftpHost               String? @db.VarChar(255)
+  sftpPort               Int?
+  sftpUsername           String? @db.VarChar(191)
+  sftpPath               String? @db.Text
+  /// The pinned host key fingerprint (#1964). No fingerprint, no connection.
+  sftpHostKeyFingerprint String? @db.VarChar(191)
+  /// The NAME of the environment variable holding the SFTP secret — never the
+  /// secret. A credential in a database row is a credential in every backup.
+  credentialEnvVar       String? @db.VarChar(120)
+
+  /// Force a delimiter instead of sniffing it (';' for a German Excel export).
+  delimiter String? @db.VarChar(4)
+
+  /// Which column identifies a person. EMAIL is the default and cannot tell an
+  /// address change from a leaver plus a joiner; EXTERNAL_ID can.
+  keyField RosterKeyField @default(EMAIL)
+
+  /// Our field name → the header this tenant's export happens to use.
+  columnMap Json
+
+  /// The tenant declaring the feed is the record of truth for these people.
+  /// False (the default) means the feed fills gaps but never overwrites a value
+  /// a human typed — the same policy SSO sync follows.
+  authoritative Boolean @default(false)
+
+  chunkSize Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs RosterRun[]
+
+  @@index([orgId, enabled])
+}
+
+/// One attempt at one file. Identified by (feedId, fileHash, dryRun): that is
+/// what makes apply idempotent and a retry resumable rather than a re-apply.
+model RosterRun {
+  id     String     @id @default(cuid())
+  feedId String
+  feed   RosterFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)
+
+  /// Tenant anchor. A plain column rather than a second FK to Organization: the
+  /// row is reached through `feed`, which cascades, and the column is what
+  /// registers the model with the tenant middleware (TENANT_MODELS).
+  orgId String
+
+  /// SHA-256 of the fetched bytes. Equal to the last successful run's hash means
+  /// the file has not changed and the run is a no-op.
+  fileHash String  @db.VarChar(64)
+  dryRun   Boolean @default(false)
+
+  status RosterRunStatus @default(RUNNING)
+
+  /// The resume checkpoint: the index of the first chunk NOT yet committed.
+  /// Written in the same transaction as the chunk it describes, and contiguous
+  /// — it never advances past a chunk that failed, so a failed chunk is
+  /// re-attempted next run instead of being skipped for ever.
+  nextChunkIndex Int @default(0)
+
+  rowCount       Int     @default(0)
+  createdCount   Int     @default(0)
+  updatedCount   Int     @default(0)
+  unchangedCount Int     @default(0)
+  skippedCount   Int     @default(0)
+  errorCount     Int     @default(0)
+  /// Keys the roster holds that the feed did not mention. Reported only —
+  /// acting on them is #1966.
+  absentKeys     Json?
+  /// Host and path of the file, for the run log. Never a query string: it can
+  /// carry a token.
+  source         String? @db.Text
+  error          String? @db.Text
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  rows RosterRowResult[]
+
+  /// The idempotency key. A second run of the same file for the same feed finds
+  /// this row instead of starting over.
+  @@unique([feedId, fileHash, dryRun])
+  @@index([feedId, startedAt])
+  @@index([orgId, startedAt])
+}
+
+/// One row's outcome, written as it is applied — inside the same transaction as
+/// the write it describes, which is what makes a crashed run readable.
+model RosterRowResult {
+  id    String    @id @default(cuid())
+  runId String
+  run   RosterRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  /// Tenant anchor; same reasoning as RosterRun.orgId.
+  orgId String
+
+  /// 1-based position among the data rows (the header is not row 1).
+  rowNumber  Int
+  chunkIndex Int             @default(0)
+  key        String          @db.VarChar(255)
+  status     RosterRowStatus
+  /// Field names an UPDATE wrote.
+  changed    Json?
+  /// Why it was skipped, what errored, or which fields were left alone.
+  message    String?         @db.Text
+  userId     String?
+
+  createdAt DateTime @default(now())
+
+  /// One result per row per run — so re-applying a chunk after a crash upserts
+  /// instead of doubling the log.
+  @@unique([runId, rowNumber])
+  @@index([runId, status])
   @@index([orgId, createdAt])
 }

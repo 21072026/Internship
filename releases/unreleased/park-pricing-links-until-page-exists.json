@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Fixed: park the `/pricing` header, footer and free-core-band links until the page exists (#1730) — the route 404s, and App Router's prefetch of an in-viewport link put that 404 in the browser console, which reded the smoke gate on `main`."
-}

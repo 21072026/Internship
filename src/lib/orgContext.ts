@@ -39,8 +39,27 @@ export function currentOrgId(): string | null | undefined {
 }
 
 // ── Central enforcement middleware ───────────────────────────────────────────
-// Models that carry a nullable `orgId` (the tenant anchors). Child records
-// (InteractionLog, Message, Goal, …) are reached through these scoped parents.
+//
+// THE RULE (CLAUDE.md, docs/tenant-isolation.md): **any model that holds tenant
+// data needs an `orgId` column AND an entry in this set.** One without the other
+// is worse than neither — the middleware ignores an unregistered model in
+// silence (see the early-return below), so a row carrying an `orgId` nobody
+// registered *looks* scoped for ever while it is protected only by whatever
+// `where` clause the last developer remembered to write. `npm run
+// check:tenant-models` (scripts/check-tenant-models.mjs) compares this set
+// against the schema in both directions on every PR, so the rule is enforced
+// rather than remembered.
+//
+// Registering a model changes WRITES as well as reads: `create`/`createMany`/
+// `upsert` get `orgId` filled in from the bound context when the caller left it
+// `undefined` (see :106-125). Sessionless paths — registration, invite
+// acceptance, the public company-inquiry form, crons, deploy backfills — bind no
+// context at all, so nothing is injected there and every such create must keep
+// passing its own `orgId`. That is deliberate, not an oversight; the call sites
+// say so where they are.
+//
+// Child records (InteractionLog, Message, Goal, …) are reached through these
+// scoped parents and stay out.
 const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'User',
   'Source',
@@ -105,6 +124,58 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // relying on the middleware, so the row is right either way; the registration
   // is what keeps every *reader* of the ledger scoped to its own tenant.
   'NotificationDelivery',
+  // The scheduled roster feed (#1965). A feed carries a tenant's HR export and
+  // its runs carry, row by row, who is in that tenant's roster — so all three
+  // are tenant property. Registered rather than exempt even though the ingest
+  // binds its own org explicitly with `runWithOrg(feed.orgId, …)` (a cron job
+  // has no session to resolve one from): the explicit binding is what makes the
+  // *background* run scoped, and the registration is what keeps every other
+  // reader — an admin screen listing runs, a support query — inside its own
+  // tenant.
+  'RosterFeed',
+  'RosterRun',
+  'RosterRowResult',
+  // ── The eight late registrations (#1559) ──────────────────────────────────
+  // These carried `orgId` from the day they were added but were never listed
+  // here, so for months they were "protected" by hand-written filters only.
+  // Registered together, with every create path audited — the audit table lives
+  // in docs/tenant-isolation.md § The eight late registrations.
+  //
+  // The org's label vocabulary, its pipeline shape and its service levels: what
+  // a tenant calls its stages and how long a candidate may wait there is its own
+  // configuration. All three have a REQUIRED orgId and a per-org natural key —
+  // `@@unique` on orgId + name, orgId + key, orgId + stageKey — so a lookup by
+  // that key alone resolves to whichever row the database happened to return
+  // unless something narrows it by tenant. This is what narrows it.
+  'Tag',
+  'StageSla',
+  'PipelineStage',
+  // The per-tenant competency framework (#822) — the questions a tenant decided
+  // to score people on. REQUIRED orgId, so every create passes one explicitly.
+  'EvaluationTemplate',
+  // Who is being interviewed by whom (#824). Nullable orgId: the create stamps
+  // the subject's own org, falling back to the caller's.
+  'InterviewPanel',
+  // A candidate's compensation note (#809) — among the most sensitive rows in
+  // the product. The create inherits `orgId` from the MentorshipRelation it
+  // hangs off, which is itself scoped, so the offer can only ever land in the
+  // caller's tenant. The expiry cron (src/lib/offerNotify.ts) runs outside any
+  // request, where no context is bound and the sweep therefore still sees every
+  // tenant's due offers — which is what a platform-wide sweep must do.
+  'Offer',
+  // A live registration link with a role attached (#1272). Its consumption
+  // paths are unauthenticated and bind NO org on purpose: /api/register and
+  // /api/invite/opened look a row up BY TOKEN, which is the only thing the
+  // invitee has. With no context the middleware does not scope, so those keep
+  // working — do not "fix" them by wrapping them in a tenant scope, or an
+  // invitation would become unusable to the very person it was sent to.
+  'InvitationToken',
+  // The public /for-companies enquiry (#1104). The form has no session and no
+  // host→org resolution exists yet, so the submit stamps the default org
+  // itself (the same one registration uses) rather than leaving NULL — a
+  // NULL-org row would be invisible to the wrapped admin triage list the
+  // moment this registration takes effect.
+  'CompanyInquiry',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

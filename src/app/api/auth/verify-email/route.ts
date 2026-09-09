@@ -40,6 +40,13 @@ export async function POST(request: Request) {
 
     // Advance the matching invitation's lifecycle to "verified" (if any invite
     // for this email hasn't been stamped yet).
+    //
+    // Unscoped on purpose: this route is entered with a verification token and
+    // no session, so no tenant context is bound and the middleware leaves the
+    // `updateMany` alone even though `InvitationToken` is registered (#1559).
+    // The address is the key, and an address belongs to one person — so do not
+    // "fix" this by wrapping the handler in a tenant scope; there is no tenant
+    // to resolve from a mail click.
     await prisma.invitationToken.updateMany({
       where: { email: user.email, verifiedAt: null },
       data: { verifiedAt: new Date() },
