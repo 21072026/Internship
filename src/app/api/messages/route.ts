@@ -28,12 +28,21 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { withTenantScope } from '@/lib/orgContext';
+import { withRequestScope } from '@/lib/requestContext';
 import { accountState, type AccountState } from '@/lib/accountState';
 
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
 // GET ?relationId= — messages in a thread (participants/admin only).
+//
+// The request-correlation context (#1601) wraps the tenant scope, so the two are
+// established together at the top of the handler and every log line below
+// carries the `x-request-id` the caller got back on the response.
 export async function GET(request: Request) {
+  return withRequestScope(request, () => handleGet(request));
+}
+
+async function handleGet(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -213,6 +222,10 @@ const schema = z
 // party. Accepts either JSON (text-only, the original shape) or multipart
 // form-data (text + an optional file attachment).
 export async function POST(request: Request) {
+  return withRequestScope(request, () => handlePost(request));
+}
+
+async function handlePost(request: Request) {
   // 60 per minute allows a normal back-and-forth conversation while stopping automated bursts.
   const limited = enforceRateLimit(request, 'messages', { limit: 60, windowMs: 60 * 1000 });
   if (limited) return limited;

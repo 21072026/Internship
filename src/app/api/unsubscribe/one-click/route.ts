@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
+import { withRequestScope } from '@/lib/requestContext';
 import { makeUnsubscribeToken, verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
 import { applyGroupPref } from '../applyUnsubscribe';
 
@@ -25,7 +26,13 @@ function text(body: string, status: number) {
   });
 }
 
+// Both handlers bind the request-correlation context (#1601) first, so the
+// logger lines below carry the same `x-request-id` the caller got back.
 export async function POST(request: Request) {
+  return withRequestScope(request, () => handlePost(request));
+}
+
+async function handlePost(request: Request) {
   // DELIBERATELY NOT RATE LIMITED. A 429 on this path is a compliance failure,
   // not a defence: the mail provider is acting on a person's behalf and will
   // report a failed one-click as a broken unsubscribe. There is nothing to
@@ -96,6 +103,10 @@ export async function POST(request: Request) {
  * arrives.
  */
 export async function GET(request: Request) {
+  return withRequestScope(request, () => handleGet(request));
+}
+
+async function handleGet(request: Request) {
   const t = new URL(request.url).searchParams.get('t') || '';
   const scope = verifyUnsubscribeToken(t);
   if (!scope) return text('This unsubscribe link is not valid.', 400);

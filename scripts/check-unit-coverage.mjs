@@ -150,6 +150,14 @@ const FLOORS = new Map([
       why: 'an external feed never overwrites what a human typed unless the tenant says so (#1943/#1965)',
     },
   ],
+  [
+    'src/lib/requestId.ts',
+    {
+      floor: 95,
+      measured: 98.91,
+      why: 'an inbound x-request-id is honoured, but never into a forged log line (#1601)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────

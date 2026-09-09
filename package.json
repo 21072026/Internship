@@ -43,6 +43,7 @@
     "test:metering": "node --test --experimental-strip-types scripts/test/metering.test.mjs",
     "test:notification-catalog": "node --test --experimental-strip-types scripts/test/notification-catalog.test.mjs",
     "test:roster-ingest": "node --test --experimental-strip-types scripts/test/roster-ingest.test.mjs",
+    "test:request-id": "node --test --experimental-strip-types scripts/test/request-id.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:api-key-routes": "node scripts/check-api-key-routes.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",

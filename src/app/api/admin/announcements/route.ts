@@ -12,6 +12,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { checkBroadcastQuota, broadcastQuotaError } from '@/lib/broadcastQuota';
+import { withRequestScope } from '@/lib/requestContext';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
 import {
@@ -102,7 +103,15 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
 }
 
 // GET — paginated history of past broadcasts (most recent first).
+//
+// The request-correlation context (#1601) is bound outside the tenant scope, so
+// both are established at the top of the handler and every log line from the
+// broadcast fan-out below carries the request id.
 export async function GET(request: Request) {
+  return withRequestScope(request, () => handleGet(request));
+}
+
+async function handleGet(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -146,6 +155,10 @@ export async function GET(request: Request) {
 // POST — broadcast an announcement to every active user as an in-app
 // notification, optionally also by email (respecting each user's opt-out).
 export async function POST(request: Request) {
+  return withRequestScope(request, () => handlePost(request));
+}
+
+async function handlePost(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
