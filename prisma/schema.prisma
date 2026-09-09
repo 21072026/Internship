@@ -143,6 +143,7 @@ model Organization {
   placements           Placement[]
   subscription         Subscription?
   orgEntitlements      OrgEntitlement[]
+  usageRollups         UsageRollup[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -3494,4 +3495,137 @@ model JobLease {
   /// Cheap sweep of leases nobody renewed (an environment that shrank back to
   /// one replica, a renamed container).
   @@index([expiresAt])
+}
+
+// ── Usage ledger ─────────────────────────────────────────────────────────────
+// One row per (org, metric, period): what a tenant used in a calendar month
+// (#1750). The billing history, and the only table an invoice or a usage screen
+// reads — a request path must never scan seven domain tables to answer "how
+// many active pairs?".
+//
+// TWO SHAPES OF NUMBER live in the same table, and the difference is what keeps
+// a re-run honest (src/lib/meteringRules.ts owns the catalogue):
+//   · COMPUTED (ACTIVE_MATCHED_PAIRS, ADMIN_SEATS) — recomputed from the domain
+//     tables by the nightly rollup and written ABSOLUTELY. Re-running a closed
+//     period writes the same value again, so the job is idempotent, and the
+//     unique triple below guarantees exactly one row per (org, metric, period).
+//   · COUNTER (VIDEO_ROOM, VIDEO_PARTICIPANT, ACTIVE_PAIR_ACTIVITY) —
+//     incremented at the moment the thing happens, because a room created last
+//     Tuesday cannot be recounted afterwards. The rollup never touches these.
+//
+// `metric` is a String and not an enum on purpose: metrics are added far more
+// often than a column type change is welcome on a `db push` project, and the
+// authoritative list is a TypeScript union that both the writer and the reader
+// import. An unknown string here is inert — a row nothing reads.
+model UsageRollup {
+  id     String @id @default(cuid())
+  orgId  String
+  metric String @db.VarChar(64)
+  // 'YYYY-MM', a UTC calendar month (src/lib/meteringRules.ts periodRange()).
+  period String @db.VarChar(7)
+  value  Int    @default(0)
+
+  // When the number was last written. For a COMPUTED metric that is when the
+  // rollup last recomputed it — an invoice dispute starts with "as of when?".
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // The idempotency key, and why the nightly job can be re-run for a closed
+  // period without producing a second row.
+  @@unique([orgId, metric, period])
+  @@index([orgId, period])
+  @@index([metric, period])
+}
+
+// ── Notification delivery ledger (#1710) ─────────────────────────────────────
+//
+// "Was the mentor actually told, on which channel, and did it land?" had no
+// answer. `Notification` records that an in-app row exists; `EmailLog` records
+// that an SMTP handoff happened, keyed by e-mail address and subject. Neither
+// says "this person, this event, this channel, this outcome" — so a mentee who
+// never heard about a stage change was indistinguishable from one told twice,
+// and an opt-out that silently swallowed a notification looked exactly like a
+// send that never happened.
+//
+// One row per (recipient, event, channel, attempt identity). Written by
+// src/lib/notifications/router.ts and by nothing else.
+//
+// NO RELATION TO User, ON PURPOSE. This follows EmailLog and AuditLog, the two
+// other ledgers here: a delivery record is evidence about a moment in the past,
+// and a cascade would erase exactly the rows an audit needs. `userId` is a
+// plain column.
+//
+// It therefore has NO retention entry yet, and that is a known follow-up rather
+// than an oversight: src/lib/retentionEntries.ts is the one registry that bounds
+// tables like this, and AuditLog (#1585), DomainEvent (#1691) and Message
+// (#2056) are already queued behind it. Nothing writes here until a send site
+// moves onto the router, so the table is empty on the day this ships; the entry
+// (a window setting plus one `registerRetention` block, the shape Notification
+// used in #1646) is owed before the migration task lands.
+enum NotificationDeliveryStatus {
+  // Accepted and handed to a channel that completes later (the e-mail job).
+  QUEUED
+  // The channel reported success. For e-mail that is an SMTP handoff, not inbox
+  // placement — the same caveat EmailStatus.SENT carries.
+  SENT
+  // Deliberately not sent: an opt-out, a missing address, no adapter. The cause
+  // is in `skipReason`, and a SKIPPED row is the whole point of the ledger —
+  // silence with a recorded reason instead of silence.
+  SKIPPED
+  // The channel was tried and failed. `error` carries the message.
+  FAILED
+}
+
+model NotificationDelivery {
+  id String @id @default(cuid())
+
+  /// Tenant anchor. Nullable like the other phase-1 tenant models, stamped from
+  /// the recipient's own `User.orgId` by the router (so it is right even when
+  /// the write happens in a cron with no request scope). Listed in
+  /// TENANT_MODELS (src/lib/orgContext.ts).
+  orgId String?
+
+  userId   String
+  /// A key of the event catalogue (src/lib/notifications/catalog.ts).
+  /// VarChar(96): the longest key today is 34 characters.
+  eventKey String @db.VarChar(96)
+  /// 'inApp' | 'email' — the NotificationChannel literal, stored as text like
+  /// EmailLog.transport rather than as an enum, so adding a channel adapter is
+  /// a code change and not a schema change on a live table.
+  channel  String @db.VarChar(16)
+
+  status     NotificationDeliveryStatus @default(QUEUED)
+  /// Why a SKIPPED row was skipped: 'category_off', 'group_off', 'email_off',
+  /// 'no_address', 'no_adapter', 'unknown_event', 'invalid_payload'.
+  skipReason String?                    @db.VarChar(64)
+  /// What rendered it — the dictionary key for in-app, the mail template id for
+  /// e-mail. Nullable: a SKIPPED row never reached a template.
+  templateId String?                    @db.VarChar(128)
+  /// Failure message when status is FAILED.
+  error      String?                    @db.Text
+
+  /// Idempotency. Globally `@unique` rather than `@@unique([orgId, …])` for the
+  /// same reason Job.idempotencyKey is: `orgId` is nullable, MySQL treats NULLs
+  /// in a unique index as distinct, and a composite key would therefore
+  /// de-duplicate nothing at all while every row still has a null org. The
+  /// router derives it from (eventKey, userId, channel, caller dedupe key) and
+  /// reads the unique violation as "already claimed" — which is what stops a
+  /// retried send from both duplicating this row and sending the mail twice.
+  dedupeKey String @unique @db.VarChar(191)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// "What was this person told, most recent first" — where an admin support
+  /// question actually starts.
+  @@index([userId, createdAt])
+  /// "Did event X reach anybody, and how often was it skipped?"
+  @@index([eventKey, status])
+  /// Tenant-leading, like every other model in TENANT_MODELS: without it an
+  /// auto-scoped query under MT_ENFORCE_ISOLATION filters orgId row by row on
+  /// top of one of the indexes above.
+  @@index([orgId, createdAt])
 }

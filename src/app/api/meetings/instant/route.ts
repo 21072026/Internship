@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 
     // Invitee count decides the host (1:1 → JaaS, groups → free instance);
     // resolveMeetingContext already excluded the organizer from the list.
-    const meetLink = generateMeetingLink({ inviteeCount: ctx.invitees.length });
+    const meetLink = generateMeetingLink({ inviteeCount: ctx.invitees.length, orgId: session.user.orgId });
 
     // RELATION keeps the established shape — one row (and one RSVP token) per
     // relation, all sharing the room. PROJECT/CONVERSATION are a single row: the

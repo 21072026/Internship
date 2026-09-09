@@ -91,6 +91,20 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // reads them.
   'Subscription',
   'OrgEntitlement',
+  // What a tenant used, per calendar month (#1750). The numbers an invoice is
+  // built from — one org reading another's usage is a commercial leak, and one
+  // org *writing* it would be a billing dispute. REQUIRED orgId, so there is no
+  // null-org fallback row here either. The nightly rollup runs outside any
+  // request scope, where the middleware does not engage, so it still sees every
+  // tenant.
+  'UsageRollup',
+  // The notification delivery ledger (#1710). One row per (recipient, event,
+  // channel) — who was told what, and why they were not. It is written by the
+  // router from whatever context the caller happens to be in (a request, a
+  // cron), and stamps `orgId` from the recipient's own User row rather than
+  // relying on the middleware, so the row is right either way; the registration
+  // is what keeps every *reader* of the ledger scoped to its own tenant.
+  'NotificationDelivery',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

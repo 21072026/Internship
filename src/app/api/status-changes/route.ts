@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
+import { recordPairActivity } from '@/lib/metering';
 
 // Stage key is a free string now (#747) so tenant-defined stages are accepted.
 const stage = z.string().min(1).max(60);
@@ -97,6 +98,11 @@ export async function POST(request: Request) {
         reasonCode,
       });
     }
+
+    // Metering signal (#1750) — volume, not the pair count. See the note in
+    // /api/interactions; a stage move is the cheapest of the three signals to
+    // emit here because the relation (and its tenant) is already in hand.
+    recordPairActivity(relation.orgId);
 
     return NextResponse.json({ change, changed: true }, { status: 201 });
   });

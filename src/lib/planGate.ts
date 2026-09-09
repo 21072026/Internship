@@ -10,7 +10,16 @@
 // Safe for the live single-tenant install: the grandfathered "default" org is
 // ENTERPRISE (maxActiveRelations = null = unlimited), so the gate is a no-op
 // there. A null/unassigned org also fails open. It only bites FREE/PRO tenants.
+//
+// The count below is NOT the billing number, and the difference is deliberate
+// (#1750): a plan cap is about CAPACITY ("you may not run more than 25 active
+// mentorships"), so an idle pair still occupies a slot, while an invoice counts
+// a month's USAGE and an idle pair is not billed. Both counts now come out of
+// lib/metering.ts so the two definitions sit next to each other and neither can
+// quietly become the other — `countActiveRelations` here, `activeMatchedPairs`
+// for anything commercial.
 
+import { countActiveRelations } from '@/lib/metering';
 import { prisma } from '@/lib/prisma';
 import { planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPlans';
 
@@ -32,7 +41,7 @@ export async function checkActiveRelationLimit(orgId: string | null | undefined)
   const limit = planLimits(plan).maxActiveRelations;
   if (limit == null) return { allowed: true, plan, limit: null, usage: 0 };
 
-  const usage = await prisma.mentorshipRelation.count({ where: { orgId, status: 'ACTIVE' } });
+  const usage = await countActiveRelations(orgId);
   return { allowed: usage < limit, plan, limit, usage };
 }
 
