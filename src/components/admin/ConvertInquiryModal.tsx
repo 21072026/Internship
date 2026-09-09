@@ -92,6 +92,16 @@ export function ConvertInquiryModal({
         onConverted();
         return;
       }
+      if (data.error === 'invitation_pending') {
+        // Nobody has registered yet, so this is not "taken" — it is "already in
+        // flight", and the action is to wait or revoke, not to convert again.
+        setError(
+          data.companyName
+            ? fill(c.invitationPending, { email, company: data.companyName })
+            : fill(c.invitationPendingUnnamed, { email })
+        );
+        return;
+      }
       if (data.error === 'email_taken') {
         setError(
           data.companyName

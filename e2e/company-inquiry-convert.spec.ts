@@ -188,3 +188,96 @@ test('converting an enquiry whose address already has an account is refused and 
     await cleanupByEmail(adminEmail);
   }
 });
+
+test('a second enquiry from an address that already has a live invitation is refused', async ({ page }) => {
+  // The gap the user lookup cannot see: nobody has REGISTERED yet, so there is
+  // no User row — and without this refusal the second conversion would mint a
+  // second Company with a second invitation to it, after which whichever token
+  // is redeemed first silently decides which duplicate the account belongs to.
+  const adminEmail = uniqueEmail('convert-pending-admin');
+  await seedUser(adminEmail, PASSWORD, 'ADMIN', 'Convert Pending Admin');
+  const contactEmail = uniqueEmail('convert-pending-contact');
+  const firstName = `Pending First ${Date.now()}`;
+  const secondName = `Pending Second ${Date.now()}`;
+  const first = await seedInquiry(contactEmail, firstName);
+  const second = await seedInquiry(contactEmail, secondName);
+
+  try {
+    await signInAndSettle(page, adminEmail, PASSWORD, '/admin');
+
+    const ok = await page.request.post(`/api/admin/company-inquiries/${first.id}/convert`, {
+      data: { companyName: firstName, contactFullName: 'Ada Lovelace', email: contactEmail },
+    });
+    expect(ok.status()).toBe(201);
+
+    const refused = await page.request.post(`/api/admin/company-inquiries/${second.id}/convert`, {
+      data: { companyName: secondName, contactFullName: 'Ada Lovelace', email: contactEmail },
+    });
+    expect(refused.status()).toBe(409);
+    const body = await refused.json();
+    expect(body.error).toBe('invitation_pending');
+    // It names the company the live invitation is already for, so the admin can
+    // see this is the same relationship rather than a new one.
+    expect(body.companyName).toBe(firstName);
+
+    // One company, one invitation, and the second enquiry untouched.
+    expect(await prisma.company.count({ where: { name: secondName } })).toBe(0);
+    expect(await prisma.invitationToken.count({ where: { email: contactEmail } })).toBe(1);
+    const untouched = await prisma.companyInquiry.findUnique({ where: { id: second.id } });
+    expect(untouched!.convertedCompanyId).toBeNull();
+    expect(untouched!.status).toBe('NEW');
+
+    // Revoking the invitation makes the address convertible again — the same
+    // rule /api/invite applies (#2071), and the reason this is a refusal rather
+    // than a hard block.
+    await prisma.invitationToken.updateMany({ where: { email: contactEmail }, data: { revokedAt: new Date() } });
+    const afterRevoke = await page.request.post(`/api/admin/company-inquiries/${second.id}/convert`, {
+      data: { companyName: secondName, contactFullName: 'Ada Lovelace', email: contactEmail },
+    });
+    expect(afterRevoke.status()).toBe(201);
+  } finally {
+    await prisma.invitationToken.deleteMany({ where: { email: contactEmail } });
+    await dropInquiry(first.id);
+    await dropInquiry(second.id);
+    await prisma.company.deleteMany({ where: { name: { in: [firstName, secondName] } } });
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('a COMPANY invitation whose company was deleted is refused at registration, not 500', async ({ page }) => {
+  // `User.companyId` has a foreign key, so a live invitation pointing at a
+  // company an admin has since deleted from /admin/companies would fail the
+  // insert with a constraint error the invitee can do nothing about — and the
+  // account it was trying to make would sign in to nothing anyway.
+  const adminEmail = uniqueEmail('convert-orphan-admin');
+  await seedUser(adminEmail, PASSWORD, 'ADMIN', 'Convert Orphan Admin');
+  const contactEmail = uniqueEmail('convert-orphan-contact');
+  const companyName = `Orphaned Company ${Date.now()}`;
+  const inquiry = await seedInquiry(contactEmail, companyName);
+
+  try {
+    await signInAndSettle(page, adminEmail, PASSWORD, '/admin');
+    const res = await page.request.post(`/api/admin/company-inquiries/${inquiry.id}/convert`, {
+      data: { companyName, contactFullName: 'Ada Lovelace', email: contactEmail },
+    });
+    expect(res.status()).toBe(201);
+    const invitation = await prisma.invitationToken.findFirst({ where: { email: contactEmail } });
+    expect(invitation!.companyId).toBeTruthy();
+
+    // The admin deletes the company while the invitation is still live.
+    await prisma.companyInquiry.updateMany({ where: { id: inquiry.id }, data: { convertedCompanyId: null } });
+    await prisma.company.delete({ where: { id: invitation!.companyId! } });
+
+    const registered = await page.request.post('/api/register', {
+      data: { token: invitation!.token, email: contactEmail, password: 'OrphanPass123', fullName: 'Ada Lovelace', consent: true },
+    });
+    expect(registered.status()).toBe(400);
+    expect(await prisma.user.count({ where: { email: contactEmail } })).toBe(0);
+  } finally {
+    await prisma.invitationToken.deleteMany({ where: { email: contactEmail } });
+    await dropInquiry(inquiry.id);
+    await prisma.company.deleteMany({ where: { name: companyName } });
+    await cleanupByEmail(contactEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});

@@ -72,7 +72,16 @@ export type ConvertInquiryRefusal =
   /** Already converted — names what it became so the admin can go look at it. */
   | { code: 'already_converted'; companyId: string | null; companyName: string | null }
   /** The address has an account — names its company so the admin can link instead. */
-  | { code: 'email_taken'; companyName: string | null };
+  | { code: 'email_taken'; companyName: string | null }
+  /**
+   * The address already has a live invitation. Not the same refusal as
+   * `email_taken`: nobody has registered yet, so there is no User to point at —
+   * and without this check a SECOND enquiry from the same address (or the same
+   * enquiry re-sent) would sail past the user lookup and mint a second Company
+   * with a second invitation to it, after which whichever token is redeemed
+   * first decides which of the two duplicates the account belongs to.
+   */
+  | { code: 'invitation_pending'; companyName: string | null };
 
 export type ConvertInquiryResult =
   | {
@@ -130,6 +139,23 @@ export async function convertInquiryToCompanyAccount(
   });
   if (existingUser) {
     return { ok: false, refusal: { code: 'email_taken', companyName: existingUser.company?.name ?? null } };
+  }
+
+  // Nor can an address that is already holding a live invitation be invited
+  // again — the same rule `/api/invite` applies, for a stronger reason here:
+  // there the duplicate is a second e-mail, here it would be a second COMPANY.
+  // A revoked invitation (#2071) is not a live one, and neither is an expired or
+  // already-used one, so withdrawing an invitation makes conversion possible
+  // again exactly as it makes re-inviting possible.
+  const pendingInvitation = await prisma.invitationToken.findFirst({
+    where: { email, used: false, revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { companyId: true },
+  });
+  if (pendingInvitation) {
+    const alreadyFor = pendingInvitation.companyId
+      ? await prisma.company.findUnique({ where: { id: pendingInvitation.companyId }, select: { name: true } })
+      : null;
+    return { ok: false, refusal: { code: 'invitation_pending', companyName: alreadyFor?.name ?? null } };
   }
 
   const invitationInput: CreateInvitationInput = {

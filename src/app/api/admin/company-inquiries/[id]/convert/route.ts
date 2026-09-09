@@ -83,8 +83,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!result.ok) {
       const { refusal } = result;
       if (refusal.code === 'not_found') return NextResponse.json({ error: 'Not found' }, { status: 404 });
-      // 409 for both: the request was well-formed and the state says no. Each
-      // one names what the admin needs in order to do the right thing instead.
+      // 409 for the rest: the request was well-formed and the state says no.
+      // Each one names what the admin needs in order to do the right thing
+      // instead — the company that already holds the address, or the one the
+      // live invitation is already for.
       return NextResponse.json({ error: refusal.code, ...refusal }, { status: 409 });
     }
 

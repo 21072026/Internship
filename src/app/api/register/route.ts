@@ -130,6 +130,24 @@ export async function POST(request: Request) {
       invitedOrgId = invitation.orgId;
       invitationLocale = isLocale(invitation.locale) ? invitation.locale : null;
       invitedCompanyId = invitation.companyId;
+      // A COMPANY invitation without a company that still exists cannot make a
+      // usable account: every company-side screen reads `User.companyId`, and
+      // `User.companyId` has a foreign key — so a pointer to a company an admin
+      // has since deleted from /admin/companies would fail this insert with a
+      // constraint error the invitee can do nothing about. Refuse it here, in
+      // the invitation's own language of refusals, so they are told to ask for a
+      // new invitation instead of hitting a 500.
+      if (invitation.role === 'COMPANY') {
+        const company = invitedCompanyId
+          ? await prisma.company.findUnique({ where: { id: invitedCompanyId }, select: { id: true } })
+          : null;
+        if (!company) {
+          return NextResponse.json(
+            { error: 'This invitation is no longer valid — ask for a new one' },
+            { status: 400 }
+          );
+        }
+      }
       autoLink = { mentorId: invitation.mentorId, menteeId: invitation.menteeId, projectId: invitation.projectId };
     } else {
       // An open registration may still carry a referral link.
