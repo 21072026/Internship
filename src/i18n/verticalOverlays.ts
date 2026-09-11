@@ -45,14 +45,38 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     en: {
       nav: { candidates: 'Leads' },
       candidates: { title: 'Leads', subtitle: 'Browse and search leads' },
+      landing: {
+        badge: 'Marketing CRM · Track leads · Close deals',
+        heroTitle: 'Every lead, every conversation, every deal —',
+        heroAccent: 'in one pipeline.',
+        heroSubtitle: 'Track your customers from first contact to close. See where every deal stands, who touched it last and what to do next — instead of piecing it together from a spreadsheet.',
+        featuresTitle: 'Everything your team needs to close',
+        featuresSubtitle: 'Purpose-built for tracking customers and moving deals forward.',
+      },
     },
     tr: {
       nav: { candidates: 'Fırsatlar' },
       candidates: { title: 'Fırsatlar', subtitle: 'Fırsatları görüntüle ve ara' },
+      landing: {
+        badge: 'Pazarlama CRM · Adayları takip et · Anlaşmaları kapat',
+        heroTitle: 'Her aday, her görüşme, her anlaşma —',
+        heroAccent: 'tek bir hatta.',
+        heroSubtitle: 'Müşterilerini ilk temastan kapanışa kadar takip et. Her anlaşmanın nerede olduğunu, en son kimin dokunduğunu ve sıradaki adımı — tabloda parça parça aramak yerine — tek bakışta gör.',
+        featuresTitle: 'Kapatmak için ekibinin ihtiyacı olan her şey',
+        featuresSubtitle: 'Müşterileri takip etmek ve anlaşmaları ilerletmek için tasarlandı.',
+      },
     },
     de: {
       nav: { candidates: 'Leads' },
       candidates: { title: 'Leads', subtitle: 'Leads durchsuchen' },
+      landing: {
+        badge: 'Marketing-CRM · Leads verfolgen · Abschlüsse erzielen',
+        heroTitle: 'Jeder Lead, jedes Gespräch, jeder Abschluss —',
+        heroAccent: 'in einer Pipeline.',
+        heroSubtitle: 'Verfolgen Sie Ihre Kunden vom ersten Kontakt bis zum Abschluss. Sehen Sie auf einen Blick, wo jeder Deal steht, wer ihn zuletzt bearbeitet hat und was als Nächstes zu tun ist — statt es aus einer Tabelle zusammenzusuchen.',
+        featuresTitle: 'Alles, was Ihr Team zum Abschluss braucht',
+        featuresSubtitle: 'Entwickelt, um Kunden zu verfolgen und Deals voranzutreiben.',
+      },
     },
   },
 };

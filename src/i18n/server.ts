@@ -7,6 +7,7 @@ import { defaultLocale, isLocale, LOCALE_COOKIE, type Locale } from './config';
 import { getDictionary } from './dictionaries';
 import { applyVerticalOverlay } from './verticalOverlays';
 import { toVerticalKey, DEFAULT_VERTICAL, type VerticalKey } from '@/lib/verticals';
+import { hostVertical } from '@/lib/hostVertical';
 
 // Read the active locale. An explicit cookie (set via the language switcher)
 // always wins; otherwise fall back to the signed-in user's saved preference,
@@ -43,7 +44,10 @@ export async function getLocale(): Promise<Locale> {
 // present — a public view resolves to the default with no query, so the overlay
 // layer costs the live single-tenant product nothing (#1197).
 export async function resolveRequestVertical(): Promise<VerticalKey> {
-  if (!(await hasSessionCookie())) return DEFAULT_VERTICAL;
+  // Signed OUT (a public page — the landing, /apply, /for-companies): the only
+  // signal is the request host, so two urls serve two products' copy from one
+  // deployment (#2355). No query.
+  if (!(await hasSessionCookie())) return hostVertical();
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return DEFAULT_VERTICAL;
