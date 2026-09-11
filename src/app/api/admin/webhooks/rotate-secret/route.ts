@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { resolveOrgId } from '@/lib/orgScope';
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -19,7 +20,11 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const id = new URL(request.url).searchParams.get('id') || '';
   const secret = randomBytes(24).toString('hex');
-  const { count } = await prisma.webhook.updateMany({ where: { id }, data: { secret } });
+  // Scoped to the caller's tenant (#2357): rotating another tenant's signing
+  // secret would silently break their receiver. Same pattern as the sibling
+  // PATCH/DELETE in ../route.ts — this route binds no tenant context, so the
+  // middleware never scopes it even under MT_ENFORCE_ISOLATION.
+  const { count } = await prisma.webhook.updateMany({ where: { id, orgId: resolveOrgId(session) }, data: { secret } });
   if (!count) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   await logActivity({

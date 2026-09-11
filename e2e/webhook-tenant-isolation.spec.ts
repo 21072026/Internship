@@ -46,6 +46,14 @@ test('a tenant admin sees, edits and deletes only its own webhooks', async ({ pa
     await page.request.patch(`/api/admin/webhooks?id=${hookB.id}`, { data: { active: false } });
     expect((await prisma.webhook.findUnique({ where: { id: hookB.id } }))?.active).toBe(true);
 
+    // rotate-secret and test-ping are refused across tenants too (destructive /
+    // external-facing, so scoped explicitly rather than left to the middleware).
+    const rot = await page.request.post(`/api/admin/webhooks/rotate-secret?id=${hookB.id}`);
+    expect(rot.status()).toBe(404);
+    expect((await prisma.webhook.findUnique({ where: { id: hookB.id } }))?.secret).toBe('s');
+    const ping = await page.request.post(`/api/admin/webhooks/test?id=${hookB.id}`);
+    expect(ping.status()).toBe(404);
+
     // A's own webhook CAN be deleted.
     await page.request.delete(`/api/admin/webhooks?id=${hookA.id}`);
     expect(await prisma.webhook.findUnique({ where: { id: hookA.id } })).toBeNull();
