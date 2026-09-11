@@ -36,6 +36,7 @@
     "test:roi": "node --test --experimental-strip-types scripts/test/roi.test.mjs",
     "test:plans": "node --test --experimental-strip-types scripts/test/plans.test.mjs",
     "test:verticals": "node --test --experimental-strip-types scripts/test/verticals.test.mjs",
+    "test:nav-capabilities": "node --test --experimental-strip-types scripts/test/nav-capabilities.test.mjs",
     "test:money": "node --test --experimental-strip-types scripts/test/money.test.mjs",
     "test:job-lease": "node --test --experimental-strip-types scripts/test/job-lease.test.mjs",
     "test:skill-vocabulary": "node --test --experimental-strip-types scripts/test/skill-vocabulary.test.mjs",

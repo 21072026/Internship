@@ -6,7 +6,8 @@ import { Building2, Keyboard, Mail, MessageSquare, Search, Sun, User as UserIcon
 import { useT } from '@/i18n/client';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { ShortcutsSheet } from '@/components/ShortcutsSheet';
-import { navLinksForRole, type NavRole } from '@/lib/navLinks';
+import { navLinksForRole, visibleNavLinks, type NavRole } from '@/lib/navLinks';
+import type { VerticalCapability } from '@/lib/verticals';
 import { isMacPlatform, isTypingTarget } from '@/lib/shortcuts';
 import { THEME_CYCLE, applyTheme, readStoredTheme } from '@/lib/theme';
 
@@ -52,7 +53,7 @@ const userHref = (u: UserHit) =>
  * code. Those rules already paint the panel #111827 with #f3f4f6 / #9ca3af
  * text, a #374151 active row and a #1f2937 hover row.
  */
-export function CommandPalette({ role }: { role: NavRole }) {
+export function CommandPalette({ role, capabilities }: { role: NavRole; capabilities?: readonly VerticalCapability[] }) {
   const t = useT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -176,7 +177,8 @@ export function CommandPalette({ role }: { role: NavRole }) {
     const needle = q.trim().toLowerCase();
     const matches = (label: string) => !needle || label.toLowerCase().includes(needle);
 
-    const links = navLinksForRole(role)
+    const baseLinks = capabilities ? visibleNavLinks(navLinksForRole(role), capabilities) : navLinksForRole(role);
+    const links = baseLinks
       .map((l) => ({ link: l, label: navLabels[l.key] ?? l.key }))
       .filter(({ label }) => matches(label));
     const goTo: PaletteOption[] = (needle ? links : links.slice(0, GOTO_PREVIEW)).map(({ link, label }) => ({
@@ -198,7 +200,7 @@ export function CommandPalette({ role }: { role: NavRole }) {
     ];
 
     return [...goTo, ...hits, ...actions.filter((a) => matches(a.label))];
-  }, [q, role, navLabels, users, companies, actions, t.search.company]);
+  }, [q, role, navLabels, users, companies, actions, t.search.company, capabilities]);
 
   // Reset the cursor whenever the candidate set changes shape, so the highlight
   // can never point past the end of the list.

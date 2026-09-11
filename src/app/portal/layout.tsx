@@ -5,6 +5,7 @@ import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
 import { getServerDictionary } from '@/i18n/server';
 import { PortalNav } from '@/components/PortalNav';
+import { shellCapabilities, shellHasCapability } from '@/lib/shellCapabilities';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -36,6 +37,12 @@ export default async function PortalLayout({ children }: { children: React.React
   // mentorship of their own the portal has nothing to show them, so they go back
   // to their own shell exactly as before. Anything else (SOURCE) goes to the root
   // router, which knows where each role belongs.
+  if (!(await shellHasCapability(session.user.orgId, 'mentorship'))) {
+    // The mentee portal is a mentorship-vertical shell (#2351); a vertical
+    // without that module sends the user home. No-op for INTERNSHIP.
+    redirect(session.user.role === 'ADMIN' ? '/admin' : '/');
+  }
+
   if (!(await canUsePortal(session.user))) {
     redirect(
       session.user.role === 'ADMIN' ? '/admin' : session.user.role === 'MENTOR' ? '/mentor' : '/'
@@ -52,6 +59,7 @@ export default async function PortalLayout({ children }: { children: React.React
   // criteria (#822) — same provider shape as the pipeline stages above.
   const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
+  const capabilities = await shellCapabilities(session.user.orgId);
 
   // The 2FA gate lives on each staff shell; the portal needs it too now that a
   // role in scope for the policy can enter here — otherwise the portal would be
@@ -63,7 +71,7 @@ export default async function PortalLayout({ children }: { children: React.React
   return (
     <>
       {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
-      <CommandPalette role="MENTEE" />
+      <CommandPalette role="MENTEE" capabilities={capabilities} />
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
       sidebar={
@@ -77,7 +85,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <PortalNav />
+          <PortalNav capabilities={capabilities} />
           <InstallAppButton />
         </nav>
 

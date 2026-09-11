@@ -7,6 +7,7 @@ import {
   Webhook,
   type LucideIcon,
 } from 'lucide-react';
+import type { VerticalCapability } from '@/lib/verticals';
 
 /**
  * The single source of truth for the role sidebars — and, because of that, for
@@ -25,21 +26,30 @@ export interface NavLink {
   /** Key into the `nav` i18n namespace. */
   key: string;
   exact?: boolean;
+  /**
+   * The vertical capability this destination belongs to (#2351). A link with a
+   * capability is shown only to an org whose vertical carries it; an untagged
+   * link is shown to every vertical. INTERNSHIP carries every capability, so no
+   * tag ever hides a link there — the filter is a no-op for today's product.
+   * Only the unambiguous cases are tagged; fuzzier ones stay untagged (shown)
+   * until a later refinement decides them deliberately.
+   */
+  capability?: VerticalCapability;
 }
 
 export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin', icon: LayoutDashboard, key: 'dashboard', exact: true },
   { href: '/admin/board', icon: Columns3, key: 'board' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
-  { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' },
-  { href: '/admin/offers', icon: Handshake, key: 'offers' },
-  { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' },
-  { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' },
+  { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' , capability: 'placements' },
+  { href: '/admin/offers', icon: Handshake, key: 'offers' , capability: 'placements' },
+  { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' , capability: 'placements' },
+  { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' , capability: 'placements' },
   { href: '/admin/candidates', icon: Users, key: 'candidates' },
   { href: '/admin/duplicates', icon: GitMerge, key: 'duplicates' },
-  { href: '/admin/mentors', icon: UserCheck, key: 'mentors' },
-  { href: '/admin/mentorship', icon: Users, key: 'mentorships' },
-  { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' },
+  { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
+  { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
+  { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
   { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries' },
   { href: '/admin/projects', icon: FolderGit2, key: 'projects' },
   { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates' },
@@ -49,7 +59,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/todos', icon: ClipboardList, key: 'todos' },
   { href: '/admin/cohorts', icon: Layers, key: 'cohorts' },
   { href: '/admin/tags', icon: TagIcon, key: 'tags' },
-  { href: '/admin/sources', icon: Radio, key: 'sources' },
+  { href: '/admin/sources', icon: Radio, key: 'sources' , capability: 'sourcing' },
   { href: '/admin/users', icon: UserCog, key: 'users' },
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
   { href: '/admin/calendar', icon: CalendarDays, key: 'calendar' },
@@ -60,7 +70,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/documents', icon: FileText, key: 'documents' },
   { href: '/admin/support', icon: LifeBuoy, key: 'support' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
-  { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' },
+  { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },
@@ -127,4 +137,19 @@ export function navLinksForRole(role: NavRole): NavLink[] {
   if (role === 'ADMIN') return ADMIN_NAV_LINKS;
   if (role === 'MENTOR') return MENTOR_NAV_LINKS;
   return PORTAL_NAV_LINKS;
+}
+
+/**
+ * Drop the links a vertical does not carry (#2351). A link with no `capability`
+ * is always kept; a tagged one survives only when `caps` includes it. Passing
+ * the full capability set — which INTERNSHIP always has — keeps every link, so
+ * this is a no-op for today's product and only thins the sidebar for a vertical
+ * that switches a module off (e.g. MARKETING has no `mentorship`, so the mentor
+ * and mentorship links fall away). Pure: same inputs, same array, no I/O.
+ */
+export function visibleNavLinks(
+  links: NavLink[],
+  caps: readonly VerticalCapability[],
+): NavLink[] {
+  return links.filter((l) => !l.capability || caps.includes(l.capability));
 }
