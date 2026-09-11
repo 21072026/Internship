@@ -277,7 +277,7 @@ export async function POST(request: Request) {
     // relations. See the note in /api/interactions.
     if (created > 0) recordPairActivity(session.user.orgId, created);
 
-    if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created });
+    if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created }, session.user.orgId);
     return NextResponse.json({ created, guestsInvited: invitedGuests.length, guests: invitedGuests, rejectedAsMembers });
   });
 }

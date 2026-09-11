@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     // awaited, and it cannot fail the write.
     recordPairActivity(relation.orgId);
 
-    await dispatchWebhook('interaction.logged', { relationId, type, date: interaction.date.toISOString() });
+    await dispatchWebhook('interaction.logged', { relationId, type, date: interaction.date.toISOString() }, relation.orgId);
     // The mentee learns their mentor logged something (#924) — previously this
     // was completely silent. No echo: only a mentor/admin can reach this point,
     // but the guard stays cheap insurance against future role changes. The

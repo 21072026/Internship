@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       scheduledAt: null,
       count: ctx.invitees.length,
       instant: true,
-    });
+    }, session.user.orgId);
 
     return NextResponse.json({ meetingId, meetLink, invited: ctx.invitees.length }, { status: 201 });
   });

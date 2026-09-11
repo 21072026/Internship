@@ -230,6 +230,9 @@ async function handlePost(request: Request) {
       translations,
       link: link || null,
       sentById: session.user.id,
+      // The sending tenant (#2357), so a later reader/query is scoped to its own
+      // org. resolveOrgId is already computed above for the broadcast quota.
+      orgId: resolveOrgId(session),
       recipientCount: users.length,
       ...(imageData && image
         ? { image: { create: { contentType: image.type, size: image.size, data: imageData } } }

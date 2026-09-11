@@ -70,7 +70,7 @@ type LoggableMeeting = {
   title: string;
   scheduledAt: Date | null;
   relationId: string | null;
-  relation: { mentor: { preferredLanguage: string | null } } | null;
+  relation: { orgId: string | null; mentor: { preferredLanguage: string | null } } | null;
 };
 
 const loggableSelect = {
@@ -78,7 +78,7 @@ const loggableSelect = {
   title: true,
   scheduledAt: true,
   relationId: true,
-  relation: { select: { mentor: { select: { preferredLanguage: true } } } },
+  relation: { select: { orgId: true, mentor: { select: { preferredLanguage: true } } } },
 } as const;
 
 /**
@@ -108,7 +108,7 @@ export async function logMeetingInteraction(meeting: LoggableMeeting): Promise<b
       type: 'Meeting',
       date: meeting.scheduledAt.toISOString(),
       autoLogged: true,
-    });
+    }, meeting.relation?.orgId ?? null);
     return true;
   } catch (error) {
     // P2002 on the unique meetingId — the other path (click vs. sweep, or two

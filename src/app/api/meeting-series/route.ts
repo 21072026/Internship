@@ -93,7 +93,8 @@ function scheduleFingerprint(s: { daysOfWeek: unknown; timeOfDay: string; timeZo
 async function announceNextOccurrence(
   series: { id: string; projectId: string | null; title: string; daysOfWeek: unknown; timeOfDay: string; timeZone: string | null; fixedLink: string | null; active: boolean },
   role: string,
-  sessionUserId: string
+  sessionUserId: string,
+  orgId: string | null | undefined,
 ) {
   if (!series.active || !series.projectId) return { invited: 0, nextOccurrence: null as string | null };
 
@@ -158,7 +159,7 @@ async function announceNextOccurrence(
       scheduledAt: next.toISOString(),
       count: invited,
       seriesId: series.id,
-    });
+    }, orgId);
   }
 
   return { invited, nextOccurrence: next.toISOString() };
@@ -245,7 +246,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const announced = await announceNextOccurrence(series, session.user.role, session.user.id);
+    const announced = await announceNextOccurrence(series, session.user.role, session.user.id, session.user.orgId);
     return NextResponse.json(
       { series: { ...series, nextOccurrence: announced.nextOccurrence }, invitesSent: announced.invited },
       { status: 201 }
@@ -308,7 +309,7 @@ export async function PUT(request: Request) {
     // Only re-announce when the meeting actually moved. Renaming it, or saving
     // the same form twice, must not mail the whole team again.
     const announced = moved
-      ? await announceNextOccurrence(updated, session.user.role, session.user.id)
+      ? await announceNextOccurrence(updated, session.user.role, session.user.id, session.user.orgId)
       : {
           invited: 0,
           nextOccurrence: updated.active
