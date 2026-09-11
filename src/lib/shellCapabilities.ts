@@ -24,12 +24,3 @@ export async function shellCapabilities(
   return verticalCapabilities(vertical);
 }
 
-// Does this shell's vertical carry a given capability? Used by the mentorship
-// shells (/mentor, /portal) to redirect a vertical that has switched the whole
-// module off, rather than render a shell its product does not include.
-export async function shellHasCapability(
-  orgId: string | null | undefined,
-  capability: VerticalCapability,
-): Promise<boolean> {
-  return (await shellCapabilities(orgId)).includes(capability);
-}
