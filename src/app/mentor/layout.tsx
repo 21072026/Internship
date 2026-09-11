@@ -18,6 +18,7 @@ import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
 import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { MentorNav } from '@/components/MentorNav';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { availableModes, canUseMentorShell } from '@/lib/dualRole';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,19 @@ export default async function MentorLayout({ children }: { children: React.React
   // mentor be mentored. With nobody to mentor, this shell is empty for them.
   if (!(await canUseMentorShell(session.user))) {
     redirect('/');
+  }
+
+  // A vertical without the mentorship module has no mentor shell at all (#2351).
+  // Resolved once here and reused below for the sidebar/palette. INTERNSHIP
+  // carries mentorship, so this never fires for today's product.
+  const capabilities = await shellCapabilities(session.user.orgId);
+  if (!capabilities.includes('mentorship')) {
+    // NOT '/': the home for a MENTOR/MENTEE role is a mentorship shell, so
+    // bouncing there would loop back through this gate (roleHome('MENTOR') ===
+    // '/mentor'). '/account' is role-neutral and terminal — it renders for
+    // every authenticated role and redirects no one, so it breaks the loop
+    // whatever the role that reached a mentorship-less mentor shell.
+    redirect('/account');
   }
 
   const { locale, t } = await getServerDictionary();
@@ -51,7 +65,7 @@ export default async function MentorLayout({ children }: { children: React.React
   return (
     <>
       {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
-      <CommandPalette role="MENTOR" />
+      <CommandPalette role="MENTOR" capabilities={capabilities} />
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
       headerExtra={<GlobalSearch />}
@@ -66,7 +80,7 @@ export default async function MentorLayout({ children }: { children: React.React
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <MentorNav />
+          <MentorNav capabilities={capabilities} />
           <InstallAppButton />
         </nav>
 

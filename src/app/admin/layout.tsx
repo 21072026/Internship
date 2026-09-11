@@ -9,6 +9,7 @@ import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { CommandPalette } from '@/components/CommandPalette';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { AdminNav } from '@/components/AdminNav';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { availableModes } from '@/lib/dualRole';
 import { GlobalSearch } from '@/components/GlobalSearch';
@@ -37,6 +38,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // criteria (#822) — same provider shape as the pipeline stages above.
   const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
+  // The vertical's module set (#2351). INTERNSHIP carries all, so the sidebar
+  // and palette are unchanged for today's product.
+  const capabilities = await shellCapabilities(session.user.orgId);
 
   // Auth hardening: when the org requires 2FA for this role, hold the user at a
   // setup gate until they enable it. Skipped while impersonating (the admin is
@@ -48,7 +52,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <>
       {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
-      <CommandPalette role="ADMIN" />
+      <CommandPalette role="ADMIN" capabilities={capabilities} />
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
       headerExtra={<GlobalSearch />}
@@ -62,7 +66,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <p className="text-xs text-gray-500 mt-1">{t.panel.admin}</p>
         </div>
 
-        <AdminNav />
+        <AdminNav capabilities={capabilities} />
 
         <ModeSwitcher modes={modes} />
 
