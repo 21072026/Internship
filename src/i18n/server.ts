@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { defaultLocale, isLocale, LOCALE_COOKIE, type Locale } from './config';
 import { getDictionary } from './dictionaries';
+import { applyVerticalOverlay } from './verticalOverlays';
+import { toVerticalKey, DEFAULT_VERTICAL, type VerticalKey } from '@/lib/verticals';
 
 // Read the active locale. An explicit cookie (set via the language switcher)
 // always wins; otherwise fall back to the signed-in user's saved preference,
@@ -36,7 +38,27 @@ export async function getLocale(): Promise<Locale> {
   return defaultLocale;
 }
 
+// The signed-in user's tenant vertical, or INTERNSHIP for a signed-out visitor
+// (and any failure). One indexed lookup, and only when a session cookie is
+// present — a public view resolves to the default with no query, so the overlay
+// layer costs the live single-tenant product nothing (#1197).
+export async function resolveRequestVertical(): Promise<VerticalKey> {
+  if (!(await hasSessionCookie())) return DEFAULT_VERTICAL;
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return DEFAULT_VERTICAL;
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { org: { select: { vertical: true } } },
+    });
+    return toVerticalKey(user?.org?.vertical);
+  } catch {
+    return DEFAULT_VERTICAL;
+  }
+}
+
 export async function getServerDictionary() {
   const locale = await getLocale();
-  return { locale, t: getDictionary(locale) };
+  const vertical = await resolveRequestVertical();
+  return { locale, t: applyVerticalOverlay(getDictionary(locale), locale, vertical) };
 }
