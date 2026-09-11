@@ -4,6 +4,7 @@
 // drift with a clear, actionable message. Run with Node's TS stripping:
 //   node --experimental-strip-types scripts/check-i18n.ts
 import { dictionaries } from '../src/i18n/dictionaries.ts';
+import { overlayEntries } from '../src/i18n/verticalOverlays.ts';
 
 type AnyRec = Record<string, unknown>;
 
@@ -34,6 +35,21 @@ for (const loc of locales) {
   for (const k of keySet) if (!baseKeySet.has(k)) errors.push(`[${loc}] extra key: ${k}`);
   for (const [k, v] of Object.entries(flat)) {
     if (v.trim() === '') errors.push(`[${loc}] empty value: ${k}`);
+  }
+}
+
+// Vertical terminology overlays (#2354): every override must target a key that
+// already exists in the base (a typo would be a silent no-op — TypeScript also
+// catches this, but the guard states it independently), and INTERNSHIP must
+// override nothing (its emptiness is the no-op guarantee for today's product).
+for (const { vertical, locale, overlay } of overlayEntries()) {
+  const overlayKeys = Object.keys(flatten(overlay as AnyRec));
+  if (vertical === 'INTERNSHIP' && overlayKeys.length > 0) {
+    errors.push(`[overlay ${vertical}/${locale}] INTERNSHIP must override nothing, found: ${overlayKeys.join(', ')}`);
+  }
+  const localeBaseKeys = new Set(Object.keys(flatten(dictionaries[locale as keyof typeof dictionaries] as AnyRec)));
+  for (const k of overlayKeys) {
+    if (!localeBaseKeys.has(k)) errors.push(`[overlay ${vertical}/${locale}] key not in base dictionary: ${k}`);
   }
 }
 

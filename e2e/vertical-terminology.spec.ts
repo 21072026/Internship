@@ -23,28 +23,29 @@ async function adminIn(vertical: string) {
   return { org, email };
 }
 
-test('a MARKETING admin sees "Leads"; an INTERNSHIP admin sees "Candidates"', async ({ page }) => {
+test('a MARKETING admin sees "Leads" on the candidates page and in the nav', async ({ page }) => {
   const mkt = await adminIn('MARKETING');
-  const intn = await adminIn('INTERNSHIP');
   try {
-    // MARKETING: the candidates page reads "Leads".
     await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
     await page.goto('/admin/candidates');
     await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
-    // The sidebar link is relabelled too.
     await expect(page.locator('aside nav').first().getByRole('link', { name: 'Leads', exact: true })).toBeVisible();
-    // And the internship word is gone from this page's heading.
     await expect(page.getByRole('heading', { name: 'Candidates', exact: true })).toHaveCount(0);
+  } finally {
+    await cleanupByEmail(mkt.email);
+    await prisma.organization.delete({ where: { id: mkt.org.id } }).catch(() => {});
+  }
+});
 
-    // INTERNSHIP: the same page still reads "Candidates" — the overlay is a no-op.
+test('an INTERNSHIP admin still sees "Candidates" — the overlay is a no-op', async ({ page }) => {
+  const intn = await adminIn('INTERNSHIP');
+  try {
     await signInAndSettle(page, intn.email, 'TermPass123', '/admin');
     await page.goto('/admin/candidates');
     await expect(page.getByRole('heading', { name: 'Candidates', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toHaveCount(0);
   } finally {
-    for (const x of [mkt, intn]) {
-      await cleanupByEmail(x.email);
-      await prisma.organization.delete({ where: { id: x.org.id } }).catch(() => {});
-    }
+    await cleanupByEmail(intn.email);
+    await prisma.organization.delete({ where: { id: intn.org.id } }).catch(() => {});
   }
 });

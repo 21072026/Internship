@@ -20,7 +20,14 @@
 
 import type { Locale } from './config';
 import type { Dictionary } from './dictionaries';
-import { DEFAULT_VERTICAL, type VerticalKey } from '@/lib/verticals';
+import type { VerticalKey } from '@/lib/verticals';
+
+// The default vertical, inlined as a literal (not imported as a value) so this
+// module has NO runtime imports and can therefore be loaded by the plain node
+// runner that scripts/check-i18n.ts uses — which is what lets that guard
+// validate the overlays. Kept in sync with DEFAULT_VERTICAL in src/lib/verticals.ts
+// by the vertical-overlays unit spec, which imports both.
+const DEFAULT_VERTICAL: VerticalKey = 'INTERNSHIP';
 
 // A recursively-optional view of the dictionary: an overlay may carry any
 // subtree down to a replaced leaf string, and nothing it omits.
@@ -87,9 +94,14 @@ export function applyVerticalOverlay<T extends object>(
   return deepMerge(base, OVERLAYS[v][locale] as DeepPartial<T>);
 }
 
-// Exposed for the parity guard (scripts/check-i18n.ts): it flattens these to
-// assert every overlay key already exists in the base and that INTERNSHIP is
-// empty.
+// Exposed for two guards. scripts/check-i18n.ts (node, at the PR gate) flattens
+// these to assert every overlay key already exists in the base and that
+// INTERNSHIP is empty. The compile-time half is stronger and needs nothing
+// here: `LocaleOverlay = DeepPartial<Dictionary>` over `typeof en` makes a
+// misspelled overlay key a TS excess-property error, caught by `tsc --noEmit`
+// in CI — so a typo is a build failure, and check-i18n is defence-in-depth plus
+// the one thing types cannot see (a valid override wrongly placed in the empty
+// INTERNSHIP entry).
 export function overlayEntries(): { vertical: VerticalKey; locale: Locale; overlay: LocaleOverlay }[] {
   const out: { vertical: VerticalKey; locale: Locale; overlay: LocaleOverlay }[] = [];
   for (const vertical of Object.keys(OVERLAYS) as VerticalKey[]) {
