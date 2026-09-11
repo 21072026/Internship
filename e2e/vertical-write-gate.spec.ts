@@ -21,6 +21,10 @@ const GATED = [
   { path: '/api/questions', cap: 'mentorship' },
   { path: '/api/meeting-requests', cap: 'mentorship' },
   { path: '/api/evaluations', cap: 'evaluations' },
+  // A second Evaluation writer: panel scoring. Gated on 'evaluations' too, so
+  // /api/evaluations is not closed while this stays open (review of #2363). The
+  // gate runs before the panel lookup, so a dummy id still reaches it.
+  { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000/score', cap: 'evaluations' },
 ];
 
 async function adminIn(vertical: 'INTERNSHIP' | 'MARKETING') {
