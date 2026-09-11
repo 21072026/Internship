@@ -45,7 +45,15 @@ test('project co-members can start a DM, and lose the composer when the project 
     await page.goto('/messages');
 
     // The co-member is offered as a "new chat" candidate.
-    await page.getByTestId('new-chat-toggle').click();
+    // Next's streaming SSR (loading.tsx wraps this route in a Suspense
+    // boundary) can briefly — and, per the live-refresh listener above,
+    // repeatedly — land a second copy of this button at the end of <body>
+    // before relocating it into #main-content, so a bare getByTestId() can hit
+    // a strict-mode violation more than once in a row. `.first()` sidesteps it:
+    // in document order the real, in-place copy always comes before the
+    // transient one appended to <body>, and the page never actually shows two.
+    const toggle = page.getByTestId('new-chat-toggle').first();
+    await toggle.click();
     const candidate = page.getByTestId('new-chat-candidate').filter({ hasText: 'Peer Bravo' });
     await expect(candidate).toBeVisible({ timeout: 10_000 });
     await candidate.click();
@@ -70,9 +78,11 @@ test('project co-members can start a DM, and lose the composer when the project 
     expect(stored).not.toBeNull();
     expect(stored!.relationId).toBeNull();
 
-    // Back in the inbox the DM now appears as a thread.
+    // Back in the inbox the DM now appears as a thread. Same streaming
+    // duplicate as the toggle above, and `.first()` for the same reason —
+    // `toBeVisible()` alone can hit the ambiguity again on almost every retry.
     await page.goto('/messages');
-    await expect(page.locator('a[href^="/messages/c/"]').filter({ hasText: 'Peer Bravo' })).toBeVisible({
+    await expect(page.locator('a[href^="/messages/c/"]').filter({ hasText: 'Peer Bravo' }).first()).toBeVisible({
       timeout: 10_000,
     });
 
