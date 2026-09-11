@@ -146,10 +146,29 @@ test('a group call on the free room says so before anyone joins', async ({ page 
   const starter = await seedUser(starterEmail, 'MentorPass123', 'MENTOR', 'Warn Starter');
   const one = await seedUser(uniqueEmail('warn-one'), 'x', 'MENTEE', 'Warn One');
   const two = await seedUser(uniqueEmail('warn-two'), 'x', 'MENTEE', 'Warn Two');
-  // Three people, so the room is a group room and not a pair.
+  // Three people, so the room is a group room and not a pair. A GROUP
+  // conversation is only ever a project's room in this app — getConversationIfAllowed()
+  // (src/lib/conversations.ts) refuses one with no `projectId` outright, for
+  // anyone — so a bare ad-hoc group here 403s the thread fetch before the page
+  // renders anything, including the start-meeting button this test clicks.
+  const project = await prisma.project.create({
+    data: {
+      name: 'Instant Team Free Room Project',
+      ownerType: 'MENTOR',
+      ownerUserId: starter.id,
+      members: {
+        create: [
+          { userId: starter.id, role: 'OWNER' },
+          { userId: one.id, role: 'MENTEE' },
+          { userId: two.id, role: 'MENTEE' },
+        ],
+      },
+    },
+  });
   const conversation = await prisma.conversation.create({
     data: {
       type: 'GROUP',
+      projectId: project.id,
       participants: { create: [{ userId: starter.id }, { userId: one.id }, { userId: two.id }] },
     },
   });
@@ -182,6 +201,8 @@ test('a group call on the free room says so before anyone joins', async ({ page 
     await prisma.notification.deleteMany({ where: { userId: { in: [starter.id, one.id, two.id] } } });
     await prisma.conversationParticipant.deleteMany({ where: { conversationId: conversation.id } });
     await prisma.conversation.deleteMany({ where: { id: conversation.id } });
+    await prisma.projectMember.deleteMany({ where: { projectId: project.id } });
+    await prisma.project.deleteMany({ where: { id: project.id } });
     await cleanupByEmail(two.email);
     await cleanupByEmail(one.email);
     await cleanupByEmail(starterEmail);
