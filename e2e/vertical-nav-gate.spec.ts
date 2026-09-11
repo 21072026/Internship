@@ -18,16 +18,20 @@ const HIDDEN_FOR_MARKETING = ['Mentors', 'Mentorships', 'Mentor Applications', '
 // Core CRM links every vertical keeps.
 const KEPT = ['Companies', 'Organizations', 'Settings'];
 
-async function makeAdmin(vertical: 'INTERNSHIP' | 'MARKETING') {
-  const stamp = `${Date.now()}-${vertical.toLowerCase()}`;
+async function makeUser(
+  vertical: 'INTERNSHIP' | 'MARKETING',
+  role: 'ADMIN' | 'MENTOR' | 'MENTEE' = 'ADMIN',
+) {
+  const stamp = `${Date.now()}-${Math.round(performance.now())}-${vertical.toLowerCase()}`;
   const org = await prisma.organization.create({
     data: { name: `Nav ${vertical} ${stamp}`, slug: `nav-${stamp}`, vertical },
   });
-  const email = uniqueEmail(`nav-${vertical.toLowerCase()}`);
-  const admin = await seedUser(email, 'NavPass123', 'ADMIN', `${vertical} Admin`);
-  await prisma.user.update({ where: { id: admin.id }, data: { orgId: org.id } });
+  const email = uniqueEmail(`nav-${role.toLowerCase()}`);
+  const user = await seedUser(email, 'NavPass123', role, `${vertical} ${role}`);
+  await prisma.user.update({ where: { id: user.id }, data: { orgId: org.id } });
   return { org, email };
 }
+const makeAdmin = (v: 'INTERNSHIP' | 'MARKETING') => makeUser(v, 'ADMIN');
 
 test('an INTERNSHIP admin sees the full sidebar — the gate is a no-op', async ({ page }) => {
   const { org, email } = await makeAdmin('INTERNSHIP');
@@ -75,3 +79,48 @@ test('a MARKETING org has no mentor shell — /mentor redirects home', async ({ 
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });
+
+test('a MENTOR in a MARKETING org lands on /account, not an infinite redirect', async ({ page }) => {
+  // The loop this guards against: '/mentor' -> gate -> '/' -> roleHome(MENTOR)
+  // -> '/mentor' -> ... A terminal redirect target breaks it. Reaching this
+  // state is a supported deploy-time act — an INTERNSHIP org with mentors
+  // reclassified to MARKETING.
+  const { org, email } = await makeUser('MARKETING', 'MENTOR');
+  try {
+    // Inline sign-in, not signInAndSettle: /account is a bare settings page with
+    // no account-menu for the helper to wait on. The post-login redirect chain
+    // itself proves no loop — roleHome for this role is the mentorship shell, so
+    // a bouncy target would 30x-loop instead of settling on /account.
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', email);
+    await page.fill('input[type="password"]', 'NavPass123');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
+    await page.goto('/mentor');
+    await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+test('a MENTEE in a MARKETING org lands on /account, not an infinite redirect', async ({ page }) => {
+  const { org, email } = await makeUser('MARKETING', 'MENTEE');
+  try {
+    // Inline sign-in, not signInAndSettle: /account is a bare settings page with
+    // no account-menu for the helper to wait on. The post-login redirect chain
+    // itself proves no loop — roleHome for this role is the mentorship shell, so
+    // a bouncy target would 30x-loop instead of settling on /account.
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', email);
+    await page.fill('input[type="password"]', 'NavPass123');
+    await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
+    await page.goto('/portal');
+    await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+

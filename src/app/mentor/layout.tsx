@@ -18,7 +18,7 @@ import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
 import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { MentorNav } from '@/components/MentorNav';
-import { shellCapabilities, shellHasCapability } from '@/lib/shellCapabilities';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { availableModes, canUseMentorShell } from '@/lib/dualRole';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
@@ -36,10 +36,16 @@ export default async function MentorLayout({ children }: { children: React.React
   }
 
   // A vertical without the mentorship module has no mentor shell at all (#2351).
-  // INTERNSHIP carries it, so this never fires for today's product; a MARKETING
-  // org (which has no mentors) is sent home rather than shown an empty shell.
-  if (!(await shellHasCapability(session.user.orgId, 'mentorship'))) {
-    redirect('/');
+  // Resolved once here and reused below for the sidebar/palette. INTERNSHIP
+  // carries mentorship, so this never fires for today's product.
+  const capabilities = await shellCapabilities(session.user.orgId);
+  if (!capabilities.includes('mentorship')) {
+    // NOT '/': the home for a MENTOR/MENTEE role is a mentorship shell, so
+    // bouncing there would loop back through this gate (roleHome('MENTOR') ===
+    // '/mentor'). '/account' is role-neutral and terminal — it renders for
+    // every authenticated role and redirects no one, so it breaks the loop
+    // whatever the role that reached a mentorship-less mentor shell.
+    redirect('/account');
   }
 
   const { locale, t } = await getServerDictionary();
@@ -49,7 +55,6 @@ export default async function MentorLayout({ children }: { children: React.React
   // criteria (#822) — same provider shape as the pipeline stages above.
   const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
-  const capabilities = await shellCapabilities(session.user.orgId);
 
   // Auth hardening: hold in-scope roles at the 2FA setup gate until enabled.
   // Skipped while impersonating (the admin behind it is already authenticated).
