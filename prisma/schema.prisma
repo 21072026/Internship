@@ -160,6 +160,9 @@ model Organization {
   subscription         Subscription?
   orgEntitlements      OrgEntitlement[]
   usageRollups         UsageRollup[]
+  webhooks             Webhook[]
+  announcements        Announcement[]
+  newsletters          Newsletter[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -990,7 +993,12 @@ model Announcement {
   // and a field that can disagree with reality.
   image AnnouncementImage?
 
+  // The tenant this announcement belongs to (#2357). Nullable + backfilled.
+  orgId String?
+  org   Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@index([createdAt])
+  @@index([orgId])
 }
 
 // An image attached to a broadcast announcement, stored in the database (same
@@ -1092,8 +1100,15 @@ model Newsletter {
   image NewsletterImage?
   sends NewsletterSend[]
 
+  // The tenant this issue belongs to (#2357). Nullable + backfilled; the
+  // dispatcher scopes recipients to it so a marketing issue never reaches an
+  // internship tenant's members.
+  orgId String?
+  org   Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   // The dispatcher's own query: "SCHEDULED and due".
   @@index([status, scheduledAt])
+  @@index([orgId])
   @@index([sentAt])
   @@index([createdAt])
 }
@@ -1619,12 +1634,19 @@ model CompanyInterest {
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
 // POSTs (HMAC-SHA256 of the body in the X-Signature header).
 model Webhook {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
+  // The tenant this webhook belongs to (#2357). Nullable + backfilled to the
+  // default org so existing rows keep working; every dispatch filters by it, so
+  // one tenant's event never fires another tenant's endpoint.
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
   url       String
   secret    String
-  events    Json     @default("[]")
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  events    Json          @default("[]")
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+
+  @@index([orgId, active])
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.

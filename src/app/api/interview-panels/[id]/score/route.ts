@@ -94,7 +94,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             : panel.scorecards.find((s) => s.authorId === m.userId)?.submittedAt ?? null,
       }));
       if (isPanelComplete(state, panel.closedAt)) {
-        await dispatchWebhook('interview_panel.completed', { panelId: panel.id, subjectId: panel.subjectId });
+        await dispatchWebhook('interview_panel.completed', { panelId: panel.id, subjectId: panel.subjectId }, session.user.orgId);
         // Everyone who scored now has something to compare against, and the
         // person who convened the panel has a decision to make.
         const audience = new Set([...panel.members.map((m) => m.userId), panel.createdById].filter(Boolean) as string[]);

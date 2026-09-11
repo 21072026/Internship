@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { rateLimit } from '@/lib/rateLimit';
 import { deliverToWebhook } from '@/lib/webhooks';
+import { resolveOrgId } from '@/lib/orgScope';
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -14,7 +15,8 @@ async function requireAdmin() {
 // It goes through the normal delivery path, so an integrator can prove their
 // signature verification works before their first real event arrives.
 export async function POST(request: Request) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireAdmin();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const id = new URL(request.url).searchParams.get('id') || '';
   // Keyed by hook id, not by client IP: the receiver is a third party and every
   // admin shares one production host, so the budget that matters is "how often
@@ -27,7 +29,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const hook = await prisma.webhook.findUnique({ where: { id } });
+  // Scoped to the caller's tenant (#2357): a test-ping to another tenant's
+  // endpoint would both deliver a signed request to a URL you don't own and
+  // disclose whether their hook exists. Same reason the sibling routes scope.
+  const hook = await prisma.webhook.findFirst({ where: { id, orgId: resolveOrgId(session) } });
   if (!hook) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   try {
     const { status, ms } = await deliverToWebhook(hook, 'ping', { hookId: hook.id, test: true });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { getServerSession } from 'next-auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
@@ -14,8 +15,13 @@ async function requireAdmin() {
 }
 
 export async function GET() {
-  if (!(await requireAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireAdmin();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const webhooks = await prisma.webhook.findMany({
+    // Scoped to the acting tenant (#2357): the middleware is advisory until
+    // MT_ENFORCE_ISOLATION, so a tenant admin must not list another tenant's
+    // endpoints (their URLs and which events they subscribe to).
+    where: { orgId: resolveOrgId(session) },
     orderBy: { createdAt: 'desc' },
     select: { id: true, url: true, events: true, active: true, createdAt: true },
   });
@@ -44,7 +50,7 @@ export async function POST(request: Request) {
   }
 
   const secret = randomBytes(24).toString('hex');
-  const webhook = await prisma.webhook.create({ data: { url: parsed.data.url, events: parsed.data.events, secret } });
+  const webhook = await prisma.webhook.create({ data: { url: parsed.data.url, events: parsed.data.events, secret, orgId: resolveOrgId(session) } });
   await logActivity({
     action: 'webhook.created',
     level: 'warning',
@@ -94,7 +100,7 @@ export async function PATCH(request: Request) {
   if (parsed.data.url !== undefined) data.url = parsed.data.url;
   if (parsed.data.events !== undefined) data.events = [...parsed.data.events];
   if (parsed.data.active !== undefined) data.active = parsed.data.active;
-  const { count } = await prisma.webhook.updateMany({ where: { id }, data });
+  const { count } = await prisma.webhook.updateMany({ where: { id, orgId: resolveOrgId(session) }, data });
   if (!count) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   await logActivity({
@@ -107,8 +113,8 @@ export async function PATCH(request: Request) {
     detail: parsed.data.url ?? (parsed.data.active === false ? 'paused' : parsed.data.active ? 'resumed' : undefined),
     request,
   });
-  const webhook = await prisma.webhook.findUnique({
-    where: { id },
+  const webhook = await prisma.webhook.findFirst({
+    where: { id, orgId: resolveOrgId(session) },
     select: { id: true, url: true, events: true, active: true },
   });
   return NextResponse.json({ webhook });
@@ -118,7 +124,7 @@ export async function DELETE(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const id = new URL(request.url).searchParams.get('id') || '';
-  const { count } = await prisma.webhook.deleteMany({ where: { id } });
+  const { count } = await prisma.webhook.deleteMany({ where: { id, orgId: resolveOrgId(session) } });
   if (count) {
     await logActivity({
       action: 'webhook.deleted',

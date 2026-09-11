@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       templateId: await resolveTemplateId(rel.orgId, scope),
     },
   });
-  await dispatchWebhook('evaluation.added', { relationId: rel.id, type: evaluation.type, authorId: session.user.id });
+  await dispatchWebhook('evaluation.added', { relationId: rel.id, type: evaluation.type, authorId: session.user.id }, rel.orgId);
   // The evaluated side learns an evaluation exists (#925): mentee wrote it →
   // mentor is told, mentor/admin wrote it → mentee is told. Privacy rule: the
   // notification (which can surface on a lock screen via browser notifications)

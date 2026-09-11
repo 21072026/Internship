@@ -55,10 +55,20 @@ export async function deliverToWebhook(
 
 // Fire-and-forget: POST a signed payload to every active webhook subscribed to
 // the event. Never throws — delivery failures are logged, not propagated.
-export async function dispatchWebhook(event: WebhookEvent, data: Record<string, unknown>) {
+export async function dispatchWebhook(
+  event: WebhookEvent,
+  data: Record<string, unknown>,
+  orgId: string | null | undefined,
+) {
   let hooks;
   try {
-    hooks = await prisma.webhook.findMany({ where: { active: true } });
+    // Scope to the acting tenant (#2357). Explicit rather than via the tenant
+    // middleware: dispatch is fire-and-forget and often runs after the request
+    // scope has unwound (and the middleware is advisory until MT_ENFORCE_ISOLATION
+    // is on), so one tenant's event must never fan out to another's endpoint.
+    // A null orgId (a legacy/system caller) matches only the legacy null-org
+    // webhooks, which the deploy backfill moves to the default org.
+    hooks = await prisma.webhook.findMany({ where: { active: true, orgId: orgId ?? null } });
   } catch (e) {
     logger.error('Webhook lookup failed', { error: String(e) });
     return;

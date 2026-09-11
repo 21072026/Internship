@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
@@ -201,6 +202,7 @@ export async function POST(request: Request) {
 
   const created = await prisma.newsletter.create({
     data: {
+      orgId: resolveOrgId(session),
       templateKey: templateKey || null,
       audience,
       status: action === 'draft' ? 'DRAFT' : 'SCHEDULED',
