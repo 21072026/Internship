@@ -16,6 +16,7 @@ interface Organization {
   name: string;
   slug: string;
   plan: OrgPlan;
+  vertical: string;
   limits: OrgPlanLimits;
   branding: {
     brandName: string | null;
@@ -118,11 +119,17 @@ export default function AdminOrganizationsPage() {
   const t = useT();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [plans, setPlans] = useState<OrgPlan[]>([]);
+  // Keys come from the server's catalogue (#2350) — never hard-coded here, or
+  // adding a vertical would mean editing two lists that can disagree.
+  const [verticals, setVerticals] = useState<string[]>([]);
   // Whether this admin may manage every tenant (#1535). Presentation only — the
   // API refuses a cross-tenant write regardless of what is rendered here.
   const [superAdmin, setSuperAdmin] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  // Blank = let the server apply the column default, so the form creates
+  // exactly what it created before this field existed.
+  const [vertical, setVertical] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +141,7 @@ export default function AdminOrganizationsPage() {
       const data = await res.json();
       setOrgs(data.organizations ?? []);
       setPlans(data.plans ?? []);
+      setVerticals(data.verticals ?? []);
       setSuperAdmin(!!data.superAdmin);
     }
     setLoading(false);
@@ -148,9 +156,9 @@ export default function AdminOrganizationsPage() {
     try {
       const res = await fetch('/api/admin/organizations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, slug }),
+        body: JSON.stringify({ name, slug, ...(vertical ? { vertical } : {}) }),
       });
-      if (res.ok) { setName(''); setSlug(''); await load(); }
+      if (res.ok) { setName(''); setSlug(''); setVertical(''); await load(); }
       else setError((await res.json().catch(() => ({}))).error ?? t.common.error);
     } finally {
       setSaving(false);
@@ -163,6 +171,22 @@ export default function AdminOrganizationsPage() {
       const res = await fetch('/api/admin/organizations', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, plan }),
+      });
+      if (res.ok) await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Which product a tenant is (#2350). Super-admin only on the server; the
+  // select is disabled for everyone else to match, but that check is cosmetic —
+  // the API is the control.
+  const changeVertical = async (id: string, next: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, vertical: next }),
       });
       if (res.ok) await load();
     } finally {
@@ -326,6 +350,21 @@ export default function AdminOrganizationsPage() {
           <div className="flex-1 min-w-[160px]">
             <Input label={t.organizations.slug} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="acme-inc" />
           </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="new-org-vertical">
+              {t.organizations.vertical}
+            </label>
+            <select
+              id="new-org-vertical"
+              data-testid="new-org-vertical"
+              value={vertical}
+              onChange={(e) => setVertical(e.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+            >
+              <option value="">—</option>
+              {verticals.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
           <Button type="submit" loading={saving}>{t.organizations.create}</Button>
         </form>
         <p className="text-xs text-gray-500 mt-2">{t.organizations.slugHint}</p>
@@ -478,6 +517,7 @@ export default function AdminOrganizationsPage() {
                   <th className="py-2 pr-4">{t.organizations.name}</th>
                   <th className="py-2 pr-4">{t.organizations.slug}</th>
                   <th className="py-2 pr-4">{t.organizations.plan}</th>
+                  <th className="py-2 pr-4">{t.organizations.vertical}</th>
                   <th className="py-2 pr-4">{t.organizations.users}</th>
                   <th className="py-2 pr-4">{t.organizations.relations}</th>
                   <th className="py-2 pr-4">{t.organizations.projects}</th>
@@ -506,6 +546,18 @@ export default function AdminOrganizationsPage() {
                         className="rounded-lg border border-gray-300 px-2 py-1 text-xs disabled:opacity-60"
                       >
                         {plans.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </td>
+                    <td className="py-2 pr-4">
+                      <select
+                        aria-label={t.organizations.vertical}
+                        data-testid={`org-vertical-${o.id}`}
+                        value={o.vertical}
+                        disabled={saving || !superAdmin}
+                        onChange={(e) => changeVertical(o.id, e.target.value)}
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs disabled:opacity-60"
+                      >
+                        {verticals.map((v) => <option key={v} value={v}>{v}</option>)}
                       </select>
                     </td>
                     <td className="py-2 pr-4"><Usage used={o.counts.users} limit={o.limits.maxUsers} /></td>

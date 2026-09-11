@@ -6,6 +6,7 @@ import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, planIncludingFeature, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
+import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
@@ -53,6 +54,9 @@ export async function GET() {
 
   return NextResponse.json({
     plans: ORG_PLAN_KEYS,
+    // The vertical catalogue (#2350). Sent with the list for the same reason
+    // `plans` is: the screen must not hard-code a key set the server owns.
+    verticals: VERTICAL_KEYS,
     // Lets the admin screen hide what this account cannot use. Presentation
     // only — the checks above and below are the actual control.
     superAdmin,
@@ -63,6 +67,10 @@ export async function GET() {
         name: o.name,
         slug: o.slug,
         plan,
+        // Normalised on the way out: a row holding a key the catalogue no
+        // longer knows renders as the default instead of an unknown string
+        // the screen has no option for.
+        vertical: toVerticalKey(o.vertical),
         limits: planLimits(plan),
         branding: {
           brandName: o.brandName,
@@ -114,6 +122,10 @@ const createSchema = z.object({
   name: z.string().min(1).max(120),
   slug: z.string().max(60).optional(),
   plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
+  // Validated against the catalogue rather than a second hand-written list:
+  // a z.enum() copy here is exactly the drift that makes a new key type-check
+  // everywhere and 400 at the only door that creates tenants.
+  vertical: z.string().refine(isVerticalKey, 'Unknown vertical').optional(),
 });
 
 // POST — create an organization. Creating tenants is an instance-level act, so
@@ -136,7 +148,15 @@ export async function POST(request: Request) {
   if (existing) return NextResponse.json({ error: 'An organization with that slug already exists' }, { status: 409 });
 
   const organization = await prisma.organization.create({
-    data: { name, slug, plan: parsed.data.plan ?? 'FREE' },
+    // Omitted vertical falls to the column default (INTERNSHIP), so every
+    // existing caller — seed, registration, the admin form — keeps creating
+    // exactly what it created before this slice.
+    data: {
+      name,
+      slug,
+      plan: parsed.data.plan ?? 'FREE',
+      ...(parsed.data.vertical ? { vertical: parsed.data.vertical } : {}),
+    },
   });
   await logActivity({
     action: 'org.created',
@@ -155,6 +175,7 @@ const optionalText = z.string().max(200).optional();
 const patchSchema = z.object({
   id: z.string().min(1),
   plan: z.string().refine(isOrgPlan, 'Invalid plan').optional(),
+  vertical: z.string().refine(isVerticalKey, 'Unknown vertical').optional(),
   brandName: optionalText,
   brandLogoUrl: z.string().max(2000).optional(),
   brandColor: z.string().optional(),
@@ -219,7 +240,7 @@ export async function PATCH(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
   const {
-    id, plan, brandName, brandLogoUrl, brandColor, supportEmail,
+    id, plan, vertical, brandName, brandLogoUrl, brandColor, supportEmail,
     ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate,
   } = parsed.data;
 
@@ -250,6 +271,19 @@ export async function PATCH(request: Request) {
   if (plan !== undefined && plan !== existing.plan && !superAdmin) {
     await logCrossTenantDenial(session, 'PATCH /api/admin/organizations (plan)', id);
     return NextResponse.json({ error: 'Only a super admin may change an organization\'s plan' }, { status: 403 });
+  }
+
+  // Which PRODUCT a tenant is, is an instance-level act for the same reason the
+  // plan is (#2350): it decides which modules exist for everyone in that org,
+  // and later slices read it to gate write paths. A tenant ADMIN owning their
+  // own org must not be able to switch their product. Same shape as the plan
+  // rule above, including the no-op exemption.
+  if (vertical !== undefined && vertical !== existing.vertical && !superAdmin) {
+    await logCrossTenantDenial(session, 'PATCH /api/admin/organizations (vertical)', id);
+    return NextResponse.json(
+      { error: 'Only a super admin may change an organization\'s vertical' },
+      { status: 403 }
+    );
   }
 
   // Entitlement is read from the plan this request leaves the org on. Now that
@@ -289,6 +323,7 @@ export async function PATCH(request: Request) {
 
   const data: Record<string, unknown> = {};
   if (plan !== undefined) data.plan = plan;
+  if (vertical !== undefined) data.vertical = vertical;
   const bn = orNull(brandName); if (bn !== undefined) data.brandName = bn;
   const bl = orNull(brandLogoUrl); if (bl !== undefined) data.brandLogoUrl = bl;
   const bc = orNull(brandColor); if (bc !== undefined) data.brandColor = bc;
