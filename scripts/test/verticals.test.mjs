@@ -74,12 +74,22 @@ test('isVerticalKey is exact — case-sensitive, no coercion', () => {
   assert.ok(!isVerticalKey(['INTERNSHIP']));
 });
 
-test('capabilities are copies — a caller cannot mutate the catalogue', () => {
+test('the catalogue cannot be mutated — neither through a copy nor through the definition', () => {
+  // verticalCapabilities() hands out a copy...
   const first = verticalCapabilities('MARKETING');
   first.push('mentorship');
   assert.ok(!verticalCapabilities('MARKETING').includes('mentorship'));
-  // And the definition's own array is not the one handed out.
   assert.notEqual(verticalCapabilities('MARKETING'), verticalCapabilities('MARKETING'));
+
+  // ...but verticalDefinition() hands out the catalogue object ITSELF, so the
+  // copy is not the protection — the freeze is. A push() here would otherwise
+  // change what every later request in this process sees, with no stack trace
+  // and no way back short of a restart.
+  const def = verticalDefinition('MARKETING');
+  assert.ok(Object.isFrozen(def) && Object.isFrozen(def.capabilities));
+  assert.throws(() => def.capabilities.push('mentorship'), TypeError);
+  assert.throws(() => { def.key = 'INTERNSHIP'; }, TypeError);
+  assert.ok(!verticalHasCapability('MARKETING', 'mentorship'));
 });
 
 test('verticalHasCapability agrees with the capability list, including the fallback', () => {
@@ -89,8 +99,19 @@ test('verticalHasCapability agrees with the capability list, including the fallb
   assert.ok(verticalHasCapability('NOPE', 'mentorship'));
 });
 
-test('every entry names a default template, and templates are distinct', () => {
-  const templates = VERTICALS.map((v) => v.defaultTemplate);
-  for (const tpl of templates) assert.ok(tpl && tpl.trim().length, 'a vertical without a template seeds no stages');
-  assert.equal(new Set(templates).size, templates.length);
+test('the catalogue carries no unresolvable pointers into other catalogues', () => {
+  // The per-vertical stage preset is deliberately absent until #2353 (see the
+  // header of src/lib/verticals.ts): a PROGRAM_TEMPLATES key is a plain string
+  // that this runner cannot resolve — programTemplates.ts is not importable
+  // here (it reaches pipeline.ts and the `@/` alias, which node's resolver does
+  // not follow) — so a wrong key would pass this suite and surface as an empty
+  // pipeline in the slice that reads it. Until the reader exists, an entry may
+  // only carry fields this file can actually check.
+  for (const v of VERTICALS) {
+    assert.deepEqual(
+      Object.keys(v).sort(),
+      ['capabilities', 'key'],
+      `${v.key} carries a field this suite cannot verify — add its check in the slice that reads it`
+    );
+  }
 });

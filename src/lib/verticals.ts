@@ -16,6 +16,15 @@
 // terminology overlay in #2354. `capabilities` is declared here now because a
 // catalogue whose shape arrives later is a catalogue everyone works around in
 // the meantime.
+//
+// What is deliberately NOT here is the per-vertical stage preset. It would be a
+// key into PROGRAM_TEMPLATES (src/lib/programTemplates.ts) — a plain `string`
+// pointer that nothing in this slice resolves, so a key that matches no template
+// would type-check, pass every test, and only surface as an empty pipeline (or a
+// 500) in the slice that finally reads it. That is exactly the failure mode
+// CLAUDE.md records for the pipeline enum. The preset lands in #2353 together
+// with the MARKETING template itself, where it has a reader and an e2e that
+// proves the stages actually appear.
 
 export type VerticalKey = 'INTERNSHIP' | 'MARKETING';
 
@@ -37,17 +46,16 @@ export type VerticalCapability =
 
 export interface VerticalDefinition {
   key: VerticalKey;
-  // The program template whose stage set a new organization of this vertical
-  // starts from. Applied at org-creation time by #2353; stored per org in
-  // PipelineStage, so a tenant can edit it afterwards like any other.
-  defaultTemplate: string;
-  capabilities: VerticalCapability[];
+  capabilities: readonly VerticalCapability[];
 }
 
-export const VERTICALS: VerticalDefinition[] = [
+// Frozen, entries and capability arrays included: verticalDefinition() hands the
+// catalogue object itself to its caller, so without this a single stray push()
+// anywhere would change what every later request sees for the life of the
+// process — a corruption with no stack trace and no way back short of a restart.
+export const VERTICALS: readonly VerticalDefinition[] = [
   {
     key: 'INTERNSHIP',
-    defaultTemplate: 'internship',
     // Everything. This is the product the repo already is, so its catalogue
     // entry must be a no-op: any capability missing from this list would switch
     // a live feature off for the only tenant that exists today.
@@ -65,7 +73,6 @@ export const VERTICALS: VerticalDefinition[] = [
   },
   {
     key: 'MARKETING',
-    defaultTemplate: 'marketing',
     // A marketing CRM tracks accounts through a funnel; it has no mentors, no
     // evaluation cycle, no placement and no partner-institution intake.
     capabilities: ['projects', 'companies', 'pipeline', 'messaging', 'documents'],
@@ -78,6 +85,12 @@ export const VERTICALS: VerticalDefinition[] = [
 // was. Falling back to "no product" would blank a tenant's UI; falling back to
 // the full set can only ever show something that already worked.
 export const DEFAULT_VERTICAL: VerticalKey = 'INTERNSHIP';
+
+VERTICALS.forEach((v) => {
+  Object.freeze(v.capabilities);
+  Object.freeze(v);
+});
+Object.freeze(VERTICALS);
 
 const BY_KEY = new Map<string, VerticalDefinition>(VERTICALS.map((v) => [v.key, v]));
 
