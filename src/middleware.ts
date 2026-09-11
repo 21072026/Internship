@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { IS_DEMO_MODE, demoBlockReason } from '@/lib/demoMode';
 import { REMEMBER_COOKIES, REMEMBER_HINT_COOKIE, clearRememberCookies } from '@/lib/rememberCookie';
+import { REQUEST_ID_HEADER, resolveRequestId } from '@/lib/requestId';
 
 // Methods that mutate state. Unverified users are limited to reads.
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -66,7 +67,38 @@ function wantsResume(req: NextRequest, pathname: string): boolean {
   return REMEMBER_COOKIES.some((name) => req.cookies.get(name));
 }
 
+/**
+ * One correlation id per request (#1601).
+ *
+ * Minted here because middleware is the only code that runs on *every* matched
+ * request, before anything can fail. It is forwarded to the route handler as a
+ * request header (`NextResponse.next({ request: { headers } })`, read there by
+ * `withRequestScope` in `src/lib/requestContext.ts`) and echoed on the response
+ * by `middleware()` below — on the error responses too, since those are exactly
+ * the requests somebody will ask about later.
+ *
+ * `crypto.randomUUID()` is available on the edge runtime; `node:crypto` is not
+ * (see the SESSION_COOKIES note above for the same constraint). The mint and the
+ * validation of an inbound value live in `@/lib/requestId`, which imports
+ * nothing and is therefore edge-safe.
+ */
+function nextWithRequestId(req: NextRequest, requestId: string): NextResponse {
+  const headers = new Headers(req.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
+  return NextResponse.next({ request: { headers } });
+}
+
 export async function middleware(req: NextRequest) {
+  // An inbound id is honoured (a proxy or the k6 runner may already have one)
+  // but never trusted verbatim into a log line — resolveRequestId bounds its
+  // length and alphabet and mints a fresh id instead of repairing a bad one.
+  const requestId = resolveRequestId(req.headers.get(REQUEST_ID_HEADER));
+  const res = await handle(req, requestId);
+  res.headers.set(REQUEST_ID_HEADER, requestId);
+  return res;
+}
+
+async function handle(req: NextRequest, requestId: string): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
 
   if (wantsResume(req, pathname)) {
@@ -85,13 +117,13 @@ export async function middleware(req: NextRequest) {
   // in. Only the cookies: the edge runtime has no database, so the row is left
   // to expire (it is unreachable without the secret).
   if (req.method === 'POST' && pathname === '/api/auth/signout') {
-    const res = NextResponse.next();
+    const res = nextWithRequestId(req, requestId);
     clearRememberCookies(res);
     return res;
   }
 
   if (!WRITE_METHODS.has(req.method) || isAllowlisted(pathname)) {
-    return NextResponse.next();
+    return nextWithRequestId(req, requestId);
   }
 
   // Public demo (#966): writes are allowed by default — a demo where every
@@ -122,7 +154,7 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  return NextResponse.next();
+  return nextWithRequestId(req, requestId);
 }
 
 export const config = {

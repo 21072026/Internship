@@ -20,6 +20,7 @@ interface Meeting {
   meetLink: string | null;
   rsvp: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   rsvpToken: string;
+  status: 'SCHEDULED' | 'CANCELLED';
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -66,11 +67,16 @@ export function UpcomingMeetings({ canRequestMeeting }: { canRequestMeeting: boo
   // Upcoming = scheduled and not more than an hour in the past (a running
   // meeting still matters); link-only meetings (no time) are listed after.
   const now = Date.now();
+  // A cancelled meeting (#1980) is not upcoming — it is off, and offering its
+  // join link and RSVP buttons would send someone to an empty room.
   const upcoming = (meetings ?? [])
+    .filter((m) => m.status !== 'CANCELLED')
     .filter((m) => m.scheduledAt && new Date(m.scheduledAt).getTime() >= now - HOUR_MS)
     .sort((a, b) => (a.scheduledAt! < b.scheduledAt! ? -1 : 1))
     .slice(0, 5);
-  const linkOnly = (meetings ?? []).filter((m) => !m.scheduledAt && m.meetLink).slice(0, 3);
+  const linkOnly = (meetings ?? [])
+    .filter((m) => m.status !== 'CANCELLED' && !m.scheduledAt && m.meetLink)
+    .slice(0, 3);
 
   const when = (iso: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));

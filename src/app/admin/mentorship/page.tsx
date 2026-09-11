@@ -40,10 +40,30 @@ interface MentorshipRelation {
   id: string;
   status: string;
   startDate: string;
+  // How the pairing ended, when COMPLETED does not say it (#1801/#2289). The
+  // list shows it, because a pairing the mentee left is not a pairing that
+  // finished and a row that renders both as "Completed" is the falsehood these
+  // workflows exist to remove.
+  lifecycleState?: string | null;
   mentor: { id: string; fullName: string; email: string };
   mentee: { id: string; fullName: string; email: string };
   company: { id: string; name: string } | null;
   _count: { interactions: number };
+}
+
+/**
+ * The pairing whose mentor is being changed (#2289). A minimal shape, not a
+ * MentorshipRelation: the same dialog is opened from the assign form's
+ * `already_mentored` refusal, where all the server gives us is the relation id
+ * and the current mentor's name — the mentor's own id is unknown there, and the
+ * server refuses `same_mentor` anyway.
+ */
+interface TransferTarget {
+  relationId: string;
+  menteeId: string | null;
+  menteeName: string;
+  mentorId: string | null;
+  mentorName: string | null;
 }
 
 /** The expected role for a picker first, everyone else after, names sorted. */
@@ -78,6 +98,21 @@ export default function MentorshipPage() {
   // off the `mentors` list already fetched from /api/users?view=mentorAvailability,
   // never recomputed here.
   const [pendingConfirm, setPendingConfirm] = useState<'at_capacity' | 'not_accepting' | null>(null);
+  // Change mentor (#2289): the target pairing, the form, and the outcome line.
+  const [transferTarget, setTransferTarget] = useState<TransferTarget | null>(null);
+  const [transferData, setTransferData] = useState({ toMentorId: '', reasonCode: '', reasonNote: '' });
+  const [transferError, setTransferError] = useState('');
+  const [transferring, setTransferring] = useState(false);
+  // Which of the two things the server did — 'corrected' or 'transferred' — is
+  // its answer, not a guess here: the admin needs to know whether a record was
+  // closed behind them.
+  const [notice, setNotice] = useState('');
+  const transferDialogRef = useModalFocus<HTMLDivElement>(transferTarget !== null, () =>
+    setTransferTarget(null)
+  );
+  // The mentor named by an `already_mentored` refusal, so the assign dialog can
+  // offer the change instead of only reporting the wall (#2289).
+  const [assignBlocked, setAssignBlocked] = useState<{ relationId: string; mentorName: string | null } | null>(null);
 
   const fetchRelations = useCallback(async () => {
     setLoading(true);
@@ -140,6 +175,7 @@ export default function MentorshipPage() {
     }
     setSubmitting(true);
     setFormError('');
+    setAssignBlocked(null);
     try {
       const res = await fetch('/api/mentorship', {
         method: 'POST',
@@ -159,6 +195,13 @@ export default function MentorshipPage() {
         // including the plan gate's quota sentence (#2283 follow-up).
         const body = await res.json().catch(() => ({}));
         setFormError(mentorshipAssignmentError(t, body, t.mentorships.assignFailed));
+        // A correct refusal the admin could not act on is how people learn to
+        // fake a completion (#2289): the route names the current mentor and
+        // their relation, so offer the change right here instead of leaving
+        // them to work out the close-then-assign sequence.
+        if (body?.code === 'already_mentored' && body.activeRelationId) {
+          setAssignBlocked({ relationId: body.activeRelationId, mentorName: body.activeMentorName ?? null });
+        }
         return;
       }
       await fetchRelations();
@@ -213,6 +256,69 @@ export default function MentorshipPage() {
     await fetchRelations();
   };
 
+  const openTransfer = (target: TransferTarget, presetMentorId = '') => {
+    setNotice('');
+    setTransferError('');
+    setTransferData({ toMentorId: presetMentorId, reasonCode: '', reasonNote: '' });
+    setTransferTarget(target);
+  };
+
+  const submitTransfer = async () => {
+    if (!transferTarget) return;
+    // Client-side mirrors of the server's own refusals, so the common mistakes
+    // cost no round trip. The server re-checks all three — this is convenience,
+    // not the rule (src/app/api/mentorship/[id]/transfer/route.ts).
+    if (!transferData.toMentorId) {
+      setTransferError(t.changeMentor.selectNewMentor);
+      return;
+    }
+    if (!transferData.reasonCode) {
+      setTransferError(t.changeMentor.reasonRequired);
+      return;
+    }
+    if (transferData.reasonCode === 'other' && !transferData.reasonNote.trim()) {
+      setTransferError(t.changeMentor.noteRequired);
+      return;
+    }
+    setTransferring(true);
+    setTransferError('');
+    try {
+      const res = await fetch(`/api/mentorship/${transferTarget.relationId}/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toMentorId: transferData.toMentorId,
+          reasonCode: transferData.reasonCode,
+          reasonNote: transferData.reasonNote.trim() || undefined,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Same shared resolver as the assign dialog: switch on `code`, never on
+        // the status, and never render the server's English `error` literal.
+        setTransferError(mentorshipAssignmentError(t, body, t.changeMentor.failed));
+        return;
+      }
+      // Say which of the two things happened. An admin who is not told whether
+      // a pairing was closed behind them has to go and look.
+      const template =
+        body.mode === 'corrected' ? t.changeMentor.correctedResult : t.changeMentor.transferredResult;
+      setNotice(
+        template
+          .replace('{mentee}', transferTarget.menteeName)
+          .replace('{mentor}', String(body.mentorName ?? ''))
+      );
+      setTransferTarget(null);
+      setAssignBlocked(null);
+      setShowForm(false);
+      await fetchRelations();
+    } catch {
+      setTransferError(t.changeMentor.failed);
+    } finally {
+      setTransferring(false);
+    }
+  };
+
   // Someone whose role isn't the one this picker is for carries a role suffix, so
   // "assign a mentor's mentor" is a deliberate choice rather than a surprise. The
   // person already picked on the other side drops out — nobody mentors themselves.
@@ -235,6 +341,31 @@ export default function MentorshipPage() {
     { value: '', label: t.mentorships.noCompany },
     ...companies.map((c) => ({ value: c.id, label: c.name })),
   ];
+  // The change-mentor picker drops the two people it cannot be: the mentee, and
+  // the mentor they already have. Full or paused mentors stay selectable here
+  // for the same reason as above, and one more: an admin moving a mentee off a
+  // mentor who left has to be able to put them somewhere.
+  const transferMentorOptions = mentors
+    .filter((m) => m.id !== transferTarget?.mentorId && m.id !== transferTarget?.menteeId)
+    .map((m) => ({
+      value: m.id,
+      label: `${m.fullName}${roleSuffix(m.role, 'MENTOR')} · ${formatMentorAvailability(m, t.mentorAvailability)}`,
+    }));
+  // Order fixed here, not by iterating the reason dictionary: the two admin-only
+  // codes belong at the end, and `wrong_assignment` is the one an admin reaches
+  // for most (they just picked the wrong name), so it leads them.
+  const END_REASON_ORDER = [
+    'wrong_assignment',
+    'mentor_unavailable',
+    'no_fit',
+    'changed_goals',
+    'mentee_request',
+    'other',
+  ] as const;
+  const reasonOptions = END_REASON_ORDER.map((code) => ({
+    value: code,
+    label: t.changeMentor.reasons[code],
+  }));
 
   return (
     <div>
@@ -243,7 +374,14 @@ export default function MentorshipPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.mentorships.title}</h1>
           <p className="text-gray-500 mt-1">{t.mentorships.subtitle}</p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
+        <Button
+          onClick={() => {
+            // A stale refusal from the last attempt must not greet the next one.
+            setFormError('');
+            setAssignBlocked(null);
+            setShowForm(true);
+          }}
+        >
           <Plus className="h-4 w-4" />
           {t.mentorships.assign}
         </Button>
@@ -251,6 +389,18 @@ export default function MentorshipPage() {
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+      )}
+
+      {notice && (
+        <div
+          data-testid="mentorship-notice"
+          className="mb-4 flex items-start justify-between gap-3 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm"
+        >
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} className="shrink-0 font-medium underline">
+            {t.changeMentor.dismiss}
+          </button>
+        </div>
       )}
 
       <MentorshipRequestQueue mentors={mentors} onApproved={() => fetchRelations()} />
@@ -269,6 +419,46 @@ export default function MentorshipPage() {
             <h2 id="mentorship-assign-title" className="text-xl font-bold text-gray-900 mb-6">{t.mentorships.assign}</h2>
             {formError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{formError}</div>
+            )}
+            {assignBlocked && (
+              <div
+                data-testid="assign-blocked-offer"
+                className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm"
+              >
+                {assignBlocked.mentorName && (
+                  <p className="mb-2">
+                    {t.changeMentor.alreadyMentoredOffer.replace('{mentor}', assignBlocked.mentorName)}
+                  </p>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="change-mentor-instead"
+                  onClick={() => {
+                    // The assign dialog steps aside — two stacked modals would
+                    // both be aria-modal and trap focus against each other.
+                    setShowForm(false);
+                    openTransfer(
+                      {
+                        relationId: assignBlocked.relationId,
+                        menteeId: formData.menteeId || null,
+                        menteeName:
+                          mentees.find((m) => m.id === formData.menteeId)?.fullName ?? t.mentorships.mentee,
+                        // Unknown from a 409 body — see TransferTarget. The
+                        // picker therefore cannot pre-drop the current mentor,
+                        // and the server answers `same_mentor` if they are picked.
+                        mentorId: null,
+                        mentorName: assignBlocked.mentorName,
+                      },
+                      // The mentor the admin had already chosen carries over —
+                      // that is the assignment they were trying to make.
+                      formData.mentorId
+                    );
+                  }}
+                >
+                  {t.changeMentor.changeInstead}
+                </Button>
+              </div>
             )}
             <div className="space-y-4">
               <Select
@@ -297,6 +487,85 @@ export default function MentorshipPage() {
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
               <Button onClick={submitCreate} loading={submitting}>{t.mentorships.assignSubmit}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change mentor (#2289) — one dialog for both outcomes; which one applies
+          is the server's call, decided from the pairing's own history. */}
+      {transferTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div
+            ref={transferDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="change-mentor-title"
+            tabIndex={-1}
+            data-testid="change-mentor-dialog"
+            className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+          >
+            <h2 id="change-mentor-title" className="text-xl font-bold text-gray-900 mb-2">
+              {t.changeMentor.title}
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {t.changeMentor.context
+                .replace('{mentee}', transferTarget.menteeName)
+                .replace('{mentor}', transferTarget.mentorName ?? t.common.none)}
+            </p>
+            <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+              {t.changeMentor.hint}
+            </p>
+            {transferError && (
+              <div
+                data-testid="change-mentor-error"
+                className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
+              >
+                {transferError}
+              </div>
+            )}
+            <div className="space-y-4">
+              <Select
+                label={t.changeMentor.newMentor}
+                required
+                data-testid="change-mentor-select"
+                options={transferMentorOptions}
+                placeholder={t.changeMentor.selectNewMentor}
+                value={transferData.toMentorId}
+                onChange={(e) => setTransferData((p) => ({ ...p, toMentorId: e.target.value }))}
+              />
+              <Select
+                label={t.changeMentor.reason}
+                required
+                data-testid="change-mentor-reason"
+                options={reasonOptions}
+                placeholder={t.changeMentor.selectReason}
+                value={transferData.reasonCode}
+                onChange={(e) => setTransferData((p) => ({ ...p, reasonCode: e.target.value }))}
+              />
+              <div>
+                <label htmlFor="change-mentor-note" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.changeMentor.note}
+                </label>
+                <textarea
+                  id="change-mentor-note"
+                  data-testid="change-mentor-note"
+                  rows={3}
+                  value={transferData.reasonNote}
+                  onChange={(e) => setTransferData((p) => ({ ...p, reasonNote: e.target.value }))}
+                  placeholder={t.changeMentor.notePlaceholder}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                />
+              </div>
+              <p className="text-xs text-gray-500">{t.changeMentor.privacy}</p>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <Button variant="outline" onClick={() => setTransferTarget(null)}>
+                {t.common.cancel}
+              </Button>
+              <Button onClick={submitTransfer} loading={transferring} data-testid="change-mentor-submit">
+                {t.changeMentor.submit}
+              </Button>
             </div>
           </div>
         </div>
@@ -368,6 +637,17 @@ export default function MentorshipPage() {
                       <PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" />
                     </span>
                     <StatusBadge status={rel.status} />
+                    {/* A pairing the mentee left did not finish. Rendering both
+                        as plain "Completed" is the record #1801/#2289 exist to
+                        stop being written. */}
+                    {(rel.lifecycleState === 'ENDED_REASSIGNED' ||
+                      rel.lifecycleState === 'ENDED_REMATCHED') && (
+                      <Badge variant="warning" data-testid="lifecycle-badge">
+                        {rel.lifecycleState === 'ENDED_REASSIGNED'
+                          ? t.changeMentor.badgeReassigned
+                          : t.rematchRequest.badge}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
                     {rel.company && (
@@ -386,14 +666,33 @@ export default function MentorshipPage() {
                     className="w-full sm:w-44"
                   />
                   {rel.status === 'ACTIVE' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      onClick={() => handleComplete(rel.id)}
-                    >
-                      {t.mentorships.markComplete}
-                    </Button>
+                    <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        data-testid={`change-mentor-${rel.id}`}
+                        onClick={() =>
+                          openTransfer({
+                            relationId: rel.id,
+                            menteeId: rel.mentee.id,
+                            menteeName: rel.mentee.fullName,
+                            mentorId: rel.mentor.id,
+                            mentorName: rel.mentor.fullName,
+                          })
+                        }
+                      >
+                        {t.changeMentor.action}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        onClick={() => handleComplete(rel.id)}
+                      >
+                        {t.mentorships.markComplete}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>

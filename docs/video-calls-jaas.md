@@ -13,21 +13,60 @@ up for it; this document is the setup that lives outside the repo.
 
 ## What the app does once configured
 
-**Hybrid routing:** JaaS bills by monthly active user and *every participant of a JaaS
-room counts against the allowance* (25 MAU on the free tier), so the tenant is not used
-for everything. Only **one-on-one meetings** (organizer + exactly one invitee: a single
-mentorship relation, a 1:1 meeting request, a two-person project/chat call) get an
-`8x8.vc` room. **Group and bulk meetings** (2+ invitees) and **recurring series** (whose
-audience is derived from membership later and can grow) always get a free
-`meet.jit.si` link, configured tenant or not. The decision is made once per meeting in
-`generateMeetingLink()` (`src/lib/meetingRoom.ts`).
+**Allowance-aware routing (#2011):** JaaS bills by monthly active user and *every
+participant of a JaaS room counts against the allowance* (25 on the free tier), so a room
+goes to the tenant only while the month still has room for it. Every kind of meeting is
+eligible — one-on-one, group, bulk and recurring series alike — and the decision is made
+once per meeting in `resolveMeetingLink()` (`src/lib/meetingRoom.ts`), which asks
+`jaasRoomAllowed()` (`src/lib/jaasAllowance.ts`) whether the projected head-count
+(invitees + the organiser; a series, whose audience grows later, is booked as a small
+group) still fits.
 
-| | Unconfigured (default) | Configured, 1:1 meeting | Configured, group/series |
+> **What this replaced, and why.** The rule used to be "1:1 calls only": the tenant was
+> reserved for pairs because the allowance was a number nobody in the codebase could see.
+> That guess had a price and groups paid it — every project meeting, every bulk schedule
+> and every recurring series was routed *by construction* to a host that hangs up an
+> embedded call after five minutes. A standup that dies at minute five is not a cheaper
+> call; it is a broken one. Now the allowance is counted from our own webhook feed, so the
+> routing is evidence rather than a proxy.
+
+| | Unconfigured (default) | Configured, allowance has room | Configured, allowance spent |
 |---|---|---|---|
 | New room links | `https://meet.jit.si/InternshipCRM-<hex>` | `https://8x8.vc/<appId>/InternshipCRM-<hex>` | `https://meet.jit.si/InternshipCRM-<hex>` |
-| Embedded panel | plain iframe, **5-minute cutoff** | `external_api.js` + JWT, no cutoff | plain iframe, **5-minute cutoff** — open in a tab for longer calls |
+| Embedded panel | plain iframe, **5-minute cutoff** + the warning | `external_api.js` + JWT, no cutoff | plain iframe, **5-minute cutoff** + the warning |
 | Display name | typed by whoever joins | filled in from the account | typed by whoever joins |
 | Moderator | whoever arrives first | the person who called the meeting (and admins) | whoever arrives first |
+
+**A public room always says so.** Whenever the panel is about to embed a `meet.jit.si`
+room it renders `FreeRoomWarning` (`src/components/meeting/FreeRoomWarning.tsx`) above the
+call — before anyone joins, in EN/TR/DE, naming both the five-minute cutoff and the escape
+from it: the *same* room opened in a browser tab has no cutoff, and the button to do that
+is in the warning. It shows for a degraded 1:1 too, because that room dies exactly the
+same way; a warning shown only to groups would lie by omission.
+
+**Nothing here gates a call.** Video is free-core. Over-allowance is an announced
+degradation, never a refusal — and an unreadable database, a broken key or an unset
+variable all resolve the same way: a public room, which is still a room.
+
+### Counting the allowance ourselves
+
+`JaasMonthlyParticipant` is one row per (calendar month, participant), written from the
+`PARTICIPANT_JOINED` webhook. `COUNT(*)` over a month is therefore the monthly-active
+figure, and `/admin/integrations` renders it as **"18 / 25 monthly active participants"**
+(`GET /api/admin/integrations/jaas-usage`).
+
+- **Identity-minimal by construction.** The webhook carries `{ id, name }`; only an
+  HMAC-SHA256 of the id is stored and the name is dropped. The key is the deployment's own
+  secret, so the table cannot be correlated across deployments, and nothing joins it to a
+  `User`.
+- **No webhook feed, no count.** With `JAAS_WEBHOOK_SECRET` unset the count stays at zero
+  and every room is routed to the tenant — an operator who has not wired the feed has given
+  us no evidence of exhaustion, and inventing one would push working calls onto the host
+  with the cutoff. The card says "not measured" rather than letting the zero read as
+  "nothing used".
+- **The limit is configuration, not a literal.** `JAAS_MONTHLY_ACTIVE_LIMIT` (default 25)
+  is the one place the number lives; `0` is a deliberate kill switch that keeps every room
+  on the public instance without unsetting credentials the feed still needs.
 
 Nothing else changes: the room URL is still emailed to invitees, still opens in any
 browser, and rooms created before the switch keep working as they did (the panel keeps
@@ -37,9 +76,10 @@ the old iframe path for `meet.jit.si` links).
 
 Two layers keep calls possible when JaaS misbehaves:
 
-1. **Creation-time** — no/broken credentials degrade every new link to `meet.jit.si`
-   (this has always been the unconfigured behaviour). Unsetting the `JAAS_*` variables
-   is the kill switch.
+1. **Creation-time** — no/broken credentials, a spent allowance or a database that cannot
+   answer all degrade a new link to `meet.jit.si` (this has always been the unconfigured
+   behaviour), and the panel warns about the cutoff before anyone joins. Unsetting the
+   `JAAS_*` variables is the kill switch; `JAAS_MONTHLY_ACTIVE_LIMIT=0` is the softer one.
 2. **Run-time** — a JaaS room name works verbatim on the free public instance, so from
    any stored `8x8.vc/<appId>/<room>` link the app derives `https://meet.jit.si/<room>`
    (`freeMeetingFallbackLink`, `src/lib/meetingLink.ts`). When the embedded JaaS call
@@ -108,10 +148,9 @@ Meeting.meetLink  https://8x8.vc/<appId>/InternshipCRM-<hex>     ← src/lib/mee
 panel   ├─ GET /api/meetings/<id>/call-token                     ← authorizes, then signs
         │     200 { domain, appId, roomName, jwt }                  (src/lib/jaas.ts)
         │     409 { code: 'not-configured' | 'not-a-jaas-room' } → falls back to the link
-        │     (the panel only requests a token for 8x8.vc links; group/series
-        │      meetings live on meet.jit.si by design and take the plain-iframe
-        │      path with no token round trip — 'not-a-jaas-room' answers direct
-        │      API calls for them)
+        │     (the panel only requests a token for 8x8.vc links; a room that was
+        │      routed to meet.jit.si takes the plain-iframe path with no token
+        │      round trip — 'not-a-jaas-room' answers direct API calls for it)
         │
         └─ new JitsiMeetExternalAPI('8x8.vc', { roomName, jwt })  ← src/components/meeting/JaasCall.tsx
 ```
@@ -132,9 +171,11 @@ panel   ├─ GET /api/meetings/<id>/call-token                     ← authori
 
 ## Verifying after deployment
 
-1. Start a call from a mentee card (a 1:1 — group meetings stay on `meet.jit.si` by
-   design). The stored link should be an `8x8.vc` one:
+1. Start a call from a mentee card. While the month's allowance has room, the stored link
+   should be an `8x8.vc` one:
    `select meetLink from Meeting order by createdAt desc limit 1;`
+   If it is a `meet.jit.si` one, `/admin/integrations` says why — no tenant, or the
+   allowance spent.
 2. `GET /api/meetings/<id>/call-token` as a participant returns `200` with a `jwt`
    (and `Cache-Control: no-store`). A `409` names the reason in `code`.
 3. The panel shows the prejoin screen, then the call — and stays up past five minutes.
@@ -144,12 +185,19 @@ panel   ├─ GET /api/meetings/<id>/call-token                     ← authori
 
 ## Costs and limits
 
-JaaS bills by **monthly active users** with a free allowance (25 MAU on the dev tier) on
-top of which usage is charged — and every *participant* of a JaaS room counts, not just
-the organizer. The hybrid routing above is the MAU-saving mechanism: only 1:1 meetings
-(two participants) touch the tenant, group/bulk/series traffic never does. Turning JaaS
-on for a deployment real people use is still a spending decision, and the usage page in
-the JaaS console is the only place it is visible — the app does not meter it. Leaving
-the variables unset is always a safe rollback: existing `8x8.vc` links keep opening in a
+JaaS bills by **monthly active users** with a free allowance (25 on the dev tier) on top
+of which usage is charged — and every *participant* of a JaaS room counts, not just the
+organizer. The routing above is the spending control: rooms use the tenant while the
+projected head-count fits inside `JAAS_MONTHLY_ACTIVE_LIMIT`, and fall back to the public
+instance (with the warning) once it does not.
+
+**The number is ours now.** `/admin/integrations` shows "N / limit monthly active
+participants" for the current UTC month, counted from the webhook feed rather than read
+off the JaaS console, so "is 25 actually the constraint for us?" is answerable from
+evidence — which is the whole point of measuring it before deciding to pay for a tier.
+It is a report and nothing else: no path in the app returns a 403 for a video reason.
+
+Turning JaaS on for a deployment real people use is still a spending decision. Leaving the
+variables unset is always a safe rollback: existing `8x8.vc` links keep opening in a
 browser tab (and the panel offers the free-room fallback), and new rooms go back to the
 public instance.

@@ -146,7 +146,7 @@ export function ApplyMentorForm() {
               <Input label={t.applyMentor.phone} type="tel" autoComplete="tel" {...register('phone')} />
               <SkillsField
                 label={t.applyMentor.expertise}
-                placeholder="React, Node.js, Product Management…"
+                placeholder={t.applyMentor.expertisePlaceholder}
                 hint={t.applyMentor.expertiseHint}
                 value={expertise}
                 onChange={(next) => { setExpertise(next); if (next.length > 0) setExpertiseError(false); }}

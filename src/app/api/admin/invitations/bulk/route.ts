@@ -21,8 +21,11 @@ import {
 // Same three explicit guards as the board's GET, for the same reasons: ADMIN
 // checked in this handler (a MENTOR gets 403 even though they may resend their
 // OWN invitations one at a time via /api/invite/[id]), the tenant filter written
-// by hand because InvitationToken is not in TENANT_MODELS, and the per-row
-// eligibility taken from src/lib/invitationStatus.ts rather than re-derived.
+// by hand — InvitationToken is registered in TENANT_MODELS since #1559, so the
+// middleware scopes these queries as well when the flag is on, but the hand
+// filter is the only one with it OFF and both read `resolveOrgId(session)`, so
+// they cannot disagree — and the per-row eligibility taken from
+// src/lib/invitationStatus.ts rather than re-derived.
 //
 // Every row reports its own outcome. A bulk action over 50 rows where 3 were
 // skipped must say which 3 — "50 selected, 47 resent" with no detail is how an

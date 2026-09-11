@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Runbook: how the migration broke e-mail** (#2166). Repointing `crm.ersah.in` moved `SMTP_HOST` to a host with no mail server, and deleting the Plesk subdomain deleted the mail domain behind `reply@crm.ersah.in` — after which the IMAP poller's retries got the server fail2ban-banned on *all* ports, killing outbound too. Documented with the diagnostic trail, plus the `docker restart` does-not-reread-env trap found while fixing it."
-}

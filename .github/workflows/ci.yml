@@ -39,6 +39,19 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # The starter skill vocabulary is the thing every skill filter will
+      # normalise to, and every way of breaking it is invisible to TypeScript:
+      # the fields are all `string`, so a duplicated key, an alias two skills
+      # both claim, an adjacency pointing at a renamed key or an empty Turkish
+      # label all compile. They surface as a picker with two "React" rows or a
+      # lookup that resolves to whichever entry came first (#1816).
+      - name: skill vocabulary is well-formed (#1816)
+        run: npm run check:skills
+      # …and the behaviour the data exists for: the four spellings of one skill
+      # collapsing to one key, and adjacency authored one-way coming out
+      # symmetric.
+      - name: skill vocabulary index (#1816)
+        run: npm run test:skill-vocabulary
       # A hardcoded stage key ('HIRED_660', …) type-checks, passes every test on
       # the default seed, and only misbehaves for a tenant that renamed its
       # stages — which no test tenant does. That invisibility is why the bug
@@ -108,6 +121,40 @@ jobs:
       # keeps honest (#1730).
       - name: money and percent formatting in all three locales (#1730)
         run: npm run test:money
+      # The billable unit goes on an invoice, and none of the ways of getting it
+      # wrong are visible in a browser: a month boundary cannot be crossed in an
+      # e2e run, a dormant pair that is still counted looks like every other
+      # row, and "a future PAUSED state is excluded automatically" has no screen
+      # at all. These assertions are the published definition read back one
+      # clause at a time (#1750).
+      - name: the billable pair means exactly one thing (#1750)
+        run: npm run test:metering
+      # The notification catalogue and the `notifications.events` dictionary are
+      # two halves of one contract, and the type system only sees one of them: a
+      # dictionary is an object literal, so adding or removing a key there is a
+      # compile error nowhere. An event with no catalogue entry cannot be
+      # published at all, an entry with no template renders as the generic
+      # fallback, and a template that gains a `{placeholder}` in ONE locale
+      # renders it literally to that locale's readers only (#1710).
+      - name: the notification catalogue matches the dictionary (#1710)
+        run: npm run test:notification-catalog
+      # The roster feed applies an HR export to real people every night, and the
+      # four properties it promises are all invisible to the type system and to a
+      # browser test: a row that did not change must not be written at all, a
+      # crash mid-batch must resume from the checkpoint instead of re-applying
+      # the chunks that committed, the same file applied twice must change
+      # nothing the second time, and a feed for one tenant must not be able to
+      # read or write another tenant's row. Every one of those typechecks
+      # perfectly while being wrong (#1965).
+      - name: the roster diff, resume and tenant isolation (#1965)
+        run: npm run test:roster-ingest
+      # An inbound x-request-id arrives on a public request and ends up inside a
+      # JSON log line, so the one function that decides whether it is honoured or
+      # replaced is a security boundary: a newline in it would forge a second log
+      # line, and an oversized one would pad every line of the request out. Both
+      # typecheck perfectly (#1601).
+      - name: an inbound request id cannot forge a log line (#1601)
+        run: npm run test:request-id
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # An API-key request has no session, so nothing resolves a tenant for it

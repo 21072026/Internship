@@ -17,9 +17,8 @@ import { resolveStartStage } from '@/lib/pipelineStages';
 import { daysInStage } from '@/lib/stageClock';
 import {
   findActiveMentorship,
-  hasOtherActiveMentorship,
-  ALREADY_MENTORED_ERROR,
   AlreadyMentoredError,
+  alreadyMentoredBody,
 } from '@/lib/activeMentorship';
 
 const createRelationSchema = z.object({
@@ -211,9 +210,13 @@ export async function POST(request: Request) {
 
     // Cheap pre-flight for the common case; the real guard is re-run inside the
     // transaction below (#419) — everything between here and the create is an
-    // await another request can win.
-    if (await hasOtherActiveMentorship(prisma, menteeId)) {
-      return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
+    // await another request can win. The refusal names the mentor in the way
+    // and carries their relation id, so the admin dialog can offer the transfer
+    // (#2289) instead of only reporting the block — this route is ADMIN-only,
+    // which is what makes returning the name here acceptable.
+    const preflightActive = await findActiveMentorship(prisma, menteeId);
+    if (preflightActive) {
+      return NextResponse.json(await alreadyMentoredBody(prisma, preflightActive.id), { status: 409 });
     }
 
     // Plan gate (#547): block a new active relation once the tenant is at its
@@ -282,7 +285,7 @@ export async function POST(request: Request) {
       });
     } catch (e) {
       if (e instanceof AlreadyMentoredError) {
-        return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
+        return NextResponse.json(await alreadyMentoredBody(prisma, e.existingRelationId), { status: 409 });
       }
       throw e;
     }

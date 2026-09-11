@@ -17,7 +17,10 @@
 // (disabled, schedule removed, or GitHub suspending cron after 60 days of repo
 // inactivity) — then there is no failed run to alert on, and the only visible
 // trace is the pile itself. Warn, never fail: an infrastructure problem must
-// not block an unrelated PR.
+// not block an unrelated PR. The workflow's own failure path now opens a
+// labelled issue (#2323, scripts/release-compact-alert.mjs), so this warning
+// is the second net, not the only one — and it names who acts, because as
+// "not a problem with this PR" it was correctly read and correctly ignored.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { resolveRelease } = require('./release-derive.cjs');
@@ -59,12 +62,21 @@ function warnOnStaleBacklog(timeline) {
   if (ageDays > MAX_AGE_DAYS) reasons.push(`the oldest is from ${oldest}, ${ageDays} days ago (> ${MAX_AGE_DAYS})`);
   if (reasons.length === 0) return;
 
+  // "Not a problem with this PR" was the whole message once, and it worked
+  // exactly as written: every reviewer read it, agreed, and moved on for three
+  // days while nothing recorded what shipped (#2323). A warning nobody is
+  // accountable for is a warning nobody acts on — so it now says who acts and
+  // where, and keeps saying it is not this PR's fault to fix in this PR.
   const message =
     `${reasons.join(' and ')}. Compaction runs daily, so this backlog means ` +
     'release-compact.yml is not folding fragments — CHANGELOG.md and ' +
-    'src/lib/releaseNotes.ts have stopped recording what shipped. Check that ' +
-    "workflow's recent runs; releases/README.md -> \"When compaction is stuck\" " +
-    'has the manual recovery. Not a problem with this PR.';
+    'src/lib/releaseNotes.ts have stopped recording what shipped. ' +
+    'WHO ACTS: not this PR and not its reviewer — the maintainer (@mersahin), ' +
+    'in #2323, by opening the pending PR from the bot/release-compact branch ' +
+    'and choosing how Actions is allowed to open it in future. If #2323 is ' +
+    'closed and this still fires, reopen it with a link to this run: something ' +
+    'new is wrong. releases/README.md -> "When compaction is stuck" has the ' +
+    'manual recovery, which any session can run.';
 
   // GitHub Actions annotation when running in CI, plain text otherwise.
   console.log(

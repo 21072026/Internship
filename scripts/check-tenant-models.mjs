@@ -13,9 +13,9 @@
 //
 //   That is not hypothetical: the set drifted from the schema once and eight
 //   models with a tenant key stayed unprotected for months before anyone
-//   noticed. The rule ("a model that holds tenant data needs `orgId` AND an
-//   entry in TENANT_MODELS") already existed in CLAUDE.md, and a rule that
-//   lives only in a doc is a rule that gets skipped in a hurry.
+//   noticed (registered in #1559). The rule ("a model that holds tenant data
+//   needs `orgId` AND an entry in TENANT_MODELS") already existed in CLAUDE.md,
+//   and a rule that lives only in a doc is a rule that gets skipped in a hurry.
 //
 //   Both directions are checked, because both are the same drift:
 //     • a model with `orgId` that nothing registered  → unenforced tenant data;
@@ -56,33 +56,29 @@ const EXEMPT = new Map([
 
 // ── Pending registration (a ratchet, not an allowlist) ───────────────────────
 // Models that carry `orgId`, are NOT yet registered, and are known to be
-// unprotected today. Registering them changes runtime behaviour (the middleware
-// starts injecting orgId into their creates too), so it is its own reviewed
-// piece of work — #1559 — with its own cross-tenant spec.
+// unprotected today. Registering one changes runtime behaviour — the middleware
+// starts injecting orgId into its creates too, and every sessionless write path
+// has to be walked — so it is its own reviewed piece of work rather than a
+// one-line addition to the set.
 //
-// These are the eight #1560 was filed about, so this script does NOT report a
-// clean tree while they are here: every run prints them (and a GitHub Actions
-// warning annotation), and the summary line drops the word "OK".
+// **EMPTY since #1559.** The eight models #1560 was filed about — Tag, StageSla,
+// PipelineStage, CompanyInquiry, Offer, InterviewPanel, EvaluationTemplate,
+// InvitationToken — are now registered in TENANT_MODELS, with every create path
+// audited (docs/tenant-isolation.md § The eight late registrations). So this
+// script reports a clean tree again: with nothing pending the summary line says
+// "OK" and no warning annotation is emitted.
 //
+// The mechanism stays, for the next model that has to wait for its own change.
 // The list only ever shrinks: an entry that has since been registered, or whose
 // model has lost its `orgId`, fails the check and must be deleted. Adding a NEW
 // name is not a way to pass CI — the length is pinned by EXPECTED_PENDING
 // below, so the set cannot grow without a reviewer seeing the number move.
-const PENDING_REGISTRATION = new Map([
-  ['Tag', 'awaiting registration + cross-tenant spec in #1559'],
-  ['StageSla', 'awaiting registration + cross-tenant spec in #1559'],
-  ['PipelineStage', 'awaiting registration + cross-tenant spec in #1559'],
-  ['CompanyInquiry', 'awaiting registration + cross-tenant spec in #1559'],
-  ['Offer', 'awaiting registration + cross-tenant spec in #1559'],
-  ['InterviewPanel', 'awaiting registration + cross-tenant spec in #1559'],
-  ['EvaluationTemplate', 'awaiting registration + cross-tenant spec in #1559'],
-  ['InvitationToken', 'awaiting registration + cross-tenant spec in #1559'],
-]);
+const PENDING_REGISTRATION = new Map([]);
 
 // How many entries PENDING_REGISTRATION is allowed to hold. Pinned as a literal
-// on purpose: a ninth unprotected model cannot be waved through by appending a
-// line, and the count only moves in a diff a human approves.
-const EXPECTED_PENDING = 8;
+// on purpose: an unprotected model cannot be waved through by appending a line,
+// and the count only moves in a diff a human approves.
+const EXPECTED_PENDING = 0;
 
 // ── Parsing ──────────────────────────────────────────────────────────────────
 
@@ -105,10 +101,17 @@ function schemaModels(source) {
 // The names inside `TENANT_MODELS = new Set([ … ])`, read as text rather than
 // imported: orgContext.ts is server-only TypeScript that pulls in the Prisma
 // client and node:async_hooks, none of which a plain-Node guard should need.
-// Line comments are stripped first so a model name mentioned in the prose above
-// an entry cannot be mistaken for one.
+// Line comments are stripped after the block is located, so a model name
+// mentioned in the prose above an entry cannot be mistaken for one.
+//
+// The closing delimiter is anchored to the START of a line, because the entries
+// carry prose and prose carries brackets: a `])` written mid-comment (naming an
+// `@@unique` pair, say) ends an unanchored non-greedy match right there and
+// every name below it reads as unregistered. That fails closed — the guard
+// reports the truncated tail as drift rather than passing it — but the report
+// then blames the schema for a comment, which costs an afternoon.
 function registeredModels(source) {
-  const block = source.match(/TENANT_MODELS[^=]*=\s*new Set\(\[([\s\S]*?)\]\)/);
+  const block = source.match(/TENANT_MODELS[^=]*=\s*new Set\(\[([\s\S]*?)^\]\)/m);
   if (!block) throw new Error(`Could not find TENANT_MODELS in ${ORG_CONTEXT_FILE}`);
   const body = block[1].replace(/\/\/[^\n]*/g, '');
   const names = [...body.matchAll(/['"`]([A-Za-z_]\w*)['"`]/g)].map((m) => m[1]);
@@ -212,10 +215,11 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-// Pending entries are not a hard failure — registering them is #1559's reviewed
-// change, not this guard's — but they ARE unprotected tenant data, so they get
-// said out loud on every run, with a GitHub annotation so the PR page shows it
-// rather than burying it in a green step's log.
+// Pending entries are not a hard failure — registering a model is its own
+// reviewed change, not this guard's — but they ARE unprotected tenant data, so
+// they get said out loud on every run, with a GitHub annotation so the PR page
+// shows it rather than burying it in a green step's log. The list is empty since
+// #1559, so today this block never fires.
 const pending = [...PENDING_REGISTRATION.keys()].filter((m) => models.get(m)?.orgId);
 if (pending.length > 0) {
   const headline =
@@ -234,11 +238,11 @@ const exemptActive = [...EXEMPT.keys()].filter((m) => models.get(m)?.orgId);
 const exemptInert = [...EXEMPT.keys()].filter((m) => !models.get(m)?.orgId);
 const verdict =
   pending.length > 0
-    ? `tenant models: no NEW drift, but ${pending.length} model(s) remain unprotected (#1559)`
+    ? `tenant models: no NEW drift, but ${pending.length} model(s) remain unprotected`
     : 'tenant models OK';
 console.log(
   `${verdict} — ${tenantKeyed.length} model(s) declare orgId; ${registeredSet.size} registered ` +
-    `in TENANT_MODELS, ${pending.length} pending (#1559), ${exemptActive.length} exempt by ` +
+    `in TENANT_MODELS, ${pending.length} pending, ${exemptActive.length} exempt by ` +
     'declared exception' +
     (exemptInert.length > 0
       ? ` (${exemptInert.length} further exemption(s) declared but not applicable — ` +

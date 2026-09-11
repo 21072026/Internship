@@ -16,6 +16,13 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid token' }, { status: 400 });
 
+  // Looked up BY TOKEN, with no tenant context bound — and that is correct.
+  // `InvitationToken` is registered in TENANT_MODELS (#1559), but this route is
+  // public: there is no session, so `currentOrgId()` is undefined and the
+  // middleware does not scope. It must stay that way. Wrapping this in a tenant
+  // scope would narrow the lookup to an org the invitee has no way to present,
+  // and the "your link was opened" signal would silently stop working. The
+  // token itself is the authorisation here.
   const invite = await prisma.invitationToken.findUnique({ where: { token: parsed.data.token } });
   // Silently succeed for unknown/consumed tokens — this is a best-effort signal,
   // not an auth check, and we don't want to leak which tokens exist.

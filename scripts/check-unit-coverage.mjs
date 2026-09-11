@@ -122,6 +122,46 @@ const FLOORS = new Map([
       why: 'diacritic/dotless-ı folding — mentor search for Şahin/Müller/Işık (#1367)',
     },
   ],
+  [
+    'src/lib/meteringRules.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the billable unit: the definition, the UTC month boundary, the allowlist (#1750)',
+    },
+  ],
+  [
+    'src/lib/importPreview.ts',
+    {
+      floor: 95,
+      measured: 97.37,
+      why: 'the one import engine: a dry run is the same code path as the apply (#1432/#2072)',
+    },
+  ],
+  [
+    'src/lib/rosterIngest.ts',
+    {
+      floor: 95,
+      measured: 98.24,
+      why: 'the roster diff, the file-hash no-op and resume after a crash mid-batch (#1965)',
+    },
+  ],
+  [
+    'src/lib/externalSyncPolicy.ts',
+    {
+      floor: 90,
+      measured: 93.41,
+      why: 'an external feed never overwrites what a human typed unless the tenant says so (#1943/#1965)',
+    },
+  ],
+  [
+    'src/lib/requestId.ts',
+    {
+      floor: 95,
+      measured: 98.91,
+      why: 'an inbound x-request-id is honoured, but never into a forged log line (#1601)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────

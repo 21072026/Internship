@@ -23,6 +23,19 @@ export const AUTH_UNEXPECTED_ERROR = 'UNEXPECTED_ERROR';
 export const AUTH_SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE';
 
 /**
+ * The user's tenant has enforced single sign-on (#1950), so no password-derived
+ * path may mint a session for them. Distinct from "Invalid email or password"
+ * on purpose: the password is not wrong, it is switched off, and the only
+ * useful thing to say is "go to your identity provider" — which the sign-in
+ * page turns into a link to `/auth/sso`.
+ *
+ * This is a deliberate, narrow enumeration trade: it reveals that an address
+ * belongs to an SSO-enforced organization. Recorded in
+ * `docs/security-exceptions.md` rather than left implicit.
+ */
+export const AUTH_SSO_REQUIRED = 'SSO_REQUIRED';
+
+/**
  * The errors authorize() raises on purpose. Their text is contractual: the
  * sign-in page keys off it to show the 2FA field, offer a resend link, or
  * explain a pending review, and renders the rest as-is.
@@ -49,4 +62,5 @@ export const INTENTIONAL_AUTH_ERRORS = new Set([
   '2FA_REQUIRED',
   'EMAIL_NOT_VERIFIED',
   'ACCOUNT_PENDING_APPROVAL',
+  AUTH_SSO_REQUIRED,
 ]);

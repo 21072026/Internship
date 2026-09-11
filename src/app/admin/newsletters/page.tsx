@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Plus, Send, Trash2, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import {
+  BroadcastQuotaLine,
+  useBroadcastQuota,
+  useBroadcastQuotaMessage,
+} from '@/components/ui/BroadcastQuota';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
@@ -107,6 +112,10 @@ export default function AdminNewslettersPage() {
   const [cadenceAudience, setCadenceAudience] = useState<NewsletterAudience>('MENTEE');
   const [cadenceHour, setCadenceHour] = useState('9');
   const [cadenceSaved, setCadenceSaved] = useState(false);
+  // The month's broadcast band (#1754), shown on the send row and re-read after
+  // every dispatch so the figure is never one issue out of date.
+  const { quota, refreshQuota } = useBroadcastQuota();
+  const quotaMessage = useBroadcastQuotaMessage();
 
   const current = bodies[tab] ?? emptyIssue();
   const filledLocales = useMemo(() => locales.filter((l) => isFilled(bodies[l])), [bodies]);
@@ -207,7 +216,13 @@ export default function AdminNewslettersPage() {
       const res = await fetch('/api/admin/newsletters', { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data?.details?.formErrors?.[0] ?? data?.error ?? n.errorGeneric);
+        // Over the month's broadcast band: nothing was sent. The issue itself is
+        // kept — but as a DRAFT, never left armed, or the cron would mail it
+        // unattended after we said it had not been sent. The refusal sentence
+        // says so (`status` in the 403 body), and the history refresh below
+        // shows the draft.
+        setError(quotaMessage(data) ?? data?.details?.formErrors?.[0] ?? data?.error ?? n.errorGeneric);
+        await Promise.all([fetchHistory(), refreshQuota()]);
         return null;
       }
 
@@ -222,7 +237,7 @@ export default function AdminNewslettersPage() {
             .replace('{failed}', String(data.dispatch.failed))
         );
       }
-      await fetchHistory();
+      await Promise.all([fetchHistory(), refreshQuota()]);
       return data.id ?? null;
     } catch {
       setError(n.errorGeneric);
@@ -261,8 +276,8 @@ export default function AdminNewslettersPage() {
         ...(method === 'DELETE' ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) setError(data?.error ?? n.errorGeneric);
-      await fetchHistory();
+      if (!res.ok) setError(quotaMessage(data) ?? data?.error ?? n.errorGeneric);
+      await Promise.all([fetchHistory(), refreshQuota()]);
     } finally {
       setRowBusy(false);
       setDeleteId(null);
@@ -601,6 +616,11 @@ export default function AdminNewslettersPage() {
               {n.sendNow}
             </Button>
           </div>
+
+          {/* What sending costs, before it is spent. Every issue is metered,
+              unlike an announcement, which only spends the band when its
+              e-mail box is ticked. */}
+          <BroadcastQuotaLine quota={quota} />
 
           {result && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-950/40 dark:text-green-200" data-testid="newsletter-result">{result}</p>}
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200" data-testid="newsletter-error">{error}</p>}

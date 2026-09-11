@@ -42,11 +42,30 @@ No hand-rolled copy of the filter is left in `src/`. There is exactly one seam:
 | `POST /api/invite` | **nothing** | 409 at invite time, while the admin is still looking at the form |
 | `POST /api/mentor/mentees` | no guard (safe only because the mentee row was three statements old) | account + relation in one transaction, with the assertion inside it |
 | `src/lib/mergeUsers.ts` | **nothing** — re-pointing `menteeId` carried a duplicate's differently-mentored `ACTIVE` relation over *alongside* the primary's | refused with `active_mentor_conflict` (409), naming both mentors; nothing is written |
+| `src/lib/mentorTransfer.ts` (change a mentee's mentor, #2289) | **did not exist** — an admin closed the relation by hand and assigned again, two unlinked writes with the invariant false in between | one transaction, the guard inside it with `exceptRelationId`, and the old pairing closed as `ENDED_REASSIGNED` rather than `COMPLETED` |
 | `scripts/import-csv.mjs` | owner-scoped, no status filter — importing the same sheet as a second `--owner` added a second `ACTIVE` relation | the row is skipped, listed under `SKIPPED — already has an active mentor`, and the process exits 1 |
 
 Seeders are clean by construction and stay that way: `prisma/seed-demo.mjs`
 skips a mentee that already has any relation, and `scripts/seed-dummy.mjs`
 truncates first and pairs only freshly created mentees.
+
+### The supported way through the 409
+
+An admin refused with `already_mentored` in the middle of a legitimate task —
+*the mentor left the company and this mentee needs a new one* — is not supposed
+to close the old relation by hand and then assign. That records a completion
+that never happened. There is one operation for it:
+**`POST /api/mentorship/<id>/transfer`**, or **Change mentor** on
+`/admin/mentorship`, which closes the old pairing as `ENDED_REASSIGNED` and
+creates the new one in the SAME transaction — re-asking the guard here with
+`exceptRelationId` — so the invariant is never violated and never has a window
+where the mentee has no mentor. A pairing with no history recorded under it is
+corrected in place instead, with no second row at all. Full rule:
+[`docs/mentor-transfer.md`](mentor-transfer.md) (#2289).
+
+The refusal body itself now names the mentor in the way (`activeRelationId`,
+`activeMentorName` — ADMIN-facing callers only), which is what lets the assign
+dialog offer that path rather than only reporting the block.
 
 ### Why the merge refuses instead of closing one relation
 

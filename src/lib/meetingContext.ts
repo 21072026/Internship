@@ -52,7 +52,7 @@ export function countContexts(input: MeetingContextInput): number {
 // the implementation (and the JaaS/public-instance choice) lives in
 // @/lib/meetingRoom, and the embeddability check in @/lib/meetingLink so client
 // components can import it.
-export { generateMeetingLink } from '@/lib/meetingRoom';
+export { generateMeetingLink, resolveMeetingLink } from '@/lib/meetingRoom';
 
 const INVITEE_SELECT = {
   id: true,

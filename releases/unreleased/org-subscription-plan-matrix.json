@@ -1,4 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Commercial spine: `Subscription` + `OrgEntitlement` and the plan→feature matrix** (#1731). New additive models give an Organization a real subscription (plan key, status, interval, period, trial, education discount, Stripe ids) and a place to grant a single feature outside its plan; both carry `orgId` and are registered in `TENANT_MODELS`. `src/lib/plans.ts` is the one source of the packaging (Community / Program / Program Plus / Enterprise + Employer tiers, published EUR prices, limits, features) and is pure/data-only, so it is unit-tested (`npm run test:plans`) and importable from client components. `resolveEntitlements()` is the single entitlement resolver; `src/lib/subscription.ts` adds `getOrCreateSubscription()` plus the DB-backed `orgEntitled()`. An idempotent deploy backfill maps every existing org's legacy plan onto a subscription row. No feature is gated behind a plan by this change."
-}

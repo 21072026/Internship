@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
+import { recordPairActivity } from '@/lib/metering';
 import { notifyIfAllowed } from '@/lib/notify';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { INTERACTION_TYPES } from '@/lib/interactionTypes';
@@ -113,6 +114,13 @@ export async function POST(request: Request) {
         type,
       },
     });
+
+    // Metering signal (#1750): activity VOLUME, not the pair count — one pair
+    // logging fifty interactions is still one billable pair. Collected here so
+    // the nightly rollup can eventually read a stream instead of scanning seven
+    // domain tables; until then activeMatchedPairs() is the truth. Never
+    // awaited, and it cannot fail the write.
+    recordPairActivity(relation.orgId);
 
     await dispatchWebhook('interaction.logged', { relationId, type, date: interaction.date.toISOString() });
     // The mentee learns their mentor logged something (#924) — previously this

@@ -38,6 +38,19 @@ name: Compact release fragments
 # + alert email) naming the branch — a maintainer opens the PR in one click, or
 # any agent session runs `node scripts/release-compact.mjs` and opens it
 # normally.
+#
+# FAILURE TRAIL (#2323). "Fails LOUDLY" above was not loud enough: four
+# scheduled runs in a row pushed a correct branch, failed at the PR step and
+# went unnoticed for three days, because an annotation lives in a run log
+# nobody opens for a workflow that has always been green, and the alert e-mail
+# is separately broken (#2322). So the failure path now also OPENS — or, on the
+# next failed run, UPDATES — a labelled issue naming the branch, the fragment
+# count, the version and the one-click manual step
+# (scripts/release-compact-alert.mjs), and CLOSES it again as soon as a
+# compaction PR exists. Updating rather than duplicating is deliberate: this
+# fires daily, and 30 identical issues would be its own kind of silence.
+# Nothing about the success path changed — the push, the force-push, the
+# arithmetic and the stamping are untouched.
 
 on:
   schedule:
@@ -53,6 +66,11 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  # A workflow that is forbidden from opening a pull request can still open an
+  # ISSUE, which is the whole failure trail of #2323 — see the FAILURE TRAIL
+  # note above. This is the default GITHUB_TOKEN's own issues scope; it grants
+  # nothing to any other workflow and needs no secret.
+  issues: write
 
 env:
   # One branch for every compaction, ever. See the header note.
@@ -132,7 +150,14 @@ jobs:
                 --head "$BRANCH" \
                 --title "chore(release): compact fragments into ${VERSION}" \
                 --body "$BODY"; then
-              echo "::error title=Could not open the compaction PR::The branch ${BRANCH} is pushed and correct (${COUNT} fragment(s) -> ${VERSION}), but creating the PR failed. Usual cause: the RELEASE_BOT_TOKEN secret is missing, and this org forbids GITHUB_TOKEN from creating pull requests. Open the PR from ${BRANCH} manually, or add the secret."
+              # The branch is pushed and correct; only the PR is missing. Leave
+              # a trail a person actually encounters — an issue plus the
+              # ::error:: annotation, both naming the branch, the count, the
+              # version and the manual step (#2323). Best effort: if even the
+              # issue cannot be filed, the annotation still goes out and this
+              # step still fails.
+              node scripts/release-compact-alert.mjs stuck \
+                || echo "::error title=Could not open the compaction PR::The branch ${BRANCH} is pushed and correct (${COUNT} fragment(s) -> ${VERSION}), but creating the PR failed and the failure could not be recorded as an issue either. Open the PR from ${BRANCH} manually; see #2323."
               exit 1
             fi
             PR="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty' || true)"
@@ -142,6 +167,11 @@ jobs:
           # auto-merge enabled must not turn a successful compaction into a
           # failed run.
           if [ -n "$PR" ]; then
+            # A PR exists, so any open "compaction is stuck" alert from an
+            # earlier failed run is answered — close it (#2323). Housekeeping
+            # only: never turn a good compaction into a failed run.
+            PR_NUMBER="$PR" node scripts/release-compact-alert.mjs resolved || true
+
             gh pr merge "$PR" --squash --auto --delete-branch \
               || echo "::warning title=Auto-merge not armed::PR #${PR} is open but auto-merge could not be enabled; merge it manually."
           fi

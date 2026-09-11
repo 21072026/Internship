@@ -9,7 +9,7 @@ import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
 import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
 import { isValidTimeZone } from '@/lib/timezone';
-import { generateMeetingLink } from '@/lib/meetingRoom';
+import { resolveMeetingLink } from '@/lib/meetingRoom';
 
 // A recurring project meeting is a *rule*, not a pile of rows (#1110).
 //
@@ -222,8 +222,16 @@ export async function POST(request: Request) {
     if (access.error) return access.error;
 
     // A series' audience is derived from project membership at announce time
-    // and can grow over the series' life — never a 1:1, so never a JaaS room.
-    const fixedLink = meetLink || generateMeetingLink({ inviteeCount: null });
+    // and can grow over the series' life, so its head-count is genuinely
+    // unknown here — `inviteeCount: null`, which the resolver books against the
+    // allowance as a small group (lib/jaasAllowance.ts). It used to mean "never
+    // a JaaS room", which put every recurring series on a host that cuts an
+    // embedded call off after five minutes (#2011).
+    const fixedLink = await resolveMeetingLink({
+      pastedLink: meetLink,
+      inviteeCount: null,
+      orgId: session.user.orgId,
+    });
     const series = await prisma.meetingSeries.create({
       data: {
         projectId,

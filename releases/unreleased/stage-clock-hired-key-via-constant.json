@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **`main` is green on `check:stage-keys` again** (#1724 follow-up). The stage-clock carve-out that stops the clock on the default hired stage was typed as a `'HIRED_660'` literal in `src/lib/stageClock.ts`, which `npm run check:stage-keys` (#1886) forbids outside the two modules that own the canonical defaults — so every PR opened after #2253 merged inherited a red `Lint · Typecheck · Build`. It now imports `DEFAULT_HIRED_STAGE_KEY` from `src/lib/offers.ts` (an allowlisted module with no imports of its own, so nothing changes for the client components that use the clock), and the doc comment says why the key is not re-typed. The baseline ratchet was also retightened: #1634's work removed the last hits in `src/lib/dormantFirstContact.ts` and `src/lib/menteeOnboarding.ts`, and a generous baseline would have let a regression back into both."
-}

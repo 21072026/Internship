@@ -9,6 +9,13 @@ import { logActivity } from '@/lib/activity';
 // Admin view of the enquiries left on /for-companies (#1104). Read + a status
 // change; the reply itself happens by email (the notification mail is sent with
 // the company's address as Reply-To).
+//
+// No orgId in any `where` below on purpose: `CompanyInquiry` is registered in
+// TENANT_MODELS since #1559 and both handlers run inside withTenantScope, so
+// the middleware narrows the list, the NEW counter and the PATCH's lookup to
+// the caller's tenant when isolation is on. That is also why the public submit
+// (/api/company-inquiry) stamps an org rather than leaving NULL — a NULL-org
+// row would match no tenant and vanish from this screen.
 const STATUSES = ['NEW', 'CONTACTED', 'CLOSED'] as const;
 
 export async function GET(request: Request) {
@@ -31,6 +38,10 @@ export async function GET(request: Request) {
         id: true, companyName: true, contactName: true, email: true, phone: true,
         openRoles: true, message: true, status: true, createdAt: true, handledAt: true,
         handledBy: { select: { fullName: true } },
+        // What the enquiry became, if it was converted (#1863) — the row shows a
+        // link to the account instead of offering to create a second one.
+        convertedAt: true,
+        convertedCompany: { select: { id: true, name: true } },
       },
     });
     const newCount = await prisma.companyInquiry.count({ where: { status: 'NEW' } });

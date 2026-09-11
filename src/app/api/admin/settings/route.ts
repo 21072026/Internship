@@ -59,6 +59,11 @@ const schema = z.object({
   // multi-tenant installation a per-tenant write would not be the number that
   // fires; the window is an installation-wide decision, like the job itself.
   orphanApplicantGraceDays: z.string().regex(/^\d{1,4}$/).optional(),
+  // Monthly broadcast recipient cap (#1754). `''` clears the override and
+  // returns the org to its plan's band; a number can only TIGHTEN that band, so
+  // accepting it from a tenant admin cannot raise anybody's ceiling. Seven
+  // digits is far past any list this product will mail.
+  broadcastMonthlyRecipients: z.string().regex(/^\d{1,7}$/).or(z.literal('')).optional(),
 });
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.

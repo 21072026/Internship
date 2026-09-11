@@ -13,6 +13,7 @@ import { sendRoleChangeEmail } from '@/services/emailService';
 import { isStageTransition } from '@/lib/stageChange';
 import { getLastContacts } from '@/lib/lastContact';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
+import { countExemptAdmins } from '@/lib/ssoEnforcement';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -170,7 +171,35 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         if (body.isActive) {
           data.pendingApproval = false;
         } else {
-          const target = await prisma.user.findUnique({ where: { id }, select: { emailVerified: true } });
+          const target = await prisma.user.findUnique({
+            where: { id },
+            select: { emailVerified: true, ssoExempt: true, orgId: true },
+          });
+          // The anti-lockout rule, read from a third direction (#1950).
+          // `countExemptAdmins` only counts ACTIVE admins, so switching the
+          // last break-glass account off removes the tenant's way back in just
+          // as surely as revoking the exemption — and unlike a revocation it
+          // looks like routine offboarding, so nothing would have warned
+          // anyone. The fail-open in ssoEnforcement.ts does not cover this: a
+          // plain IdP outage leaves the SAML config valid, `isSsoActive` true
+          // and every password door shut. Deactivate through the same door as
+          // a revocation: switch enforcement off, or exempt another admin.
+          if (target?.ssoExempt && target.orgId) {
+            const org = await prisma.organization.findUnique({
+              where: { id: target.orgId },
+              select: { ssoEnforced: true },
+            });
+            if (org?.ssoEnforced && (await countExemptAdmins(target.orgId)) <= 1) {
+              return NextResponse.json(
+                {
+                  error:
+                    'This is the last SSO exemption in an organization that enforces SSO. Grant another admin an exemption, or switch enforcement off first.',
+                  code: 'last_sso_exemption',
+                },
+                { status: 400 }
+              );
+            }
+          }
           data.pendingApproval = target ? !target.emailVerified : false;
           // Switching an account off must also end the sessions it already
           // has. `isActive` is only ever read at sign-in, so on its own this

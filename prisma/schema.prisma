@@ -109,6 +109,16 @@ model Organization {
   ssoIssuer        String? // IdP entity ID / issuer
   ssoEntryPoint    String?  @db.Text // IdP SSO sign-in URL
   ssoCertificate   String?  @db.Text // IdP x509 signing certificate (PEM)
+  // Enforced SSO (#1950): when true, NO password-derived path may mint a
+  // session for this tenant's users — sign-in, remember-me silent re-auth,
+  // password reset/SET_INITIAL, invitation registration and password change all
+  // refuse. The single rule lives in src/lib/ssoEnforcement.ts; every door calls
+  // it. Two safety interlocks: the write boundary refuses to switch this on
+  // unless isSsoActive(org) AND the org has at least one active, ssoExempt
+  // ADMIN (anti-lockout), and enforcement only *applies* while SSO is still
+  // active — a plan downgrade or a broken config falls back to password login
+  // rather than locking the tenant out of its own data. See docs/sso-saml.md.
+  ssoEnforced      Boolean  @default(false)
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
@@ -146,8 +156,10 @@ model Organization {
   settings             Setting[]
   programCosts         ProgramCost[]
   placements           Placement[]
+  rosterFeeds          RosterFeed[]
   subscription         Subscription?
   orgEntitlements      OrgEntitlement[]
+  usageRollups         UsageRollup[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -347,6 +359,14 @@ model User {
   // `src/lib/superAdmin.ts` reads it from the database per request so revoking
   // it takes effect on the next request, like `sessionsValidFrom`.
   isSuperAdmin            Boolean       @default(false)
+  // Break-glass exemption from the tenant's enforced SSO (#1950). Only an
+  // active ADMIN may hold one, only an admin may grant it, and every grant and
+  // revocation is audited (`sso.exempt_granted` / `sso.exempt_revoked`). It is
+  // deliberately NOT time-boxed: an exemption that silently expires recreates
+  // exactly the lockout it exists to prevent — an IdP outage on the day it
+  // lapses leaves nobody who can sign in and switch enforcement off. The
+  // narrowing is "who", not "how long".
+  ssoExempt               Boolean       @default(false)
   // Set only when the `selfRegistration` setting is 'manual': the account was
   // created by open sign-up and is waiting for an admin to let it in. Lets the
   // sign-in page tell "we haven't reviewed you yet" apart from "an admin
@@ -413,6 +433,16 @@ model User {
   lastLoginAt             DateTime?
   // Last time the user was seen active (page-view heartbeat, consent-gated).
   lastSeenAt              DateTime?
+  // The HR system's own identifier for this person, when a roster feed carries
+  // one (#1965). Nullable and unbackfilled: only people who arrive through a
+  // feed keyed on EXTERNAL_ID ever have it. It is what makes an e-mail change
+  // readable as an update instead of a leaver plus a joiner - matching on the
+  // address alone cannot tell those apart, and #1966 would deprovision the
+  // "leaver". Not unique: the uniqueness that matters is per tenant, and MySQL
+  // treats NULLs in a unique index as distinct, so a composite unique over a
+  // nullable pair would stop de-duplicating anything at all (the same reasoning
+  // as Job.idempotencyKey).
+  externalId              String?       @db.VarChar(191)
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
@@ -481,6 +511,7 @@ model User {
 
   @@index([role])
   @@index([referredById])
+  @@index([orgId, externalId])
 }
 
 // Per-user state for in-product guidance surfaces (#2068): "I have seen this"
@@ -1245,6 +1276,10 @@ model Company {
   requisitions      Requisition[]
   interviewRequests InterviewRequest[]
   placements        Placement[]
+  // The enquiries this company was created from (#1863). A list rather than a
+  // single row because nothing stops a second enquiry from the same company
+  // later being linked to the account it already has.
+  fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -1386,32 +1421,46 @@ enum CompanyInquiryStatus {
 // stored (rather than only emailed) so a request cannot quietly go missing in
 // an inbox, and so an admin can see what is still unanswered.
 model CompanyInquiry {
-  orgId       String?
-  org         Organization?        @relation(fields: [orgId], references: [id])
-  id          String               @id @default(cuid())
-  companyName String
-  contactName String
-  email       String
-  phone       String?
+  orgId              String?
+  org                Organization?        @relation(fields: [orgId], references: [id])
+  id                 String               @id @default(cuid())
+  companyName        String
+  contactName        String
+  email              String
+  phone              String?
   // Roles they are hiring for, and anything else they typed.
-  openRoles   String?              @db.Text
-  message     String?              @db.Text
+  openRoles          String?              @db.Text
+  message            String?              @db.Text
   // Preferred UI language ('en' | 'tr' | 'de') — the language they read the
   // page in, so a reply can be written in it.
-  locale      String?
-  status      CompanyInquiryStatus @default(NEW)
+  locale             String?
+  status             CompanyInquiryStatus @default(NEW)
   // When they accepted the privacy terms — set server-side on submit.
-  consentAt   DateTime?
-  handledAt   DateTime?
-  handledById String?
-  note        String?              @db.Text
-  createdAt   DateTime             @default(now())
+  consentAt          DateTime?
+  handledAt          DateTime?
+  handledById        String?
+  note               String?              @db.Text
+  createdAt          DateTime             @default(now())
+  // What this enquiry BECAME (#1863). An admin converts a warm lead into a real
+  // Company plus an invited COMPANY login in one action; these two columns are
+  // the record of that. Their presence is also the idempotence key: the convert
+  // endpoint claims the enquiry with a conditional UPDATE on
+  // `convertedCompanyId: null`, so a double-click (or two admins on the same
+  // row) produces one Company and one invitation, and the loser gets a
+  // 409 `already_converted` naming what it already became.
+  //
+  // The enquiry itself is never deleted — it is the record of where the
+  // relationship came from — so this is a link, not a replacement.
+  convertedCompanyId String?
+  convertedAt        DateTime?
 
-  handledBy User? @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+  handledBy        User?    @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+  convertedCompany Company? @relation("ConvertedFromInquiry", fields: [convertedCompanyId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([email])
   @@index([orgId])
+  @@index([convertedCompanyId])
 }
 
 enum MentorApplicationStatus {
@@ -1977,6 +2026,29 @@ model MentorshipRelation {
   // certified) as a successful completion. Keys live in
   // src/lib/relationLifecycle.ts.
   lifecycleState          String?
+  // Why the pairing ended, as picked by the person who ended it (#2289): a code
+  // from src/lib/relationLifecycle.ts (ADMIN_END_REASON_CODES). Nullable and
+  // never backfilled — a relation closed before this column existed, or closed
+  // as an honest COMPLETED, carries none.
+  //
+  // A CODE, and deliberately no free-text column beside it. Several read paths
+  // return a relation's scalars to the mentor or the mentee (they use Prisma
+  // `include`, which selects every column), so prose stored here would reach
+  // the very person it is about — #1801 makes "the outgoing mentor is never
+  // shown the reason" a rule, and a candid note only stays candid if it is not
+  // read back. A coarse code is the same kind of fact `StatusChange.reasonCode`
+  // already exposes on those paths; the admin's free-text elaboration lives in
+  // the ActivityLog entry, which only admins read.
+  endReasonCode           String?
+  // The pairing this one continues (#2289). Set on the relation CREATED by a
+  // mentor transfer, pointing at the one that was closed as ENDED_REASSIGNED —
+  // so the incoming mentor's blank page has a readable predecessor and the
+  // mentee's history is reachable instead of merely still existing somewhere.
+  // NOTHING is moved between the two: every child row (interactions,
+  // evaluations, notes, messages) stays on the relation it was written under,
+  // because re-pointing `relationId` would re-attribute the outgoing mentor's
+  // work to the incoming one — InteractionLog has no author column of its own.
+  previousRelationId      String?
 
   mentor                User                   @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                   @relation("MenteeRelations", fields: [menteeId], references: [id])
@@ -1997,10 +2069,15 @@ model MentorshipRelation {
   weeklyReportReminders WeeklyReportReminder[]
   placement             Placement?
   rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
+  previousRelation      MentorshipRelation?    @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
+  // At most one successor in practice (a closed relation is transferred once),
+  // but the FK cannot express that, so Prisma types it as a list.
+  nextRelations         MentorshipRelation[]   @relation("RelationChain")
 
   @@index([status])
   @@index([lifecycleState])
   @@index([pipelineStatus])
+  @@index([previousRelationId])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -2307,6 +2384,19 @@ enum RsvpStatus {
   DECLINED
 }
 
+// Is this meeting still on? (#1980)
+//
+// Deliberately two values, not four. "Happened" is `endedAt` and "declined" is
+// `rsvp` — both already exist and mean something narrower than a status would;
+// folding them in here would give the same fact two homes. CANCELLED is the one
+// thing the schema could not say: the meeting was called off, so it must drop
+// out of the banner, the reminder, the calendar and the auto-log without the
+// row (and its notes and interaction log) being destroyed.
+enum MeetingStatus {
+  SCHEDULED
+  CANCELLED
+}
+
 // A scheduled meeting, with a video link and an emailed RSVP (responded to via
 // a public token link).
 //
@@ -2318,35 +2408,55 @@ enum RsvpStatus {
 // MySQL can't express "exactly one of three" as a CHECK, so the rule lives in
 // src/lib/meetingContext.ts and every write path goes through it.
 model Meeting {
-  id             String     @id @default(cuid())
+  id                  String        @id @default(cuid())
   // Nullable since #1051: project/conversation meetings have no relation.
-  relationId     String?
-  projectId      String?
-  conversationId String?
-  title          String
+  relationId          String?
+  projectId           String?
+  conversationId      String?
+  title               String
   // Optional: a meeting with a set time expects an RSVP and gets reminders; a
   // meeting with no time (null) is just a shared link — no RSVP, no reminder.
-  scheduledAt    DateTime?
+  scheduledAt         DateTime?
   // The clock the organizer picked `scheduledAt` on (IANA zone), captured at
   // creation (#1210). `scheduledAt` is an instant and is enough to render the
   // time for anyone, but not to say *which* reading was the one agreed on — and
   // the organizer's profile zone can't stand in for it, since it changes when
   // they travel. Null for meetings created before this and for the odd caller
   // that sends no zone; both fall back to the organizer's profile zone.
-  timeZone       String?
-  meetLink       String?
-  rsvp           RsvpStatus @default(PENDING)
-  rsvpToken      String     @unique
-  createdById    String
-  reminderSentAt DateTime?
-  createdAt      DateTime   @default(now())
+  timeZone            String?
+  meetLink            String?
+  rsvp                RsvpStatus    @default(PENDING)
+  rsvpToken           String        @unique
+  createdById         String
+  reminderSentAt      DateTime?
+  createdAt           DateTime      @default(now())
   // Null for manually scheduled meetings; set for auto-generated series instances.
-  seriesId       String?
+  seriesId            String?
   // "This meeting is over" — set when any participant marks it ended, which
   // hides the dashboard banner for everyone instead of letting the assumed
   // 60-minute window run out. Null = never marked; the window still applies.
-  endedAt        DateTime?
-  endedById      String?
+  endedAt             DateTime?
+  endedById           String?
+  // Called off, not held and not deleted (#1980). Every reader that answers
+  // "is there a meeting?" — the dashboard banner, the reminder cron, the
+  // calendar, the ICS feed, the auto-log sweep — filters CANCELLED out, while
+  // the row itself survives so the notes and the interaction log written in it
+  // keep their anchor.
+  status              MeetingStatus @default(SCHEDULED)
+  cancelledAt         DateTime?
+  cancelledById       String?
+  cancelReason        String?       @db.Text
+  // "This meeting moved" — answerable without joining an audit table, which is
+  // what the change mail and the .ics SEQUENCE both need.
+  rescheduledAt       DateTime?
+  previousScheduledAt DateTime?
+  // The shared identity of ONE bulk schedule. POST /api/meetings writes one row
+  // per invitee sharing a single room link, so "cancel this meeting" is
+  // ambiguous without it: with a batch key the caller can say `scope: 'batch'`
+  // and mean the whole session. Null on every row written before this and on
+  // any single-row path — a null batch means "just this row", never "all the
+  // nulls".
+  batchKey            String?
 
   relation     MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: Cascade)
   project      Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -2361,6 +2471,7 @@ model Meeting {
   @@index([projectId])
   @@index([conversationId])
   @@index([seriesId])
+  @@index([batchKey])
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
@@ -2492,6 +2603,42 @@ model MeetingRoomState {
   updatedAt    DateTime @updatedAt
 }
 
+// Our own count of JaaS monthly active participants (#2011).
+//
+// JaaS bills — and caps a free tenant — on distinct participants per calendar
+// month, and the provider's dashboard is the only place that number used to
+// exist. That made "is the 25-participant allowance actually the constraint?"
+// unanswerable from anything we own, so the routing was a guess dressed up as a
+// rule. One row per (period, participant) written from the JaaS webhook feed
+// makes it a number: `COUNT(*) WHERE period = ?` is the MAU.
+//
+// IDENTITY-MINIMAL BY CONSTRUCTION. The webhook carries `{ id, name }`; only a
+// keyed hash of the id is stored here and the name is dropped on the floor. The
+// hash is not reversible to a person by anyone reading this table, and it is
+// salted per deployment (lib/jaasAllowance.ts), so the same participant in two
+// deployments does not correlate. Nothing joins this table to a User.
+model JaasMonthlyParticipant {
+  id String @id @default(cuid())
+
+  /// The calendar month, UTC, 'YYYY-MM' — the same period vocabulary the
+  /// billing meter uses (lib/meteringRules.ts), so the two can be read side by
+  /// side without converting anything.
+  period String @db.VarChar(7)
+
+  /// HMAC-SHA256 of the JaaS participant id, hex. Never the id, never the name.
+  participantHash String @db.VarChar(64)
+
+  /// When this participant was first seen in this month. There is deliberately
+  /// no "last seen": the metered unit is "was active at all", and a rolling
+  /// timestamp would turn a counter into an attendance log.
+  firstSeenAt DateTime @default(now())
+
+  /// The insert is an upsert on this pair, which is what makes the row count a
+  /// DISTINCT count without a GROUP BY.
+  @@unique([period, participantHash])
+  @@index([period])
+}
+
 // Audit trail of pipeline stage changes for a mentorship.
 model StatusChange {
   id          String   @id @default(cuid())
@@ -2554,6 +2701,13 @@ model InvitationToken {
   // this to itself; an admin picks the mentor in the invite form.
   mentorId     String?
   menteeId     String?
+  // The company an invited COMPANY user belongs to (#1863). A COMPANY account
+  // is useless without it — every company-side screen reads `User.companyId` —
+  // and registration has no other way to learn it, since the invitee only
+  // supplies a name and a password. Carried here for the same reason `orgId` is:
+  // the fact is known when the invitation is minted and must survive until it is
+  // consumed, possibly days later. Only ever set on a `role = COMPANY` row.
+  companyId    String?
   // The project the invitee should join on registration, if any.
   projectId    String?
   // Lifecycle timestamps (nullable — each set once, the first time it happens):
@@ -3463,4 +3617,312 @@ model JobLease {
   /// Cheap sweep of leases nobody renewed (an environment that shrank back to
   /// one replica, a renamed container).
   @@index([expiresAt])
+}
+
+// ── Usage ledger ─────────────────────────────────────────────────────────────
+// One row per (org, metric, period): what a tenant used in a calendar month
+// (#1750). The billing history, and the only table an invoice or a usage screen
+// reads — a request path must never scan seven domain tables to answer "how
+// many active pairs?".
+//
+// TWO SHAPES OF NUMBER live in the same table, and the difference is what keeps
+// a re-run honest (src/lib/meteringRules.ts owns the catalogue):
+//   · COMPUTED (ACTIVE_MATCHED_PAIRS, ADMIN_SEATS) — recomputed from the domain
+//     tables by the nightly rollup and written ABSOLUTELY. Re-running a closed
+//     period writes the same value again, so the job is idempotent, and the
+//     unique triple below guarantees exactly one row per (org, metric, period).
+//   · COUNTER (VIDEO_ROOM, VIDEO_PARTICIPANT, ACTIVE_PAIR_ACTIVITY) —
+//     incremented at the moment the thing happens, because a room created last
+//     Tuesday cannot be recounted afterwards. The rollup never touches these.
+//
+// `metric` is a String and not an enum on purpose: metrics are added far more
+// often than a column type change is welcome on a `db push` project, and the
+// authoritative list is a TypeScript union that both the writer and the reader
+// import. An unknown string here is inert — a row nothing reads.
+model UsageRollup {
+  id     String @id @default(cuid())
+  orgId  String
+  metric String @db.VarChar(64)
+  // 'YYYY-MM', a UTC calendar month (src/lib/meteringRules.ts periodRange()).
+  period String @db.VarChar(7)
+  value  Int    @default(0)
+
+  // When the number was last written. For a COMPUTED metric that is when the
+  // rollup last recomputed it — an invoice dispute starts with "as of when?".
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // The idempotency key, and why the nightly job can be re-run for a closed
+  // period without producing a second row.
+  @@unique([orgId, metric, period])
+  @@index([orgId, period])
+  @@index([metric, period])
+}
+
+// ── Notification delivery ledger (#1710) ─────────────────────────────────────
+//
+// "Was the mentor actually told, on which channel, and did it land?" had no
+// answer. `Notification` records that an in-app row exists; `EmailLog` records
+// that an SMTP handoff happened, keyed by e-mail address and subject. Neither
+// says "this person, this event, this channel, this outcome" — so a mentee who
+// never heard about a stage change was indistinguishable from one told twice,
+// and an opt-out that silently swallowed a notification looked exactly like a
+// send that never happened.
+//
+// One row per (recipient, event, channel, attempt identity). Written by
+// src/lib/notifications/router.ts and by nothing else.
+//
+// NO RELATION TO User, ON PURPOSE. This follows EmailLog and AuditLog, the two
+// other ledgers here: a delivery record is evidence about a moment in the past,
+// and a cascade would erase exactly the rows an audit needs. `userId` is a
+// plain column.
+//
+// It therefore has NO retention entry yet, and that is a known follow-up rather
+// than an oversight: src/lib/retentionEntries.ts is the one registry that bounds
+// tables like this, and AuditLog (#1585), DomainEvent (#1691) and Message
+// (#2056) are already queued behind it. Nothing writes here until a send site
+// moves onto the router, so the table is empty on the day this ships; the entry
+// (a window setting plus one `registerRetention` block, the shape Notification
+// used in #1646) is owed before the migration task lands.
+enum NotificationDeliveryStatus {
+  // Accepted and handed to a channel that completes later (the e-mail job).
+  QUEUED
+  // The channel reported success. For e-mail that is an SMTP handoff, not inbox
+  // placement — the same caveat EmailStatus.SENT carries.
+  SENT
+  // Deliberately not sent: an opt-out, a missing address, no adapter. The cause
+  // is in `skipReason`, and a SKIPPED row is the whole point of the ledger —
+  // silence with a recorded reason instead of silence.
+  SKIPPED
+  // The channel was tried and failed. `error` carries the message.
+  FAILED
+}
+
+model NotificationDelivery {
+  id String @id @default(cuid())
+
+  /// Tenant anchor. Nullable like the other phase-1 tenant models, stamped from
+  /// the recipient's own `User.orgId` by the router (so it is right even when
+  /// the write happens in a cron with no request scope). Listed in
+  /// TENANT_MODELS (src/lib/orgContext.ts).
+  orgId String?
+
+  userId   String
+  /// A key of the event catalogue (src/lib/notifications/catalog.ts).
+  /// VarChar(96): the longest key today is 34 characters.
+  eventKey String @db.VarChar(96)
+  /// 'inApp' | 'email' — the NotificationChannel literal, stored as text like
+  /// EmailLog.transport rather than as an enum, so adding a channel adapter is
+  /// a code change and not a schema change on a live table.
+  channel  String @db.VarChar(16)
+
+  status     NotificationDeliveryStatus @default(QUEUED)
+  /// Why a SKIPPED row was skipped: 'category_off', 'group_off', 'email_off',
+  /// 'no_address', 'no_adapter', 'unknown_event', 'invalid_payload'.
+  skipReason String?                    @db.VarChar(64)
+  /// What rendered it — the dictionary key for in-app, the mail template id for
+  /// e-mail. Nullable: a SKIPPED row never reached a template.
+  templateId String?                    @db.VarChar(128)
+  /// Failure message when status is FAILED.
+  error      String?                    @db.Text
+
+  /// Idempotency. Globally `@unique` rather than `@@unique([orgId, …])` for the
+  /// same reason Job.idempotencyKey is: `orgId` is nullable, MySQL treats NULLs
+  /// in a unique index as distinct, and a composite key would therefore
+  /// de-duplicate nothing at all while every row still has a null org. The
+  /// router derives it from (eventKey, userId, channel, caller dedupe key) and
+  /// reads the unique violation as "already claimed" — which is what stops a
+  /// retried send from both duplicating this row and sending the mail twice.
+  dedupeKey String @unique @db.VarChar(191)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// "What was this person told, most recent first" — where an admin support
+  /// question actually starts.
+  @@index([userId, createdAt])
+  /// "Did event X reach anybody, and how often was it skipped?"
+  @@index([eventKey, status])
+  /// Tenant-leading, like every other model in TENANT_MODELS: without it an
+  /// auto-scoped query under MT_ENFORCE_ISOLATION filters orgId row by row on
+  /// top of one of the indexes above.
+  @@index([orgId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduled roster feed (#1963 / #1964 / #1965)
+//
+// A tenant's HR export, fetched on a schedule and turned into an accurate
+// roster. The engine is src/lib/rosterIngest.ts on top of the shared import
+// engine (src/lib/importPreview.ts); these three tables are the part of it that
+// has to survive a crash.
+//
+// NOTE ON OWNERSHIP: #1964 owns these models. They are created here because the
+// ingestion engine (#1965) has nowhere to keep its checkpoint otherwise, and
+// #1964 had not landed when this shipped — the same arrangement the issue
+// prescribes for src/lib/importPreview.ts. #1964 extends them (schedule
+// expression, last-error surfacing, the admin UI's counters); nothing here is a
+// rename.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum RosterTransport {
+  HTTPS
+  SFTP
+}
+
+enum RosterKeyField {
+  EMAIL
+  EXTERNAL_ID
+}
+
+enum RosterRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  NOOP
+}
+
+/// Mirrors `RowStatus` in src/lib/importPreview.ts, token for token. One
+/// vocabulary for every importer in the tree — a second one would let the same
+/// outcome be called two things on two screens.
+enum RosterRowStatus {
+  CREATE
+  UPDATE
+  UNCHANGED
+  SKIP
+  ERROR
+}
+
+/// One configured feed for one tenant.
+model RosterFeed {
+  id    String       @id @default(cuid())
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  name      String          @db.VarChar(120)
+  transport RosterTransport @default(HTTPS)
+  enabled   Boolean         @default(false)
+
+  /// HTTPS transport. Checked by assertPublicHttpsUrl() before every fetch: the
+  /// URL is tenant-supplied and fetched from the server's network position.
+  url String? @db.Text
+
+  /// SFTP transport.
+  sftpHost               String? @db.VarChar(255)
+  sftpPort               Int?
+  sftpUsername           String? @db.VarChar(191)
+  sftpPath               String? @db.Text
+  /// The pinned host key fingerprint (#1964). No fingerprint, no connection.
+  sftpHostKeyFingerprint String? @db.VarChar(191)
+  /// The NAME of the environment variable holding the SFTP secret — never the
+  /// secret. A credential in a database row is a credential in every backup.
+  credentialEnvVar       String? @db.VarChar(120)
+
+  /// Force a delimiter instead of sniffing it (';' for a German Excel export).
+  delimiter String? @db.VarChar(4)
+
+  /// Which column identifies a person. EMAIL is the default and cannot tell an
+  /// address change from a leaver plus a joiner; EXTERNAL_ID can.
+  keyField RosterKeyField @default(EMAIL)
+
+  /// Our field name → the header this tenant's export happens to use.
+  columnMap Json
+
+  /// The tenant declaring the feed is the record of truth for these people.
+  /// False (the default) means the feed fills gaps but never overwrites a value
+  /// a human typed — the same policy SSO sync follows.
+  authoritative Boolean @default(false)
+
+  chunkSize Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs RosterRun[]
+
+  @@index([orgId, enabled])
+}
+
+/// One attempt at one file. Identified by (feedId, fileHash, dryRun): that is
+/// what makes apply idempotent and a retry resumable rather than a re-apply.
+model RosterRun {
+  id     String     @id @default(cuid())
+  feedId String
+  feed   RosterFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)
+
+  /// Tenant anchor. A plain column rather than a second FK to Organization: the
+  /// row is reached through `feed`, which cascades, and the column is what
+  /// registers the model with the tenant middleware (TENANT_MODELS).
+  orgId String
+
+  /// SHA-256 of the fetched bytes. Equal to the last successful run's hash means
+  /// the file has not changed and the run is a no-op.
+  fileHash String  @db.VarChar(64)
+  dryRun   Boolean @default(false)
+
+  status RosterRunStatus @default(RUNNING)
+
+  /// The resume checkpoint: the index of the first chunk NOT yet committed.
+  /// Written in the same transaction as the chunk it describes, and contiguous
+  /// — it never advances past a chunk that failed, so a failed chunk is
+  /// re-attempted next run instead of being skipped for ever.
+  nextChunkIndex Int @default(0)
+
+  rowCount       Int     @default(0)
+  createdCount   Int     @default(0)
+  updatedCount   Int     @default(0)
+  unchangedCount Int     @default(0)
+  skippedCount   Int     @default(0)
+  errorCount     Int     @default(0)
+  /// Keys the roster holds that the feed did not mention. Reported only —
+  /// acting on them is #1966.
+  absentKeys     Json?
+  /// Host and path of the file, for the run log. Never a query string: it can
+  /// carry a token.
+  source         String? @db.Text
+  error          String? @db.Text
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  rows RosterRowResult[]
+
+  /// The idempotency key. A second run of the same file for the same feed finds
+  /// this row instead of starting over.
+  @@unique([feedId, fileHash, dryRun])
+  @@index([feedId, startedAt])
+  @@index([orgId, startedAt])
+}
+
+/// One row's outcome, written as it is applied — inside the same transaction as
+/// the write it describes, which is what makes a crashed run readable.
+model RosterRowResult {
+  id    String    @id @default(cuid())
+  runId String
+  run   RosterRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  /// Tenant anchor; same reasoning as RosterRun.orgId.
+  orgId String
+
+  /// 1-based position among the data rows (the header is not row 1).
+  rowNumber  Int
+  chunkIndex Int             @default(0)
+  key        String          @db.VarChar(255)
+  status     RosterRowStatus
+  /// Field names an UPDATE wrote.
+  changed    Json?
+  /// Why it was skipped, what errored, or which fields were left alone.
+  message    String?         @db.Text
+  userId     String?
+
+  createdAt DateTime @default(now())
+
+  /// One result per row per run — so re-applying a chunk after a crash upserts
+  /// instead of doubling the log.
+  @@unique([runId, rowNumber])
+  @@index([runId, status])
+  @@index([orgId, createdAt])
 }

@@ -44,11 +44,18 @@ must be isolated — so #543-2 adds a "can't forget the filter" layer:
 - `withTenantScope(session, fn)` — the route-handler convenience wrapper
   (`runWithOrg(resolveOrgId(session), fn)`).
 - A single **Prisma `$use` middleware** (installed lazily by `runWithOrg`) then
-  auto-injects `orgId` into every query on a tenant-anchored model
-  (`User`, `Source`, `Company`, `Project`, `Cohort`, `MentorshipRelation`) for
-  the duration of that request — `where` for reads/updates/deletes (Prisma 5
+  auto-injects `orgId` into every query on a tenant-anchored model for the
+  duration of that request — `where` for reads/updates/deletes (Prisma 5
   `extendedWhereUnique` lets `findUnique`/`update`/`delete` carry the extra
   filter), `data` for `create`/`createMany`/`upsert`.
+
+The set of anchored models is `TENANT_MODELS` in `src/lib/orgContext.ts`, and
+**that file is the list** — this doc does not repeat it, because a copied list is
+a list that goes stale (it named six models for months while the set held eleven).
+Since #1559 the rule holds without exception: **every** model in
+`prisma/schema.prisma` that declares an `orgId` is registered, and
+`npm run check:tenant-models` fails the build in both directions if that ever
+stops being true.
 
 This engine is **entirely dormant unless `MT_ENFORCE_ISOLATION=true`**:
 `runWithOrg` is a straight passthrough when the flag is off (no context is
@@ -100,22 +107,111 @@ the day #1553 added `orgId`, and the call was then made against the real shape �
 below).
 
 `PENDING_REGISTRATION` is for a model that is known to be unprotected and is
-waiting on its own reviewed change — the eight models of #1559. It is a ratchet,
-not an allowlist:
+waiting on its own reviewed change. **It is empty since #1559** — the eight
+models it was created for are registered (see the section below) — but the
+mechanism stays for the next one. It is a ratchet, not an allowlist:
 
 - every run prints each pending model with its own reason, and in CI emits a
   GitHub **warning annotation** on `src/lib/orgContext.ts`, so the PR page shows
   the unprotected set instead of burying it in a green step's log;
 - while anything is pending the summary line does **not** say "OK" — it reads
   `no NEW drift, but N model(s) remain unprotected`;
-- the list length is pinned by an `EXPECTED_PENDING` literal, so a ninth
-  unprotected model cannot be waved through by appending a line: the number has
-  to move in the same diff, in front of a reviewer;
+- the list length is pinned by an `EXPECTED_PENDING` literal (**0** today), so
+  an unprotected model cannot be waved through by appending a line: the number
+  has to move in the same diff, in front of a reviewer;
 - an entry that has since been registered, or whose model lost its `orgId`,
   fails the check until it is deleted.
 
-So the guard's job while #1559 is open is to stop the set of unprotected models
-from *growing*, and to say on every run exactly which ones they are.
+With the list empty the guard is back to green-means-clean: every model with an
+`orgId` is registered, and the summary line says `tenant models OK`. While
+something *is* pending, the guard's job is to stop that set from growing and to
+say on every run exactly which models it holds.
+
+One parsing note, learned the hard way: the guard locates `TENANT_MODELS` by
+matching `new Set([ … ])` in the source text, with the closing `])` **anchored to
+the start of a line**. The entries carry prose, and prose carries brackets — a
+`])` written mid-comment (naming an `@@unique` pair, say) used to end the match
+there and report every name below it as unregistered. It fails closed, but the
+report then blames the schema for a comment.
+
+### The eight late registrations (#1559)
+
+Eight models carried a tenant key from the day they were added and were never
+listed in `TENANT_MODELS`, so for months they were scoped only by whatever
+`where` clause each call site remembered. Registering them changes **writes** as
+well as reads — `create`/`createMany`/`upsert` get `orgId` filled in from the
+bound context when the caller left it `undefined` — so each one's create paths
+were walked. This is where the org comes from in each:
+
+| Model | `orgId` | Where a new row's org comes from |
+|---|---|---|
+| `Tag` | required | `POST /api/tags` — wrapped, passes `resolveOrgId(session)` explicitly. |
+| `StageSla` | required | `PUT /api/admin/stage-sla` — wrapped; the `upsert`'s natural key is `(orgId, stageKey)`, so the org is named in both `where` and `create`. |
+| `PipelineStage` | required | `PUT /api/admin/organizations/[id]/pipeline-stages` — **deliberately not wrapped**: a super admin manages any tenant (#1535) and the org is a path parameter. Every query names `orgId: id` itself. |
+| `EvaluationTemplate` | required | `PUT /api/admin/evaluation-templates` — wrapped in #1559; the create names `resolveOrgId(session)`. |
+| `InterviewPanel` | nullable | `POST /api/interview-panels` — wrapped; the create stamps the **subject's** own org, falling back to the caller's. |
+| `Offer` | nullable | `POST /api/offers` — wrapped; the create inherits `relation.orgId`, and with the flag on that relation's own lookup is already scoped, so a foreign relation reads as "not found" and never reaches the create. |
+| `InvitationToken` | nullable | `src/lib/inviteCreate.ts` (the single minting path, called by `/api/invite` and the bulk route) — passes the inviter's `resolveOrgId(session)`. |
+| `CompanyInquiry` | nullable | `POST /api/company-inquiry` — **public, no session**; it stamps `defaultOrgId()` itself (see below). |
+
+Writes that happen **outside a request**, where no context is bound and the
+middleware never engages, so each binds its own org:
+
+- **the offer-expiry cron** (`expireOffers()` in `src/lib/offerNotify.ts`, run
+  from `/api/cron`) sweeps **every** tenant's due offers and claims each row with
+  `status: 'SENT'` rather than a tenant filter. That is the required behaviour —
+  one tick must expire every org's offers, and there is no session to resolve an
+  org from;
+- **the deploy backfills** (`prisma/backfill-organization.mjs`,
+  `prisma/backfill-relation-start-stage.mjs`) run as plain Node scripts that
+  never load `orgContext.ts`, so no middleware exists in that process at all;
+  they read and write `orgId` explicitly, which is their whole job;
+- **`prisma/seed.mjs` / `seed-demo.mjs` / `scripts/sanitize-db.mjs`** — same.
+
+Three **sessionless read paths** are deliberately left unwrapped, and each now
+says so in a comment so nobody "fixes" it later. With no context bound the
+middleware early-returns, which is exactly what keeps them working once the flag
+is on:
+
+- `POST /api/register` looks the invitation up **by token** — the only thing the
+  invitee holds — and the row's own `orgId` is what assigns the new account its
+  tenant (#1272);
+- `POST /api/invite/opened` stamps `openedAt`, also by token;
+- `POST /api/auth/verify-email` advances the matching invitation by **address**.
+
+Wrapping any of those would narrow the lookup to an org the invitee cannot
+present, and the invitation would become unusable to the person it was sent to.
+
+**Why the public company enquiry stamps an org instead of staying NULL.** The
+`/for-companies` form has no session, and there is no host/subdomain→org
+resolution yet (`resolveOrgId` reads the session and nothing else), so the
+enquiry carries no tenant signal. The admin triage list
+(`/api/admin/company-inquiries`) runs inside `withTenantScope`, so a `NULL`-org
+row would match no tenant and **disappear from the only screen that shows it** —
+the failure mode step 1 of the rollout checklist below is about. The submit
+therefore calls `defaultOrgId()`, the same thing `/api/register` does for an
+uninvited sign-up. When host-based tenancy lands, that line is where the real
+tenant gets resolved.
+
+**Hand-written filters were kept, not removed**, everywhere the flag being off
+leaves them as the only protection — the admin invitation board, the bulk
+invitation actions, the tag routes, `assertSameOrg` on the interview-panel
+lookups. They all read the same `resolveOrgId(session)` the middleware would
+inject, so the two can never disagree. The one filter that *was* removed is the
+admin offer list's, which was gated on `isIsolationEnforced()` — i.e. it applied
+exactly when and how the middleware already does, which is two sources of truth
+for one filter.
+
+The proof is `e2e/tenant-models-registered.spec.ts`: for each of the eight, a
+`findMany` with **no** tenant filter of its own, run against the app's Prisma
+client inside `runWithOrg()`, in both directions. That is the only assertion that
+separates "the middleware scoped it" from "the handler happened to filter" — a
+route response cannot tell you which. A third test is the control: with the flag
+off the same reads return both tenants' rows, so a half-written seed cannot make
+the file pass while testing nothing.
+
+`MT_ENFORCE_ISOLATION` itself is **not** flipped by #1559 — that is #1572, after
+the rollout checklist below.
 
 ### Settings: per-tenant with a global fallback (#1553)
 
@@ -186,10 +282,18 @@ central middleware scopes all of its queries. Wrapping is behavior-neutral while
 the flag is off (`withTenantScope` is a pure passthrough).
 
 Public / token-based routes (registration, apply, forgot-password, invite
-acceptance) are intentionally not wrapped: they have no session and resolve their
-subject from the invite/reset token, not a tenant context. Routes that only ever
-read the caller's own rows (account, profile, avatar, cv) are wrapped too for
+acceptance, the `/for-companies` enquiry) are intentionally not wrapped: they
+have no session and resolve their subject from the invite/reset token or the
+address typed into the form, not a tenant context. Routes that only ever read
+the caller's own rows (account, profile, avatar, cv) are wrapped too for
 uniformity, though scoping is redundant there.
+
+One **authenticated** route is deliberately unwrapped as well:
+`/api/admin/organizations/[id]/pipeline-stages`, where the org is a path
+parameter because a super admin manages any tenant (#1535). Binding the caller's
+own org there would narrow every query to the wrong tenant and break the feature;
+`requireAdminOrg()` is what refuses a plain ADMIN a foreign `id`, and every query
+names `orgId: id` itself.
 
 ### API-key requests have no session — so they bind their org themselves (#1546)
 

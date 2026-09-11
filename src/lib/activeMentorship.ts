@@ -17,8 +17,9 @@ import type { Prisma } from '@prisma/client';
 //   5. POST /api/invite                      — refuses the pre-link up front
 //   6. POST /api/mentor/mentees              — mentor-created mentee
 //   7. src/lib/mergeUsers.ts                 — duplicate-account merge
+//   8. src/lib/mentorTransfer.ts             — admin mentor transfer (#2289)
 //
-// scripts/import-csv.mjs is the eighth and the one seam: tsconfig excludes
+// scripts/import-csv.mjs is the ninth and the one seam: tsconfig excludes
 // `scripts/`, so a .mjs file cannot import this TS module. It carries the same
 // filter inline with a comment pointing here.
 //
@@ -99,6 +100,32 @@ export const ALREADY_MENTORED_ERROR = {
   error: 'This mentee already has an active mentorship relation',
   code: 'already_mentored',
 } as const;
+
+/**
+ * The same refusal, plus WHO the current mentor is (#2289).
+ *
+ * `already_mentored` was a correct refusal an admin could not act on: it named
+ * no mentor and there was no control that changed one, which is how people
+ * learn to fake a completion. These two fields are what lets the assign dialog
+ * say "X already mentors this person — transfer them instead" and link
+ * straight to POST /api/mentorship/<id>/transfer.
+ *
+ * ADMIN-facing callers only: the mentor's name is a person's name attached to
+ * a mentee, so this must not be answered to a public or self-service route.
+ * `error` and `code` stay byte-identical to ALREADY_MENTORED_ERROR — several
+ * callers and e2e/dup-guard-transliteration.spec.ts match on them — so this is
+ * purely additive, and one extra query on the refusal path only.
+ */
+export async function alreadyMentoredBody(db: RelationDb, relationId: string) {
+  const relation = await db.mentorshipRelation
+    .findUnique({ where: { id: relationId }, select: { id: true, mentor: { select: { fullName: true } } } })
+    .catch(() => null);
+  return {
+    ...ALREADY_MENTORED_ERROR,
+    activeRelationId: relation?.id ?? relationId,
+    activeMentorName: relation?.mentor.fullName ?? null,
+  };
+}
 
 /**
  * Thrown from inside a `$transaction` so the guard rolls the write back rather

@@ -10,7 +10,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { notify } from '@/lib/notify';
-import { generateMeetingLink, resolveMeetingContext, type Invitee } from '@/lib/meetingContext';
+import { resolveMeetingContext, resolveMeetingLink, type Invitee } from '@/lib/meetingContext';
 
 // "Start a meeting now" (#1052).
 //
@@ -47,9 +47,11 @@ export async function POST(request: Request) {
     const ctx = await resolveMeetingContext(session.user, { relationIds, projectId, conversationId });
     if (!ctx.ok) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
-    // Invitee count decides the host (1:1 → JaaS, groups → free instance);
-    // resolveMeetingContext already excluded the organizer from the list.
-    const meetLink = generateMeetingLink({ inviteeCount: ctx.invitees.length });
+    // The head-count decides the host: the JaaS tenant while the month's
+    // participant allowance still has room for this room, the public instance
+    // otherwise (#2011). resolveMeetingContext already excluded the organizer
+    // from the list, and the resolver adds them back when it projects.
+    const meetLink = await resolveMeetingLink({ inviteeCount: ctx.invitees.length, orgId: session.user.orgId });
 
     // RELATION keeps the established shape — one row (and one RSVP token) per
     // relation, all sharing the room. PROJECT/CONVERSATION are a single row: the
