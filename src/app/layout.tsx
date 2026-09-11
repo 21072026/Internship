@@ -5,6 +5,8 @@ import './globals.css';
 import { Providers } from './providers';
 import { getLocale } from '@/i18n/server';
 import { getClientDictionary } from '@/i18n/dictionaries';
+import { resolveRequestVertical } from '@/i18n/server';
+import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
@@ -51,7 +53,10 @@ const NO_FLASH = `(function(){try{var h=document.documentElement;var p=function(
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale();
-  const dict = getClientDictionary(locale);
+  // Same vertical overlay the server dictionary gets (#2354), so the client
+  // payload and server render agree. INTERNSHIP resolves to an empty overlay,
+  // so this is identical to the base client dict for today's product.
+  const dict = applyVerticalOverlay(getClientDictionary(locale), locale, await resolveRequestVertical());
   const cookieStore = await cookies();
   let theme = cookieStore.get('theme')?.value;
   let fontSize = cookieStore.get('fontSize')?.value;
