@@ -10,6 +10,34 @@ Newest entries on top.
 
 ---
 
+## 2026-09-11 — Aynı modelin ikinci yazarı/kardeş dosyası iki kez gözden kaçtı (#2352, #2357)
+
+**Bir route'u tenant/yetenek kapısına aldığında, aynı modeli yazan DİĞER yolları da ara — yoksa
+kapı kağıt üstünde kalır.** Bu tur iki kez oldu ve iki kez adversarial inceleme yakaladı, CI değil:
+(1) #2352 `/api/goals` ve `/api/evaluations`'ı gate'ledi ama `notes/[id]/convert` (Goal yaratıyor) ve
+`interview-panels/[id]/score` (Evaluation yaratıyor) açıktı; (2) #2357 `admin/webhooks/route.ts`'i
+org'a scope etti ama aynı dizindeki `rotate-secret` ve `test` kardeş dosyalarını kaçırdı — biri
+başka kiracının imza sırrını döndürebiliyordu. **Kural: bir modeli koruyan bir değişiklikte
+`grep -rn "prisma.<model>\.\(create\|update\|delete\|find\)" src` çalıştır ve HER yazar/okuyucuyu
+kapıdan geçir; bir klasördeki `route.ts`'i düzeltmek kardeş `foo/route.ts` dosyalarını kapsamaz.**
+CI (typecheck/smoke) bunu görmez çünkü her dosya tek başına derlenir ve tek-kiracıda no-op'tur.
+
+---
+
+## 2026-09-11 — Kendi yazdığım dersi ihlal ettim: bayat local main'de karar verme (#1559)
+
+**Aynı oturumda `docs/agent-experience.md`'ye "local main sessizce geride olabilir, issue durumuna
+güvenmeden önce kapatan commit'i ara" yazdım, sonra tam bunu yaptım.** #1559'u "yapılmamış" sanıp
+yeniden açtım — çünkü `check:tenant-models`'i ve `git log --grep=1559`'u oturum başındaki bayat
+local main'de (`9a4b9e55`, 09-07) çalıştırdım; kayıt işi aslında `4e9b2251` (09-09) ile inmişti ama
+o commit henüz local'imde yoktu. **Kural (güçlendirilmiş): bir guard'ın veya `git log`'un sonucuna
+göre bir issue'yu açmadan/kapatmadan ÖNCE `git fetch && git checkout main && git pull --ff-only`
+ile local'i güncelle — guard'lar local checkout'a karşı çalışır, `git fetch` tek başına working
+tree'yi ilerletmez.** Bir dokümana kural yazmak onu uygulamaya yetmiyor; kontrol listesi bir
+komuttur, hatırlama değil.
+
+---
+
 ## 2026-09-11 — Kapalı bir issue, işin bittiğinin kanıtı değil (#1559)
 
 **`COMPLETED` kapanmış bir issue'ya dayanarak "o iş bitti" diye ilerlemek bu turda bir
