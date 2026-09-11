@@ -10,6 +10,75 @@ Newest entries on top.
 
 ---
 
+## 2026-09-11 — Kapalı bir issue, işin bittiğinin kanıtı değil (#1559)
+
+**`COMPLETED` kapanmış bir issue'ya dayanarak "o iş bitti" diye ilerlemek bu turda bir
+epic'in ön koşulunu görünmez yaptı.** #1559 iki gün önce tamamlandı diye kapanmıştı;
+`npm run check:tenant-models` hâlâ sekiz modelin korumasız olduğunu basıyordu ve
+`git log --grep=1559` `main`'de **tek bir commit** döndürmüyordu. İnen şey ön koşullarıydı
+(#1560 guard'ı, #1566 iki-kiracı fixture'ı), işin kendisi değil. Bu fark önemli, çünkü o
+sekizin içinde `PipelineStage` ve `StageSla` var — yani ikinci bir ürün dikeyinin
+farklılaşacağı tablolar. **Kural: bir issue'nun durumuna dayanarak plan kurmadan önce onu
+kapatan commit'i ara (`git log --grep=<N>`) ve varsa ilgili guard'ı çalıştır; ikisi de yoksa
+issue'yu yeniden aç.** Kapanışın kendisi bir bulgudur, sessizce düzeltilecek bir kayıt hatası
+değil.
+
+---
+
+## 2026-09-11 — Local `main` sessizce geride olabilir, ve merge de bir dal değişimidir (#2350)
+
+**`git status` "clean" diyor ama `main` `origin/main`'in on commit gerisinde olabilir.** Dalı
+oradan açtım, PR doğar doğmaz `CONFLICTING` oldu. **Dal açmadan önce
+`git fetch && git log --oneline main..origin/main`; boş değilse önce `main`'i ileri al.**
+İkinci yarısı daha sinsi: CLAUDE.md "dal değiştirdikten sonra `npx prisma generate`" diyor,
+ama **merge de dal değişimidir** — main'in getirdiği yeni kolonlar (o turda #1863'ün
+`convertedCompanyId`'si) olmadan `tsc` alakasız e2e spec'lerinde patlıyor ve hata, çözdüğün
+çatışmadan geliyormuş gibi görünüyor. Çatışma çözümünün kendisi ayrıca kolaydı: aynı
+destructure satırına bir taraf `ssoEnforced`, öteki `vertical` eklemişti; doğru çözüm her
+zamanki gibi iki tarafı da tutmak.
+
+---
+
+## 2026-09-11 — `string` tipli bir katalog anahtarı sessiz bir kırık işaretçidir (#2350)
+
+**Kendi diff'ime karşı koşturduğum çürütme incelemesi, hiçbir kapının yakalamadığı bir kusur
+buldu.** Yeni dikey kataloğuna `defaultTemplate: 'internship'` yazmıştım; `PROGRAM_TEMPLATES`'in
+gerçek anahtarları `canonical_pipeline`, `graduate_internship`, `onboarding_buddy`,
+`leadership_cohort`, `career_transition`. Alan `string` tiplendiği için `tsc` görmüyor, benim
+testim de yalnızca "boş değil ve benzersiz" diyordu — yani yanlış anahtar bütün CI'dan geçip
+ancak onu **okuyan** dilimde boş pipeline ya da `null` üzerinde 500 olarak yüzeye çıkardı. Bu,
+CLAUDE.md'nin pipeline enum'u için kaydettiği hatanın aynısı. **Kural: okuyucusu ve doğrulaması
+olmayan veriyi gönderme — alanı, onu okuyan dilime bırak.** Doğru anahtarı yazmak yerine alanı
+kaldırdım ve kuralı teste koydum: bir katalog girdisi yalnızca o suite'in doğrulayabildiği
+alanları taşıyabilir.
+
+İki ek not aynı turdan. (1) **Gözden geçirenin önerdiği düzeltmeyi dene:** "testte
+`programTemplate`'i import edip çözümlendiğini doğrula" `node --test` altında **çalışmıyor**,
+çünkü `programTemplates.ts` → `pipeline.ts` → `@/i18n/config` ve Node'un çözümleyicisi ne `@/`
+alias'ını ne de uzantısız relative import'u takip ediyor. `scripts/test/*.test.mjs` yalnızca
+alias'sız import zincirine sahip modülleri sınayabilir; bu, hangi kuralın birim testle, hangisinin
+Playwright ya da bir `check:*` script'iyle pinleneceğini belirliyor. (2) **Nesnenin kendisini
+döndüren bir yardımcı varken, kopya döndüren kardeşi koruma değildir:** `verticalDefinition()`
+katalog nesnesini veriyordu, dolayısıyla tek bir `push()` süreç ömrü boyunca her isteğin
+gördüğünü değiştirirdi. Katalogları `Object.freeze` + `readonly` ile gönder.
+
+---
+
+## 2026-09-11 — İzolasyon incelemesi request/response'ta bitmez (#2357)
+
+**Bir inceleme, taradığı yüzey kadar iyidir.** Çok kiracılılık haritasını çıkaran ilk tur
+yalnızca *istek* yüzeyini taradı ve "çocuk kayıtlar scoped parent üzerinden korunur" diye
+rahatlatıcı bir sonuca vardı. Ayrı bir eleştirmen turu "asenkron yarı hiç taranmamış" dedi ve
+orada gerçek bir açık çıktı: `Webhook`, `Announcement`, `Newsletter` modellerinde `orgId`
+**yok** ve hiçbirinin scoped bir parent'ı da yok; `dispatchWebhook`
+`prisma.webhook.findMany({ where: { active: true } })` diyor — org filtresi yok. Üstelik bu
+yollar cron'dan çalıştığı için istek bağlamı yok: `MT_ENFORCE_ISOLATION` açılsa bile middleware'i
+hiç görmezler. **Kural: bir izolasyon/yetki incelemesinde cron, fan-out, webhook, e-posta şablonu
+ve zamanlanmış işler ayrı bir modalitedir; "her sorgu `where` yazıyor mu" sorusu oraya
+ulaşmaz.** Bugün tek kiracıda latent olan bir sızıntı, ikinci org yaratıldığı an canlıdır.
+
+---
+
 ## 2026-09-08 — A new column on `MentorshipRelation` is public to mentors by default (#2289)
 
 Roughly forty route files read relations with Prisma **`include`**, and `include` selects
