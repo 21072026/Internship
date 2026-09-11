@@ -75,6 +75,21 @@ model Organization {
   // so single-tenant production is never constrained. Limits are advisory in
   // this phase (surfaced as usage-vs-limit), not hard-enforced.
   plan             OrgPlan  @default(FREE)
+  // Which PRODUCT this tenant is (#2350, epic #2348). coreCRM is one core with
+  // several verticals: INTERNSHIP is the mentorship/placement product this repo
+  // started as, MARKETING the second one. It is a property of the TENANT, not of
+  // the deployment — two orgs on the same container can be different products,
+  // which is why this is a column and not an env var.
+  //
+  // A String, not an enum, on purpose: `Role` (schema.prisma, SUPER_ADMIN note)
+  // is the worked example of why widening a role enum is expensive, and a
+  // vertical is a catalogue key that product will add to. The catalogue lives in
+  // src/lib/verticals.ts; an unknown key falls back to INTERNSHIP rather than to
+  // "no product", so a bad write can never blank a tenant's UI.
+  //
+  // Literal default, so `db push` fills existing rows itself (#2298 only bites
+  // client-side defaults and required columns without one).
+  vertical         String   @default("INTERNSHIP")
   // White-label branding (#546). All optional — when null the app falls back to
   // its own defaults (see src/lib/branding.ts). These are stored per tenant and
   // resolved once per-tenant chrome application lands (needs tenant resolution,

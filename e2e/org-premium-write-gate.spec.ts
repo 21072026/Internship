@@ -85,6 +85,33 @@ test('the plan, not the admin role, decides who may write branding and SSO', asy
     // that always sends the current value is not broken by the rule.
     expect((await patch({ plan: 'FREE' })).ok()).toBeTruthy();
 
+    // --- The same rule for the vertical (#2350) ------------------------------
+    // Which PRODUCT a tenant is decides which modules exist for everyone in it,
+    // and later slices read it to gate write paths — so a tenant admin switching
+    // their own org's vertical is the same class of act as self-upgrading the
+    // plan, and is refused the same way.
+    expect((await row())?.vertical).toBe('INTERNSHIP');
+    const selfSwitch = await patch({ vertical: 'MARKETING' });
+    expect(selfSwitch.status()).toBe(403);
+    expect((await row())?.vertical).toBe('INTERNSHIP');
+
+    // Bundled with a legitimate write, the whole request is refused — the
+    // refusal is before the write, not after it.
+    const bundledVertical = await patch({ vertical: 'MARKETING', brandName: 'Gate Brand' });
+    expect(bundledVertical.status()).toBe(403);
+    const afterVertical = await row();
+    expect(afterVertical?.vertical).toBe('INTERNSHIP');
+    expect(afterVertical?.brandName).toBeNull();
+
+    // A key the catalogue does not know is a 400 from the schema, never a
+    // stored string: the column must not be able to hold a value the app
+    // cannot resolve.
+    expect((await patch({ vertical: 'NOT_A_VERTICAL' })).status()).toBe(400);
+    expect((await row())?.vertical).toBe('INTERNSHIP');
+
+    // Echoing the current vertical back is a no-op, not a change.
+    expect((await patch({ vertical: 'INTERNSHIP' })).ok()).toBeTruthy();
+
     // --- PRO: white-label is Enterprise packaging, so still locked -----------
     // docs/premium-model-calismasi.md puts BOTH features in Enterprise; Pro buys
     // scale, analytics and the AI package.
