@@ -35,6 +35,10 @@
  *   MentorApplication (fullName, email, phone, experience, motivation, linkedinUrl,
  *                      rejectReason)
  *   EmailLog (to, subject, error)
+ *   Contact (firstName, lastName, email) — the SaleVali marketing CRM's people:
+ *                 the named human at a merchant. Rewritten per row like User,
+ *                 because the email column is uniquely indexed and a single
+ *                 updateMany to one address would collide on the second row.
  *   MeetingGuest (email, name, rsvpToken) — an external invitee's address, and
  *                 the address is the ONLY identifier they have here: no account,
  *                 no consent record, and no self-service erasure path. Rewritten
@@ -54,7 +58,10 @@
  *   MentorshipRequest.message, CompanyInterest.note, InterviewRequest.note,
  *   Offer.compensationNote/declineNote, Meeting.title/meetLink,
  *   MenteeOnboarding.steps, Announcement (text/translations/link),
- *   StatusChange.reasonNote
+ *   StatusChange.reasonNote,
+ *   and from the marketing CRM: Contact.phone/title/notes,
+ *   Customer.legalName/vatId/website/notes, Interaction.subject/body,
+ *   Task.title/description, StageChange.note
  *
  * Deleted outright (files and credentials — nothing to anonymise):
  *   CvFile, AvatarFile, Document, AnnouncementImage, MessageAttachment,
@@ -70,7 +77,11 @@
  *   Meeting timing/RSVP, MeetingSeries(+Reminder, +OccurrenceEnd),
  *   AvailabilitySlot, Conversation(+Participant), MessageReaction,
  *   MessageHiddenFor, Setting, CompanyEntitlement, AiUsage, DocumentRequirement
- *   (+Reminder), WeeklyReportReminder, Offer status/dates.
+ *   (+Reminder), WeeklyReportReminder, Offer status/dates,
+ *   Campaign, CustomerIntegration, TrialReminder, and the shape of Customer
+ *   itself (companyName, city, industry, stage, pricing, MRR, funnel dates) —
+ *   a merchant is a firm, not a person, and this is the same line already drawn
+ *   for Company, whose `name` stays while contactEmail/address/description go.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -235,6 +246,14 @@ async function run() {
     ['activityLog', () => prisma.activityLog.updateMany({ data: { actorEmail: null, detail: null, ip: null, userAgent: null } })],
     ['companyInquiry', () => prisma.companyInquiry.updateMany({ data: { contactName: PLACEHOLDER, email: `inquiry@${DEMO_DOMAIN}`, phone: null, message: null } })],
     ['company', () => prisma.company.updateMany({ data: { contactEmail: null, address: null, description: null } })],
+    // SaleVali marketing CRM (APP_PRODUCT=marketing). Same rule as above: the
+    // funnel shape is the test value, the words people wrote are not. vatId and
+    // website identify the merchant outright, and legalName is the registered
+    // name a sole trader signs with their own.
+    ['customer', () => prisma.customer.updateMany({ data: { legalName: null, vatId: null, website: null, notes: null } })],
+    ['interaction', () => prisma.interaction.updateMany({ data: { subject: null, body: null } })],
+    ['task', () => prisma.task.updateMany({ data: { title: PLACEHOLDER, description: null } })],
+    ['stageChange', () => prisma.stageChange.updateMany({ data: { note: null } })],
     ['source', () => prisma.source.updateMany({ data: { contactName: null, contactEmail: null } })],
   ];
   for (const [label, fn] of blanks) {
@@ -258,6 +277,26 @@ async function run() {
     });
   }
   if (guests.length) console.log(`  rewrote ${guests.length} meetingGuest`);
+
+  // The marketing CRM's contacts: a named person at a merchant, with the same
+  // standing as a meeting guest — no account, no consent record, no self-service
+  // erasure path, and an address that is their only identifier here. Rewritten
+  // per row because Contact.email is globally unique.
+  const contacts = await prisma.contact.findMany({ select: { id: true }, orderBy: { createdAt: 'asc' } });
+  for (const [n, c] of contacts.entries()) {
+    await prisma.contact.update({
+      where: { id: c.id },
+      data: {
+        firstName: FIRST[n % FIRST.length],
+        lastName: LAST[(n * 7) % LAST.length],
+        email: `contact${n + 1}@${DEMO_DOMAIN}`,
+        phone: null,
+        title: null,
+        notes: null,
+      },
+    });
+  }
+  if (contacts.length) console.log(`  rewrote ${contacts.length} contact`);
 
   // MentorApplication carries an applicant's own words plus their contact
   // details, and its email column is indexed, so it is rewritten per row to
@@ -299,6 +338,13 @@ async function verify() {
 
   const realEmails = await prisma.user.count({ where: { NOT: { email: { endsWith: `@${DEMO_DOMAIN}` } } } });
   if (realEmails > 0) problems.push(`${realEmails} users still have a non-demo email`);
+
+  // A contact's address is the marketing CRM's equivalent of the two above: the
+  // one field that reaches a real person outside this system.
+  const contactEmails = await prisma.contact.count({
+    where: { email: { not: null }, NOT: { email: { endsWith: `@${DEMO_DOMAIN}` } } },
+  });
+  if (contactEmails > 0) problems.push(`${contactEmails} marketing contacts still have a non-demo email`);
 
   const withPhone = await prisma.user.count({ where: { OR: [{ phone: { not: null } }, { whatsapp: { not: null } }] } });
   if (withPhone > 0) problems.push(`${withPhone} users still have a phone number`);

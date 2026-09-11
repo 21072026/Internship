@@ -5,6 +5,9 @@ import {
   type NotificationRole,
 } from '@/lib/notificationLink';
 
+// The internship roles — the ones with a shell of their own. `Role` also carries
+// the SaleVali marketing values (APP_PRODUCT=marketing), which have no landing
+// page here and fall back to '/' like any unknown role, asserted at the bottom.
 const roles = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'] as const satisfies readonly NotificationRole[];
 const kinds = ['relation', 'thread', 'mentee', 'support', 'project', 'dashboard'] as const satisfies readonly LinkKind[];
 const ids = { relationId: 'rel_1', menteeId: 'mentee_1', projectId: 'project_1' };
@@ -30,7 +33,7 @@ const expected = {
     relation: '/source', thread: '/messages/rel_1', mentee: '/source',
     support: '/messages/support', project: '/projects/project_1', dashboard: '/source',
   },
-} as const satisfies Record<NotificationRole, Record<LinkKind, string>>;
+} as const satisfies Record<(typeof roles)[number], Record<LinkKind, string>>;
 
 test.describe('notificationLink', () => {
   test('maps every role × kind combination', { tag: '@smoke' }, () => {

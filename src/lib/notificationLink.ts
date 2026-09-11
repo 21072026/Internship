@@ -1,4 +1,10 @@
-export type NotificationRole = 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE';
+import type { Role } from '@prisma/client';
+
+// Any role may receive a notification, so this takes the whole enum. Only the
+// roles with a shell of their own in this product appear in ROOTS below; the
+// SaleVali marketing roles (APP_PRODUCT=marketing) have no internship landing
+// page, and the `?? '/'` fallback that has always been there answers for them.
+export type NotificationRole = Role;
 
 export type LinkKind =
   | 'relation'
@@ -14,7 +20,7 @@ type LinkIds = {
   projectId?: string;
 };
 
-const ROOTS: Record<NotificationRole, string> = {
+const ROOTS: Partial<Record<NotificationRole, string>> = {
   ADMIN: '/admin',
   MENTOR: '/mentor',
   MENTEE: '/portal',

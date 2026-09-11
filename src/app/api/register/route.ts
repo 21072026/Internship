@@ -14,6 +14,7 @@ import { createOrGetProjectConversation } from '@/lib/conversations';
 import { getSetting } from '@/lib/settings';
 import { isValidTimeZone } from '@/lib/timezone';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
+import type { Role } from '@prisma/client';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -68,7 +69,10 @@ export async function POST(request: Request) {
     // Without a token: open self-registration creates a MENTEE (#589) — mentees
     // are the self-serve intake; mentors/companies/sources arrive by invitation.
     // Same safety net as before: unverified email + inactive until admin approval.
-    let role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE' = 'MENTEE';
+    // Typed as the Prisma enum rather than a hand-written union: the column is
+    // `Role` and the invitation carries whatever value it was created with, so a
+    // literal list here only means a compile error every time the enum grows.
+    let role: Role = 'MENTEE';
     // Set from the invitation (its sender) or from a referral code, and written
     // onto the new account so "who brought this person in" is answerable later.
     let referredById: string | null = null;

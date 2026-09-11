@@ -14,6 +14,22 @@ enum Role {
   MENTEE
   COMPANY
   SOURCE
+  // SaleVali Marketing CRM operators (APP_PRODUCT=marketing, src/lib/product.ts).
+  // Three NEW values rather than reusing ADMIN: 115 files in this repo gate on
+  // `role !== 'ADMIN'`, so a shared value would hand every marketer candidate
+  // PII, impersonation and org settings — and every internship admin the
+  // customer funnel. Distinct values keep all of those checks correct with zero
+  // edits, the fail-closed property src/lib/authzScope.ts already relies on
+  // (an unknown role gets no scope builder and the caller answers 403).
+  //
+  // APPEND only, never reorder or rename: this emits
+  // ALTER TABLE `User` MODIFY `role` ENUM(...) NOT NULL, which infra/schema-guard.sh
+  // flags and then clears via is_enum_widening() by proving the reverse diff's
+  // member list is a strict subset. Removing or re-casing a member emits the
+  // identical statement and the guard will (correctly) stop the deploy.
+  MARKETING_ADMIN
+  MARKETING_MANAGER
+  MARKETER
 }
 
 enum MentorshipStatus {
@@ -107,6 +123,13 @@ model Organization {
   offers               Offer[]
   requisitions         Requisition[]
   interviewRequests    InterviewRequest[]
+
+  // SaleVali Marketing CRM anchors (APP_PRODUCT=marketing). Back-relations
+  // only — the orgId column lives on the marketing table, not here.
+  customers      Customer[]
+  contacts       Contact[]
+  campaigns      Campaign[]
+  marketingTasks Task[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -395,6 +418,21 @@ model User {
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+
+  // SaleVali Marketing CRM (APP_PRODUCT=marketing). List-side relation fields
+  // only: every FK column lives on the marketing table, so `User` itself gains
+  // no column and the diff for this block is empty. Marketing's `name` and
+  // `passwordHash` are deliberately NOT added — they are this model's existing
+  // `fullName` and `password`; the port maps the names in code rather than
+  // adding a second required column to a populated table.
+  createdCustomers       Customer[]    @relation("CustomerCreatedBy")
+  assignedCustomers      Customer[]    @relation("CustomerAssignedTo")
+  createdContacts        Contact[]     @relation("ContactCreatedBy")
+  createdCampaigns       Campaign[]    @relation("CampaignCreatedBy")
+  createdInteractions    Interaction[] @relation("InteractionCreatedBy")
+  createdMarketingTasks  Task[]        @relation("TaskCreatedBy")
+  assignedMarketingTasks Task[]        @relation("TaskAssignedTo")
+  marketingStageChanges  StageChange[] @relation("StageChangeCreatedBy")
 
   @@index([role])
   @@index([referredById])
@@ -1069,6 +1107,11 @@ model Company {
   offers            Offer[]
   requisitions      Requisition[]
   interviewRequests InterviewRequest[]
+
+  // The same firm seen from the SaleVali side of the business, when it happens
+  // to be both a staj veren firma and a merchant buying the ERP. Optional on
+  // both sides — the two populations are otherwise unrelated.
+  marketingCustomers Customer[] @relation("MarketingCustomerCompany")
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -2661,4 +2704,416 @@ model GoogleCalendarEventLink {
 
   @@unique([meetingId, connectionId])
   @@index([connectionId])
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SaleVali Marketing CRM — the second product this image serves
+// (APP_PRODUCT=marketing, src/lib/product.ts).
+//
+// These tables track SaleVali's OWN customers: online merchants selling on
+// Amazon/eBay/OTTO/Shopify who buy the multichannel ERP. The marketing team are
+// the operators (User), never the records. They are a different population from
+// the internship pipeline and share only `Organization`, `User` and `Setting`.
+//
+// Three properties this block deliberately holds, because the repo pushes with
+// `prisma db push` against a live database and infra/schema-guard.sh is the only
+// thing between a bad diff and production:
+//
+//   1. Every statement it produces is a CREATE TABLE or CREATE INDEX. Nothing
+//      here modifies an existing column (the one exception is the additive
+//      widening of `enum Role` above, which the guard clears explicitly).
+//   2. No FK to `User` is `Restrict`. Marketing's own schema made all six
+//      `createdBy` links required + Restrict; here they are nullable + SetNull.
+//      See the note on Customer.createdById.
+//   3. The four tables that are queried without a scoped parent carry `orgId`.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Lifecycle of a SaleVali customer, from unqualified prospect to churn.
+/// Mirrors the real funnel on salevali.de: contact -> demo/consultation ->
+/// 30 day free trial -> paying subscription -> cancellation (30 day notice).
+enum LifecycleStage {
+  PROSPECT_100
+  CONTACTED_200
+  DEMO_SCHEDULED_300
+  DEMO_COMPLETED_400
+  TRIAL_ACTIVE_500
+  TRIAL_EXPIRED_600
+  CUSTOMER_ACTIVE_700
+  CANCELLATION_NOTICE_800
+  CHURNED_900
+  LOST_950
+  DISQUALIFIED_990
+}
+
+/// How the customer reached SaleVali.
+enum CustomerSource {
+  WEBSITE_TRIAL
+  DEMO_REQUEST
+  AFFILIATE
+  CONSULTANT
+  REFERRAL
+  MARKETPLACE
+  OUTBOUND
+  ADS
+  EVENT
+  OTHER
+}
+
+/// SaleVali billing model. Invoice-only users pay a fixed monthly fee,
+/// API-connected users are billed per transaction in tiers.
+enum PricingModel {
+  UNDECIDED
+  INVOICE_ONLY_FIXED
+  API_TRANSACTION_TIERED
+}
+
+/// State of the SEPA direct debit mandate used for billing.
+enum SepaMandateStatus {
+  NONE
+  REQUESTED
+  ACTIVE
+  FAILED
+}
+
+/// Sales channels and shipping providers a customer can connect to SaleVali.
+enum IntegrationChannel {
+  AMAZON
+  EBAY
+  KAUFLAND
+  OTTO
+  ETSY
+  SHOPIFY
+  SHOPWARE
+  WOOCOMMERCE
+  PRESTASHOP
+  DHL
+  DPD
+  GLS
+  UPS
+  HERMES
+  CUSTOM_API
+  OTHER
+}
+
+enum IntegrationStatus {
+  INTERESTED
+  IN_PROGRESS
+  CONNECTED
+  BLOCKED
+}
+
+/// UI language the customer works in — SaleVali ships DE / EN / TR.
+enum CustomerLocale {
+  DE
+  EN
+  TR
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+/// Touch types the marketing team logs against a customer.
+///
+/// A SECOND enum rather than a merge into `InteractionType` (line 32), which is
+/// live on `InteractionLog.type` and spells its members `Meeting`/`Email`/`Call`.
+/// Adding members to that enum would be a safe widening, but re-casing
+/// `Meeting` -> `MEETING` REMOVES a member: the same
+/// ALTER TABLE `InteractionLog` MODIFY `type` ENUM(...) statement, rewriting
+/// every live mentor↔mentee interaction row, and infra/schema-guard.sh would
+/// (correctly) stop the deploy. The two vocabularies only overlap by accident —
+/// marketing has DEMO/ONBOARDING/NOTE, the mentorship log has Feedback — so a
+/// merged 12-member enum would also force every exhaustive map on the
+/// internship side to grow members it can never legally receive. This column is
+/// on a brand-new table, so its own enum costs one CREATE TABLE and nothing else.
+enum MarketingInteractionType {
+  EMAIL
+  CALL
+  WHATSAPP
+  MEETING
+  DEMO
+  ONBOARDING
+  NOTE
+}
+
+/// The central record of the marketing CRM: a company that uses — or should use
+/// — the SaleVali multichannel ERP. Online merchants, not marketing staff, and
+/// NOT the same population as `Company` (staj veren firmalar) — see companyId.
+model Customer {
+  id    String @id @default(cuid())
+  // Required, not nullable like Company/Offer: those columns are nullable
+  // because their rows predate multi-tenancy and were backfilled. This table is
+  // born scoped and has no rows to grandfather, so it follows Tag and
+  // Requisition — a marketing row without a tenant is a bug, and a required
+  // column makes it a loud one instead of a row that silently disappears the
+  // day MT_ENFORCE_ISOLATION is turned on.
+  orgId String
+
+  companyName  String
+  legalName    String?
+  website      String?
+  country      String         @default("DE") @db.VarChar(2)
+  city         String?
+  vatId        String?
+  locale       CustomerLocale @default(DE)
+  industry     String?
+  stage        LifecycleStage @default(PROSPECT_100)
+  source       CustomerSource @default(OTHER)
+  pricingModel PricingModel   @default(UNDECIDED)
+
+  /// Monthly order/transaction volume — drives the tiered API pricing and
+  /// tells us how valuable the account is.
+  monthlyTransactions Int?
+  /// Expected or actual monthly recurring revenue for SaleVali.
+  mrr                 Decimal? @db.Decimal(12, 2)
+  currency            String   @default("EUR") @db.VarChar(3)
+
+  trialStartedAt       DateTime?
+  trialEndsAt          DateTime?
+  convertedAt          DateTime?
+  cancellationNoticeAt DateTime?
+  churnedAt            DateTime?
+  closedAt             DateTime?
+
+  sepaMandateStatus SepaMandateStatus @default(NONE)
+
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // The cross-product link: the same firm may appear as a staj veren firma AND
+  // as a merchant buying SaleVali, and then both screens should be able to say
+  // so. Optional and SetNull — most merchants are not internship companies,
+  // every existing Company has no Customer, and deleting a Company must detach
+  // the marketing record rather than delete it or be blocked by it. Nothing is
+  // merged: no unique constraint, so a group running several merchant accounts
+  // can point them all at one Company. Cross-tenant links have to be refused in
+  // the write path (assertSameOrg, src/lib/orgScope.ts) — a composite FK would
+  // need Company.orgId NOT NULL, which is a destructive change to a live table.
+  companyId String?
+
+  assignedToId String?
+  campaignId   String?
+  // Nullable + SetNull, NOT Marketing's required + Restrict. This repo HARD
+  // DELETES User rows for GDPR erasure (src/lib/accountErasure.ts, reached from
+  // the admin erase route and self-service account deletion). A Restrict FK
+  // would abort that delete with an opaque FK error, and because Marketing's
+  // column was required there would be no NULL to write either — the erasure
+  // could only be fixed by deleting marketing business records that belong to
+  // the org, not to the marketer. SetNull detaches in the database, so
+  // hardDeleteUser needs no new detach line for these six tables. Note that
+  // infra/schema-guard.sh cannot see this class of problem at all:
+  // ADD CONSTRAINT ... ON DELETE RESTRICT matches none of its patterns, so the
+  // deploy would go green and the first erasure request would fail in
+  // production. Who created a record is audit data; losing the pointer when the
+  // person exercises their erasure right is the correct trade.
+  createdById  String?
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  company    Company?     @relation("MarketingCustomerCompany", fields: [companyId], references: [id], onDelete: SetNull)
+  assignedTo User?        @relation("CustomerAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  campaign   Campaign?    @relation("MarketingCampaignCustomers", fields: [campaignId], references: [id], onDelete: SetNull)
+  createdBy  User?        @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  contacts       Contact[]
+  integrations   CustomerIntegration[]
+  interactions   Interaction[]
+  tasks          Task[]
+  stageHistory   StageChange[]
+  trialReminders TrialReminder[]
+
+  // Both the orgId-leading compounds and Marketing's original single-column
+  // indexes: the compounds are what the queries will use once scoping is
+  // enforced, the plain ones are what they use today (MT_ENFORCE_ISOLATION
+  // defaults off and no marketing query filters by orgId yet, so an
+  // orgId-leading index would serve none of the dashboard's stage counts).
+  // Indexes are additive in both directions — this costs write throughput on an
+  // empty table, not a migration.
+  @@index([orgId, stage])
+  @@index([orgId, assignedToId])
+  @@index([orgId, trialEndsAt])
+  @@index([stage])
+  @@index([trialEndsAt])
+  @@index([assignedToId])
+  @@index([campaignId])
+  @@index([createdById])
+  @@index([companyId])
+}
+
+/// A person at a customer company — the human the marketing team talks to.
+/// Carries its own orgId rather than leaning on Customer: `customerId` is
+/// OPTIONAL, so a contact is not guaranteed to have a scoped parent at all, and
+/// the contacts screen lists the table directly.
+model Contact {
+  id    String @id @default(cuid())
+  orgId String
+
+  firstName String
+  lastName  String
+  // Kept as Marketing had it: a GLOBAL unique, not @@unique([orgId, email]).
+  // With one shared Organization the org-scoped version is exactly as
+  // restrictive, and the CSV importer (scripts/import-csv.mjs) keys its
+  // idempotent re-runs on `findUnique({ where: { email } })`. Revisit when a
+  // second tenant actually exists — the table will not be empty then, so expect
+  // a DROP INDEX + CREATE and a deliberate sign-off at the guard.
+  email     String? @unique
+  phone     String?
+  title     String?
+  isPrimary Boolean @default(false)
+  notes     String? @db.Text
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  customerId  String?
+  createdById String?
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer  Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdBy User?        @relation("ContactCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([createdById])
+}
+
+/// Which sales channels / shipping providers the customer runs. Both a
+/// segmentation signal and the concrete value SaleVali delivers to them.
+/// No orgId: a pure child, only ever read through its customer — the pattern
+/// src/lib/orgContext.ts describes for InteractionLog / Message / Goal.
+model CustomerIntegration {
+  id         String             @id @default(cuid())
+  customerId String
+  customer   Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  channel    IntegrationChannel
+  status     IntegrationStatus  @default(INTERESTED)
+  notes      String?            @db.Text
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@unique([customerId, channel])
+  @@index([channel, status])
+}
+
+/// Acquisition channel a customer came in through (affiliate push, ad set,
+/// consultant partnership, webinar). Not the main entity — attribution only.
+model Campaign {
+  id    String @id @default(cuid())
+  orgId String
+
+  name        String
+  description String?        @db.Text
+  status      CampaignStatus @default(DRAFT)
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Decimal?       @db.Decimal(12, 2)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  createdById String?
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User?        @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  customers Customer[]   @relation("MarketingCampaignCustomers")
+
+  @@index([orgId, status])
+  @@index([createdById])
+}
+
+/// Every touch the marketing team logs against a customer. No orgId: always
+/// read through the customer it hangs off.
+model Interaction {
+  id          String                   @id @default(cuid())
+  customerId  String
+  type        MarketingInteractionType
+  subject     String?
+  body        String?                  @db.Text
+  happenedAt  DateTime                 @default(now())
+  createdAt   DateTime                 @default(now())
+  createdById String?
+
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("InteractionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, happenedAt])
+  @@index([createdById])
+}
+
+/// Follow-up work owned by a marketer for a specific customer.
+///
+/// Carries orgId despite being a Customer child, for the same reason Offer does
+/// despite being a MentorshipRelation child: the dashboard counts open tasks
+/// across the whole table and the detail routes update them by bare id, so it
+/// is never reached through a scoped parent.
+///
+/// Note the name: this is the MARKETING task. The internship project task is
+/// `ProjectTask` — unrelated table, unrelated product.
+model Task {
+  id    String @id @default(cuid())
+  orgId String
+
+  customerId   String
+  title        String
+  description  String?   @db.Text
+  dueDate      DateTime?
+  done         Boolean   @default(false)
+  doneAt       DateTime?
+  assignedToId String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdById  String?
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer   Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTo User?        @relation("TaskAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy  User?        @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, dueDate])
+  @@index([orgId, done, dueDate])
+  @@index([assignedToId, done])
+  @@index([createdById])
+}
+
+/// Audit trail of lifecycle transitions, so funnel conversion and time-in-stage
+/// can be measured instead of guessed.
+///
+/// Keeps LifecycleStage as an ENUM, unlike internship's StatusChange whose
+/// fromStatus/toStatus are plain Strings — that widening exists so TENANTS can
+/// define their own pipeline stages (PipelineStage). The SaleVali funnel is the
+/// vendor's own product funnel and is not tenant-configurable.
+/// No orgId: written and read only through the customer.
+model StageChange {
+  id          String          @id @default(cuid())
+  customerId  String
+  fromStage   LifecycleStage?
+  toStage     LifecycleStage
+  note        String?         @db.Text
+  changedAt   DateTime        @default(now())
+  createdById String?
+
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("StageChangeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, changedAt])
+  @@index([toStage, changedAt])
+  @@index([createdById])
+}
+
+/// One row per reminder actually sent, unique per customer + threshold, so a
+/// timer that fires twice (or a retried deploy) can never mail the same person
+/// about the same trial twice. Written only AFTER a successful send: a failed
+/// send must be retried on the next run, and a crash between send and write
+/// costs one duplicate mail — the lesser evil next to a silently unsent one.
+/// No orgId: only ever hit by findUnique on the compound key below, from a
+/// customer the job has already loaded.
+model TrialReminder {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Days before trial end when this reminder fired: 7, 3 or 0.
+  threshold  Int
+  sentAt     DateTime @default(now())
+
+  @@unique([customerId, threshold])
 }
