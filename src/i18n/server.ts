@@ -50,14 +50,20 @@ export async function resolveRequestVertical(): Promise<VerticalKey> {
   if (!(await hasSessionCookie())) return hostVertical();
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) return DEFAULT_VERTICAL;
+    // No VALID identity (a stale/expired/revoked cookie decodes to no user) is
+    // still "signed out" for this purpose, so the vertical is a host signal —
+    // otherwise a marketing-host visitor with a leftover cookie sees the
+    // internship landing (#2355 review).
+    if (!session?.user?.id) return hostVertical();
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { org: { select: { vertical: true } } },
     });
     return toVerticalKey(user?.org?.vertical);
   } catch {
-    return DEFAULT_VERTICAL;
+    // A transient session/DB error is not a reason to override the host's
+    // product with the default one; fall back to the host signal.
+    return hostVertical();
   }
 }
 

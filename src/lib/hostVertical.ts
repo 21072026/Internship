@@ -47,8 +47,19 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
   return DEFAULT_VERTICAL;
 }
 
-// The vertical for the current request's host. Reads X-Forwarded-Host (set by
-// the reverse proxy) first, then Host. Any failure resolves to the default.
+// The vertical for the current request's host. Reads X-Forwarded-Host first,
+// then Host; any failure resolves to the default.
+//
+// TRUST NOTE: on the Caddy front (prod) reverse_proxy overwrites X-Forwarded-Host
+// with the real host, so it is authoritative there. On the nginx/Plesk topic
+// path it is NOT stripped, so a client could forge it. That is acceptable ONLY
+// because the resolved vertical is COSMETIC here — it drives the terminology
+// overlay (landing copy, the "Candidates"→"Leads" label) and nothing else: a
+// forged header just shows the forger marketing copy on their own request, with
+// no authz, data-scope or cache consequence (capability/tenant decisions read
+// the SESSION's org, never this host). If a vertical ever gains authz weight,
+// host resolution MUST move to a signal the proxy is trusted to set (or a
+// server-side host allow-list keyed off the TLS SNI), not this header.
 export async function hostVertical(): Promise<VerticalKey> {
   try {
     const h = await headers();
