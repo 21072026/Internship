@@ -17,6 +17,7 @@ import {
   type ResolvedStage,
 } from './pipeline';
 import type { Locale } from '@/i18n/config';
+import { defaultTemplateForVertical, templateStagePayload } from './programTemplates';
 
 export { defaultPipelineStages, isDefaultLabel, onPathKeys, stageLabel, startStageKey, type ResolvedStage };
 
@@ -110,4 +111,63 @@ export function createStartStageResolver(locale: Locale = 'en'): StartStageResol
     cache.set(cacheKey, key);
     return key;
   };
+}
+
+// ── Writing a stage set ──────────────────────────────────────────────────────
+
+// The ONE function that replaces an org's PipelineStage rows (#2353). Both the
+// admin editor (PUT /api/admin/organizations/[id]/pipeline-stages) and org
+// provisioning go through it, so the "single writer" rule the editor route
+// documented still holds — the difference between them is the authz/plan check
+// each does BEFORE calling this, not a second copy of the write.
+//
+// Label normalization is preserved: a label that is still the built-in one for
+// its key is stored blank ("use the localized built-in", #2268); only a typed
+// label persists. For a marketing key (no built-in) that means the label lands
+// verbatim, exactly as any other non-canonical template's does.
+export interface StageWrite {
+  key: string;
+  label: string;
+  order: number;
+  isTerminal?: boolean;
+  isOffPath?: boolean;
+  color?: string | null;
+}
+
+export async function replaceStages(orgId: string, stages: StageWrite[]): Promise<void> {
+  await prisma.$transaction([
+    prisma.pipelineStage.deleteMany({ where: { orgId } }),
+    prisma.pipelineStage.createMany({
+      data: stages.map((s) => ({
+        orgId,
+        key: s.key,
+        label: isDefaultLabel(s.key, s.label) ? '' : s.label.trim(),
+        order: s.order,
+        isTerminal: s.isTerminal ?? false,
+        isOffPath: s.isOffPath ?? false,
+        color: s.color && s.color.trim() ? s.color.trim() : null,
+      })),
+    }),
+  ]);
+}
+
+// Provision a new org's starting stage set from its vertical (#2353). Returns
+// false when the vertical starts on the canonical set (INTERNSHIP) — the caller
+// writes nothing and the resolve fallback serves the built-ins, exactly as
+// before verticals existed. A MARKETING org gets the marketing funnel.
+//
+// This deliberately bypasses the editor route's FREE-plan gate: seeding a
+// tenant at creation is provisioning by a super admin, not a tenant editing its
+// own stages, and a new org is FREE by default (#547). The template is a
+// pre-validated catalogue entry, so the validation the route does per request
+// is already guaranteed here.
+export async function provisionStagePreset(
+  orgId: string,
+  vertical: string,
+  locale: Locale = 'en',
+): Promise<boolean> {
+  const template = defaultTemplateForVertical(vertical);
+  if (!template) return false;
+  await replaceStages(orgId, templateStagePayload(template, locale).stages);
+  return true;
 }

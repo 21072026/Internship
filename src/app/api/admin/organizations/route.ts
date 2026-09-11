@@ -11,6 +11,8 @@ import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
+import { provisionStagePreset } from '@/lib/pipelineStages';
+import { getLocale } from '@/i18n/server';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import {
   applySsoEnforcement,
@@ -192,6 +194,11 @@ export async function POST(request: Request) {
       ...(parsed.data.vertical ? { vertical: parsed.data.vertical } : {}),
     },
   });
+  // Seed the vertical's starting stage set (#2353). A no-op for INTERNSHIP
+  // (returns false, org resolves to the canonical built-ins); a MARKETING org
+  // gets the marketing funnel. Provisioning by a super admin, so it deliberately
+  // bypasses the editor's FREE-plan gate — see provisionStagePreset.
+  await provisionStagePreset(organization.id, organization.vertical, await getLocale());
   await logActivity({
     action: 'org.created',
     actorId: session.user.id,

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isHexColor } from '@/lib/branding';
-import { resolvePipelineStages, defaultPipelineStages, isDefaultLabel } from '@/lib/pipelineStages';
+import { resolvePipelineStages, defaultPipelineStages, replaceStages } from '@/lib/pipelineStages';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
 import { getLocale } from '@/i18n/server';
@@ -89,25 +89,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
-  // Replace the whole set atomically so order/keys stay consistent.
-  await prisma.$transaction([
-    prisma.pipelineStage.deleteMany({ where: { orgId: id } }),
-    prisma.pipelineStage.createMany({
-      data: stages.map((s) => ({
-        orgId: id,
-        key: s.key,
-        // A label that is still one of ours is stored blank, which means "use
-        // the built-in localized label" — so saving a colour or a reorder does
-        // not pin a language (#2268). Only a label the admin actually typed is
-        // persisted, and it renders verbatim to everyone.
-        label: isDefaultLabel(s.key, s.label) ? '' : s.label.trim(),
-        order: s.order,
-        isTerminal: s.isTerminal ?? false,
-        isOffPath: s.isOffPath ?? false,
-        color: s.color && s.color.trim() ? s.color.trim() : null,
-      })),
-    }),
-  ]);
+  // Replace the whole set through the shared writer (#2353) so org provisioning
+  // and this editor never drift in how a stage row is shaped (label
+  // normalization, defaults). The authz + plan gate above is what differs.
+  await replaceStages(id, stages);
 
   const resolved = await resolvePipelineStages(id, await getLocale());
   return NextResponse.json({ stages: resolved, custom: true });
