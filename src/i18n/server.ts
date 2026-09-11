@@ -6,7 +6,7 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { defaultLocale, isLocale, LOCALE_COOKIE, type Locale } from './config';
 import { getDictionary } from './dictionaries';
 import { applyVerticalOverlay } from './verticalOverlays';
-import { toVerticalKey, DEFAULT_VERTICAL, type VerticalKey } from '@/lib/verticals';
+import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { hostVertical } from '@/lib/hostVertical';
 
 // Read the active locale. An explicit cookie (set via the language switcher)
