@@ -65,6 +65,181 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.197.0-beta',
+    date: '2026-09-11',
+    time: '17:54',
+    commit: '7e319d7',
+    highlights: {
+      en: [
+        "Visiting the marketing address now shows a marketing landing page — its own headline and pitch — while the internship address is unchanged.",
+      ],
+      tr: [
+        "Pazarlama adresini ziyaret etmek artık pazarlama landing sayfasını gösteriyor — kendi başlığı ve sunumuyla — staj adresi ise değişmedi.",
+      ],
+      de: [
+        "Der Besuch der Marketing-Adresse zeigt jetzt eine Marketing-Landingpage — mit eigener Überschrift und eigenem Pitch — während die Praktikums-Adresse unverändert bleibt.",
+      ],
+    },
+  },
+  {
+    version: '0.195.0-beta',
+    date: '2026-09-11',
+    time: '13:17',
+    commit: '79a773e',
+    highlights: {
+      en: [
+        "A marketing organization now sees marketing wording — its candidate list reads \"Leads\" — while nothing changes for internship organizations.",
+      ],
+      tr: [
+        "Bir pazarlama organizasyonu artık pazarlama diliyle görüyor — aday listesi \"Fırsatlar\" yazıyor — staj organizasyonlarında hiçbir şey değişmiyor.",
+      ],
+      de: [
+        "Eine Marketing-Organisation sieht jetzt Marketing-Begriffe — ihre Kandidatenliste heißt \"Leads\" — während sich für Praktikums-Organisationen nichts ändert.",
+      ],
+    },
+  },
+  {
+    version: '0.190.0-beta',
+    date: '2026-09-09',
+    time: '21:43',
+    commit: 'be597bb',
+    highlights: {
+      en: [
+        "Organizations can now require single sign-on: with it on, nobody in the tenant can sign in with a password, reset one, set one from an invitation or change one — the identity provider is the only way in.",
+        "Turning it on ends the organization's existing sessions immediately and forgets every remembered device, so nobody stays signed in on yesterday's password.",
+        "It cannot be switched on until at least one administrator holds a break-glass exemption, so an identity-provider outage can never lock an organization out of its own account.",
+        "Someone whose organization requires single sign-on is now told exactly that on the sign-in page, with a link to continue, instead of being told their password is wrong.",
+      ],
+      tr: [
+        "Organizasyonlar artık tek oturum açmayı zorunlu kılabiliyor: açıldığında kiracıdaki hiç kimse parolayla giremiyor, parola sıfırlayamıyor, davetle parola belirleyemiyor ve parola değiştiremiyor — tek yol kimlik sağlayıcı.",
+        "Zorunluluk açıldığı anda organizasyonun mevcut oturumları sona eriyor ve hatırlanan tüm cihazlar unutuluyor; kimse dünkü parolasıyla giriş yapmış kalmıyor.",
+        "En az bir yönetici acil durum muafiyeti almadan açılamıyor; böylece kimlik sağlayıcıdaki bir kesinti bir organizasyonu kendi hesabından tamamen dışarıda bırakamıyor.",
+        "Kurumu tek oturum açmayı zorunlu kılan bir kullanıcıya giriş sayfasında \"parolan hatalı\" yerine tam olarak bu söyleniyor ve devam bağlantısı gösteriliyor.",
+      ],
+      de: [
+        "Organisationen können jetzt Single Sign-on verlangen: ist es aktiv, kann sich niemand im Mandanten per Passwort anmelden, ein Passwort zurücksetzen, per Einladung eines vergeben oder es ändern — der Identitätsanbieter ist der einzige Weg hinein.",
+        "Beim Einschalten enden die bestehenden Sitzungen der Organisation sofort und alle gemerkten Geräte werden vergessen, sodass niemand mit dem Passwort von gestern angemeldet bleibt.",
+        "Es lässt sich erst einschalten, wenn mindestens eine Administratorin oder ein Administrator eine Notfall-Ausnahme hat — so kann ein Ausfall des Identitätsanbieters eine Organisation nie vollständig aus ihrem eigenen Konto aussperren.",
+        "Wer in einer Organisation mit erzwungenem Single Sign-on ist, liest auf der Anmeldeseite jetzt genau das — mit Link zum Fortfahren — statt der Meldung, das Passwort sei falsch.",
+      ],
+    },
+  },
+  {
+    version: '0.189.0-beta',
+    date: '2026-09-09',
+    time: '21:35',
+    commit: 'b7563de',
+    highlights: {
+      en: [
+        "Group meetings and recurring calls now use the same video room as one-on-one calls, so a team call no longer gets cut off after a few minutes.",
+        "If a call does have to run on the free public room, the meeting panel says so before anyone joins — and offers to open the same room in a browser tab, where there is no time limit.",
+        "Admins can see this month's video usage on the integrations page: how many participants have joined a call, out of the monthly allowance. No names are stored.",
+      ],
+      tr: [
+        "Grup toplantıları ve tekrarlayan görüşmeler artık birebir görüşmelerle aynı video odasını kullanıyor; ekip görüşmesi birkaç dakika sonra kesilmiyor.",
+        "Bir görüşme yine de ücretsiz herkese açık odada çalışmak zorunda kalırsa, görüşme paneli bunu kimse katılmadan önce söylüyor ve aynı odayı süre sınırı olmayan bir tarayıcı sekmesinde açmayı öneriyor.",
+        "Yöneticiler bu ayın video kullanımını entegrasyonlar sayfasında görebiliyor: aylık kotanın ne kadarına karşılık kaç katılımcı görüşmeye katıldı. Hiçbir isim saklanmıyor.",
+      ],
+      de: [
+        "Gruppenbesprechungen und wiederkehrende Gespräche nutzen jetzt denselben Videoraum wie Einzelgespräche — ein Teamgespräch wird nicht mehr nach wenigen Minuten getrennt.",
+        "Muss ein Gespräch doch im freien öffentlichen Raum stattfinden, sagt das Besprechungsfenster das, bevor jemand beitritt, und bietet an, denselben Raum in einem Browser-Tab ohne Zeitlimit zu öffnen.",
+        "Administratorinnen sehen die Videonutzung des Monats auf der Integrationsseite: wie viele Teilnehmende an einem Gespräch teilgenommen haben, gemessen am monatlichen Kontingent. Es werden keine Namen gespeichert.",
+      ],
+    },
+  },
+  {
+    version: '0.188.0-beta',
+    date: '2026-09-09',
+    time: '21:35',
+    commit: 'e3c60b0',
+    highlights: {
+      en: [
+        "A meeting can now be rescheduled, cancelled or deleted instead of being abandoned at the wrong time — a cancelled meeting disappears from the dashboard, the calendar, the subscription feed and the reminder e-mails, and is withdrawn from the calendars it was mirrored to.",
+        "Moving a meeting sends the reminder again for the new time, remembers the time it moved from, and asks the invitee to answer again — an acceptance of the old time does not count for the new one.",
+        "Deleting a meeting keeps what was written in it: the notes taken and the interaction log entry stay.",
+        "Only the person who called the meeting, the mentee's mentor or an administrator may change it; a mentee replies to an invitation rather than moving it.",
+      ],
+      tr: [
+        "Bir toplantı artık yanlış saatte bırakılmak yerine ertelenebiliyor, iptal edilebiliyor ya da silinebiliyor — iptal edilen toplantı panodan, takvimden, abonelik akışından ve hatırlatma e-postalarından düşer ve yansıtıldığı takvimlerden geri çekilir.",
+        "Toplantı taşındığında hatırlatma yeni saat için yeniden gönderilir, eski saat kayda geçer ve davetliden yeniden yanıt istenir — eski saate verilen 'katılıyorum' yenisi için sayılmaz.",
+        "Toplantıyı silmek, içinde yazılanları silmez: alınan notlar ve etkileşim kaydı yerinde kalır.",
+        "Toplantıyı yalnızca onu planlayan kişi, mentee'nin mentoru veya bir yönetici değiştirebilir; mentee toplantıyı taşımaz, davete yanıt verir.",
+      ],
+      de: [
+        "Ein Meeting lässt sich jetzt verschieben, absagen oder löschen, statt zur falschen Zeit stehen zu bleiben — ein abgesagtes Meeting verschwindet aus dem Dashboard, dem Kalender, dem Abonnement-Feed und den Erinnerungs-E-Mails und wird aus den Kalendern zurückgezogen, in die es gespiegelt wurde.",
+        "Beim Verschieben wird die Erinnerung für die neue Zeit erneut verschickt, die alte Zeit bleibt festgehalten, und die Zusage wird neu erfragt — eine Zusage zur alten Zeit gilt nicht für die neue.",
+        "Das Löschen eines Meetings löscht nicht, was darin geschrieben wurde: Notizen und der Eintrag im Interaktionsprotokoll bleiben erhalten.",
+        "Ändern darf ein Meeting nur, wer es angesetzt hat, die Mentorin oder der Mentor des Mentees oder eine Administratorin; ein Mentee antwortet auf die Einladung, statt sie zu verschieben.",
+      ],
+    },
+  },
+  {
+    version: '0.187.1-beta',
+    date: '2026-09-09',
+    time: '13:24',
+    commit: 'ccde937',
+    highlights: {
+      en: [
+        "Every response now carries a request id, so a problem you report can be traced to the exact request in the server logs.",
+      ],
+      tr: [
+        "Her yanıt artık bir istek kimliği taşıyor; bildirdiğiniz bir sorun sunucu kayıtlarında tam olarak o isteğe kadar izlenebiliyor.",
+      ],
+      de: [
+        "Jede Antwort enthält jetzt eine Anfrage-ID, sodass ein gemeldetes Problem in den Server-Logs genau der betreffenden Anfrage zugeordnet werden kann.",
+      ],
+    },
+  },
+  {
+    version: '0.187.0-beta',
+    date: '2026-09-09',
+    time: '13:20',
+    commit: '717d151',
+    highlights: {
+      en: [
+        "A company enquiry can now be turned into a real company account with one button. Admin → Company enquiries has a \"Convert to account\" action that creates the company and emails the contact an invitation to set up their own login — the details are prefilled from the enquiry and editable first.",
+        "Nobody sets a password for somebody else: the invited contact chooses their own, and if the invitation email cannot be sent the screen says so instead of reporting success.",
+        "Converting the same enquiry twice is refused and tells you which company it already became, and a converted enquiry stays in the list with a link to that company.",
+        "If the contact already has an invitation waiting, converting again is refused and names the company that invitation is for — so two enquiries from the same person cannot quietly become two companies.",
+      ],
+      tr: [
+        "Bir firma talebi artık tek düğmeyle gerçek bir firma hesabına dönüşüyor. Yönetici → Firma talepleri ekranındaki \"Hesaba dönüştür\" işlemi firmayı oluşturuyor ve ilgili kişiye kendi girişini kurması için davet e-postası gönderiyor; bilgiler talepten dolu geliyor ve göndermeden önce düzeltilebiliyor.",
+        "Kimse bir başkası adına şifre belirlemiyor: davet edilen kişi şifresini kendisi seçiyor, davet e-postası gönderilemediyse ekran başarı yazmak yerine bunu açıkça söylüyor.",
+        "Aynı talebi ikinci kez dönüştürmek reddediliyor ve hangi firmaya dönüştüğü söyleniyor; dönüştürülmüş talep listede kalıyor ve o firmaya bağlantı veriyor.",
+        "İlgili kişiye zaten bekleyen bir davet varsa yeniden dönüştürmek reddediliyor ve davetin hangi firma için olduğu söyleniyor — böylece aynı kişiden gelen iki talep sessizce iki firmaya dönüşmüyor.",
+      ],
+      de: [
+        "Eine Unternehmensanfrage wird jetzt mit einem Klick zu einem echten Unternehmenskonto. Unter Admin → Unternehmensanfragen legt die Aktion \"In Konto umwandeln\" das Unternehmen an und schickt der Kontaktperson eine Einladung, mit der sie ihren Zugang selbst einrichtet — die Angaben sind aus der Anfrage vorbelegt und vorher änderbar.",
+        "Niemand setzt ein Passwort für jemand anderen: die eingeladene Person wählt es selbst, und wenn die Einladungsmail nicht versandt werden konnte, sagt der Bildschirm das statt Erfolg zu melden.",
+        "Dieselbe Anfrage ein zweites Mal umzuwandeln wird abgelehnt und nennt das bereits angelegte Unternehmen; eine umgewandelte Anfrage bleibt in der Liste und verlinkt darauf.",
+        "Wartet für die Kontaktperson schon eine Einladung, wird eine erneute Umwandlung abgelehnt und das Unternehmen genannt, für das die Einladung gilt — zwei Anfragen derselben Person werden so nicht unbemerkt zu zwei Unternehmen.",
+      ],
+    },
+  },
+  {
+    version: '0.186.0-beta',
+    date: '2026-09-09',
+    time: '12:57',
+    commit: 'e642f20',
+    highlights: {
+      en: [
+        "Announcement e-mails and newsletters now share a monthly recipient allowance per organization, shown on both composers as \"used X of Y this month\".",
+        "A broadcast that would cross the allowance is refused in full — never delivered by half. What you wrote is kept as a draft rather than left queued, so nothing goes out later behind your back, and the message says how many recipients are left and when the meter resets.",
+        "One-to-one messages, notifications, invitations, password resets and meeting reminders are never counted and keep working even when the allowance is used up.",
+      ],
+      tr: [
+        "Duyuru e-postaları ve bültenler artık kuruluş başına aylık bir alıcı hakkını paylaşıyor; her iki oluşturma ekranında bu ay kaç alıcının kullanıldığı yazıyor.",
+        "Hakkı aşacak bir toplu gönderim yarısı gitmiş halde bırakılmaz, tümüyle reddedilir. Yazdığınız içerik kuyrukta bekletilmez, taslak olarak saklanır — böylece haberiniz olmadan sonradan gönderilmez — ve kaç alıcı kaldığı ile sayacın ne zaman sıfırlanacağı yazılır.",
+        "Birebir mesajlar, bildirimler, davetler, şifre sıfırlama ve toplantı hatırlatmaları hiçbir zaman sayılmaz; hak tükendiğinde de çalışmaya devam eder.",
+      ],
+      de: [
+        "Ankündigungs-E-Mails und Newsletter teilen sich jetzt ein monatliches Empfängerkontingent pro Organisation, das in beiden Editoren als \"X von Y in diesem Monat verbraucht\" erscheint.",
+        "Eine Rundmail, die das Kontingent überschreiten würde, wird vollständig abgelehnt — nie zur Hälfte ausgeliefert. Der Entwurf bleibt erhalten statt in der Warteschlange zu stehen, sodass nichts unbemerkt später hinausgeht; genannt werden die restlichen Empfänger sowie der Zeitpunkt der Zurücksetzung.",
+        "Einzelnachrichten, Benachrichtigungen, Einladungen, Passwort-Zurücksetzungen und Terminerinnerungen werden nie gezählt und funktionieren auch bei ausgeschöpftem Kontingent weiter.",
+      ],
+    },
+  },
+  {
     version: '0.181.0-beta',
     date: '2026-09-08',
     time: '08:11',

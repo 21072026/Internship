@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Per-vertical terminology overlay** (#2354, epic #2348). coreCRM serves several products from one dictionary, and a MARKETING tenant should not read \"candidate\" and \"mentee\" where it means \"lead\". A vertical may now override individual dictionary strings through a `DeepPartial` overlay deep-merged onto the base translation (`src/i18n/verticalOverlays.ts`), resolved per request from the signed-in user's `Organization.vertical` and applied in both `getServerDictionary()` and the root layout's client dictionary so server render and client payload agree. INTERNSHIP overrides nothing — its overlay is empty in every locale, so the merge returns the base object unchanged (referentially identical) and the whole layer is invisible to today's product; a signed-out visitor resolves to the default with no query, so the overlay costs the live single-tenant product nothing. The first overrides dress the candidates surface (`nav.candidates`, `candidates.title`, `candidates.subtitle`) as Leads in EN/TR/DE; the set grows as more marketing surfaces are dressed. Overlays only ever REPLACE a leaf string that already exists in the base — a unit spec asserts INTERNSHIP stays empty, every overlay key exists in the base (a typo is a build failure, not a silent no-op), and a MARKETING e2e proves a marketing admin sees \"Leads\" while an internship admin still sees \"Candidates\" on the same page.",
-  "notes": {
-    "en": ["A marketing organization now sees marketing wording — its candidate list reads \"Leads\" — while nothing changes for internship organizations."],
-    "tr": ["Bir pazarlama organizasyonu artık pazarlama diliyle görüyor — aday listesi \"Fırsatlar\" yazıyor — staj organizasyonlarında hiçbir şey değişmiyor."],
-    "de": ["Eine Marketing-Organisation sieht jetzt Marketing-Begriffe — ihre Kandidatenliste heißt \"Leads\" — während sich für Praktikums-Organisationen nichts ändert."]
-  }
-}
