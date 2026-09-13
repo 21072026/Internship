@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **One id per request, from the middleware to the log line** (#1601). `src/middleware.ts` mints (or honours, within a bounded alphabet) an `x-request-id`, forwards it to the handler and echoes it on every response — error responses included. `src/lib/requestContext.ts` carries it in an `AsyncLocalStorage` modelled on `orgContext.ts`, and `logger.ts` now stamps `requestId` (and `orgId`) onto every line automatically, so a support ticket can be traced to the lines it produced.",
-  "notes": {
-    "en": ["Every response now carries a request id, so a problem you report can be traced to the exact request in the server logs."],
-    "tr": ["Her yanıt artık bir istek kimliği taşıyor; bildirdiğiniz bir sorun sunucu kayıtlarında tam olarak o isteğe kadar izlenebiliyor."],
-    "de": ["Jede Antwort enthält jetzt eine Anfrage-ID, sodass ein gemeldetes Problem in den Server-Logs genau der betreffenden Anfrage zugeordnet werden kann."]
-  }
-}
