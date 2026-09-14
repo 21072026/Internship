@@ -234,7 +234,12 @@ export function PersonHoverCard({
         onFocus={show}
         onBlur={onLeave}
         onClick={onClick}
-        className={`cursor-pointer underline decoration-dotted underline-offset-2 hover:decoration-solid focus:outline-none focus:ring-2 focus:ring-blue-300 rounded ${className}`}
+        // `inline-flex` + `min-h-6`: this is a role="button", and wherever it
+        // renders as a flex item it stops being an inline target and loses SC
+        // 2.5.8's Inline exception — at which point a 20px-tall name next to a
+        // form control is an undersized target (#2403). 24px is the criterion's
+        // minimum; the width already exceeds it for any real name.
+        className={`inline-flex min-h-6 items-center cursor-pointer underline decoration-dotted underline-offset-2 hover:decoration-solid focus:outline-none focus:ring-2 focus:ring-blue-300 rounded ${className}`}
       >
         {children ?? label}
       </span>
