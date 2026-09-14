@@ -8,7 +8,11 @@ export async function getOrgBranding(orgId: string | null | undefined): Promise<
   if (!orgId) return resolveBranding(null);
   const org = await prisma.organization.findUnique({
     where: { id: orgId },
-    select: { brandName: true, brandLogoUrl: true, brandColor: true, supportEmail: true },
+    select: { brandName: true, brandLogoUrl: true, brandColor: true, supportEmail: true, vertical: true, name: true },
   });
-  return resolveBranding(org);
+  // A non-INTERNSHIP vertical is a different product, so its unbranded fallback
+  // is the org's own name — never "Internship CRM" (#2355 follow-up). INTERNSHIP
+  // keeps the product default.
+  const fallbackName = org && org.vertical && org.vertical !== 'INTERNSHIP' ? org.name : undefined;
+  return resolveBranding(org, fallbackName);
 }
