@@ -45,6 +45,30 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     en: {
       nav: { candidates: 'Leads' },
       candidates: { title: 'Leads', subtitle: 'Browse and search leads' },
+      // The admin dashboard (#2356). People = leads, the pipeline relation = a
+      // deal — so "mentee/mentor/mentorship" become "lead/rep/deal" and nothing
+      // reads "internship" to a marketing tenant.
+      dashboard: {
+        subtitle: 'Overview of your marketing pipeline',
+        mentees: 'Leads',
+        mentors: 'Reps',
+        activeMentorships: 'Active deals',
+        perStage: 'Leads per stage',
+        recentMentorships: 'Recent deals',
+        latestAssignments: 'Latest deals',
+        noMentorships: 'No deals yet',
+        newCandidates: 'New Leads',
+        recentlyRegistered: 'Recently added leads',
+        noCandidates: 'No leads yet',
+        quickActions: { browseCandidates: 'Browse Leads' },
+      },
+      checklist: {
+        steps: {
+          inviteMentors: 'Invite your first reps',
+          inviteMentees: 'Add your first leads',
+          assignMentorship: 'Create the first deal',
+        },
+      },
       landing: {
         badge: 'Marketing CRM · Track leads · Close deals',
         heroTitle: 'Every lead, every conversation, every deal —',
@@ -55,8 +79,31 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
-      nav: { candidates: 'Fırsatlar' },
-      candidates: { title: 'Fırsatlar', subtitle: 'Fırsatları görüntüle ve ara' },
+      // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
+      // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
+      nav: { candidates: 'Müşteri Adayları' },
+      candidates: { title: 'Müşteri Adayları', subtitle: 'Müşteri adaylarını görüntüle ve ara' },
+      dashboard: {
+        subtitle: 'Pazarlama hattınıza genel bakış',
+        mentees: 'Müşteri Adayları',
+        mentors: 'Temsilciler',
+        activeMentorships: 'Aktif fırsatlar',
+        perStage: 'Aşama başına aday',
+        recentMentorships: 'Son fırsatlar',
+        latestAssignments: 'Son eklenen fırsatlar',
+        noMentorships: 'Henüz fırsat yok',
+        newCandidates: 'Yeni Müşteri Adayları',
+        recentlyRegistered: 'Son eklenen müşteri adayları',
+        noCandidates: 'Henüz müşteri adayı yok',
+        quickActions: { browseCandidates: 'Müşteri adaylarını görüntüle' },
+      },
+      checklist: {
+        steps: {
+          inviteMentors: 'İlk temsilcilerini davet et',
+          inviteMentees: 'İlk müşteri adaylarını ekle',
+          assignMentorship: 'İlk fırsatı oluştur',
+        },
+      },
       landing: {
         badge: 'Pazarlama CRM · Adayları takip et · Anlaşmaları kapat',
         heroTitle: 'Her aday, her görüşme, her anlaşma —',
@@ -69,6 +116,27 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     de: {
       nav: { candidates: 'Leads' },
       candidates: { title: 'Leads', subtitle: 'Leads durchsuchen' },
+      dashboard: {
+        subtitle: 'Überblick über Ihre Marketing-Pipeline',
+        mentees: 'Leads',
+        mentors: 'Vertriebsmitarbeiter',
+        activeMentorships: 'Aktive Deals',
+        perStage: 'Leads pro Phase',
+        recentMentorships: 'Aktuelle Deals',
+        latestAssignments: 'Neueste Deals',
+        noMentorships: 'Noch keine Deals',
+        newCandidates: 'Neue Leads',
+        recentlyRegistered: 'Kürzlich hinzugefügte Leads',
+        noCandidates: 'Noch keine Leads',
+        quickActions: { browseCandidates: 'Leads durchsuchen' },
+      },
+      checklist: {
+        steps: {
+          inviteMentors: 'Laden Sie Ihre ersten Mitarbeiter ein',
+          inviteMentees: 'Fügen Sie Ihre ersten Leads hinzu',
+          assignMentorship: 'Ersten Deal anlegen',
+        },
+      },
       landing: {
         badge: 'Marketing-CRM · Leads verfolgen · Abschlüsse erzielen',
         heroTitle: 'Jeder Lead, jedes Gespräch, jeder Abschluss —',

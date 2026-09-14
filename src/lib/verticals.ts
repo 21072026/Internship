@@ -47,6 +47,13 @@ export type VerticalCapability =
 export interface VerticalDefinition {
   key: VerticalKey;
   capabilities: readonly VerticalCapability[];
+  // The product name shown to a SIGNED-OUT visitor, where there is no org brand
+  // to read (#2356). A signed-in tenant always overrides this with its own
+  // `Organization.brandName`; this is only the public-landing / no-org fallback,
+  // so a marketing host stops reading "Internship CRM" in its wordmark and tab
+  // title. One marketing customer today (SaleVali); a second would move this to
+  // host→org branding (see issue #2457).
+  productName: string;
 }
 
 // Frozen, entries and capability arrays included: verticalDefinition() hands the
@@ -56,6 +63,7 @@ export interface VerticalDefinition {
 export const VERTICALS: readonly VerticalDefinition[] = [
   {
     key: 'INTERNSHIP',
+    productName: 'Internship CRM',
     // Everything. This is the product the repo already is, so its catalogue
     // entry must be a no-op: any capability missing from this list would switch
     // a live feature off for the only tenant that exists today.
@@ -73,6 +81,7 @@ export const VERTICALS: readonly VerticalDefinition[] = [
   },
   {
     key: 'MARKETING',
+    productName: 'SaleVali',
     // A marketing CRM tracks accounts through a funnel; it has no mentors, no
     // evaluation cycle, no placement and no partner-institution intake.
     capabilities: ['projects', 'companies', 'pipeline', 'messaging', 'documents'],
@@ -119,4 +128,10 @@ export function verticalCapabilities(value: unknown): VerticalCapability[] {
 
 export function verticalHasCapability(value: unknown, capability: VerticalCapability): boolean {
   return verticalDefinition(value).capabilities.includes(capability);
+}
+
+// The signed-out product name for a vertical (#2356) — the wordmark/tab-title
+// fallback when there is no org brand to read. Total function via toVerticalKey.
+export function productNameFor(value: unknown): string {
+  return verticalDefinition(value).productName;
 }

@@ -4,8 +4,15 @@ import { resolveBranding, type ResolvedBranding } from '@/lib/branding';
 // Server-side: resolve a tenant's white-label branding (#546) for the given org,
 // falling back to the product defaults when the org has no overrides (or no org
 // — single-tenant / not signed in). Cheap single-row lookup.
-export async function getOrgBranding(orgId: string | null | undefined): Promise<ResolvedBranding> {
-  if (!orgId) return resolveBranding(null);
+export async function getOrgBranding(
+  orgId: string | null | undefined,
+  // Name to use when there is NO org (signed-out) instead of the product default
+  // (#2356). Lets a marketing host's public wordmark read its own product name
+  // rather than "Internship CRM". Ignored once an org is resolved — a signed-in
+  // tenant's own brandName always wins.
+  noOrgFallbackName?: string | null,
+): Promise<ResolvedBranding> {
+  if (!orgId) return resolveBranding(null, noOrgFallbackName);
   const org = await prisma.organization.findUnique({
     where: { id: orgId },
     select: { brandName: true, brandLogoUrl: true, brandColor: true, supportEmail: true, vertical: true, name: true },

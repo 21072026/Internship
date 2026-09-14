@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { GraduationCap } from 'lucide-react';
-import { getServerDictionary } from '@/i18n/server';
+import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
+import { productNameFor } from '@/lib/verticals';
 import { VersionFooter } from '@/components/VersionFooter';
 import { APP_VERSION } from '@/lib/version';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from './links';
@@ -20,6 +21,9 @@ import { DemoLink } from './DemoLink';
 export async function PublicFooter() {
   const { t } = await getServerDictionary();
   const n = t.publicNav;
+  // Vertical product name (#2356): a marketing host's footer wordmark and
+  // copyright read "SaleVali", not "InternshipCRM". INTERNSHIP is unchanged.
+  const productName = productNameFor(await resolveRequestVertical());
 
   const columns = [
     {
@@ -85,7 +89,7 @@ export async function PublicFooter() {
           <div className="col-span-2 sm:col-span-1">
             <Link href="/" className="flex items-center gap-2 min-w-0">
               <GraduationCap className="h-6 w-6 text-blue-600 flex-shrink-0" />
-              <span className="font-bold text-gray-900 dark:text-gray-100 truncate">InternshipCRM</span>
+              <span className="font-bold text-gray-900 dark:text-gray-100 truncate">{productName}</span>
             </Link>
             <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{n.tagline}</p>
             {/* Founder identity (#1097): a real person by name — the sole
@@ -152,7 +156,7 @@ export async function PublicFooter() {
         </div>
 
         <div className="mt-10 pt-6 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
-          <p>© {new Date().getFullYear()} InternshipCRM. {n.rights}</p>
+          <p>© {new Date().getFullYear()} {productName}. {n.rights}</p>
           <VersionFooter version={APP_VERSION} />
         </div>
       </div>
