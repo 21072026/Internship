@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { defaultOrgId } from '@/lib/defaultOrg';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -94,6 +95,12 @@ test('Swagger UI renders the operations and the token button pre-authorizes it',
   const email = uniqueEmail('apiexp-ui');
   const pw = 'ApiExpPass123!';
   const admin = await seedUser(email, pw, 'ADMIN', 'API Explorer UI Admin');
+  // A key minted for an org-less admin is refused by withApiKey() ("not bound
+  // to an organization", #1546) — real accounts always get an org at
+  // registration (defaultOrgId(), see src/lib/defaultOrg.ts), but seedUser()
+  // does not, so this test has to assign one itself for the v1 request below
+  // to reach the same path a real admin's key would.
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: await defaultOrgId() } });
   // Every key this test causes to exist, by id, read off the mint response.
   // The cleanup used to be `name: { startsWith: 'Swagger UI' }` — which is the
   // exact name the page mints, so pointed at a real DATABASE_URL (CLAUDE.md

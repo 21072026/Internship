@@ -5,6 +5,7 @@ import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
 import { getServerDictionary } from '@/i18n/server';
 import { PortalNav } from '@/components/PortalNav';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -36,6 +37,16 @@ export default async function PortalLayout({ children }: { children: React.React
   // mentorship of their own the portal has nothing to show them, so they go back
   // to their own shell exactly as before. Anything else (SOURCE) goes to the root
   // router, which knows where each role belongs.
+  // The mentee portal is a mentorship-vertical shell (#2351). Resolved once and
+  // reused for the sidebar/palette below. No-op for INTERNSHIP.
+  const capabilities = await shellCapabilities(session.user.orgId);
+  if (!capabilities.includes('mentorship')) {
+    // '/account', not '/': a MENTEE's home is '/portal', so '/' would loop back
+    // through this very gate (roleHome('MENTEE') === '/portal'). '/account' is
+    // role-neutral and terminal. An ADMIN who wandered in still goes to /admin.
+    redirect(session.user.role === 'ADMIN' ? '/admin' : '/account');
+  }
+
   if (!(await canUsePortal(session.user))) {
     redirect(
       session.user.role === 'ADMIN' ? '/admin' : session.user.role === 'MENTOR' ? '/mentor' : '/'
@@ -63,7 +74,7 @@ export default async function PortalLayout({ children }: { children: React.React
   return (
     <>
       {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
-      <CommandPalette role="MENTEE" />
+      <CommandPalette role="MENTEE" capabilities={capabilities} />
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
       sidebar={
@@ -77,7 +88,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <PortalNav />
+          <PortalNav capabilities={capabilities} />
           <InstallAppButton />
         </nav>
 

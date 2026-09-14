@@ -16,6 +16,7 @@ interface Organization {
   name: string;
   slug: string;
   plan: OrgPlan;
+  vertical: string;
   limits: OrgPlanLimits;
   branding: {
     brandName: string | null;
@@ -33,6 +34,10 @@ interface Organization {
     spEntityId: string;
     acsUrl: string;
     metadataUrl: string;
+    // Enforced SSO (#1950).
+    ssoEnforced: boolean;
+    exemptAdmins: number;
+    sessionsToEnd: number;
   };
   createdAt: string;
   counts: {
@@ -118,11 +123,17 @@ export default function AdminOrganizationsPage() {
   const t = useT();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [plans, setPlans] = useState<OrgPlan[]>([]);
+  // Keys come from the server's catalogue (#2350) — never hard-coded here, or
+  // adding a vertical would mean editing two lists that can disagree.
+  const [verticals, setVerticals] = useState<string[]>([]);
   // Whether this admin may manage every tenant (#1535). Presentation only — the
   // API refuses a cross-tenant write regardless of what is rendered here.
   const [superAdmin, setSuperAdmin] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  // Blank = let the server apply the column default, so the form creates
+  // exactly what it created before this field existed.
+  const [vertical, setVertical] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +145,7 @@ export default function AdminOrganizationsPage() {
       const data = await res.json();
       setOrgs(data.organizations ?? []);
       setPlans(data.plans ?? []);
+      setVerticals(data.verticals ?? []);
       setSuperAdmin(!!data.superAdmin);
     }
     setLoading(false);
@@ -148,9 +160,9 @@ export default function AdminOrganizationsPage() {
     try {
       const res = await fetch('/api/admin/organizations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, slug }),
+        body: JSON.stringify({ name, slug, ...(vertical ? { vertical } : {}) }),
       });
-      if (res.ok) { setName(''); setSlug(''); await load(); }
+      if (res.ok) { setName(''); setSlug(''); setVertical(''); await load(); }
       else setError((await res.json().catch(() => ({}))).error ?? t.common.error);
     } finally {
       setSaving(false);
@@ -163,6 +175,22 @@ export default function AdminOrganizationsPage() {
       const res = await fetch('/api/admin/organizations', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, plan }),
+      });
+      if (res.ok) await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Which product a tenant is (#2350). Super-admin only on the server; the
+  // select is disabled for everyone else to match, but that check is cosmetic —
+  // the API is the control.
+  const changeVertical = async (id: string, next: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, vertical: next }),
       });
       if (res.ok) await load();
     } finally {
@@ -280,6 +308,46 @@ export default function AdminOrganizationsPage() {
     }
   };
 
+  // Enforced SSO (#1950). Deliberately its own request rather than a field on
+  // the config form: switching it on ENDS every password session in the tenant,
+  // and an action with that consequence must be pressed on purpose, after a
+  // confirmation that names the number.
+  const toggleEnforcement = async (next: boolean) => {
+    const org = orgs.find((x) => x.id === ssoOrgId);
+    if (!org) return;
+    const question = next
+      ? t.organizations.ssoEnforceConfirm.replace('{count}', String(org.sso.sessionsToEnd))
+      : t.organizations.ssoRelaxConfirm;
+    if (!window.confirm(question)) return;
+    setSaving(true); setSsoMsg(null);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ssoOrgId, ssoEnforced: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const blockers: string[] = Array.isArray(data.blockers) ? data.blockers : [];
+        setSsoMsg(
+          blockers.includes('SSO_NOT_ACTIVE')
+            ? t.organizations.ssoEnforceNeedsActive
+            : blockers.includes('NO_EXEMPT_ADMIN')
+              ? t.organizations.ssoEnforceNeedsExempt
+              : data.error || t.common.error
+        );
+        return;
+      }
+      setSsoMsg(
+        next
+          ? t.organizations.ssoEnforceDone.replace('{count}', String(data.sessionsEnded ?? 0))
+          : t.organizations.ssoRelaxDone
+      );
+      await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const disableSso = async () => {
     if (!ssoOrgId) return;
     setSaving(true); setSsoMsg(null);
@@ -325,6 +393,21 @@ export default function AdminOrganizationsPage() {
           </div>
           <div className="flex-1 min-w-[160px]">
             <Input label={t.organizations.slug} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="acme-inc" />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="new-org-vertical">
+              {t.organizations.vertical}
+            </label>
+            <select
+              id="new-org-vertical"
+              data-testid="new-org-vertical"
+              value={vertical}
+              onChange={(e) => setVertical(e.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+            >
+              <option value="">—</option>
+              {verticals.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
           </div>
           <Button type="submit" loading={saving}>{t.organizations.create}</Button>
         </form>
@@ -442,6 +525,26 @@ export default function AdminOrganizationsPage() {
                   {t.organizations.ssoEnable}
                 </label>
                 <Button type="submit" loading={saving} disabled={ssoLocked} data-testid="sso-save">{t.common.save}</Button>
+                {/* Enforcement is not part of the form above: it is saved on
+                    its own, immediately, because it ends live sessions. */}
+                <div data-testid="sso-enforce-block" className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">
+                  <label className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                    <input
+                      type="checkbox"
+                      data-testid="sso-enforced"
+                      disabled={ssoLocked || saving}
+                      checked={ssoOrg?.sso.ssoEnforced ?? false}
+                      onChange={(e) => toggleEnforcement(e.target.checked)}
+                    />
+                    {t.organizations.ssoEnforce}
+                  </label>
+                  <p className="text-xs text-amber-800">{t.organizations.ssoEnforceHint}</p>
+                  <p className="text-xs text-amber-800" data-testid="sso-enforce-readiness">
+                    {t.organizations.ssoExemptAdmins.replace('{count}', String(ssoOrg?.sso.exemptAdmins ?? 0))}
+                    {' · '}
+                    {t.organizations.ssoEnforceSessions.replace('{count}', String(ssoOrg?.sso.sessionsToEnd ?? 0))}
+                  </p>
+                </div>
               </>
             )}
           </form>
@@ -478,6 +581,7 @@ export default function AdminOrganizationsPage() {
                   <th className="py-2 pr-4">{t.organizations.name}</th>
                   <th className="py-2 pr-4">{t.organizations.slug}</th>
                   <th className="py-2 pr-4">{t.organizations.plan}</th>
+                  <th className="py-2 pr-4">{t.organizations.vertical}</th>
                   <th className="py-2 pr-4">{t.organizations.users}</th>
                   <th className="py-2 pr-4">{t.organizations.relations}</th>
                   <th className="py-2 pr-4">{t.organizations.projects}</th>
@@ -506,6 +610,18 @@ export default function AdminOrganizationsPage() {
                         className="rounded-lg border border-gray-300 px-2 py-1 text-xs disabled:opacity-60"
                       >
                         {plans.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </td>
+                    <td className="py-2 pr-4">
+                      <select
+                        aria-label={t.organizations.vertical}
+                        data-testid={`org-vertical-${o.id}`}
+                        value={o.vertical}
+                        disabled={saving || !superAdmin}
+                        onChange={(e) => changeVertical(o.id, e.target.value)}
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs disabled:opacity-60"
+                      >
+                        {verticals.map((v) => <option key={v} value={v}>{v}</option>)}
                       </select>
                     </td>
                     <td className="py-2 pr-4"><Usage used={o.counts.users} limit={o.limits.maxUsers} /></td>

@@ -505,13 +505,71 @@ const CAREER_TRANSITION: ProgramTemplate = {
  * because it is what the product does today, then the four shapes an
  * organization is most likely to recognise as its own.
  */
+/**
+ * A sales/marketing funnel: a lead from first sight to won or lost (#2353). This
+ * is the MARKETING vertical's starting stage set — the coreCRM analogue of the
+ * canonical mentorship pipeline, for a tenant that tracks accounts through a
+ * deal instead of mentees through a placement. Its keys are its own (LEAD_*,
+ * DEAL_*), never the canonical PipelineStatus keys, so a marketing board never
+ * borrows an internship label through the built-in resolver (the notificationText
+ * built-in-label path keys off the canonical set).
+ */
+const MARKETING_FUNNEL: ProgramTemplate = {
+  key: 'marketing_funnel',
+  // Marketing follows up faster than a mentorship cadence; a week-old untouched
+  // lead is already cooling.
+  reminderDays: 7,
+  stages: [
+    { key: 'LEAD_NEW', order: 0, isTerminal: false, isOffPath: false, color: '#2563eb',
+      labels: { en: 'New lead', tr: 'Yeni aday', de: 'Neuer Lead' } },
+    { key: 'LEAD_CONTACTED', order: 1, isTerminal: false, isOffPath: false, color: '#0ea5e9',
+      labels: { en: 'Contacted', tr: 'İletişime geçildi', de: 'Kontaktiert' } },
+    { key: 'LEAD_QUALIFIED', order: 2, isTerminal: false, isOffPath: false, color: '#8b5cf6',
+      labels: { en: 'Qualified', tr: 'Nitelendirildi', de: 'Qualifiziert' } },
+    { key: 'DEAL_PROPOSAL', order: 3, isTerminal: false, isOffPath: false, color: '#f59e0b',
+      labels: { en: 'Proposal sent', tr: 'Teklif gönderildi', de: 'Angebot gesendet' } },
+    { key: 'DEAL_NEGOTIATION', order: 4, isTerminal: false, isOffPath: false, color: '#f97316',
+      labels: { en: 'Negotiation', tr: 'Pazarlık', de: 'Verhandlung' } },
+    { key: 'DEAL_WON', order: 5, isTerminal: true, isOffPath: false, color: '#16a34a',
+      labels: { en: 'Won', tr: 'Kazanıldı', de: 'Gewonnen' } },
+    { key: 'DEAL_LOST', order: 6, isTerminal: true, isOffPath: true, color: '#6b7280',
+      labels: { en: 'Lost', tr: 'Kaybedildi', de: 'Verloren' } },
+  ],
+  // A marketing cadence in days: a fresh lead is contacted next-day, and a deal
+  // does not sit in a stage for long before it needs a nudge.
+  slas: [
+    { stageKey: 'LEAD_NEW', days: 1 },
+    { stageKey: 'LEAD_CONTACTED', days: 3 },
+    { stageKey: 'LEAD_QUALIFIED', days: 7 },
+    { stageKey: 'DEAL_PROPOSAL', days: 5 },
+    { stageKey: 'DEAL_NEGOTIATION', days: 7 },
+  ],
+};
+
 export const PROGRAM_TEMPLATES: ProgramTemplate[] = [
   canonicalTemplate(),
   GRADUATE_INTERNSHIP,
   ONBOARDING_BUDDY,
   LEADERSHIP_COHORT,
   CAREER_TRANSITION,
+  MARKETING_FUNNEL,
 ];
+
+// The stage preset a new organization of a given vertical starts from (#2353).
+// A vertical with no entry (INTERNSHIP) starts on the canonical set via the
+// resolve fallback, exactly as every org did before verticals existed — so this
+// map only needs the verticals that diverge. The value is a PROGRAM_TEMPLATES
+// key; keeping the map here, next to the catalogue, is what lets the program
+// template unit spec assert every pointer resolves.
+const VERTICAL_DEFAULT_TEMPLATE: Record<string, string> = {
+  MARKETING: 'marketing_funnel',
+};
+
+// The template a vertical provisions with, or null when it starts on canonical.
+export function defaultTemplateForVertical(vertical: string): ProgramTemplate | null {
+  const key = VERTICAL_DEFAULT_TEMPLATE[vertical];
+  return key ? programTemplate(key) : null;
+}
 
 /** One template by key, or null when the key is unknown (never throws). */
 export function programTemplate(key: string | null | undefined): ProgramTemplate | null {

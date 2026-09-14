@@ -206,7 +206,7 @@ export function OnboardingForm() {
           <Input
             label={t.onboarding.phone}
             type="tel"
-            placeholder="+90 5xx xxx xx xx"
+            placeholder={t.onboarding.phonePlaceholder}
             {...step1Form.register('phone')}
             error={step1Form.formState.errors.phone?.message}
           />
@@ -223,14 +223,14 @@ export function OnboardingForm() {
           <Input
             label={t.onboarding.university}
             required
-            placeholder="e.g. MIT, Stanford, etc."
+            placeholder={t.onboarding.universityPlaceholder}
             {...step2Form.register('university')}
             error={step2Form.formState.errors.university?.message}
           />
           <Input
             label={t.onboarding.department}
             required
-            placeholder="e.g. Computer Science"
+            placeholder={t.onboarding.departmentPlaceholder}
             {...step2Form.register('department')}
             error={step2Form.formState.errors.department?.message}
           />
@@ -238,7 +238,7 @@ export function OnboardingForm() {
             label={t.onboarding.graduationYear}
             required
             options={graduationYearOptions}
-            placeholder="Select year"
+            placeholder={t.onboarding.graduationYearPlaceholder}
             {...step2Form.register('graduationYear')}
             error={step2Form.formState.errors.graduationYear?.message}
           />
@@ -269,7 +269,7 @@ export function OnboardingForm() {
             label={t.onboarding.cvUrl}
             type="url"
             placeholder="https://drive.google.com/..."
-            hint="Link to your CV (Google Drive, Dropbox, etc.)"
+            hint={t.onboarding.cvUrlHint}
             {...step3Form.register('cvUrl')}
             error={step3Form.formState.errors.cvUrl?.message}
           />

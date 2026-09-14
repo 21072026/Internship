@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -41,6 +42,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   if (session.user.role === 'ADMIN') return NextResponse.json({ error: 'Administrators have read-only access' }, { status: 403 });
   return withTenantScope(session, async () => {
     const report = await loadReport((await params).id);

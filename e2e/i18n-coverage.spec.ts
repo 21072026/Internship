@@ -76,3 +76,19 @@ test('mentor dashboard has no untranslated strings in TR or DE', async ({ page }
     await cleanupByEmail(email);
   }
 });
+
+// #2308: public apply-as-mentor form placeholders and hints must be translated in TR and DE
+test('apply-as-mentor form placeholders are translated in TR and DE', async ({ page }) => {
+  await page.goto('/apply-as-mentor');
+  await page.evaluate(() => { document.cookie = 'locale=tr;path=/'; });
+  await page.reload();
+
+  const expertiseInput = page.getByTestId('mentor-expertise-input');
+  await expect(expertiseInput).toHaveAttribute('placeholder', 'React, Node.js, Ürün Yönetimi…');
+
+  await page.evaluate(() => { document.cookie = 'locale=de;path=/'; });
+  await page.reload();
+
+  await expect(expertiseInput).toHaveAttribute('placeholder', 'React, Node.js, Produktmanagement…');
+});
+

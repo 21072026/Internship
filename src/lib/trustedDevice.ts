@@ -275,6 +275,23 @@ export async function revokeAllTrustedDevices(userId: string): Promise<void> {
   });
 }
 
+/**
+ * The same thing for a batch of accounts, in one statement.
+ *
+ * Exists for the enforced-SSO sweep (#1950), which stamps `sessionsValidFrom`
+ * for a whole tenant: calling `revokeAllTrustedDevices` in a loop over
+ * thousands of users would be thousands of round trips, and *not* calling it
+ * would break the hard rule these two halves exist to keep together. It lives
+ * here, next to its per-user sibling, so the pairing stays visible in one file.
+ */
+export async function revokeTrustedDevicesForUsers(userIds: string[]): Promise<void> {
+  if (userIds.length === 0) return;
+  await prisma.trustedDevice.updateMany({
+    where: { userId: { in: userIds }, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}
+
 export interface TrustedDeviceView {
   id: string;
   label: string | null;

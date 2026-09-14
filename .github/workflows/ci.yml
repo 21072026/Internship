@@ -148,6 +148,13 @@ jobs:
       # perfectly while being wrong (#1965).
       - name: the roster diff, resume and tenant isolation (#1965)
         run: npm run test:roster-ingest
+      # An inbound x-request-id arrives on a public request and ends up inside a
+      # JSON log line, so the one function that decides whether it is honoured or
+      # replaced is a security boundary: a newline in it would forge a second log
+      # line, and an oversized one would pad every line of the request out. Both
+      # typecheck perfectly (#1601).
+      - name: an inbound request id cannot forge a log line (#1601)
+        run: npm run test:request-id
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # An API-key request has no session, so nothing resolves a tenant for it

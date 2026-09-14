@@ -9,6 +9,7 @@ import { useT } from '@/i18n/client';
 import { freeMeetingFallbackLink, isEmbeddableMeetingLink, parseJaasMeetingLink } from '@/lib/meetingLink';
 import { meetingNotesAutoOpen, useFloatingNotes } from '@/components/meeting/FloatingNotes';
 import { JaasCall } from '@/components/meeting/JaasCall';
+import { FreeRoomWarning } from '@/components/meeting/FreeRoomWarning';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 
@@ -34,6 +35,11 @@ interface ActiveMeeting {
   meetingId: string;
   meetLink: string;
   title: string;
+  // Everyone but the organizer. Carried so the panel can tell a pair from a
+  // group without a round trip — a group on the public instance gets a sharper
+  // warning (#2011). Optional: a panel restored from a session written before
+  // this existed simply has no count.
+  invited?: number;
 }
 
 const LauncherContext = createContext<((opts: StartOptions) => void) | null>(null);
@@ -51,7 +57,12 @@ function readActive(): ActiveMeeting | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ActiveMeeting>;
     if (!parsed?.meetingId || !parsed?.meetLink) return null;
-    return { meetingId: parsed.meetingId, meetLink: parsed.meetLink, title: parsed.title ?? '' };
+    return {
+      meetingId: parsed.meetingId,
+      meetLink: parsed.meetLink,
+      title: parsed.title ?? '',
+      invited: typeof parsed.invited === 'number' ? parsed.invited : undefined,
+    };
   } catch {
     return null;
   }
@@ -139,7 +150,7 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
       }
       const data: { meetingId: string; meetLink: string; invited: number } = await res.json();
       setPending(null);
-      openPanel({ meetingId: data.meetingId, meetLink: data.meetLink, title: trimmed });
+      openPanel({ meetingId: data.meetingId, meetLink: data.meetLink, title: trimmed, invited: data.invited });
       // Now the window knows which room it is taking notes for.
       if (await notesOpening) notes.attach({ meetingId: data.meetingId, title: trimmed });
       // Copying is best-effort: the link is on screen either way, and a blocked
@@ -325,6 +336,11 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
           </button>
         </div>
       </header>
+
+      {/* Before the call, not during it (#2011). Outside the `!narrow` branch
+          on purpose: on a phone the panel is a Join button, and that is exactly
+          the moment the limit is worth knowing. */}
+      <FreeRoomWarning meetLink={meeting.meetLink} group={(meeting.invited ?? 0) >= 2} />
 
       {/* Desktop: the room itself. The JaaS iframe is built by external_api.js
           and sized by it (`height/width: 100%` inline), so its box only needs a

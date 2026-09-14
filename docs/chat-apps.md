@@ -36,7 +36,7 @@ verbatim:
 
 That answer is still shipped and still true: `/admin/integrations` carries
 admin-managed outbound **webhooks** (HMAC-signed over the body —
-`src/lib/webhooks.ts`, eight event types in `WEBHOOK_EVENTS`) and **API keys**
+`src/lib/webhooks.ts`, ten event types in `WEBHOOK_EVENTS`) and **API keys**
 for `/api/v1/*`, which is what a Zapier or Make recipe consumes.
 
 **What changed, honestly: not the condition.** The three-paying-customers bar has

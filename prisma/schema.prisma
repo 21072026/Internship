@@ -75,6 +75,21 @@ model Organization {
   // so single-tenant production is never constrained. Limits are advisory in
   // this phase (surfaced as usage-vs-limit), not hard-enforced.
   plan             OrgPlan  @default(FREE)
+  // Which PRODUCT this tenant is (#2350, epic #2348). coreCRM is one core with
+  // several verticals: INTERNSHIP is the mentorship/placement product this repo
+  // started as, MARKETING the second one. It is a property of the TENANT, not of
+  // the deployment — two orgs on the same container can be different products,
+  // which is why this is a column and not an env var.
+  //
+  // A String, not an enum, on purpose: `Role` (schema.prisma, SUPER_ADMIN note)
+  // is the worked example of why widening a role enum is expensive, and a
+  // vertical is a catalogue key that product will add to. The catalogue lives in
+  // src/lib/verticals.ts; an unknown key falls back to INTERNSHIP rather than to
+  // "no product", so a bad write can never blank a tenant's UI.
+  //
+  // Literal default, so `db push` fills existing rows itself (#2298 only bites
+  // client-side defaults and required columns without one).
+  vertical         String   @default("INTERNSHIP")
   // White-label branding (#546). All optional — when null the app falls back to
   // its own defaults (see src/lib/branding.ts). These are stored per tenant and
   // resolved once per-tenant chrome application lands (needs tenant resolution,
@@ -94,6 +109,16 @@ model Organization {
   ssoIssuer        String? // IdP entity ID / issuer
   ssoEntryPoint    String?  @db.Text // IdP SSO sign-in URL
   ssoCertificate   String?  @db.Text // IdP x509 signing certificate (PEM)
+  // Enforced SSO (#1950): when true, NO password-derived path may mint a
+  // session for this tenant's users — sign-in, remember-me silent re-auth,
+  // password reset/SET_INITIAL, invitation registration and password change all
+  // refuse. The single rule lives in src/lib/ssoEnforcement.ts; every door calls
+  // it. Two safety interlocks: the write boundary refuses to switch this on
+  // unless isSsoActive(org) AND the org has at least one active, ssoExempt
+  // ADMIN (anti-lockout), and enforcement only *applies* while SSO is still
+  // active — a plan downgrade or a broken config falls back to password login
+  // rather than locking the tenant out of its own data. See docs/sso-saml.md.
+  ssoEnforced      Boolean  @default(false)
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
@@ -135,6 +160,9 @@ model Organization {
   subscription         Subscription?
   orgEntitlements      OrgEntitlement[]
   usageRollups         UsageRollup[]
+  webhooks             Webhook[]
+  announcements        Announcement[]
+  newsletters          Newsletter[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -334,6 +362,14 @@ model User {
   // `src/lib/superAdmin.ts` reads it from the database per request so revoking
   // it takes effect on the next request, like `sessionsValidFrom`.
   isSuperAdmin            Boolean       @default(false)
+  // Break-glass exemption from the tenant's enforced SSO (#1950). Only an
+  // active ADMIN may hold one, only an admin may grant it, and every grant and
+  // revocation is audited (`sso.exempt_granted` / `sso.exempt_revoked`). It is
+  // deliberately NOT time-boxed: an exemption that silently expires recreates
+  // exactly the lockout it exists to prevent — an IdP outage on the day it
+  // lapses leaves nobody who can sign in and switch enforcement off. The
+  // narrowing is "who", not "how long".
+  ssoExempt               Boolean       @default(false)
   // Set only when the `selfRegistration` setting is 'manual': the account was
   // created by open sign-up and is waiting for an admin to let it in. Lets the
   // sign-in page tell "we haven't reviewed you yet" apart from "an admin
@@ -957,7 +993,12 @@ model Announcement {
   // and a field that can disagree with reality.
   image AnnouncementImage?
 
+  // The tenant this announcement belongs to (#2357). Nullable + backfilled.
+  orgId String?
+  org   Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   @@index([createdAt])
+  @@index([orgId])
 }
 
 // An image attached to a broadcast announcement, stored in the database (same
@@ -1059,8 +1100,15 @@ model Newsletter {
   image NewsletterImage?
   sends NewsletterSend[]
 
+  // The tenant this issue belongs to (#2357). Nullable + backfilled; the
+  // dispatcher scopes recipients to it so a marketing issue never reaches an
+  // internship tenant's members.
+  orgId String?
+  org   Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
   // The dispatcher's own query: "SCHEDULED and due".
   @@index([status, scheduledAt])
+  @@index([orgId])
   @@index([sentAt])
   @@index([createdAt])
 }
@@ -1243,6 +1291,10 @@ model Company {
   requisitions      Requisition[]
   interviewRequests InterviewRequest[]
   placements        Placement[]
+  // The enquiries this company was created from (#1863). A list rather than a
+  // single row because nothing stops a second enquiry from the same company
+  // later being linked to the account it already has.
+  fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -1384,32 +1436,46 @@ enum CompanyInquiryStatus {
 // stored (rather than only emailed) so a request cannot quietly go missing in
 // an inbox, and so an admin can see what is still unanswered.
 model CompanyInquiry {
-  orgId       String?
-  org         Organization?        @relation(fields: [orgId], references: [id])
-  id          String               @id @default(cuid())
-  companyName String
-  contactName String
-  email       String
-  phone       String?
+  orgId              String?
+  org                Organization?        @relation(fields: [orgId], references: [id])
+  id                 String               @id @default(cuid())
+  companyName        String
+  contactName        String
+  email              String
+  phone              String?
   // Roles they are hiring for, and anything else they typed.
-  openRoles   String?              @db.Text
-  message     String?              @db.Text
+  openRoles          String?              @db.Text
+  message            String?              @db.Text
   // Preferred UI language ('en' | 'tr' | 'de') — the language they read the
   // page in, so a reply can be written in it.
-  locale      String?
-  status      CompanyInquiryStatus @default(NEW)
+  locale             String?
+  status             CompanyInquiryStatus @default(NEW)
   // When they accepted the privacy terms — set server-side on submit.
-  consentAt   DateTime?
-  handledAt   DateTime?
-  handledById String?
-  note        String?              @db.Text
-  createdAt   DateTime             @default(now())
+  consentAt          DateTime?
+  handledAt          DateTime?
+  handledById        String?
+  note               String?              @db.Text
+  createdAt          DateTime             @default(now())
+  // What this enquiry BECAME (#1863). An admin converts a warm lead into a real
+  // Company plus an invited COMPANY login in one action; these two columns are
+  // the record of that. Their presence is also the idempotence key: the convert
+  // endpoint claims the enquiry with a conditional UPDATE on
+  // `convertedCompanyId: null`, so a double-click (or two admins on the same
+  // row) produces one Company and one invitation, and the loser gets a
+  // 409 `already_converted` naming what it already became.
+  //
+  // The enquiry itself is never deleted — it is the record of where the
+  // relationship came from — so this is a link, not a replacement.
+  convertedCompanyId String?
+  convertedAt        DateTime?
 
-  handledBy User? @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+  handledBy        User?    @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+  convertedCompany Company? @relation("ConvertedFromInquiry", fields: [convertedCompanyId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([email])
   @@index([orgId])
+  @@index([convertedCompanyId])
 }
 
 enum MentorApplicationStatus {
@@ -1568,12 +1634,19 @@ model CompanyInterest {
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
 // POSTs (HMAC-SHA256 of the body in the X-Signature header).
 model Webhook {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
+  // The tenant this webhook belongs to (#2357). Nullable + backfilled to the
+  // default org so existing rows keep working; every dispatch filters by it, so
+  // one tenant's event never fires another tenant's endpoint.
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
   url       String
   secret    String
-  events    Json     @default("[]")
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  events    Json          @default("[]")
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+
+  @@index([orgId, active])
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
@@ -2333,6 +2406,19 @@ enum RsvpStatus {
   DECLINED
 }
 
+// Is this meeting still on? (#1980)
+//
+// Deliberately two values, not four. "Happened" is `endedAt` and "declined" is
+// `rsvp` — both already exist and mean something narrower than a status would;
+// folding them in here would give the same fact two homes. CANCELLED is the one
+// thing the schema could not say: the meeting was called off, so it must drop
+// out of the banner, the reminder, the calendar and the auto-log without the
+// row (and its notes and interaction log) being destroyed.
+enum MeetingStatus {
+  SCHEDULED
+  CANCELLED
+}
+
 // A scheduled meeting, with a video link and an emailed RSVP (responded to via
 // a public token link).
 //
@@ -2344,35 +2430,55 @@ enum RsvpStatus {
 // MySQL can't express "exactly one of three" as a CHECK, so the rule lives in
 // src/lib/meetingContext.ts and every write path goes through it.
 model Meeting {
-  id             String     @id @default(cuid())
+  id                  String        @id @default(cuid())
   // Nullable since #1051: project/conversation meetings have no relation.
-  relationId     String?
-  projectId      String?
-  conversationId String?
-  title          String
+  relationId          String?
+  projectId           String?
+  conversationId      String?
+  title               String
   // Optional: a meeting with a set time expects an RSVP and gets reminders; a
   // meeting with no time (null) is just a shared link — no RSVP, no reminder.
-  scheduledAt    DateTime?
+  scheduledAt         DateTime?
   // The clock the organizer picked `scheduledAt` on (IANA zone), captured at
   // creation (#1210). `scheduledAt` is an instant and is enough to render the
   // time for anyone, but not to say *which* reading was the one agreed on — and
   // the organizer's profile zone can't stand in for it, since it changes when
   // they travel. Null for meetings created before this and for the odd caller
   // that sends no zone; both fall back to the organizer's profile zone.
-  timeZone       String?
-  meetLink       String?
-  rsvp           RsvpStatus @default(PENDING)
-  rsvpToken      String     @unique
-  createdById    String
-  reminderSentAt DateTime?
-  createdAt      DateTime   @default(now())
+  timeZone            String?
+  meetLink            String?
+  rsvp                RsvpStatus    @default(PENDING)
+  rsvpToken           String        @unique
+  createdById         String
+  reminderSentAt      DateTime?
+  createdAt           DateTime      @default(now())
   // Null for manually scheduled meetings; set for auto-generated series instances.
-  seriesId       String?
+  seriesId            String?
   // "This meeting is over" — set when any participant marks it ended, which
   // hides the dashboard banner for everyone instead of letting the assumed
   // 60-minute window run out. Null = never marked; the window still applies.
-  endedAt        DateTime?
-  endedById      String?
+  endedAt             DateTime?
+  endedById           String?
+  // Called off, not held and not deleted (#1980). Every reader that answers
+  // "is there a meeting?" — the dashboard banner, the reminder cron, the
+  // calendar, the ICS feed, the auto-log sweep — filters CANCELLED out, while
+  // the row itself survives so the notes and the interaction log written in it
+  // keep their anchor.
+  status              MeetingStatus @default(SCHEDULED)
+  cancelledAt         DateTime?
+  cancelledById       String?
+  cancelReason        String?       @db.Text
+  // "This meeting moved" — answerable without joining an audit table, which is
+  // what the change mail and the .ics SEQUENCE both need.
+  rescheduledAt       DateTime?
+  previousScheduledAt DateTime?
+  // The shared identity of ONE bulk schedule. POST /api/meetings writes one row
+  // per invitee sharing a single room link, so "cancel this meeting" is
+  // ambiguous without it: with a batch key the caller can say `scope: 'batch'`
+  // and mean the whole session. Null on every row written before this and on
+  // any single-row path — a null batch means "just this row", never "all the
+  // nulls".
+  batchKey            String?
 
   relation     MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: Cascade)
   project      Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -2387,6 +2493,7 @@ model Meeting {
   @@index([projectId])
   @@index([conversationId])
   @@index([seriesId])
+  @@index([batchKey])
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
@@ -2518,6 +2625,42 @@ model MeetingRoomState {
   updatedAt    DateTime @updatedAt
 }
 
+// Our own count of JaaS monthly active participants (#2011).
+//
+// JaaS bills — and caps a free tenant — on distinct participants per calendar
+// month, and the provider's dashboard is the only place that number used to
+// exist. That made "is the 25-participant allowance actually the constraint?"
+// unanswerable from anything we own, so the routing was a guess dressed up as a
+// rule. One row per (period, participant) written from the JaaS webhook feed
+// makes it a number: `COUNT(*) WHERE period = ?` is the MAU.
+//
+// IDENTITY-MINIMAL BY CONSTRUCTION. The webhook carries `{ id, name }`; only a
+// keyed hash of the id is stored here and the name is dropped on the floor. The
+// hash is not reversible to a person by anyone reading this table, and it is
+// salted per deployment (lib/jaasAllowance.ts), so the same participant in two
+// deployments does not correlate. Nothing joins this table to a User.
+model JaasMonthlyParticipant {
+  id String @id @default(cuid())
+
+  /// The calendar month, UTC, 'YYYY-MM' — the same period vocabulary the
+  /// billing meter uses (lib/meteringRules.ts), so the two can be read side by
+  /// side without converting anything.
+  period String @db.VarChar(7)
+
+  /// HMAC-SHA256 of the JaaS participant id, hex. Never the id, never the name.
+  participantHash String @db.VarChar(64)
+
+  /// When this participant was first seen in this month. There is deliberately
+  /// no "last seen": the metered unit is "was active at all", and a rolling
+  /// timestamp would turn a counter into an attendance log.
+  firstSeenAt DateTime @default(now())
+
+  /// The insert is an upsert on this pair, which is what makes the row count a
+  /// DISTINCT count without a GROUP BY.
+  @@unique([period, participantHash])
+  @@index([period])
+}
+
 // Audit trail of pipeline stage changes for a mentorship.
 model StatusChange {
   id          String   @id @default(cuid())
@@ -2580,6 +2723,13 @@ model InvitationToken {
   // this to itself; an admin picks the mentor in the invite form.
   mentorId     String?
   menteeId     String?
+  // The company an invited COMPANY user belongs to (#1863). A COMPANY account
+  // is useless without it — every company-side screen reads `User.companyId` —
+  // and registration has no other way to learn it, since the invitee only
+  // supplies a name and a password. Carried here for the same reason `orgId` is:
+  // the fact is known when the invitation is minted and must survive until it is
+  // consumed, possibly days later. Only ever set on a `role = COMPANY` row.
+  companyId    String?
   // The project the invitee should join on registration, if any.
   projectId    String?
   // Lifecycle timestamps (nullable — each set once, the first time it happens):

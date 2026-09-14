@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
+import { isPasswordLoginBlocked } from '@/lib/ssoEnforcement';
 
 const schema = z.object({ email: z.string().email() });
 
@@ -35,9 +36,14 @@ export async function POST(request: Request) {
       // decides. Deliberately not Accept-Language — this endpoint answers
       // identically for an address that does not exist, so the person filling in
       // the form is not necessarily the account holder.
-      select: { id: true, email: true, fullName: true, orgId: true, preferredLanguage: true },
+      select: { id: true, email: true, fullName: true, orgId: true, ssoExempt: true, preferredLanguage: true },
     });
-    if (user) {
+    // Enforced SSO (#1950): the reset endpoint refuses to complete for this
+    // tenant, so mailing the link would only hand someone a dead end. Skipped
+    // silently — the response below is identical either way, which is the whole
+    // point of this endpoint and must not become an enumeration oracle here.
+    const ssoBlocked = user ? await isPasswordLoginBlocked(user) : false;
+    if (user && !ssoBlocked) {
       const token = await createPasswordResetToken(user.id, 'RESET');
       try {
         await sendPasswordResetEmail({

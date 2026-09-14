@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Turn one line of a note into a real piece of work (#1059).
 //
@@ -53,6 +54,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     if (target === 'GOAL') {
+      // Converting a note line INTO a goal is a goals-module write, gated the
+      // same way /api/goals is (#2352). Converting to a PROJECT_TASK is not, so
+      // the gate lives inside this branch, not at the handler top.
+      const capGate = await requireCapability(session.user.orgId, 'mentorship');
+      if (capGate) return capGate;
       // Only the mentor of that relation (or an admin) may set a goal on it.
       const relation = await prisma.mentorshipRelation.findUnique({
         where: { id: relationId! },

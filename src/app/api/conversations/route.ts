@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
 import { createOrGetProjectConversation, findOrCreateDirectConversation, isActiveProjectMember } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
+import { withRequestScope } from '@/lib/requestContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 
 const schema = z.union([
@@ -16,6 +17,12 @@ const schema = z.union([
 // conversation. 403 when the two aren't allowed to message each other, which
 // today means they share no project and have no mentorship (see canMessage).
 export async function POST(request: Request) {
+  // Request-correlation context (#1601) around the tenant scope: both bound at
+  // the top of the handler, so any log line from here on names this request.
+  return withRequestScope(request, () => handlePost(request));
+}
+
+async function handlePost(request: Request) {
     // 20 per 15 minutes permits normal conversation setup while limiting automated creation attempts.
   const limited = enforceRateLimit(request, 'conversation-create', { limit: 20, windowMs: 15 * 60 * 1000 });
   if (limited) return limited;

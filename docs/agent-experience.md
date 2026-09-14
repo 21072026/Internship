@@ -10,6 +10,103 @@ Newest entries on top.
 
 ---
 
+## 2026-09-11 — Aynı modelin ikinci yazarı/kardeş dosyası iki kez gözden kaçtı (#2352, #2357)
+
+**Bir route'u tenant/yetenek kapısına aldığında, aynı modeli yazan DİĞER yolları da ara — yoksa
+kapı kağıt üstünde kalır.** Bu tur iki kez oldu ve iki kez adversarial inceleme yakaladı, CI değil:
+(1) #2352 `/api/goals` ve `/api/evaluations`'ı gate'ledi ama `notes/[id]/convert` (Goal yaratıyor) ve
+`interview-panels/[id]/score` (Evaluation yaratıyor) açıktı; (2) #2357 `admin/webhooks/route.ts`'i
+org'a scope etti ama aynı dizindeki `rotate-secret` ve `test` kardeş dosyalarını kaçırdı — biri
+başka kiracının imza sırrını döndürebiliyordu. **Kural: bir modeli koruyan bir değişiklikte
+`grep -rn "prisma.<model>\.\(create\|update\|delete\|find\)" src` çalıştır ve HER yazar/okuyucuyu
+kapıdan geçir; bir klasördeki `route.ts`'i düzeltmek kardeş `foo/route.ts` dosyalarını kapsamaz.**
+CI (typecheck/smoke) bunu görmez çünkü her dosya tek başına derlenir ve tek-kiracıda no-op'tur.
+
+---
+
+## 2026-09-11 — Kendi yazdığım dersi ihlal ettim: bayat local main'de karar verme (#1559)
+
+**Aynı oturumda `docs/agent-experience.md`'ye "local main sessizce geride olabilir, issue durumuna
+güvenmeden önce kapatan commit'i ara" yazdım, sonra tam bunu yaptım.** #1559'u "yapılmamış" sanıp
+yeniden açtım — çünkü `check:tenant-models`'i ve `git log --grep=1559`'u oturum başındaki bayat
+local main'de (`9a4b9e55`, 09-07) çalıştırdım; kayıt işi aslında `4e9b2251` (09-09) ile inmişti ama
+o commit henüz local'imde yoktu. **Kural (güçlendirilmiş): bir guard'ın veya `git log`'un sonucuna
+göre bir issue'yu açmadan/kapatmadan ÖNCE `git fetch && git checkout main && git pull --ff-only`
+ile local'i güncelle — guard'lar local checkout'a karşı çalışır, `git fetch` tek başına working
+tree'yi ilerletmez.** Bir dokümana kural yazmak onu uygulamaya yetmiyor; kontrol listesi bir
+komuttur, hatırlama değil.
+
+---
+
+## 2026-09-11 — Kapalı bir issue, işin bittiğinin kanıtı değil (#1559)
+
+**`COMPLETED` kapanmış bir issue'ya dayanarak "o iş bitti" diye ilerlemek bu turda bir
+epic'in ön koşulunu görünmez yaptı.** #1559 iki gün önce tamamlandı diye kapanmıştı;
+`npm run check:tenant-models` hâlâ sekiz modelin korumasız olduğunu basıyordu ve
+`git log --grep=1559` `main`'de **tek bir commit** döndürmüyordu. İnen şey ön koşullarıydı
+(#1560 guard'ı, #1566 iki-kiracı fixture'ı), işin kendisi değil. Bu fark önemli, çünkü o
+sekizin içinde `PipelineStage` ve `StageSla` var — yani ikinci bir ürün dikeyinin
+farklılaşacağı tablolar. **Kural: bir issue'nun durumuna dayanarak plan kurmadan önce onu
+kapatan commit'i ara (`git log --grep=<N>`) ve varsa ilgili guard'ı çalıştır; ikisi de yoksa
+issue'yu yeniden aç.** Kapanışın kendisi bir bulgudur, sessizce düzeltilecek bir kayıt hatası
+değil.
+
+---
+
+## 2026-09-11 — Local `main` sessizce geride olabilir, ve merge de bir dal değişimidir (#2350)
+
+**`git status` "clean" diyor ama `main` `origin/main`'in on commit gerisinde olabilir.** Dalı
+oradan açtım, PR doğar doğmaz `CONFLICTING` oldu. **Dal açmadan önce
+`git fetch && git log --oneline main..origin/main`; boş değilse önce `main`'i ileri al.**
+İkinci yarısı daha sinsi: CLAUDE.md "dal değiştirdikten sonra `npx prisma generate`" diyor,
+ama **merge de dal değişimidir** — main'in getirdiği yeni kolonlar (o turda #1863'ün
+`convertedCompanyId`'si) olmadan `tsc` alakasız e2e spec'lerinde patlıyor ve hata, çözdüğün
+çatışmadan geliyormuş gibi görünüyor. Çatışma çözümünün kendisi ayrıca kolaydı: aynı
+destructure satırına bir taraf `ssoEnforced`, öteki `vertical` eklemişti; doğru çözüm her
+zamanki gibi iki tarafı da tutmak.
+
+---
+
+## 2026-09-11 — `string` tipli bir katalog anahtarı sessiz bir kırık işaretçidir (#2350)
+
+**Kendi diff'ime karşı koşturduğum çürütme incelemesi, hiçbir kapının yakalamadığı bir kusur
+buldu.** Yeni dikey kataloğuna `defaultTemplate: 'internship'` yazmıştım; `PROGRAM_TEMPLATES`'in
+gerçek anahtarları `canonical_pipeline`, `graduate_internship`, `onboarding_buddy`,
+`leadership_cohort`, `career_transition`. Alan `string` tiplendiği için `tsc` görmüyor, benim
+testim de yalnızca "boş değil ve benzersiz" diyordu — yani yanlış anahtar bütün CI'dan geçip
+ancak onu **okuyan** dilimde boş pipeline ya da `null` üzerinde 500 olarak yüzeye çıkardı. Bu,
+CLAUDE.md'nin pipeline enum'u için kaydettiği hatanın aynısı. **Kural: okuyucusu ve doğrulaması
+olmayan veriyi gönderme — alanı, onu okuyan dilime bırak.** Doğru anahtarı yazmak yerine alanı
+kaldırdım ve kuralı teste koydum: bir katalog girdisi yalnızca o suite'in doğrulayabildiği
+alanları taşıyabilir.
+
+İki ek not aynı turdan. (1) **Gözden geçirenin önerdiği düzeltmeyi dene:** "testte
+`programTemplate`'i import edip çözümlendiğini doğrula" `node --test` altında **çalışmıyor**,
+çünkü `programTemplates.ts` → `pipeline.ts` → `@/i18n/config` ve Node'un çözümleyicisi ne `@/`
+alias'ını ne de uzantısız relative import'u takip ediyor. `scripts/test/*.test.mjs` yalnızca
+alias'sız import zincirine sahip modülleri sınayabilir; bu, hangi kuralın birim testle, hangisinin
+Playwright ya da bir `check:*` script'iyle pinleneceğini belirliyor. (2) **Nesnenin kendisini
+döndüren bir yardımcı varken, kopya döndüren kardeşi koruma değildir:** `verticalDefinition()`
+katalog nesnesini veriyordu, dolayısıyla tek bir `push()` süreç ömrü boyunca her isteğin
+gördüğünü değiştirirdi. Katalogları `Object.freeze` + `readonly` ile gönder.
+
+---
+
+## 2026-09-11 — İzolasyon incelemesi request/response'ta bitmez (#2357)
+
+**Bir inceleme, taradığı yüzey kadar iyidir.** Çok kiracılılık haritasını çıkaran ilk tur
+yalnızca *istek* yüzeyini taradı ve "çocuk kayıtlar scoped parent üzerinden korunur" diye
+rahatlatıcı bir sonuca vardı. Ayrı bir eleştirmen turu "asenkron yarı hiç taranmamış" dedi ve
+orada gerçek bir açık çıktı: `Webhook`, `Announcement`, `Newsletter` modellerinde `orgId`
+**yok** ve hiçbirinin scoped bir parent'ı da yok; `dispatchWebhook`
+`prisma.webhook.findMany({ where: { active: true } })` diyor — org filtresi yok. Üstelik bu
+yollar cron'dan çalıştığı için istek bağlamı yok: `MT_ENFORCE_ISOLATION` açılsa bile middleware'i
+hiç görmezler. **Kural: bir izolasyon/yetki incelemesinde cron, fan-out, webhook, e-posta şablonu
+ve zamanlanmış işler ayrı bir modalitedir; "her sorgu `where` yazıyor mu" sorusu oraya
+ulaşmaz.** Bugün tek kiracıda latent olan bir sızıntı, ikinci org yaratıldığı an canlıdır.
+
+---
+
 ## 2026-09-08 — A new column on `MentorshipRelation` is public to mentors by default (#2289)
 
 Roughly forty route files read relations with Prisma **`include`**, and `include` selects
@@ -6668,6 +6765,106 @@ yere bakmadan varsayılamaz.
 Bir daldan diğerine geçtikten sonra `npx tsc --noEmit`, önceki dalın build'inden kalan
 `.next/types` yüzünden var olmayan route dosyalarını arıyor ("Cannot find module
 '../../src/app/api/.../route.js'"). Bunlar teşhis değil çöp: `rm -rf .next/types` (ya da
-bir `npm run build`) hepsini siliyor. Aynı sınıftan diğer tuzak: worktree'ler
-`node_modules`'ü paylaştığı için `npx prisma generate` **paylaşılan** client'ı yazıyor —
-alakasız bir dosyada beliren bir hataya inanmadan önce `prisma generate`'i yeniden koştur.
+bir `npm run build`) hepsini siliyor. Aynı sınıftan ikinci tuzak paylaşılan
+`node_modules` üzerinden geliyor ve bu dosyada ayrıca anlatılıyor (aşağıda,
+"Paylaşılan `node_modules` içinde `prisma generate` yarışıyor").
+## 2026-09-09 — Sonuçlanmış bir check kendini yeniden değerlendirmez
+
+**Kırmızının sebebi base dalıysa, base düzelince PR yeşile dönmez.** Bir check run
+sonuçlandıktan sonra kendini yeniden değerlendirmiyor: main'deki hatayı gideren commit
+merge olduğunda o PR'ın check'i olduğu gibi kırmızı kalıyor, auto-merge de "başarısız
+zorunlu kontrol" gördüğü için hiç tetiklenmiyor. Bu turda iki PR tam bu yüzden saatlerce
+öylece bekledi — ikisinin de diff'i doğruydu, eksik olan tek şey **yeni bir commit**'ti.
+Dolayısıyla auto-merge'ü açmak bir dalı "teslim edilmiş" saymak için yetmiyor: kapının
+kırmızı olduğu bir PR'da hiçbir zamanlayıcı devreye girmiyor, birinin bir şey push etmesi
+gerekiyor.
+
+**Düzeltme başkasının dalındaysa `main`'i o dala merge et, rebase etme.** Merge commit'i
+karşı ajanın çalışma kopyasını geçerli bırakıyor; rebase ise sha'ları değiştirip hâlâ o
+dalda çalışan oturumun altından zemini çekiyor (`--force-with-lease` ile bile). Kendi
+dalında serbestsin — orada rebase daha temiz bir geçmiş bırakıyor.
+
+**Kendi diff'ini suçlamadan önce base'e bak.** Kırmızı `Playwright smoke`'un sebebi bu
+turda benim değişikliğim değil main'di (#2284'ün `/pricing` prefetch 404'ü, bu dosyada
+2026-09-07 altında anlatılıyor). Teşhisin en ucuz hâli logu okumaktan da önce geliyor:
+**başka bir base üzerinde duran, konusu tamamen alakasız bir PR'ın aynı check'ine bak** —
+o da aynı satırda kırmızıysa sorun senin dalında değil. Bu, "log oku → hipotez kur →
+yerelde koştur" turunun tamamını atlatıyor.
+
+## 2026-09-09 — Liste biçimli çatışmada birleşim doğru, blok sınırında yanlış
+
+**Kardeş PR'lar aynı listelere birer satır ekliyor; orada "hangisi kazanır" sorusu yok.**
+Bu partide altı PR `ci.yml`'e bir adım, `package.json`'a bir script, `TENANT_MODELS`'a bir
+model, coverage `FLOORS`'a bir dosya ve `CLAUDE.md`'ye bir madde ekliyordu — hepsi ikili
+olarak çatışıyor ve her seferinde doğru çözüm iki tarafı da tutmak. Bunu bir kural olarak
+uygulamak turu hızlandırıyor.
+
+**Ama aynı refleks bir blok sınırının üstünden geçerse yapıyı bozuyor.** `prisma/schema.prisma`
+içinde çatışma iki modelin arasına düştüğünde kör birleşim bir **kapanış süslü parantezini**
+yuttu; semptom ise şemayla ilgisi belli olmayan bir yığın `tsc` hatası oldu ("Property
+'<model>' does not exist on type 'PrismaClient'"). O hataya inanıp kodda model aramak boşa
+giden zaman: `npx prisma validate` aynı şeyi tek satırda ve doğru yerde söylüyor. **Kural:
+Prisma modelinin yokluğundan şikâyet eden bir tsc hatasında önce şemayı doğrula** — %90
+oranı senin kodun değil, çözdüğün çatışmanın kendisi.
+
+## 2026-09-09 — Yeniden üretilemeyen bir CI hatasında teori değil ortam kur
+
+**Üç makul hipotezin üçü de yanlıştı.** axe job'undaki bir `waitForURL` timeout'u için
+sırasıyla e-posta küçük harfe çevirme, bir rate limit ve onboarding yönlendirmesini
+suçladım; hiçbiri değildi. Konteynerde MariaDB'yi kaldırıp gerçek bir Chromium'la spec'i
+koşturmak **on dakika** sürdü ve cevabı yerinde verdi. Hipotez üretmek bedava görünüyor
+ama her turu bir push + CI beklemesi kadar pahalı; ortamı kurmak bir kez ödenip her
+hipotezi saniyeler içinde eleyen bir maliyet.
+
+**Ve cevap zaten sorunun kendisi değildi.** Ortam ayağa kalkınca görülen iki şey vardı:
+timeout'u çözen commit **ölmüş bir ajanın worktree'sinde push edilmemiş** duruyordu, ve
+altında asıl bulgu — klavyeyle erişilemeyen bir kaydırma konteyneri — timeout'un hiç
+konusu olmayan bir kusur olarak bekliyordu. Yani "hatayı yeniden üret" adımı yalnızca
+teşhis değil, kapsam denetimi: rapor edilen semptomu kovalarken yanındaki gerçek kusuru
+görmenin tek yolu ortamın gerçekten çalışması.
+
+## 2026-09-09 — Mükerrer iş, kaybeden PR'da açıkça yazılır
+
+**Claim yorumu gerekli ama yeterli değil; ikinci bakılacak yer açık PR listesi.** Bu turda
+#2045 ve #2075 claim yorumları *yazılmış olmasına rağmen* iki kez yapıldı, çünkü karşı
+oturum issue'lara baktı ve **açık pull request'lere bakmadı** — iş PR'a çıkmışken issue
+üzerinde hâlâ görünür bir işaret yoktu. İşe başlamadan önce ikisini birlikte oku.
+
+**Mükerrer bir PR ortaya çıktığında bunu kaybeden PR'ın üstüne yaz.** İki dal aynı işi
+yapıyorsa, merge olanın neyi kapsadığını (ve varsa senin dalında olup onda olmayanı)
+kaybeden PR'a yorum olarak düşmek, kapatma kararını merge anında keşfedilen bir çatışma
+olmaktan çıkarıp okunabilir bir kayda çeviriyor. Sessizce kapatmak ya da öylece bırakmak,
+aynı işi üçüncü kez yapacak oturumun elinden tek ipucunu alıyor.
+
+## 2026-09-09 — Paylaşılan `node_modules` içinde `prisma generate` yarışıyor (#1950)
+
+Worktree'nin talimatı `ln -s /home/user/Internship/node_modules node_modules`.
+Şemaya iki kolon ekleyip `prisma generate` çalıştırdım, `npx tsc --noEmit`
+temiz geçti; dört dakika sonra aynı komut 24 hata verdi. Sebep: **başka bir
+oturum kendi şemasından generate etmiş ve paylaşılan `node_modules/.prisma`'yı
+üzerime yazmıştı.** Belirtisi, kendi eklediğin alanın `UserSelect`'te
+"does not exist" demesi — yani şema değişikliğini unutmuşsun gibi görünüyor.
+
+Çözüm `node_modules`'ü symlink olmaktan çıkarmak değil, **yalnız Prisma'yı**
+yerelleştirmek: `node_modules`'ü gerçek bir dizin yapıp kanonik kurulumdaki her
+girdiyi tek tek symlink'le, sonra `.prisma` ve `@prisma`'yı symlink yerine
+`cp -r` ile gerçek kopya olarak koy ve `prisma generate`'i öyle çalıştır.
+Üretici çıktısını çözdüğü `@prisma/client`'ın yanına yazdığı için, o iki dizin
+gerçek kopya olduğunda üretilen istemci worktree'ye ait oluyor ve komşu
+oturumlar birbirini ezmiyor (~83 MB, saniyeler sürüyor). **Kural: şemaya
+dokunan bir worktree oturumunda `.prisma` ve `@prisma` symlink kalmasın** — ve
+`tsc` bir kez geçtikten sonra "does not exist" hataları geri geldiyse, kendi
+diff'ini değil önce `grep -c <yeniAlan> node_modules/.prisma/client/index.d.ts`
+sonucunu kontrol et.
+
+## 2026-09-09 — Uzun bir dalın altından kayan tek şey birleştirme çakışması değil (#1950)
+
+Bayatlık kontrolü (`merge-tree --write-tree`) temiz dedi, yine de birleştirmeden
+sonra `npm run test:notification-catalog` kırmızıya döndü: bu dal uçarken main'e
+tipli bildirim kataloğu (#1710) inmişti ve sözlüğe eklediğim iki
+`notifications.events` anahtarının artık `src/lib/notifications/catalog.ts`'te
+karşılığı olması gerekiyordu. Metinsel çakışma yok, sözleşme çakışması var.
+**Kural: bayatlık kontrolü temiz çıksa bile, birleştirmeden sonra kapıların
+tamamını (`tsc`, `build`, `check:*` ve ilgili `test:*` betikleri) yeniden
+çalıştır** — özellikle diff'in dokunduğu alanda main'e yeni bir "her X'in bir Y
+kaydı olmalı" denetimi inmiş olabilir.

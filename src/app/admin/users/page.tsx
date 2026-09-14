@@ -23,6 +23,8 @@ interface AdminUser {
   isActive: boolean;
   emailVerified: boolean;
   accountState?: AccountState;
+  // Break-glass exemption from enforced SSO (#1950). Only admins can hold one.
+  ssoExempt?: boolean;
 }
 
 // Which badge each account state gets. `warning` (amber) is for "waiting on
@@ -204,6 +206,35 @@ export default function AdminUsersPage() {
     }
   };
 
+  // Grant or revoke the break-glass exemption from enforced SSO (#1950). The
+  // confirmation is not ceremony: an exemption is a password door into a tenant
+  // that has told its auditors it has none, and revoking the last one while
+  // enforcement is on is refused server-side for the opposite reason.
+  const toggleSsoExempt = async (u: AdminUser) => {
+    if (busyId) return;
+    const next = !u.ssoExempt;
+    const question = next
+      ? t.usersAdmin.ssoExemptGrantConfirm.replace('{name}', u.fullName)
+      : t.usersAdmin.ssoExemptRevokeConfirm.replace('{name}', u.fullName);
+    if (!window.confirm(question)) return;
+    setBusyId(u.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/sso-exempt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exempt: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? t.common.error);
+      await load();
+    } catch (e) {
+      setActionError({ userId: u.id, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   // Clear a brute-force lockout for someone who locked themselves out.
   const unlock = async (u: AdminUser) => {
     if (busyId) return;
@@ -345,6 +376,12 @@ export default function AdminUsersPage() {
                   {lockedIds.has(u.id) && (
                     <Badge variant="danger" data-testid={`locked-badge-${u.id}`}>{t.usersAdmin.locked}</Badge>
                   )}
+                  {/* Enforced SSO's break-glass holder (#1950). Badged in the
+                      directory on purpose: an exemption nobody can see is how a
+                      temporary back door becomes a permanent one. */}
+                  {u.ssoExempt && (
+                    <Badge variant="warning" data-testid={`sso-exempt-badge-${u.id}`}>{t.usersAdmin.ssoExempt}</Badge>
+                  )}
                   {lockedIds.has(u.id) && u.role !== 'ADMIN' && (
                     <Button
                       variant="outline"
@@ -383,6 +420,21 @@ export default function AdminUsersPage() {
                     {u.isActive ? t.usersAdmin.deactivate : t.usersAdmin.activate}
                   </Button>
                   <RoleConvertButton userId={u.id} fullName={u.fullName} role={u.role} onDone={load} />
+                  {/* Only an active admin may hold the exemption — the endpoint
+                      enforces that; the button simply does not offer it to
+                      anyone else. */}
+                  {u.role === 'ADMIN' && u.isActive && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busyId === u.id}
+                      disabled={!!busyId}
+                      data-testid={`sso-exempt-toggle-${u.id}`}
+                      onClick={() => toggleSsoExempt(u)}
+                    >
+                      {u.ssoExempt ? t.usersAdmin.ssoExemptRevoke : t.usersAdmin.ssoExemptGrant}
+                    </Button>
+                  )}
                   {/* Admin accounts are out of scope (the endpoint refuses a
                       peer admin), same rule as reset-password and erase. */}
                   {u.role !== 'ADMIN' && u.id !== session?.user?.id && (

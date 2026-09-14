@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
@@ -11,6 +12,8 @@ const schema = z.object({ answer: z.string().min(1).max(4000) });
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const { id } = await params;
 
   const q = await prisma.mentorQuestion.findUnique({ where: { id }, include: { relation: true } });

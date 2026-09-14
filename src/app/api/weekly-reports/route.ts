@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -47,6 +48,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Only mentees can create weekly reports' }, { status: 403 });
   return withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));

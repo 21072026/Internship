@@ -170,6 +170,18 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // working — do not "fix" them by wrapping them in a tenant scope, or an
   // invitation would become unusable to the very person it was sent to.
   'InvitationToken',
+  // The fan-out surfaces (#2357). A webhook, an announcement and a newsletter
+  // each belong to the tenant that created them, and each is READ by a
+  // dispatcher — the webhook fan-out, the newsletter cron — that runs outside
+  // any request scope. Registration scopes every admin-facing reader to its own
+  // tenant; the dispatchers stamp/scope orgId explicitly (they have the row's
+  // own orgId), the same pattern the roster feeds and the notification ledger
+  // use. Without this a MARKETING tenant's `pipeline.stage_change` fires an
+  // INTERNSHIP tenant's endpoint, and one global newsletter cadence reaches
+  // both tenants' members.
+  'Webhook',
+  'Announcement',
+  'Newsletter',
   // The public /for-companies enquiry (#1104). The form has no session and no
   // host→org resolution exists yet, so the submit stamps the default org
   // itself (the same one registration uses) rather than leaving NULL — a

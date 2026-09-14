@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
@@ -7,7 +8,7 @@ import { randomBytes } from 'crypto';
 import { notify } from '@/lib/notify';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestDecisionEmail } from '@/services/emailService';
-import { generateMeetingLink } from '@/lib/meetingRoom';
+import { resolveMeetingLink } from '@/lib/meetingRoom';
 
 const schema = z.object({ action: z.enum(['accept', 'decline']) });
 
@@ -46,6 +47,8 @@ async function emailDecision(
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const { id } = await params;
 
   const req = await prisma.meetingRequest.findUnique({ where: { id }, include: { relation: true } });
@@ -73,7 +76,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // Accept → create the confirmed meeting with an auto video link. A request
   // lives in one relation's thread (either side may file it), so the confirmed
   // meeting is structurally a 1:1 call: one mentor, one mentee.
-  const link = generateMeetingLink({ inviteeCount: 1, orgId: session.user.orgId });
+  const link = await resolveMeetingLink({ inviteeCount: 1, orgId: session.user.orgId });
   // The wall clock behind `proposedAt` was typed by the *requester* (see
   // POST /api/meeting-requests), so theirs is the zone this time was agreed on —
   // not the mentor's, even though the mentor is the one confirming it (#1210).

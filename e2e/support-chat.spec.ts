@@ -27,8 +27,15 @@ test('support chat: first message opens a ticket, next one appends, admin is not
 
     // The pinned Support entry is always present in the inbox.
     await page.goto('/messages');
-    await expect(page.getByTestId('support-entry')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('support-entry').click();
+    // /messages is wrapped in a loading.tsx Suspense boundary, whose streamed
+    // content can briefly (and, per MessagesLiveRefresh, repeatedly) land a
+    // second copy of the inbox at the end of <body> before React relocates it
+    // into #main-content — the page never actually shows two. `.first()` picks
+    // the real, in-place copy (it's first in document order) instead of
+    // tripping strict mode on the transient one (#2241).
+    const supportEntry = page.getByTestId('support-entry').first();
+    await expect(supportEntry).toBeVisible({ timeout: 10_000 });
+    await supportEntry.click();
     await page.waitForURL((u) => u.pathname === '/messages/support', { timeout: 10_000 });
     await expect(page.getByTestId('support-chat')).toBeVisible({ timeout: 10_000 });
 

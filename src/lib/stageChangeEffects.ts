@@ -87,5 +87,5 @@ export async function emitStageChange(opts: {
     }
   }
 
-  await dispatchWebhook('pipeline.stage_change', { relationId: opts.relationId, from: opts.from, to: opts.to });
+  await dispatchWebhook('pipeline.stage_change', { relationId: opts.relationId, from: opts.from, to: opts.to }, opts.orgId);
 }

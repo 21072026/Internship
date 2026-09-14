@@ -490,3 +490,15 @@ workaround, #636, and it compiled on every PR push).
   is a signal to inspect first (`git log --oneline main..origin/main` and
   `origin/main..main`), not to force through. If the actual file contents match between the
   two tips, `git reset --hard origin/main` is safe.
+- **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
+  inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted
+  verbatim), forwards it to the handler and echoes it on **every** response, error responses
+  included. `src/lib/logger.ts` stamps `requestId` (and `orgId`) onto every line by itself, so
+  no caller passes it. Three rules: the value is carried by the `AsyncLocalStorage` in
+  `src/lib/requestContext.ts` — the same shape as `orgContext.ts`, do not add a second
+  mechanism; that file is **server-only** (`node:async_hooks`) and is reached from client-safe
+  code only through the `ambientRequestId()` seam in `requestId.ts`; and a handler binds it
+  with `withRequestScope(request, () => …)` **around** `withTenantScope`, so both contexts are
+  established at the top of the handler. Only the header is read — never the body, the other
+  headers or the query string, which carry PII. Not every handler binds it yet: wrap the one
+  you are touching if it logs.

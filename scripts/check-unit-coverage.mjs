@@ -63,6 +63,10 @@ const TEST_DIR = 'scripts/test';
 // act on is a gate that gets deleted.
 const FLOORS = new Map([
   [
+    'src/lib/verticals.ts',
+    { floor: 95, measured: 100.0, why: 'vertical catalogue: unknown key must fall back, never blank a tenant (#2350)' },
+  ],
+  [
     'src/lib/mentorDirectory.ts',
     { floor: 95, measured: 100.0, why: 'scan cap / truncated-result reporting (#1820)' },
   ],
@@ -148,6 +152,14 @@ const FLOORS = new Map([
       floor: 90,
       measured: 93.41,
       why: 'an external feed never overwrites what a human typed unless the tenant says so (#1943/#1965)',
+    },
+  ],
+  [
+    'src/lib/requestId.ts',
+    {
+      floor: 95,
+      measured: 98.91,
+      why: 'an inbound x-request-id is honoured, but never into a forged log line (#1601)',
     },
   ],
 ]);

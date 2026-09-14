@@ -6,14 +6,20 @@ import { usePathname } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { useT } from '@/i18n/client';
-import { ADMIN_NAV_LINKS } from '@/lib/navLinks';
+import { ADMIN_NAV_LINKS, visibleNavLinks } from '@/lib/navLinks';
+import type { VerticalCapability } from '@/lib/verticals';
 
 // The route list itself lives in lib/navLinks — shared with the command
 // palette's "Go to" group (#2079), so the two can never drift apart.
-const LINKS = ADMIN_NAV_LINKS;
 
-export function AdminNav() {
+export function AdminNav({ capabilities }: { capabilities?: readonly VerticalCapability[] }) {
   const t = useT();
+  // The vertical's capability set, resolved by the layout (#2351). Undefined
+  // means "not passed" — treated as the full product, so nothing is hidden.
+  const LINKS = useMemo(
+    () => (capabilities ? visibleNavLinks(ADMIN_NAV_LINKS, capabilities) : ADMIN_NAV_LINKS),
+    [capabilities],
+  );
   const pathname = usePathname();
   const [q, setQ] = useState('');
   const nav = t.nav as Record<string, string>;
@@ -49,7 +55,7 @@ export function AdminNav() {
     const needle = q.trim().toLowerCase();
     if (!needle) return LINKS;
     return LINKS.filter((l) => (nav[l.key] ?? l.key).toLowerCase().includes(needle));
-  }, [q, nav]);
+  }, [q, nav, LINKS]);
 
   const isActive = (l: (typeof LINKS)[number]) =>
     l.exact ? pathname === l.href : pathname === l.href || pathname.startsWith(l.href + '/');

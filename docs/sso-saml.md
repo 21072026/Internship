@@ -101,6 +101,116 @@ That is #1929; the customer-facing setup it will need is already written up in
 [`docs/sso-oidc.md`](sso-oidc.md), and the e2e stub IdP below already serves the
 OIDC endpoints.
 
+## Enforced SSO — closing every other door (#1950)
+
+`Organization.ssoEnforced` is the promise a customer's security questionnaire is
+actually asking about: *"can our users still sign in with a password?"* Answering
+"no" is only honest if **every** session-minting path refuses, not just the login
+form. There are six, and five of them derive from a password:
+
+| # | Door | Where it is refused |
+|---|------|---------------------|
+| 1 | password sign-in | `credentials` provider, `src/lib/auth.ts` |
+| 2 | "remember me" silent re-auth | `POST /api/auth/remember/refresh` **and** the `remember` provider |
+| 3 | password reset completion (`RESET` **and** `SET_INITIAL`) | `POST /api/auth/reset` |
+| 4 | invitation / self registration (it sets a password) | `POST /api/register` |
+| 5 | self-service password change | `PUT /api/account` |
+| 6 | impersonation | **not refused — see below** |
+
+The rule itself lives in exactly one place, `src/lib/ssoEnforcement.ts`, and
+every door above calls it. A door that does not call it is the bug this feature
+exists to prevent — including the doors that do not exist yet (magic link,
+social sign-in): they inherit the rule by calling the same helper.
+
+Adjacent, non-authoritative refusals for the same reason: `POST /api/auth/forgot`
+silently skips the mail (the link would be refused on submit anyway) and
+`POST /api/admin/users/[id]/reset-password` answers the admin honestly instead of
+looking like broken SMTP.
+
+### Impersonation is deliberately still allowed
+
+An `impersonate` grant mints a session without a password — but it is not a
+password door. The admin who starts it is already signed in, and in an enforced
+tenant that session came from the IdP. The grant is single-use, minted only by an
+admin-guarded route, the session is time-capped, and every start and stop is
+audited and notified to the account holder. Refusing it under enforcement would
+withdraw support access from exactly the tenants whose IdP is having a bad day —
+which is when support access matters most. **Decision: enforcement does not apply
+to impersonation.** If that is ever unacceptable to a customer, the lever to add
+is a per-tenant "no impersonation" setting, not a change to this rule.
+
+### The two interlocks
+
+1. **Anti-lockout.** `PATCH /api/admin/organizations` refuses to switch
+   `ssoEnforced` on unless (a) `isSsoActive(org)` is true for the config the
+   request *leaves* the org on, and (b) at least one **active `ADMIN` of that org
+   holds `ssoExempt`**. Without (b) a tenant with an expired IdP certificate has
+   no way back into its own account except our database console. The same rule is
+   enforced from the other end: `POST /api/admin/users/[id]/sso-exempt` refuses to
+   revoke the *last* exemption while the org is enforcing — **and from a third
+   direction**, `PATCH /api/users/[id]` refuses to set `isActive: false` on the
+   last exempt admin. `countExemptAdmins` counts only *active* admins, so
+   switching the holder off removes the way back in exactly like revoking the
+   exemption, except that it looks like routine offboarding and warns nobody.
+   All three refusals answer with `code: 'last_sso_exemption'`. Demoting an
+   admin is already impossible (`PATCH /api/users/[id]` only converts between
+   `MENTOR` and `MENTEE`) and there is no user-delete route, so those are the
+   three doors.
+2. **Fail-open on a broken IdP.** Enforcement only *applies* while
+   `isSsoActive(org)` still holds. A plan downgrade (SSO_SAML is an Enterprise
+   feature, #1742) or a config an admin broke would otherwise leave a tenant with
+   no working door at all; instead the flag stays set, password login works again,
+   and enforcement re-engages the moment SSO does.
+
+### The break-glass exemption
+
+`User.ssoExempt` is granted and revoked through
+`POST /api/admin/users/[id]/sso-exempt` (`{ "exempt": true|false }`), and it is
+narrow on purpose:
+
+- ADMIN only, never from an impersonation session, never across tenants (checked
+  against `user.orgId` explicitly, not via the isolation middleware, which is off
+  in production — #1549);
+- only an **active `ADMIN`** may hold one. An exemption on a mentee account is a
+  permanent password back door into a tenant that told its auditors it had none;
+- every grant and revocation writes an `AuditLog` row (`SSO_EXEMPT_GRANTED` /
+  `SSO_EXEMPT_REVOKED`) and an `ActivityLog` row (`sso.exempt_granted` /
+  `sso.exempt_revoked`, level `warning`), and the holder is notified;
+- it is surfaced as a badge in **Admin → Users**. An exemption nobody can see is
+  how a temporary back door becomes a permanent one.
+
+It is deliberately **not time-boxed**. An exemption that silently expires
+recreates exactly the lockout it exists to prevent, on a day nobody chose; the
+narrowing is *who holds it*, not *for how long*, and the audit trail is what
+makes a stale one findable.
+
+### The sweep on flip
+
+Turning enforcement on ends the sessions that were obtained by password —
+otherwise "we enforce SSO" is false for another twelve hours, for everyone who
+was already signed in. `applySsoEnforcement()` stamps `sessionsValidFrom = now()`
+for every non-exempt user of the org **and** revokes their trusted devices, in
+batches of 500, then writes one audited `sso.enforced` row carrying the count.
+
+Both halves, always. Stamping `sessionsValidFrom` alone does nothing: the
+remembered browser trades its cookie for a fresh session on its next visit and
+nobody is signed out (CLAUDE.md's hard rule, [`docs/remember-me.md`](remember-me.md)).
+The sweep runs only on the OFF → ON edge, so re-saving an enforcing tenant does
+not sign it out again, and it is idempotent if it ever does run twice.
+
+### Honest errors, and what they reveal
+
+A refused password sign-in throws the `SSO_REQUIRED` provider error (allow-listed
+in `src/lib/authErrors.ts`, so it reaches the browser instead of becoming
+`UNEXPECTED_ERROR`), and the sign-in page renders "your organization requires
+single sign-on" with a link to `/auth/sso`. The API doors answer
+`{ code: "sso_required" }` with the same message.
+
+That is a deliberate, narrow enumeration trade — it confirms that an address
+belongs to an SSO-enforced organization, which the generic "Invalid email or
+password" avoids for everyone else. It is recorded in
+[`docs/security-exceptions.md`](security-exceptions.md), not left implicit.
+
 ## What CI proves (#1936)
 
 `e2e/sso-roundtrip.spec.ts` drives the **whole** SP-initiated flow — `/auth/sso`

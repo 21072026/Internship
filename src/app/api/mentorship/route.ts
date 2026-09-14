@@ -290,7 +290,7 @@ export async function POST(request: Request) {
       throw e;
     }
 
-    await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null });
+    await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null }, session.user.orgId);
 
     // A direct admin assignment used to be completely silent — neither side heard
     // about it until they happened to log in (#668). In-app is unconditional,

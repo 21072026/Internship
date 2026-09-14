@@ -27,6 +27,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   if (!meeting) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   // A no-time meeting has nothing to put in a calendar file.
   if (!meeting.scheduledAt) return NextResponse.json({ error: 'Meeting has no scheduled time' }, { status: 400 });
+  // Called off (#1980). This route is a PUBLISH copy — "here is an event" — and
+  // handing one out for a meeting that is off would put it back on the calendar
+  // of whoever clicked. Withdrawing it from a client that already holds it is a
+  // METHOD:CANCEL mail (#1982), not a file served from a bare token.
+  if (meeting.status === 'CANCELLED') return NextResponse.json({ error: 'Meeting was cancelled' }, { status: 410 });
 
   const ics = buildMeetingIcs({
     uid: meeting.id,

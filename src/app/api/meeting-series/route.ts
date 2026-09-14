@@ -9,7 +9,7 @@ import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
 import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
 import { isValidTimeZone } from '@/lib/timezone';
-import { generateMeetingLink } from '@/lib/meetingRoom';
+import { resolveMeetingLink } from '@/lib/meetingRoom';
 
 // A recurring project meeting is a *rule*, not a pile of rows (#1110).
 //
@@ -93,7 +93,8 @@ function scheduleFingerprint(s: { daysOfWeek: unknown; timeOfDay: string; timeZo
 async function announceNextOccurrence(
   series: { id: string; projectId: string | null; title: string; daysOfWeek: unknown; timeOfDay: string; timeZone: string | null; fixedLink: string | null; active: boolean },
   role: string,
-  sessionUserId: string
+  sessionUserId: string,
+  orgId: string | null | undefined,
 ) {
   if (!series.active || !series.projectId) return { invited: 0, nextOccurrence: null as string | null };
 
@@ -158,7 +159,7 @@ async function announceNextOccurrence(
       scheduledAt: next.toISOString(),
       count: invited,
       seriesId: series.id,
-    });
+    }, orgId);
   }
 
   return { invited, nextOccurrence: next.toISOString() };
@@ -222,8 +223,16 @@ export async function POST(request: Request) {
     if (access.error) return access.error;
 
     // A series' audience is derived from project membership at announce time
-    // and can grow over the series' life — never a 1:1, so never a JaaS room.
-    const fixedLink = meetLink || generateMeetingLink({ inviteeCount: null, orgId: session.user.orgId });
+    // and can grow over the series' life, so its head-count is genuinely
+    // unknown here — `inviteeCount: null`, which the resolver books against the
+    // allowance as a small group (lib/jaasAllowance.ts). It used to mean "never
+    // a JaaS room", which put every recurring series on a host that cuts an
+    // embedded call off after five minutes (#2011).
+    const fixedLink = await resolveMeetingLink({
+      pastedLink: meetLink,
+      inviteeCount: null,
+      orgId: session.user.orgId,
+    });
     const series = await prisma.meetingSeries.create({
       data: {
         projectId,
@@ -237,7 +246,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const announced = await announceNextOccurrence(series, session.user.role, session.user.id);
+    const announced = await announceNextOccurrence(series, session.user.role, session.user.id, session.user.orgId);
     return NextResponse.json(
       { series: { ...series, nextOccurrence: announced.nextOccurrence }, invitesSent: announced.invited },
       { status: 201 }
@@ -300,7 +309,7 @@ export async function PUT(request: Request) {
     // Only re-announce when the meeting actually moved. Renaming it, or saving
     // the same form twice, must not mail the whole team again.
     const announced = moved
-      ? await announceNextOccurrence(updated, session.user.role, session.user.id)
+      ? await announceNextOccurrence(updated, session.user.role, session.user.id, session.user.orgId)
       : {
           invited: 0,
           nextOccurrence: updated.active

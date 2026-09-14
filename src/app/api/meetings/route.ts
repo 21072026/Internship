@@ -10,7 +10,7 @@ import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
-import { generateMeetingLink } from '@/lib/meetingContext';
+import { resolveMeetingLink } from '@/lib/meetingContext';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
@@ -70,6 +70,12 @@ export async function GET() {
         meetLink: true,
         rsvp: true,
         endedAt: true,
+        // Called off (#1980), with the reason the organiser gave. Every reader
+        // of this list has to be able to tell a meeting that is on from one
+        // that is not — the portal drops the cancelled ones, the mentor and
+        // admin surfaces mark them.
+        status: true,
+        cancelReason: true,
         createdAt: true,
         // The token belongs to the mentee the meeting was written for — it is
         // the same credential their invite e-mail carries, and the portal's
@@ -155,7 +161,11 @@ export async function POST(request: Request) {
     // same room, so the video link is generated once (Jitsi, no account needed)
     // when the organizer didn't paste one. The per-person RSVP token stays
     // unique — each participant confirms attendance individually.
-    const link = meetLink || generateMeetingLink({ inviteeCount: relations.length, orgId: session.user.orgId });
+    const link = await resolveMeetingLink({
+      pastedLink: meetLink,
+      inviteeCount: relations.length,
+      orgId: session.user.orgId,
+    });
 
     // Guests are resolved once for the whole batch: they are invited to the
     // shared room, not to each relation. Anyone with an account is dropped here
@@ -167,6 +177,12 @@ export async function POST(request: Request) {
       // reported back to the UI the right one.
       ...(session.user.email ? [session.user.email] : []),
     ]);
+
+    // The shared identity of this one schedule (#1980). Every row written below
+    // carries it, so a later "cancel this meeting" can ask whether it means this
+    // invitee or the whole session — a bulk schedule fans out into one row per
+    // invitee sharing a single room, and there was no way to name that group.
+    const batchKey = randomBytes(12).toString('hex');
 
     let created = 0;
     // The row the guests hang off — the first one written in this batch.
@@ -183,6 +199,7 @@ export async function POST(request: Request) {
           meetLink: link,
           rsvpToken,
           createdById: session.user.id,
+          batchKey,
         },
       });
       guestHostMeetingId ??= meeting.id;
@@ -260,7 +277,7 @@ export async function POST(request: Request) {
     // relations. See the note in /api/interactions.
     if (created > 0) recordPairActivity(session.user.orgId, created);
 
-    if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created });
+    if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created }, session.user.orgId);
     return NextResponse.json({ created, guestsInvited: invitedGuests.length, guests: invitedGuests, rejectedAsMembers });
   });
 }

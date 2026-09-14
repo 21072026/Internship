@@ -14,7 +14,17 @@
 // handed back as `mailError` and the caller decides — the single invite reports
 // "share the link manually", the bulk run rolls the row back so a paste never
 // leaves a half-created invitation behind.
+//
+// Since #1863 the three steps are also exported separately —
+// `persistInvitation` / `logInvitationCreated` / `deliverInvitation` — because
+// the inquiry→company conversion has to mint its invitation INSIDE a
+// `$prisma.transaction` alongside the Company it belongs to (an invitation to
+// sign in to a company that failed to be created is worse than no invitation),
+// and an SMTP round-trip has no business holding a database transaction open.
+// `createInvitation` is still the one-call path and is exactly those three in
+// order, so neither route grew a second copy of the mechanics.
 import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { sendInvitationEmail } from '@/services/emailService';
@@ -29,7 +39,13 @@ export interface CreateInvitationInput {
   /** null mints an email-less shareable link (#670); nothing is sent. */
   email: string | null;
   label: string | null;
-  role: 'MENTOR' | 'MENTEE' | 'ADMIN';
+  /**
+   * COMPANY is reachable only from the inquiry→company conversion (#1863):
+   * `/api/invite` and the bulk board both validate against their own, narrower
+   * enum, so no admin can mint a company login from the generic invite form
+   * without a company to attach it to.
+   */
+  role: 'MENTOR' | 'MENTEE' | 'ADMIN' | 'COMPANY';
   /**
    * Which language the invitation mail is written in (#1720).
    *
@@ -44,6 +60,11 @@ export interface CreateInvitationInput {
   mentorId?: string | null;
   menteeId?: string | null;
   projectId?: string | null;
+  /**
+   * The company an invited COMPANY user is attached to on registration (#1863).
+   * Meaningless for any other role and simply carried through as null.
+   */
+  companyId?: string | null;
   /** Passed through to the activity log for IP/UA attribution. */
   request?: Request;
 }
@@ -63,12 +84,31 @@ export function invitationRegisterUrl(token: string): string {
   return `${appUrl}/auth/register?token=${token}`;
 }
 
-export async function createInvitation(input: CreateInvitationInput): Promise<CreatedInvitation> {
+/** The persisted half of an invitation — no mail attempted yet. */
+export interface PersistedInvitation {
+  invitationId: string;
+  token: string;
+  /** The locale stamped on the row, which is what a resend must repeat. */
+  locale: string | null;
+}
+
+/**
+ * Write the InvitationToken row. The token, the 7-day expiry and every pointer
+ * a registration later reads are decided here and nowhere else.
+ *
+ * `client` lets a caller run the insert inside its own interactive transaction
+ * (#1863), so an invitation and the row it depends on either both exist or
+ * neither does. Default: the ordinary client, i.e. today's behaviour.
+ */
+export async function persistInvitation(
+  input: CreateInvitationInput,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<PersistedInvitation> {
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + INVITATION_TTL_DAYS);
 
-  const invitation = await prisma.invitationToken.create({
+  const invitation = await client.invitationToken.create({
     data: {
       token,
       email: input.email,
@@ -81,40 +121,74 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Cr
       mentorId: input.mentorId ?? null,
       menteeId: input.menteeId ?? null,
       projectId: input.projectId ?? null,
+      companyId: input.companyId ?? null,
     },
+    select: { id: true, locale: true },
   });
 
+  return { invitationId: invitation.id, token, locale: invitation.locale };
+}
+
+/**
+ * The audit entry for a minted invitation. Separate from `persistInvitation` so
+ * a caller minting inside a transaction can log AFTER the commit — an
+ * `invite.created` line for an invitation that was rolled back would be a lie
+ * in the one record that is supposed to be trustworthy.
+ */
+export async function logInvitationCreated(
+  input: CreateInvitationInput,
+  invitationId: string,
+): Promise<void> {
   await logActivity({
     action: 'invite.created',
     actorId: input.actor.id,
     actorEmail: input.actor.email ?? null,
     targetType: 'invitation',
-    targetId: invitation.id,
+    targetId: invitationId,
     detail: `${input.email ?? input.label ?? 'link'} · ${input.role}`,
     request: input.request,
   });
+}
 
-  let emailSent = false;
-  let mailError: unknown = null;
-  if (input.email) {
-    try {
-      // The transport reports what it did, so demo mode and an unconfigured
-      // SMTP are honestly "not sent" rather than a guess about SMTP_USER.
-      emailSent =
-        (await sendInvitationEmail({
-          to: input.email,
-          token,
-          role: input.role,
-          orgId: input.orgId,
-          locale: invitation.locale,
-        })) === 'SENT';
-    } catch (err) {
-      mailError = err;
-      console.error('Invitation email failed (token still valid):', err);
-    }
+/**
+ * Send the invitation mail for an already-persisted token. Never throws: the
+ * token is live by the time this runs, so a blocked relay must cost at most the
+ * mail, never the invitation.
+ */
+export async function deliverInvitation(
+  input: Pick<CreateInvitationInput, 'email' | 'role' | 'orgId'>,
+  persisted: PersistedInvitation,
+): Promise<{ emailSent: boolean; mailError: unknown }> {
+  if (!input.email) return { emailSent: false, mailError: null };
+  try {
+    // The transport reports what it did, so demo mode and an unconfigured
+    // SMTP are honestly "not sent" rather than a guess about SMTP_USER.
+    const result = await sendInvitationEmail({
+      to: input.email,
+      token: persisted.token,
+      role: input.role,
+      orgId: input.orgId,
+      locale: persisted.locale,
+    });
+    return { emailSent: result === 'SENT', mailError: null };
+  } catch (err) {
+    console.error('Invitation email failed (token still valid):', err);
+    return { emailSent: false, mailError: err };
   }
+}
 
-  return { invitationId: invitation.id, token, registerUrl: invitationRegisterUrl(token), emailSent, mailError };
+export async function createInvitation(input: CreateInvitationInput): Promise<CreatedInvitation> {
+  const persisted = await persistInvitation(input);
+  await logInvitationCreated(input, persisted.invitationId);
+  const { emailSent, mailError } = await deliverInvitation(input, persisted);
+
+  return {
+    invitationId: persisted.invitationId,
+    token: persisted.token,
+    registerUrl: invitationRegisterUrl(persisted.token),
+    emailSent,
+    mailError,
+  };
 }
 
 /**

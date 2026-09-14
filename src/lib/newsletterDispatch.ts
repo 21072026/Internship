@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -216,6 +217,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       audience: true,
       status: true,
       content: true,
+      orgId: true,
       image: { select: { contentType: true, size: true, data: true } },
     },
   });
@@ -239,8 +241,13 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   // the cron retries it and a human can still edit or cancel it), and a claimed
   // row that then refuses to send would be stuck in SENDING for good.
   const roles = audienceRoles(issue.audience as NewsletterAudience);
+  // Scope recipients to the issue's own tenant (#2357). This runs from the cron
+  // with no request context, so the middleware does not engage; the issue row
+  // carries its orgId and we filter by it explicitly, so a marketing issue never
+  // reaches an internship tenant's members. A legacy issue with orgId = NULL
+  // (backfilled to the default org on deploy) still resolves to one tenant.
   const users = (await prisma.user.findMany({
-    where: { isActive: true, role: { in: roles as ('MENTEE' | 'MENTOR')[] } },
+    where: { isActive: true, role: { in: roles as ('MENTEE' | 'MENTOR')[] }, orgId: issue.orgId },
     select: { id: true, email: true, role: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
   })) as Recipient[];
 
@@ -527,6 +534,12 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   const canonical = template.content[defaultLocale];
   const created = await prisma.newsletter.create({
     data: {
+      // Curated library issues are the internship product's content, so they
+      // belong to the default org (#2357). A marketing tenant's own newsletter
+      // cadence is separate future work; scoping here keeps an internship issue
+      // from reaching a marketing tenant's members via dispatchNewsletter's
+      // recipient filter.
+      orgId: await defaultOrgId(),
       templateKey: template.key,
       audience: template.audience,
       status: 'SCHEDULED',

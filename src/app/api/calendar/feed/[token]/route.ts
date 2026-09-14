@@ -52,7 +52,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     // occurrence is rendered from the rule below, and listing both double-books
     // the day (the same exclusion /api/calendar-events makes, #1110).
     prisma.meeting.findMany({
-      where: { relationId: { not: null }, seriesId: null, scheduledAt: { not: null, gte: since }, relation: relWhere },
+      // `status: 'SCHEDULED'` — a cancelled meeting (#1980) leaves the feed, so
+      // a subscribed client drops it on the next refresh instead of holding a
+      // slot nobody is coming to.
+      where: {
+        relationId: { not: null },
+        seriesId: null,
+        status: 'SCHEDULED',
+        scheduledAt: { not: null, gte: since },
+        relation: relWhere,
+      },
       select: { id: true, title: true, scheduledAt: true },
       orderBy: { scheduledAt: 'asc' },
       take: MAX_EVENTS,
@@ -63,6 +72,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     prisma.meeting.findMany({
       where: {
         scheduledAt: { not: null, gte: since },
+        status: 'SCHEDULED',
         OR: [
           { project: { members: { some: { userId: user.id } } } },
           { conversation: { participants: { some: { userId: user.id } } } },

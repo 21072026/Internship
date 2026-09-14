@@ -15,6 +15,10 @@ export const WEBHOOK_EVENTS = [
   'interaction.logged',
   'evaluation.added',
   'meeting.scheduled',
+  // A meeting moved, or was called off (#1980). An integration mirroring the
+  // calendar needs both, or its copy keeps the time nobody is coming at.
+  'meeting.rescheduled',
+  'meeting.cancelled',
   // Every assigned interviewer has submitted (or an admin closed the panel):
   // the scores are now comparable (#824).
   'interview_panel.completed',
@@ -51,10 +55,20 @@ export async function deliverToWebhook(
 
 // Fire-and-forget: POST a signed payload to every active webhook subscribed to
 // the event. Never throws — delivery failures are logged, not propagated.
-export async function dispatchWebhook(event: WebhookEvent, data: Record<string, unknown>) {
+export async function dispatchWebhook(
+  event: WebhookEvent,
+  data: Record<string, unknown>,
+  orgId: string | null | undefined,
+) {
   let hooks;
   try {
-    hooks = await prisma.webhook.findMany({ where: { active: true } });
+    // Scope to the acting tenant (#2357). Explicit rather than via the tenant
+    // middleware: dispatch is fire-and-forget and often runs after the request
+    // scope has unwound (and the middleware is advisory until MT_ENFORCE_ISOLATION
+    // is on), so one tenant's event must never fan out to another's endpoint.
+    // A null orgId (a legacy/system caller) matches only the legacy null-org
+    // webhooks, which the deploy backfill moves to the default org.
+    hooks = await prisma.webhook.findMany({ where: { active: true, orgId: orgId ?? null } });
   } catch (e) {
     logger.error('Webhook lookup failed', { error: String(e) });
     return;

@@ -2414,6 +2414,9 @@ export async function sendMeetingReminders() {
       reminderSentAt: null,
       seriesId: null,
       relationId: { not: null },
+      // A cancelled meeting (#1980) is not reminded about. Moving one clears
+      // `reminderSentAt`, so the new time gets its own reminder from here.
+      status: 'SCHEDULED',
     },
     include: {
       relation: {

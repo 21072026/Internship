@@ -126,7 +126,7 @@ export async function POST(request: Request) {
     data: { menteeId: mentee.id, preferredMentorId: mentor.id },
   });
   await notify(mentor.id, 'application.received', { name: fullName }, '/mentor/applications');
-  await dispatchWebhook('application.created', { mentorId: mentor.id, menteeName: fullName, email });
+  await dispatchWebhook('application.created', { mentorId: mentor.id, menteeName: fullName, email }, mentor.orgId);
 
   // Duplicate post-check (#841): fire-and-forget — the application itself is
   // already accepted, admins just get a heads-up to review /admin/duplicates.

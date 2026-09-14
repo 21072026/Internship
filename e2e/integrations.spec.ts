@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { defaultOrgId } from '@/lib/defaultOrg';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -7,7 +8,12 @@ test.afterAll(async () => {
 
 test('admin generates an API key that authorizes the read-only v1 API', async ({ page }) => {
   const adminEmail = uniqueEmail('int-admin');
-  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Int Admin');
+  const admin = await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Int Admin');
+  // A key minted for an org-less admin is refused by withApiKey() ("not bound
+  // to an organization", #1546) — real accounts always get an org at
+  // registration (defaultOrgId(), see src/lib/defaultOrg.ts), but seedUser()
+  // does not, so this test has to assign one itself to exercise the real path.
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: await defaultOrgId() } });
   let keyId = '';
   try {
     await page.goto('/auth/signin');

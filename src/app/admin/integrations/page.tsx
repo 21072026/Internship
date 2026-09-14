@@ -33,6 +33,18 @@ function todayInputValue(): string {
   return new Date().toISOString().slice(0, 10);
 }
 interface GoogleStatus { configured: boolean; connected: boolean }
+// GET /api/admin/integrations/jaas-usage — four numbers and two booleans, no
+// identities (#2011). `metered` is whether the webhook feed that produces the
+// count is wired at all: without it `active` is a truthful zero rather than a
+// measurement, and the card has to say which.
+interface JaasUsage {
+  configured: boolean;
+  metered: boolean;
+  period: string;
+  active: number;
+  allowance: number;
+  remaining: number;
+}
 interface ConnectorHealth {
   connector: string;
   state: string;
@@ -78,18 +90,21 @@ export default function IntegrationsPage() {
 
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
   const [health, setHealth] = useState<ConnectorHealth[]>([]);
+  const [jaas, setJaas] = useState<JaasUsage | null>(null);
 
   const load = useCallback(async () => {
-    const [w, k, g, h] = await Promise.all([
+    const [w, k, g, h, v] = await Promise.all([
       fetch('/api/admin/webhooks'),
       fetch('/api/admin/api-keys'),
       fetch('/api/admin/integrations/google/status'),
       fetch('/api/admin/integrations/health'),
+      fetch('/api/admin/integrations/jaas-usage'),
     ]);
     if (w.ok) { const d = await w.json(); setHooks(d.webhooks ?? []); setEventTypes(d.eventTypes ?? []); }
     if (k.ok) setKeys((await k.json()).keys ?? []);
     if (g.ok) setGoogle(await g.json());
     if (h.ok) setHealth((await h.json()).connectors ?? []);
+    if (v.ok) setJaas(await v.json());
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -396,6 +411,48 @@ export default function IntegrationsPage() {
           )}
           {google && google.configured && !google.connected && (
             <p className="text-xs text-gray-400">{t.integrations.googleReadyHint}</p>
+          )}
+        </Card>
+
+        {/* The video allowance, counted from our own data (#2011). Reported so
+            a human can decide about a paid tier from evidence; it charges
+            nobody and gates nothing. */}
+        <Card data-testid="jaas-usage">
+          <CardHeader><CardTitle>{t.integrations.videoAllowance}</CardTitle></CardHeader>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{t.integrations.videoAllowanceDesc}</p>
+          {jaas && (
+            <>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100" data-testid="jaas-usage-count">
+                {t.integrations.videoAllowanceCount
+                  .replace('{used}', String(jaas.active))
+                  .replace('{limit}', String(jaas.allowance))}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {t.integrations.videoAllowancePeriod.replace('{period}', jaas.period)}
+              </p>
+              <div
+                className="mt-3 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden"
+                role="img"
+                aria-label={t.integrations.videoAllowanceCount
+                  .replace('{used}', String(jaas.active))
+                  .replace('{limit}', String(jaas.allowance))}
+              >
+                <div
+                  className={jaas.remaining > 0 ? 'h-full bg-blue-600' : 'h-full bg-amber-500'}
+                  style={{ width: `${jaas.allowance > 0 ? Math.min(100, (jaas.active / jaas.allowance) * 100) : 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3" data-testid="jaas-usage-state">
+                {!jaas.configured
+                  ? t.integrations.videoAllowanceUnconfigured
+                  : !jaas.metered
+                    ? t.integrations.videoAllowanceUnmetered
+                    : jaas.remaining > 0
+                      ? t.integrations.videoAllowanceRemaining.replace('{n}', String(jaas.remaining))
+                      : t.integrations.videoAllowanceSpent}
+              </p>
+              <p className="text-xs text-gray-400 mt-2">{t.integrations.videoAllowancePrivacy}</p>
+            </>
           )}
         </Card>
       </div>

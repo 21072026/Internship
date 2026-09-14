@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Two urls serve two products' landing from one deployment** (#2355, epic #2348). A public, sessionless page (the landing, `/apply`, `/for-companies`) has no organization to read a vertical from, so its vertical now comes from the request host: `src/lib/hostVertical.ts` maps the `X-Forwarded-Host` (or `Host`) header to a vertical — `marketing.ersah.in` (configurable via `MARKETING_HOSTS`, comma-separated) resolves to MARKETING, everything else to INTERNSHIP — and `resolveRequestVertical()` falls back to it when there is no session, so the terminology overlay (#2354) dresses the whole public surface per host. The landing overlay gives the marketing host its own hero, badge and value proposition in EN/TR/DE (`Every lead, every conversation, every deal — in one pipeline`), while the default host is byte-identical to today. An unknown host resolves to INTERNSHIP, never a blank product. This is the code half of serving marketing.ersah.in from the new deployment; the DNS/proxy cutover of that live domain is a separate, deliberate infra step.",
+  "notes": {
+    "en": ["Visiting the marketing address now shows a marketing landing page — its own headline and pitch — while the internship address is unchanged."],
+    "tr": ["Pazarlama adresini ziyaret etmek artık pazarlama landing sayfasını gösteriyor — kendi başlığı ve sunumuyla — staj adresi ise değişmedi."],
+    "de": ["Der Besuch der Marketing-Adresse zeigt jetzt eine Marketing-Landingpage — mit eigener Überschrift und eigenem Pitch — während die Praktikums-Adresse unverändert bleibt."]
+  }
+}

@@ -65,7 +65,17 @@ export async function GET(request: Request) {
       // series generator are the ghosts this excludes: one per mentee, stuck at
       // whatever time the rule used to have, surviving the series' cancellation
       // (#1110). Cancelling or moving a series now deletes them for good.
-      where: { relationId: { not: null }, seriesId: null, scheduledAt: { not: null, ...inWindow }, relation: relWhere },
+      //
+      // `status: 'SCHEDULED'` — a cancelled meeting (#1980) is off the calendar;
+      // the row survives for its notes and its interaction log, not to keep
+      // holding a slot nobody is coming to.
+      where: {
+        relationId: { not: null },
+        seriesId: null,
+        status: 'SCHEDULED',
+        scheduledAt: { not: null, ...inWindow },
+        relation: relWhere,
+      },
       include: { relation: { include: { mentee: { select: { fullName: true } } } } },
       orderBy: { scheduledAt: 'asc' },
     }),

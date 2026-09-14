@@ -3,21 +3,24 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useT } from '@/i18n/client';
-import { MENTOR_NAV_LINKS } from '@/lib/navLinks';
+import { MENTOR_NAV_LINKS, visibleNavLinks } from '@/lib/navLinks';
+import type { VerticalCapability } from '@/lib/verticals';
+import { useMemo } from 'react';
 
-export function MentorNav() {
+export function MentorNav({ capabilities }: { capabilities?: readonly VerticalCapability[] }) {
+  const LINKS = useMemo(() => (capabilities ? visibleNavLinks(MENTOR_NAV_LINKS, capabilities) : MENTOR_NAV_LINKS), [capabilities]);
   const t = useT();
   const pathname = usePathname();
   const nav = t.nav as Record<string, string>;
 
   // The route list lives in lib/navLinks — shared with the command palette's
   // "Go to" group (#2079), so the two can never drift apart.
-  const isActive = (link: (typeof MENTOR_NAV_LINKS)[number]) =>
+  const isActive = (link: (typeof LINKS)[number]) =>
     link.exact ? pathname === link.href : pathname.startsWith(link.href);
 
   return (
     <>
-      {MENTOR_NAV_LINKS.map((link) => {
+      {LINKS.map((link) => {
         const Icon = link.icon;
         const active = isActive(link);
         return (

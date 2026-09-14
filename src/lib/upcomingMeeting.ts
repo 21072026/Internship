@@ -68,6 +68,9 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
         scheduledAt: { gte: windowStart, lte: windowEnd },
         // Marked over by a participant — gone for everyone, not just the marker.
         endedAt: null,
+        // Called off (#1980) — the banner is "there is a meeting now", and a
+        // cancelled one is exactly what nobody should be told to join.
+        status: 'SCHEDULED',
         // A Meeting row hangs off a relation, a project or a conversation (#1051);
         // whichever it is, the user is expected there if they are on that side of it.
         OR: [

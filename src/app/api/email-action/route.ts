@@ -6,6 +6,7 @@ import { markThreadRead } from '@/lib/threadRead';
 import { conversationForRelation } from '@/lib/conversations';
 import { verifyEmailActionToken, EMAIL_REACTION_EMOJIS } from '@/lib/emailActionToken';
 import { logger } from '@/lib/logger';
+import { withRequestScope } from '@/lib/requestContext';
 
 // One-click actions from a notification email (#1204): "mark as read" and the
 // five emoji reactions. No session — the signed token is the credential, the
@@ -18,7 +19,14 @@ import { logger } from '@/lib/logger';
 
 const schema = z.object({ token: z.string().min(1).max(512) });
 
+// Bind the request-correlation context (#1601) so every logger line below —
+// and every one emitted by the helpers it calls — carries the same
+// `x-request-id` the caller got back on the response.
 export async function POST(request: Request) {
+  return withRequestScope(request, () => handlePost(request));
+}
+
+async function handlePost(request: Request) {
   const limited = enforceRateLimit(request, 'email-action', { limit: 60, windowMs: 10 * 60 * 1000 });
   if (limited) return limited;
 

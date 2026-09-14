@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
@@ -25,6 +26,8 @@ const patchSchema = z.object({
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const { id } = await params;
 
   const goal = await goalIfAllowed(session.user.id, session.user.role, id);
@@ -69,6 +72,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const { id } = await params;
 
   const goal = await goalIfAllowed(session.user.id, session.user.role, id);
