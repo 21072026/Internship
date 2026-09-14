@@ -106,6 +106,14 @@ export function AccountSettings() {
   const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaBusy, setTwoFaBusy] = useState(false);
+  // Recovery codes (#1542). `twoFaRecoveryCodes` holds the plaintext for the
+  // ONE render it exists in — it comes back from `enable`/`regenerate-codes`
+  // and is never fetchable again, so it lives in component state and nowhere
+  // else (no localStorage, no URL). `twoFaRecoveryCount` is what every later
+  // visit sees: how many are left out of the set.
+  const [twoFaRecoveryCodes, setTwoFaRecoveryCodes] = useState<string[] | null>(null);
+  const [twoFaRecoveryCount, setTwoFaRecoveryCount] = useState<{ total: number; remaining: number } | null>(null);
+  const [twoFaRecoveryCopied, setTwoFaRecoveryCopied] = useState(false);
   const [signOutBusy, setSignOutBusy] = useState(false);
   // "Remember me" devices (#1495). null = still loading; [] = none remembered.
   const [devices, setDevices] = useState<TrustedDeviceView[] | null>(null);
@@ -219,7 +227,15 @@ export function AccountSettings() {
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt ?? null });
       })
       .catch(() => setPrefsLoadFailed(true));
-    fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
+    fetch('/api/account/2fa')
+      .then((r) => r.json())
+      .then((d) => {
+        setTwoFaEnabled(!!d.enabled);
+        if (d.recoveryCodes) {
+          setTwoFaRecoveryCount({ total: d.recoveryCodes.total ?? 0, remaining: d.recoveryCodes.remaining ?? 0 });
+        }
+      })
+      .catch(() => {});
     void loadDevices();
     void loadPushDevices();
     void loadAccessHistory();
@@ -285,7 +301,7 @@ export function AccountSettings() {
     }
   };
 
-  const twoFa = async (action: 'setup' | 'enable' | 'disable') => {
+  const twoFa = async (action: 'setup' | 'enable' | 'disable' | 'regenerate-codes') => {
     setTwoFaBusy(true);
     try {
       const res = await fetch('/api/account/2fa', {
@@ -295,13 +311,63 @@ export function AccountSettings() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       if (action === 'setup') setTwoFaSetup({ secret: data.secret, otpauth: data.otpauth });
-      else if (action === 'enable') { setTwoFaEnabled(true); setTwoFaSetup(null); setTwoFaCode(''); flash(t.account.updated); }
-      else { setTwoFaEnabled(false); setTwoFaSetup(null); setTwoFaCode(''); flash(t.account.updated); }
+      else if (action === 'enable') {
+        setTwoFaEnabled(true); setTwoFaSetup(null); setTwoFaCode('');
+        showRecoveryCodes(data.recoveryCodes);
+        flash(t.account.updated);
+      }
+      else if (action === 'regenerate-codes') {
+        showRecoveryCodes(data.recoveryCodes);
+        flash(t.account.updated);
+      }
+      else {
+        setTwoFaEnabled(false); setTwoFaSetup(null); setTwoFaCode('');
+        setTwoFaRecoveryCodes(null); setTwoFaRecoveryCount({ total: 0, remaining: 0 });
+        flash(t.account.updated);
+      }
     } catch (e2) {
       flash(e2 instanceof Error ? e2.message : 'Failed', true);
     } finally {
       setTwoFaBusy(false);
     }
+  };
+
+  // The plaintext arrives exactly once, in the response body. Everything here
+  // is about giving the user a real chance to keep it: it is put on screen, the
+  // count is updated to match, and copy/download are one click each.
+  const showRecoveryCodes = (codes: unknown) => {
+    if (!Array.isArray(codes) || codes.length === 0) {
+      // A set that did not come back is a bug worth surfacing, not a silent
+      // "2FA is on" with no way back into the account.
+      flash(t.account.recoveryFailed, true);
+      return;
+    }
+    const list = codes.map(String);
+    setTwoFaRecoveryCodes(list);
+    setTwoFaRecoveryCount({ total: list.length, remaining: list.length });
+    setTwoFaRecoveryCopied(false);
+  };
+
+  const copyRecoveryCodes = async () => {
+    if (!twoFaRecoveryCodes) return;
+    try {
+      await navigator.clipboard.writeText(twoFaRecoveryCodes.join('\n'));
+      setTwoFaRecoveryCopied(true);
+    } catch {
+      // No clipboard permission (or an insecure origin): the codes are on
+      // screen and downloadable, so this is not worth an error banner.
+    }
+  };
+
+  const downloadRecoveryCodes = () => {
+    if (!twoFaRecoveryCodes) return;
+    const blob = new Blob([`${twoFaRecoveryCodes.join('\n')}\n`], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'internship-crm-recovery-codes.txt';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Both preferences go through the same helpers as the sidebar controls
@@ -728,6 +794,66 @@ export function AccountSettings() {
   // visibility can be decided on the rows alone.
   const pushDeviceRows = pushDevices ?? [];
 
+  // Recovery codes (#1542), in two mutually exclusive states.
+  //
+  // Freshly minted: the plaintext, once, with copy and download next to it and
+  // an explicit "this is the only time" warning — followed by a dismissal that
+  // drops it from state, so it cannot come back by re-rendering.
+  //
+  // Otherwise: the count. A set that is spent or exhausted has to be VISIBLE,
+  // because the alternative is finding out on the day the authenticator is
+  // gone; and the regenerate button lives here rather than behind a fresh
+  // authenticator code, for the reason spelled out in the API route.
+  const recoveryBlock = (
+    <div className="border-t border-gray-200 dark:border-gray-700 pt-3" data-testid="recovery-codes-section">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.account.recoveryTitle}</h3>
+      <p className="text-sm text-gray-600 mt-1">{t.account.recoveryHint}</p>
+
+      {twoFaRecoveryCodes ? (
+        <div className="mt-3 space-y-3">
+          <p className="text-sm font-medium text-amber-700 dark:text-amber-300">{t.account.recoverySaveNow}</p>
+          <ul
+            className="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-200 dark:border-gray-700 rounded px-3 py-2 font-mono text-sm text-gray-900"
+            data-testid="recovery-codes-list"
+          >
+            {twoFaRecoveryCodes.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={copyRecoveryCodes}>
+              {twoFaRecoveryCopied ? t.account.recoveryCopied : t.account.recoveryCopy}
+            </Button>
+            <Button variant="outline" onClick={downloadRecoveryCodes}>{t.account.recoveryDownload}</Button>
+            <Button variant="outline" onClick={() => setTwoFaRecoveryCodes(null)}>{t.account.recoveryDone}</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {twoFaRecoveryCount && twoFaRecoveryCount.total > 0 ? (
+            <p className="text-sm text-gray-700 dark:text-gray-200" data-testid="recovery-codes-remaining">
+              {t.account.recoveryRemaining}: {twoFaRecoveryCount.remaining} / {twoFaRecoveryCount.total}
+            </p>
+          ) : (
+            <p className="text-sm text-amber-700 dark:text-amber-300">{t.account.recoveryNone}</p>
+          )}
+          {twoFaRecoveryCount && twoFaRecoveryCount.total > 0 && twoFaRecoveryCount.remaining === 0 && (
+            <p className="text-sm text-amber-700 dark:text-amber-300">{t.account.recoveryExhausted}</p>
+          )}
+          <p className="text-xs text-gray-500">{t.account.recoveryRegenerateHint}</p>
+          <Button
+            variant="outline"
+            loading={twoFaBusy}
+            onClick={() => twoFa('regenerate-codes')}
+            data-testid="recovery-codes-regenerate"
+          >
+            {t.account.recoveryRegenerate}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div>
       <div className="mb-8">
@@ -827,10 +953,13 @@ export function AccountSettings() {
       <Card className="mt-6 max-w-4xl" data-testid="two-factor-card">
         <CardHeader><CardTitle>{t.account.twoFactorSection}</CardTitle></CardHeader>
         {twoFaEnabled ? (
-          <div className="space-y-3 max-w-sm">
+          <div className="space-y-3 max-w-md">
             <p className="text-sm text-green-700">✓ {t.account.twoFactorOn}</p>
-            <Input label={t.account.twoFactorCode} inputMode="numeric" placeholder="123456" value={twoFaCode} onChange={(e) => setTwoFaCode(e.target.value)} />
-            <Button variant="outline" loading={twoFaBusy} disabled={!twoFaCode} onClick={() => twoFa('disable')}>{t.account.twoFactorDisable}</Button>
+            <div className="max-w-sm space-y-3">
+              <Input label={t.account.twoFactorCode} inputMode="numeric" placeholder="123456" value={twoFaCode} onChange={(e) => setTwoFaCode(e.target.value)} />
+              <Button variant="outline" loading={twoFaBusy} disabled={!twoFaCode} onClick={() => twoFa('disable')}>{t.account.twoFactorDisable}</Button>
+            </div>
+            {recoveryBlock}
           </div>
         ) : twoFaSetup ? (
           <div className="space-y-3 max-w-md">

@@ -9,7 +9,7 @@ Bir bastırma dosyası yerine düz metin: gerekçe diğer güvenlik dokümanlar�
 yanında okunabilir kalıyor ve biri okuduğunda **hâlâ geçerli mi** diye sorması
 gerektiği belli oluyor.
 
-Son gözden geçirme: **2026-09-09** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
+Son gözden geçirme: **2026-09-14** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
 
 ## Açık bulgular
 
@@ -122,6 +122,37 @@ olduğunu öğreniyor.
 organizasyonlar. Muaf (`ssoExempt`) kullanıcılar ve zorunluluk uygulanmayan her
 kiracı eski genel hatayı almaya devam ediyor. Ayrıntılar:
 [`docs/sso-saml.md`](sso-saml.md) § *Enforced SSO*.
+
+### `js/xss-through-dom` — kurtarma kodlarını indirme bağlantısı (#1542)
+
+2FA kurtarma kodları ekranda bir kez gösteriliyor ve "indir" düğmesi bunları
+`text/plain` bir blob olarak kaydettiriyor (`AccountSettings.tsx` ve
+`TwoFactorSetupGate.tsx`). Desen yukarıdaki önizleme vakasıyla aynı aileden —
+`URL.createObjectURL()` sonucu bir DOM niteliğine gidiyor — ama **hedef `<img
+src>` değil, `<a href>`**, ve bu ayrım gerekçeyi değiştirdiği için ayrı
+yazıyorum: bir anchor `javascript:` şemasını çalıştırabilir, bir `<img>`
+çalıştıramaz. Burada çalıştıramamasının sebebi başka:
+
+- Şemayı yine **tarayıcı** koyuyor: `createObjectURL()` `blob:<origin>/<uuid>`
+  üretir, içerik şemayı seçemez. Yani `href` asla `javascript:` ya da `data:`
+  olamaz.
+- `a.download` ayarlı, dolayısıyla tıklama bir **indirme**, gezinme değil.
+- Blob'un içeriği kullanıcı girdisi değil: uygulamanın kendi API'sinden yeni
+  gelmiş kod dizisi, `text/plain` olarak serileştiriliyor.
+- Anchor DOM'a hiç eklenmiyor — aynı tick içinde oluşturuluyor, tıklanıyor ve
+  URL `revokeObjectURL()` ile iptal ediliyor.
+
+**Karar: 1 — "false positive" olarak kapatılır.** Kodla susturma denenmemeli:
+#1325'te ölçüldüğü gibi CodeQL bu sınıfta yardımcı fonksiyonu sanitizer olarak
+tanımıyor ve uyarı aynı satırlarda yeniden çıkıyor.
+
+⚠️ **Uyarı numarası doğrulanmadı.** PR #2337'nin CodeQL kapısı *"1 new alert
+including 1 high severity security vulnerability"* diyor, ama code-scanning
+uyarıları bir ajan oturumundan okunamıyor (yazma izni ister; check run'ın
+`output.text`'i boş). Yukarıdaki gerekçe, diff'te bu sınıfa girebilecek **tek**
+desenin bu olmasına dayanıyor. Security → Code scanning'de kural/satır bundan
+başkasını gösteriyorsa bu bölüm yanlıştır: o zaman doğru hamle bu maddeyi
+silip uyarıyı gerçekten adıyla ele almak.
 
 ## Yeni bir istisna eklerken
 

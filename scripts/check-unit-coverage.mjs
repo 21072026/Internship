@@ -163,6 +163,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/recoveryCodeFormat.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the stored hash is taken over the normalised code, so changing normalisation invalidates every printed code (#1542)',
+    },
+  ],
+  [
     'src/lib/twoFactorResetRule.ts',
     {
       floor: 95,
