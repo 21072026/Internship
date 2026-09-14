@@ -166,6 +166,12 @@ export function AccountSettings() {
   // and every meeting time we emailed them stayed on the wrong clock.
   const [timezone, setTimezone] = useState('');
   const [savingTz, setSavingTz] = useState(false);
+  // Has GET /api/profile answered yet? The save-on-pick controls below must not
+  // be operable before it has (#2344): the loader sets their initial values, so
+  // a pick made while it is still in flight is overwritten by the response a
+  // moment later — the user's choice is silently reverted, and on a loaded
+  // machine the window is wide enough to hit every time.
+  const [profileLoaded, setProfileLoaded] = useState(false);
   // Read after mount: `Intl…resolvedOptions()` is a browser answer, and reading
   // it during render would differ from the server's HTML.
   const [detectedTz, setDetectedTz] = useState<string | null>(null);
@@ -225,6 +231,7 @@ export function AccountSettings() {
         setActiveMenteeCount(typeof user.activeMenteeCount === 'number' ? user.activeMenteeCount : 0);
         setAvailability(user.availability ?? null);
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt ?? null });
+        setProfileLoaded(true);
       })
       .catch(() => setPrefsLoadFailed(true));
     fetch('/api/account/2fa')
@@ -1120,7 +1127,11 @@ export function AccountSettings() {
             id="account-timezone"
             data-testid="timezone-select"
             value={resolveTimeZone(timezone)}
-            disabled={savingTz}
+            // Not operable until the profile has loaded — see `profileLoaded`.
+            // Until then this control does not yet show the zone that is
+            // stored, so a pick would be made against the wrong "current"
+            // value and then reverted by the load (#2344).
+            disabled={savingTz || !profileLoaded}
             onChange={(e) => changeTimezone(e.target.value)}
             className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           >
