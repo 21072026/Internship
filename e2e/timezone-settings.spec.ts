@@ -31,10 +31,21 @@ test.describe('everyone can set their own timezone', () => {
 
       const select = page.getByTestId('timezone-select');
       await expect(select).toBeVisible();
-      await select.selectOption('Asia/Tokyo');
 
-      // Saved on pick — no submit button to forget.
-      await expect(page.getByTestId('timezone-current')).toContainText(/GMT\+9/, { timeout: 10_000 });
+      // Saved on pick — no submit button to forget. The badge therefore only
+      // changes once the write has come back, so the wait is on the RESPONSE
+      // and not on a wall-clock window (#2344). The assertion used to carry
+      // `{ timeout: 10_000 }`, which SHORTENS the project default: on a loaded
+      // runner — four shards sharing one dev server — a PUT plus a re-render
+      // can outlast ten seconds, and the badge was then reported as "still
+      // showing the browser zone" when it simply had not been written yet.
+      const saved = page.waitForResponse(
+        (response) => response.url().includes('/api/profile') && response.request().method() === 'PUT'
+      );
+      await select.selectOption('Asia/Tokyo');
+      expect((await saved).ok()).toBe(true);
+
+      await expect(page.getByTestId('timezone-current')).toContainText(/GMT\+9/);
       await expect.poll(async () => (await prisma.user.findUnique({ where: { email } }))?.timezone).toBe('Asia/Tokyo');
 
       await page.reload();
@@ -43,6 +54,45 @@ test.describe('everyone can set their own timezone', () => {
       // The browser is in Berlin, so the app offers that zone — as an offer, not
       // an overwrite: the deliberate choice above is still what is stored.
       await expect(page.getByTestId('timezone-detected')).toContainText('Europe/Berlin');
+    } finally {
+      await cleanupByEmail(email);
+    }
+  });
+
+  // The bug #2344 was filed for, made deterministic. The picker saves on change
+  // and the profile load sets its initial value, so while GET /api/profile is
+  // still in flight the control shows a zone that is not the stored one and a
+  // pick is overwritten by the response a moment later. Locally that window is
+  // a few milliseconds; on a four-shard CI runner sharing one dev server it is
+  // wide enough to lose every time, which is what "the badge still shows the
+  // browser zone" was.
+  //
+  // Holding the response open turns "a race we hope to win" into an assertion.
+  test('the timezone picker is not operable until the profile has loaded', async ({ page }) => {
+    const email = uniqueEmail('tz-settings-race');
+    await seedUser(email, 'Pass1234!', 'MENTOR', 'TZ Race Mentor');
+
+    try {
+      await signIn(page, email);
+
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.route('**/api/profile', async (route) => {
+        if (route.request().method() !== 'GET') return route.continue();
+        await held;
+        return route.continue();
+      });
+
+      await page.goto('/account');
+      const select = page.getByTestId('timezone-select');
+      await expect(select).toBeVisible();
+      // Rendered, and deliberately not usable yet.
+      await expect(select).toBeDisabled();
+
+      release();
+      await expect(select).toBeEnabled();
     } finally {
       await cleanupByEmail(email);
     }
