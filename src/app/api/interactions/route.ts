@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
+import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { recordPairActivity } from '@/lib/metering';
@@ -31,11 +32,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const relationId = searchParams.get('relationId');
 
-    const where: Record<string, unknown> = {};
-    if (relationId) {
-      where.relationId = relationId;
-    }
-
     // Fail-closed scoping (#847): COMPANY and SOURCE used to fall past this
     // chain with an empty `where` and read every mentee's interaction log.
     // A role with no defined scope is now denied outright.
@@ -44,9 +40,17 @@ export async function GET(request: Request) {
       await logScopeDenial(session.user, 'GET /api/interactions');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    if (Object.keys(relationScope).length > 0) {
-      where.relation = relationScope;
-    }
+
+    // Composed through the shared helper (#2288) rather than assigned key by
+    // key. No filter here collides with the scope's keys today — but that was
+    // also true of /api/mentorship until a search filter was added, so the
+    // scope goes in as a conjunct here too. ADMIN's empty scope is dropped by
+    // `andScope`, which keeps the pointless `relation: {}` join out of the
+    // query exactly as the old length check did.
+    const where = andScope<Prisma.InteractionLogWhereInput>(
+      Object.keys(relationScope).length > 0 ? { relation: relationScope } : {},
+      relationId ? { relationId } : undefined
+    );
 
     const interactions = await prisma.interactionLog.findMany({
       where,

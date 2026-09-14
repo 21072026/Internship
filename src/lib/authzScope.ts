@@ -128,3 +128,47 @@ export async function logScopeDenial(user: ScopeUser, resource: string): Promise
     detail: `No scope defined for role ${user.role}`,
   });
 }
+
+/**
+ * Compose a scope with request filters so the scope is a **conjunct** (#2288).
+ *
+ * `GET /api/mentorship` used to spread the scope into the `where` and then set
+ * `where.OR = [...search terms...]`. The MENTOR and MENTEE scopes above are
+ * *themselves* expressed as `OR` (both sides of the relation, #1141), so that
+ * assignment did not narrow the scope — it REPLACED it, and any authenticated
+ * mentor or mentee could read every relation in the database by adding
+ * `?search=`. COMPANY and SOURCE survived only because their scopes happen to
+ * use different keys, which is the tell that the bug belongs to the shape of
+ * the composition and not to one route.
+ *
+ * So the composition lives here, next to the builders whose shape it has to
+ * survive: `AND` is the one key a scope builder will never produce, and a later
+ * filter lands in its own array element instead of on top of the scope.
+ *
+ *     const where = andScope<Prisma.MentorshipRelationWhereInput>(
+ *       scope,
+ *       status ? { status } : undefined,
+ *       search ? { OR: [...] } : undefined,
+ *     );
+ *
+ * Empty and absent terms are dropped, so a no-filter request keeps the exact
+ * `where` it had before and the result is never `AND: []` (which Prisma reads
+ * as "match nothing" on some versions — a fail-closed shape, but one that would
+ * silently empty every unfiltered list).
+ */
+export function andScope<W extends object>(
+  scope: W,
+  ...filters: Array<W | undefined | null | false>
+): W {
+  const terms = [scope, ...filters].filter(
+    (term): term is W => Boolean(term) && Object.keys(term as object).length > 0
+  );
+  if (terms.length === 0) return {} as W;
+  // One term needs no wrapper — and it is copied rather than handed back, so a
+  // caller that still assigns onto the result cannot reach into a builder's
+  // object.
+  if (terms.length === 1) return { ...terms[0] };
+  // `W` is a Prisma `*WhereInput`; every one of them accepts `AND`, but the
+  // generic parameter cannot express that, hence the assertion.
+  return { AND: terms } as unknown as W;
+}

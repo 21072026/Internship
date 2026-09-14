@@ -236,3 +236,50 @@ test('the outgoing mentor cannot read the mentee\'s re-match reason', { tag: '@s
     await prisma.mentorshipRequest.deleteMany({ where: { id: req.id } });
   }
 });
+
+/**
+ * A filter must not be able to widen the scope (#2288).
+ *
+ * `GET /api/mentorship` built its `where` by spreading the scope and then
+ * ASSIGNING `where.OR = [...search terms...]`. A mentor's scope is itself an
+ * `OR` over both sides of the relation, so `?search=` replaced it wholesale and
+ * one request returned every relation in the database — each mentee's id, name,
+ * e-mail, university and pipeline position included.
+ *
+ * The assertion has to be on the SEARCH path: the unsearched list was always
+ * correctly scoped, so a test without `?search=` passes against the bug. The
+ * second half (the mentor's own row still being findable) is what keeps the
+ * first half from being satisfied by a filter that matches nothing at all.
+ */
+test('a mentor cannot widen its scope with ?search=', { tag: '@smoke' }, async ({ page }) => {
+  await signInAsFreshUser(page, emails.MENTOR, PASSWORD, LANDING.MENTOR);
+
+  // "Other" matches the foreign pair on all three searched columns (its
+  // mentor's name, its mentee's name and its company's name) and matches
+  // nothing in the caller's own relation — so any row that comes back is a row
+  // the search reached past the scope for.
+  const res = await page.request.get('/api/mentorship?search=Other');
+  expect(res.status()).toBe(200);
+  const relations = (await res.json()).relations as
+    | { id: string; mentorId: string; menteeId: string }[]
+    | undefined;
+  expect(Array.isArray(relations), 'GET /api/mentorship should return relations[]').toBe(true);
+  expect(
+    (relations ?? []).map((relation) => relation.id),
+    'the foreign relation must not be reachable through search'
+  ).not.toContain(foreignRelationId);
+  const foreign = (relations ?? []).filter(
+    (relation) => relation.mentorId !== users.MENTOR.id && relation.menteeId !== users.MENTOR.id
+  );
+  expect(
+    foreign,
+    `search returned ${foreign.length} relation(s) this mentor is not part of`
+  ).toEqual([]);
+
+  const own = await page.request.get('/api/mentorship?search=Matrix Mentee');
+  expect(own.status()).toBe(200);
+  expect(
+    ((await own.json()).relations as { id: string }[]).map((relation) => relation.id),
+    'search must still find the mentor\'s own relation'
+  ).toContain(ownRelationId);
+});

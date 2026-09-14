@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { resolveOwner } from '@/lib/projectAccess';
-import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
+import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { createOrGetProjectConversation } from '@/lib/conversations';
@@ -48,11 +49,19 @@ export async function GET() {
   // Fail-closed scoping (#849): SOURCE used to fall past the role chain here
   // and read every project, private ones included. Per-role scopes now live in
   // authzScope.ts and an unlisted role is denied instead of unfiltered.
-  const where = await scopeForRole(session.user, 'project');
-  if (!where) {
+  const scope = await scopeForRole(session.user, 'project');
+  if (!scope) {
     await logScopeDenial(session.user, 'GET /api/projects');
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  // This list takes no query filters today, so `andScope` is a pass-through
+  // here — it is used anyway (#2288) so that "the scope is a conjunct" is a
+  // property of the module that owns scoping and not a habit each route has to
+  // remember. The MENTOR and MENTEE project scopes are `OR`s, so the first
+  // hand-rolled `where.OR = […]` filter added here would replace the scope in
+  // exactly the way it did on /api/mentorship; adding it as another argument
+  // to this call cannot.
+  const where = andScope<Prisma.ProjectWhereInput>(scope);
 
   const projects = await prisma.project.findMany({ where, include, orderBy: { updatedAt: 'desc' } });
   // The card's "who's on it" row and its intern count come from the merged team
