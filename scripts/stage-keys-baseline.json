@@ -8,22 +8,6 @@
     "hits": 2,
     "issue": "#1884"
   },
-  "src/app/api/admin/analytics/benchmark/route.ts": {
-    "hits": 4,
-    "issue": "#1882"
-  },
-  "src/app/api/admin/analytics/cohorts/route.ts": {
-    "hits": 6,
-    "issue": "#1882"
-  },
-  "src/app/api/admin/analytics/route.ts": {
-    "hits": 4,
-    "issue": "#1882"
-  },
-  "src/app/api/admin/analytics/sources/route.ts": {
-    "hits": 2,
-    "issue": "#1882"
-  },
   "src/app/api/admin/sources/route.ts": {
     "hits": 2,
     "issue": "#1884"
@@ -31,10 +15,6 @@
   "src/app/api/calendar-events/route.ts": {
     "hits": 3,
     "issue": "#1884"
-  },
-  "src/app/api/mentor/analytics/route.ts": {
-    "hits": 4,
-    "issue": "#1882"
   },
   "src/components/JourneyTracker.tsx": {
     "hits": 2,

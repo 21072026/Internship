@@ -37,6 +37,11 @@ interface Analytics {
     activeRate: number | null;
     warn: boolean;
   }[];
+  // What this tenant calls the stage the conversion number counted (#1882).
+  // `finishedLabelIsCustom` is false when the tenant never renamed it, and the
+  // screen then keeps its own translated wording.
+  finishedLabel?: string;
+  finishedLabelIsCustom?: boolean;
 }
 
 type RangePreset = '30' | '90' | '6m' | '12m' | 'all';
@@ -131,6 +136,17 @@ export default function AdminAnalyticsPage() {
   // cohorts endpoint and infer the tier from a 403 (#1442). `null` = not known
   // yet, so neither the premium cards nor the locked panel is drawn.
   const premium = usePremiumAnalytics();
+
+  // The word this screen uses for "reached the outcome". A tenant that renamed
+  // its last pipeline stage gets ITS name; everyone else keeps the translated
+  // strings that were here before #1882, so a default-catalogue tenant sees
+  // exactly the same text as before.
+  const outcomeName = data?.finishedLabelIsCustom ? data.finishedLabel : undefined;
+  const outcomeHeading = outcomeName ?? t.analytics.cohortHired;
+  const outcomeWord = outcomeName ?? t.analytics.hired;
+  const conversionLabel = outcomeName
+    ? t.analytics.conversionToStage.replace('{stage}', outcomeName)
+    : t.analytics.conversion;
 
   useEffect(() => {
     const qs = rangeQuery(range);
@@ -235,9 +251,9 @@ export default function AdminAnalyticsPage() {
         columns: [a.fullReportMonth, a.trendNewRelations, a.trendInteractions],
         rows: data.trends.months.map((m, i) => [m, data.trends!.newRelations[i], data.trends!.interactions[i]]),
       }] : []),
-      { name: 'Mentors', columns: ['Mentor', a.active, a.hired], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) },
-      { name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, a.cohortHired, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) },
-      { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, a.cohortHired, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
+      { name: 'Mentors', columns: ['Mentor', a.active, outcomeWord], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) },
+      { name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, outcomeHeading, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) },
+      { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, outcomeHeading, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
       ...(dropReasonRows.length > 0
         ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
         : []),
@@ -296,7 +312,7 @@ export default function AdminAnalyticsPage() {
         <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat label={t.analytics.totalRelations} value={data.totalRelations} />
-        <Stat label={t.analytics.conversion} value={`${data.conversionToHired}%`} />
+        <Stat label={conversionLabel} value={`${data.conversionToHired}%`} />
         <Stat label={t.analytics.interactions} value={data.engagement.interactions} />
         <Stat label={t.analytics.rsvpRate} value={data.rsvp.acceptanceRate === null ? '—' : `${data.rsvp.acceptanceRate}%`} />
       </div>
@@ -513,7 +529,7 @@ export default function AdminAnalyticsPage() {
                     <PersonHoverCard personId={m.id} name={m.fullName} role="MENTOR" />
                   </span>
                   <span className="text-gray-500 flex-shrink-0">
-                    {m.active} {t.analytics.active} · {m.hired} {t.analytics.hired}
+                    {m.active} {t.analytics.active} · {m.hired} {outcomeWord}
                   </span>
                 </div>
               ))}

@@ -111,6 +111,14 @@ jobs:
       # the two can silently disagree (#1731).
       - name: the plan → feature matrix and its fallbacks (#1731)
         run: npm run test:plans
+      # e2e/support/idp-mock.mjs hand-rolls the stub IdP's certificate in DER,
+      # and an invalid INTEGER there throws at IMPORT — so the Playwright
+      # webServer never starts and the whole job fails with no test having run.
+      # The serial is 8 random bytes, so the bad shape (a redundant leading
+      # 0x00) came up about once in 256 runs and read as an infrastructure
+      # flake every time it did.
+      - name: the stub IdP's DER encoder (#2251)
+        run: npm run test:idp-mock-der
       # src/lib/money.ts is the ONLY place a currency symbol is written, which
       # is what lets the pricing page carry no currency literal of its own. So
       # every bug in it is a wrong number on a public page, in a locale the

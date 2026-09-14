@@ -13,9 +13,9 @@ import { signInAndSettle, gotoSettled } from './helpers/auth';
  *
  * The API assertion is the load-bearing one; the two testid assertions only
  * guard that the screen renders the resolved order rather than a default.
- * The headline conversion number on /admin/analytics is deliberately NOT
- * asserted: it still compares against 'HIRED_660'
- * (src/app/api/admin/analytics/route.ts) and #1882 owns that fix.
+ * The five reports that decide "was this person placed" are covered by
+ * e2e/custom-pipeline-outcome-analytics.spec.ts (#1882) on the same fixture —
+ * this spec stays about the funnel's stage ORDER.
  */
 
 const PASSWORD = 'CustomPipe123!';

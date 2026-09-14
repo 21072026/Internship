@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { daysInStage } from '@/lib/stageClock';
+import { outcomeStageKeys } from '@/lib/pipelineStages';
+import { getLocale } from '@/i18n/server';
 
 // GET — mentor-scoped analytics: their own pipeline funnel, goal summary and
 // engagement stats (EPIC: mentor analytics / pipeline funnel, roadmap #370).
@@ -22,6 +24,8 @@ export async function GET(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const locale = await getLocale();
 
   return await withTenantScope(session, async () => {
     // A MENTOR sees only their own mentees; an ADMIN sees all (no mentor filter),
@@ -82,11 +86,20 @@ export async function GET(request: Request) {
       funnel[r.pipelineStatus] = (funnel[r.pipelineStatus] ?? 0) + 1;
     }
 
+    // "Hired" is the TENANT's own finished stage set (#1882). These two counts
+    // used to be inline `r.pipelineStatus === 'HIRED_660' || … === 'EMPLOYED_700'`
+    // comparisons, so a mentor working a renamed pipeline saw 0 hired and 0%
+    // conversion no matter how many mentees they had placed. For an org on the
+    // built-in catalogue `finished` is exactly those two keys.
+    const outcome = await outcomeStageKeys(
+      (session.user as { orgId?: string | null }).orgId ?? null,
+      locale,
+    );
+    const finished = new Set(outcome.finished);
+
     const totalRelations = relations.length;
     const activeRelations = relations.filter((r) => r.status === 'ACTIVE').length;
-    const hired = relations.filter(
-      (r) => r.pipelineStatus === 'HIRED_660' || r.pipelineStatus === 'EMPLOYED_700'
-    ).length;
+    const hired = relations.filter((r) => finished.has(r.pipelineStatus)).length;
     const conversionToHired = totalRelations > 0 ? Math.round((hired / totalRelations) * 100) : 0;
 
     // Goal summary across all mentees. OPEN/total are current state; "done" is
@@ -115,9 +128,7 @@ export async function GET(request: Request) {
 
     // Average days to hired for completed mentees.
     let avgDaysToHired: number | null = null;
-    const hiredRelations = relations.filter(
-      (r) => r.pipelineStatus === 'HIRED_660' || r.pipelineStatus === 'EMPLOYED_700'
-    );
+    const hiredRelations = relations.filter((r) => finished.has(r.pipelineStatus));
     if (hiredRelations.length > 0) {
       const durations = hiredRelations
         .map((r) => {
@@ -125,7 +136,7 @@ export async function GET(request: Request) {
           if (!last) return null;
           return Math.floor((last.createdAt.getTime() - r.startDate.getTime()) / (24 * 60 * 60 * 1000));
         })
-        // Backdated status changes can put the HIRED/EMPLOYED transition before
+        // Backdated status changes can put the finishing transition before
         // the relation's startDate, producing a negative duration — drop it
         // rather than average in a nonsensical value.
         .filter((d): d is number => d !== null && d >= 0);
@@ -166,6 +177,9 @@ export async function GET(request: Request) {
       // Echoed so the screen can say which period these numbers describe — and
       // so a caller that sent a bad range sees what it actually got.
       range: { from: iso(from), to: iso(to) },
+      // And which stage "hired" meant here (#1882).
+      finishedLabel: outcome.finishedLabel,
+      finishedLabelIsCustom: outcome.finishedLabelIsCustom,
     });
   });
 }

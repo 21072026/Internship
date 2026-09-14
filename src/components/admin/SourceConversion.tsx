@@ -24,6 +24,9 @@ export function SourceConversion() {
   const c = t.analytics;
   const [rows, setRows] = useState<SourceRow[] | null>(null);
   const [unsourced, setUnsourced] = useState(0);
+  // The tenant's own name for the stage the "hired" column counted (#1882),
+  // used only when the tenant renamed it — see CohortComparison.
+  const [outcomeName, setOutcomeName] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/admin/analytics/sources')
@@ -32,6 +35,7 @@ export function SourceConversion() {
         const d = await r.json();
         setRows(d.sources ?? []);
         setUnsourced(d.unsourced ?? 0);
+        setOutcomeName(d.finishedLabelIsCustom ? (d.finishedLabel as string) || null : null);
       })
       .catch(() => {});
   }, []);
@@ -56,7 +60,7 @@ export function SourceConversion() {
                 <th className="py-2 pr-3">{c.sourceName}</th>
                 <th className="py-2 pr-3">{c.cohortTotal}</th>
                 <th className="py-2 pr-3">{c.sourceInPipeline}</th>
-                <th className="py-2 pr-3">{c.cohortHired}</th>
+                <th className="py-2 pr-3">{outcomeName ?? c.cohortHired}</th>
                 <th className="py-2">{c.cohortConversion}</th>
               </tr>
             </thead>

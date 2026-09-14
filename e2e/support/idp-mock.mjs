@@ -91,6 +91,21 @@ function derOid(dotted) {
 
 function derInt(value) {
   let b = Buffer.isBuffer(value) ? value : Buffer.from([value]);
+  // DER demands the MINIMAL two's-complement encoding, and the two rules below
+  // are not symmetric decoration — getting either wrong produces a certificate
+  // OpenSSL rejects outright with ERR_OSSL_ASN1_ILLEGAL_PADDING.
+  //
+  // 1. Strip redundant leading 0x00 bytes. A 0x00 is only legal when the byte
+  //    after it has its high bit set (there to carry the sign). The serial here
+  //    is `crypto.randomBytes(8)`, so roughly 1 run in 256 draws a first byte of
+  //    0x00 followed by a byte under 0x80 — and *that* run died at import,
+  //    before a single test body ran, taking the whole Playwright job with it.
+  //    It read as an unrelated infrastructure flake precisely because it is rare
+  //    and fires in the webServer rather than in a spec.
+  // 2. Only then pad for the sign bit.
+  let i = 0;
+  while (i + 1 < b.length && b[i] === 0 && !(b[i + 1] & 0x80)) i += 1;
+  if (i) b = b.subarray(i);
   if (b[0] & 0x80) b = Buffer.concat([Buffer.from([0]), b]); // keep it positive
   return der(0x02, b);
 }
@@ -107,12 +122,14 @@ const OID_COMMON_NAME = '2.5.4.3';
 const OID_SHA256_RSA = '1.2.840.113549.1.1.11';
 const derName = (cn) => derSeq(derSet(derSeq(derOid(OID_COMMON_NAME), derUtf8(cn))));
 
-function selfSignedCertificate(publicKey, privateKey, commonName) {
+// `serial` is injectable so a test can pin the byte patterns that used to break
+// the encoder; production callers always let it be random.
+function selfSignedCertificate(publicKey, privateKey, commonName, serial = crypto.randomBytes(8)) {
   const algorithm = derSeq(derOid(OID_SHA256_RSA), derNull());
   const now = Date.now();
   const tbs = derSeq(
     der(0xa0, derInt(2)), // [0] EXPLICIT version, v3
-    derInt(crypto.randomBytes(8)), // serial
+    derInt(serial),
     algorithm,
     derName(commonName), // issuer == subject (self-signed)
     derSeq(derUtcTime(new Date(now - 60_000)), derUtcTime(new Date(now + 86_400_000))),
@@ -529,4 +546,4 @@ if (!process.env.IDP_MOCK_NO_LISTEN) {
   server.listen(PORT, '127.0.0.1', () => console.log(`idp-mock listening on ${PORT}`));
 }
 
-export { server, SAML_ISSUER, OIDC_ISSUER, ORIGIN };
+export { server, SAML_ISSUER, OIDC_ISSUER, ORIGIN, derInt, selfSignedCertificate };

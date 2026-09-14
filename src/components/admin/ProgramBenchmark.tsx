@@ -9,6 +9,10 @@ interface Benchmark {
   you: { conversion: number; dropRate: number; total: number; hired: number } | null;
   platform: { avgConversion: number | null; avgDropRate: number | null; poolSize: number; minRelations: number };
   percentile: number | null;
+  // The VIEWER's own finished stage name (#1882) — never another program's.
+  // Rendered only when the tenant actually renamed it.
+  finishedLabel?: string;
+  finishedLabelIsCustom?: boolean;
 }
 
 // Premium cross-program benchmark (Faz 2, #542) on the admin analytics page.
@@ -36,6 +40,10 @@ export function ProgramBenchmark() {
 
   const you = data.you;
   const p = data.platform;
+  const outcomeName = data.finishedLabelIsCustom ? data.finishedLabel : undefined;
+  const conversionLabel = outcomeName
+    ? c.conversionToStage.replace('{stage}', outcomeName)
+    : c.benchmarkConversion;
 
   const Metric = ({ label, you: y, avg }: { label: string; you: number | null; avg: number | null }) => {
     const delta = y != null && avg != null ? y - avg : null;
@@ -68,7 +76,7 @@ export function ProgramBenchmark() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Metric label={c.benchmarkConversion} you={you.conversion} avg={p.avgConversion} />
+            <Metric label={conversionLabel} you={you.conversion} avg={p.avgConversion} />
             <Metric label={c.benchmarkDropRate} you={you.dropRate} avg={p.avgDropRate} />
           </div>
           <p className="text-xs text-gray-400 mt-3">

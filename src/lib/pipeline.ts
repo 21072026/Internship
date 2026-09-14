@@ -41,6 +41,18 @@ export const ON_PATH_STATUSES = [
   'EMPLOYED_700',
 ] as const satisfies readonly PipelineStatus[];
 
+// The stages of the canonical catalogue that mean "reached the outcome" — the
+// tail of ON_PATH_STATUSES, and for years the literal
+// `new Set(['HIRED_660','EMPLOYED_700'])` copied into five analytics routes
+// (#1882). It lives here, with the catalogue it describes, so those routes can
+// generalise over a TENANT'S stages without naming a key: it is only the ANCHOR
+// that lets `outcomeStageKeys()` (src/lib/pipelineStages.ts) reproduce this exact
+// set for an org on the built-in stages while resolving a renamed pipeline's own
+// final stage. `DEFAULT_HIRED_STAGE_KEY` in src/lib/offers.ts is the first of
+// these and answers a different question (may we offer the "move to hired"
+// suggestion?); #1504 is the issue that unifies the two.
+export const CANONICAL_OUTCOME_KEYS = ['HIRED_660', 'EMPLOYED_700'] as const satisfies readonly PipelineStatus[];
+
 // The next stage along the happy path, or null when the current stage is the
 // terminal state (EMPLOYED_700) or an off-path status not on the sequence.
 export function nextOnPathStatus(current: string): PipelineStatus | null {

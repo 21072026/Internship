@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "Fixed a ~1-in-256 CI failure: the stub IdP's hand-rolled DER encoder emitted a non-minimal INTEGER for certificate serials beginning with a zero byte, so `new X509Certificate()` threw at import and the Playwright webServer never started. Guarded by `npm run test:idp-mock-der`."
+}

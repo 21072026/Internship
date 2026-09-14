@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { buildSignupWindow, type SignupCounts } from '@/lib/signupFunnel';
+import { outcomeStageKeys } from '@/lib/pipelineStages';
+import { getLocale } from '@/i18n/server';
 
 // GET — aggregate analytics for the admin dashboard:
 // pipeline funnel, mentor workload/outcomes, engagement and RSVP rate.
@@ -17,6 +19,8 @@ export async function GET(request: Request) {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const locale = await getLocale();
 
   return await withTenantScope(session, async () => {
   const { searchParams } = new URL(request.url);
@@ -101,13 +105,22 @@ export async function GET(request: Request) {
 
   const funnel = Object.fromEntries(byStage.map((s) => [s.pipelineStatus, s._count._all]));
 
-  const HIRED = new Set(['HIRED_660', 'EMPLOYED_700']);
+  // What "hired" means here is the TENANT's own finished stage set (#1882) —
+  // this route used to compare against the literals `HIRED_660`/`EMPLOYED_700`,
+  // which a customer that renamed its pipeline does not have, so the headline
+  // conversion and every mentor's outcome count read zero. For an org on the
+  // built-in catalogue `finished` is exactly those two keys.
+  const outcome = await outcomeStageKeys(
+    (session.user as { orgId?: string | null }).orgId ?? null,
+    locale,
+  );
+  const finished = new Set(outcome.finished);
   const mentorWorkload = mentors
     .map((m) => ({
       id: m.id,
       fullName: m.fullName,
       active: m.mentorRelations.length,
-      hired: m.mentorRelations.filter((r) => HIRED.has(r.pipelineStatus)).length,
+      hired: m.mentorRelations.filter((r) => finished.has(r.pipelineStatus)).length,
     }))
     .sort((a, b) => b.active - a.active);
 
@@ -119,7 +132,7 @@ export async function GET(request: Request) {
   const rsvpAcceptanceRate = rsvpResponded ? Math.round(((rsvp.ACCEPTED || 0) / rsvpResponded) * 100) : null;
 
   const totalRelations = byStage.reduce((n, s) => n + s._count._all, 0);
-  const hiredCount = (funnel.HIRED_660 || 0) + (funnel.EMPLOYED_700 || 0);
+  const hiredCount = outcome.finished.reduce((n, key) => n + (funnel[key] || 0), 0);
   const conversionToHired = totalRelations ? Math.round((hiredCount / totalRelations) * 100) : 0;
 
   return NextResponse.json({
@@ -133,6 +146,12 @@ export async function GET(request: Request) {
     trends,
     range,
     signupFunnel: signupWindows,
+    // So the screen can name the stage the conversion number counted, rather
+    // than asserting a universal "Hired" (#1882). `finishedLabelIsCustom` is
+    // false for a tenant that never renamed it, and the page then keeps its own
+    // translated wording — byte-identical text for a default-catalogue tenant.
+    finishedLabel: outcome.finishedLabel,
+    finishedLabelIsCustom: outcome.finishedLabelIsCustom,
   });
   });
 }
