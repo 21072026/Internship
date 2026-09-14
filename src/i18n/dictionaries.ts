@@ -2348,6 +2348,8 @@ const en = {
     realAccountLink: 'See what the product does',
   },
   projects: {
+    planLimitReached:
+      'Plan limit reached: {usage}/{limit} projects on the {plan} plan. Existing projects are unaffected — upgrade, or archive one, to add another.',
     title: 'Projects',
     subtitle: 'Internship projects — company-backed or community',
     newProject: 'New project',
@@ -7459,6 +7461,8 @@ const tr: Dict = {
     realAccountLink: 'Ürünün neler yaptığına bakın',
   },
   projects: {
+    planLimitReached:
+      '{plan} planında proje sınırına ulaşıldı: {usage}/{limit}. Mevcut projeler etkilenmez — yenisini eklemek için planı yükseltin ya da birini arşivleyin.',
     title: 'Projeler',
     subtitle: 'Staj projeleri — şirket destekli veya topluluk',
     newProject: 'Yeni proje',
@@ -12529,6 +12533,8 @@ const de: Dict = {
     realAccountLink: 'Sehen, was das Produkt kann',
   },
   projects: {
+    planLimitReached:
+      'Plan-Limit erreicht: {usage}/{limit} Projekte im {plan}-Tarif. Bestehende Projekte bleiben unberührt — für ein weiteres den Tarif erhöhen oder eines archivieren.',
     title: 'Projekte',
     subtitle: 'Praktikumsprojekte — von Unternehmen unterstützt oder gemeinschaftlich',
     newProject: 'Neues Projekt',
