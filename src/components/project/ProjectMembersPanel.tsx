@@ -26,6 +26,7 @@ export function ProjectMembersPanel({
   projectId,
   myId,
   canAdd = true,
+  isPublic = false,
 }: {
   projectId: string;
   myId: string;
@@ -36,6 +37,15 @@ export function ProjectMembersPanel({
    * ADMIN/MENTOR-only. Removing a member stays available to any owner.
    */
   canAdd?: boolean;
+  /**
+   * Whether the project is on the public showcase — which decides whether the
+   * "approve a join request" advice is actionable at all. Join requests are
+   * only accepted on public projects (`code: 'not_public'`), and a
+   * mentee-created project starts private and can only be published by an
+   * admin, so telling that owner to wait for join requests described a flow
+   * that could never happen (#2270).
+   */
+  isPublic?: boolean;
 }) {
   const t = useT();
   const [members, setMembers] = useState<Member[]>([]);
@@ -203,7 +213,7 @@ export function ProjectMembersPanel({
         </>
       ) : (
         <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="members-add-blocked">
-          {t.projects.ownerInviteViaJoinRequests}
+          {isPublic ? t.projects.ownerInviteViaJoinRequests : t.projects.ownerInviteAskAdmin}
         </p>
       )}
     </div>

@@ -285,7 +285,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   the member POST refuses them on purpose (#2270) and they grow
                   the team through join requests instead. */}
               {isLead && session && (
-                <ProjectMembersPanel projectId={id} myId={session.user.id} canAdd={role !== 'MENTEE'} />
+                <ProjectMembersPanel projectId={id} myId={session.user.id} canAdd={role !== 'MENTEE'} isPublic={p.isPublic} />
               )}
 
               {isLead && <ProjectJoinRequests projectId={id} />}
