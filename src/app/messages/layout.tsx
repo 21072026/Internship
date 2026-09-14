@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { roleHome } from '@/lib/roleHome';
 import { MessagesShell } from '@/components/MessagesShell';
+import { RoleShell } from '@/components/RoleShell';
 
 /**
  * Route-scoped viewport (#1009). `viewportFit: 'cover'` is what makes
@@ -30,5 +31,9 @@ export default async function MessagesLayout({ children }: { children: React.Rea
   // land here after signing in, instead of on the role's home page.
   if (!session) redirect('/auth/signin?callbackUrl=/messages');
 
-  return <MessagesShell homeHref={roleHome(session.user.role)}>{children}</MessagesShell>;
+  return (
+    <RoleShell>
+      <MessagesShell homeHref={roleHome(session.user.role)}>{children}</MessagesShell>
+    </RoleShell>
+  );
 }
