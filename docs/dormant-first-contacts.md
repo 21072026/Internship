@@ -68,6 +68,44 @@ gösterilir, "Pasif" rozeti ve kaç hatırlatma gittiği kartta görünür.
   E-posta grubu: `announcements` (`re-engagement` ile aynı grup — okuyucunun bunu
   kapatmak için uzanacağı düğme odur).
 
+## Üst sınır nerede uygulanır (#2287)
+
+Söz **kişiye** verilmiştir, dolayısıyla sayım da kişi üzerindendir; harcama ise hâlâ
+**ilişkide** tutulur (`dormantNudgeCount`), çünkü atomik talebi mümkün kılan o.
+`sendDormantCheckIns` kararı verirken iki toplu değer okur:
+
+| Soru | Kaynak |
+|---|---|
+| Bu insan kaç mail aldı? | mentee'nin **ACTIVE** ilişkilerindeki `dormantNudgeCount` **toplamı** |
+| En son ne zaman yazdık? | aynı kümedeki `dormantNudgeSentAt` **en büyüğü** |
+
+İkincisi aralık kuralının da saatidir: 31 günlük boşluk, o kişiye gönderilen **son**
+maile göre ölçülür — hangi ilişkiden gitmiş olursa olsun.
+
+**Bu, mükerrer bir kaydın sözü bozmasına karşı dayanıklıdır.** Bir mentee'nin birden
+fazla ACTIVE mentörü olamaz (#419) ve bu geçerliyken toplam zaten ilişkinin kendi
+sayacına eşittir — yani normal durumda hiçbir davranış değişmez. Kural bir kez
+delindiğinde ise eskiden iki bağımsız bütçe iki katı mail demekti; dördüncü mail bir
+yana, **ikincisi zaten "bir daha yazmayacağız" diyor**. #2283'ün eklediği bellek içi
+küme bunu yalnızca *tek tur* için engelliyordu: ikinci ilişkinin bütçesi dokunulmadan
+kaldığı için fazla mail iptal olmuyor, ertesi güne erteleniyordu.
+
+Aynı kural haftalık rapor hatırlatması için de geçerli
+(`sendWeeklyReportReminders`): talep hâlâ `@@unique([relationId, weekStart])` ile
+atomik, ama gönderilecek ilişki kişi başına **tek** seçilir (deterministik olarak en
+küçük `id`, böylece çakışan iki tur aynı satırda yarışır) ve
+`WeeklyReportReminder.recipientId` sayesinde "bu insana bu hafta yazıldı mı?" sorusu
+artık sorulabiliyor. `@@unique([recipientId, weekStart])` bilinçli olarak **daha
+eklenmedi**: dağıtım önce `db push` sonra backfill çalıştırıyor, dolayısıyla indeks
+henüz NULL olan satırların — ve tam da bu işin konusu olan mükerrerlerin — üzerine
+kurulurdu. Sıralama #2286'daki DB backstop'ıyla aynı: genişlet → doldur → temiz
+olduğunu doğrula → daralt.
+
+**Mentöre giden hatırlatmalar bilerek ilişki başınadır** (`checkMentorInteractionReminders`,
+`checkStageDeadlineReminders`): oradaki alıcı mentör ve her mesaj *farklı* bir mentee
+hakkında — aynı kişiye giden iki farklı içerik, mükerrer değil. Onları birleştirmek bir
+son tarihi düşürmek olurdu.
+
 ## Elle çalıştırma
 
 ```

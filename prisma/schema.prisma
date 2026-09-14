@@ -494,6 +494,7 @@ model User {
   menteeOnboarding                  MenteeOnboarding[]            @relation("OnboardingMentee")
   missingDocumentReminderSubjects   DocumentRequirementReminder[] @relation("MissingDocumentReminderSubject")
   missingDocumentReminderRecipients DocumentRequirementReminder[] @relation("MissingDocumentReminderRecipient")
+  weeklyReportReminders             WeeklyReportReminder[]        @relation("WeeklyReportReminderRecipient")
   createdOffers                     Offer[]                       @relation("OfferCreatedBy")
   decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
   reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
@@ -3046,15 +3047,34 @@ model WeeklyReport {
 
 // Delivery-only weekly idempotency marker; contains no report/message content.
 model WeeklyReportReminder {
-  id         String   @id @default(cuid())
-  relationId String
-  weekStart  DateTime @db.Date
-  createdAt  DateTime @default(now())
+  id          String   @id @default(cuid())
+  relationId  String
+  // The PERSON the reminder was sent to (#2287). The claim is still keyed by
+  // the relation — that unique is what makes the claim atomic — but the cap
+  // the product owes a human is "one reminder per person per week", and that
+  // question cannot be asked of a relation-keyed row at all.
+  //
+  // Nullable on purpose, and it stays nullable in this change: the table has
+  // rows, and `db push` REFUSES a new required column with no database-side
+  // default on a populated table (#2298) — additive is not the same as
+  // appliable. `prisma/backfill-weekly-report-reminder-recipient.mjs` fills the
+  // existing rows. The `@@unique([recipientId, weekStart])` that would make
+  // the cap structural is the deliberate CONTRACT step and is NOT here: deploys
+  // run `db push` BEFORE the backfills, so the index would be created against
+  // rows that are still NULL — and, worse, against exactly the duplicate rows
+  // this issue is about. Same sequencing as the one-active-mentor backstop
+  // (#2286): expand, backfill, verify clean on prod and shared preview, then
+  // contract.
+  recipientId String?
+  weekStart   DateTime @db.Date
+  createdAt   DateTime @default(now())
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  recipient User?              @relation("WeeklyReportReminderRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@unique([relationId, weekStart])
   @@index([weekStart])
+  @@index([recipientId, weekStart])
 }
 
 // Structured hiring demand (#806). CompanyNeed remains in place during the
