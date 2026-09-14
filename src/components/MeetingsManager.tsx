@@ -231,6 +231,11 @@ export function MeetingsManager() {
                 <label className="flex items-center gap-2 text-sm py-1 mb-1 border-b border-gray-100 dark:border-gray-800 font-medium">
                   <input
                     type="checkbox"
+                    // 24px, not the browser's 13px: WCAG 2.2 SC 2.5.8 wants a
+                    // 24px target, and the spacing exception does not save these
+                    // — they sit within 12px of the full-width date and filter
+                    // fields on the same screen (#2403).
+                    className="h-6 w-6 shrink-0 cursor-pointer accent-blue-600"
                     checked={relations.every((r) => selected[r.id])}
                     onChange={(e) => setSelected(e.target.checked ? Object.fromEntries(relations.map((r) => [r.id, true])) : {})}
                   />
@@ -240,6 +245,7 @@ export function MeetingsManager() {
                   <label key={r.id} className="flex items-center gap-2 text-sm py-1">
                     <input
                       type="checkbox"
+                      className="h-6 w-6 shrink-0 cursor-pointer accent-blue-600"
                       checked={!!selected[r.id]}
                       onChange={(e) => setSelected((p) => ({ ...p, [r.id]: e.target.checked }))}
                     />

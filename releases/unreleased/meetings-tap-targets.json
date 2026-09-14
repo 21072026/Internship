@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **`/admin/meetings` meets WCAG 2.2 SC 2.5.8 (Target Size) at phone width** (#2403). The mobile layout audit reported seven findings there: three browser-default `13×13px` checkboxes in the recipient list, and four 20px-tall `person-trigger` names. The spacing exception did not save them — each sits within 12px of a full-width date or filter control on the same screen. The checkboxes are now 24×24 (`h-6 w-6`, the criterion's minimum, since a bare `<input type=\"checkbox\">` will always fail this rule beside another control), and `PersonHoverCard`'s trigger is `inline-flex min-h-6 items-center`: it is a `role=\"button\"`, and wherever it renders as a flex item it is blockified and loses SC 2.5.8's *Inline* exception, at which point a 20px name next to a form field is an undersized target. Both fixes are in shared components, so every screen that uses them gains the larger target."
+}
