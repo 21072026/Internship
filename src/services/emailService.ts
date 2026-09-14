@@ -1749,6 +1749,48 @@ export async function sendRoleChangeEmail({
   });
 }
 
+// The account owner's copy of an admin 2FA reset (#1543). Sent from the reset
+// route, not left to a preference: their second factor is gone and somebody else
+// removed it, so this is a disclosure rather than a notification — the same
+// class as "an administrator accessed your account". It names the administrator,
+// because "who did this" is the only question the owner actually has, and that
+// is what turns an insider reset into something they can dispute.
+export async function sendTwoFactorResetEmail({
+  to,
+  fullName,
+  adminName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  adminName: string;
+  /** The account's User.preferredLanguage — the target's language, not the admin's (#1720). */
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const M = getDictionary(resolved).twoFactorResetEmail;
+  return await sendEmail({
+    to,
+    fromName: brand.name,
+    category: 'account',
+    locale: resolved,
+    subject: M.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(M.body.replace('{admin}', adminName))}</p>
+        <p>${esc(M.reenrol)}</p>
+        ${ctaBlock(brand, `${appUrl()}/account`, M.cta)}
+        <p style="color: #6b7280; font-size: 14px;">${esc(M.notYou)}</p>
+      </div>
+    `,
+  });
+}
+
 // --- Meeting requests (#668) ------------------------------------------------
 
 export async function sendMeetingRequestEmail({

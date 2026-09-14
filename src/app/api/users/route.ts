@@ -33,6 +33,10 @@ const SELECTS = {
     // one — an exemption nobody can find is how a temporary back door becomes
     // a permanent one.
     ssoExempt: true,
+    // Whether the account has a second factor at all (#1543). A boolean, not a
+    // secret: the admin directory offers "reset two-factor" only to the rows
+    // where there is something to reset, so support does not press it blind.
+    twoFactorEnabled: true,
   },
   // Admin mentor pickers (#942): a name plus what's needed to derive
   // availability. `activeMenteeCount` and `availability` are computed below,

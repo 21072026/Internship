@@ -25,6 +25,9 @@ interface AdminUser {
   accountState?: AccountState;
   // Break-glass exemption from enforced SSO (#1950). Only admins can hold one.
   ssoExempt?: boolean;
+  // Does this account have an authenticator enrolled (#1543)? The reset action
+  // is only offered where there is a factor to clear.
+  twoFactorEnabled?: boolean;
 }
 
 // Which badge each account state gets. `warning` (amber) is for "waiting on
@@ -227,6 +230,30 @@ export default function AdminUsersPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? t.common.error);
+      await load();
+    } catch (e) {
+      setActionError({ userId: u.id, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Last resort for "I lost my phone and never saved the recovery codes"
+  // (#1543). The confirmation is not ceremony: this removes a protection from
+  // somebody else's account, so the admin is told in the prompt exactly what
+  // happens — the factor and its recovery codes go, every session and
+  // remembered device dies, and the owner is notified naming them. The button
+  // is hidden for admin targets and for rows with no factor, but the endpoint
+  // is the control: it refuses both regardless of what the UI offers.
+  const resetTwoFactor = async (u: AdminUser) => {
+    if (busyId) return;
+    if (!window.confirm(t.usersAdmin.reset2faConfirm.replace('{name}', u.fullName))) return;
+    setBusyId(u.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/reset-2fa`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? t.usersAdmin.reset2faFailed);
       await load();
     } catch (e) {
       setActionError({ userId: u.id, message: e instanceof Error ? e.message : String(e) });
@@ -447,6 +474,21 @@ export default function AdminUsersPage() {
                       onClick={() => forceSignOut(u)}
                     >
                       {t.usersAdmin.forceSignOut}
+                    </Button>
+                  )}
+                  {/* Only where there is a factor to clear, and never for an
+                      admin target — the endpoint refuses a peer admin (and the
+                      caller's own id) whatever the UI shows. */}
+                  {u.twoFactorEnabled && u.role !== 'ADMIN' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busyId === u.id}
+                      disabled={!!busyId}
+                      data-testid={`reset-2fa-${u.id}`}
+                      onClick={() => resetTwoFactor(u)}
+                    >
+                      {t.usersAdmin.reset2fa}
                     </Button>
                   )}
                   {/* Admin accounts are out of scope (the endpoint refuses them):

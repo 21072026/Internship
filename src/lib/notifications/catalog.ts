@@ -243,6 +243,10 @@ export const NOTIFICATION_EVENTS = [
   { key: 'security.passwordResetStarted', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.adminSignedOutAll', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.accountUnlocked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // An admin cleared somebody's second factor (#1543). It carries `admin`
+  // because the owner's question is not "did this happen" but "who did it" —
+  // an insider reset the owner cannot name is one they cannot dispute.
+  { key: 'security.twoFactorReset', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['admin'] },
   // Enforced SSO's break-glass exemption (#1950). A disclosure like the rest of
   // this block: the holder is the tenant's password back door, and an exemption
   // its holder never heard about is the kind that is still there a year later.

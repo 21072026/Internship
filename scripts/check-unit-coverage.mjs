@@ -162,6 +162,14 @@ const FLOORS = new Map([
       why: 'an inbound x-request-id is honoured, but never into a forged log line (#1601)',
     },
   ],
+  [
+    'src/lib/twoFactorResetRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'who may clear someone else\'s second factor: never a peer admin, never self, never while impersonating (#1543)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────
