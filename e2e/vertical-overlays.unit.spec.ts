@@ -55,5 +55,7 @@ test('overlays REPLACE leaves and leave everything else untouched', () => {
 
 test('each locale that carries a MARKETING override localizes it, not a copy of English', () => {
   const tr = applyVerticalOverlay(dictionaries.tr, 'tr', 'MARKETING');
-  expect((tr.candidates as { title: string }).title).toBe('Fırsatlar');
+  // "Fırsat" is reserved for the deal/pipeline concept (#2356); the person list is
+  // "Müşteri Adayları", not a literal translation of the English "Leads" override.
+  expect((tr.candidates as { title: string }).title).toBe('Müşteri Adayları');
 });
