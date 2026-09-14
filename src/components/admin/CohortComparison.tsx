@@ -30,11 +30,18 @@ export function CohortComparison() {
   const t = useT();
   const c = t.analytics;
   const [rows, setRows] = useState<CohortRow[] | null>(null);
+  // What this tenant calls the stage the "hired" column counted (#1882). Only
+  // used when the tenant actually renamed it — otherwise the translated
+  // built-in heading stays, so a default-catalogue tenant sees no change.
+  const [outcomeName, setOutcomeName] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/admin/analytics/cohorts')
       .then(async (r) => {
-        if (r.ok) setRows((await r.json()).cohorts ?? []);
+        if (!r.ok) return;
+        const body = await r.json();
+        setRows(body.cohorts ?? []);
+        setOutcomeName(body.finishedLabelIsCustom ? (body.finishedLabel as string) || null : null);
       })
       .catch(() => {});
   }, []);
@@ -59,7 +66,7 @@ export function CohortComparison() {
                 <th className="py-2 pr-3">{c.cohortName}</th>
                 <th className="py-2 pr-3">{c.cohortTotal}</th>
                 <th className="py-2 pr-3">{c.cohortInProgress}</th>
-                <th className="py-2 pr-3">{c.cohortHired}</th>
+                <th className="py-2 pr-3">{outcomeName ?? c.cohortHired}</th>
                 <th className="py-2 pr-3">{c.cohortConversion}</th>
                 <th className="py-2 pr-3">{c.cohortAvgDays}</th>
                 <th className="py-2">{c.cohortInteractions}</th>

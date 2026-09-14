@@ -4056,6 +4056,7 @@ const en = {
     subtitle: 'Pipeline, mentor workload and engagement insights',
     totalRelations: 'Relations',
     conversion: 'Hired rate',
+    conversionToStage: '{stage} rate',
     interactions: 'Interactions',
     rsvpRate: 'RSVP acceptance',
     funnelKpi: {
@@ -9141,6 +9142,7 @@ const tr: Dict = {
     subtitle: 'Pipeline, mentor yükü ve etkileşim içgörüleri',
     totalRelations: 'İlişkiler',
     conversion: 'İşe alım oranı',
+    conversionToStage: '{stage} oranı',
     interactions: 'Etkileşimler',
     rsvpRate: 'RSVP kabul',
     funnelKpi: {
@@ -14211,6 +14213,7 @@ const de: Dict = {
     subtitle: 'Pipeline, Mentorenauslastung und Engagement-Erkenntnisse',
     totalRelations: 'Beziehungen',
     conversion: 'Einstellungsquote',
+    conversionToStage: '{stage}-Quote',
     interactions: 'Interaktionen',
     rsvpRate: 'Zusagequote',
     funnelKpi: {

@@ -32,6 +32,11 @@ interface MentorAnalytics {
   statusChanges: number;
   rows: MentorAnalyticsRow[];
   range: { from: string; to: string };
+  // What this tenant calls the stage "hired" counted (#1882). Rendered only
+  // when the tenant actually renamed it; otherwise the translated built-in
+  // wording stays, so a default-catalogue tenant sees no change.
+  finishedLabel?: string;
+  finishedLabelIsCustom?: boolean;
 }
 
 type RangePreset = '30' | '90' | '6m' | '12m' | 'all';
@@ -99,6 +104,11 @@ export default function MentorAnalyticsPage() {
   }, [load]);
 
   const ma = t.mentorAnalytics;
+  const outcomeName = data?.finishedLabelIsCustom ? data.finishedLabel : undefined;
+  const outcomeWord = outcomeName ?? ma.hired;
+  const outcomeRateLabel = outcomeName
+    ? t.analytics.conversionToStage.replace('{stage}', outcomeName)
+    : ma.hiredRate;
 
   // A mentor's own numbers are free core: no entitlement check here, ever.
   const exportExcel = async () => {
@@ -183,7 +193,7 @@ export default function MentorAnalyticsPage() {
           {/* Summary stats */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-3">
             <StatCard icon={Users} value={data.totalRelations} label={ma.totalMentees} color="bg-blue-500" />
-            <StatCard icon={TrendingUp} value={`${data.conversionToHired}%`} label={ma.hiredRate} color="bg-green-500" />
+            <StatCard icon={TrendingUp} value={`${data.conversionToHired}%`} label={outcomeRateLabel} color="bg-green-500" />
             <StatCard icon={BookOpen} value={data.interactions} label={ma.totalInteractions} color="bg-purple-500" />
             <StatCard icon={ArrowRightLeft} value={data.statusChanges} label={ma.stageMoves} color="bg-indigo-500" />
           </div>
@@ -273,7 +283,7 @@ export default function MentorAnalyticsPage() {
                 <div className="grid grid-cols-2 gap-3 text-center">
                   <div className="rounded-lg bg-green-50 dark:bg-green-950/30 p-3">
                     <p className="text-2xl font-bold text-green-700 dark:text-green-300">{data.hired}</p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">{ma.hired}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">{outcomeWord}</p>
                   </div>
                   <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3">
                     <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
