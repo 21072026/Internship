@@ -132,7 +132,7 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
            SMTP_BULK_HOST SMTP_BULK_PORT SMTP_BULK_USER SMTP_BULK_PASS SMTP_BULK_FROM \
            INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
            INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
-           CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY; do
+           CRON_SECRET CRON_ENABLED MT_ENFORCE_ISOLATION MARKETING_HOSTS JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -330,6 +330,7 @@ app_env_args() {
     -e CRON_SECRET="${CRON_SECRET:-}" \
     -e CRON_ENABLED="${CRON_ENABLED:-}" \
     -e MT_ENFORCE_ISOLATION="${MT_ENFORCE_ISOLATION:-}" \
+    -e MARKETING_HOSTS="${MARKETING_HOSTS:-}" \
     -e TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}" \
     -e HEALTH_TOKEN="${HEALTH_TOKEN:-}" \
     -e JAAS_APP_ID="${JAAS_APP_ID:-}" \

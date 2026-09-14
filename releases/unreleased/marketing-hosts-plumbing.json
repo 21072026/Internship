@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **`MARKETING_HOSTS` is now threaded to the container by the deploy scripts** (#2355, epic #2348). The host→vertical resolver (`src/lib/hostVertical.ts`) reads `MARKETING_HOSTS` to decide which public hosts show the marketing landing, but `infra/deploy-prod.sh` never passed it through, so only the built-in default (`marketing.ersah.in`) could ever work — a second marketing host (a preview host, a future prod host) had no way to take effect. The shared prod/preview deploy now passes `MARKETING_HOSTS` from the env file and captures it from a running container on redeploy, the same pattern `MT_ENFORCE_ISOLATION` uses. No behaviour change where the var is unset (the code default still resolves `marketing.ersah.in`); this unblocks pointing another host at the marketing landing on a given deployment."
+}
