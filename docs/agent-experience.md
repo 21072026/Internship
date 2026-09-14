@@ -6911,3 +6911,32 @@ olmadı, modül **günlerce ölçülmedi**, PR açıklaması ise "%95 tabanına 
 ölçüldü" diyordu. Hiçbir kapı yakalayamaz. O iki dosyada çakışma çözdüysen
 sonucu *kanıtla*: `prisma validate`, ve `test:unit:coverage` modülü gerçekten
 ölçmeli.
+
+## 2026-09-14 — İzolasyon projesini YEREL doğrularken dev-mode tuzağı (#2356)
+
+`e2e/isolation/*` (MT_ENFORCE_ISOLATION=true, port 3010) yerelde `npm run dev`
+ile koşturulunca **flag-on.spec dahil** düşüyor (companies/candidates tüm org'ları
+döndürüyor); aynı testler CI'da ve prod build'de (`npm run start`) geçiyor. Sebep
+kod değil: dev sunucusunun modül/örnekleme davranışı Prisma `$use` tenant
+middleware'iyle güvenilir eşleşmiyor. **Güvenilir yerel baseline = CI'yı taklit et:**
+`CI=1 E2E_ISOLATION=1 DATABASE_URL=…e2e npx playwright test --project=isolation`
+— `CI=1` config'i `npm run start`'a çevirir ve `reuseExistingServer:false` yapar,
+yani prod build üzerinde kendi 3010 sunucusunu ayağa kaldırır. Ayrıca config
+`reuseExistingServer: !CI` olduğundan, dev'de 3010'da kalıntı bir sunucu varsa
+Playwright onu (flag'siz) yeniden kullanır — ikinci bir yanlış-kırmızı kaynağı.
+Ders: izolasyon projesini "yeşil mi" diye yerelde `npm run dev` ile yargılama; ya
+CI=1 prod build ile koş ya da e2e-full'ün `isolation` işine bak — ama drift gate onu
+çoğu zaman *skip* eder, "success" satırı işin gerçekten koştuğu anlamına gelmez;
+job-level `conclusion`'a bak (`gh run view <id> --json jobs`).
+
+## 2026-09-14 — Uzun oturumda worktree başka PR'ların işiyle kirlenebilir (#2356)
+
+Uzun bir oturumun ortasında `git status`, benim dokunmadığım ~30 dosyayı staged
+gösterdi (2FA reset, notification caps, sw-cache…) — hepsi bu arada main'e merge
+olmuş başka PR'ların işi, worktree/indeks'te kalıntı olarak. Dalım eski bir main'e
+(kendi commit'i olmadan) dayanıyordu. Tuzak: "my-edits.diff" diye `git diff <eski-base>`
+almak bu kalıntıları **benim işim sanıp** yakalar. Doğrusu: kendi yazdığım yeni
+dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
+`git checkout -B <dal> origin/main` ile temiz taze base'e geç, sonra düzenlemeleri
+**bilgiden** yeniden uygula (kalıntı diff'e güvenme). Genel ders: commit'lemeden
+önce `git status`'u gözden geçir; "benim değil" gibi görünen her şeyi sorgula.
