@@ -299,7 +299,7 @@ org branding'indeydi.
 |---|---|
 | `scripts/check-demo-blocklist.mjs:29` — "file inclusion" | CI script'i, sabit yolları (`src/app/api`, `src/lib/demoMode.ts`) `readdirSync`/`readFileSync` ile geziyor. İstek girdisi yok, sunucu kod yolu bile değil. |
 | `src/components/CalendarView.tsx:134` — "SSRF" | **İstemci tarafı** `fetch('/api/calendar-events?…')` — sabit göreli yol, ISO tarih parametreleri. SSRF sunucunun saldırgan kontrolündeki bir URL'e istek atmasını gerektirir. |
-| `public/sw.js:25` — "SSRF" | Service worker; `fetch` handler'ı `new URL(req.url).origin !== self.location.origin` olan her isteği **daha önce** return ediyor. Aynı-origin GET'ler için tarayıcı içi cache proxy'si. |
+| `public/sw.js:25` — "SSRF" | Service worker; `fetch` handler'ı `new URL(req.url).origin !== self.location.origin` olan her isteği **daha önce** return ediyor. Aynı-origin GET'ler için tarayıcı içi cache proxy'si. **Not (#1550):** SSRF değildi, ama aynı satırın *gerçek* bir kusuru vardı ve bu tarayıcı onu hiç görmedi — o cache proxy'si kimlik doğrulamalı `/api/` yanıtlarını da yazıyordu ve çıkışta temizlenmiyordu, yani paylaşılan cihazda hesaplar arası okuma. Kural artık `docs/realtime-and-push.md` § 4'te. |
 
 **Ders:** bu tarayıcı `where: { field: variable }` desenini ORM'den ve
 veritabanı tipinden bağımsız olarak *Critical* etiketliyor, ve gerçek giden-istek
