@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Admin-side 2FA reset** (#1543). `POST /api/admin/users/[id]/reset-2fa` clears a locked-out user's TOTP secret, replay high-water mark and recovery codes, stamps `sessionsValidFrom` and revokes their trusted devices in one transaction. The decision is the unit-tested rule in `src/lib/twoFactorResetRule.ts`: the caller's ADMIN capability is re-read from the database (not the 12h JWT), an impersonation session is refused, and any ADMIN target — peer or self — is refused. AuditLog + ActivityLog rows are written inside the same transaction, so a reset that cannot be recorded does not happen; the owner is told in-app and by e-mail, naming the admin.",
+  "notes": {
+    "en": [
+      "Lost your authenticator and your recovery codes? An administrator can now reset two-factor authentication for you, and you are told by e-mail who did it."
+    ],
+    "tr": [
+      "Doğrulayıcı uygulamanı ve kurtarma kodlarını kaybettiysen artık bir yönetici iki adımlı doğrulamanı sıfırlayabiliyor; bunu kimin yaptığı sana e-postayla bildiriliyor."
+    ],
+    "de": [
+      "Authenticator und Wiederherstellungscodes verloren? Eine Administration kann die Zwei-Faktor-Authentifizierung jetzt zurücksetzen — und du erfährst per E-Mail, wer es war."
+    ]
+  }
+}

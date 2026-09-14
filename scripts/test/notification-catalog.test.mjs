@@ -200,6 +200,7 @@ test('a security or account event is mandatory on every channel', () => {
     'security.passwordResetStarted',
     'security.adminSignedOutAll',
     'security.accountUnlocked',
+    'security.twoFactorReset',
     'role_changed.toMentor',
     'role_changed.toMentee',
     'retention.confirm',
