@@ -10,6 +10,7 @@ import { notify } from '@/lib/notify';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestEmail } from '@/services/emailService';
 import { parseUserDateTime } from '@/lib/timezone';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // GET ?relationId= — meeting requests for a thread (participants/admin).
 export async function GET(request: Request) {
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
 
 const schema = z.object({
   relationId: z.string().min(1),
-  topic: z.string().min(1).max(300),
+  topic: z.string().min(1).max(TEXT_LIMITS.meetingTopic),
   proposedAt: z.string().min(1),
 });
 

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 async function goalIfAllowed(userId: string, role: string, goalId: string) {
   const goal = await prisma.goal.findUnique({ where: { id: goalId }, include: { relation: true } });
@@ -17,8 +18,8 @@ async function goalIfAllowed(userId: string, role: string, goalId: string) {
 
 const patchSchema = z.object({
   status: z.enum(['OPEN', 'DONE']).optional(),
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().max(2000).nullable().optional(),
+  title: z.string().min(1).max(TEXT_LIMITS.goalTitle).optional(),
+  description: z.string().max(TEXT_LIMITS.goalDescription).nullable().optional(),
   dueDate: z.string().nullable().optional(),
 });
 

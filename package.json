@@ -25,6 +25,7 @@
     "check:stage-keys": "node scripts/check-stage-keys.mjs",
     "check:tenant-models": "node scripts/check-tenant-models.mjs",
   "check:schema-push": "node scripts/check-schema-push-safety.mjs",
+    "check:text-limits": "node --experimental-strip-types scripts/check-text-limits.mjs",
     "test:unit": "node --test --experimental-strip-types scripts/test/*.test.mjs",
     "test:unit:coverage": "node scripts/check-unit-coverage.mjs",
     "test:release": "node --test scripts/test/release-derive.test.mjs scripts/test/release-media.test.mjs scripts/test/release-lockfile.test.mjs",

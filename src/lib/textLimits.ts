@@ -38,8 +38,10 @@ export const TEXT_LIMITS = {
   /** Company.logoUrl — VARCHAR(191) */
   companyLogoUrl: 191,
   /**
-   * Company.contactEmail — VARCHAR(191). RFC 5321 allows an address up to 254
-   * characters; the column does not, so the shorter of the two is the bound.
+   * Company.contactEmail — and CompanyInquiry.email, which is the same rule on
+   * the same shape of column. Both VARCHAR(191). RFC 5321 allows an address up
+   * to 254 characters; the column does not, so the shorter of the two is the
+   * bound.
    */
   companyContactEmail: 191,
   /** Company.size — VARCHAR(191); the field holds a bracket label ("11-50") */
@@ -118,6 +120,54 @@ export const TEXT_LIMITS = {
   invitationEmail: 191,
   /** Bulk-invite full name (carried into the report only) — VARCHAR(191) */
   invitationFullName: 191,
+
+  // ── VARCHAR(191) columns whose zod cap used to be wider (#2262) ────────────
+  // Each of these guarded a `String` column with no `@db.` attribute — MySQL
+  // VARCHAR(191) — from a cap of 200, 300 or 500, or from no cap at all. Long
+  // input therefore passed validation and died in the INSERT with Prisma P2000,
+  // which no route handles: a 500 for text the form had just accepted.
+
+  /** Project.name — VARCHAR(191) */
+  projectName: 191,
+  /**
+   * Project.repoUrl / demoUrl / boardUrl — VARCHAR(191).
+   * A legitimate URL longer than 191 characters exists but is rare (a deep link
+   * into a hosted board). The column is what it is, so the bound matches it
+   * rather than the column being widened for a case nobody has hit: a refusal
+   * at the form is recoverable, a 500 after typing is not.
+   */
+  projectUrl: 191,
+  /** Project.description — @db.Text */
+  projectDescription: 5000,
+  /** Project.goals — @db.Text */
+  projectGoals: 5000,
+  /** Goal.title — VARCHAR(191) */
+  goalTitle: 191,
+  /** Goal.description — @db.Text */
+  goalDescription: 2000,
+  /** MeetingRequest.topic — VARCHAR(191) */
+  meetingTopic: 191,
+  /** Document.title — VARCHAR(191) */
+  documentTitle: 191,
+  /** Organization.brandName — VARCHAR(191) */
+  orgBrandName: 191,
+  /**
+   * Organization.brandColor — VARCHAR(191), holds a CSS colour ("#1d4ed8").
+   * Capped far below the column for the same reason as `companySize`: the
+   * field has a shape, and 191 characters of it is not a colour.
+   */
+  orgBrandColor: 40,
+  /** Organization.supportEmail — VARCHAR(191) (see companyContactEmail on RFC 5321) */
+  orgSupportEmail: 191,
+  /** Organization.ssoIssuer — VARCHAR(191) */
+  orgSsoIssuer: 191,
+  /**
+   * User.linkedinUrl / githubUrl / portfolioUrl and MentorApplication.linkedinUrl
+   * — all VARCHAR(191). Same reasoning as `projectUrl`.
+   */
+  profileUrl: 191,
+  /** User.city / university / department — VARCHAR(191), and previously uncapped */
+  profileShortText: 191,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;

@@ -210,6 +210,13 @@ jobs:
           # main, where it falls back to origin/main and finds no diff).
           SCHEMA_PUSH_SAFETY_BASE: ${{ github.event.pull_request.base.sha }}
         run: npm run check:schema-push
+      # A zod cap wider than the column behind it is a Prisma P2000 that no
+      # route handles, i.e. a 500 for text the form had just accepted (#1433,
+      # #2262). The invariant was checked only by the scheduled full suite, so
+      # a too-wide cap merged green and surfaced on the first long paste; it
+      # reads nothing but files, so it belongs here.
+      - name: no zod cap is wider than its column (#2262)
+        run: npm run check:text-limits
       # `toLocaleDateString()` with no argument formats in the BROWSER's
       # language, so a fully-Turkish screen printed 8/25/2026 and an interview
       # slot carried no timezone at all (#1422). The tree is clean; this stops

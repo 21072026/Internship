@@ -20,6 +20,7 @@ import {
   countSweepableUsers,
   ssoEnforcementBlockers,
 } from '@/lib/ssoEnforcement';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -212,19 +213,19 @@ export async function POST(request: Request) {
 }
 
 // Empty string clears an optional branding field (stored as null).
-const optionalText = z.string().max(200).optional();
+const optionalText = z.string().max(TEXT_LIMITS.orgBrandName).optional();
 const patchSchema = z.object({
   id: z.string().min(1),
   plan: z.string().refine(isOrgPlan, 'Invalid plan').optional(),
   vertical: z.string().refine(isVerticalKey, 'Unknown vertical').optional(),
   brandName: optionalText,
   brandLogoUrl: z.string().max(2000).optional(),
-  brandColor: z.string().optional(),
-  supportEmail: z.string().max(200).optional(),
+  brandColor: z.string().max(TEXT_LIMITS.orgBrandColor).optional(),
+  supportEmail: z.string().max(TEXT_LIMITS.orgSupportEmail).optional(),
   // SSO config (#545).
   ssoEnabled: z.boolean().optional(),
   ssoProvider: z.string().max(20).optional(),
-  ssoIssuer: z.string().max(500).optional(),
+  ssoIssuer: z.string().max(TEXT_LIMITS.orgSsoIssuer).optional(),
   ssoEntryPoint: z.string().max(2000).optional(),
   ssoCertificate: z.string().max(20000).optional(),
   // Enforced SSO (#1950). Separate from ssoEnabled on purpose: "our IdP works"

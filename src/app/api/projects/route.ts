@@ -13,6 +13,7 @@ import { mergeTeam, internCount } from '@/lib/projectTeam';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { checkProjectLimit, projectLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
@@ -86,15 +87,15 @@ export async function GET() {
 }
 
 const schema = z.object({
-  name: z.string().min(1).max(200),
-  description: z.string().max(5000).optional().nullable(),
+  name: z.string().min(1).max(TEXT_LIMITS.projectName),
+  description: z.string().max(TEXT_LIMITS.projectDescription).optional().nullable(),
   technologies: z.array(z.string()).max(50).optional(),
-  repoUrl: z.string().url().max(500).optional().or(z.literal('')),
-  demoUrl: z.string().url().max(500).optional().or(z.literal('')),
-  boardUrl: z.string().url().max(500).optional().or(z.literal('')),
+  repoUrl: z.string().url().max(TEXT_LIMITS.projectUrl).optional().or(z.literal('')),
+  demoUrl: z.string().url().max(TEXT_LIMITS.projectUrl).optional().or(z.literal('')),
+  boardUrl: z.string().url().max(TEXT_LIMITS.projectUrl).optional().or(z.literal('')),
   status: z.enum(['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED', 'CANCELLED']).optional(),
   isPublic: z.boolean().optional(),
-  goals: z.string().max(5000).optional().nullable(),
+  goals: z.string().max(TEXT_LIMITS.projectGoals).optional().nullable(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
   // Which contributor terms this project's members accept (#1026).

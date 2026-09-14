@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
 import { TEXT_LIMITS, type TextLimitKey } from '@/lib/textLimits';
+import { COLUMN_GUARDS, type Guard } from '@/lib/textLimitsRegistry';
 
 // The invariant `src/lib/textLimits.ts` states in its own header, checked
 // against the schema instead of trusted (#1433).
@@ -70,72 +71,13 @@ function stringColumns(model: string): Column[] {
   return columns;
 }
 
-type Guard =
-  /** The constant that bounds this column, and every file that must use it. */
-  | { limit: TextLimitKey; files: string[] }
-  /** Not free text a user types — say why, so the next reader can disagree. */
-  | { exempt: string };
-
-/** A cuid the server generates, or a foreign key that has to match a real row. */
-const ID = { exempt: 'an id — server-generated, or matched against an existing row' } as const;
-
-const COMPANY_WRITERS = [
-  'src/app/api/companies/route.ts',
-  'src/app/api/companies/[id]/route.ts',
-  'src/components/forms/CompanyForm.tsx',
-];
-const TASK_WRITERS = [
-  'src/app/api/todos/route.ts',
-  'src/app/api/projects/[id]/tasks/route.ts',
-  'src/app/api/project-tasks/[taskId]/route.ts',
-  'src/components/todos/MyTodos.tsx',
-  'src/components/todos/PersonTodos.tsx',
-  'src/components/todos/TodoRow.tsx',
-];
-const TEMPLATE_WRITERS = [
-  'src/lib/goalTemplates.ts',
-  'src/app/api/admin/goal-templates/route.ts',
-  'src/app/api/projects/[id]/task-templates/route.ts',
-];
-
-// The models the "Add company" modal and the to-do surface write into. Every
-// String column of each one is accounted for below — the test fails on a column
-// that is missing from this map, not merely on one that is wrong.
-const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
-  Company: {
-    id: ID,
-    orgId: ID,
-    name: { limit: 'companyName', files: COMPANY_WRITERS },
-    description: { limit: 'companyDescription', files: COMPANY_WRITERS },
-    contactEmail: { limit: 'companyContactEmail', files: COMPANY_WRITERS },
-    industry: { limit: 'companyIndustry', files: COMPANY_WRITERS },
-    logoUrl: { limit: 'companyLogoUrl', files: COMPANY_WRITERS },
-    size: { limit: 'companySize', files: COMPANY_WRITERS },
-    address: { limit: 'companyAddress', files: COMPANY_WRITERS },
-  },
-  CompanyNeed: {
-    id: ID,
-    companyId: ID,
-    position: { limit: 'companyNeedPosition', files: COMPANY_WRITERS },
-    period: { limit: 'companyNeedPeriod', files: COMPANY_WRITERS },
-  },
-  ProjectTask: {
-    id: ID,
-    projectId: ID,
-    assigneeId: ID,
-    createdById: ID,
-    templateId: ID,
-    title: { limit: 'todoTitle', files: TASK_WRITERS },
-  },
-  ProjectTaskTemplate: {
-    id: ID,
-    projectId: ID,
-    createdById: ID,
-    // The same constant as ProjectTask.title, and not by coincidence: a
-    // template's wording is written into a task's title unchanged.
-    title: { limit: 'todoTitle', files: TEMPLATE_WRITERS },
-  },
-};
+// The registry moved to src/lib/textLimitsRegistry.ts (#2262) so the PR gate can
+// read it too — `npm run check:text-limits` runs the structural half of this
+// file (accounted-for, no stale row, the constant fits, the guard file uses the
+// constant) without a browser. What stays HERE is the half that needs zod: a
+// schema built from the constant accepts the column's capacity exactly and
+// rejects one character more. Both read the same map, so they cannot disagree
+// about what is guarded.
 
 for (const [model, guards] of Object.entries(COLUMN_GUARDS)) {
   const columns = stringColumns(model);
