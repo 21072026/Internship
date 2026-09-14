@@ -187,7 +187,21 @@ export function ProjectForm({
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) {
+        // The plan cap (#2273) is the one refusal here that tells the reader
+        // what they can DO about it, so it is rendered from its CODE in their
+        // own language rather than from the server's English literal — the
+        // rule src/lib/apiErrorMessage.ts exists for.
+        if (data?.code === 'project_limit_reached') {
+          throw new Error(
+            t.projects.planLimitReached
+              .replace('{usage}', String(data.usage ?? '?'))
+              .replace('{limit}', String(data.limit ?? '?'))
+              .replace('{plan}', String(data.plan ?? '?'))
+          );
+        }
+        throw new Error(data.error || 'Failed');
+      }
       await onSaved();
     } catch (e2) {
       setError(e2 instanceof Error ? e2.message : 'Failed');

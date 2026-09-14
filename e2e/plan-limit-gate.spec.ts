@@ -60,3 +60,96 @@ test('FREE tenant is gated on new active relations; existing are unaffected', as
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });
+
+// The project cap (#2273). `maxProjects` had been declared in the plan
+// catalogue since #547 and read by exactly one thing — the usage gauge on
+// /admin/organizations — so the number was shown and never enforced. #2270 then
+// opened project creation to the largest role population there is.
+//
+// Asserted from the MENTEE side on purpose: that is the role #2270 opened, the
+// one that makes unbounded growth per tenant the default rather than a
+// theoretical case, and the one whose client-side brake (a per-user rate limit
+// with an in-process counter) is explicitly not a quota.
+test('FREE tenant is gated on new projects; existing projects are unaffected', async ({ page }) => {
+  const pw = 'ProjectCapPass123';
+  const menteeEmail = uniqueEmail('projcap-mentee');
+  const stamp = menteeEmail.replace(/[^a-z0-9]/gi, '');
+  const org = await prisma.organization.create({
+    data: { name: `Project Cap Org ${stamp}`, slug: `projcap-${stamp}`.slice(0, 60), plan: 'FREE' },
+  });
+  const cap = planLimits('FREE').maxProjects!;
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Project Cap Mentee');
+  await prisma.user.update({ where: { id: mentee.id }, data: { orgId: org.id } });
+
+  try {
+    // Fill the org exactly to the cap, directly — the gate is about what the
+    // tenant HOLDS, not about how the rows got there.
+    for (let i = 0; i < cap; i++) {
+      await prisma.project.create({
+        data: { orgId: org.id, name: `Cap Filler ${i} ${stamp}`, ownerType: 'MENTEE', ownerUserId: mentee.id, technologies: [] },
+      });
+    }
+
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', menteeEmail);
+    await page.fill('input[type="password"]', pw);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    const res = await page.request.post('/api/projects', { data: { name: `Cap Overflow ${stamp}` } });
+    expect(res.status()).toBe(403);
+    const body = await res.json();
+    // Its OWN code, not the relation gate's: a client that maps
+    // 'plan_limit_reached' renders a sentence about active mentorships, which
+    // would be confidently wrong here.
+    expect(body.code).toBe('project_limit_reached');
+    expect(body.limit).toBe(cap);
+    expect(body.usage).toBe(cap);
+    expect(body.plan).toBe('FREE');
+
+    // Nothing was created, and nothing existing was touched.
+    expect(await prisma.project.count({ where: { orgId: org.id } })).toBe(cap);
+    expect(await prisma.project.count({ where: { name: `Cap Overflow ${stamp}` } })).toBe(0);
+  } finally {
+    await prisma.projectMember.deleteMany({ where: { project: { orgId: org.id } } });
+    await prisma.project.deleteMany({ where: { orgId: org.id } });
+    await cleanupByEmail(menteeEmail);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+// An unlimited plan is never gated — the grandfathered `default` org is
+// ENTERPRISE, so this is what makes the change a no-op on the live install.
+test('ENTERPRISE tenant is not gated on projects', async ({ page }) => {
+  const pw = 'ProjectCapPass123';
+  const menteeEmail = uniqueEmail('projcap-ent-mentee');
+  const stamp = menteeEmail.replace(/[^a-z0-9]/gi, '');
+  const org = await prisma.organization.create({
+    data: { name: `Project Cap Ent ${stamp}`, slug: `projcapent-${stamp}`.slice(0, 60), plan: 'ENTERPRISE' },
+  });
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Project Cap Ent Mentee');
+  await prisma.user.update({ where: { id: mentee.id }, data: { orgId: org.id } });
+
+  try {
+    // Past what FREE would allow, so a gate that ignored the plan would fire.
+    for (let i = 0; i < planLimits('FREE').maxProjects! + 1; i++) {
+      await prisma.project.create({
+        data: { orgId: org.id, name: `Ent Filler ${i} ${stamp}`, ownerType: 'MENTEE', ownerUserId: mentee.id, technologies: [] },
+      });
+    }
+
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', menteeEmail);
+    await page.fill('input[type="password"]', pw);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    const res = await page.request.post('/api/projects', { data: { name: `Ent Overflow ${stamp}` } });
+    expect(res.status()).toBe(201);
+  } finally {
+    await prisma.projectMember.deleteMany({ where: { project: { orgId: org.id } } });
+    await prisma.project.deleteMany({ where: { orgId: org.id } });
+    await cleanupByEmail(menteeEmail);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});

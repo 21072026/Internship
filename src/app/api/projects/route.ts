@@ -10,6 +10,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { mergeTeam, internCount } from '@/lib/projectTeam';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { checkProjectLimit, projectLimitError } from '@/lib/planGate';
+import { resolveOrgId } from '@/lib/orgScope';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
@@ -126,6 +128,20 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
+
+  // The plan's project cap (#2273) — the quota the rate limit above is not.
+  // Checked against the SESSION's org because that is the tenant the row will
+  // land in: Project is a registered tenant model, so the create below is
+  // stamped by the middleware bound in withTenantScope, not by anything this
+  // handler passes. Gating on the owner's org instead would be a different
+  // number from the one the row gets.
+  //
+  // Fails open when no org resolves, exactly like the relation gate — a tenant
+  // that predates the org backfill must not lose the ability to create.
+  const projectGate = await checkProjectLimit(resolveOrgId(session));
+  if (!projectGate.allowed) {
+    return NextResponse.json(projectLimitError(projectGate), { status: 403 });
+  }
   // A mentee creates only for themselves, and the two programme-level flags
   // below (`isPublic`, `contributorTerms*`) are not theirs to set.
   const menteeCreator = session.user.role === 'MENTEE';

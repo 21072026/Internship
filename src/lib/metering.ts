@@ -111,6 +111,23 @@ export async function countActiveRelations(orgId: string): Promise<number> {
   });
 }
 
+/**
+ * Projects a tenant holds — the second capacity cap (#2273), and, like
+ * `countActiveRelations` above, NOT a billing number.
+ *
+ * EVERY project counts, whatever its status. That is a deliberate match with
+ * the usage gauge on /admin/organizations, which reads a plain
+ * `_count.projects`: a gate that counted a narrower set than the number the
+ * operator is looking at would refuse a create while the screen still showed
+ * room, and "the gauge and the gate disagree" is exactly the failure #1750 put
+ * these counts in one file to prevent. If the product later decides an ARCHIVED
+ * project should free its slot, the gauge and this function move in the same
+ * commit.
+ */
+export async function countOrgProjects(orgId: string): Promise<number> {
+  return prisma.project.count({ where: { orgId } });
+}
+
 // ── The ledger (UsageRollup) ────────────────────────────────────────────────
 // One row per (org, metric, period). COMPUTED metrics are written absolutely
 // so a re-run is a no-op; COUNTER metrics are incremented as they happen and
