@@ -8,6 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { notifyIfAllowed } from '@/lib/notify';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 async function relationIfAllowed(userId: string, role: string, relationId: string) {
   const rel = await prisma.mentorshipRelation.findUnique({ where: { id: relationId } });
@@ -33,8 +34,8 @@ export async function GET(request: Request) {
 
 const schema = z.object({
   relationId: z.string().min(1),
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).optional(),
+  title: z.string().min(1).max(TEXT_LIMITS.goalTitle),
+  description: z.string().max(TEXT_LIMITS.goalDescription).optional(),
   dueDate: z.string().optional(),
 });
 

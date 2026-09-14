@@ -8,6 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { mergeTeam, internCount } from '@/lib/projectTeam';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
@@ -59,15 +60,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 const schema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(5000).nullable().optional(),
+  name: z.string().min(1).max(TEXT_LIMITS.projectName).optional(),
+  description: z.string().max(TEXT_LIMITS.projectDescription).nullable().optional(),
   technologies: z.array(z.string()).max(50).optional(),
-  repoUrl: z.string().url().max(500).optional().or(z.literal('')),
-  demoUrl: z.string().url().max(500).optional().or(z.literal('')),
-  boardUrl: z.string().url().max(500).optional().or(z.literal('')),
+  repoUrl: z.string().url().max(TEXT_LIMITS.projectUrl).optional().or(z.literal('')),
+  demoUrl: z.string().url().max(TEXT_LIMITS.projectUrl).optional().or(z.literal('')),
+  boardUrl: z.string().url().max(TEXT_LIMITS.projectUrl).optional().or(z.literal('')),
   status: z.enum(['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED', 'CANCELLED']).optional(),
   isPublic: z.boolean().optional(),
-  goals: z.string().max(5000).nullable().optional(),
+  goals: z.string().max(TEXT_LIMITS.projectGoals).nullable().optional(),
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
   // Which contributor terms this project's members accept (#1026). Empty

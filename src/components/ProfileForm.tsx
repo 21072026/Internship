@@ -46,21 +46,21 @@ const profileSchema = z.object({
   fullName: z.string().min(1, 'Full name is required'),
   phone: z.string().optional().refine((v) => !v || isValidPhone(v), 'Please enter a valid phone number'),
   whatsapp: z.string().optional().refine((v) => !v || isValidPhone(v), 'Please enter a valid phone number'),
-  city: z.string().optional(),
+  city: z.string().max(TEXT_LIMITS.profileShortText).optional(),
   birthDate: z.string().optional().refine((v) => !v || isValidPastOrTodayDate(v), 'Please enter a valid date not in the future'),
-  university: z.string().optional(),
-  department: z.string().optional(),
+  university: z.string().max(TEXT_LIMITS.profileShortText).optional(),
+  department: z.string().max(TEXT_LIMITS.profileShortText).optional(),
   graduationYear: z.coerce.number().int().min(2010).max(new Date().getFullYear() + 5).optional().or(z.literal(0)),
   languages: z.string().optional(),
   // Accept a full URL or an internal path (e.g. /api/cv/<id> set on upload).
   cvUrl: z.string().refine((v) => v === '' || /^https?:\/\//.test(v) || v.startsWith('/'), 'Please enter a valid URL').optional().or(z.literal('')),
   displayName: z.string().optional(),
-  bio: z.string().optional(),
+  bio: z.string().max(TEXT_LIMITS.bio).optional(),
   country: z.string().optional(),
   timezone: z.string().optional(),
-  linkedinUrl: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
-  githubUrl: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
-  portfolioUrl: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
+  linkedinUrl: z.string().url('Please enter a valid URL').max(TEXT_LIMITS.profileUrl).optional().or(z.literal('')),
+  githubUrl: z.string().url('Please enter a valid URL').max(TEXT_LIMITS.profileUrl).optional().or(z.literal('')),
+  portfolioUrl: z.string().url('Please enter a valid URL').max(TEXT_LIMITS.profileUrl).optional().or(z.literal('')),
   interests: z.string().optional(),
   targetPosition: z.string().optional(),
   mentorCapacity: z.coerce.number().int().min(0).max(100).optional().or(z.literal(0)),
@@ -300,7 +300,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
               {...register('whatsapp')}
               error={errors.whatsapp?.message}
             />
-            <Input label={t.profileForm.city} placeholder={t.profileForm.cityHint} {...register('city')} error={errors.city?.message} />
+            <Input label={t.profileForm.city} placeholder={t.profileForm.cityHint} maxLength={TEXT_LIMITS.profileShortText} {...register('city')} error={errors.city?.message} />
             <Input label={t.profileForm.birthDate} type="date" {...register('birthDate')} error={errors.birthDate?.message} />
           </div>
 
@@ -323,10 +323,10 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
                 <Select label={t.profileForm.timezone} options={timezoneOptions} {...register('timezone')} error={errors.timezone?.message} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input label="LinkedIn" type="url" placeholder="https://linkedin.com/in/..." {...register('linkedinUrl')} error={errors.linkedinUrl?.message} />
-                <Input label="GitHub" type="url" placeholder="https://github.com/..." {...register('githubUrl')} error={errors.githubUrl?.message} />
+                <Input label="LinkedIn" type="url" placeholder="https://linkedin.com/in/..." maxLength={TEXT_LIMITS.profileUrl} {...register('linkedinUrl')} error={errors.linkedinUrl?.message} />
+                <Input label="GitHub" type="url" placeholder="https://github.com/..." maxLength={TEXT_LIMITS.profileUrl} {...register('githubUrl')} error={errors.githubUrl?.message} />
               </div>
-              <Input label={t.profileForm.portfolio} type="url" placeholder="https://..." {...register('portfolioUrl')} error={errors.portfolioUrl?.message} />
+              <Input label={t.profileForm.portfolio} type="url" placeholder="https://..." maxLength={TEXT_LIMITS.profileUrl} {...register('portfolioUrl')} error={errors.portfolioUrl?.message} />
               {role === 'MENTOR' && (
                 <div className="space-y-4">
                   <Input label={t.profileForm.languages} placeholder={t.profileForm.languagesPlaceholder} hint={t.profileForm.languagesHint} {...register('languages')} error={errors.languages?.message} />
@@ -351,12 +351,14 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
               <Input
                 label={t.profileForm.university}
                 placeholder={t.profileForm.universityHint}
+                maxLength={TEXT_LIMITS.profileShortText}
                 {...register('university')}
                 error={errors.university?.message}
               />
               <Input
                 label={t.profileForm.department}
                 placeholder={t.profileForm.departmentHint}
+                maxLength={TEXT_LIMITS.profileShortText}
                 {...register('department')}
                 error={errors.department?.message}
               />

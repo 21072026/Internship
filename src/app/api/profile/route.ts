@@ -7,6 +7,7 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -31,11 +32,11 @@ const updateProfileSchema = z.object({
   fullName: z.string().min(1).optional(),
   phone: z.string().optional().refine((v) => !v || isValidPhone(v), 'Invalid phone number'),
   whatsapp: z.string().optional().refine((v) => !v || isValidPhone(v), 'Invalid phone number'),
-  city: z.string().optional(),
+  city: z.string().max(TEXT_LIMITS.profileShortText).optional(),
   birthDate: z.string().optional().refine((v) => !v || isValidPastOrTodayDate(v), 'Birth date must be a valid date and cannot be in the future'),
   referralSource: z.string().optional(),
-  university: z.string().optional(),
-  department: z.string().optional(),
+  university: z.string().max(TEXT_LIMITS.profileShortText).optional(),
+  department: z.string().max(TEXT_LIMITS.profileShortText).optional(),
   graduationYear: z.number().int().nullable().optional(),
   // Bounded below rather than here: the caps live in `@/lib/skills` (one copy
   // for the client and the server), and a refusal has to carry a code the form
@@ -51,7 +52,7 @@ const updateProfileSchema = z.object({
   publicShowProjects: z.boolean().optional(),
   // Extended profile fields (EPIC 32).
   displayName: z.string().max(120).optional(),
-  bio: z.string().max(2000).optional(),
+  bio: z.string().max(TEXT_LIMITS.bio).optional(),
   country: z.string().max(80).optional(),
   timezone: z.string().max(80).optional().refine(
     (tz) => {
@@ -61,9 +62,9 @@ const updateProfileSchema = z.object({
     },
     { message: 'Invalid IANA timezone' }
   ),
-  linkedinUrl: z.string().url().or(z.literal('')).optional(),
-  githubUrl: z.string().url().or(z.literal('')).optional(),
-  portfolioUrl: z.string().url().or(z.literal('')).optional(),
+  linkedinUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
+  githubUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
+  portfolioUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
   interests: z.string().max(2000).optional(),
   targetPosition: z.string().max(160).optional(),
   mentorCapacity: z.number().int().min(0).max(100).nullable().optional(),

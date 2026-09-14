@@ -8,6 +8,7 @@ import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { logActivity } from '@/lib/activity';
 import type { DocumentType } from '@prisma/client';
 import { applicableRequirementsForUser } from '@/lib/documentRequirements';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const META_SELECT = {
   id: true, ownerId: true, uploaderId: true, type: true, title: true,
@@ -17,7 +18,7 @@ const META_SELECT = {
 
 const uploadSchema = z.object({
   type: z.enum(DOCUMENT_TYPES).default('OTHER'),
-  title: z.string().trim().max(200).optional(),
+  title: z.string().trim().max(TEXT_LIMITS.documentTitle).optional(),
   targetUserId: z.string().min(1).optional(),
   isTemplate: z.boolean().optional(),
   requirementId: z.string().min(1).optional(),

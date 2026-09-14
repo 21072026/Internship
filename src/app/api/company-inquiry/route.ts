@@ -19,7 +19,7 @@ import { sendCompanyInquiryEmail } from '@/services/emailService';
 const schema = z.object({
   companyName: z.string().min(1).max(160),
   contactName: z.string().min(1).max(120),
-  email: z.string().email().max(200),
+  email: z.string().email().max(TEXT_LIMITS.companyContactEmail),
   phone: z.string().max(40).optional(),
   openRoles: z.string().max(300).optional(),
   message: z.string().max(TEXT_LIMITS.publicContactMessage).optional(),
