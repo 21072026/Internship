@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { GraduationCap, Github, ExternalLink, Trello, ArrowLeft } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { getServerDictionary } from '@/i18n/server';
 import { Badge } from '@/components/ui/Badge';
 import { mergeTeam, internCount, type TeamMember } from '@/lib/projectTeam';
@@ -40,7 +41,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const { locale, t } = await getServerDictionary();
   const session = await getServerSession(authOptions);
 
-  const p = await prisma.project.findUnique({
+  // Scoped to the caller's org (#2356): a by-id fetch with no org filter is a
+  // cross-tenant IDOR under MT_ENFORCE_ISOLATION — a signed-in admin of org A
+  // could open org B's private project (name, goals, roster, join requests) by
+  // id. Binding the session's org here makes a cross-org id resolve to null →
+  // notFound(). Anonymous visitors bind no org, so the public showcase view of
+  // public projects is unchanged; a no-op entirely while the flag is off.
+  const p = await withTenantScope(session, () => prisma.project.findUnique({
     where: { id },
     select: {
       name: true, description: true, technologies: true, repoUrl: true, demoUrl: true, boardUrl: true, status: true,
@@ -62,7 +69,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         },
       },
     },
-  });
+  }));
   if (!p) notFound();
 
   const role = session?.user.role;
