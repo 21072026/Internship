@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Three screens stop spilling past a 360px phone in German** (#2310). `/admin/newsletters` overflowed by 48px at the page container and in eight nested boxes below it: the schedule control and its button could not wrap, and the tip rows' `flex-1` title input kept the intrinsic width of its German placeholder. `/projects` overflowed through `PublicFooter`'s link columns, where a long German label had no `break-words` — the same shape as #1497 on `/release-notes`. `/admin/api-explorer` overflowed inside Swagger UI's own server/scheme selector, whose `<select>` will not shrink; corrected in the component's scoped stylesheet (wrap the row, keep the boxes inside their column, let the control scroll) rather than at a source we do not own. `src/components/ui/Input.tsx` also gains `min-w-0` on its wrapper so a field can shrink when it is a flex item — without it a `datetime-local`, ~200px of browser chrome, drags its whole row past the viewport, which is what the nine `/admin/newsletters` findings cascaded from. Separately, the audit's own admin is now a **super-admin**: `/admin/organizations` is in the sidebar, a plain ADMIN 403s on it, and the route was therefore enumerated as covered while rendering nothing — an audited route that never renders reads as tested and is not.",
+  "notes": {
+    "en": [
+      "The newsletter composer, the projects page footer and the API explorer no longer run off the side of the screen on a phone in German."
+    ],
+    "tr": [
+      "Bülten oluşturma ekranı, projeler sayfasının alt bilgisi ve API gezgini telefonda Almanca görünümde artık ekranın dışına taşmıyor."
+    ],
+    "de": [
+      "Der Newsletter-Editor, die Fußzeile der Projektseite und der API-Explorer laufen auf dem Handy in deutscher Sprache nicht mehr über den Bildschirmrand hinaus."
+    ]
+  }
+}

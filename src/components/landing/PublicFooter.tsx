@@ -111,9 +111,12 @@ export async function PublicFooter() {
               <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 {col.title}
               </h2>
+              {/* `break-words`: a German footer label ("Datenschutzerklärung")
+                  is wider than the column at 360px and pushed the list past the
+                  viewport (#2310) — the same shape as #1497 on /release-notes. */}
               <ul className="mt-3 space-y-2">
                 {col.links.map((l) => (
-                  <li key={l.href}>
+                  <li key={l.href} className="break-words">
                     {'demoPlacement' in l && l.demoPlacement ? (
                       <DemoLink
                         href={l.href}

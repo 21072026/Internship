@@ -450,6 +450,18 @@ export function ApiExplorer() {
         html.dark .swagger-ui input::placeholder,
         html.dark .swagger-ui textarea::placeholder { color: #6b7280; }
         html.dark .swagger-ui option { background-color: #ffffff; color: #111827; }
+
+        /* Phone width (#2310). Swagger UI's server/scheme selector is a flex row
+           holding a <select>, and a <select> does not shrink below its content:
+           at 360px in German it was 160px of control in a 145px box, so the row
+           spilled. This is the library's own markup, so it is corrected here
+           rather than at the source — let the row wrap, keep the boxes inside
+           their column, and let the control scroll if a server URL is still
+           longer than the space. */
+        .swagger-ui .schemes { flex-wrap: wrap; }
+        .swagger-ui .schemes-server-container,
+        .swagger-ui .servers { max-width: 100%; overflow-x: auto; }
+        .swagger-ui .servers select { max-width: 100%; }
       `}</style>
 
       <div className="mb-6">
