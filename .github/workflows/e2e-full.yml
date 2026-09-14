@@ -11,9 +11,14 @@ name: E2E Full Suite (scheduled)
 # back. Can also be run on demand.
 #
 # Drift gate (same idea as deploy-prod's): a scheduled firing SKIPS the whole
-# run when the commit is the same one the last completed run already tested —
-# re-testing an unchanged main only re-sends the same red email 4× a day.
-# workflow_dispatch always runs (manual = deliberate).
+# run when this exact commit already has a GREEN run — re-testing a commit the
+# suite already passed only burns runner minutes. The verdict is load-bearing
+# (#2374): the gate used to ask for the last *completed* run of any conclusion,
+# so the first red run on a commit silenced every later firing on it, and each
+# of those skips reported as a green check in the Actions list. A red commit is
+# now re-tested (and re-mailed) every 6h until it is green or a new commit
+# lands — that is the point of the alert, and a re-run also tells a flake apart
+# from a real break. workflow_dispatch always runs (manual = deliberate).
 #
 # Cost note: this repo is PUBLIC since 2026-07, so GitHub-hosted standard runners
 # are free and unmetered. Sharding multiplies billed minutes (each shard repeats
@@ -35,34 +40,78 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Skip a scheduled firing when the last completed run already tested this
-  # exact commit — nothing changed, so the verdict (and the email) would only
-  # repeat. Completed runs of ANY conclusion count: a red run on an unchanged
-  # main must not be re-tested and re-reported every 6 hours either.
+  # Skip a scheduled firing only when this exact commit ALREADY PASSED. Anything
+  # else — never tested, or tested and red — runs.
+  #
+  # `status=` on the workflow-runs endpoint is overloaded: it accepts status
+  # values (queued/in_progress/completed) *and* conclusion values, so
+  # `status=success` means "completed and green". Verified against this repo's
+  # own history while writing this (counts drift, the behaviour does not):
+  # status=completed → 206 runs, status=success → 52, status=failure → 153.
+  # There is no `conclusion=` parameter — passing one returns the unfiltered 206,
+  # which is exactly how a typo would quietly reinstate the bug, so keep the
+  # spelling as `status=success`. (An unrecognised *value* is safe the other way:
+  # `status=bogus` returns 0 runs, i.e. "never skip".)
+  #
+  # Scoped by `head_sha` rather than "is the newest green run mine?" so the
+  # question asked is literally the guarantee we want to make: has THIS commit
+  # passed? No ordering assumptions, one request.
+  #
+  # Note a skipped firing is itself recorded as a green run on this sha, so it
+  # matches the query too. That is sound rather than circular: the first skip on
+  # a commit needs a green run to exist, and only a real execution can create
+  # the first one. (The one exception is the runs from before this fix — the 9
+  # green skips already on record for f462c89 — which is harmless because a
+  # scheduled run only ever sees the branch tip.)
   gate:
-    name: Skip if this commit already ran
+    name: Skip if this commit already passed
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
-      - name: Compare with the last completed run
+      - name: Look for a green run on this commit
         id: decide
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          SHORT="${SHA:0:7}"
+          if [ "$EVENT" = "workflow_dispatch" ]; then
             echo "manual dispatch — always run"
             echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "### Running the full suite on \`$SHORT\` (manual dispatch)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          last=$(gh api "repos/${{ github.repository }}/actions/workflows/e2e-full.yml/runs?branch=${{ github.ref_name }}&status=completed&per_page=1" \
-            --jq '.workflow_runs[0].head_sha' 2>/dev/null || echo "")
-          if [ -n "$last" ] && [ "$last" != "null" ] && [ "$last" = "${{ github.sha }}" ]; then
-            echo "head ${{ github.sha }} already tested by the last completed run — skipping"
+          # `// empty` prints nothing for an empty result set, and a failing gh
+          # call falls back to the same empty string: an unreachable API means
+          # "no green run known", i.e. run the suite. The gate fails open.
+          green=$(gh api \
+            "repos/$REPO/actions/workflows/e2e-full.yml/runs?branch=$BRANCH&head_sha=$SHA&status=success&per_page=1" \
+            --jq '.workflow_runs[0].html_url // empty' 2>/dev/null || echo "")
+          if [ -n "$green" ]; then
+            echo "$SHORT already has a green run ($green) — skipping"
             echo "run=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Skipped — \`$SHORT\` already passed"
+              echo
+              echo "No new commit on \`$BRANCH\`, and the full suite is already green on this one:"
+              echo
+              echo "- deferring to $green"
+              echo
+              echo "**No tests ran in this run.** The green check on it means *deferred*, not *passed*."
+            } >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "head ${{ github.sha }} differs from last tested ($last) — running"
+            echo "no green run recorded for $SHORT — running"
             echo "run=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Running the full suite on \`$SHORT\`"
+              echo
+              echo "No green run is on record for this commit — it has either never been"
+              echo "tested, or the last attempt on it was red."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
   e2e-full:

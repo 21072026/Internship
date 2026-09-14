@@ -49,10 +49,12 @@ After switching branches, run `npx prisma generate` so the client matches the sc
 a stale client causes schema-drift 500s (the smoke test will catch these).
 The **full suite** also runs on a schedule, 4× a day at 03/09/15/21 UTC
 (`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted). A drift gate skips the
-scheduled firing when main hasn't changed since the last completed run (re-testing the same
-commit only repeats the same verdict); `workflow_dispatch` always runs. A Turkish summary
-email (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`) goes out **only when the run is
-red** — the failing tests with error snippets. Set the repo variable
+scheduled firing when the commit already has a **green** run (#2374 — it used to accept the
+last *completed* run of any conclusion, so one red run masked itself green 4× a day forever;
+a red commit is now re-tested until it passes or a new commit lands), and the skip path says
+in the job summary which green run it is deferring to; `workflow_dispatch` always runs.
+A Turkish summary email (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`) goes out
+**only when the run is red** — the failing tests with error snippets. Set the repo variable
 `E2E_REPORT_MODE=always` to restore the "✅ N/N test geçti" green heartbeat.
 
 **Load tests (k6)** live in `k6/` and are the *non-functional* net: the app can be
