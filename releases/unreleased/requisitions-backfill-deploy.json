@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Infra: requisition backfill ordering** (#1385). Run the topic deploy's existing requisition backfill after demo seeding and the organization backfill so newly seeded legacy needs and repaired company orgIds are included. Preserve non-blocking execution and stdout/stderr logs; production and shared preview already run the backfill after organization repair."
+}

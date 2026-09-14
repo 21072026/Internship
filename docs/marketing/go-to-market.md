@@ -303,6 +303,202 @@ hedefi hem içerik olarak yanlış — self-host uyumu üretmez; kendi sunucusun
 *Verantwortlicher* olur ve uyum TOM'lara, Verarbeitungsverzeichnis'e, silme sürelerine ve AVV'lere
 bağlıdır. Söylenebilecek olan **mekanizma**dır, uyum sonucu değil (bkz. §3.3 son satır).
 
+#### 6.4.1 Directory submission packets — #2226 (2026-09-13)
+
+**BLOCKED — external publication required.** The following packets are **PREPARED**:
+copy and link values are ready, but the screenshot set and external submission are not.
+No submission was sent and no published listing URL has been verified.
+
+Selection follows channel matrix row 4 and §6.4: **Capterra, GetApp, OMR Reviews**.
+[Issue #2226](https://github.com/21072026/Internship/issues/2226)'s title names
+AlternativeTo, SaaSHub and OpenAlternative, but its body delegates channel selection to
+this matrix. Those title-only channels are not substituted for the matrix's priorities.
+Prepare all packets now; activate Capterra/GetApp first, then OMR, respecting the two-channel
+limit. Check the Phase 1 gates in §4 and the Impressum prerequisite before submission.
+Do not fill pricing fields until the published offer has been checked against #1403;
+the copy below makes no hosted-plan or price promise.
+
+**Status rules:** PREPARED means a repository packet exists, with any missing assets named.
+SUBMITTED requires an actual submission receipt/date. PUBLISHED requires an accessible public
+product listing, verified demo link and screenshots. Account creation or a vendor dashboard
+does not count as publication. Record the receipt reference (without private account data),
+submission date, public URL and verification date in the relevant packet when they exist.
+
+**Shared product fields for each packet**
+
+| Field | Exact value |
+|---|---|
+| Product name | InternCRM |
+| License | AGPL-3.0-or-later |
+| Website | https://interncrm.com |
+| Source repository | https://github.com/21072026/Internship |
+| Public demo | https://demo.interncrm.com |
+| Demo entry point | https://demo.interncrm.com/auth/signin |
+| Feature evidence | `src/lib/features.ts`, `src/app/features/page.tsx`; public catalogue: https://interncrm.com/features |
+| Alternatives for each packet | Together Platform (§3.1), Qooper (§3.2), Chronus (§3.3), MentorcliQ (§3.4) in `docs/research/competitive-analysis-2026-08.md` |
+
+Alternatives describe overlapping mentoring use cases, not feature parity, an integration,
+an endorsement or a partnership. Use the names in a comparison field when supported; otherwise
+keep them as submission notes, without inserting unsupported competitive claims into the copy.
+Category labels below are proposed matches; confirm the available taxonomy in the vendor form.
+
+**Copy shared by the packets (adapted from `copy-bank.md` §1.1/§1.4 and §4.1)**
+
+EN one-sentence description / short description:
+
+```text
+InternCRM is an open-source CRM for mentoring and internship programmes, tracking participants from first contact through internship, offer and hire.
+```
+
+EN long description:
+
+```text
+InternCRM brings mentoring and internship programme work into one pipeline, from first contact to offer and hire. Programme administrators, mentors, mentees and companies have role-specific views. Track interactions, approve weekly reports or request changes, and follow offer status alongside the participant's progress. Per-stage service levels help programme teams identify where follow-up is needed.
+
+The interface is available in English, Turkish and German. InternCRM is licensed under AGPL-3.0-or-later and can run on your own server. Explore the public demo through one-click sign-in as an administrator, mentor or mentee, using synthetic data.
+```
+
+DE one-sentence description / short description:
+
+```text
+InternCRM ist ein Open-Source-CRM für Mentoring- und Praktikumsprogramme, das Teilnehmende vom Erstkontakt über das Praktikum bis zum Angebot und zur Einstellung begleitet.
+```
+
+DE long description:
+
+```text
+InternCRM bündelt die Arbeit in Mentoring- und Praktikumsprogrammen in einer Pipeline vom Erstkontakt bis zum Angebot und zur Einstellung. Programmverantwortliche, Mentorinnen und Mentoren, Mentees und Unternehmen erhalten rollenspezifische Ansichten. Interaktionen werden dokumentiert, Wochenberichte freigegeben oder zur Überarbeitung zurückgegeben und Angebotsstatus im Verlauf der Teilnahme verfolgt. Service-Level pro Stufe helfen dabei, offenen Handlungsbedarf zu erkennen.
+
+Die Oberfläche ist auf Deutsch, Englisch und Türkisch verfügbar. InternCRM steht unter AGPL-3.0-or-later und kann auf dem eigenen Server betrieben werden. Die öffentliche Demo lässt sich mit synthetischen Daten per Ein-Klick-Anmeldung als Administrator, Mentor oder Mentee erkunden.
+```
+
+Claims map to catalogue keys `pipeline`, `mentors`, `companies`, `comms`, `weeklyReports`,
+`offers`, `platform`, `demo`, plus `src/lib/stageSla.ts`, `src/lib/demoMode.ts` and the approved
+copy references above. No adoption figures, testimonials, awards, rankings, certifications or
+customer references are used. Public stats are not marketing evidence.
+
+**UTM contract — links only**
+
+The current `src/lib/demoMode.ts` (#1391) uses `utm_campaign=demo` and `utm_content` for
+placement. Reuse that campaign, set placement to `directory_listing`, and use `referral`
+for this external channel; do not reuse the on-site `crm` source or `cta` medium.
+The `/auth/signin` destination follows `copy-bank.md` §0.1 and `linkedin-playbook.md` §3.3.
+LinkedIn's §7.2 values remain LinkedIn-specific.
+[Issue #1390](https://github.com/21072026/Internship/issues/1390) and all its comments were
+read on 2026-09-13 (no comments at that time); it specifies first-touch capture and persistence,
+not a directory campaign name. This packet implements neither cookies nor persistence and
+does not claim registration attribution works. No application or #1390 change is needed.
+
+**Screenshot inventory and outstanding dependency — applies to every packet**
+
+No suitable set of product screenshots exists in the tracked repository as inspected on
+2026-09-13. `public/icon-512.png`, the shortcut icons and `public/splash/` are branding assets,
+not product screenshots. `public/release-media/release-note-media.png` is a real release-note
+image, inspected visually, but does not demonstrate the mentoring/pipeline workflow.
+**Screenshot asset paths used: none.** Do not upload these as substitutes or invent file paths.
+
+The same three capture references are reserved for each directory below. They are real route
+references, **not existing image files**:
+
+| Reference | Demo view to capture | Caption / purpose | Asset path |
+|---|---|---|---|
+| S1 | Admin: `https://demo.interncrm.com/admin/board` | Internship pipeline / Praktikums-Pipeline | Missing — #2225/#1399 |
+| S2 | Mentor: `https://demo.interncrm.com/mentor` | Mentor workspace / Mentoren-Arbeitsbereich | Missing — #2225/#1399 |
+| S3 | Mentor → select a mentee → Reports tab (`/mentor/mentees/[id]`) | Weekly-report approval / Freigabe von Wochenberichten | Missing — #2225/#1399 |
+
+Capture actual rendered screens with synthetic demo data, following
+`autoposter-interncrm-line.md` §7.2. For S3, select a seeded relationship through the UI;
+`[id]` is a route parameter, not a literal demo URL. Keep the synthetic-data demo banner visible.
+Use EN for GetApp and DE for Capterra/OMR; inspect every image for real personal data,
+readability and relevance. Record the resulting repository paths here before upload.
+If the demo lacks a view's data, report that gap to #2225; do not fabricate a UI state.
+
+**Capterra (Capterra.de in the matrix)**
+
+| Field | Submission value |
+|---|---|
+| Product / license / demo | InternCRM · AGPL-3.0-or-later · https://demo.interncrm.com |
+| Description | DE short and long copy above; EN versions available if the editor requests them |
+| Categories | Mentoring; Human Resources (secondary if offered) |
+| Exact tagged demo link | `https://demo.interncrm.com/auth/signin?utm_source=capterra&utm_medium=referral&utm_campaign=demo&utm_content=directory_listing` |
+| Screenshots | S1, S2, S3 above — asset paths missing; upload blocked |
+| Alternatives | Together Platform; Qooper; Chronus; MentorcliQ |
+| Vendor entry | [G2 Digital Markets](https://www.g2digitalmarkets.com/) → [Get Listed](https://app.g2digitalmarkets.com/get-listed/start) |
+| Status / receipt / published URL | PREPARED / none / none verified |
+
+The vendor platform's public page links to Get Listed and discusses Capterra profiles
+(verified 2026-09-13). The old `/vendors/sign-up` URL returned 404; do not use it.
+The form is client-rendered and no authenticated vendor session is available here.
+The operator must sign in or create/verify the vendor account, confirm Capterra placement
+and its no-cost option, upload S1–S3 and submit. Do not enroll in PPC or a paid plan.
+
+**GetApp**
+
+| Field | Submission value |
+|---|---|
+| Product / license / demo | InternCRM · AGPL-3.0-or-later · https://demo.interncrm.com |
+| Description | EN short and long copy above |
+| Categories | Mentoring; Human Resources; Applicant Tracking (secondary if offered) |
+| Exact tagged demo link | `https://demo.interncrm.com/auth/signin?utm_source=getapp&utm_medium=referral&utm_campaign=demo&utm_content=directory_listing` |
+| Screenshots | S1, S2, S3 above — asset paths missing; upload blocked |
+| Alternatives | Together Platform; Qooper; Chronus; MentorcliQ |
+| Vendor entry | [GetApp footer: Get listed](https://www.getapp.com/) → [G2 Digital Markets](https://www.g2digitalmarkets.com/) → [Get Listed](https://app.g2digitalmarkets.com/get-listed/start) |
+| Status / receipt / published URL | PREPARED / none / none verified |
+
+The public footer chain was verified on 2026-09-13. This is the same vendor entry as Capterra:
+check for an existing InternCRM record before creating another. Do not assume a shared
+submission publishes both listings. Confirm a distinct GetApp public URL and per-site demo
+link. If the vendor editor only allows one shared outbound URL, request per-site links through
+its support flow; leave distinguishable UTM acceptance blocked until verified. No purchase.
+Operator account access, screenshots, submission and moderation remain outstanding.
+
+**OMR Reviews**
+
+| Field | Submission value |
+|---|---|
+| Product / license / demo | InternCRM · AGPL-3.0-or-later · https://demo.interncrm.com |
+| Description | DE short and long copy above |
+| Categories | HR; Recruiting (secondary); Mentoring if available in the submission taxonomy |
+| Exact tagged demo link | `https://demo.interncrm.com/auth/signin?utm_source=omr_reviews&utm_medium=referral&utm_campaign=demo&utm_content=directory_listing` |
+| Screenshots | S1, S2, S3 above — asset paths missing; upload blocked |
+| Alternatives | Together Platform; Qooper; Chronus; MentorcliQ |
+| Submission entry | [Software anbieten](https://omr.com/de/reviews/b2b/list-software) |
+| Status / receipt / published URL | PREPARED / none / none verified |
+
+The [OMR directory](https://omr.com/de/reviews) links to this submission page, which states
+that further information and publication notification arrive by email (verified 2026-09-13).
+The operator must complete the form with their actual contact details, handle the email
+follow-up, provide S1–S3 and verify the final public listing. No authenticated submission or
+email access was available in this session. Request a free listing; stop if payment is required.
+
+**Publication verification and issue handoff**
+
+For each listing, open the public page while signed out, verify its copy and uploaded images,
+then follow its demo link. Record both the public listing URL and the final demo URL; confirm
+all UTM parameters survive directory redirects. A direct demo HTTP check is not evidence of
+a published listing, successful sign-in or persisted attribution. Count each actual directory
+page separately, even if the vendor platform shares records. Never infer a product slug.
+
+Prepared progress comment for #2226 (not a publication announcement):
+
+```text
+BLOCKED — external publication required.
+
+Prepared Capterra, GetApp and OMR Reviews packets in docs/marketing/go-to-market.md §6.4.1,
+following the channel matrix referenced by this issue. Each contains approved-copy adaptations,
+license, categories, researched competitor names and a distinct UTM-tagged demo link, reusing
+the existing demo campaign. Attribution persistence remains #1390's responsibility.
+
+No listings were submitted or verified as published. The required product screenshot set is
+missing (#2225/#1399); existing icons and the release-note image do not satisfy it. Vendor
+account/form access and email follow-up are still required. Capterra/GetApp also need per-site
+outbound-link verification if their shared vendor record propagates one URL.
+
+After the screenshot set and publication prerequisites are ready, submit through the recorded
+vendor entry points, verify the public pages and links, then add the actual published URLs here.
+The three-published-listings acceptance criterion is still blocked; keep this issue open.
+```
+
 ### 6.5 awesome-selfhosted (Faz sonrası, hafta ~18 — hafta 1 Release + 4 ay, EN)
 
 **Nereye:** PR **ana repoya gitmez**; `awesome-selfhosted/awesome-selfhosted-data` içinde

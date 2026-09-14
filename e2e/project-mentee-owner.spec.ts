@@ -75,6 +75,24 @@ test('a mentee creates a project from the portal and edits the one they own', { 
     const listed = await page.request.get('/api/projects');
     const ids = ((await listed.json()).projects as { id: string }[]).map((p) => p.id);
     expect(ids).toContain(project!.id);
+    // …and the roster too: the members guard read OWNER rows only, so the demo
+    // set (ownerUserId, no member row, no backfill on topic/preview deploys)
+    // rendered the panel for an owner whose every fetch answered 403.
+    const rosterWithoutMemberRow = await page.request.get(`/api/projects/${project!.id}/members`);
+    expect(rosterWithoutMemberRow.status()).toBe(200);
+
+    // The programme's two flags are not the creator's to set: a mentee POST
+    // asking to publish the project and to switch the project-level IP gate off
+    // is ignored, and a later PUT asking for the same is refused outright.
+    const sneaky = await page.request.post('/api/projects', {
+      data: { name: 'MO Ungated', isPublic: true, contributorTermsRequired: false, contributorTermsKey: 'zzz' },
+    });
+    expect(sneaky.status()).toBe(201);
+    const ungated = await prisma.project.findFirst({ where: { name: 'MO Ungated' } });
+    expect(ungated).toMatchObject({ isPublic: false, contributorTermsRequired: true, contributorTermsKey: null });
+    const publish = await page.request.put(`/api/projects/${ungated!.id}`, { data: { isPublic: true } });
+    expect(publish.status()).toBe(403);
+    expect((await publish.json()).code).toBe('programme_only');
   } finally {
     await prisma.project.deleteMany({ where: { ownerUserId: mentee.id } });
     await cleanupByEmail(email);

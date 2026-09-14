@@ -6780,3 +6780,12 @@ karşılığı olması gerekiyordu. Metinsel çakışma yok, sözleşme çakış
 tamamını (`tsc`, `build`, `check:*` ve ilgili `test:*` betikleri) yeniden
 çalıştır** — özellikle diff'in dokunduğu alanda main'e yeni bir "her X'in bir Y
 kaydı olmalı" denetimi inmiş olabilir.
+
+## 2026-09-13 — Directory packets must follow current campaign code (#2226)
+
+Issue #2226 names different directories in its title than the channel matrix it references.
+Record the selection rationale in the submission packet. After fetching main, recheck
+`src/lib/demoMode.ts`: #1391 added `utm_campaign=demo` and placement via `utm_content`,
+while the marketing documents still describe the earlier attribution gap. Directory links
+can reuse those values without implementing #1390. A shared Capterra/GetApp vendor entry
+does not prove separate public listings or independently configurable outbound URLs.

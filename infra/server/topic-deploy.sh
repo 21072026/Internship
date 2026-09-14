@@ -295,7 +295,6 @@ fi
 _in_image "$IMAGE" npx prisma db push --accept-data-loss
 _in_image "$IMAGE" node prisma/seed-templates.mjs || true
 _in_image "$IMAGE" node prisma/seed-contributor-terms.mjs || true
-_in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
 
 if [ "${EXISTING_TABLES:-0}" -eq 0 ]; then
   # First deploy of this PR: fill it with the synthetic demo set. Nothing here
@@ -315,6 +314,8 @@ fi
 # to be rehearsed, so it has to run here too, not only in deploy-prod.sh.
 _in_image "$IMAGE" node prisma/backfill-organization.mjs \
   || echo "WARN: org backfill FAILED (exit non-zero) — see the output above"
+# Legacy needs require company orgId; include rows created by the demo seed.
+_in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
 
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true

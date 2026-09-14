@@ -29,6 +29,7 @@ bu yüzden her olgunun **tek bir sahibi** vardır — aşağıdaki tablo o sahip
 | Soru | Dosya | Bölüm |
 |---|---|---|
 | Bu kanalı açmalı mıyız, sırası ne? | `go-to-market.md` | §5 kanal matrisi · §5.1 elenen kanallar |
+| Dizin başvurularının metni, UTM linki ve yayın durumu nerede? | `go-to-market.md` | §6.4.1 — #2226 başvuru paketleri ve ekran görüntüsü blokajı |
 | Şu an hangi fazdayız, hangi dilde yazıyoruz? | `go-to-market.md` (tablo) → `content-calendar.md` (kaynak) | §4 faz-dil tablosu · §1.5 |
 | Bu hafta ne yayınlıyorum? | `content-calendar.md` | §2 haftalık tablo |
 | Bu haftanın metni hazır mı, nerede? | `content-calendar.md` → `copy-bank.md` | §2.0 eşleme tablosu → §7 |
