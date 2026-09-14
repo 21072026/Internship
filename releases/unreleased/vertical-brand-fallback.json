@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **A non-internship vertical no longer greets its users as \"Internship CRM\"** (#2355 follow-up). The brand wordmark falls back to the product name only for the INTERNSHIP vertical; a MARKETING (or any future) organization that has set no white-label brandName now falls back to its OWN name instead — `getOrgBranding()` reads the org's vertical and name and passes the name as `resolveBranding()`'s new `fallbackName` when the vertical is not INTERNSHIP. A tenant that has configured white-label branding is unaffected (a set brandName still wins); the INTERNSHIP product default is unchanged. Fixes a marketing tenant seeing the internship wordmark on its own admin panel after the marketing.ersah.in cutover.",
+  "notes": {
+    "en": ["A marketing organization that hasn't set a custom brand now shows its own name in the header instead of \"Internship CRM\"."],
+    "tr": ["Özel marka belirlememiş bir pazarlama organizasyonu artık başlıkta \"Internship CRM\" yerine kendi adını gösteriyor."],
+    "de": ["Eine Marketing-Organisation ohne eigene Marke zeigt jetzt ihren eigenen Namen in der Kopfzeile statt \"Internship CRM\"."]
+  }
+}
