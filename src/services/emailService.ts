@@ -1749,6 +1749,48 @@ export async function sendRoleChangeEmail({
   });
 }
 
+// The account owner's copy of an admin 2FA reset (#1543). Sent from the reset
+// route, not left to a preference: their second factor is gone and somebody else
+// removed it, so this is a disclosure rather than a notification — the same
+// class as "an administrator accessed your account". It names the administrator,
+// because "who did this" is the only question the owner actually has, and that
+// is what turns an insider reset into something they can dispute.
+export async function sendTwoFactorResetEmail({
+  to,
+  fullName,
+  adminName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  adminName: string;
+  /** The account's User.preferredLanguage — the target's language, not the admin's (#1720). */
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const M = getDictionary(resolved).twoFactorResetEmail;
+  return await sendEmail({
+    to,
+    fromName: brand.name,
+    category: 'account',
+    locale: resolved,
+    subject: M.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(M.body.replace('{admin}', adminName))}</p>
+        <p>${esc(M.reenrol)}</p>
+        ${ctaBlock(brand, `${appUrl()}/account`, M.cta)}
+        <p style="color: #6b7280; font-size: 14px;">${esc(M.notYou)}</p>
+      </div>
+    `,
+  });
+}
+
 // --- Meeting requests (#668) ------------------------------------------------
 
 export async function sendMeetingRequestEmail({
@@ -2136,6 +2178,21 @@ export async function checkMentorInteractionReminders() {
 
 // Notify mentors about mentees whose current stage deadline has passed. Each
 // relation is reminded once per deadline (deadlineReminderSentAt guards it).
+//
+// PER RELATION HERE IS CORRECT, and that is a decision rather than an oversight
+// (#2287 asked for it to be settled rather than left ambiguous). The cap the
+// dormant and weekly-report sweeps had to fix was "one HUMAN, N identical
+// messages": a mentee with two ACTIVE mentorships received the same mail twice.
+// This sweep's recipient is the MENTOR, and each message is about a different
+// mentee of theirs — same person, different content, no duplicate. Collapsing
+// them would drop a deadline on the floor. The same reasoning covers
+// checkMentorInteractionReminders above, which already batches a mentor's
+// mentees into ONE mail with a list.
+//
+// The residual is a volume question, not a correctness one: a mentor with ten
+// overdue relations gets ten mails in one tick. If that ever needs fixing it is
+// a digest (batch this sweep by mentor the way the interaction reminder does),
+// not a per-person cap — a cap would silently drop deadlines.
 export async function checkStageDeadlineReminders() {
   const now = new Date();
   const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'] as const;
@@ -2206,12 +2263,47 @@ export async function sendWeeklyReportReminders(now = new Date()) {
     },
   });
   if (relations.length === 0) return { checked: 0, reminded: 0, emailed: 0 };
-  const claims = relations.map((relation) => ({ id: randomUUID(), relationId: relation.id, weekStart }));
-  await prisma.weeklyReportReminder.createMany({ data: claims, skipDuplicates: true });
+
+  // ONE reminder per PERSON per week (#2287), not per relation. The eligibility
+  // query returns a row per ACTIVE relation, so a mentee holding two of them
+  // used to get two identical mails and two identical bell items every Friday,
+  // indefinitely — the same defect as the dormant budget below, without the
+  // "we will not write again" promise attached to it.
+  //
+  // The collapse happens BEFORE the claim, by picking one relation per mentee,
+  // and the pick is deterministic (lowest id): two overlapping ticks then
+  // choose the SAME relation, so the existing @@unique([relationId, weekStart])
+  // settles the race atomically. Deduplicating after the claim would need a
+  // unique on the person, which this change deliberately does not add yet (see
+  // the schema comment on WeeklyReportReminder.recipientId).
+  const byMentee = new Map<string, (typeof relations)[number]>();
+  for (const relation of [...relations].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    if (!byMentee.has(relation.mentee.id)) byMentee.set(relation.mentee.id, relation);
+  }
+  const candidates = [...byMentee.values()];
+
+  // Someone already reminded this week through a DIFFERENT relation — one that
+  // has since been completed, or simply a run that picked differently — must
+  // not be reminded again. The relation-keyed unique cannot see that; the
+  // recipient column is what makes the question answerable at all.
+  const alreadyReminded = new Set(
+    (
+      await prisma.weeklyReportReminder.findMany({
+        where: { weekStart, recipientId: { in: candidates.map((relation) => relation.mentee.id) } },
+        select: { recipientId: true },
+      })
+    )
+      .map((row) => row.recipientId)
+      .filter((id): id is string => !!id)
+  );
+
+  const toRemind = candidates.filter((relation) => !alreadyReminded.has(relation.mentee.id));
+  const claims = toRemind.map((relation) => ({ id: randomUUID(), relationId: relation.id, recipientId: relation.mentee.id, weekStart }));
+  if (claims.length > 0) await prisma.weeklyReportReminder.createMany({ data: claims, skipDuplicates: true });
   const claimedIds = new Set((await prisma.weeklyReportReminder.findMany({ where: { id: { in: claims.map((claim) => claim.id) } }, select: { relationId: true } })).map((claim) => claim.relationId));
   let reminded = 0;
   let emailed = 0;
-  for (const relation of relations) {
+  for (const relation of toRemind) {
     if (!claimedIds.has(relation.id)) continue;
     const preferredLanguage = relation.mentee.preferredLanguage ?? undefined;
     const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
@@ -2298,25 +2390,59 @@ export async function sendDormantCheckIns(now = new Date()) {
 
   let sent = 0;
   let checked = 0;
-  // The cap is per PERSON, not per relation. It is spent on the RELATION
-  // (dormantNudgeCount), so a mentee holding two ACTIVE mentorships would get
-  // FOUR "still interested?" mails out of two independent two-nudge budgets —
-  // and the second one already told them we would not write again, which
-  // docs/dormant-first-contacts.md declares non-negotiable on sender-reputation
-  // grounds. Two ACTIVE relations for one mentee is the bug being closed in
-  // #419; the guards there stop NEW violations and touch no existing rows, so
-  // until the data is clean this is what keeps the promise. One tick only —
-  // relations dormant on different days still nudge on different days. The real
-  // fix is the invariant, not this set.
-  const nudgedMentees = new Set<string>();
+
+  // THE CAP IS A PROMISE TO A PERSON, AND IT IS COUNTED PER PERSON (#2287).
+  //
+  // It is still SPENT on the relation (`dormantNudgeCount`, the atomic claim
+  // below), because that is what makes two overlapping ticks safe. But what the
+  // product owes is "at most two, ever, to this human, and the second one says
+  // nobody will write again" — docs/dormant-first-contacts.md declares that
+  // non-negotiable on sender-reputation grounds. A mentee holding two ACTIVE
+  // mentorships holds two independent budgets, so read per relation the promise
+  // breaks by a clean multiple: four mails, two of which already said there
+  // would be no more.
+  //
+  // #2283 put an in-memory Set here. That deduplicates ONE TICK, which is not
+  // the same thing: the second relation's budget is untouched, so the extra
+  // mail is deferred to tomorrow's run rather than cancelled. The fix is to ask
+  // the question of the person — the SUM of what their relations have spent,
+  // and the LATEST nudge any of them sent, which is also the right clock for
+  // the spacing rule. Both come out of rows that already exist, so this needs
+  // no column and no migration.
+  //
+  // While "one mentee, at most one ACTIVE mentor" (#419) holds, the sum equals
+  // the relation's own count and nothing here behaves differently. That is the
+  // point: it is defence in depth, and it becomes load-bearing the day #1799
+  // raises that limit above one deliberately.
+  const menteeIds = [...new Set(relations.map((relation) => relation.mentee.id))];
+  const spend = menteeIds.length
+    ? await prisma.mentorshipRelation.groupBy({
+        by: ['menteeId'],
+        // ACTIVE only, matching the eligibility query: a completed mentorship's
+        // spent budget is not a reason to stay silent in a new one.
+        where: { menteeId: { in: menteeIds }, status: 'ACTIVE' },
+        _sum: { dormantNudgeCount: true },
+        _max: { dormantNudgeSentAt: true },
+      })
+    : [];
+  const spentByMentee = new Map(spend.map((row) => [row.menteeId, row._sum.dormantNudgeCount ?? 0]));
+  const lastNudgeByMentee = new Map(spend.map((row) => [row.menteeId, row._max.dormantNudgeSentAt]));
   for (const relation of relations) {
     if (sent >= DORMANT_NUDGE_MAX_PER_RUN) break;
     checked += 1;
+    // The claim below is still guarded on THIS relation's own count; the
+    // decision to send is made on the person's.
     const count = relation.dormantNudgeCount;
-    if (count > 0) {
-      // Every nudge after the first is spaced from the one before it.
-      if (!relation.dormantNudgeSentAt) continue;
-      const days = Math.floor((now.getTime() - relation.dormantNudgeSentAt.getTime()) / DAY_MS);
+    const spent = spentByMentee.get(relation.mentee.id) ?? count;
+    if (spent >= DORMANT_MAX_NUDGES) continue;
+    const lastNudgeAt = lastNudgeByMentee.get(relation.mentee.id) ?? relation.dormantNudgeSentAt;
+    if (spent > 0) {
+      // Every nudge after the first is spaced from the one before it — the last
+      // one this PERSON got, whichever relation sent it. This is also what
+      // stops a second relation in the SAME run: the map is updated on the
+      // claim, so the gap is zero days and the branch below refuses.
+      if (!lastNudgeAt) continue;
+      const days = Math.floor((now.getTime() - lastNudgeAt.getTime()) / DAY_MS);
       if (days < DORMANT_SECOND_NUDGE_GAP_DAYS) continue;
     } else if (!relation.dormantSince || relation.dormantSince > now) {
       // Flagged is due (see the note above); a stamp in the future can only
@@ -2331,8 +2457,6 @@ export async function sendDormantCheckIns(now = new Date()) {
       continue;
     }
 
-    if (nudgedMentees.has(relation.mentee.id)) continue;
-
     // Claim before sending, guarded on the count we read: two overlapping ticks
     // (or a retried container) can then never write the same person twice. A
     // mid-send failure loses one nudge, which is the far better failure than
@@ -2342,13 +2466,15 @@ export async function sendDormantCheckIns(now = new Date()) {
       data: { dormantNudgeCount: count + 1, dormantNudgeSentAt: now },
     });
     if (claimed.count === 0) continue;
-    nudgedMentees.add(relation.mentee.id);
+    spentByMentee.set(relation.mentee.id, spent + 1);
+    lastNudgeByMentee.set(relation.mentee.id, now);
 
     const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
       ? (relation.mentee.preferredLanguage as Locale)
       : defaultLocale;
     const copy = getDictionary(locale).dormantCheckIn;
-    const isFinal = count + 1 >= DORMANT_MAX_NUDGES;
+    // "Final" is the person's last nudge, not the relation's.
+    const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
     const brand = await emailBrand(relation.orgId);
     await sendEmail({
       to: relation.mentee.email,

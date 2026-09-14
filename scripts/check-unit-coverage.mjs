@@ -170,6 +170,14 @@ const FLOORS = new Map([
       why: 'the stored hash is taken over the normalised code, so changing normalisation invalidates every printed code (#1542)',
     },
   ],
+  [
+    'src/lib/twoFactorResetRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'who may clear someone else\'s second factor: never a peer admin, never self, never while impersonating (#1543)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────

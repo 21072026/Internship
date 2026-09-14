@@ -42,9 +42,19 @@ function clean(v: string | null | undefined): string | null {
 }
 
 // Merge a tenant's (possibly partial/null) branding over the product defaults.
-export function resolveBranding(b: Partial<Branding> | null | undefined): ResolvedBranding {
+//
+// `fallbackName` overrides the product default used when the tenant set no
+// brandName (#2355 follow-up). A non-INTERNSHIP vertical is a DIFFERENT product,
+// so it must not fall back to "Internship CRM" — the caller passes the org's own
+// name instead, and a marketing tenant that never touched white-label still sees
+// its own name in the wordmark rather than being greeted as the internship
+// product. INTERNSHIP passes nothing and keeps the product default.
+export function resolveBranding(
+  b: Partial<Branding> | null | undefined,
+  fallbackName?: string | null,
+): ResolvedBranding {
   return {
-    name: clean(b?.brandName) ?? DEFAULT_BRANDING.name,
+    name: clean(b?.brandName) ?? clean(fallbackName) ?? DEFAULT_BRANDING.name,
     logoUrl: clean(b?.brandLogoUrl) ?? DEFAULT_BRANDING.logoUrl,
     color: clean(b?.brandColor) ?? DEFAULT_BRANDING.color,
     supportEmail: clean(b?.supportEmail) ?? DEFAULT_BRANDING.supportEmail,

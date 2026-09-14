@@ -6877,3 +6877,37 @@ Record the selection rationale in the submission packet. After fetching main, re
 while the marketing documents still describe the earlier attribution gap. Directory links
 can reuse those values without implementing #1390. A shared Capterra/GetApp vendor entry
 does not prove separate public listings or independently configurable outbound URLs.
+
+## 2026-09-14 — Bir PR'ı "yeşil" bırakmak onu merge etmez (#1542, #1550)
+
+**Auto-merge'ü kurmak işi bitirmiyor.** #2336'nın on üç check'inin hepsi yeşildi
+ve auto-merge (squash) kuruluydu; PR yine de girmedi, elle merge etmek gerekti.
+Aynı şey #2337'de de oldu. Bu oturumda "auto-merge kurdum, gerisi kendiliğinden
+olur" diye bırakılan PR'lar **günlerce** öylece durdu. Kurmak zararsız ama tek
+başına yeterli değil: PR'ı gerçekten kapatana kadar takip et.
+
+**Sonuçlanmış bir check run kendi kendini yeniden değerlendirmez.** Kırmızının
+sebebi *taban* dalıysa ve taban düzeltilirse, PR kırmızı kalmaya devam eder —
+yeni bir commit gelmedikçe hiçbir şey onu hareket ettirmez. Düzeltme başkasının
+dalındaysa main'i oraya **merge commit'i** ile al (rebase etme, checkout'unu
+bozarsın); kendi dalınsa rebase et. İki PR bu yüzden boşuna bekledi.
+
+**Kendi diff'ini suçlamadan önce tabana bak.** `Playwright smoke` PR'ımda
+kırmızıydı; sebebi main'di — #2284 `/pricing` linklerini sayfa var olmadan
+göndermiş, App Router görüş alanındaki her `<Link>`i prefetch ediyor ve 404
+konsola düşüyor, `e2e/smoke.spec.ts:30` de bunu hata sayıyor. Ucuz doğrulama:
+farklı bir tabandaki ilgisiz bir PR'a bak — o da aynı şekilde kırmızıysa senin
+değil.
+
+**Liste tipi çakışmalarda kör birleştirme, blok sınırında sessizce bozar.**
+Altı kardeş PR aynı listelere (ci.yml, package.json, `TENANT_MODELS`, coverage
+`FLOORS`, CLAUDE.md) birer satır eklediğinde iki tarafı da korumak neredeyse her
+zaman doğru. Ama birleştirme bir Prisma modelinin sınırından geçerse kapanış
+parantezini yutuyor (belirti: eksik model hakkında bir yığın tsc hatası —
+`prisma validate` bunu tek satırda söyler), ve `check-unit-coverage.mjs`'te bir
+`[anahtar, {…}]` çiftinin ortasından geçerse nesnesi hiç kapanmayan bir çift
+üretiyor. İkincisi `new Map([...])` tarafından sessizce yutuldu: taban hiç var
+olmadı, modül **günlerce ölçülmedi**, PR açıklaması ise "%95 tabanına karşı %100
+ölçüldü" diyordu. Hiçbir kapı yakalayamaz. O iki dosyada çakışma çözdüysen
+sonucu *kanıtla*: `prisma validate`, ve `test:unit:coverage` modülü gerçekten
+ölçmeli.
