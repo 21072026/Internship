@@ -7,6 +7,7 @@ import { getLocale } from '@/i18n/server';
 import { getClientDictionary } from '@/i18n/dictionaries';
 import { resolveRequestVertical } from '@/i18n/server';
 import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
+import { productNameFor } from '@/lib/verticals';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
@@ -18,11 +19,22 @@ import { SystemThemeSync } from '@/components/SystemThemeSync';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { appleSplashLinks } from '@/lib/appleSplash';
 
-export const metadata: Metadata = {
-  title: 'Internship CRM - Mentor-Mentee Management',
-  description: 'A comprehensive CRM for managing mentor-mentee relationships and internship programs',
-  applicationName: 'Internship CRM',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'InternshipCRM' },
+// Vertical-aware tab title / app name (#2356). INTERNSHIP is byte-identical to
+// the previous static metadata (several landing e2e specs assert the exact
+// title), so only a marketing host/tenant reads its own product name instead of
+// "Internship CRM". resolveRequestVertical is session-first, host-second, so it
+// is right both signed-in (org vertical) and signed-out (host vertical).
+export async function generateMetadata(): Promise<Metadata> {
+  const vertical = await resolveRequestVertical();
+  const isMarketing = vertical === 'MARKETING';
+  const productName = productNameFor(vertical);
+  return {
+  title: isMarketing ? `${productName} — Marketing CRM` : 'Internship CRM - Mentor-Mentee Management',
+  description: isMarketing
+    ? 'A CRM for tracking customers through a marketing pipeline — from first contact to close.'
+    : 'A comprehensive CRM for managing mentor-mentee relationships and internship programs',
+  applicationName: productName,
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: productName },
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
@@ -35,7 +47,8 @@ export const metadata: Metadata = {
     // from the device table in lib/appleSplash.ts.
     other: appleSplashLinks(),
   },
-};
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#1D4ED8',

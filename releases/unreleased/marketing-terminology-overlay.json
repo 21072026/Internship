@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **The marketing vertical now reads as its own product, not internship with a different logo** (#2356, epic #2348). A signed-in marketing tenant's admin dashboard, its first-run checklist and its people list still showed internship terminology — \"Mentee\", \"Mentor\", \"Active Mentorships\", \"Overview of your internship management system\", \"Invite your first mentors\" — and a signed-out marketing host's wordmark and browser tab still said \"Internship CRM\". The per-vertical terminology overlay was extended to cover the admin dashboard (leads / reps / deals) and the onboarding checklist, the people list is now \"Leads\" (\"Müşteri Adayları\") consistently rather than conflating leads with deals, and the signed-out wordmark and tab title now read the vertical's own product name (a `productName` per vertical in src/lib/verticals.ts). Internship is byte-identical — its overlay stays empty and its title unchanged.",
+  "notes": {
+    "en": ["Marketing tenants now see marketing terminology throughout — leads, reps and deals on the dashboard and checklist, and the marketing product name in the wordmark and browser tab — instead of internship wording."],
+    "tr": ["Pazarlama kiracıları artık her yerde pazarlama terminolojisi görüyor — panoda ve kontrol listesinde müşteri adayları, temsilciler ve fırsatlar; wordmark ve tarayıcı sekmesinde pazarlama ürün adı — staj terimleri yerine."],
+    "de": ["Marketing-Mandanten sehen jetzt durchgängig Marketing-Terminologie — Leads, Mitarbeiter und Deals im Dashboard und in der Checkliste sowie den Marketing-Produktnamen im Wortzeichen und Browser-Tab — statt Praktikums-Begriffe."]
+  }
+}
