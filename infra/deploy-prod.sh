@@ -727,6 +727,14 @@ run_tool node prisma/backfill-sso-plan.mjs || true
 # note. Only ever fills NULLs — idempotent.
 run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
 
+# Fill WeeklyReportReminder.recipientId for rows written before #2287, so the
+# weekly reminder can be capped per PERSON rather than per relation. The column
+# ships nullable because db push refuses a required one on a populated table
+# (#2298); this is the expand half. It also PRINTS how many (recipient, week)
+# pairs still hold more than one row — the number the @@unique contract step is
+# gated on. Only ever fills NULLs — idempotent.
+run_tool node prisma/backfill-weekly-report-reminder-recipient.mjs || true
+
 # Move relations that were created on the schema default (APPLICATION_100) in a
 # tenant whose custom stage set does not contain that key (#1634). They render
 # in no board column and count in no funnel row; each move writes a StatusChange
