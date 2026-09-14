@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -7,7 +8,7 @@ import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { withTenantScope } from '@/lib/orgContext';
-import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
+import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -66,21 +67,32 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const where: Record<string, unknown> = {
-      ...scope,
-      ...(session.user.role === 'COMPANY' ? { orgId: companyOrgId, companyId: session.user.companyId } : {}),
-    };
-
-    if (status) {
-      where.status = status;
-    }
-    if (search) {
-      where.OR = [
-        { mentor: { fullName: { contains: search } } },
-        { mentee: { fullName: { contains: search } } },
-        { company: { name: { contains: search } } },
-      ];
-    }
+    // Composed, never assigned (#2288). This used to spread `scope` into a
+    // `Record<string, unknown>` and then set `where.OR = [...search...]`. The
+    // MENTOR/MENTEE scopes are themselves an `OR` over both sides of the
+    // relation, so `?search=` did not narrow them — it overwrote them, and any
+    // signed-in mentor or mentee could read every relation (and every mentee's
+    // e-mail) in the database. `andScope` puts the scope in its own `AND`
+    // conjunct where no later filter can reach it, and the real Prisma type
+    // replaces the `Record<string, unknown>` that let the collision compile.
+    const where = andScope<Prisma.MentorshipRelationWhereInput>(
+      scope,
+      session.user.role === 'COMPANY'
+        ? { orgId: companyOrgId, companyId: session.user.companyId }
+        : undefined,
+      // Unvalidated on purpose, exactly as before: an unknown value is a Prisma
+      // error, not a silently wider list.
+      status ? { status: status as Prisma.MentorshipRelationWhereInput['status'] } : undefined,
+      search
+        ? {
+            OR: [
+              { mentor: { fullName: { contains: search } } },
+              { mentee: { fullName: { contains: search } } },
+              { company: { name: { contains: search } } },
+            ],
+          }
+        : undefined
+    );
 
     const include = {
       mentor: { select: { id: true, fullName: true, email: true, department: true } },
