@@ -328,6 +328,7 @@ docker run -d \
   "${APP_NET_ARGS[@]}" \
   --restart=unless-stopped \
   -e DATABASE_URL="$CONTAINER_DB" \
+  -e MT_ENFORCE_ISOLATION=true \
   -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
   -e NEXTAUTH_URL="$URL" \
   -e NEXT_PUBLIC_APP_URL="$URL" \
