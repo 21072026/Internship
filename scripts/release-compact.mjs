@@ -1,6 +1,9 @@
 // Fold the pending release fragments into the three canonical files (#1275),
 // ONE RELEASE PER FRAGMENT (#1457):
 //   package.json            -> version = the newest fragment's version
+//   package-lock.json       -> the same version, in the two places npm keeps it
+//                              (#2243 — otherwise `npm install` rewrites them
+//                              and every clean checkout goes dirty)
 //   CHANGELOG.md            -> one section per fragment: its own version, the
 //                              date/time it shipped and the commit that
 //                              brought it in
@@ -26,6 +29,8 @@ const { FRAGMENT_DIR, resolveRelease } = require('./release-derive.cjs');
 // The two media writers (#2233) live in the media module so they can be unit
 // tested — this file is top-level script code and cannot be imported.
 const { changelogMedia, releaseNotesMedia } = require('./release-media.cjs');
+// package-lock.json carries the same version (#2243) — same reason, same shape.
+const { LOCKFILE, setLockfileVersion, lockfileVersions } = require('./release-lockfile.cjs');
 
 // The public repository, for the commit links in the changelog. Same URL as
 // src/components/landing/links.ts (a .mjs script cannot import the TS module).
@@ -66,6 +71,22 @@ const newestFirst = [...timeline].reverse();
 // 1. package.json — replace exactly the version line, preserving formatting.
 const pkgNext = pkgRaw.replace(`"version": "${pkg.version}"`, `"version": "${version}"`);
 if (pkgNext === pkgRaw) throw new Error(`could not find "version": "${pkg.version}" in package.json`);
+
+// 1b. package-lock.json — npm keeps the same version in two places there, and
+// rewrites both from package.json on the next `npm install`. Leaving them behind
+// made every clean checkout go dirty on install (#2243). Targeted replacement,
+// never a JSON round-trip: this file is ~800 KB and the diff must stay 2 lines.
+const lockPath = path.join(root, LOCKFILE);
+const lockRaw = readFileSync(lockPath, 'utf8');
+const lockAt = lockfileVersions(lockRaw);
+if (lockAt.top !== lockAt.root) {
+  throw new Error(`${LOCKFILE}: its two version fields disagree (${lockAt.top} vs ${lockAt.root}) — fix it by hand`);
+}
+// `from` is what the lockfile actually says, not pkg.version: a lockfile that
+// drifted before the guard existed still gets pulled forward instead of
+// stalling the release.
+const lockNext =
+  lockAt.top === version ? lockRaw : setLockfileVersion(lockRaw, { name: pkg.name, from: lockAt.top, to: version });
 
 // 2. CHANGELOG.md — one section per fragment, newest first.
 const clPath = path.join(root, 'CHANGELOG.md');
@@ -121,10 +142,12 @@ if (dryRun) {
   console.log(`--- dry run: ${timeline.length} fragment(s) -> ${version} ---\n`);
   console.log(sections);
   console.log(`release-notes entries: ${withNotes.length}`);
+  console.log(`${LOCKFILE}: ${lockAt.top} -> ${version}${lockNext === lockRaw ? ' (already in step)' : ''}`);
   process.exit(0);
 }
 
 writeFileSync(pkgPath, pkgNext);
+if (lockNext !== lockRaw) writeFileSync(lockPath, lockNext);
 writeFileSync(clPath, clNext);
 if (rnNext) writeFileSync(rnPath, rnNext);
 

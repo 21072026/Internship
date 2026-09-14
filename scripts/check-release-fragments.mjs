@@ -4,6 +4,11 @@
 // check:i18n). A malformed fragment must fail HERE, in the PR that adds it —
 // not in next.config.js during the deploy build.
 //
+// It is also where package.json and package-lock.json are held to the SAME
+// version (#2243) — it already reads the version, and a lockfile that has
+// fallen behind makes a plain `npm install` on a clean checkout report a change
+// nobody made.
+//
 // It also prints the release timeline the fragments resolve to (#1457): one
 // version per pending change, with the merge date and commit where the checkout
 // has the history to see them. Reviewing a PR, that is the answer to "which
@@ -21,9 +26,11 @@
 // labelled issue (#2323, scripts/release-compact-alert.mjs), so this warning
 // is the second net, not the only one — and it names who acts, because as
 // "not a problem with this PR" it was correctly read and correctly ignored.
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { resolveRelease } = require('./release-derive.cjs');
+const { LOCKFILE, FIX_COMMAND, lockfileVersions } = require('./release-lockfile.cjs');
 const pkg = require('../package.json');
 
 /** Compaction runs daily, so a backlog this size or this old means it is stuck.
@@ -47,6 +54,41 @@ try {
   }
 } catch (error) {
   console.error(`XX ${error.message}`);
+  process.exit(1);
+}
+
+checkLockfileVersion();
+
+/** package.json vs package-lock.json (#2243).
+ *
+ *  Compared here and NOT against the derived version: npm only ever writes
+ *  package.json's version into the lockfile, and the derived version (base +
+ *  pending fragments) is by design ahead of package.json on every branch that
+ *  carries a fragment. Comparing the derived version would fail every normal
+ *  PR; comparing these two fails exactly when a compaction — or a hand edit —
+ *  moved one and not the other, which is the drift that made `npm install`
+ *  dirty a clean checkout. */
+function checkLockfileVersion() {
+  const lockPath = new URL(`../${LOCKFILE}`, import.meta.url);
+  let versions;
+  try {
+    versions = lockfileVersions(readFileSync(lockPath, 'utf8'));
+  } catch (error) {
+    console.error(`XX cannot read ${LOCKFILE}: ${error.message}`);
+    process.exit(1);
+  }
+  const wrong = Object.entries(versions).filter(([, value]) => value !== pkg.version);
+  if (wrong.length === 0) {
+    console.log(`${LOCKFILE} version OK — ${pkg.version} in both fields`);
+    return;
+  }
+  console.error(
+    `XX package.json says ${pkg.version} but ${LOCKFILE} says ` +
+      wrong.map(([where, value]) => `${value ?? '(missing)'} (${where}-level)`).join(' and ') +
+      `. npm rewrites those fields on the next install, so a clean checkout goes dirty for ` +
+      `nobody's change. Fix it with exactly this, then commit ${LOCKFILE}:\n` +
+      `     ${FIX_COMMAND}`
+  );
   process.exit(1);
 }
 
