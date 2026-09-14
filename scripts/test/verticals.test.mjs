@@ -27,6 +27,7 @@ import {
   verticalDefinition,
   verticalCapabilities,
   verticalHasCapability,
+  productNameFor,
 } from '../../src/lib/verticals.ts';
 
 test('the catalogue has a unique key per entry and a default that is in it', () => {
@@ -110,8 +111,22 @@ test('the catalogue carries no unresolvable pointers into other catalogues', () 
   for (const v of VERTICALS) {
     assert.deepEqual(
       Object.keys(v).sort(),
-      ['capabilities', 'key'],
+      ['capabilities', 'key', 'productName'],
       `${v.key} carries a field this suite cannot verify — add its check in the slice that reads it`
     );
   }
+});
+
+test('every vertical has a non-empty product name, and productNameFor resolves it', () => {
+  // The signed-out wordmark / tab-title fallback (#2356). A blank one would put
+  // an empty brand on a marketing landing, so pin that each entry has one and
+  // that the two we ship read as expected.
+  for (const v of VERTICALS) {
+    assert.equal(typeof v.productName, 'string');
+    assert.ok(v.productName.trim().length > 0, `${v.key} has an empty productName`);
+  }
+  assert.equal(productNameFor('INTERNSHIP'), 'Internship CRM');
+  assert.equal(productNameFor('MARKETING'), 'SaleVali');
+  // Total function: an unknown key falls back to the default vertical's name.
+  assert.equal(productNameFor('nope'), productNameFor(DEFAULT_VERTICAL));
 });
