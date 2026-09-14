@@ -79,3 +79,30 @@ day-to-day development. (Port `3307` avoids clashing with a local DB on `3306`.)
 `npm run test:e2e` boots its own dev server and needs a reachable DB — point it
 at the local DB (Option A). CI runs the suite against an isolated MySQL service,
 so the shared preview DB is never required for tests.
+
+---
+
+## Database engine minimum — MySQL 8.0.1
+
+Use **MySQL 8**, not MariaDB and not MySQL 5.7. Everything in the repo already
+assumes it: the server runs 8.0.46, `infra/server/bootstrap.sh` pins the
+`mysql:8.0` image, and CI (`e2e.yml`, `e2e-full.yml`) uses the same image so the
+tests are not lying about the engine (`docs/server-migration.md`).
+
+The **hard floor is 8.0.1**, and it is the job queue that sets it (#1671). The
+claim query in `src/lib/jobs/queueStore.ts` is
+
+```sql
+SELECT id FROM `Job`
+ WHERE status = 'PENDING' AND runAt <= ?
+ ORDER BY priority DESC, runAt ASC
+ LIMIT ? FOR UPDATE SKIP LOCKED
+```
+
+`SKIP LOCKED` is what makes two workers claim *disjoint* sets of jobs instead of
+queueing behind one another's row locks; MySQL added it in **8.0.1**. On an older
+engine the statement is a **syntax error**, not a slow path — which is the right
+direction: a silent fallback to a plain `FOR UPDATE` would serialise the entire
+queue while looking like a performance problem. MySQL 8 is also required for
+native `JSON` columns (`Job.payload`, `JobRun.summary`) and is why `db push`
+refuses a literal DEFAULT on them (`docs/server-migration.md`).
