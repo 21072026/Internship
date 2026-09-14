@@ -20,6 +20,15 @@ test('UTC week helpers keep Monday boundaries and exclude a partial first week',
 });
 
 test('mentee submission, mentor review, authorization, print and reminder dedupe', async ({ browser }) => {
+  // Triples the timeout (#2343). This is not a normal test and the default 60s
+  // is not a budget it was ever going to fit: it opens FIVE browser contexts —
+  // mentee, mentor, an unrelated mentor, an outsider and an admin — walks a
+  // submit/review round trip, a 53-row paginated history, the print view and
+  // four reminder sweeps. It timed out mid-run in CI, and the first thing that
+  // happened to be pending was blamed for it. `test.slow()` rather than a
+  // hand-written number so the reason is legible and the value tracks the
+  // project default.
+  test.slow();
   const password = 'WeeklyReport123';
   const mentorEmail = uniqueEmail('weekly-mentor');
   const menteeEmail = uniqueEmail('weekly-mentee');
@@ -159,10 +168,27 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect(finalHistoryPage).toMatchObject({ page: 3, pageSize: 20, total: 53, totalPages: 3, hasMore: false });
     expect(finalHistoryPage.reports).toHaveLength(13);
     await menteePage.goto('/portal/goals');
-    await expect(menteePage.getByTestId('weekly-reports-load-more')).toBeVisible();
-    while (await menteePage.getByTestId('weekly-reports-load-more').isVisible().catch(() => false)) {
-      await menteePage.getByTestId('weekly-reports-load-more').click();
+    // Wait on the RESULT, never on the button's own state (#2343). "Load more"
+    // is `{hasMore && <Button loading={loadingMore} …>}`, so it is disabled
+    // while a page is in flight and unmounted the instant the last page lands.
+    // A `while (isVisible) click()` loop races its own final iteration: the
+    // locator resolves mid-load, the click waits for `loadingMore` to clear,
+    // and the element detaches instead of becoming enabled — 15 seconds of
+    // waiting with nothing actually wrong.
+    //
+    // Two clicks, because the API assertions above pin `totalPages: 3`. Each is
+    // waited on by the arrival of the first row of the next page, and the
+    // button has to be GONE at the end — which is the pagination behaviour the
+    // old loop never actually asserted.
+    const loadMore = menteePage.getByTestId('weekly-reports-load-more');
+    const historyRows = menteePage.getByTestId('weekly-report-row');
+    await expect(loadMore).toBeVisible();
+    for (let page = 2; page <= 3; page += 1) {
+      const seen = await historyRows.count();
+      await loadMore.click();
+      await expect(historyRows.nth(seen)).toBeVisible();
     }
+    await expect(loadMore).toHaveCount(0);
     await expect(menteePage.getByText('Paginated report 51')).toBeVisible();
 
     const friday = new Date('2026-08-14T15:00:00Z');
@@ -171,26 +197,51 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     const remindersBeforeOptOut = await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_reminder.due' } });
     const first = await sendWeeklyReportReminders(friday);
     const rerun = await sendWeeklyReportReminders(friday);
-    expect(first.reminded).toBe(1);
-    expect(first.emailed).toBe(0);
+    // `reminded` and `emailed` are INSTALLATION-wide counters: every other
+    // relation at INTERNSHIP_IN_PROGRESS_450 is counted too — another spec's on
+    // the shared CI database, or the demo seed on a developer's. Asserting
+    // `toBe(1)` on them makes this test depend on being the only pair in the
+    // database, which it is not promised to be. So the exact assertions are
+    // scoped to THIS pair, and the counters are used only for the property that
+    // really is global: a re-run in the same week reminds nobody new.
+    expect(first.reminded).toBeGreaterThanOrEqual(1);
+    expect(await prisma.weeklyReportReminder.count({ where: { relationId: relation.id } })).toBe(1);
+    // The opt-out is what is under test: this mentee has the weeklyReports
+    // category off, so the sweep claims the week for them and sends neither the
+    // bell item nor the mail.
     expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_reminder.due' } })).toBe(remindersBeforeOptOut);
     expect(rerun.reminded).toBe(0);
-    expect(await prisma.weeklyReportReminder.count({ where: { relationId: relation.id } })).toBe(1);
 
     const nextFriday = addUtcWeeks(friday, 1);
     await prisma.user.update({ where: { id: mentee.id }, data: { notificationPrefs: { weeklyReports: true }, emailNotifications: false } });
     const emailOff = await sendWeeklyReportReminders(nextFriday);
-    expect(emailOff).toMatchObject({ reminded: 1, emailed: 0 });
+    // Scoped for the same reason as above: `emailed` counts the whole
+    // installation. What this step is about is one mentee with the category on
+    // and e-mail off — the bell item is written and no mail is attempted for
+    // THEM, which EmailLog answers exactly (it records SKIPPED sends too, so
+    // the absence of a row is the absence of an attempt).
+    expect(emailOff.reminded).toBeGreaterThanOrEqual(1);
     expect((await prisma.notification.findFirst({ where: { userId: mentee.id, type: 'weekly_report_reminder.due' }, orderBy: { createdAt: 'desc' } }))?.id).toBeTruthy();
+    expect(await prisma.emailLog.count({ where: { to: menteeEmail, category: 'weekly-report' } })).toBe(0);
 
     const emailOnFriday = addUtcWeeks(friday, 2);
     await prisma.user.update({ where: { id: mentee.id }, data: { emailNotifications: true } });
     const emailOn = await sendWeeklyReportReminders(emailOnFriday);
-    expect(emailOn).toMatchObject({ reminded: 1, emailed: 1 });
+    expect(emailOn.reminded).toBeGreaterThanOrEqual(1);
+    // …and with e-mail back on, exactly one goes to this mentee.
+    expect(await prisma.emailLog.count({ where: { to: menteeEmail, category: 'weekly-report' } })).toBe(1);
 
     const submittedFriday = addUtcWeeks(friday, 3);
     await prisma.weeklyReport.create({ data: { orgId: org.id, relationId: relation.id, weekStart: utcWeekStart(submittedFriday), summary: 'Done', status: 'SUBMITTED' } });
-    expect((await sendWeeklyReportReminders(submittedFriday)).reminded).toBe(0);
+    await sendWeeklyReportReminders(submittedFriday);
+    // A submitted report suppresses the reminder — for THIS pair and THIS week,
+    // which is the claim. The sweep's own counter cannot say that: it is the
+    // whole installation, and any other in-progress relation is in it.
+    expect(
+      await prisma.weeklyReportReminder.count({
+        where: { relationId: relation.id, weekStart: utcWeekStart(submittedFriday) },
+      })
+    ).toBe(0);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
     if (relationId) await prisma.mentorshipRelation.deleteMany({ where: { id: relationId } });
