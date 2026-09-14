@@ -3335,6 +3335,11 @@ model Job {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Attempt ledger (#1671). Cascade: a deleted job takes its runs with it —
+  /// a run row that outlived its job describes nothing and would only make
+  /// `pruneJobRuns()` the sole thing standing between the table and orphans.
+  runs JobRun[]
+
   @@index([status, runAt, priority])
   @@index([name, status])
   /// Tenant-leading, like every other model in TENANT_MODELS (MatchFeedback's
@@ -3344,6 +3349,53 @@ model Job {
   /// claim query `status=PENDING AND runAt<=now`, which is the hottest one this
   /// table will ever serve.
   @@index([orgId, status, runAt])
+}
+
+/// One row per ATTEMPT at a job (#1671, absorbing #1606). `Job` says what must
+/// happen and what state it is in now; `JobRun` is the only place that records
+/// what actually happened each time somebody tried — which is what makes the
+/// twelve cron callbacks this queue replaces visible for the first time.
+///
+/// Deliberately NOT in TENANT_MODELS (src/lib/orgContext.ts): it carries no
+/// `orgId` and is system-level operational data, reached only through the `Job`
+/// it belongs to. Registering a model with no tenant column would make the
+/// isolation middleware filter on a field that does not exist.
+model JobRun {
+  id    String @id @default(cuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// Which attempt this was — `Job.attempts` at the moment the handler ran.
+  /// Not derived from the row count: a pruned ledger must not renumber history.
+  attempt Int
+
+  /// Provenance, one of 'schedule' | 'manual' | 'boot' (see JobTrigger in
+  /// src/lib/jobs/types.ts). Without it the operations console (#1607) cannot
+  /// tell "the 09:00 slot fired" from "an admin pushed re-run".
+  trigger String @db.VarChar(16)
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  /// Defaults to false because the row is written BEFORE the handler runs: a
+  /// run that never got a finishing stamp (the container died mid-handler) is
+  /// not a success, and reading `ok` needs no join with `finishedAt` to say so.
+  ok Boolean @default(false)
+
+  durationMs Int?
+
+  /// Message of the throw that ended this attempt. Free text from the handler,
+  /// so every surface that renders it runs it through sanitizeError() first.
+  error String? @db.Text
+
+  /// COUNTERS ONLY — `Record<string, number>` in TypeScript, enforced again at
+  /// runtime by sanitizeSummary() in src/lib/jobs/queue.ts. Never an e-mail
+  /// address, a name or message content: the admin surfaces render it more or
+  /// less verbatim.
+  summary Json?
+
+  @@index([jobId])
+  @@index([startedAt])
 }
 
 // ── Programme economics ──────────────────────────────────────────────────────
