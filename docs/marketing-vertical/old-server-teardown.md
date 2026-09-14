@@ -145,3 +145,25 @@ koşabilir. **İnsan gerektirenler:** adım 0 (repo/Actions kapatma), adım 2'ni
 yorumu (mail kutusu çıkarsa ne yapılacağı bir karardır), adım 7 (anahtar
 yönetimi). Bu yüzden burada tek bir "hepsini yap" script'i yok: sökümün yarısı
 karar, yarısı komut.
+
+## Uygulaması
+
+- **Adım 0 tamamlandı:** `21072026/Marketing` repo'su silindi, dolayısıyla
+  `deploy-test.yml` ve `pr-preview.yml` artık tetiklenemez — söktüğünü geri
+  kuracak bir şey kalmadı.
+- **Adım 1–6 ve 8:** `infra/marketing-teardown.sh`, iki modlu. `--inventory`
+  salt-okunur (envanter + mail kontrolü + anahtar raporu, hiçbir şeyi
+  değiştirmez), `--apply` yıkıcı ve `TEARDOWN_CONFIRM=SOK-MARKETING` ister.
+  Script silmeye izin verdiği adları bir **beyaz liste** ile sınırlar; mail
+  kontrolü bir referans bulduysa subdomain'lere dokunmadan durur; dump'ı
+  `backup-db.sh`'in üç kontrolüyle (boyut → gzip → `CREATE TABLE`) doğrulamadan
+  hiçbir `DROP` çalıştırmaz. Yanlış silmenin bedeli geri alınamaz olduğu için
+  bu mantığın regresyon testi var: `infra/test/marketing-teardown.test.sh` (CI).
+- **Çalıştırma:** Actions → *Marketing Teardown (old Plesk box, one-time)*.
+  Önce `phase=inventory` koş ve logu oku — envanter bu dokümandan değil kutudan
+  gelmeli. Sonra `phase=teardown` + `confirm=SOK-MARKETING`.
+- **Adım 7 insanda kalır:** repo silinince secret gitti ama anahtar kutuda
+  duruyor. Envanter fazı `authorized_keys`'te eşleşen satırı raporlar (anahtar
+  materyalini değil), kararı sen verirsin.
+- Söküm bitip Internship doğrulandıktan sonra **bu workflow'u ve script'i sil**:
+  bir kerelik, root yetkili bir araç işini bitirdikten sonra durmamalı.
