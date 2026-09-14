@@ -469,7 +469,11 @@ export default function AdminNewslettersPage() {
                       value={tip.title}
                       onChange={(e) => patchTip(i, { title: e.target.value })}
                       data-testid={`newsletter-tip-title-${i}`}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800"
+                      // `min-w-0` with `flex-1`: without it the field keeps its
+                      // intrinsic min-content width — which is the German
+                      // placeholder — and the row pushes the composer past a
+                      // 360px viewport (#2310).
+                      className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800"
                     />
                     {current.tips.length > 1 && (
                       <button
@@ -599,7 +603,10 @@ export default function AdminNewslettersPage() {
             <Button type="button" variant="secondary" loading={busy} onClick={sendTest} data-testid="newsletter-send-test">
               {n.sendTest}
             </Button>
-            <div className="flex items-end gap-2">
+            {/* Wraps and shrinks: at 360px the date control and its button do
+                not fit on one line, and an unwrappable pair here dragged the
+                whole page past the viewport (#2310). */}
+            <div className="flex min-w-0 flex-wrap items-end gap-2">
               <Input
                 label={n.scheduleFor}
                 type="datetime-local"

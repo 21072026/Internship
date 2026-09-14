@@ -206,7 +206,13 @@ let sourceId: string;
 
 test.beforeAll(async () => {
   adminEmail = uniqueEmail('mobcov-admin');
-  await seedUser(adminEmail, PW, 'ADMIN', 'Mobile Coverage Admin');
+  const auditAdmin = await seedUser(adminEmail, PW, 'ADMIN', 'Mobile Coverage Admin');
+  // A SUPER-admin, because /admin/organizations is in the sidebar and a plain
+  // ADMIN cannot render it: the page 403s, the audit reports "never became
+  // ready", and the route sits in the enumeration measuring nothing. An audited
+  // route that never renders is worse than an unaudited one — it reads as
+  // covered. (#2310; the flag is on User, not a Role value — src/lib/superAdmin.ts.)
+  await prisma.user.update({ where: { id: auditAdmin.id }, data: { isSuperAdmin: true } });
   // A relation with a goal, a past interaction and an upcoming meeting: the
   // shared fixture every other widening uses (#2043). Without it the candidate,
   // mentorship, meeting and activity screens all render their empty states, and

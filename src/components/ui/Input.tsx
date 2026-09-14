@@ -17,7 +17,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
 
     return (
-      <div className="w-full">
+      // `min-w-0` so the field can shrink when it is a flex item. Without it a
+      // control with a wide intrinsic size — `datetime-local` is the worst,
+      // ~200px of browser chrome — forces its flex row past the viewport, which
+      // is how a 360px German screen ends up with nine overflowing boxes
+      // (#2310). It changes nothing outside a flex/grid parent.
+      <div className="w-full min-w-0">
         {label && (
           <label
             htmlFor={inputId}
