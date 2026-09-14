@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 import { formatDate } from '@/lib/relativeTime';
-import { resolveOrgId } from '@/lib/orgScope';
+import { withTenantScope } from '@/lib/orgContext';
 import { PoolRemoveButton } from '@/components/admin/PoolRemoveButton';
 
 export const dynamic = 'force-dynamic';
@@ -23,13 +23,16 @@ export default async function AdminReEngagementPage() {
 
   const { t, locale } = await getServerDictionary();
   const r = t.reEngagement;
-  const orgId = resolveOrgId(session);
-
-  const people = await prisma.user.findMany({
-    where: { role: 'MENTEE', reEngageAt: { not: null }, ...(orgId ? { orgId } : {}) },
+  // Bound to the caller's org (#2356) instead of the hand-rolled
+  // `...(orgId ? { orgId } : {})` this used to carry: that pattern is not
+  // fail-closed — a null orgId under enforcement would have listed every
+  // tenant's mentees. withTenantScope lets the central middleware inject the
+  // filter (a no-op while the flag is off).
+  const people = await withTenantScope(session, () => prisma.user.findMany({
+    where: { role: 'MENTEE', reEngageAt: { not: null } },
     orderBy: { reEngageAt: 'asc' },
     select: { id: true, fullName: true, email: true, reEngageAt: true, reEngageNote: true, reEngageNotifiedAt: true },
-  });
+  }));
 
   return (
     <div>

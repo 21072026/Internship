@@ -1,8 +1,10 @@
 import { getServerSession } from 'next-auth';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
+import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Users, Building2, BookOpen, Bell, AlertTriangle } from 'lucide-react';
@@ -12,7 +14,13 @@ import { getServerDictionary } from '@/i18n/server';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { clipSkillLabel } from '@/lib/skills';
 
-async function getStats() {
+// Bound to the caller's org (#2356): this is a server component, so its Prisma
+// reads do not pass through an API route's `withTenantScope` — without binding
+// the tenant context here, the central middleware sees no org and the dashboard
+// counts every tenant's mentees, mentors and mentorships (a cross-org leak once
+// MT_ENFORCE_ISOLATION is on). A no-op while the flag is off.
+async function getStats(session: Session | null) {
+  return withTenantScope(session, async () => {
   const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount] =
     await Promise.all([
       prisma.user.count({ where: { role: 'MENTEE' } }),
@@ -68,11 +76,12 @@ async function getStats() {
     pipelineCounts,
     overdueCount,
   };
+  });
 }
 
 export default async function AdminDashboard() {
   const session = await getServerSession(authOptions);
-  const stats = await getStats();
+  const stats = await getStats(session);
   const { locale, t } = await getServerDictionary();
   const stages = await resolvePipelineStages(session?.user.orgId, locale);
 
