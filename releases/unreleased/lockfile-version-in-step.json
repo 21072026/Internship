@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- Release compaction now moves `package-lock.json`'s version with `package.json`'s (the two fields npm keeps there), and `npm run check:release-fragments` fails when the two files disagree — `npm run fix:lockfile-version` repairs it in a 2-line diff. A clean checkout of `main` no longer goes dirty on `npm install` (#2243)."
+}
