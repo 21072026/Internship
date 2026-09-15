@@ -83,8 +83,11 @@ export const VERTICALS: readonly VerticalDefinition[] = [
     key: 'MARKETING',
     productName: 'SaleVali',
     // A marketing CRM tracks accounts through a funnel; it has no mentors, no
-    // evaluation cycle, no placement and no partner-institution intake.
-    capabilities: ['projects', 'companies', 'pipeline', 'messaging', 'documents'],
+    // evaluation cycle, no placement, no partner-institution intake — and no
+    // intern projects (#2356): "Projects" is the internship product's team/task
+    // workspace, so a marketing tenant must not see the nav entry or be able to
+    // write through its APIs.
+    capabilities: ['companies', 'pipeline', 'messaging', 'documents'],
   },
 ];
 

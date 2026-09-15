@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
 import { isProjectOwner } from '@/lib/projectAccess';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { sendProjectJoinRequestEmail } from '@/services/emailService';
@@ -61,6 +62,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
     const project = await prisma.project.findUnique({
@@ -158,6 +161,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
     if (!(await isProjectOwner(session.user, id))) {

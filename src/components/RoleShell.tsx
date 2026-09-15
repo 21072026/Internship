@@ -7,6 +7,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { CommandPalette } from '@/components/CommandPalette';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { AdminNav } from '@/components/AdminNav';
 import { MentorNav } from '@/components/MentorNav';
@@ -53,10 +54,17 @@ export async function RoleShell({
 
   const isAdmin = role === 'ADMIN';
   const isMentor = role === 'MENTOR';
+  // The vertical's capability set (#2351/#2356). The /admin layout already
+  // resolves this and hands it to AdminNav; this shell — worn by /todos,
+  // /interviews, /messages, /newsletters, /mentors — did not, so AdminNav fell
+  // back to "not passed = every link" and a MARKETING admin saw the full
+  // internship menu on exactly those pages. The menu now reads the same
+  // capability set on every route.
+  const capabilities = await shellCapabilities(session.user.orgId);
 
   return (
     <>
-      <CommandPalette role={isAdmin ? 'ADMIN' : isMentor ? 'MENTOR' : 'MENTEE'} />
+      <CommandPalette role={isAdmin ? 'ADMIN' : isMentor ? 'MENTOR' : 'MENTEE'} capabilities={capabilities} />
       <ResponsiveShell
         brand={<BrandWordmark oneLine />}
         headerExtra={isAdmin || isMentor ? <GlobalSearch /> : undefined}
@@ -73,15 +81,15 @@ export async function RoleShell({
             </div>
 
             {isAdmin ? (
-              <AdminNav />
+              <AdminNav capabilities={capabilities} />
             ) : isMentor ? (
               <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-                <MentorNav />
+                <MentorNav capabilities={capabilities} />
                 <InstallAppButton />
               </nav>
             ) : (
               <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-                <PortalNav />
+                <PortalNav capabilities={capabilities} />
                 <InstallAppButton />
               </nav>
             )}

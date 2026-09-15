@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
 import { createOrGetProjectConversation, removeProjectConversationParticipant } from '@/lib/conversations';
 import { notificationLink } from '@/lib/notificationLink';
 
@@ -71,6 +72,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
     const project = await loadContext(id);
@@ -150,6 +153,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
     const project = await loadContext(id);

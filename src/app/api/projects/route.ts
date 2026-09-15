@@ -8,6 +8,7 @@ import { resolveOwner } from '@/lib/projectAccess';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { mergeTeam, internCount } from '@/lib/projectTeam';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -118,6 +119,10 @@ const CAN_CREATE = new Set(['ADMIN', 'MENTOR', 'MENTEE']);
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Intern projects are not a MARKETING capability (#2356): refuse the write
+  // even when the nav entry is hidden, so a hand-typed URL cannot create one.
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   // A signed-in caller with the wrong role is forbidden, not unauthenticated —
   // this used to answer 401 and send the client off to re-sign-in.
   if (!CAN_CREATE.has(session.user.role)) {

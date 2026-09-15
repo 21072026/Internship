@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
 import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/goalTemplates';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -81,6 +82,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
     const a = await access(session, id);
@@ -115,6 +118,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
     const a = await access(session, id);
@@ -159,6 +164,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
     const a = await access(session, id);

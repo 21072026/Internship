@@ -50,14 +50,19 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
-  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries' },
-  { href: '/admin/projects', icon: FolderGit2, key: 'projects' },
-  { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates' },
+  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'placements' },
+  // Intern team/task projects and their contributor-IP terms, mentee goal
+  // templates, programme cohorts, mentor/mentee success stories and the
+  // partner-company enquiry inbox are internship modules (#2356). A MARKETING
+  // tenant carries none of these capabilities, so the links drop out of its
+  // sidebar — and the projects write APIs are gated on the same capability.
+  { href: '/admin/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },
+  { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates', capability: 'mentorship' },
   // The canned-response pool the composer offers (#1871), next to the other
   // reusable-text screen rather than buried under settings.
   { href: '/admin/message-templates', icon: MessageSquareQuote, key: 'messageTemplates' },
   { href: '/todos', icon: ClipboardList, key: 'todos' },
-  { href: '/admin/cohorts', icon: Layers, key: 'cohorts' },
+  { href: '/admin/cohorts', icon: Layers, key: 'cohorts', capability: 'mentorship' },
   { href: '/admin/tags', icon: TagIcon, key: 'tags' },
   { href: '/admin/sources', icon: Radio, key: 'sources' , capability: 'sourcing' },
   { href: '/admin/users', icon: UserCog, key: 'users' },
@@ -65,7 +70,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/calendar', icon: CalendarDays, key: 'calendar' },
   { href: '/admin/announcements', icon: Megaphone, key: 'announcements' },
   { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters' },
-  { href: '/admin/testimonials', icon: Quote, key: 'testimonials' },
+  { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship' },
   { href: '/admin/email', icon: Mail, key: 'email' },
   { href: '/admin/documents', icon: FileText, key: 'documents' },
   { href: '/admin/support', icon: LifeBuoy, key: 'support' },
@@ -76,7 +81,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement' },
-  { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms' },
+  { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects' },
   { href: '/admin/organizations', icon: Network, key: 'organizations' },
   { href: '/admin/settings', icon: Settings, key: 'settings' },
   { href: '/admin/invite', icon: Mail, key: 'invite' },
@@ -92,7 +97,7 @@ export const MENTOR_NAV_LINKS: NavLink[] = [
   { href: '/mentor/applications', icon: Inbox, key: 'applications' },
   { href: '/mentor/invite', icon: UserPlus, key: 'inviteMentee' },
   { href: '/mentor/profile', icon: User, key: 'myProfile' },
-  { href: '/mentor/projects', icon: FolderGit2, key: 'projects' },
+  { href: '/mentor/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },
   { href: '/todos', icon: ClipboardList, key: 'todos' },
   { href: '/mentor/interactions', icon: BookOpen, key: 'interactionLogs' },
   { href: '/mentor/email', icon: Mail, key: 'email' },
@@ -113,7 +118,7 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   { href: '/portal', icon: LayoutDashboard, key: 'dashboard', exact: true },
   { href: '/portal/profile', icon: User, key: 'myProfile' },
   // Their own projects, not the public showcase at /projects (#1114).
-  { href: '/portal/projects', icon: FolderKanban, key: 'projects' },
+  { href: '/portal/projects', icon: FolderKanban, key: 'projects', capability: 'projects' },
   // Opted-in mentors only (#938) — consent-gated, see /api/mentors.
   { href: '/mentors', icon: Users, key: 'mentorDirectory' },
   { href: '/todos', icon: ListChecks, key: 'todos' },
