@@ -11,6 +11,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { notify } from '@/lib/notify';
 import { resolveMeetingContext, resolveMeetingLink, type Invitee } from '@/lib/meetingContext';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // "Start a meeting now" (#1052).
 //
@@ -43,6 +44,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
     const { title, relationIds, projectId, conversationId } = parsed.data;
+    // An instant meeting on a project is a projects-module write (#2356).
+    if (projectId) {
+      const capGate = await requireCapability(session.user.orgId, 'projects');
+      if (capGate) return capGate;
+    }
 
     const ctx = await resolveMeetingContext(session.user, { relationIds, projectId, conversationId });
     if (!ctx.ok) return NextResponse.json({ error: ctx.error }, { status: ctx.status });

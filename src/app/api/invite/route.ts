@@ -11,6 +11,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { locales } from '@/i18n/config';
 import { z } from 'zod';
 import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Email invitations (#51).
 //
@@ -144,8 +145,14 @@ export async function POST(request: Request) {
 
       // Only somebody who runs the project may hand out membership to it.
       const projectId: string | null = parsed.data.projectId || null;
-      if (projectId && !(await isProjectOwner(session.user, projectId))) {
-        return NextResponse.json({ error: 'You cannot add members to that project' }, { status: 403 });
+      if (projectId) {
+        // Pre-linking an invitation to a project is a projects-module write
+        // (#2356): acceptance upserts a ProjectMember.
+        const capGate = await requireCapability(session.user.orgId, 'projects');
+        if (capGate) return capGate;
+        if (!(await isProjectOwner(session.user, projectId))) {
+          return NextResponse.json({ error: 'You cannot add members to that project' }, { status: 403 });
+        }
       }
 
       // Both duplicate guards are address-based, so they only apply to a named
