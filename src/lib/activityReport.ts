@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { menteeRelationWhere } from '@/lib/menteeRelation';
+import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 
 // Detailed mentee activity report. Aggregates, for a time window, the signals
 // that answer "what has this mentee (and their mentor) been doing": login
@@ -77,7 +78,9 @@ export async function getMenteeActivity(
     prisma.goal.count({ where: { ...relFilter, status: 'OPEN' } }),
     prisma.interactionLog.count({ where: { ...relFilter, date: { gte: since } } }),
     prisma.meeting.count({ where: { ...relFilter, createdAt: { gte: since } } }),
-    prisma.statusChange.count({ where: { ...relFilter, createdAt: { gte: since } } }),
+    // Real moves only (#2264): an old no-op row would be reported to the
+    // mentee as a stage they moved through.
+    prisma.statusChange.count({ where: { ...relFilter, ...REAL_STAGE_MOVE, createdAt: { gte: since } } }),
     prisma.message.count({ where: { ...relFilter, senderId: mentee.id, createdAt: { gte: since } } }),
     prisma.message.count({ where: { ...relFilter, senderId: { not: mentee.id }, createdAt: { gte: since } } }),
   ]);

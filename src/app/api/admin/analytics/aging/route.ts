@@ -7,6 +7,7 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { computeStageAging } from '@/lib/stageAging';
 import { daysInStage, isStageOverdue } from '@/lib/stageClock';
+import { isStageTransition } from '@/lib/stageChange';
 
 // GET — hiring-funnel aging & SLA.
 // - stageAging: average/median time actually SPENT in each stage, computed from
@@ -72,6 +73,11 @@ export async function GET(request: Request) {
   const dropCounts = new Map<string, Map<string, number>>();
   for (const r of relations) {
     for (const c of r.statusChanges) {
+      // Same rule as the clock and the duration report (#2264): a row whose
+      // `fromStatus` equals its `toStatus` is not a move, so it is not a
+      // drop-off either — otherwise an old no-op row sitting on an off-path
+      // stage is counted as somebody arriving there, with its reason code.
+      if (!isStageTransition(c.fromStatus, c.toStatus)) continue;
       if (!negativeKeys.has(c.toStatus)) continue;
       const reasonCode = c.reasonCode ?? UNSPECIFIED_REASON;
       if (!dropCounts.has(c.toStatus)) dropCounts.set(c.toStatus, new Map());

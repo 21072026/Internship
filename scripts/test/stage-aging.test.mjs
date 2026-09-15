@@ -110,3 +110,57 @@ test('the date window keeps only visits that ENDED inside it', () => {
   assert.equal(row(result, 'APPROVAL_PENDING_220').visits, 1);
   assert.equal(row(result, 'APPROVAL_PENDING_220').avgDays, 5);
 });
+
+// ── No-op rows are not visits (#2264) ───────────────────────────────────────
+//
+// #934 stopped NEW `fromStatus === toStatus` rows being written and decided
+// just as explicitly that the ones already in the table stay. They are still
+// arithmetic here: read literally, a no-op is "left stage X, entered stage X",
+// which ends the visit in progress early and records a second, near-zero one.
+test('a no-op status change is neither a visit nor a drag on the average', () => {
+  const withNoop = computeStageAging([
+    {
+      menteeId: 'mentee-noop',
+      startDate: at(0),
+      statusChanges: [
+        // Four days in APPLICATION_100 — but a no-op row lands on day 1.
+        { fromStatus: 'APPLICATION_100', toStatus: 'APPLICATION_100', createdAt: at(1) },
+        { fromStatus: 'APPLICATION_100', toStatus: 'INTERVIEW_PENDING_250', createdAt: at(4) },
+      ],
+    },
+  ]);
+
+  const clean = computeStageAging([
+    {
+      menteeId: 'mentee-noop',
+      startDate: at(0),
+      statusChanges: [
+        { fromStatus: 'APPLICATION_100', toStatus: 'INTERVIEW_PENDING_250', createdAt: at(4) },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(withNoop, clean, 'the row must not change a single number');
+
+  const application = row(withNoop, 'APPLICATION_100');
+  assert.equal(application.visits, 1, 'one visit, not two');
+  assert.equal(application.avgDays, 4, 'the full four days, not 1 and 3 averaged');
+});
+
+test('a relation whose only status changes are no-ops contributes nothing', () => {
+  const result = computeStageAging([
+    {
+      menteeId: 'mentee-all-noop',
+      startDate: at(0),
+      statusChanges: [
+        { fromStatus: 'APPLICATION_100', toStatus: 'APPLICATION_100', createdAt: at(1) },
+        { fromStatus: 'APPLICATION_100', toStatus: 'APPLICATION_100', createdAt: at(3) },
+      ],
+    },
+  ]);
+
+  // Same as a relation that never moved: it is still sitting in its first
+  // stage, and this report only measures visits that have ENDED.
+  assert.deepEqual(result.rows, []);
+  assert.equal(result.droppedNonPositive, 0, 'dropped, not counted as a zero-length visit');
+});

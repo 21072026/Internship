@@ -15,6 +15,7 @@ import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { ArchivedNotice } from '@/components/ArchivedNotice';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 import { daysInStage } from '@/lib/stageClock';
+import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 
 // ACTIVE, else the latest COMPLETED one shown as an archive (#1408).
 async function getMenteeRelation(menteeId: string) {
@@ -33,7 +34,8 @@ async function getMenteeRelation(menteeId: string) {
       },
       // The stage clock (#1724) — newest recorded move only; `stageDeadline` is
       // a scalar and already comes along with the `include`.
-      statusChanges: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+      // Real moves only (#2264), same as /portal.
+      statusChanges: { where: REAL_STAGE_MOVE, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
     },
   });
   return pickMenteeRelation(relations);
