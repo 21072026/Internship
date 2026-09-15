@@ -21,6 +21,7 @@ import {
   AlreadyMentoredError,
   alreadyMentoredBody,
 } from '@/lib/activeMentorship';
+import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -120,7 +121,9 @@ export async function GET(request: Request) {
       // The stage clock (#1724). Only the newest move is needed — the shared
       // helper takes the latest `createdAt` and falls back to `startDate` —
       // so this stays one extra row per relation, not the whole audit trail.
-      statusChanges: { orderBy: { createdAt: 'desc' as const }, take: 1, select: { createdAt: true } },
+      // Only real moves (#2264): a no-op row would be the newest one here and
+      // would restart the stage clock at zero. See REAL_STAGE_MOVE.
+      statusChanges: { where: REAL_STAGE_MOVE, orderBy: { createdAt: 'desc' as const }, take: 1, select: { createdAt: true } },
     };
 
     // `stageDeadline` already rides along on every row (the query uses

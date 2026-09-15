@@ -76,7 +76,14 @@ export function computeStageAging(
   };
 
   for (const r of relations) {
-    const changes = r.statusChanges;
+    // A row whose `fromStatus` equals its `toStatus` is not a move (#2264).
+    // New ones stopped being written in #934, which decided just as explicitly
+    // that the existing rows stay, so this reader drops them instead. Left in,
+    // one is read as "left stage X, entered stage X": the visit before it ends
+    // early, a zero-length visit to X is recorded, and the same arrival is
+    // counted twice — which pulls that stage's average and median toward zero,
+    // the one number this report exists to produce.
+    const changes = r.statusChanges.filter((c) => c.fromStatus !== c.toStatus);
     if (changes.length === 0) continue;
     // Initial stage: from relation start until the first recorded transition.
     const firstLeftAt = changes[0].createdAt.getTime();

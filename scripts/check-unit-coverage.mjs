@@ -95,6 +95,19 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'stage visits counted separately from candidates (#1427)' },
   ],
   [
+    'src/lib/stageClock.ts',
+    { floor: 85, measured: 89.86, why: 'an old no-op StatusChange must not restart "days in stage" (#2264)' },
+  ],
+  [
+    // Not floored because somebody wrote tests for it: `stageClock.ts` imports
+    // it for the terminal/off-path stage set, so the stage-clock test exercises
+    // it transitively. The floor records the protection that exists, which is
+    // the rule this check enforces — a module cannot sit in AWAITING_TESTS once
+    // something runs it.
+    'src/lib/pipeline.ts',
+    { floor: 85, measured: 87.86, why: 'canonical stage list + labels, reached through the stage clock (#2264)' },
+  ],
+  [
     'src/lib/lastContactRule.ts',
     { floor: 95, measured: 100.0, why: 'what counts as contact: 1:1 yes, group only if the mentee wrote it (#2275)' },
   ],
@@ -199,7 +212,6 @@ const AWAITING_TESTS = new Map([
   ['src/lib/orgContext.ts', 'wave-0 rewrite (#1549); tenant registry + middleware'],
   ['src/lib/entitlements.ts', 'wave-1 billing-subject collapse (#1592)'],
   ['src/lib/planGate.ts', 'wave-1 billing-subject collapse (#1592)'],
-  ['src/lib/pipeline.ts', 'assertions exist, but under Playwright — needs #1598'],
   ['src/lib/dormantFirstContact.ts', '"two mails, never a third" (docs/dormant-first-contacts.md)'],
   ['src/lib/relativeTime.ts', 'assertions exist, but under Playwright — needs #1598'],
 ]);
@@ -208,7 +220,7 @@ const AWAITING_TESTS = new Map([
 // the same reason check-tenant-models.mjs pins its pending set: a seventh
 // unfloored module cannot be waved through by appending a line, and the count
 // only moves in a diff a human approved.
-const EXPECTED_AWAITING = 6;
+const EXPECTED_AWAITING = 5;
 
 const TRACKED = [...FLOORS.keys(), ...AWAITING_TESTS.keys()];
 

@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { daysInStage } from '@/lib/stageClock';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
+import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 
 // GET — mentor-scoped analytics: their own pipeline funnel, goal summary and
 // engagement stats (EPIC: mentor analytics / pipeline funnel, roadmap #370).
@@ -59,7 +60,10 @@ export async function GET(request: Request) {
           pipelineStatus: true,
           startDate: true,
           mentee: { select: { id: true, fullName: true } },
-          statusChanges: { orderBy: { createdAt: 'asc' }, select: { toStatus: true, createdAt: true } },
+          // Real moves only (#2264). Filtering here rather than at each reader
+          // fixes all three at once: the "stage moves" count below, the
+          // finishing transition behind avgDaysToHired, and the shared clock.
+          statusChanges: { where: REAL_STAGE_MOVE, orderBy: { createdAt: 'asc' }, select: { toStatus: true, createdAt: true } },
         },
       }),
       // Grouped rather than counted: the same query feeds both the headline

@@ -113,3 +113,75 @@ test('stage clock: mentor sees days-in-stage and an overdue state, the mentee se
     await cleanupByEmail(mentorEmail);
   }
 });
+
+// #2264: the same relation, with an old no-op `StatusChange` (fromStatus ===
+// toStatus) written yesterday. #934 stopped new ones being written and decided
+// just as explicitly that the existing rows stay, so every reader has to skip
+// them — and the clock is the reader it hurts most, because it takes the NEWEST
+// row: left in, a relation nobody has touched for twelve days reads as touched
+// yesterday, on the board, in the mentor list and in the overdue report.
+//
+// Seeded through Prisma rather than the API on purpose: the API cannot create
+// one any more, which is exactly why this has to be a seeded regression.
+test('stage clock: an old no-op status change does not restart the clock', async ({ page }) => {
+  const mentorEmail = uniqueEmail('noop-mentor');
+  const menteeEmail = uniqueEmail('noop-mentee');
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Noop Mentor');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Noop Mentee');
+
+  const rel = await prisma.mentorshipRelation.create({
+    data: {
+      mentorId: mentor.id,
+      menteeId: mentee.id,
+      status: 'ACTIVE',
+      pipelineStatus: 'INTERVIEW_PENDING_250',
+      startDate: new Date(Date.now() - 60 * DAY),
+    },
+  });
+  await prisma.statusChange.create({
+    data: {
+      relationId: rel.id,
+      fromStatus: 'APPLICATION_100',
+      toStatus: 'INTERVIEW_PENDING_250',
+      changedById: mentor.id,
+      createdAt: new Date(Date.now() - 12 * DAY - 60_000),
+    },
+  });
+  await prisma.statusChange.create({
+    data: {
+      relationId: rel.id,
+      fromStatus: 'INTERVIEW_PENDING_250',
+      toStatus: 'INTERVIEW_PENDING_250',
+      changedById: mentor.id,
+      createdAt: new Date(Date.now() - 1 * DAY - 60_000),
+    },
+  });
+
+  try {
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
+
+    // 12, not 1. The query filters the row out (`REAL_STAGE_MOVE`), so the
+    // newest row it sees is the real move.
+    const rows = (await (await page.request.get('/api/mentorship')).json()).relations as {
+      id: string;
+      daysInStage: number;
+    }[];
+    expect(rows.find((r) => r.id === rel.id)?.daysInStage).toBe(12);
+
+    await page.goto('/mentor/board');
+    const chip = page.getByTestId(`stage-clock-${rel.id}`);
+    await expect(chip).toBeVisible({ timeout: 15_000 });
+    await expect(chip).toContainText('12');
+
+    // The mentee's own screen reads from a different query, so it is asserted
+    // rather than assumed to follow.
+    await signInAsFreshUser(page, menteeEmail, 'MenteePass123', '/portal');
+    await expect(page.getByTestId('portal-stage-clock')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('portal-stage-clock-days')).toContainText('12');
+  } finally {
+    await prisma.statusChange.deleteMany({ where: { relationId: rel.id } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});

@@ -10,6 +10,7 @@
 // metadata was needed: isOffPath already means exactly this ("left the normal
 // flow"), which is what a drop-off reason is about.
 
+import { prisma } from './prisma';
 import { resolvePipelineStages } from './pipelineStages';
 import { isDropoffReasonCode } from './dropoffReasons';
 
@@ -116,3 +117,23 @@ export function statusChangeData(input: StatusChangeInput): StatusChangeData | n
     ...(input.createdAt ? { createdAt: input.createdAt } : {}),
   };
 }
+
+// ── The read side of the same rule (#2264) ──────────────────────────────────
+//
+// The gate above stops NEW no-op rows; the ones already in the table stay, and
+// they are still arithmetic for anything that reads them. A reader that wants
+// only real moves filters with this rather than fetching the noise and
+// discarding it in JS — which matters most for the stage clock, whose queries
+// are `orderBy createdAt desc, take: 1`: the newest row is the answer, so
+// filtering afterwards cannot recover the move the no-op hid.
+//
+// It is a field-to-field comparison (`fromStatus <> toStatus`), which Prisma
+// expresses as a reference rather than a value, and only under `equals` —
+// `not: <ref>` is rejected at runtime, hence the `NOT` wrapper.
+//
+// `src/lib/stageClock.ts` applies the same rule in memory for the callers that
+// already hold the full history (the mentee detail page, the aging report);
+// this is the same rule where the query can enforce it.
+export const REAL_STAGE_MOVE = {
+  NOT: { fromStatus: { equals: prisma.statusChange.fields.toStatus } },
+} as const;

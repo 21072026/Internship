@@ -25,6 +25,7 @@ import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { ArchivedNotice } from '@/components/ArchivedNotice';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 import { daysInStage } from '@/lib/stageClock';
+import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 
 // #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
 // deep links and the back button work and the phone page stays short:
@@ -53,7 +54,9 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         // configured, plus the newest recorded move so the shared helper can
         // date the current stage. One extra row per relation, not the trail.
         stageDeadline: true,
-        statusChanges: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+        // Real moves only (#2264) — a no-op row is the newest one and would
+        // restart the mentee's own "days in this stage".
+        statusChanges: { where: REAL_STAGE_MOVE, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
         mentor: { select: { id: true, fullName: true, publicProfile: true } },
       },
     }),

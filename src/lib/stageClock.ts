@@ -23,8 +23,40 @@ export interface StageClockSource {
    * The relation's recorded stage moves. Order-insensitive — the newest
    * `createdAt` wins — so a caller may hand these over ascending (the aging
    * report reads them that way), descending, or as the single newest row.
+   *
+   * `fromStatus`/`toStatus` are optional, and a row that carries both is
+   * ignored when they are equal: such a row is not a move (#2264). They are
+   * optional rather than required because a caller that has already filtered
+   * at the query — every one that reads `take: 1` does — has no reason to
+   * fetch two more columns, and requiring them would make this the kind of
+   * type change that gets satisfied with a cast.
    */
-  statusChanges?: ReadonlyArray<{ createdAt: Date | string }> | null;
+  statusChanges?: ReadonlyArray<StageClockChange> | null;
+}
+
+export interface StageClockChange {
+  createdAt: Date | string;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+}
+
+/**
+ * Is this row a real move?
+ *
+ * A `StatusChange` whose `fromStatus` equals its `toStatus` records nothing
+ * happening. New ones stopped being written in #934, which decided just as
+ * explicitly that the existing rows stay — they can carry an admin's own
+ * reason code, and the table is an audit trail. So the readers skip them
+ * instead, and this one matters most: the clock takes the NEWEST row, so a
+ * single old no-op restarts "days in stage" at zero and a relation that has
+ * been stuck for months reads as fresh on the board, in the mentor list and in
+ * the overdue report.
+ *
+ * A row with neither field is assumed real: the caller filtered upstream.
+ */
+function isRealMove(change: StageClockChange): boolean {
+  if (change.fromStatus == null || change.toStatus == null) return true;
+  return change.fromStatus !== change.toStatus;
 }
 
 const asTime = (value: Date | string): number =>
@@ -43,6 +75,7 @@ const asTime = (value: Date | string): number =>
 export function stageEnteredAt(relation: StageClockSource): number {
   let entered = asTime(relation.startDate);
   for (const change of relation.statusChanges ?? []) {
+    if (!isRealMove(change)) continue;
     const at = asTime(change.createdAt);
     if (at > entered) entered = at;
   }
