@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileSignature, Search } from 'lucide-react';
@@ -78,7 +78,14 @@ function OffersIndex() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
-  const [search, setSearch] = useState(searchParams.get('q') ?? '');
+  // The search box is UNCONTROLLED, keyed by the URL's own `q` (#2161). It used
+  // to be React state that other handlers reset imperatively — `applyPreset`
+  // and the clear button both called `setSearch('')` — so a keystroke that
+  // arrived between the click and React flushing that reset was wiped, and the
+  // form then submitted an empty query. The DOM owns the text; the field is
+  // re-mounted only when the URL's `q` actually changes, which is the only time
+  // something other than the user should be allowed to change it.
+  const urlQuery = searchParams.get('q') ?? '';
 
   const page = Math.max(1, Number(searchParams.get('page')) || 1);
 
@@ -111,22 +118,52 @@ function OffersIndex() {
 
   // Filters live in the URL so a view can be linked to. Changing any of them
   // drops back to page 1 — page 2 of the previous filter set means nothing.
-  const setParams = useCallback((next: Record<string, string | null>) => {
-    const sp = new URLSearchParams(searchParams.toString());
-    for (const [key, value] of Object.entries(next)) {
-      if (value === null || value === '') sp.delete(key);
-      else sp.set(key, value);
-    }
-    if (!('page' in next)) sp.delete('page');
-    const qs = sp.toString();
-    router.replace(qs ? `/admin/offers?${qs}` : '/admin/offers');
-  }, [router, searchParams]);
+  // THE PARAMS WE LAST WROTE, which is not the same thing as the params this
+  // render was given (#2161). `useSearchParams()` is a snapshot, and
+  // `router.replace()` does not synchronously re-render with the new URL — so a
+  // preset click followed by a search submit in the same tick built the search
+  // URL from the PRE-preset params, silently dropping the preset's `status` and
+  // listing rows from outside the preset. The ref is authoritative the instant
+  // a navigation is issued; the effect keeps it honest when the URL changes for
+  // any other reason (a back button, a link, the initial render).
+  const paramsRef = useRef(searchParams.toString());
+  useEffect(() => {
+    paramsRef.current = searchParams.toString();
+  }, [searchParams]);
 
-  const applyPreset = useCallback((params: Record<string, string>) => {
-    const qs = new URLSearchParams(params).toString();
-    setSearch('');
-    router.replace(qs ? `/admin/offers?${qs}` : '/admin/offers');
-  }, [router]);
+  const navigate = useCallback(
+    (sp: URLSearchParams) => {
+      const qs = sp.toString();
+      paramsRef.current = qs;
+      router.replace(qs ? `/admin/offers?${qs}` : '/admin/offers');
+    },
+    [router]
+  );
+
+  const setParams = useCallback(
+    (next: Record<string, string | null>) => {
+      const sp = new URLSearchParams(paramsRef.current);
+      for (const [key, value] of Object.entries(next)) {
+        if (value === null || value === '') sp.delete(key);
+        else sp.set(key, value);
+      }
+      if (!('page' in next)) sp.delete('page');
+      navigate(sp);
+    },
+    [navigate]
+  );
+
+  // A preset names a VIEW, and the search box inside it narrows within that
+  // view — so choosing a preset resets the query (it is a new view) while
+  // typing keeps the preset (it is a search *in* the view). The two compose in
+  // that one direction, deliberately; replacing the preset from the search box
+  // would leave no way to search inside a preset at all.
+  const applyPreset = useCallback(
+    (params: Record<string, string>) => {
+      navigate(new URLSearchParams(params));
+    },
+    [navigate]
+  );
 
   const activePreset = useMemo(() => {
     const current = FILTER_KEYS.filter((key) => searchParams.get(key));
@@ -218,7 +255,11 @@ function OffersIndex() {
         {/* data-testid, not input[type="search"]: AdminNav renders its own
             sidebar filter box with that selector on every admin page. */}
         <form
-          onSubmit={(e) => { e.preventDefault(); setParams({ q: search.trim() }); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const typed = new FormData(e.currentTarget).get('q');
+            setParams({ q: typeof typed === 'string' ? typed.trim() : '' });
+          }}
           className="text-sm"
         >
           <span className="block text-gray-500 mb-1">{a.filters.search}</span>
@@ -226,8 +267,12 @@ function OffersIndex() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              name="q"
+              // `key` re-mounts the field when the URL's query changes — which
+              // is how a preset click or "clear" empties it — and never while
+              // the user is typing.
+              key={urlQuery}
+              defaultValue={urlQuery}
               placeholder={a.filters.searchPlaceholder}
               aria-label={a.filters.searchPlaceholder}
               data-testid="admin-offers-search"
@@ -238,7 +283,7 @@ function OffersIndex() {
 
         {FILTER_KEYS.some((key) => searchParams.get(key)) && (
           <button
-            onClick={() => { setSearch(''); router.replace('/admin/offers'); }}
+            onClick={() => navigate(new URLSearchParams())}
             data-testid="admin-offers-clear"
             className="text-sm text-gray-500 hover:underline py-1.5"
           >
