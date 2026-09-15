@@ -596,9 +596,9 @@ Two consequences worth knowing:
 - **No `docker image prune -af` anywhere any more.** `-a` removes every image no
   container is using, which includes `:previous`. `deploy-prod.sh`,
   `topic-deploy.sh` and `topic-teardown.sh` now prune dangling layers and remove
-  app images by name instead. (The legacy `deploy.yml` still has a blanket
-  prune; it is superseded and not on any trigger, but if it is ever revived it
-  will eat the rollback targets.)
+  app images by name instead. (The Plesk-era `deploy.yml`, which had a blanket
+  prune, was removed on 2026-09-15 — a revived GitHub→SSH deploy would eat the
+  rollback targets, which is one more reason not to bring it back.)
 - **A fresh environment has no rollback target** until its first deploy under
   this scheme replaces something. `--rollback` says so rather than guessing.
 

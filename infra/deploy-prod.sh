@@ -2,10 +2,12 @@
 #
 # CI-independent production deploy (#636).
 #
-# Does exactly what the `Production Deploy` job in .github/workflows/deploy.yml
-# does — but runs ON THE SERVER (or over SSH from a laptop), so it needs no
-# GitHub Actions minutes. Use it when the Actions quota is exhausted, or as the
-# command a self-hosted runner / auto-deploy poller (infra/autodeploy.sh) calls.
+# THE production deploy — runs ON THE SERVER, as the command the self-hosted
+# runner (deploy-prod.yml / deploy-preview.yml) and the break-glass poller
+# (infra/autodeploy.sh) call, or by hand over SSH when Actions is unavailable.
+# It began as a server-side twin of the Plesk-era `Production Deploy` job in
+# deploy.yml; that workflow was removed on 2026-09-15 and this script is the
+# only deploy path left.
 #
 # WHAT IT DOES
 #   1. sync the working copy to origin/main (unless --no-pull)
@@ -19,7 +21,7 @@
 #   4. seed-templates + seed-goal-templates + backfill-project-members
 #      + backfill-sso-plan (all idempotent)
 #   5. swap the internship-crm container (host networking, port 3200, restart
-#      unless-stopped) — byte-for-byte the flags deploy.yml uses. With
+#      unless-stopped) — the same flags the retired deploy.yml used. With
 #      REPLICAS>1 the replicas are swapped ONE AT A TIME, each drained out of
 #      the reverse-proxy pool first (#1701)
 #   6. health-check http://127.0.0.1:3200 and prune old images
@@ -170,8 +172,8 @@ warn() {
 
 # The forward-only baseline: prefer what the container actually reports at
 # /api/health over the state file. The file is only written by THIS script, so a
-# deploy from any other path (the legacy deploy.yml over SSH, a manual
-# `docker run`) leaves it stale and the guard then reasons about a commit that
+# deploy from any other path (a manual `docker run`, an ad-hoc SSH session)
+# leaves it stale and the guard then reasons about a commit that
 # has not been live for weeks.
 # The detailed fields (incl. sha) are gated on HEALTH_TOKEN when it is set
 # (#897); sending it here keeps the drift gate working once it is configured.

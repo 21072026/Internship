@@ -1,7 +1,7 @@
 name: Deploy preview (hosted build → server swap, auto on main)
 
 # PREVIEW deploy — the sibling of deploy-prod.yml. The IMAGE IS BUILT ON A
-# GITHUB-HOSTED RUNNER (build-image.yml) and pushed to ghcr; the Plesk server
+# GITHUB-HOSTED RUNNER (build-image.yml) and pushed to ghcr; the server
 # only pulls it and swaps the container, so preview
 # (https://preview.interncrm.com, container internship-crm-preview on :3201) is
 # kept in step with main without the box ever compiling anything.
@@ -30,8 +30,8 @@ name: Deploy preview (hosted build → server swap, auto on main)
 # preview container already exists.
 #
 # ⚠️ The preview DB is SHARED across all previews (see CLAUDE.md) — a schema
-# `db push` here affects every preview. That is unchanged from the old
-# deploy.yml behavior.
+# `db push` here affects every preview. That is unchanged from the retired
+# Plesk-era pipeline's behavior.
 on:
   # No paths-ignore: the drift gate below already skips redundant builds, and
   # filtering docs-only merges out here would only delay them until the next

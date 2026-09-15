@@ -1,6 +1,6 @@
 name: MySQL Watchdog (database health)
 
-# Keeps the Plesk box's MySQL/MariaDB alive, and makes sure the thing that
+# Keeps the server's MySQL 8 alive, and makes sure the thing that
 # keeps it alive is itself alive.
 #
 # The database is being OOM-killed: the kernel picks mysqld, the unit stops,
@@ -13,7 +13,7 @@ name: MySQL Watchdog (database health)
 #   · it runs on a GitHub-HOSTED runner ON PURPOSE. A watchdog that needs the
 #     sick server to be healthy is not a watchdog — if the box is so short of
 #     memory that mysqld died, its self-hosted runner may be dead too;
-#   · it re-installs the timer when it is missing (a server rebuild, a Plesk
+#   · it re-installs the timer when it is missing (a server rebuild, a host
 #     update that rewrote the unit), so the on-box watchdog cannot quietly
 #     disappear;
 #   · it is the only path that EMAILS. The on-box script logs; nobody reads

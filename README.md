@@ -130,7 +130,7 @@ the stress test nightly and **emails the team on failure**.
 
 ## Deployment
 
-CI/CD via GitHub Actions, running on a **self-hosted runner** (the Plesk host itself, so
+CI/CD via GitHub Actions, running on a **self-hosted runner** (the Caddy-fronted Docker host itself, so
 deploys cost no hosted Actions minutes). Every merge to `main` goes to **both** the shared
 preview and production; every PR additionally gets its own throwaway environment.
 

@@ -1,6 +1,6 @@
 name: Runner Watchdog (self-hosted health)
 
-# Keeps the self-hosted runner (Plesk server) alive.
+# Keeps the self-hosted runner (the Caddy-fronted Docker host) alive.
 #
 # Runs on a GitHub-HOSTED runner ON PURPOSE: if the self-hosted runner is down
 # (e.g. after a server reboot its `svc.sh` service didn't come back up), a

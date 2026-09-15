@@ -6,7 +6,7 @@ name: Topic Preview (hosted build → server swap, auto per-PR)
 #   PR #123 → container internship-crm-pr123 on a dedicated port →
 #             https://pr123.<domain>  (wildcard DNS + TLS)
 # A bot comment on the PR carries the URL (updated on every push). When the PR
-# is merged or closed, the environment (container + image + Plesk route) is torn
+# is merged or closed, the environment (container + image + Caddy route) is torn
 # down so it stops consuming server resources.
 #
 # THE IMAGE IS BUILT ON A GITHUB-HOSTED RUNNER (build-image.yml) and pushed to
@@ -16,9 +16,11 @@ name: Topic Preview (hosted build → server swap, auto per-PR)
 # `next build` for EVERY push to EVERY open PR. The repo is public now, so hosted
 # runners are free — the compiling belongs there.
 #
-# PREREQUISITES (one-time, on the Plesk server — see infra/README.md):
+# PREREQUISITES (one-time, on the server — see infra/README.md):
 #   1. The self-hosted runner is registered and its user can run docker AND the
-#      `plesk` CLI (topic-deploy.sh creates the subdomain + injects the proxy).
+#      Caddy with `import /etc/caddy/sites/*.caddy` (topic-deploy.sh writes the
+#      per-PR site file and reloads; the `plesk` CLI branch is the retired box's
+#      fallback and is not taken here).
 #   2. Wildcard DNS *.interncrm.com → the server (infra/setup-dns-cloudflare.sh) and a
 #      wildcard TLS cert in ${CERT_DIR} (infra/acme-issue-wildcard.sh).
 #   3. /etc/internship-crm/preview.env (chmod 600) with DATABASE_URL,
