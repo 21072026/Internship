@@ -1,15 +1,33 @@
 import { test, expect } from '@playwright/test';
+import { floodIp } from './helpers/rateLimit';
+
+// EVERY FLOOD IN THIS FILE SPENDS ITS OWN SYNTHETIC IP (#2159).
+//
+// `enforceRateLimit` keys on `bucket:ip` and the counter store is per PROCESS,
+// so a test that deliberately exhausts a bucket used to exhaust it for every
+// later spec hitting the same endpoint — for the rest of the shard, since the
+// window is 15 minutes. The support flood below was failing
+// `support-attachments.spec.ts` and `support-chat.spec.ts` with 429 on every
+// scheduled run. `floodIp()` gives each flood here an address of its own; the
+// reasoning, and the matching `freshIp()` the other specs use, is in
+// e2e/helpers/rateLimit.ts.
+//
+// Isolation must NOT be applied to the spoofing test below: its whole point is
+// that the caller cannot buy a fresh bucket, so it has to reach the ceiling on
+// one address it did not choose.
 
 // The forgot-password endpoint is limited to 5 requests / 15 min per IP.
 //
-// Both tests share one process-wide bucket keyed on the caller's IP, so they
-// must stay in this file and in this order: the first exhausts the limit, the
-// second checks that a spoofed header can't hand the caller a fresh one.
+// These two tests no longer share a bucket, and the spoofing test below is
+// stronger for it: it used to lean on this one having already spent the shared
+// counter, and now it has to reach the ceiling on its own 12 requests — which
+// is the actual claim, that a rotating header buys nothing.
 test('repeated forgot-password requests are rate limited (429)', async ({ request }) => {
   const statuses: number[] = [];
   for (let i = 0; i < 8; i++) {
     const res = await request.post('/api/auth/forgot', {
       data: { email: `flood-${i}@example.com` },
+      headers: floodIp('forgot-password'),
     });
     statuses.push(res.status());
   }
@@ -48,6 +66,7 @@ test('support submissions are rate limited and return Retry-After', async ({ req
   for (let i = 0; i < 6; i++) {
     const response = await request.post('/api/support', {
       data: { body: 'rate-limit test' },
+      headers: floodIp('support'),
     });
     statuses.push(response.status());
 

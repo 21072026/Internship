@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -45,6 +46,9 @@ test('support attachments: image preview in composer, send, renders inline in th
   const user = await seedUser(email, 'AttPass123', 'MENTEE', 'SA Image User');
   try {
     await signIn(page, email, 'AttPass123', '/portal');
+    // See the file-only test below: the send spends the /api/support bucket, so
+    // it spends an address of its own (#2159).
+    await page.setExtraHTTPHeaders(freshIp('sa image send'));
     await page.goto('/messages/support');
     await expect(page.getByTestId('support-chat')).toBeVisible({ timeout: 10_000 });
 
@@ -85,6 +89,9 @@ test('support attachments: file-only message allowed (text not required)', async
   const user = await seedUser(email, 'AttPass123', 'MENTEE', 'SA NoText User');
   try {
     await signIn(page, email, 'AttPass123', '/portal');
+    // The send below goes through /api/support (5 posts / 15 min per IP) and
+    // this spec is testing attachments, not the brake — #2159.
+    await page.setExtraHTTPHeaders(freshIp('sa file-only send'));
     await page.goto('/messages/support');
     await expect(page.getByTestId('support-chat')).toBeVisible({ timeout: 10_000 });
 
@@ -384,6 +391,7 @@ test('support attachments API: empty submission rejected', async ({ page }) => {
   try {
     await signIn(page, email, 'AttPass123', '/portal');
     const empty = await page.request.post('/api/support', {
+      headers: freshIp('sa empty'),
       multipart: { body: '   ' },
     });
     expect(empty.status()).toBe(400);
@@ -401,12 +409,13 @@ test('support attachments API: text-only and attachment-only both accepted', asy
     await signIn(page, email, 'AttPass123', '/portal');
 
     // Text only via JSON.
-    const textOnly = await page.request.post('/api/support', { data: { body: 'Hello support.' } });
+    const textOnly = await page.request.post('/api/support', { data: { body: 'Hello support.' }, headers: freshIp('sa text-only') });
     expect(textOnly.status()).toBe(201);
     const { ticketId } = await textOnly.json();
 
     // Attachment only via multipart (no body text).
     const attachOnly = await page.request.post('/api/support', {
+      headers: freshIp('sa attachment-only'),
       multipart: {
         body: '',
         files: {

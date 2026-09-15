@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -25,7 +26,10 @@ test('admin queue: reply takes assignment and IN_PROGRESS, close notifies the re
     await userPage.fill('input[type="password"]', pw);
     await userPage.click('button[type="submit"]');
     await userPage.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
-    const created = await userPage.request.post('/api/support', { data: { body: 'My internship dates look wrong.' } });
+    // /api/support is 5 posts / 15 min per IP and the whole shard shares one
+    // process — this queue test is not the brake's test, so it spends an
+    // address of its own (#2159).
+    const created = await userPage.request.post('/api/support', { data: { body: 'My internship dates look wrong.' }, headers: freshIp('admin-support open') });
     expect(created.status()).toBe(201);
     const { ticketId } = await created.json();
 

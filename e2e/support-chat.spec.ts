@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -16,7 +17,12 @@ test('support chat: first message opens a ticket, next one appends, admin is not
   const user = await seedUser(userEmail, pw, 'MENTEE', 'Support User');
   const admin = await seedUser(adminEmail, 'x', 'ADMIN', 'Support Admin');
 
-  const ctx = await browser.newContext();
+  // /api/support is limited to 5 posts / 15 min per IP and this test sends
+  // seven — it is exercising the support channel, not the brake, so every
+  // request spends an address of its own (#2159, see helpers/rateLimit.ts).
+  // The context header covers what the browser itself sends (the sign-in POST,
+  // the send-button fetch); the per-request ones cover the API calls below.
+  const ctx = await browser.newContext({ extraHTTPHeaders: freshIp('support-chat ui') });
   try {
     const page = await ctx.newPage();
     await page.goto('/auth/signin');
@@ -40,13 +46,13 @@ test('support chat: first message opens a ticket, next one appends, admin is not
     await expect(page.getByTestId('support-chat')).toBeVisible({ timeout: 10_000 });
 
     // First message opens a new ticket.
-    const first = await page.request.post('/api/support', { data: { body: 'Hello, I need help with my CV upload.' } });
+    const first = await page.request.post('/api/support', { data: { body: 'Hello, I need help with my CV upload.' }, headers: freshIp('support-chat first') });
     expect(first.status()).toBe(201);
     const firstJson = await first.json();
     expect(firstJson.isNew).toBe(true);
 
     // Second message joins the same (still open) ticket.
-    const second = await page.request.post('/api/support', { data: { body: 'One more detail: it fails on PDF files.' } });
+    const second = await page.request.post('/api/support', { data: { body: 'One more detail: it fails on PDF files.' }, headers: freshIp('support-chat second') });
     expect(second.status()).toBe(201);
     const secondJson = await second.json();
     expect(secondJson.isNew).toBe(false);
@@ -80,6 +86,7 @@ test('support chat: first message opens a ticket, next one appends, admin is not
 
     // Text is optional when at least one valid attachment is present.
     const attachmentOnly = await page.request.post('/api/support', {
+      headers: freshIp('support-chat attachment-only'),
       multipart: {
         body: '',
         files: {
@@ -93,6 +100,7 @@ test('support chat: first message opens a ticket, next one appends, admin is not
 
     // Text and attachments can still be sent together.
     const textAndAttachment = await page.request.post('/api/support', {
+      headers: freshIp('support-chat text+attachment'),
       multipart: {
         body: 'Screenshot and details attached.',
         files: {
@@ -105,7 +113,7 @@ test('support chat: first message opens a ticket, next one appends, admin is not
     expect(textAndAttachment.status()).toBe(201);
 
     // Only a truly empty submission is rejected.
-    const empty = await page.request.post('/api/support', { data: { body: '   ' } });
+    const empty = await page.request.post('/api/support', { data: { body: '   ' }, headers: freshIp('support-chat empty') });
     expect(empty.status()).toBe(400);
 
     // Admins were notified about the new ticket (named sender → support.new).
@@ -113,7 +121,7 @@ test('support chat: first message opens a ticket, next one appends, admin is not
 
     // A closed ticket means the next message opens a fresh one.
     await prisma.supportTicket.update({ where: { id: firstJson.ticketId }, data: { status: 'CLOSED', closedAt: new Date() } });
-    const reopened = await page.request.post('/api/support', { data: { body: 'New question after closure.' } });
+    const reopened = await page.request.post('/api/support', { data: { body: 'New question after closure.' }, headers: freshIp('support-chat reopen') });
     expect(reopened.status()).toBe(201);
     const reopenedJson = await reopened.json();
     expect(reopenedJson.isNew).toBe(true);
