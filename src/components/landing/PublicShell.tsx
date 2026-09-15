@@ -48,7 +48,9 @@ export async function PublicShell({
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <PublicHeader showRegister={showRegister} dashboardHref={dashboardHref} hideInternshipLinks={isMarketing} />
+      {/* A marketing host is invitation-only (#2356): no self-serve Register
+          button — token-less sign-up would mint a MENTEE in the internship org. */}
+      <PublicHeader showRegister={showRegister && !isMarketing} dashboardHref={dashboardHref} hideInternshipLinks={isMarketing} />
       <main id="main-content" className="flex-1">
         {children}
       </main>

@@ -217,7 +217,7 @@ export default async function HomePage() {
             </Link>
           </p>
           )}
-          {!IS_DEMO_MODE && (
+          {!IS_DEMO_MODE && !isMarketing && (
             <div className="mt-8">
               {/* Same-tab on purpose (unchanged): the demo is the destination,
                   not a side trip. */}
@@ -652,7 +652,9 @@ export default async function HomePage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">{L.ctaTitle}</h2>
           <p className="text-blue-100 mb-8">{L.ctaSubtitle}</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors dark:!bg-white dark:!text-blue-700 dark:hover:!bg-blue-100">
+            {/* Marketing is invitation-only (#2356): its one door is sign-in, not
+                the token-less mentee sign-up. */}
+            <Link href={isMarketing ? '/auth/signin' : '/auth/register'} className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors dark:!bg-white dark:!text-blue-700 dark:hover:!bg-blue-100">
               {L.ctaMentee} <ArrowRight className="h-5 w-5" />
             </Link>
             {/* The mentor and company sides are internship audiences; a
@@ -680,7 +682,7 @@ export default async function HomePage() {
             </Link>
           </p>
           )}
-          {!IS_DEMO_MODE && (
+          {!IS_DEMO_MODE && !isMarketing && (
             <p className="mt-4 text-sm text-blue-100">
               {L.demoCtaInline}{' '}
               <DemoLink

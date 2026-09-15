@@ -10,6 +10,7 @@ import { isLocale, locales } from '@/i18n/config';
 import { passwordSchema } from '@/lib/password';
 import { notify } from '@/lib/notify';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
+import { hostVertical } from '@/lib/hostVertical';
 import { resolveReferrer } from '@/lib/referral';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { getSetting } from '@/lib/settings';
@@ -66,6 +67,18 @@ export async function POST(request: Request) {
     }
 
     const { token, password, fullName } = parsed.data;
+    // A MARKETING host is invitation-only (#2356): there is no marketing
+    // self-serve sign-up, and a token-less registration here would mint a
+    // MENTEE in the internship default org. Refuse before any DB work. This is
+    // the one authz-adjacent use of the host-resolved vertical the TRUST NOTE in
+    // src/lib/hostVertical.ts permits: a forged host can only refuse the
+    // forger's own request. Anything with cross-user weight must not follow it.
+    if (!token && (await hostVertical()) === 'MARKETING') {
+      return NextResponse.json(
+        { error: 'Registration on this product is by invitation only', code: 'invitation_required' },
+        { status: 403 },
+      );
+    }
     // Normalize email (trim + lowercase) so the account is looked up
     // consistently everywhere afterwards (sign-in, forgot-password) — a
     // casing/whitespace difference otherwise creates a "can't find my account"

@@ -46,7 +46,9 @@ export async function PublicFooter() {
         // The demo links to itself from its own footer — hide it there.
         // `demoPlacement` is what routes this one through DemoLink below, so
         // the click is measured and the URL carries its own utm_content (#1391).
-        ...(IS_DEMO_MODE
+        // …and not on a marketing host either (#2356): the demo is the
+        // internship demo, with mentor/mentee accounts.
+        ...(IS_DEMO_MODE || isMarketing
           ? []
           : [{ href: demoUrl('footer'), label: n.demo, external: true, demoPlacement: 'footer' as const }]),
       ],

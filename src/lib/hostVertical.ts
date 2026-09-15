@@ -50,16 +50,19 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
 // The vertical for the current request's host. Reads X-Forwarded-Host first,
 // then Host; any failure resolves to the default.
 //
-// TRUST NOTE: on the Caddy front (prod) reverse_proxy overwrites X-Forwarded-Host
-// with the real host, so it is authoritative there. On the nginx/Plesk topic
-// path it is NOT stripped, so a client could forge it. That is acceptable ONLY
-// because the resolved vertical is COSMETIC here — it drives the terminology
-// overlay (landing copy, the "Candidates"→"Leads" label) and nothing else: a
-// forged header just shows the forger marketing copy on their own request, with
-// no authz, data-scope or cache consequence (capability/tenant decisions read
-// the SESSION's org, never this host). If a vertical ever gains authz weight,
-// host resolution MUST move to a signal the proxy is trusted to set (or a
-// server-side host allow-list keyed off the TLS SNI), not this header.
+// TRUST NOTE (revised 2026-09-16). Every environment — prod, preview AND the
+// per-PR topic envs — now sits behind Caddy (infra/server/topic-deploy.sh
+// route_caddy; the nginx/Plesk passthrough this note used to describe was
+// retired with the Plesk box on 2026-09-06 and is dead code). Caddy's
+// reverse_proxy OVERWRITES X-Forwarded-Host with the host it accepted, so the
+// value read here is the proxy's, not the client's. Even so, keep the contract:
+// the host-resolved vertical is COSMETIC — copy, landing sections, chrome — and
+// must not decide anything with cross-user weight (tenant scoping, roles, data
+// access). The ONE permitted authz-adjacent use is /api/register refusing a
+// token-less sign-up on a MARKETING host (#2356): its failure mode under a
+// forged header is refusing the forger's own request, nothing else. Anything
+// beyond that must key off a signal the request cannot influence (the session's
+// org, the invitation row), never this header.
 export async function hostVertical(): Promise<VerticalKey> {
   try {
     const h = await headers();

@@ -3,6 +3,7 @@ import { useT, useLocale } from "@/i18n/client";
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 import { useEffect, useState } from 'react';
+import { useVertical } from '@/lib/verticalClient';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -36,6 +37,9 @@ function RegisterForm() {
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // A marketing host is invitation-only (#2356): the token field is open by
+  // default and the mentor application is not offered.
+  const isMarketing = useVertical() === 'MARKETING';
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   // Registration is open: anyone can sign up as a mentee without an invitation.
@@ -43,7 +47,7 @@ function RegisterForm() {
   // an invitation to be here" and turned the landing's open door into a locked
   // one. It is now folded away, and only unfolded for people who arrived with a
   // token in the link — the ones who actually have one.
-  const [showToken, setShowToken] = useState(false);
+  const [showToken, setShowToken] = useState(isMarketing);
 
   // Record that the invitation link was opened (once), so admins see the invite
   // progress from "sent" to "link opened" before the invitee finishes signing up.
@@ -155,12 +159,14 @@ function RegisterForm() {
                 {t.auth.haveInviteToggle}
               </button>
             )}
+            {!isMarketing && (
             <p className="text-xs text-gray-500">
               {t.auth.wantMentor}{' '}
               <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="apply-as-mentor-link">
                 {t.auth.applyMentorLink}
               </Link>
             </p>
+            )}
             <Input
               label={t.auth.fullName}
               required
