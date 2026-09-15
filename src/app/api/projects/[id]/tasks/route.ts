@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
 import { goalLinkFor } from '@/lib/projectGoalLink';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
 import { defaultLocale } from '@/i18n/config';
@@ -36,6 +37,8 @@ const schema = z
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
 

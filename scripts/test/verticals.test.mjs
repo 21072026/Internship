@@ -48,7 +48,9 @@ test('INTERNSHIP carries every capability any vertical declares', () => {
 
 test('MARKETING drops the mentorship-specific modules and keeps the CRM core', () => {
   const caps = verticalCapabilities('MARKETING');
-  for (const gone of ['mentorship', 'evaluations', 'placements', 'sourcing']) {
+  // 'projects' left MARKETING in #2356: intern team/task projects are not a
+  // marketing concept, and the nav entry + write APIs are gated on it.
+  for (const gone of ['mentorship', 'evaluations', 'placements', 'sourcing', 'projects']) {
     assert.ok(!caps.includes(gone), `MARKETING should not carry "${gone}"`);
   }
   for (const kept of ['pipeline', 'companies', 'messaging']) {
