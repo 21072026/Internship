@@ -7,6 +7,7 @@ import { canManageProject, isProjectMember, isProjectOwner } from '@/lib/project
 import { notify } from '@/lib/notify';
 import { goalLinkFor } from '@/lib/projectGoalLink';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // One to-do: tick it off, put it away, reword it, hand it over.
 //
@@ -57,6 +58,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
 
   const task = await taskFor(session.user, taskId);
   if (!task) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // A project-bound task is a projects-module write (#2356); a personal to-do
+  // (projectId null) is not, so the gate is conditional.
+  if (task.projectId) {
+    const capGate = await requireCapability(session.user.orgId, 'projects');
+    if (capGate) return capGate;
+  }
 
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
@@ -152,6 +159,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   const task = await taskFor(session.user, taskId);
   if (!task) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // A project-bound task is a projects-module write (#2356); a personal to-do
+  // (projectId null) is not, so the gate is conditional.
+  if (task.projectId) {
+    const capGate = await requireCapability(session.user.orgId, 'projects');
+    if (capGate) return capGate;
+  }
 
   const lead = task.projectId
     ? await isProjectOwner(session.user, task.projectId)

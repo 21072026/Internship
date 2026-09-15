@@ -25,6 +25,19 @@ const GATED = [
   // /api/evaluations is not closed while this stays open (review of #2363). The
   // gate runs before the panel lookup, so a dummy id still reaches it.
   { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000/score', cap: 'evaluations' },
+  // Intern projects (#2356): MARKETING dropped 'projects', so the static POST,
+  // the id-bearing writers (their gate runs before the project lookup, so a
+  // dummy id still reaches it) and meeting-series (gate at the handler top) are
+  // all refused. The body-conditional gates — invite/conversations/instant with
+  // a projectId, note→task conversion, a project-bound contributor-terms
+  // acceptance — need a valid body and are not representable in this
+  // empty-POST table; they are covered by the same requireCapability call.
+  { path: '/api/projects', cap: 'projects' },
+  { path: '/api/projects/00000000-0000-0000-0000-000000000000/members', cap: 'projects' },
+  { path: '/api/projects/00000000-0000-0000-0000-000000000000/join-requests', cap: 'projects' },
+  { path: '/api/projects/00000000-0000-0000-0000-000000000000/task-templates', cap: 'projects' },
+  { path: '/api/projects/00000000-0000-0000-0000-000000000000/tasks', cap: 'projects' },
+  { path: '/api/meeting-series', cap: 'projects' },
 ];
 
 async function adminIn(vertical: 'INTERNSHIP' | 'MARKETING') {

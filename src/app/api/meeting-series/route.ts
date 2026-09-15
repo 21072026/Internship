@@ -10,6 +10,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
 import { isValidTimeZone } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingRoom';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // A recurring project meeting is a *rule*, not a pile of rows (#1110).
 //
@@ -212,6 +213,9 @@ export async function POST(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // A meeting series hangs off a project (#2356): a projects-module write.
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const parsed = recurrenceSchema.safeParse(await request.json().catch(() => null));
@@ -259,6 +263,9 @@ export async function PUT(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // A meeting series hangs off a project (#2356): a projects-module write.
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const parsed = updateSchema.safeParse(await request.json().catch(() => null));
@@ -338,6 +345,8 @@ export async function DELETE(request: Request) {
     if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     if (current.projectId) {
+      const capGate = await requireCapability(session.user.orgId, 'projects');
+      if (capGate) return capGate;
       const access = await ensureProjectAccess(session.user, current.projectId);
       if (access.error) return access.error;
     }

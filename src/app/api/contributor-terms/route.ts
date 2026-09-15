@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { isProjectMember } from '@/lib/projectTeam';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // GET — the terms in force plus this user's own acceptance state (#1025).
 // The BODY is returned, not a link: the text has to be readable before the
@@ -51,6 +52,10 @@ export async function POST(request: Request) {
   // evidence that says nothing, which is worse than no evidence.
   let key = parsed.data.key;
   if (parsed.data.projectId) {
+    // A project-bound acceptance is a projects-module write (#2356); the
+    // platform-level acceptance (no projectId) is not.
+    const capGate = await requireCapability(session.user.orgId, 'projects');
+    if (capGate) return capGate;
     const project = await prisma.project.findUnique({
       where: { id: parsed.data.projectId },
       select: { contributorTermsKey: true, contributorTermsRequired: true },

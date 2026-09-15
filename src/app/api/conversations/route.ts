@@ -6,6 +6,7 @@ import { createOrGetProjectConversation, findOrCreateDirectConversation, isActiv
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { requireCapability } from '@/lib/capabilityGate';
 
 const schema = z.union([
   z.object({ userId: z.string().min(1), projectId: z.never().optional() }),
@@ -34,6 +35,9 @@ async function handlePost(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
     if ('projectId' in parsed.data && parsed.data.projectId) {
+      // The project's group conversation is a projects-module write (#2356).
+      const capGate = await requireCapability(session.user.orgId, 'projects');
+      if (capGate) return capGate;
       if (!(await isActiveProjectMember(session.user.id, parsed.data.projectId))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
