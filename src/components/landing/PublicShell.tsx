@@ -4,6 +4,7 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { PublicHeader } from './PublicHeader';
 import { PublicFooter } from './PublicFooter';
+import { resolveRequestVertical } from '@/i18n/server';
 import { AnalyticsScripts } from '@/components/AnalyticsScripts';
 
 /**
@@ -38,10 +39,16 @@ export async function PublicShell({
   // very bug it would be fixing.
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   const dashboardHref = session ? roleHome(session.user.role) : undefined;
+  // Which product's chrome (#2356). The header is a client component (the menu
+  // needs state) so it cannot resolve the vertical itself; the shell resolves
+  // it here — session-first, host-second — and hands down one flag. A
+  // marketing host's header drops the partner-company pitch and the intern
+  // project showcase, which describe the mentoring product.
+  const isMarketing = (await resolveRequestVertical()) === 'MARKETING';
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <PublicHeader showRegister={showRegister} dashboardHref={dashboardHref} />
+      <PublicHeader showRegister={showRegister} dashboardHref={dashboardHref} hideInternshipLinks={isMarketing} />
       <main id="main-content" className="flex-1">
         {children}
       </main>

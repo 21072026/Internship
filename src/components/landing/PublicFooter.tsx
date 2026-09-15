@@ -23,19 +23,25 @@ export async function PublicFooter() {
   const n = t.publicNav;
   // Vertical product name (#2356): a marketing host's footer wordmark and
   // copyright read "SaleVali", not "InternshipCRM". INTERNSHIP is unchanged.
-  const productName = productNameFor(await resolveRequestVertical());
+  const vertical = await resolveRequestVertical();
+  const isMarketing = vertical === 'MARKETING';
+  const productName = productNameFor(vertical);
 
   const columns = [
     {
       title: n.colProduct,
       links: [
         { href: '/features', label: n.features },
-        { href: '/for-companies', label: n.forCompanies },
+        // Internship-only destinations are left out for a marketing host
+        // (#2356): the partner-company pitch, the intern project showcase, the
+        // mentor application and the contributor-IP terms describe the
+        // mentoring product, not a sales CRM.
+        ...(isMarketing ? [] : [{ href: '/for-companies', label: n.forCompanies }]),
         // #1732 — the price is a Product answer, not a legal one, and the
         // footer is where a visitor who scrolled past the band looks for it.
         // Un-parked with the header entry now that the page exists (#1730).
         { href: '/pricing', label: n.pricing },
-        { href: '/projects', label: n.showcase },
+        ...(isMarketing ? [] : [{ href: '/projects', label: n.showcase }]),
         { href: '/release-notes', label: n.whatsNew },
         // The demo links to itself from its own footer — hide it there.
         // `demoPlacement` is what routes this one through DemoLink below, so
@@ -48,10 +54,10 @@ export async function PublicFooter() {
     {
       title: n.colCommunity,
       links: [
-        { href: '/apply-as-mentor', label: n.becomeMentor },
+        ...(isMarketing ? [] : [{ href: '/apply-as-mentor', label: n.becomeMentor }]),
         { href: GITHUB_URL, label: n.github, external: true },
         { href: '/code-of-conduct', label: t.codeOfConduct.title },
-        { href: '/contributor-terms', label: t.contributorTerms.title },
+        ...(isMarketing ? [] : [{ href: '/contributor-terms', label: t.contributorTerms.title }]),
       ],
     },
     {

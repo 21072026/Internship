@@ -33,10 +33,17 @@ import { GITHUB_URL } from './links';
 export function PublicHeader({
   showRegister = true,
   dashboardHref,
+  hideInternshipLinks = false,
 }: {
   showRegister?: boolean;
   /** Set when the visitor is signed in — the route to their own dashboard. */
   dashboardHref?: string;
+  /**
+   * Set by PublicShell for a MARKETING host (#2356): drops the internship-only
+   * nav entries (/for-companies, /projects). Resolved on the server because
+   * this client component cannot read the vertical itself.
+   */
+  hideInternshipLinks?: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -72,11 +79,16 @@ export function PublicHeader({
   // worth keeping: a nav entry may only point at a route that ships in the same
   // PR — `e2e/pricing.spec.ts` now asserts the page renders, not merely that
   // clicking changed the URL, which is how the original break passed its gate.
+  //
+  // `/for-companies` and `/projects` are internship destinations — the partner-
+  // company pitch and the intern project showcase — so a marketing host's shell
+  // asks for them to be left out (#2356); the flag is resolved server-side in
+  // PublicShell because this component cannot read the vertical itself.
   const links = [
     { href: '/features', label: n.features },
-    { href: '/for-companies', label: n.forCompanies },
+    ...(hideInternshipLinks ? [] : [{ href: '/for-companies', label: n.forCompanies }]),
     { href: '/pricing', label: n.pricing },
-    { href: '/projects', label: n.showcase },
+    ...(hideInternshipLinks ? [] : [{ href: '/projects', label: n.showcase }]),
   ];
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
