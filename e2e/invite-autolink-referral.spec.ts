@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 /**
  * Invitations that connect people, and referral links that record who brought
@@ -48,6 +49,7 @@ test('an invitation carrying a mentor connects the two on registration', { tag: 
 
   try {
     const res = await request.post('/api/register', {
+      headers: freshIp('register invite-autolink-referral'),
       data: { token, email: inviteeEmail, password, fullName: 'Link Invitee', consent: true },
     });
     expect(res.status()).toBe(201);
@@ -88,6 +90,7 @@ test('a mentee referral link credits the mentee who shared it', async ({ request
 
   try {
     const res = await request.post('/api/register', {
+      headers: freshIp('register invite-autolink-referral 2'),
       data: { ref: code, email: newcomerEmail, password, fullName: 'Referred Newcomer', consent: true },
     });
     expect(res.status()).toBe(201);

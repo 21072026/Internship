@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedInvite, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
@@ -29,6 +30,7 @@ test('invitation lifecycle is stamped and shown in Recent Invitations', async ({
 
     // 3. Registering stamps registeredAt and (invited → auto-verified) verifiedAt.
     const reg = await page.request.post('/api/register', {
+      headers: freshIp('register invite-lifecycle'),
       data: { token, email, password: 'Passw0rd!23', fullName: 'Invite Lifecycle', consent: true },
     });
     expect(reg.ok()).toBeTruthy();

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
+import { freshIp } from './helpers/rateLimit';
 
 // #670 — invitations without an address.
 //
@@ -48,6 +49,7 @@ test('a mentor mints an email-less invite link; whoever registers with it become
 
     // Register through it with an address the invitation never knew about.
     const registered = await page.request.post('/api/register', {
+      headers: freshIp('register invite-link-only'),
       data: {
         token: row!.token,
         email: inviteeEmail,

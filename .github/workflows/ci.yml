@@ -269,6 +269,15 @@ jobs:
         env:
           K6_CHECK_REQUIRED: '1'
         run: npm run check:k6
+      # A rate-limit bucket the e2e suite can exhaust (#2158/#2159). The
+      # limiter's counter store is per PROCESS and a shard runs its whole file
+      # list against one server, so every e2e request that carries no client
+      # address counts into the same `<bucket>:unknown` counter — the suite's
+      # calls to an endpoint are cumulative, and the windows are 10-60 minutes.
+      # Twice now that tipped over silently and was diagnosed from a red
+      # scheduled run hours after the merge. This fails the PR instead.
+      - name: e2e rate-limit budget (#2158)
+        run: npm run check:e2e-rate-limits
       # The admin API explorer publishes what scripts/openapi-generate.cjs
       # derives from src/app/api. A static analyser degrades silently: a route
       # in a shape it does not recognise simply vanishes from the document, and

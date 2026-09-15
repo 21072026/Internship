@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 /**
  * Enforced SSO — every password door refused (#1950).
@@ -312,6 +313,7 @@ test('an SSO-enforced tenant refuses every password door', { tag: '@smoke' }, as
       },
     });
     const refusedRegister = await anonCtx.request.post('/api/register', {
+      headers: freshIp('register sso-enforced'),
       data: {
         token: inviteToken,
         email: inviteeEmail,
