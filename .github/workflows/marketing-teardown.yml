@@ -1,0 +1,122 @@
+name: Marketing Teardown (old Plesk box, one-time)
+
+# Removes the Marketing CRM from the ersah.in Plesk box (#2348), which still
+# runs Internship. Manual only, and split in two on purpose:
+#
+#   phase=inventory (default)  read-only. Prints what is on the box and runs
+#                              the mail-domain check. Run this FIRST and read
+#                              the log — the inventory must come from the box,
+#                              not from the plan.
+#   phase=teardown             destructive. Requires typing the confirmation
+#                              phrase, and refuses if the mail check found a
+#                              reference nobody has cut yet.
+#
+# Steps 0 and 7 of docs/marketing-vertical/old-server-teardown.md are NOT here:
+# deleting the source repo is done (the repo is gone), and pulling the deploy
+# key out of authorized_keys is a human decision. The inventory phase reports
+# on the key so that decision has something to stand on.
+#
+# Delete this workflow once the teardown has run and Internship is verified.
+# It is a one-time tool with root on a live box; it should not outlive its job.
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: 'inventory = read-only report · teardown = actually remove'
+        type: choice
+        options: [inventory, teardown]
+        default: inventory
+      confirm:
+        description: 'Type SOK-MARKETING to allow the teardown phase'
+        type: string
+        default: ''
+      mail_cleared:
+        description: 'Only if the mail check found a reference AND a human has cut it'
+        type: boolean
+        default: false
+
+concurrency:
+  group: marketing-teardown
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  teardown:
+    name: ${{ inputs.phase == 'teardown' && 'Remove Marketing from the box' || 'Inventory (read-only)' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # Fail before touching the box, not halfway through it.
+      - name: Check the confirmation phrase
+        if: inputs.phase == 'teardown'
+        run: |
+          if [ "${{ inputs.confirm }}" != "SOK-MARKETING" ]; then
+            echo "::error::phase=teardown needs confirm=SOK-MARKETING (got an empty or wrong value)."
+            exit 1
+          fi
+
+      - name: Setup SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SSH_PRIVATE_KEY:-}" ] || [ -z "${SSH_HOST:-}" ]; then
+            echo "::error::SSH_PRIVATE_KEY / SSH_HOST are not set on this repository."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          # Via env var, not inline interpolation, to preserve the OpenSSH format.
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H -p "${SSH_PORT:-22}" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || \
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      # Copied over rather than pulled by the box: `git fetch` from this
+      # server's IP has been answering 429 (#1239), and the same reasoning as
+      # mysql-watchdog.yml applies — the box must not need the network to run
+      # a script we already have.
+      - name: Ship the teardown script
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/deploy_key -P "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            infra/marketing-teardown.sh "${SSH_USER}@${SSH_HOST}:/tmp/marketing-teardown.sh"
+
+      - name: Run it
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.phase }}" = "teardown" ]; then
+            MODE=--apply
+            EXPORTS="export TEARDOWN_CONFIRM=SOK-MARKETING; export MAIL_CLEARED=${{ inputs.mail_cleared && '1' || '0' }};"
+          else
+            MODE=--inventory
+            EXPORTS=""
+          fi
+          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            "${SSH_USER}@${SSH_HOST}" "${EXPORTS} bash /tmp/marketing-teardown.sh ${MODE}; rc=\$?; rm -f /tmp/marketing-teardown.sh; exit \$rc"
+
+      - name: What is left for a human
+        if: inputs.phase == 'teardown' && success()
+        run: |
+          echo "### Marketing is off the old box" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Still manual (step 7 of the plan): remove the Marketing deploy key from" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`~/.ssh/authorized_keys\` if Internship does not use the same key — the" >> "$GITHUB_STEP_SUMMARY"
+          echo "repo's secret is gone, but the key on the box is not." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Then delete this workflow and \`infra/marketing-teardown.sh\`." >> "$GITHUB_STEP_SUMMARY"

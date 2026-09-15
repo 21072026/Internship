@@ -307,6 +307,12 @@ jobs:
       # only thing keeping it off prod is the name check at the top (#966).
       - name: demo reset guard (#966)
         run: bash infra/test/reset-demo-guard.test.sh
+      # The Marketing teardown runs ONCE, as root, on the box that also serves
+      # Internship — the one chance to get "delete only Marketing" right. Its
+      # whitelist, its dump verification and its refusal to remove a subdomain
+      # that still has mail are pure shell logic, so they are proven here.
+      - name: marketing teardown blast radius (#2348)
+        run: bash infra/test/marketing-teardown.test.sh
       # The MySQL watchdog only ever runs on the box at the moment the database
       # is already down, so its two decisions — "is this server alive?" and
       # "should I restart it?" — get their coverage here instead. A probe that
