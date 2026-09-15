@@ -10,7 +10,8 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
-import { getServerDictionary } from '@/i18n/server';
+import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
+import { verticalCapabilities } from '@/lib/verticals';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { DemoLink } from '@/components/landing/DemoLink';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
@@ -38,7 +39,20 @@ export default async function HomePage() {
 
   // Fed from the single-source catalogue (#584/#588): the landing shows the
   // featured subset; /features shows everything.
-  const features = getFeatures(t).filter((f) => f.featured);
+  // Which product is this landing selling (#2356)? Host-resolved for a
+  // signed-out visitor, org-resolved when signed in. The internship landing is
+  // byte-identical (INTERNSHIP carries every capability and `isMarketing` is
+  // false); a MARKETING host gets a lean page — hero, features, funnel, "and
+  // more", transparency, CTA — with the mentee/mentor/company argument, the
+  // role picker, the three audience sections, the free-core band, the how-it-
+  // works steps, the roles grid, the stories and the per-role FAQ left out,
+  // because those describe the internship loop and would be nonsense to a
+  // sales team. Their copy stays internship-only; the sections that remain are
+  // re-worded through the MARKETING overlay in src/i18n/verticalOverlays.ts.
+  const vertical = await resolveRequestVertical();
+  const isMarketing = vertical === 'MARKETING';
+  const caps = verticalCapabilities(vertical);
+  const features = getFeatures(t).filter((f) => f.featured && (!f.capability || caps.includes(f.capability)));
 
   // Consent-gated success stories (#1100). Honesty rule (§4.2): with zero
   // published stories the section does not exist — no heading, no empty grid,
@@ -195,12 +209,14 @@ export default async function HomePage() {
               It is now the headline of its own band further down the page
               (#1732); the badge above still carries the short form, so the hero
               has not lost the promise. */}
+          {!isMarketing && (
           <p className="mt-4 text-sm text-gray-500">
             {L.becomeMentor}{' '}
             <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="become-mentor-link">
               {L.becomeMentorLink}
             </Link>
           </p>
+          )}
           {!IS_DEMO_MODE && (
             <div className="mt-8">
               {/* Same-tab on purpose (unchanged): the demo is the destination,
@@ -228,20 +244,25 @@ export default async function HomePage() {
               into copy by hand (§4.3). A zero piece is not rendered; with all
               three at zero the strip is not in the DOM at all ("0 open
               projects" is worse than nothing). */}
-          {livePieces.length > 0 && (
+          {!isMarketing && livePieces.length > 0 && (
             <p className="mt-6 text-center text-sm text-gray-600" data-testid="hero-live-strip">
               <span className="font-medium text-gray-500">{L.liveNow}</span>{' '}
               {livePieces.join(' · ')}
             </p>
           )}
+          {!isMarketing && (
           <div className="text-center mt-10">
             <a href="#loop" className="inline-flex items-center gap-1.5 text-blue-600 hover:underline font-medium">
               {L.heroScrollCue} <ArrowDown className="h-4 w-4" />
             </a>
           </div>
+          )}
         </div>
       </section>
 
+      {/* Internship-only argument: the loop, the role picker, the three audience
+          sections, the free-core band and the how-it-works steps (#2356). */}
+      {!isMarketing && (<>
       {/* The loop */}
       <section id="loop" className="py-16 px-4 bg-white scroll-mt-16">
         <div className="max-w-6xl mx-auto">
@@ -426,6 +447,7 @@ export default async function HomePage() {
           <p className="mt-6 text-sm text-gray-500 max-w-3xl mx-auto text-center leading-relaxed">{L.howInterest}</p>
         </div>
       </section>
+      </>)}
 
       {/* Pipeline diagram */}
       <section className="py-16 px-4 bg-white">
@@ -491,7 +513,8 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Roles */}
+      {/* Roles — the five internship roles; a marketing tenant has one (#2356). */}
+      {!isMarketing && (
       <section className="py-16 px-4 bg-white">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.rolesTitle}</h2>
@@ -510,6 +533,7 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* And a lot more */}
       <section className="py-16 px-4">
@@ -569,6 +593,8 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Mentor/mentee stories and the per-role FAQ are internship-only (#2356). */}
+      {!isMarketing && (<>
       {/* Success stories (#1100) — rendered ONLY when at least one published,
           consent-gated story exists; otherwise this section is not in the DOM
           at all (docs/landing-value-proposition.md §4.2 honesty rule). */}
@@ -618,6 +644,7 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+      </>)}
 
       {/* CTA — one button per audience, all at the same weight */}
       <section className="py-16 px-4">
@@ -628,6 +655,9 @@ export default async function HomePage() {
             <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors dark:!bg-white dark:!text-blue-700 dark:hover:!bg-blue-100">
               {L.ctaMentee} <ArrowRight className="h-5 w-5" />
             </Link>
+            {/* The mentor and company sides are internship audiences; a
+                marketing visitor has one door (#2356). */}
+            {!isMarketing && (<>
             <Link
               href={mentorHref}
               className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"
@@ -640,13 +670,16 @@ export default async function HomePage() {
             >
               <Briefcase className="h-5 w-5" /> {L.ctaCompany}
             </Link>
+            </>)}
           </div>
+          {!isMarketing && (
           <p className="mt-6 text-sm text-blue-100">
             {t.auth.wantMentor}{' '}
             <Link href="/apply-as-mentor" className="text-white underline hover:text-blue-50 font-medium" data-testid="apply-as-mentor-link">
               {t.auth.applyMentorLink}
             </Link>
           </p>
+          )}
           {!IS_DEMO_MODE && (
             <p className="mt-4 text-sm text-blue-100">
               {L.demoCtaInline}{' '}
