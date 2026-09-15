@@ -1,5 +1,5 @@
 // Which deployment this build is running as. Baked in at build time via the
-// NEXT_PUBLIC_APP_ENV build-arg (see Dockerfile + deploy.yml), so it is safe to
+// NEXT_PUBLIC_APP_ENV build-arg (see Dockerfile + build-image.yml / deploy-prod.yml), so it is safe to
 // read in both server and client components. Defaults to 'production' locally.
 export type AppEnv = 'production' | 'preview';
 

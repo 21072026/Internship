@@ -1,7 +1,7 @@
 // Idempotent backfill for multi-tenancy Phase 1 (#543): ensure a single default
 // Organization exists and every tenant-scoped row points at it. Additive and
 // safe — nothing enforces isolation yet, so this only fills the nullable orgId
-// columns. Runs on deploy (deploy-prod.sh / deploy.yml / topic-deploy.sh /
+// columns. Runs on deploy (deploy-prod.sh / topic-deploy.sh /
 // demo-refresh.sh) and from the seeders, which import assignDefaultOrg().
 //
 // Completeness matters more than it looks (#1557): once MT_ENFORCE_ISOLATION is
