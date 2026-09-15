@@ -12,19 +12,25 @@ import { MeetingLauncherProvider } from '@/components/meeting/MeetingLauncher';
 import { FloatingNotesProvider } from '@/components/meeting/FloatingNotes';
 import type { Locale } from '@/i18n/config';
 import type { ClientDictionary } from '@/i18n/dictionaries';
+import type { VerticalKey } from '@/lib/verticals';
+import { VerticalProvider } from '@/lib/verticalClient';
 
 export function Providers({
   children,
   locale,
   dict,
+  vertical,
 }: {
   children: React.ReactNode;
   locale: Locale;
   dict: ClientDictionary;
+  /** The request's vertical (#2356), resolved by the root layout. */
+  vertical: VerticalKey;
 }) {
   return (
     <SessionProvider>
       <LocaleProvider locale={locale} dict={dict}>
+      <VerticalProvider vertical={vertical}>
         {/* WCAG 4.1.3: one live region for the whole app, mounted empty above
             every page shell so it is already in the accessibility tree when the
             first status message arrives (see ui/LiveRegion.tsx). */}
@@ -44,6 +50,7 @@ export function Providers({
             <TimezoneSync />
           </ToastProvider>
         </LiveRegionProvider>
+      </VerticalProvider>
       </LocaleProvider>
     </SessionProvider>
   );

@@ -9,6 +9,8 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useT, useLocale } from '@/i18n/client';
 import { GITHUB_URL } from './links';
+import { useVertical } from '@/lib/verticalClient';
+import { productNameFor } from '@/lib/verticals';
 
 /**
  * The one header every public page wears (#1197).
@@ -48,6 +50,10 @@ export function PublicHeader({
   const t = useT();
   const locale = useLocale();
   const n = t.publicNav;
+  // The wordmark is the vertical's product name (#2356): "SaleVali" on a
+  // marketing host, "Internship CRM" everywhere else — the footer, tab title
+  // and signed-in shell already read the same source.
+  const productName = productNameFor(useVertical());
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -107,7 +113,7 @@ export function PublicHeader({
             className="flex items-center gap-2 min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <GraduationCap className="h-7 w-7 text-blue-600 flex-shrink-0" />
-            <span className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">InternshipCRM</span>
+            <span className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">{productName}</span>
             <BetaBadge className="flex-shrink-0" />
           </Link>
 

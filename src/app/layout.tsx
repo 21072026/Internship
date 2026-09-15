@@ -70,7 +70,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Same vertical overlay the server dictionary gets (#2354), so the client
   // payload and server render agree. INTERNSHIP resolves to an empty overlay,
   // so this is identical to the base client dict for today's product.
-  const dict = applyVerticalOverlay(getClientDictionary(locale), locale, await resolveRequestVertical());
+  const vertical = await resolveRequestVertical();
+  const dict = applyVerticalOverlay(getClientDictionary(locale), locale, vertical);
   const cookieStore = await cookies();
   let theme = cookieStore.get('theme')?.value;
   let fontSize = cookieStore.get('fontSize')?.value;
@@ -127,7 +128,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             offline fallback and the install prompt used to exist only behind
             login. Renders nothing. */}
         <ServiceWorkerRegistrar />
-        <Providers locale={locale} dict={dict}>
+        <Providers locale={locale} dict={dict} vertical={vertical}>
           {/* Public demo (#966) — above everything, on every route, so a visitor
               never mistakes the demo for their own tenant. */}
           {IS_DEMO_MODE && <DemoModeBanner />}
