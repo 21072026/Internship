@@ -258,6 +258,11 @@ test('phone width: /release-notes fits, one release per card', async ({ page }) 
 });
 
 test('reflow: the board and the calendar survive 320px and 400% zoom', async ({ page }) => {
+  // Triples the timeout. This one test sweeps TWO viewports over several routes
+  // in TWO locales with a settle between each — around 78 seconds of real work
+  // against a warm server, where the project default is 60. It was failing as a
+  // timeout, which reads like a layout finding and is not one.
+  test.slow();
   // WCAG 1.4.10 (#2047). The rest of this file measures 360px and up; 320 is the
   // width the success criterion actually names, and the board (13 stage columns)
   // and the calendar (a seven-column month grid + a four-tab view switcher) are
