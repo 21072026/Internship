@@ -8,8 +8,8 @@ name: Infra Setup (one-time, manual)
 #   2. cert  — wildcard TLS cert via acme.sh + DNS-01, on the server over SSH
 #   3. perms — verify $NGINX_CONF_DIR is writable + nginx reload works
 #
-# Required secrets: SSH_PRIVATE_KEY / SSH_HOST / SSH_USER / SSH_PORT (already
-# used by deploy.yml) and CF_API_TOKEN — a SCOPED Cloudflare token
+# Required secrets: SSH_PRIVATE_KEY / SSH_HOST / SSH_USER / SSH_PORT (shared
+# with the runner/MySQL watchdogs) and CF_API_TOKEN — a SCOPED Cloudflare token
 # (Zone→DNS→Edit + Zone→Zone→Read, the target zone only). See infra/README.md.
 on:
   workflow_dispatch:

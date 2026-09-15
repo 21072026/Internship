@@ -6940,3 +6940,34 @@ dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
 `git checkout -B <dal> origin/main` ile temiz taze base'e geç, sonra düzenlemeleri
 **bilgiden** yeniden uygula (kalıntı diff'e güvenme). Genel ders: commit'lemeden
 önce `git status`'u gözden geçir; "benim değil" gibi görünen her şeyi sorgula.
+
+## 2026-09-15 — Marketing'i "ayrı sistem" yaparken üç ders + Plesk kalıntısı
+
+- **Capability filtresi HER kabukta uygulanmalı.** `AdminNav`'ın `capabilities?` prop'u
+  opsiyonel ve "geçilmedi = tüm linkler" varsayılanı var. `/admin/layout` geçiyordu ama
+  `/todos`, `/interviews`, `/messages`, `/newsletters`, `/mentors`'ın giydiği `RoleShell`
+  geçmiyordu → marketing admin'i tam o sayfalarda tam internship menüsünü görüyordu
+  ("menü sayfadan sayfaya değişiyor"). Ders: bir nav component'ine opsiyonel filtre
+  eklediğinde `grep -rn "<AdminNav"` ile HER render noktasını bul; "not passed = show all"
+  bir sızıntı varsayılanıdır — ya zorunlu prop yap ya da her kabukta çöz.
+- **Ham HTML'de i18n string grep'i doğrulama değildir.** Kök layout `getClientDictionary`
+  JSON'unu gömer; `SERVER_ONLY_NAMESPACES` (landing, featureCatalog, trust, accessibility)
+  dışındaki her namespace client'a gider. "Questions people actually ask" landing FAQ'sunun
+  render'ı DEĞİL `pricing.faqTitle`'ın JSON'daki kopyasıydı — yarım saat yanlış yerde
+  arattı. Doğrulamayı server-only namespace string'leri ya da `href="..."` attribute'ları
+  üzerinden yap; dictionary'de bulunan bir string'in HTML'de görünmesi hiçbir şey kanıtlamaz.
+- **Landing'i dikeye göre bölmek page.tsx'le bitmez.** Paylaşılan public chrome
+  (`PublicHeader`/`PublicFooter`) internship linkleri taşıyordu (/for-companies, /projects,
+  /apply-as-mentor, /contributor-terms). `PublicHeader` `'use client'` → vertical'ı okuyamaz;
+  server `PublicShell` çözüp tek bir flag geçirir. Kural: dikeye göre gizlenen her şey için
+  önce "bu string'i render eden BAŞKA yer var mı" diye `grep -rn` yap.
+- **`deploy.yml` ("Deploy to Plesk Server") silindi.** 17 Tem'den beri ölü (hepsi
+  failure/skipped), yalnız `workflow_dispatch`, SSH ile emekli kutuya giden bir break-glass —
+  yani Actions listesinde kafa karıştıran ve kazara çalıştırılırsa hiçliğe deploy eden bir
+  şey. Silmeden kontrol edilenler: branch protection required checks (yalnız "Lint ·
+  Typecheck · Build" + "Playwright smoke" — "Production Deploy" değil), `uses:`/`workflow_call`
+  referansı (yok), SSH_* secret'ları (watchdog'lar + infra-setup da kullanıyor → secret'lara
+  DOKUNMA, yalnız dosya). `marketing-teardown.yml` bilerek KALDI: eski kutunun subdomain/DB
+  temizliği henüz yapılmadı, o güvenli tek-seferlik araç. Aktif workflow'lardaki "Plesk"
+  yalnız yorumdu (runs-on label'ı değil) → prose güncellendi, script'lerin `plesk` CLI
+  fallback dalları (topic-deploy.sh, replica-route.sh) dual-mode ve testli, dokunulmadı.

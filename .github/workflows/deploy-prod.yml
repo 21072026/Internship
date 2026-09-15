@@ -1,7 +1,7 @@
 name: Deploy prod (hosted build → server swap, auto on main)
 
 # Production deploy. The IMAGE IS BUILT ON A GITHUB-HOSTED RUNNER (build-image.yml)
-# and pushed to ghcr; the Plesk server only pulls it and swaps the container.
+# and pushed to ghcr; the server only pulls it and swaps the container.
 #
 # HISTORY (why it looks like this):
 #   #636  the whole deploy moved onto a self-hosted runner ON THE SERVER because
@@ -30,7 +30,7 @@ name: Deploy prod (hosted build → server swap, auto on main)
 # the weekly `schedule` entry — nothing else changes, and deploy-preview.yml keeps
 # tracking main so preview stays the always-current staging environment.
 #
-# PREREQUISITES (one-time, on the Plesk server):
+# PREREQUISITES (one-time, on the server):
 #   1. Register a self-hosted runner for this repo (Settings → Actions →
 #      Runners → New self-hosted runner) and install it as a service:
 #        ./config.sh --url https://github.com/21072026/Internship --token <TOKEN> --labels self-hosted

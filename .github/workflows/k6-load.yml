@@ -18,7 +18,7 @@ name: Nightly k6 Load Test
 # any commit changing. Every night runs.
 #
 # Cadence: 23:40 UTC daily = 01:40 Europe/Berlin (CEST) / 02:40 Europe/Istanbul.
-# That window is deliberately empty on the Plesk box: the deploy drift checks run
+# That window is deliberately empty on the server: the deploy drift checks run
 # at :23 and :53 past hours 0/6/12/18, `demo-reset` at 02:00 and 14:00, the weekly
 # `stress` at Mon 02:30, the server's mysqldump at 03:15 and `e2e-full` at 03:00.
 # GitHub's scheduler can lag several minutes, so treat the separation as generous

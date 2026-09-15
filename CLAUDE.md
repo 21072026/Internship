@@ -16,7 +16,9 @@ along the way.
 - **NextAuth 4** (Credentials provider, JWT sessions, bcrypt password hashing)
 - **Tailwind CSS**, **lucide-react**, **react-hook-form**, **zod**
 - **Nodemailer** (SMTP) + **node-cron** for interaction reminders
-- Containerized (**Docker**); deployed to a **Plesk** server via GitHub Actions
+- Containerized (**Docker**); deployed to a **Caddy-fronted Docker host** (Oracle ARM,
+  `interncrm.com`) by GitHub Actions through the box's **self-hosted runner** — the
+  Plesk box was retired on 2026-09-06 (`docs/server-migration.md`)
 
 ## Commands
 
@@ -126,7 +128,9 @@ src/
 prisma/
   schema.prisma     # source of truth for the DB
   seed.mjs          # first-admin seeder
-.github/workflows/deploy.yml  # build → ghcr.io → SSH deploy (prod + PR previews)
+.github/workflows/deploy-prod.yml     # hosted build → ghcr.io → self-hosted runner swaps prod (auto on main)
+.github/workflows/deploy-preview.yml  # same shape for preview.interncrm.com
+.github/workflows/topic-preview.yml   # per-PR topic env at pr<N>.interncrm.com
 ```
 
 ## Environment variables
@@ -137,7 +141,7 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 ## Deployment
 
 All three environments follow the same shape: the image is **built on a GitHub-hosted
-runner** (`build-image.yml`, pushed to `ghcr.io/21072026/internship`), and the Plesk
+runner** (`build-image.yml`, pushed to `ghcr.io/21072026/internship`), and the
 server's **self-hosted runner** only pulls it, runs `prisma db push --accept-data-loss`
 + the idempotent backfills, swaps its container and health-checks it. **Nothing
 compiles on the server** — keep it that way (the repo is public, so `ubuntu-latest`
@@ -184,7 +188,10 @@ workaround, #636, and it compiled on every PR push).
 - `topic-preview.yml` — per-PR isolated environment, torn down when the PR closes (#583).
   **Fork PRs get none** (their `GITHUB_TOKEN` can't push to ghcr, and unreviewed fork code
   shouldn't run on the production host).
-- `deploy.yml` is the **legacy hosted** pipeline (ghcr.io + SSH), **superseded** — don't extend it.
+- The Plesk-era `deploy.yml` ("Deploy to Plesk Server": hosted build + SSH into the old box)
+  was **removed on 2026-09-15** — dead since 2026-07-17, superseded by the three workflows
+  above, and its SSH target no longer exists. Don't reintroduce a GitHub→SSH deploy; the
+  self-hosted runner is the deploy path.
 - `infra/autodeploy.sh` is a break-glass poller that **builds on the server** — don't put it
   on a cron (see `infra/README.md`).
 - Each **topic env has its own database** (`internship_pr<N>`, #1185), created on first
