@@ -146,24 +146,55 @@ yorumu (mail kutusu çıkarsa ne yapılacağı bir karardır), adım 7 (anahtar
 yönetimi). Bu yüzden burada tek bir "hepsini yap" script'i yok: sökümün yarısı
 karar, yarısı komut.
 
-## Uygulaması
+## Sonuç — söküm 2026-09-15'te yapıldı
 
-- **Adım 0 tamamlandı:** `21072026/Marketing` repo'su silindi, dolayısıyla
-  `deploy-test.yml` ve `pr-preview.yml` artık tetiklenemez — söktüğünü geri
-  kuracak bir şey kalmadı.
-- **Adım 1–6 ve 8:** `infra/marketing-teardown.sh`, iki modlu. `--inventory`
-  salt-okunur (envanter + mail kontrolü + anahtar raporu, hiçbir şeyi
-  değiştirmez), `--apply` yıkıcı ve `TEARDOWN_CONFIRM=SOK-MARKETING` ister.
-  Script silmeye izin verdiği adları bir **beyaz liste** ile sınırlar; mail
-  kontrolü bir referans bulduysa subdomain'lere dokunmadan durur; dump'ı
-  `backup-db.sh`'in üç kontrolüyle (boyut → gzip → `CREATE TABLE`) doğrulamadan
-  hiçbir `DROP` çalıştırmaz. Yanlış silmenin bedeli geri alınamaz olduğu için
-  bu mantığın regresyon testi var: `infra/test/marketing-teardown.test.sh` (CI).
-- **Çalıştırma:** Actions → *Marketing Teardown (old Plesk box, one-time)*.
-  Önce `phase=inventory` koş ve logu oku — envanter bu dokümandan değil kutudan
-  gelmeli. Sonra `phase=teardown` + `confirm=SOK-MARKETING`.
-- **Adım 7 insanda kalır:** repo silinince secret gitti ama anahtar kutuda
-  duruyor. Envanter fazı `authorized_keys`'te eşleşen satırı raporlar (anahtar
-  materyalini değil), kararı sen verirsin.
-- Söküm bitip Internship doğrulandıktan sonra **bu workflow'u ve script'i sil**:
-  bir kerelik, root yetkili bir araç işini bitirdikten sonra durmamalı.
+Adım 0 daha önce tamamlanmıştı (`21072026/Marketing` repo'su silindi, deploy
+workflow'ları artık tetiklenemez). Kalanı `infra/marketing-teardown.sh` ile bir
+GitHub Actions runner'ından, iki fazlı olarak koşturuldu; script ve workflow bu
+commit'te silindi — bir kerelik, root yetkili bir araç işini bitirdikten sonra
+repoda durmamalı.
+
+**Envanter fazı (salt-okunur).** Kutuda bulunan: tek container
+`salevali-crm-marketing` (3 gündür `Exited (1)`), tek image
+`ghcr.io/21072026/marketing:test-…`, tek subdomain `marketing.ersah.in`,
+`salevali_crm_test` (11 tablo), `/etc/salevali-crm/test.env` (874 B). PR ortamı
+kalmamıştı. **Mail kontrolü temiz** — ne posta kutusu ne referans, yani 5. adımın
+önü açıktı.
+
+**Söküm fazı.** Dump doğrulandı (2810 B, 11 tablo) ve
+`/var/backups/salevali_crm_test-20260915T075304Z.sql.gz` olarak duruyor; ardından
+veritabanı ve iki kullanıcı düşürüldü, container ve image ada göre silindi,
+`marketing.ersah.in` Plesk'ten kaldırıldı, env dosyası shred edildi. Sertifikaya
+dokunulmadı.
+
+### 8. adımın üç uyarısı yanlış alarmdı
+
+Run kırmızı bitti, çünkü Internship doğrulaması üç `!!` verdi: "internship-crm
+container'ı çalışmıyor", "internship veritabanı yok", "wildcard sertifikası
+eksik". Üçü de **kontrolün varsayımı** yanlış olduğu için çıktı, kutuda bir şey
+kırıldığı için değil — script zaten beyaz listesi dışında hiçbir şeye dokunmadı
+ve neyi sildiğini tek tek logladı. Dışarıdan ölçülen gerçek durum:
+
+- `https://crm.interncrm.com/api/health` → **200**, `version 0.202.0-beta`,
+  `replica: internship-crm`. Uygulama ayakta.
+- `*.ersah.in` wildcard sertifikası **geçerli** (Let's Encrypt, 10 Aralık 2026).
+  Plesk'in sertifika deposunda `wildcard-ersah.in` adıyla aranması yanlıştı;
+  sertifika acme.sh tarafından `/etc/nginx/ssl` altına kuruluyor
+  (`infra/server/bootstrap.sh`).
+- `crm.ersah.in` → 301 → `interncrm.com`; Internship'in kanonik adı artık
+  interncrm.com.
+- `marketing.ersah.in` artık kendi vhost'u olmadığı için Internship'e düşüyor
+  (health cevabı `replica: internship-crm` diyor) — yani Marketing gitti.
+
+Container filtresi (`name=internship-crm`) ve veritabanı adı grep'i ("internship"
+içeren bir DB) de aynı cinsten varsayımlardı; prod'un gerçek container ve DB adı
+`ENV_FILE` içinden geliyor, repoda sabit değil. Ders: **bir teardown script'inin
+son doğrulaması, doğrulayacağı şeyin adını tahmin etmemeli** — dışarıdan HTTP ve
+TLS ölçmek, isim eşleştirmekten daha güvenilir bir "hâlâ ayakta mı" kanıtı.
+
+### Hâlâ insanda olan tek iş
+
+`~/.ssh/authorized_keys` **6. satır**, yorumu `marketing-crm-github-actions`:
+Marketing deploy'unun bu kutuya girdiği anahtar. Repo silinince secret gitti ama
+anahtar kutuda duruyor — sahibi olmayan bir erişim yolu. Internship kendi
+anahtarını kullandığı için bu satır güvenle çıkarılabilir.
