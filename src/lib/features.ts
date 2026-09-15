@@ -19,6 +19,7 @@ import {
   FolderKanban, BadgeEuro,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
+import type { VerticalCapability } from '@/lib/verticals';
 
 export type FeatureCategory = 'tracking' | 'collaboration' | 'companies' | 'insights' | 'trust' | 'platform';
 
@@ -29,6 +30,11 @@ export interface Feature {
   color: string;
   // Featured entries render as the landing page's feature cards.
   featured?: boolean;
+  // The vertical capability this card advertises (#2356). The landing filters
+  // its featured grid by the host vertical's capability set, so a marketing
+  // visitor is not sold "Mentor self-service" or intern projects. Untagged =
+  // shown to every vertical. /features keeps showing the whole catalogue.
+  capability?: VerticalCapability;
   title: string;
   desc: string;
 }
@@ -44,11 +50,11 @@ export function getFeatures(t: Dictionary): Feature[] {
   return [
     // Featured (the original landing cards — exact strings asserted in e2e).
     { key: 'pipeline', category: 'tracking', icon: GitBranch, color: 'blue', featured: true, title: L.fPipelineT, desc: L.fPipelineD },
-    { key: 'mentors', category: 'collaboration', icon: Users, color: 'green', featured: true, title: L.fMentorT, desc: L.fMentorD },
-    { key: 'companies', category: 'companies', icon: Building2, color: 'purple', featured: true, title: L.fCompanyT, desc: L.fCompanyD },
+    { key: 'mentors', category: 'collaboration', icon: Users, color: 'green', featured: true, capability: 'mentorship', title: L.fMentorT, desc: L.fMentorD },
+    { key: 'companies', category: 'companies', icon: Building2, color: 'purple', featured: true, capability: 'companies', title: L.fCompanyT, desc: L.fCompanyD },
     { key: 'comms', category: 'collaboration', icon: CalendarClock, color: 'amber', featured: true, title: L.fCommsT, desc: L.fCommsD },
     { key: 'docs', category: 'platform', icon: FileText, color: 'teal', featured: true, title: L.fDocsT, desc: L.fDocsD },
-    { key: 'growth', category: 'collaboration', icon: Target, color: 'orange', featured: true, title: L.fGrowthT, desc: L.fGrowthD },
+    { key: 'growth', category: 'collaboration', icon: Target, color: 'orange', featured: true, capability: 'mentorship', title: L.fGrowthT, desc: L.fGrowthD },
     { key: 'analytics', category: 'insights', icon: BarChart3, color: 'sky', featured: true, title: L.fAnalyticsT, desc: L.fAnalyticsD },
     { key: 'privacy', category: 'trust', icon: ShieldCheck, color: 'rose', featured: true, title: L.fPrivacyT, desc: L.fPrivacyD },
     { key: 'platform', category: 'platform', icon: Sparkles, color: 'indigo', featured: true, title: L.fPlatformT, desc: L.fPlatformD },
