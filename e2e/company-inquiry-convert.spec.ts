@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
+import { freshIp } from './helpers/rateLimit';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -269,6 +270,7 @@ test('a COMPANY invitation whose company was deleted is refused at registration,
     await prisma.company.delete({ where: { id: invitation!.companyId! } });
 
     const registered = await page.request.post('/api/register', {
+      headers: freshIp('register company-inquiry-convert'),
       data: { token: invitation!.token, email: contactEmail, password: 'OrphanPass123', fullName: 'Ada Lovelace', consent: true },
     });
     expect(registered.status()).toBe(400);

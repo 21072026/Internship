@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
+import { freshIp } from './helpers/rateLimit';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -19,6 +20,7 @@ test('registration records the accepted privacy-policy version', async ({ page }
   const email = uniqueEmail('gdpr-consent');
   try {
     const res = await page.request.post('/api/register', {
+      headers: freshIp('register gdpr-consent'),
       data: {
         email,
         password: 'ConsentPass123',

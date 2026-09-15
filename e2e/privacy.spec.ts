@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -30,6 +31,7 @@ test('registration records consent and the privacy page is public', async ({ pag
   const email = uniqueEmail('consent');
   try {
     const res = await page.request.post('/api/register', {
+      headers: freshIp('register privacy'),
       data: { email, password: 'ConsentPass123', fullName: 'Consent User' },
     });
     expect(res.ok()).toBeTruthy();

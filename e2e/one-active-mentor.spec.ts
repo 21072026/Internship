@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 /**
  * ONE MENTEE, AT MOST ONE ACTIVE MENTOR — EPIC F / #419.
@@ -73,6 +74,7 @@ test(
       // Registration itself must still succeed — the account is valid; only the
       // LINK is refused.
       const res = await request.post('/api/register', {
+        headers: freshIp('register one-active-mentor'),
         data: { token, email: inviteeEmail, password: PASSWORD, fullName: 'OAM Invited Mentor', consent: true },
       });
       expect(res.status()).toBe(201);

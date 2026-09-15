@@ -3,6 +3,7 @@
 // 403'd invited COMPANY users' portals until the next deploy's backfill.
 import { test, expect } from '@playwright/test';
 import { prisma, uniqueEmail, cleanupByEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 const PASSWORD = 'RegisterOrg123!';
 const emails: string[] = [];
@@ -36,6 +37,7 @@ test('invited registration inherits the invitation’s org immediately', async (
     },
   });
   const res = await request.post('/api/register', {
+    headers: freshIp('register register-org'),
     data: { token: invite.token, email, password: PASSWORD, fullName: 'Invited OrgUser' },
   });
   expect(res.status()).toBe(201);
@@ -47,6 +49,7 @@ test('token-less self-registration gets the default org, not null', async ({ req
   const email = uniqueEmail('selfreg-org');
   emails.push(email);
   const res = await request.post('/api/register', {
+    headers: freshIp('register register-org 2'),
     data: { email, password: PASSWORD, fullName: 'SelfReg OrgUser' },
   });
   expect(res.status()).toBe(201);
@@ -67,6 +70,7 @@ test('a legacy invitation without an org still registers (falls back to default 
     },
   });
   const res = await request.post('/api/register', {
+    headers: freshIp('register register-org 3'),
     data: { token: invite.token, email, password: PASSWORD, fullName: 'Legacy Invite OrgUser' },
   });
   expect(res.status()).toBe(201);

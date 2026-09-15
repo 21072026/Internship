@@ -1,16 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAsFreshUser } from './helpers/auth';
+import { freshIp, floodIp } from './helpers/rateLimit';
 
 // #904: a public, unauthenticated application to become a mentor. No User is
 // created on submission; an admin reviews the queue via GET (this task ships
 // only POST + GET — approve/reject is a later task).
 //
-// The POST handler is IP-rate-limited (5 / 15 min, process-wide bucket) and
-// `playwright.config.ts` runs the whole suite with `workers: 1`, so these
-// tests share one counter — keep them in this file, in this order, same as
-// rate-limit.spec.ts: functional tests first (well under the limit), the
-// flood test last.
+// The POST handler is IP-rate-limited (5 / 15 min) and the counter store is
+// per PROCESS, so the whole shard used to share one `mentor-application:unknown`
+// counter: these five POSTs alone reached the ceiling, and whichever spec ran
+// next got the 429 (#2158). Each functional test now spends a synthetic address
+// of its own; the flood test at the bottom pins one on purpose, because it is
+// measuring the brake and has to spend one counter repeatedly. No ordering
+// requirement is left — see e2e/helpers/rateLimit.ts.
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -22,6 +25,7 @@ test('public application is accepted, creates no User, sets consentAt, and notif
 
   try {
     const res = await request.post('/api/mentor-applications', {
+      headers: freshIp('mentor-app accepted'),
       data: {
         fullName: 'New Mentor',
         email,
@@ -60,10 +64,10 @@ test('a second application while one is PENDING is rejected with 409', async ({ 
   const email = uniqueEmail('mentor-app-dup');
 
   try {
-    const first = await request.post('/api/mentor-applications', { data: { fullName: 'Dup Mentor', email } });
+    const first = await request.post('/api/mentor-applications', { data: { fullName: 'Dup Mentor', email }, headers: freshIp('mentor-app duplicate 1') });
     expect(first.status()).toBe(200);
 
-    const second = await request.post('/api/mentor-applications', { data: { fullName: 'Dup Mentor', email } });
+    const second = await request.post('/api/mentor-applications', { data: { fullName: 'Dup Mentor', email }, headers: freshIp('mentor-app duplicate 2') });
     expect(second.status()).toBe(409);
 
     expect(await prisma.mentorApplication.count({ where: { email } })).toBe(1);
@@ -79,7 +83,7 @@ test('an email already tied to an account gets the same neutral response and no 
   await seedUser(email, 'ExistingPass123', 'MENTEE', 'Existing User');
 
   try {
-    const res = await request.post('/api/mentor-applications', { data: { fullName: 'Existing User', email } });
+    const res = await request.post('/api/mentor-applications', { data: { fullName: 'Existing User', email }, headers: freshIp('mentor-app existing user') });
     expect(res.status()).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
@@ -132,12 +136,13 @@ test('GET is admin-only; an admin can filter by status and gets a paginated shap
 });
 
 test('excess requests to the public endpoint are rate limited (429)', async ({ request }) => {
-  // Earlier tests in this file already spent part of the shared per-IP bucket
-  // (limit 5 / 15 min) — send until a 429 shows up rather than assuming an
-  // exact remaining count.
+  // This one owns an address, so the six requests below are the only thing that
+  // has ever touched its counter — the assertion is about the limiter and
+  // nothing else, and it no longer needs the tests above it to have run first.
   const statuses: number[] = [];
   for (let i = 0; i < 6; i++) {
     const res = await request.post('/api/mentor-applications', {
+      headers: floodIp('mentor-application'),
       data: { fullName: 'Flood Mentor', email: uniqueEmail(`mentor-app-flood-${i}`) },
     });
     statuses.push(res.status());

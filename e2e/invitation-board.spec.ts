@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { freshIp } from './helpers/rateLimit';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
@@ -118,6 +119,7 @@ test('invitation board filters, bulk re-invites and revokes', async ({ page }) =
     );
 
     const registerAttempt = await page.request.post('/api/register', {
+      headers: freshIp('register invitation-board'),
       data: {
         token: stale.token,
         email: staleEmail,
