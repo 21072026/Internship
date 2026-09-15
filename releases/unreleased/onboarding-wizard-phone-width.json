@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **The mentor dashboard's mentee-onboarding wizard stops pushing the page past a 360px phone** (#2282). Its cards sit in a grid, and a grid item defaults to `min-width: auto` — so the widest unbreakable row in a card (a long German mentee name beside a badge and two 44px controls) set the track width instead of the name truncating, and 328px of column carried 361px of content. `min-w-0` on the card lets the track win and the name truncate as it was always meant to. The step labels in the expanded state gain `min-w-0 break-words` for the same reason: they are full German sentences. Also `test.slow()` on the 320px/400%-zoom reflow test — it sweeps two viewports over several routes in two locales, about 78 seconds against a warm server where the project default is 60, and was failing as a timeout that reads like a layout finding and is not one."
+}

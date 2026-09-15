@@ -113,7 +113,11 @@ export function MenteeOnboardingWizard() {
           const panelId = `onboarding-panel-${item.menteeId}`;
 
           return (
-            <Card key={item.menteeId} padding="sm" data-testid={`onboarding-card-${item.menteeId}`}>
+            // `min-w-0`: a grid item defaults to `min-width: auto`, so the
+            // card's widest unbreakable row — a long German mentee name plus a
+            // badge and two 44px controls — sets the track width and pushes the
+            // grid past a 360px viewport instead of the name truncating.
+            <Card key={item.menteeId} padding="sm" className="min-w-0" data-testid={`onboarding-card-${item.menteeId}`}>
               <div className="flex items-center gap-2">
                 {item.relationId ? (
                   <Link
@@ -204,7 +208,14 @@ export function MenteeOnboardingWizard() {
                           >
                             {state.done ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Circle className="h-4 w-4 text-gray-300" />}
                           </button>
-                          <span className={state.done ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-200'}>
+                          {/* `min-w-0 break-words`: the step labels are full
+                              German sentences, and without this the row keeps
+                              its min-content width and pushes the whole wizard
+                              — and the mentor dashboard around it — past a
+                              360px viewport. */}
+                          <span
+                            className={`min-w-0 break-words ${state.done ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-200'}`}
+                          >
                             {stepLabels[step]}
                           </span>
                         </li>
