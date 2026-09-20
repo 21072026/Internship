@@ -6971,3 +6971,37 @@ dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
   temizliği henüz yapılmadı, o güvenli tek-seferlik araç. Aktif workflow'lardaki "Plesk"
   yalnız yorumdu (runs-on label'ı değil) → prose güncellendi, script'lerin `plesk` CLI
   fallback dalları (topic-deploy.sh, replica-route.sh) dual-mode ve testli, dokunulmadı.
+
+## 2026-09-20 — CI watchdog turu: headless-shell revision symlink'i, search rate limit'i, "reprodüksiyon" ne demek
+
+- **Pinlenmiş chromium-headless-shell'in dizin yapısı chromium'dan farklı, symlink de farklı.**
+  `/opt/pw-browsers`'ta kurulu build 1194, Playwright 1243 istiyor. Tam chromium için
+  `chromium/` sembolik linki zaten `chrome-linux/chrome`'a işaret ediyor — o path'i
+  `chromium-1243/` altına aynı adla kopyalayıp `INSTALLATION_COMPLETE`/`DEPENDENCIES_VALIDATED`
+  dokunmak yetiyor. Ama **headless-shell farklı**: eski build `chrome-linux/headless_shell`,
+  Playwright 1243 `chrome-headless-shell-linux64/chrome-headless-shell` arıyor — hem dizin adı
+  hem dosya adı farklı (security-audit-playbook.md §2 bunu "işe yaramıyor" diye zaten
+  işaretlemiş, ama neden işe yaramadığını netleştiriyor). Çözüm: `chrome-headless-shell-linux64`
+  adında bir dizin aç, içine eski `chrome-linux`'u symlink'le, sonra o dizinin içinde
+  `chrome-headless-shell -> headless_shell` diye ikinci bir symlink daha ekle. İkisi birden
+  olmadan `browserType.launch: Executable doesn't exist` hatası devam ediyor.
+- **`search_issues` (semantic search) kendi rate limit'ine çarpıyor, ardışık 5-6 çağrıda 403
+  "API rate limit exceeded" dönüyor** — GraphQL/REST kotasından ayrı bir şey. Paralel arama
+  yerine her çağrı arasına ~8s `sleep` koymak yeterli; retry'de aynı sorgu genelde temiz döner.
+  Bir CI watchdog turunda 8-10 farklı test adı arayacaksan bunu baştan hesaba kat.
+- **"Yerelde reprodüksiyon" bazen sadece "aynı kod yolunu geçirdiğini kanıtlamak" anlamına
+  gelir, bug'ı tetiklemek değil.** `offers.spec.ts`'in flaky `signIn` hatası (element detached
+  from DOM) CI'nin tek çekirdekli runner'ına bağlı bir yarış durumu — bu container'da 8 kez
+  art arda koştursan da tetiklenmiyor (hepsi geçti). Kanıt olarak "hatayı tetikledim" yerine
+  "belgelenen bozuk deseni ortadan kaldırdım (repo'nun kendi kanıtlı `signInAsFreshUser`
+  helper'ına geçtim) ve değişmemiş tüm testler 3/3 art arda yeşil" sunmak PR'da dürüst ve
+  yeterli bir doğrulama — CLAUDE.md'nin "reprodüksiyon şart" talimatını "bug'ı asla göremezsen
+  hiç fix göndeyme" diye okumamak lazım.
+- **Aynı "iki DOM elemanı" semptomu farklı sayfalarda tekrarlanıyorsa yeni issue açma, mevcut
+  şemsiye issue'ya (burada #2312) kanıt ekle.** Üç farklı testid (`ai-monthly-quota`,
+  `email-group-toggle-*`, `trusted-devices`) üç farklı sayfada (`/admin/settings`,
+  notif-prefs, `/account`) aynı "strict mode violation: resolved to 2 elements" şeklinde
+  patlıyor — #2312'nin kendi geçmişi zaten bunu yapmış (üçüncü örneği "kanıt" diye eklemiş,
+  ayrı issue açmamış), o emsali takip etmek doğru çağrı. Ayrı issue açmak yerine önce
+  `search_issues` ile "strict mode violation resolved to 2 elements" gibi genel bir sorguyla
+  şemsiye issue'yu bul.

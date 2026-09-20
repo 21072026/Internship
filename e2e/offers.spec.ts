@@ -1,20 +1,13 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // Offer management (#809): state machine, role scoping, the compensationNote
 // sensitivity rule, audit trail, and the idempotent expiry cron.
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
-
-async function signIn(page: Page, email: string, password: string, redirectPrefix: string) {
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => u.pathname.startsWith(redirectPrefix), { timeout: 20_000 });
-}
 
 async function seedScenario(prefix: string) {
   const pw = 'OfferTestPass123!';
@@ -63,7 +56,7 @@ test('admin creates and sends an offer via the wizard; mentee accepts it and see
     const open = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title: 'Open Frontend Requisition', status: 'OPEN', openings: 1, requiredSkills: [] } });
     const closed = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title: 'Closed Requisition', status: 'FILLED', openings: 1, filled: 1, requiredSkills: [] } });
     const other = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: otherCompany.id, title: 'Other Company Requisition', status: 'OPEN', openings: 1, requiredSkills: [] } });
-    await signIn(page, s.adminEmail, s.pw, '/admin');
+    await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
     await page.goto(`/admin/candidates/${s.mentee.id}`);
     await expect(page.getByTestId('offer-management-panel')).toBeVisible({ timeout: 10_000 });
 
@@ -92,8 +85,7 @@ test('admin creates and sends an offer via the wizard; mentee accepts it and see
     await expect(page.getByTestId(`offer-row-${offer.id}`)).not.toContainText(open.id);
 
     // Mentee sees the offer and accepts it.
-    await page.context().clearCookies();
-    await signIn(page, s.menteeEmail, s.pw, '/portal');
+    await signInAsFreshUser(page, s.menteeEmail, s.pw, '/portal');
     await expect(page.getByTestId('offer-card')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('offer-card')).toContainText('Frontend Developer');
     await page.getByTestId('offer-accept-button').click();
@@ -123,7 +115,7 @@ test('offer create and draft edit validate requisitions and allow an optional cl
     const otherCompany = await prisma.company.create({ data: { name: 'Validation Other Company', orgId: s.org.id } });
     const valid = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title: 'Valid Requisition', status: 'OPEN', openings: 1, requiredSkills: [] } });
     const wrongCompany = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: otherCompany.id, title: 'Wrong Company', status: 'OPEN', openings: 1, requiredSkills: [] } });
-    await signIn(page, s.adminEmail, s.pw, '/admin');
+    await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
 
     const create = (requisitionId?: string | null) => page.request.post('/api/offers', { data: {
       relationId: s.relation.id, position: 'API-created role', ...(requisitionId === undefined ? {} : { requisitionId }),
@@ -171,7 +163,7 @@ test('mentee declines an offer with a reason and sees a persistent declined stat
       },
     });
 
-    await signIn(page, s.menteeEmail, s.pw, '/portal');
+    await signInAndSettle(page, s.menteeEmail, s.pw, '/portal');
     await expect(page.getByTestId('offer-card')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('offer-decline-button').click();
     await page.getByTestId('offer-decline-reason').selectOption('LOCATION');
@@ -198,7 +190,7 @@ test('an invalid state transition is rejected with 400', async ({ page }) => {
       data: { relationId: s.relation.id, companyId: s.company.id, status: 'DRAFT', position: 'QA Engineer', createdById: s.admin.id },
     });
 
-    await signIn(page, s.adminEmail, s.pw, '/admin');
+    await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
     // DRAFT -> ACCEPTED is not a legal edge (only DRAFT -> SENT is).
     const res = await page.request.fetch(`/api/offers/${draft.id}`, {
       method: 'PATCH',
@@ -222,7 +214,7 @@ test('a mentee cannot read another mentee\'s offer', async ({ page }) => {
       data: { relationId: s.relation.id, companyId: s.company.id, status: 'SENT', position: 'Data Analyst', sentAt: new Date(), createdById: s.admin.id },
     });
 
-    await signIn(page, otherMenteeEmail, s.pw, '/portal');
+    await signInAndSettle(page, otherMenteeEmail, s.pw, '/portal');
     const res = await page.request.get(`/api/offers/${offer.id}`);
     expect(res.status()).toBe(403);
 
@@ -250,7 +242,7 @@ test('a mentee cannot list a DRAFT offer by asking for it explicitly', async ({ 
       },
     });
 
-    await signIn(page, s.menteeEmail, s.pw, '/portal');
+    await signInAndSettle(page, s.menteeEmail, s.pw, '/portal');
 
     // The role filter must win over the query string: ?status=DRAFT used to
     // skip the not-DRAFT guard and leak the admin's unsent staging offer.
@@ -284,7 +276,7 @@ test('an unauthorized/other role never receives compensationNote in the response
     });
 
     // COMPANY may see the offer (it's theirs) but must never get compensationNote.
-    await signIn(page, companyEmail, s.pw, '/company');
+    await signInAndSettle(page, companyEmail, s.pw, '/company');
     const res = await page.request.get(`/api/offers/${offer.id}`);
     expect(res.status()).toBe(200);
     const body = await res.json();
@@ -297,8 +289,7 @@ test('an unauthorized/other role never receives compensationNote in the response
     for (const o of listBody.offers) expect(o).not.toHaveProperty('compensationNote');
 
     // The mentee it belongs to IS authorized to see it (they need it to decide).
-    await page.context().clearCookies();
-    await signIn(page, s.menteeEmail, s.pw, '/portal');
+    await signInAsFreshUser(page, s.menteeEmail, s.pw, '/portal');
     const menteeRes = await page.request.get(`/api/offers/${offer.id}`);
     expect(menteeRes.status()).toBe(200);
     const menteeBody = await menteeRes.json();
@@ -315,7 +306,7 @@ test('a company with no companyId gets 403, not a query against null', async ({ 
     data: { email: companyEmail, password: await bcrypt.hash('OfferTestPass123!', 10), role: 'COMPANY', fullName: 'No Company', companyId: null, skills: [] },
   });
   try {
-    await signIn(page, companyEmail, 'OfferTestPass123!', '/company');
+    await signInAndSettle(page, companyEmail, 'OfferTestPass123!', '/company');
     const res = await page.request.get('/api/offers');
     expect(res.status()).toBe(403);
   } finally {
@@ -330,7 +321,7 @@ test('admin can withdraw a sent offer', async ({ page }) => {
       data: { relationId: s.relation.id, companyId: s.company.id, status: 'SENT', position: 'DevOps Engineer', sentAt: new Date(), createdById: s.admin.id },
     });
 
-    await signIn(page, s.adminEmail, s.pw, '/admin');
+    await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
     await page.goto(`/admin/candidates/${s.mentee.id}`);
     await expect(page.getByTestId(`offer-row-${offer.id}`)).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Withdraw' }).first().click();
@@ -361,7 +352,7 @@ test('the expiry cron transitions a due offer exactly once across two runs', asy
       },
     });
 
-    await signIn(page, s.adminEmail, s.pw, '/admin');
+    await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
     const first = await page.request.get('/api/cron');
     expect(first.status()).toBe(200);
     const second = await page.request.get('/api/cron');
