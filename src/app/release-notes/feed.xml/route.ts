@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const lang = new URL(request.url).searchParams.get('lang');
   const locale = isLocale(lang) ? lang : defaultLocale;
 
-  return new NextResponse(releaseFeedXml({ origin: publicOrigin(request.url), locale }), {
+  return new NextResponse(releaseFeedXml({ origin: publicOrigin((n) => request.headers.get(n)), locale }), {
     headers: {
       // The type the page's `rel="alternate"` link advertises. Readers and
       // browsers both accept it, and it stays parseable as plain XML.

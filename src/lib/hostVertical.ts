@@ -17,27 +17,12 @@
 import { headers } from 'next/headers';
 import { DEFAULT_VERTICAL, type VerticalKey } from '@/lib/verticals';
 
-// The hosts that serve the MARKETING landing. Comma-separated, matched on the
-// hostname only (port and case ignored). Defaults to the known marketing domain
-// so a deployment that sets nothing still routes it correctly.
-function marketingHosts(): Set<string> {
-  const raw = process.env.MARKETING_HOSTS ?? 'marketing.ersah.in';
-  return new Set(
-    raw
-      .split(',')
-      .map((h) => h.trim().toLowerCase())
-      .filter(Boolean),
-  );
-}
-
-// Normalise a Host / X-Forwarded-Host value to a bare lowercase hostname.
-export function hostnameOf(hostHeader: string | null | undefined): string | null {
-  if (!hostHeader) return null;
-  // X-Forwarded-Host can carry a list (proxy chain); the first is the client's.
-  const first = hostHeader.split(',')[0].trim().toLowerCase();
-  // Strip a port if present. IPv6 in brackets has none we care about here.
-  return first.replace(/:\d+$/, '') || null;
-}
+// The marketing-host list and the header parser live in servedHosts.ts, shared
+// with the redirect allowlist (#2488): a host that gets the marketing landing is
+// by construction a host a redirect may stay on. `hostnameOf` is re-exported so
+// existing importers keep working.
+import { hostnameOf, marketingHosts } from '@/lib/servedHosts';
+export { hostnameOf };
 
 // The vertical a given host serves. Pure, so it is unit-testable without the
 // request headers.

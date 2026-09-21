@@ -23,3 +23,15 @@ export function sameOriginPath(raw: string | null | undefined, fallback = '/'): 
     return fallback;
   }
 }
+
+/**
+ * An ABSOLUTE url on the origin the browser is on, for a same-site path
+ * (#2488). NextAuth resolves a relative callbackUrl server-side against
+ * NEXTAUTH_URL — the internship host — whatever host served the page, so a
+ * marketing visitor signing out landed on interncrm.com. The path goes through
+ * sameOriginPath first, so a caller can never smuggle another origin in; the
+ * server (callbacks.redirect → servedHosts.ts) validates the host again.
+ */
+export function absoluteHere(path: string): string {
+  return `${window.location.origin}${sameOriginPath(path, '/')}`;
+}
