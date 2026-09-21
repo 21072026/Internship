@@ -58,8 +58,13 @@ test('a relative sign-out callbackUrl still resolves against baseUrl — NextAut
 test('the SSO login failure redirect stays on the host the browser is on', async ({ request }) => {
   const marketing = await request.get('/api/auth/sso/no-such-org/login', { headers: AS_MARKETING, maxRedirects: 0 });
   expect([302, 303, 307, 308]).toContain(marketing.status());
-  const loc = marketing.headers()['location'];
-  expect(loc, 'marketing host').toMatch(new RegExp(`^https://${MARKETING.replace(/\./g, '\\.')}/auth/signin\\?error=sso_unavailable`));
+  // Parsed, not regex-matched: building a RegExp from the host constant trips
+  // CodeQL's incomplete-escaping rule (dots escaped, backslashes not), and the
+  // URL parser is what the browser will act on anyway.
+  const loc = new URL(marketing.headers()['location']);
+  expect(loc.origin, 'marketing host').toBe(`https://${MARKETING}`);
+  expect(loc.pathname).toBe('/auth/signin');
+  expect(loc.searchParams.get('error')).toBe('sso_unavailable');
 
   const def = await request.get('/api/auth/sso/no-such-org/login', { maxRedirects: 0 });
   const defLoc = new URL(def.headers()['location']);
