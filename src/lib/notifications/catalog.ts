@@ -173,6 +173,7 @@ export const NOTIFICATION_EVENTS = [
   { key: 'interview.assignedBlind', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'interview.panelComplete', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'interview_request.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'interview_request.declined', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['reasonCode'] },
   { key: 'mentor_application.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'mentor_application.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'signup.pendingApproval', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },

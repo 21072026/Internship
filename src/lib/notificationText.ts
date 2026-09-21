@@ -25,6 +25,7 @@ export interface NotificationDict {
     events: Record<string, string>;
     generic: string;
   };
+  interviewDeclineReasons: Record<string, string>;
 }
 
 /**
@@ -64,6 +65,12 @@ export function renderNotification(n: RenderableNotification, t: NotificationDic
   if (typeof params.from === 'string' && typeof params.to === 'string' && n.type.startsWith('stage.')) {
     values.from = stageDisplay(params.from, typeof params.fromLabel === 'string' ? params.fromLabel : undefined, locale);
     values.to = stageDisplay(params.to, typeof params.toLabel === 'string' ? params.toLabel : undefined, locale);
+  }
+  // Store the stable reason code, not a sentence frozen in the recipient's
+  // language at decision time. The bell can then render the same row in the
+  // viewer's current locale, just like built-in pipeline stage keys above.
+  if (n.type === 'interview_request.declined' && typeof params.reasonCode === 'string') {
+    values.reasonCode = t.interviewDeclineReasons[params.reasonCode] ?? t.interviewDeclineReasons.UNSPECIFIED ?? params.reasonCode;
   }
 
   const template = t.notifications.events[n.type];

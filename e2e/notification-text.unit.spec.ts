@@ -52,6 +52,13 @@ test.describe('renderNotification', () => {
     expect(out).toContain('Sözleşme');
   });
 
+  test('interview decline reason code renders in the viewer locale', () => {
+    const n = { type: 'interview_request.declined', params: { reasonCode: 'CANDIDATE_NOT_READY' } };
+    expect(renderNotification(n, en, 'en')).toContain('Candidate is not ready for an interview yet');
+    expect(renderNotification(n, tr, 'tr')).toContain('Aday henüz mülakata hazır değil');
+    expect(renderNotification(n, de, 'de')).toContain('Kandidat ist noch nicht bereit für ein Interview');
+  });
+
   test('every locale has a template for every event key (parity beyond check:i18n)', () => {
     const keys = Object.keys(en.notifications.events);
     for (const dict of [tr, de]) {

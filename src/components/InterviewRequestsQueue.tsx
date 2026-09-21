@@ -11,6 +11,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate, formatDateTimeWithZone } from '@/lib/relativeTime';
 import { viewerTimeZone } from '@/lib/timezone';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { InterviewDeclineDialog } from '@/components/InterviewDeclineDialog';
 
 type Item = {
   id: string;
@@ -40,6 +41,8 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
   // HTML for a client re-render to disagree with.
   const [timezone, setTimezone] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [decliningId, setDecliningId] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const load = useCallback(async () => {
     const res = await fetch('/api/interview-requests');
     const data = await res.json();
@@ -50,14 +53,27 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
   }, [text.errors.loadFailed]);
 
   useEffect(() => { void load(); }, [load]);
-  const decide = async (id: string, action: 'approve' | 'decline') => {
-    const res = await fetch(`/api/interview-requests/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
-    });
-    if (!res.ok) setError((await res.json()).error ?? text.errors.saveFailed);
-    await load();
+  const decide = async (id: string, action: 'approve' | 'decline', declineReasonCode?: string, declineNote?: string) => {
+    setSavingId(id);
+    setError('');
+    try {
+      const res = await fetch(`/api/interview-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          ...(action === 'decline' ? { declineReasonCode, declineNote: declineNote || undefined } : {}),
+        }),
+      });
+      if (!res.ok) {
+        setError((await res.json()).error ?? text.errors.saveFailed);
+        return;
+      }
+      setDecliningId(null);
+      await load();
+    } finally {
+      setSavingId(null);
+    }
   };
 
   return (
@@ -124,8 +140,8 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
                 </div>
                 {item.status === 'PENDING' && (
                   <div className="mt-3 flex gap-2">
-                    <Button size="sm" onClick={() => void decide(item.id, 'approve')}>{text.approve}</Button>
-                    <Button size="sm" variant="outline" onClick={() => void decide(item.id, 'decline')}>{text.decline}</Button>
+                    <Button size="sm" loading={savingId === item.id} onClick={() => void decide(item.id, 'approve')}>{text.approve}</Button>
+                    <Button size="sm" variant="outline" disabled={savingId === item.id} onClick={() => setDecliningId(item.id)}>{text.decline}</Button>
                   </div>
                 )}
                 {item.status === 'APPROVED' && (
@@ -143,6 +159,14 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
           })}
         </div>
       )}
+      <InterviewDeclineDialog
+        open={decliningId !== null}
+        loading={decliningId !== null && savingId === decliningId}
+        onCancel={() => setDecliningId(null)}
+        onConfirm={(reasonCode, note) => {
+          if (decliningId) void decide(decliningId, 'decline', reasonCode, note);
+        }}
+      />
     </div>
   );
 }

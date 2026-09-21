@@ -10,6 +10,18 @@ Newest entries on top.
 
 ---
 
+## 2026-09-21 — Talep girdisi ile karar metnini aynı alanda tutma (#1416)
+
+**Bir kaydı açan tarafın notu ile o kayıt hakkında sonradan verilen kararın açıklaması aynı
+kolona yazılmamalı.** `InterviewRequest.note` şirketin talep anındaki girdisiydi; red kararı bu
+alanı güncellediğinde hem geçmişi bozuyor hem de metnin sahibini belirsizleştiriyordu. Karar için
+ayrı `declineReasonCode` / `declineNote` alanları kullan ve oluşturma notunu değişmez bırak.
+Kullanıcıya gösterilecek gerekçe cümlesini de veritabanına dondurma: kararlı kodu sakla, kart ve
+bildirimde görüntüleyen kişinin güncel dilinde çöz. Eski `null` kayıtları için yalnızca gösterim
+katmanında `UNSPECIFIED` fallback'i kullan; geriye dönük veriyi uydurma bir kararla güncelleme.
+
+---
+
 ## 2026-09-11 — Aynı modelin ikinci yazarı/kardeş dosyası iki kez gözden kaçtı (#2352, #2357)
 
 **Bir route'u tenant/yetenek kapısına aldığında, aynı modeli yazan DİĞER yolları da ara — yoksa

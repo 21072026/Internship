@@ -11,7 +11,8 @@ export const createInterviewRequestSchema = z.object({
 
 export const decideInterviewRequestSchema = z.object({
   action: z.enum(['approve', 'decline']),
-  note: z.string().trim().max(1000).nullable().optional(),
+  declineReasonCode: z.string().trim().max(64).optional(),
+  declineNote: z.string().trim().max(1000).nullable().optional(),
 }).strict();
 
 export function interviewActiveKey(requisitionId: string, menteeId: string) {
