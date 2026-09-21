@@ -10,10 +10,17 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
 import { InterviewRequestForm } from '@/components/InterviewRequestForm';
 import { useT } from '@/i18n/client';
+import { UNSPECIFIED_INTERVIEW_DECLINE_REASON } from '@/lib/interviewDeclineReasons';
 
 type Candidate = { id: string; fullName: string };
 type Shortlist = { id: string; status: string; note: string | null; mentee: Candidate };
-type Interview = { id: string; menteeId: string; status: string };
+type Interview = {
+  id: string;
+  menteeId: string;
+  status: string;
+  declineReasonCode: string | null;
+  declineNote: string | null;
+};
 
 export default function CompanyRequisitionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -70,6 +77,17 @@ export default function CompanyRequisitionDetailPage() {
               )}
             </div>
           </div>
+          {request?.status === 'DECLINED' && (
+            <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200" data-testid={`interview-decline-reason-${request.id}`}>
+              <p>
+                <span className="font-medium">{text.declineReasonDisplay}:</span>{' '}
+                {(t.interviewDeclineReasons as Record<string, string>)[request.declineReasonCode ?? UNSPECIFIED_INTERVIEW_DECLINE_REASON]
+                  ?? request.declineReasonCode
+                  ?? t.interviewDeclineReasons.UNSPECIFIED}
+              </p>
+              {request.declineNote && <p className="mt-1 whitespace-pre-wrap">{request.declineNote}</p>}
+            </div>
+          )}
           {!request && <InterviewRequestForm onSubmit={(payload) => requestInterview(item.mentee.id, payload)} />}
         </div>
       );

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Interview decline reasons** (#1416). Declining an interview request now requires a coded reason, preserves the company's original request note, and shows the localized reason to company users on the request card and in their notification.",
+  "notes": {
+    "en": ["Interview request declines now include a clear reason, visible to the company on the request card and in its notification."],
+    "tr": ["Mülakat talebi reddedildiğinde gerekçe artık şirketin talep kartında ve bildiriminde açıkça gösteriliyor."],
+    "de": ["Bei abgelehnten Interviewanfragen sieht das Unternehmen den Grund jetzt auf der Anfragekarte und in der Benachrichtigung."]
+  }
+}

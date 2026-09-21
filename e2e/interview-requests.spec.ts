@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, uniqueEmail } from './helpers/db';
-import { submitSignInForm } from './helpers/auth';
+import { gotoSettled, submitSignInForm } from './helpers/auth';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
 
 const stamp = `${Date.now()}-${Math.round(Math.random() * 10000)}`;
@@ -12,7 +12,7 @@ const emails = {
   mentorOther: uniqueEmail('int-mentor-other'), mentee: uniqueEmail('int-mentee'),
 };
 let orgA: { id: string }; let orgB: { id: string }; let companyA: { id: string }; let companyB: { id: string };
-let adminA: { id: string }; let mentorA: { id: string }; let mentee: { id: string };
+let adminA: { id: string }; let companyUserA: { id: string }; let mentorA: { id: string }; let mentee: { id: string };
 let relation: { id: string; pipelineStatus: string }; let reqA: { id: string }; let reqB: { id: string };
 
 // This spec re-signs in as a different role many times on the SAME `page`
@@ -36,7 +36,7 @@ test.describe.serial('Story #807 shortlist and interview requests', () => {
     companyB = await prisma.company.create({ data: { name: `Interview Co B ${stamp}`, orgId: orgB.id } });
     const user = (email: string, role: 'ADMIN' | 'COMPANY' | 'MENTOR' | 'MENTEE', orgId: string, companyId?: string, preferredLanguage?: string) => prisma.user.create({ data: { email, password: hash, role, fullName: email.split('@')[0], orgId, companyId, preferredLanguage, skills: [] } });
     adminA = await user(emails.adminA, 'ADMIN', orgA.id); await user(emails.adminB, 'ADMIN', orgB.id);
-    await user(emails.companyA, 'COMPANY', orgA.id, companyA.id); await user(emails.companyB, 'COMPANY', orgB.id, companyB.id); await user(emails.companyNull, 'COMPANY', orgA.id);
+    companyUserA = await user(emails.companyA, 'COMPANY', orgA.id, companyA.id); await user(emails.companyB, 'COMPANY', orgB.id, companyB.id); await user(emails.companyNull, 'COMPANY', orgA.id);
     mentorA = await user(emails.mentorA, 'MENTOR', orgA.id); await user(emails.mentorOther, 'MENTOR', orgA.id);
     mentee = await user(emails.mentee, 'MENTEE', orgA.id, undefined, 'tr');
     relation = await prisma.mentorshipRelation.create({ data: { orgId: orgA.id, companyId: companyA.id, mentorId: mentorA.id, menteeId: mentee.id, status: 'ACTIVE', pipelineStatus: 'APPLICATION_100' } });
@@ -45,7 +45,7 @@ test.describe.serial('Story #807 shortlist and interview requests', () => {
   });
 
   test.afterAll(async () => {
-    await prisma.notification.deleteMany({ where: { userId: mentee?.id } }).catch(() => {}); await prisma.auditLog.deleteMany({ where: { actorId: { in: [adminA?.id, mentorA?.id].filter(Boolean) } } }).catch(() => {});
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentee?.id, companyUserA?.id].filter(Boolean) } } }).catch(() => {}); await prisma.auditLog.deleteMany({ where: { actorId: { in: [adminA?.id, mentorA?.id].filter(Boolean) } } }).catch(() => {});
     await prisma.interviewRequest.deleteMany({ where: { menteeId: mentee?.id } }).catch(() => {}); await prisma.companyInterest.deleteMany({ where: { menteeId: mentee?.id } }).catch(() => {});
     await prisma.mentorshipRelation.deleteMany({ where: { id: relation?.id } }).catch(() => {}); await prisma.requisition.deleteMany({ where: { id: { in: [reqA?.id, reqB?.id].filter(Boolean) } } }).catch(() => {});
     await prisma.user.deleteMany({ where: { email: { in: Object.values(emails) } } }).catch(() => {}); await prisma.company.deleteMany({ where: { id: { in: [companyA?.id, companyB?.id].filter(Boolean) } } }).catch(() => {}); await prisma.organization.deleteMany({ where: { id: { in: [orgA?.id, orgB?.id].filter(Boolean) } } }).catch(() => {}); await prisma.$disconnect();
@@ -118,17 +118,51 @@ test.describe.serial('Story #807 shortlist and interview requests', () => {
     await prisma.interviewRequest.delete({ where: { id: (await next.json()).request.id } });
   });
 
-  test('decline creates one audit and no mentee notification', async ({ page }) => {
+  test('decline requires a coded reason, preserves the request note, and tells the company', async ({ page }) => {
     await prisma.companyInterest.updateMany({ where: { companyId: companyA.id, menteeId: mentee.id, requisitionId: reqA.id }, data: { status: 'SHORTLISTED' } });
-    const pending = await prisma.interviewRequest.create({ data: { orgId: orgA.id, companyId: companyA.id, requisitionId: reqA.id, menteeId: mentee.id, status: 'PENDING', activeKey: `${reqA.id}:${mentee.id}:decline` } });
+    const pending = await prisma.interviewRequest.create({ data: { orgId: orgA.id, companyId: companyA.id, requisitionId: reqA.id, menteeId: mentee.id, status: 'PENDING', note: 'Company request note', activeKey: `${reqA.id}:${mentee.id}:decline` } });
     const before = await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } });
-    await login(page, emails.adminA); const declined = await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline', note: 'Not now' } }); expect(declined.status()).toBe(200);
+    await login(page, emails.adminA);
+    const missingReason = await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline' } });
+    expect(missingReason.status()).toBe(400); expect((await missingReason.json()).code).toBe('decline_reason_required');
+    const invalidReason = await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline', declineReasonCode: 'NOT_A_REASON' } });
+    expect(invalidReason.status()).toBe(400); expect((await invalidReason.json()).code).toBe('decline_reason_required');
+
+    await gotoSettled(page, '/admin/interview-requests');
+    const card = page.getByTestId(`interview-request-${pending.id}`);
+    await card.getByRole('button', { name: 'Decline' }).click();
+    const dialog = page.getByTestId('interview-decline-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('interview-decline-confirm')).toBeDisabled();
+    await dialog.getByTestId('interview-decline-reason').selectOption('CANDIDATE_NOT_READY');
+    await dialog.getByTestId('interview-decline-note').fill('Not now');
+    await dialog.getByTestId('interview-decline-confirm').click();
+    await expect(card.getByText('Declined', { exact: true })).toBeVisible();
+
+    const stored = await prisma.interviewRequest.findUniqueOrThrow({ where: { id: pending.id } });
+    expect(stored.note).toBe('Company request note');
+    expect(stored.declineReasonCode).toBe('CANDIDATE_NOT_READY');
+    expect(stored.declineNote).toBe('Not now');
     expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } })).toBe(before);
     expect((await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline' } })).status()).toBe(409);
     expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } })).toBe(before);
+    const companyNotification = await prisma.notification.findFirstOrThrow({ where: { userId: companyUserA.id, type: 'interview_request.declined' } });
+    expect(companyNotification.params).toMatchObject({ reasonCode: 'CANDIDATE_NOT_READY' });
+    expect(companyNotification.link).toBe(`/company/requisitions/${reqA.id}`);
     expect(await prisma.auditLog.count({ where: { targetId: pending.id } })).toBe(1);
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { targetId: pending.id } });
-    expect(audit.actorId).toBe(adminA.id); expect(audit.targetId).toBe(pending.id); expect(audit.detail).toContain(reqA.id); expect(audit.detail).toContain(mentee.id); expect(audit.detail).toContain('DECLINED');
+    expect(audit.actorId).toBe(adminA.id); expect(audit.targetId).toBe(pending.id); expect(audit.detail).toContain(reqA.id); expect(audit.detail).toContain(mentee.id); expect(audit.detail).toContain('DECLINED'); expect(audit.detail).toContain('CANDIDATE_NOT_READY');
+
+    await login(page, emails.companyA);
+    await gotoSettled(page, `/company/requisitions/${reqA.id}`);
+    const companyReason = page.getByTestId(`interview-decline-reason-${pending.id}`);
+    await expect(companyReason).toContainText('Candidate is not ready for an interview yet');
+    await expect(companyReason).toContainText('Not now');
+
+    // Rows declined before #1416 have no code and must remain readable.
+    await prisma.interviewRequest.update({ where: { id: pending.id }, data: { declineReasonCode: null, declineNote: null } });
+    await page.reload();
+    await expect(page.getByTestId(`interview-decline-reason-${pending.id}`)).toContainText('Unspecified');
   });
 
   test('concurrent approve/decline has one winner and one audit', async ({ page }) => {
@@ -140,7 +174,7 @@ test.describe.serial('Story #807 shortlist and interview requests', () => {
     const notificationsBefore = await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } });
     const results = await Promise.all([
       page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'approve' } }),
-      page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline' } }),
+      page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline', declineReasonCode: 'OTHER' } }),
     ]);
     expect(results.filter((result) => result.status() === 200)).toHaveLength(1); expect(results.filter((result) => result.status() === 409)).toHaveLength(1);
     expect(await prisma.auditLog.count({ where: { targetId: pending.id } })).toBe(1);

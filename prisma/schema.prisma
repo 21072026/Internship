@@ -3147,19 +3147,22 @@ model Requisition {
 // mentee for one requisition (#807). Status stays String so the workflow can
 // grow without a schema enum migration.
 model InterviewRequest {
-  id            String    @id @default(cuid())
-  requisitionId String
-  menteeId      String
-  companyId     String
-  orgId         String
-  status        String    @default("PENDING")
-  note          String?   @db.Text
-  decidedById   String?
-  decidedAt     DateTime?
-  proposedSlots Json?
-  activeKey     String?   @unique
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  requisitionId     String
+  menteeId          String
+  companyId         String
+  orgId             String
+  status            String    @default("PENDING")
+  note              String?   @db.Text
+  declineReasonCode String?
+  // Optional free-text elaboration on the decline reason (never required).
+  declineNote       String?   @db.Text
+  decidedById       String?
+  decidedAt         DateTime?
+  proposedSlots     Json?
+  activeKey         String?   @unique
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   requisition Requisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
   mentee      User         @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
