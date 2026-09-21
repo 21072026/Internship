@@ -35,6 +35,16 @@ export function isAccentColor(value: unknown): value is AccentColor {
 // (so it's never mistaken for production), blue everywhere else.
 export const DEFAULT_ACCENT: AccentColor = IS_PREVIEW ? 'green' : 'blue';
 
+// The browser-UI tint (`theme-color` meta, manifest `theme_color`) per vertical
+// (#2356): SaleVali magenta-600 on a marketing host, the internship blue-700
+// everywhere else. Read by both viewport exports (root + /messages) and the
+// manifest, so the three cannot drift — a SaleVali install whose Messages
+// shortcut painted the status bar blue was the drift this closes.
+export const THEME_COLOR: Record<VerticalKey, string> = { INTERNSHIP: '#1D4ED8', MARKETING: '#b929cf' };
+export function themeColorFor(vertical?: VerticalKey | null): string {
+  return vertical === 'MARKETING' ? THEME_COLOR.MARKETING : THEME_COLOR.INTERNSHIP;
+}
+
 // The accent a vertical wears when nobody chose one (#2356): SaleVali's magenta
 // for MARKETING, the environment default (blue; green on preview) otherwise.
 export function defaultAccentFor(vertical?: VerticalKey | null): AccentColor {

@@ -11,7 +11,7 @@ import { productNameFor } from '@/lib/verticals';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
-import { resolveAccent } from '@/lib/accent';
+import { resolveAccent, themeColorFor } from '@/lib/accent';
 import { DENSITY_CLASS, resolveDensity } from '@/lib/density';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
@@ -36,11 +36,17 @@ export async function generateMetadata(): Promise<Metadata> {
   applicationName: productName,
   appleWebApp: { capable: true, statusBarStyle: 'default', title: productName },
   // The favicon / home-screen icon follow the vertical too (#2356). Both SVGs
-  // live in public/ (the file-based app/icon.svg convention cannot branch on
-  // the host and would emit a second <link rel="icon"> next to this one).
+  // live in public/: the file-based app/icon.svg convention cannot branch on
+  // the host, and Next ignores it anyway once `icons` is set here. Each branch
+  // carries a raster fallback after the SVG — Safari loads no SVG favicon and
+  // would otherwise fall through to the implicit /favicon.ico, which is the
+  // internship cap on both hosts.
   icons: {
     icon: isMarketing
-      ? [{ url: '/icon-salevali.svg', type: 'image/svg+xml' }]
+      ? [
+          { url: '/icon-salevali.svg', type: 'image/svg+xml' },
+          { url: '/icon-salevali-192.png', type: 'image/png', sizes: '192x192' },
+        ]
       : [
           { url: '/icon.svg', type: 'image/svg+xml' },
           { url: '/favicon.ico', sizes: 'any' },
@@ -49,18 +55,19 @@ export async function generateMetadata(): Promise<Metadata> {
     // iOS launch screens for the installed app (#2084). Safari ignores the
     // manifest here and wants one media-matched <link> per device resolution,
     // so the list — and the images under public/splash/ — are both generated
-    // from the device table in lib/appleSplash.ts.
-    other: appleSplashLinks(),
+    // from the device table in lib/appleSplash.ts. One set per product mark.
+    other: appleSplashLinks(isMarketing ? 'salevali' : ''),
   },
   };
 }
 
-// The browser-UI tint follows the vertical (#2356): SaleVali magenta-600 on a
-// marketing host, the internship blue-700 everywhere else.
+// The browser-UI tint follows the vertical (#2356) — `themeColorFor` is the
+// one place the two colours live, shared with the /messages viewport and the
+// manifest. resolveRequestVertical is cached per request, so this is free.
 export async function generateViewport(): Promise<Viewport> {
-  const isMarketing = (await resolveRequestVertical()) === 'MARKETING';
+  const vertical = await resolveRequestVertical();
   return {
-  themeColor: isMarketing ? '#b929cf' : '#1D4ED8',
+  themeColor: themeColorFor(vertical),
   // Shrink the layout viewport when the on-screen keyboard opens instead of
   // letting it overlay the page, so a full-height screen (the chat shell, #1006)
   // keeps its composer above the keyboard rather than behind it.

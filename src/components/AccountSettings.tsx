@@ -407,11 +407,14 @@ export function AccountSettings() {
     document.documentElement.setAttribute('data-accent', next);
     document.cookie = `accent=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
     try {
-      await fetch('/api/profile', {
+      const res = await fetch('/api/profile', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accentColor: next }),
       });
-      flash(t.account.updated);
+      // The cookie above keeps this device right either way; only claim
+      // "updated" when the account actually took it (a rejected save used to
+      // flash the same toast, #2356).
+      if (res.ok) flash(t.account.updated);
     } catch {
       // cookie + attribute already applied locally
     }

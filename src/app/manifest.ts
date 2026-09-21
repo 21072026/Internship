@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { hostVertical } from '@/lib/hostVertical';
+import { themeColorFor } from '@/lib/accent';
 
 // Web app manifest (served at /manifest.webmanifest) — makes the app
 // installable on desktop and mobile.
@@ -29,7 +30,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
       display: 'standalone',
       display_override: ['standalone', 'minimal-ui'],
       background_color: '#ffffff',
-      theme_color: '#b929cf',
+      theme_color: themeColorFor('MARKETING'),
       orientation: 'any',
       icons: [
         { src: '/icon-salevali.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
@@ -37,11 +38,13 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
         { src: '/icon-salevali-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
         { src: '/icon-salevali-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
-      // Role-neutral destinations that exist for a marketing tenant too.
+      // Role-neutral destinations that exist for a marketing tenant too. The
+      // glyphs sit on the brand's purple tile (scripts/generate-pwa-images.ts),
+      // not the internship blue one.
       shortcuts: [
-        { name: 'Messages', short_name: 'Messages', description: 'Open your conversations', url: '/messages', icons: [{ src: '/shortcut-messages-96.png', sizes: '96x96', type: 'image/png' }] },
-        { name: 'To-dos', short_name: 'To-dos', description: 'Everything on your list', url: '/todos', icons: [{ src: '/shortcut-todos-96.png', sizes: '96x96', type: 'image/png' }] },
-        { name: 'Notifications', short_name: 'Alerts', description: 'What happened while you were away', url: '/notifications', icons: [{ src: '/shortcut-notifications-96.png', sizes: '96x96', type: 'image/png' }] },
+        { name: 'Messages', short_name: 'Messages', description: 'Open your conversations', url: '/messages', icons: [{ src: '/shortcut-messages-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
+        { name: 'To-dos', short_name: 'To-dos', description: 'Everything on your list', url: '/todos', icons: [{ src: '/shortcut-todos-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
+        { name: 'Notifications', short_name: 'Alerts', description: 'What happened while you were away', url: '/notifications', icons: [{ src: '/shortcut-notifications-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
       ],
       share_target: { action: '/share', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
     };
@@ -64,7 +67,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     // is not available, rather than all the way down to a normal tab.
     display_override: ['standalone', 'minimal-ui'],
     background_color: '#ffffff',
-    theme_color: '#1D4ED8',
+    theme_color: themeColorFor('INTERNSHIP'),
     // Deliberately *not* locked to portrait (#2084): the pipeline board is a
     // wide horizontal scroller and the analytics tables are wide too, so a
     // tablet held in landscape must stay in landscape. 'any' follows the device.
