@@ -120,7 +120,7 @@ src/
   app/
     api/            # route handlers (auth, register, invite, mentorship, interactions, ...)
     admin/  mentor/  portal/  auth/  onboarding/   # role-scoped pages
-    layout.tsx  page.tsx  icon.svg
+    layout.tsx  page.tsx        # app icons live in public/ (icon.svg, icon-salevali.svg)
   components/ui/    # Button, Card, Input, Select, Badge, ...
   components/forms/ # OnboardingForm, ...
   lib/              # auth.ts (NextAuth config), prisma.ts (client singleton)

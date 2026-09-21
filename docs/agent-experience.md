@@ -7045,3 +7045,52 @@ dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
   `DATABASE_URL=mysql://e2e:e2epass@127.0.0.1:3306/internship_e2e npx prisma db push
   --skip-generate --accept-data-loss` — bu yerel, izole DB'dir; CLAUDE.md'nin "shared
   preview/prod'a db push yapma" kuralı buna uygulanmaz.
+
+## 2026-09-21 — host-sıçrama + branding: harness yanlış negatifleri ve iki git tuzağı
+
+- **Yerel curl doğrulamasında "absent" hepsi yanlış negatifti.** Landing (370-500 KB) ve
+  /release-notes (1.1 MB) gövdelerini `chk "$BODY" …` gibi bir shell fonksiyonuna argüman olarak
+  geçirdim; argüman kırpıldı, her grep "absent" dedi — küçük sayfalar (signin) geçtiği için
+  önce curl timeout'unu suçladım. Doğrusu: body'yi dosyaya yaz, `grep -qF -- "$pat" "$file"`.
+  Aynı koşuda `<meta theme-color>` satırını doğrudan `grep -o` ile basmam gerçeği gösterdi —
+  bir assert düştüğünde ham çıktıyı da bas.
+- **`git add a b c` tek geçersiz pathspec'te tamamen iptal olur.** `git mv src/app/icon.svg
+  public/icon.svg` sonrası listede eski yol kaldı → add sessizce hiçbir şey eklemedi, commit
+  yalnız rename'i içerdi ve PR öyle açıldı. Commit'ten önce `git diff --cached --name-only |
+  wc -l`'i beklenen sayıyla assert et; amend + `--force-with-lease` ile düzeltildi.
+- **Working tree'de "benim olmayan" diff: önce sahibini bul, sonra karar ver.** package.json
+  `test:served-hosts` script'i ve check-unit-coverage FLOORS girişi (#2488 referanslı) ben
+  yazmadan working tree'de duruyordu. #2488 maliyet sahibinin aynı gün açtığı tracking issue
+  çıktı → içerik doğru, benimsendi. Ders: gizemli diff = `gh api issues/<n>` + reflog + `git
+  status` üçlüsü; kör revert etme, kör commit de etme (önceki oturumun dersi #2).
+- **NextAuth v4 callbackUrl kök nedeni:** `callbacks.redirect` yalnız `{url, baseUrl}` alır,
+  isteği görmez; baseUrl = NEXTAUTH_URL origin'i. Çoklu-host deployment'ta göreli callbackUrl her
+  zaman internship host'una çözülür; client'tan `window.location.origin` göndermek de varsayılan
+  callback'te REDDEDİLİR (origin !== baseUrl). Tek kaldıraç: allowlist'li custom redirect
+  callback + client'ın mutlak same-origin URL göndermesi. Allowlist yeni env değil, mevcut
+  config'den türetilir; URL hostname'ini doğrudan set'e bak (header parser'ı virgül böler —
+  `marketing.ersah.in,evil.example` bypass'ı), https'te alınan porta güvenme.
+- **Marka rengi vs WCAG:** SaleVali primary #cc33e5 beyaz metinle 4.1:1 — primary butonlarda
+  (14px/500, "large" değil) AA regresyonu. Çözüm: 600 = #b929cf (4.9:1), primary 500'de dolgu
+  olarak; altın işaret asla magenta üzerine değil, marka koyu moru (#1a0a2e, 10.9:1) üzerine.
+  Workflow'un kontrast tablosu (37 çift, blue/purple parity etiketli) kararı dakikada verdirdi.
+- **Next 15 metadata:** `app/icon.svg` dosya-konvansiyonu host'a göre dallanamaz ve
+  layout'taki `icons.icon` ile ikinci `<link rel=icon>` üretir → public/'e taşı, tek kaynak
+  `generateMetadata`. Manifest fetch cookie taşımaz → `hostVertical()` (session değil).
+  `resolveRequestVertical` aynı istekte metadata+viewport+body+shell+footer'dan çağrılıyor →
+  React `cache()` şart (session decode + Prisma lookup ×5 yerine ×1).
+- **Ağır workflow'lar limit'e çarpıyor:** 71 ajanlı review'da çürütücülerin HEPSİ düştü; yalın
+  (4-5 ajan, tek yargıç/açı) sürümler bitti. Bulgu başına ≤1 çürütücü, ya da bulguları kendin
+  koddan teyit et.
+- **Bir listenin ikinci kopyası:** `ACCENT_COLORS`'a 'magenta' eklendi, UI sundu, ama
+  `PUT /api/profile`'ın zod `z.enum([...])`'u kendi altı-renklik kopyasını taşıyordu → 400.
+  Değer listesi genişletirken `grep -rn "'amber'"` gibi *son üyeyi* ara (enum'lar, seed'ler,
+  e-posta renk haritaları, `schema.prisma` yorumları); doğrulayıcı listeyi kaynaktan okusun
+  (`z.enum(ACCENT_COLORS)` — zod 3.25 readonly tuple kabul ediyor). Regresyon testi *en yeni*
+  üyeyi seçsin ki bir sonraki ekleme de aynı teste takılsın.
+- **Playwright `CI=1` = sadece `next start`:** build ayrı adımdır; worktree'de önce
+  `npm run build`. Aynı `.next` içinde dev ve prod artefaktı karışınca (`next dev` sonrası
+  `next start` ya da tersi) `ENOENT app-paths-manifest.json` yağmuru → `rm -rf .next`, yeniden
+  build. Bu dev-modu ENOENT'i gerçek test hatası değildir; ilk koşudaki "element not found"
+  bundandı.
+

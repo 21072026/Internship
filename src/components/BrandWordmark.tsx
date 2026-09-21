@@ -1,5 +1,5 @@
 import { getServerSession } from 'next-auth';
-import { GraduationCap } from 'lucide-react';
+import { BrandMark } from '@/components/BrandMark';
 import { authOptions } from '@/lib/auth';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { hostVertical } from '@/lib/hostVertical';
@@ -25,7 +25,7 @@ export async function BrandWordmark({ className, oneLine = false }: { className?
         // eslint-disable-next-line @next/next/no-img-element -- tenant logo is an arbitrary external/stored URL
         <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[150px] flex-shrink-0 object-contain" />
       ) : (
-        <GraduationCap className="h-7 w-7 flex-shrink-0 text-blue-600" />
+        <BrandMark className="h-7 w-7 flex-shrink-0 text-blue-600" />
       )}
       {/* Keep the mobile wordmark on one line without squeezing its name; the
           regular sidebar/desktop wordmark may still wrap as before. */}

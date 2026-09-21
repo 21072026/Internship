@@ -12,7 +12,8 @@ import { AvatarManager } from '@/components/AvatarManager';
 import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
-import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
+import { ACCENT_COLORS, ACCENT_SWATCH, defaultAccentFor, resolveAccent } from '@/lib/accent';
+import { useVertical } from '@/lib/verticalClient';
 import { applyTheme, readStoredTheme, resolveTheme, type Theme } from '@/lib/theme';
 import { applyDensity, readStoredDensity, resolveDensity, type Density } from '@/lib/density';
 import { durationSince, relativeTime } from '@/lib/relativeTime';
@@ -140,9 +141,13 @@ export function AccountSettings() {
   const [pushDevicesStale, setPushDevicesStale] = useState(false);
   const [pushDeviceBusy, setPushDeviceBusy] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
+  // The accent the picker shows before a choice is the VERTICAL's default
+  // (#2356): magenta on a marketing tenant, blue/green otherwise — the same
+  // value the root layout painted, so the selected swatch matches the page.
+  const vertical = useVertical();
   const [theme, setTheme] = useState<Theme>('system');
   const [density, setDensity] = useState<Density>('comfortable');
-  const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
+  const [accent, setAccent] = useState<string>(defaultAccentFor(vertical));
   const [role, setRole] = useState('');
   // A list, not a comma-joined string (@/lib/skills, #2314).
   const [skills, setSkills] = useState<string[]>([]);
@@ -222,7 +227,7 @@ export function AccountSettings() {
         // (The helpers fall back to the account preference themselves.)
         setTheme(readStoredTheme());
         setDensity(readStoredDensity());
-        setAccent(resolveAccent(user.accentColor));
+        setAccent(resolveAccent(user.accentColor, vertical));
         setRole(user.role ?? '');
         setTimezone(user.timezone ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills : []);
@@ -402,11 +407,14 @@ export function AccountSettings() {
     document.documentElement.setAttribute('data-accent', next);
     document.cookie = `accent=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
     try {
-      await fetch('/api/profile', {
+      const res = await fetch('/api/profile', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accentColor: next }),
       });
-      flash(t.account.updated);
+      // The cookie above keeps this device right either way; only claim
+      // "updated" when the account actually took it (a rejected save used to
+      // flash the same toast, #2356).
+      if (res.ok) flash(t.account.updated);
     } catch {
       // cookie + attribute already applied locally
     }

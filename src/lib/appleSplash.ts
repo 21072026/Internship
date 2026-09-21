@@ -5,7 +5,7 @@
 // media query. Hand-listing seventeen of those in the layout is unreadable and
 // rots the moment Apple ships a new screen size, so the device table lives here
 // and both the <link> tags (src/app/layout.tsx) and the image generator
-// (scripts/generate-pwa-images.mjs) are derived from it.
+// (scripts/generate-pwa-images.ts) are derived from it.
 //
 // Portrait only, deliberately: a launch image shows for a fraction of a second
 // and a missing one costs a blank flash, not a broken app — doubling the asset
@@ -47,10 +47,17 @@ export function splashPixels(d: AppleSplashDevice): { w: number; h: number } {
   return { w: d.width * d.ratio, h: d.height * d.ratio };
 }
 
+/**
+ * Image variants, one per product mark (#2356): '' is the internship cap,
+ * 'salevali' the SaleVali tile. The suffix is part of the file name so both
+ * sets sit side by side under public/splash/.
+ */
+export type SplashVariant = '' | 'salevali';
+
 /** Public path of the generated image for a device. */
-export function splashHref(d: AppleSplashDevice): string {
+export function splashHref(d: AppleSplashDevice, variant: SplashVariant = ''): string {
   const { w, h } = splashPixels(d);
-  return `/splash/apple-splash-${w}x${h}.png`;
+  return `/splash/apple-splash-${w}x${h}${variant ? `-${variant}` : ''}.png`;
 }
 
 /** The media query Safari matches a launch image with. */
@@ -59,10 +66,10 @@ export function splashMedia(d: AppleSplashDevice): string {
 }
 
 /** `icons.other` entries for the root layout's metadata. */
-export function appleSplashLinks(): { rel: string; url: string; media: string }[] {
+export function appleSplashLinks(variant: SplashVariant = ''): { rel: string; url: string; media: string }[] {
   return APPLE_SPLASH_DEVICES.map((d) => ({
     rel: 'apple-touch-startup-image',
-    url: splashHref(d),
+    url: splashHref(d, variant),
     media: splashMedia(d),
   }));
 }

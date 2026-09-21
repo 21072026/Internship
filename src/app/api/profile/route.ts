@@ -8,6 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { ACCENT_COLORS } from '@/lib/accent';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -81,7 +82,9 @@ const updateProfileSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']).optional(),
   fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
   density: z.enum(['comfortable', 'compact']).optional(),
-  accentColor: z.enum(['blue', 'green', 'purple', 'rose', 'teal', 'amber']).optional(),
+  // Read from the one list (#2356): a colour added to ACCENT_COLORS is
+  // otherwise pickable in the UI and rejected here with a 400 — 'magenta' was.
+  accentColor: z.enum(ACCENT_COLORS).optional(),
 });
 
 const PROFILE_FIELDS = new Set(Object.keys(updateProfileSchema.shape));

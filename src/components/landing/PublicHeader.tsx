@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { GraduationCap, Github, Menu, X } from 'lucide-react';
+import { Github, Menu, X } from 'lucide-react';
+import { BrandMark } from '@/components/BrandMark';
 import { BetaBadge } from '@/components/BetaBadge';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -112,7 +113,7 @@ export function PublicHeader({
             aria-label={n.homeLink}
             className="flex items-center gap-2 min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
-            <GraduationCap className="h-7 w-7 text-blue-600 flex-shrink-0" />
+            <BrandMark className="h-7 w-7 text-blue-600 flex-shrink-0" />
             <span className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">{productName}</span>
             <BetaBadge className="flex-shrink-0" />
           </Link>

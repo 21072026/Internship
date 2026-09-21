@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { GraduationCap, CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import { BrandTile } from '@/components/BrandMark';
 import { useT } from '@/i18n/client';
 
 function VerifyInner() {
@@ -30,9 +31,7 @@ function VerifyInner() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-3">
-            <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center">
-              <GraduationCap className="h-8 w-8 text-white" />
-            </div>
+            <BrandTile />
           </div>
         </div>
 

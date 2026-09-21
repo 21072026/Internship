@@ -1,4 +1,6 @@
 import type { MetadataRoute } from 'next';
+import { hostVertical } from '@/lib/hostVertical';
+import { themeColorFor } from '@/lib/accent';
 
 // Web app manifest (served at /manifest.webmanifest) — makes the app
 // installable on desktop and mobile.
@@ -8,7 +10,45 @@ import type { MetadataRoute } from 'next';
 // so the few strings here stay English, while everything a signed-in person
 // reads (including /share, the share target below) goes through the EN/TR/DE
 // dictionaries as usual.
-export default function manifest(): MetadataRoute.Manifest {
+// Two products, one manifest route (#2356): a manifest is fetched without
+// cookies, so the only vertical signal is the host — hostVertical(), never the
+// session. A marketing host installs as "SaleVali" with the brand icon and tint;
+// everything else is byte-identical to the internship manifest below.
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const marketing = (await hostVertical()) === 'MARKETING';
+  if (marketing) {
+    return {
+      id: '/',
+      name: 'SaleVali',
+      short_name: 'SaleVali',
+      description: 'Leads, accounts and deals in one pipeline',
+      lang: 'en',
+      dir: 'ltr',
+      categories: ['business', 'productivity'],
+      start_url: '/',
+      scope: '/',
+      display: 'standalone',
+      display_override: ['standalone', 'minimal-ui'],
+      background_color: '#ffffff',
+      theme_color: themeColorFor('MARKETING'),
+      orientation: 'any',
+      icons: [
+        { src: '/icon-salevali.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+        { src: '/icon-salevali-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/icon-salevali-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/icon-salevali-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      ],
+      // Role-neutral destinations that exist for a marketing tenant too. The
+      // glyphs sit on the brand's purple tile (scripts/generate-pwa-images.ts),
+      // not the internship blue one.
+      shortcuts: [
+        { name: 'Messages', short_name: 'Messages', description: 'Open your conversations', url: '/messages', icons: [{ src: '/shortcut-messages-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
+        { name: 'To-dos', short_name: 'To-dos', description: 'Everything on your list', url: '/todos', icons: [{ src: '/shortcut-todos-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
+        { name: 'Notifications', short_name: 'Alerts', description: 'What happened while you were away', url: '/notifications', icons: [{ src: '/shortcut-notifications-salevali-96.png', sizes: '96x96', type: 'image/png' }] },
+      ],
+      share_target: { action: '/share', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
+    };
+  }
   return {
     // A stable identity for the installed app, independent of where it is
     // hosted: without `id`, the browser derives one from start_url, so a change
@@ -27,7 +67,7 @@ export default function manifest(): MetadataRoute.Manifest {
     // is not available, rather than all the way down to a normal tab.
     display_override: ['standalone', 'minimal-ui'],
     background_color: '#ffffff',
-    theme_color: '#1D4ED8',
+    theme_color: themeColorFor('INTERNSHIP'),
     // Deliberately *not* locked to portrait (#2084): the pipeline board is a
     // wide horizontal scroller and the analytics tables are wide too, so a
     // tablet held in landscape must stay in landscape. 'any' follows the device.

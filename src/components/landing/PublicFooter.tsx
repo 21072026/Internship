@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { GraduationCap } from 'lucide-react';
+import { BrandMark } from '@/components/BrandMark';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import { productNameFor } from '@/lib/verticals';
 import { VersionFooter } from '@/components/VersionFooter';
@@ -96,7 +96,7 @@ export async function PublicFooter() {
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
           <div className="col-span-2 sm:col-span-1">
             <Link href="/" className="flex items-center gap-2 min-w-0">
-              <GraduationCap className="h-6 w-6 text-blue-600 flex-shrink-0" />
+              <BrandMark className="h-6 w-6 text-blue-600 flex-shrink-0" />
               <span className="font-bold text-gray-900 dark:text-gray-100 truncate">{productName}</span>
             </Link>
             <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{n.tagline}</p>

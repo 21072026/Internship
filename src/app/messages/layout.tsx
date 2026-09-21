@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 import { roleHome } from '@/lib/roleHome';
 import { MessagesShell } from '@/components/MessagesShell';
 import { RoleShell } from '@/components/RoleShell';
+import { resolveRequestVertical } from '@/i18n/server';
+import { themeColorFor } from '@/lib/accent';
 
 /**
  * Route-scoped viewport (#1009). `viewportFit: 'cover'` is what makes
@@ -14,13 +16,18 @@ import { RoleShell } from '@/components/RoleShell';
  * these are the only screens built to reserve the insets themselves.
  *
  * A nested export replaces the root one for these routes, so the root's fields
- * are repeated here rather than inherited.
+ * are repeated here rather than inherited — including the vertical-aware tint
+ * (#2356): a static '#1D4ED8' here painted a SaleVali install's status bar
+ * internship blue on exactly the screen its manifest shortcut opens.
  */
-export const viewport: Viewport = {
-  themeColor: '#1D4ED8',
-  interactiveWidget: 'resizes-content',
-  viewportFit: 'cover',
-};
+export async function generateViewport(): Promise<Viewport> {
+  const vertical = await resolveRequestVertical();
+  return {
+    themeColor: themeColorFor(vertical),
+    interactiveWidget: 'resizes-content',
+    viewportFit: 'cover',
+  };
+}
 
 // Conversation threads are available to any authenticated participant.
 // MessagesShell provides the mobile app shell (full-height frame + header with

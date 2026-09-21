@@ -9,7 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { GraduationCap } from 'lucide-react';
+import { BrandTile } from '@/components/BrandMark';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Suspense } from 'react';
@@ -125,9 +125,7 @@ function RegisterForm() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-3">
-            <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center">
-              <GraduationCap className="h-8 w-8 text-white" />
-            </div>
+            <BrandTile />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">{t.auth.createAccount}</h1>
           <p className="text-gray-500 mt-2">{t.auth.registerSubtitle}</p>

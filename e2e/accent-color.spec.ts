@@ -51,3 +51,36 @@ test('a user can pick an accent color; it applies live and persists across reloa
     await cleanupByEmail(email);
   }
 });
+
+// Regression (#2356): the profile validator used to carry its own copy of the
+// colour list, so the newest swatch was pickable in the UI and rejected by the
+// API with a 400 — the swatch flipped and quietly flipped back. Pick the newest
+// colour rather than a long-standing one so a future addition trips this too.
+test('the newest accent (magenta) is accepted by the profile API and persists', async ({ page }) => {
+  const email = uniqueEmail('accent-magenta');
+  const pw = 'AccentPass123';
+  const user = await seedUser(email, pw, 'MENTEE', 'Magenta Mentee');
+
+  try {
+    await signIn(page, email, pw, '/portal');
+    await page.goto('/account');
+    await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible({ timeout: 10_000 });
+
+    const done = page.waitForResponse(
+      (r) => r.url().includes('/api/profile') && r.request().method() === 'PUT',
+      { timeout: 20_000 }
+    );
+    await page.getByRole('radio', { name: 'Magenta' }).click();
+    const res = await done;
+    expect(res.status(), await res.text()).toBe(200);
+
+    await expect(page.locator('html')).toHaveAttribute('data-accent', 'magenta');
+    await expect
+      .poll(async () => (await prisma.user.findUnique({ where: { id: user.id } }))?.accentColor, { timeout: 10_000 })
+      .toBe('magenta');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-accent', 'magenta');
+  } finally {
+    await cleanupByEmail(email);
+  }
+});
