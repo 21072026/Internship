@@ -35,12 +35,17 @@ export async function generateMetadata(): Promise<Metadata> {
     : 'A comprehensive CRM for managing mentor-mentee relationships and internship programs',
   applicationName: productName,
   appleWebApp: { capable: true, statusBarStyle: 'default', title: productName },
+  // The favicon / home-screen icon follow the vertical too (#2356). Both SVGs
+  // live in public/ (the file-based app/icon.svg convention cannot branch on
+  // the host and would emit a second <link rel="icon"> next to this one).
   icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.ico', sizes: 'any' },
-    ],
-    apple: '/apple-touch-icon.png',
+    icon: isMarketing
+      ? [{ url: '/icon-salevali.svg', type: 'image/svg+xml' }]
+      : [
+          { url: '/icon.svg', type: 'image/svg+xml' },
+          { url: '/favicon.ico', sizes: 'any' },
+        ],
+    apple: isMarketing ? '/apple-touch-icon-salevali.png' : '/apple-touch-icon.png',
     // iOS launch screens for the installed app (#2084). Safari ignores the
     // manifest here and wants one media-matched <link> per device resolution,
     // so the list — and the images under public/splash/ — are both generated
@@ -50,13 +55,18 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export const viewport: Viewport = {
-  themeColor: '#1D4ED8',
+// The browser-UI tint follows the vertical (#2356): SaleVali magenta-600 on a
+// marketing host, the internship blue-700 everywhere else.
+export async function generateViewport(): Promise<Viewport> {
+  const isMarketing = (await resolveRequestVertical()) === 'MARKETING';
+  return {
+  themeColor: isMarketing ? '#b929cf' : '#1D4ED8',
   // Shrink the layout viewport when the on-screen keyboard opens instead of
   // letting it overlay the page, so a full-height screen (the chat shell, #1006)
   // keeps its composer above the keyboard rather than behind it.
   interactiveWidget: 'resizes-content',
-};
+  };
+}
 
 // Runs before paint to set the dark class from the saved preference or the OS,
 // so there's no light flash. Mirrors the server-side cookie read below.
@@ -100,7 +110,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={locale}
       className={[theme === 'dark' ? 'dark' : undefined, fontSizeClass, densityClass].filter(Boolean).join(' ') || undefined}
-      data-accent={resolveAccent(accent)}
+      data-accent={resolveAccent(accent, vertical)}
       // The preferences this request resolved (cookie, else the signed-in
       // user's saved value). The no-flash script falls back to these when the
       // device itself has stored nothing, so a preference that lives only in

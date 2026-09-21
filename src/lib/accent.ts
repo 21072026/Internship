@@ -5,8 +5,13 @@
 // globals.css. Keep this list in sync with the html[data-accent="…"] palette
 // blocks there.
 import { IS_PREVIEW } from '@/lib/appEnv';
+import type { VerticalKey } from '@/lib/verticals';
 
-export const ACCENT_COLORS = ['blue', 'green', 'purple', 'rose', 'teal', 'amber'] as const;
+// 'magenta' is SaleVali's brand (#2356): the MARKETING vertical's default, and
+// pickable by anyone. Its 600 (#b929cf) sits between the brand primary #cc33e5
+// (kept at 500, fills only) and the brand dark #9b1dbd (700) so white button
+// text clears WCAG AA (4.9:1) — the primary itself is 4.1:1 and does not.
+export const ACCENT_COLORS = ['blue', 'green', 'purple', 'rose', 'teal', 'amber', 'magenta'] as const;
 export type AccentColor = (typeof ACCENT_COLORS)[number];
 
 // The 600-shade of each palette, for rendering the picker swatches (Tailwind
@@ -19,6 +24,7 @@ export const ACCENT_SWATCH: Record<AccentColor, string> = {
   rose: '#e11d48',
   teal: '#0d9488',
   amber: '#d97706',
+  magenta: '#b929cf',
 };
 
 export function isAccentColor(value: unknown): value is AccentColor {
@@ -29,8 +35,14 @@ export function isAccentColor(value: unknown): value is AccentColor {
 // (so it's never mistaken for production), blue everywhere else.
 export const DEFAULT_ACCENT: AccentColor = IS_PREVIEW ? 'green' : 'blue';
 
+// The accent a vertical wears when nobody chose one (#2356): SaleVali's magenta
+// for MARKETING, the environment default (blue; green on preview) otherwise.
+export function defaultAccentFor(vertical?: VerticalKey | null): AccentColor {
+  return vertical === 'MARKETING' ? 'magenta' : DEFAULT_ACCENT;
+}
+
 // Resolve the accent to apply: an explicit user preference wins, otherwise the
-// environment default. Returns the value for the <html data-accent> attribute.
-export function resolveAccent(preference?: string | null): AccentColor {
-  return isAccentColor(preference) ? preference : DEFAULT_ACCENT;
+// vertical's default. Returns the value for the <html data-accent> attribute.
+export function resolveAccent(preference?: string | null, vertical?: VerticalKey | null): AccentColor {
+  return isAccentColor(preference) ? preference : defaultAccentFor(vertical);
 }

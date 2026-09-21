@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -43,7 +44,11 @@ export async function getLocale(): Promise<Locale> {
 // (and any failure). One indexed lookup, and only when a session cookie is
 // present — a public view resolves to the default with no query, so the overlay
 // layer costs the live single-tenant product nothing (#1197).
-export async function resolveRequestVertical(): Promise<VerticalKey> {
+// Wrapped in React's per-request cache() (#2356): the root layout asks for the
+// vertical from generateMetadata, generateViewport and its body, and PublicShell
+// and the footer ask again — one session decode + one Prisma lookup per request,
+// not five.
+export const resolveRequestVertical = cache(async (): Promise<VerticalKey> => {
   // Signed OUT (a public page — the landing, /apply, /for-companies): the only
   // signal is the request host, so two urls serve two products' copy from one
   // deployment (#2355). No query.
@@ -65,7 +70,7 @@ export async function resolveRequestVertical(): Promise<VerticalKey> {
     // product with the default one; fall back to the host signal.
     return hostVertical();
   }
-}
+});
 
 export async function getServerDictionary() {
   const locale = await getLocale();

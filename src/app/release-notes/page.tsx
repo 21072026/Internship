@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { GraduationCap, Rss, Sparkles } from 'lucide-react';
+import { Rss, Sparkles } from 'lucide-react';
+import { BrandMark } from '@/components/BrandMark';
 import { getServerDictionary } from '@/i18n/server';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { publicOrigin, releaseFeedUrl } from '@/lib/releaseFeed';
@@ -87,7 +88,7 @@ export default async function ReleaseNotesPage() {
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-8">
           <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline">
-            <GraduationCap className="h-4 w-4" /> {t.releaseNotes.back}
+            <BrandMark className="h-4 w-4" /> {t.releaseNotes.back}
           </Link>
           <a
             href={feedUrl}

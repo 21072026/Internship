@@ -339,6 +339,18 @@ html[data-accent="amber"] {
   --accent-800:#92400e; --accent-900:#78350f;
   --accent-tint:rgba(120,53,15,0.25); --accent-tint-hover:rgba(120,53,15,0.35);
 }
+/* SaleVali magenta (#2356) — the MARKETING vertical's default. Anchored on the
+   brand: 50/100 = brand light/mid tints, 500 = brand primary #cc33e5 (fills,
+   progress bars, rings — never text on it), 600 = #b929cf so white text on
+   primary buttons is 4.9:1 and the link colour is 4.7:1 on the gray-50 body,
+   700 = brand dark #9b1dbd. 800/900 extend the ramp at Tailwind's own
+   lightness steps; tint = the 900 shade at .25/.35 like every other accent. */
+html[data-accent="magenta"] {
+  --accent-50:#f8e9fd; --accent-100:#eedcfb; --accent-200:#eaccfd; --accent-300:#e4affe;
+  --accent-400:#dd83fc; --accent-500:#cc33e5; --accent-600:#b929cf; --accent-700:#9b1dbd;
+  --accent-800:#7c25a4; --accent-900:#60248b;
+  --accent-tint:rgba(96,36,139,0.25); --accent-tint-hover:rgba(96,36,139,0.35);
+}
 
 /* --- Utility remap (written once; references the palette vars above). --- */
 /* Backgrounds */
