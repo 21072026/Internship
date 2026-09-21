@@ -65,6 +65,305 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.204.0-beta',
+    date: '2026-09-21',
+    time: '10:28',
+    commit: 'c81382a',
+    highlights: {
+      en: [
+        "Interview request declines now include a clear reason, visible to the company on the request card and in its notification.",
+      ],
+      tr: [
+        "Mülakat talebi reddedildiğinde gerekçe artık şirketin talep kartında ve bildiriminde açıkça gösteriliyor.",
+      ],
+      de: [
+        "Bei abgelehnten Interviewanfragen sieht das Unternehmen den Grund jetzt auf der Anfragekarte und in der Benachrichtigung.",
+      ],
+    },
+  },
+  {
+    version: '0.203.2-beta',
+    date: '2026-09-15',
+    time: '22:46',
+    commit: '1da2aa6',
+    highlights: {
+      en: [
+        "On the marketing product the header, sign-in and registration pages now speak marketing, the primary button is Sign in, and self-serve sign-up is refused — accounts are created by invitation.",
+      ],
+      tr: [
+        "Pazarlama ürününde başlık, giriş ve kayıt sayfaları artık pazarlama dilinde; ana buton Giriş yap; self-servis kayıt reddediliyor — hesaplar davetle açılıyor.",
+      ],
+      de: [
+        "Im Marketing-Produkt sprechen Kopfzeile, Anmelde- und Registrierungsseite jetzt Marketing, der Hauptbutton ist Anmelden, und die Selbstregistrierung wird abgelehnt — Konten werden per Einladung angelegt.",
+      ],
+    },
+  },
+  {
+    version: '0.203.0-beta',
+    date: '2026-09-15',
+    time: '19:57',
+    commit: '70f6016',
+    highlights: {
+      en: [
+        "The marketing product now has its own landing page: a lean page about leads, accounts and deals, without the mentoring sections that only make sense for the internship product.",
+      ],
+      tr: [
+        "Pazarlama ürününün artık kendi landing sayfası var: müşteri adayları, firmalar ve anlaşmalar üzerine yalın bir sayfa — yalnızca staj ürününde anlamlı olan mentorluk bölümleri olmadan.",
+      ],
+      de: [
+        "Das Marketing-Produkt hat jetzt eine eigene Landingpage: eine schlanke Seite über Leads, Accounts und Deals — ohne die Mentoring-Abschnitte, die nur im Praktikums-Produkt Sinn ergeben.",
+      ],
+    },
+  },
+  {
+    version: '0.202.5-beta',
+    date: '2026-09-15',
+    time: '19:45',
+    commit: '5d1ae5f',
+    highlights: {
+      en: [
+        "Marketing tenants now see only the modules that belong to a marketing CRM — projects, goal templates, cohorts, success stories and the company-enquiry inbox are gone from their menu — and the menu no longer changes between pages.",
+      ],
+      tr: [
+        "Pazarlama kiracıları artık yalnızca bir pazarlama CRM'ine ait modülleri görüyor — projeler, hedef şablonları, kohortlar, başarı hikâyeleri ve firma talepleri menüden kalktı — ve menü sayfadan sayfaya değişmiyor.",
+      ],
+      de: [
+        "Marketing-Mandanten sehen jetzt nur noch die Module eines Marketing-CRM — Projekte, Zielvorlagen, Kohorten, Erfolgsgeschichten und der Unternehmensanfragen-Eingang sind aus dem Menü verschwunden — und das Menü wechselt nicht mehr zwischen Seiten.",
+      ],
+    },
+  },
+  {
+    version: '0.202.1-beta',
+    date: '2026-09-15',
+    time: '08:18',
+    commit: 'e8c72e7',
+    highlights: {
+      en: [
+        "On the offers screen, searching while a quick filter is active now searches inside that filter instead of quietly dropping it and showing offers from outside it.",
+        "Typing into the search box immediately after picking a filter no longer loses what you typed.",
+      ],
+      tr: [
+        "Teklifler ekranında bir hızlı filtre açıkken arama yapmak artık filtreyi sessizce düşürüp dışındaki teklifleri göstermiyor; aramayı o filtrenin içinde yapıyor.",
+        "Filtreyi seçer seçmez arama kutusuna yazdığınızda yazdığınız artık kaybolmuyor.",
+      ],
+      de: [
+        "Eine Suche bei aktivem Schnellfilter sucht jetzt innerhalb dieses Filters, statt ihn stillschweigend zu verwerfen und Angebote von außerhalb anzuzeigen.",
+        "Wer direkt nach dem Wählen eines Filters ins Suchfeld tippt, verliert das Getippte nicht mehr.",
+      ],
+    },
+  },
+  {
+    version: '0.202.0-beta',
+    date: '2026-09-14',
+    time: '08:42',
+    commit: '7c6c9fe',
+    highlights: {
+      en: [
+        "Marketing tenants now see marketing terminology throughout — leads, reps and deals on the dashboard and checklist, and the marketing product name in the wordmark and browser tab — instead of internship wording.",
+      ],
+      tr: [
+        "Pazarlama kiracıları artık her yerde pazarlama terminolojisi görüyor — panoda ve kontrol listesinde müşteri adayları, temsilciler ve fırsatlar; wordmark ve tarayıcı sekmesinde pazarlama ürün adı — staj terimleri yerine.",
+      ],
+      de: [
+        "Marketing-Mandanten sehen jetzt durchgängig Marketing-Terminologie — Leads, Mitarbeiter und Deals im Dashboard und in der Checkliste sowie den Marketing-Produktnamen im Wortzeichen und Browser-Tab — statt Praktikums-Begriffe.",
+      ],
+    },
+  },
+  {
+    version: '0.201.9-beta',
+    date: '2026-09-14',
+    time: '07:18',
+    commit: '36993a5',
+    highlights: {
+      en: [
+        "Choosing a timezone on the account page immediately after opening it no longer gets undone a moment later — the picker waits until your current setting has loaded.",
+      ],
+      tr: [
+        "Hesap sayfasını açar açmaz saat dilimi seçtiğinizde seçiminiz artık bir an sonra geri alınmıyor; seçim kutusu mevcut ayarınız yüklenene kadar bekliyor.",
+      ],
+      de: [
+        "Eine Zeitzone, die direkt nach dem Öffnen der Kontoseite gewählt wird, wird nicht mehr kurz darauf zurückgesetzt — die Auswahl wartet, bis Ihre aktuelle Einstellung geladen ist.",
+      ],
+    },
+  },
+  {
+    version: '0.201.7-beta',
+    date: '2026-09-14',
+    time: '06:27',
+    commit: 'e884d40',
+    highlights: {
+      en: [
+        "The newsletter composer, the projects page footer and the API explorer no longer run off the side of the screen on a phone in German.",
+      ],
+      tr: [
+        "Bülten oluşturma ekranı, projeler sayfasının alt bilgisi ve API gezgini telefonda Almanca görünümde artık ekranın dışına taşmıyor.",
+      ],
+      de: [
+        "Der Newsletter-Editor, die Fußzeile der Projektseite und der API-Explorer laufen auf dem Handy in deutscher Sprache nicht mehr über den Bildschirmrand hinaus.",
+      ],
+    },
+  },
+  {
+    version: '0.201.6-beta',
+    date: '2026-09-14',
+    time: '06:19',
+    commit: '8c30b3b',
+    highlights: {
+      en: [
+        "Long text in a project name, goal title, meeting topic, document title, organisation setting or profile field is now refused by the form with a clear message instead of failing with a server error after you press save.",
+      ],
+      tr: [
+        "Proje adı, hedef başlığı, toplantı konusu, belge başlığı, kuruluş ayarları ve profil alanlarına uzun metin girildiğinde artık kaydettikten sonra sunucu hatası almıyorsunuz; form bunu baştan ve açık bir mesajla reddediyor.",
+      ],
+      de: [
+        "Zu langer Text in einem Projektnamen, Zieltitel, Meeting-Thema, Dokumenttitel, in den Organisationseinstellungen oder in Profilfeldern wird jetzt direkt im Formular mit einer klaren Meldung abgelehnt, statt nach dem Speichern in einem Serverfehler zu enden.",
+      ],
+    },
+  },
+  {
+    version: '0.201.3-beta',
+    date: '2026-09-14',
+    time: '04:23',
+    commit: '28c80c9',
+    highlights: {
+      en: [
+        "If you renamed your pipeline stages, the cohort comparison, source conversion, programme benchmark, admin conversion rate and mentor analytics now count your own final stage — they used to report zero placements no matter how many people you had placed.",
+        "Time-to-hire in the cohort report is measured to your own final stage too, so it is no longer permanently blank for a renamed pipeline.",
+        "These reports now name the stage they counted, using the name you gave it. If you use the built-in stages, the wording is exactly as before.",
+      ],
+      tr: [
+        "Aşamalarınızı yeniden adlandırdıysanız kohort karşılaştırması, kaynak dönüşümü, program kıyaslaması, yönetici dönüşüm oranı ve mentor analitiği artık sizin kendi son aşamanızı sayıyor — eskiden kaç kişiyi yerleştirmiş olursanız olun sıfır gösteriyorlardı.",
+        "Kohort raporundaki işe alım süresi de kendi son aşamanıza göre ölçülüyor; yeniden adlandırılmış bir hatta artık kalıcı olarak boş kalmıyor.",
+        "Bu raporlar saydıkları aşamayı, sizin verdiğiniz adla söylüyor. Yerleşik aşamaları kullanıyorsanız metin eskisiyle birebir aynı.",
+      ],
+      de: [
+        "Wenn Sie Ihre Pipeline-Phasen umbenannt haben, zählen Kohortenvergleich, Quellen-Conversion, Programm-Benchmark, die Conversion-Quote im Admin-Bereich und die Mentoren-Analysen jetzt Ihre eigene Endphase — bisher meldeten sie null Vermittlungen, egal wie viele Sie vermittelt hatten.",
+        "Auch die Dauer bis zur Einstellung im Kohortenbericht wird an Ihrer eigenen Endphase gemessen und bleibt bei einer umbenannten Pipeline nicht mehr dauerhaft leer.",
+        "Die Berichte benennen jetzt die Phase, die sie gezählt haben — mit dem Namen, den Sie ihr gegeben haben. Bei den eingebauten Phasen bleibt die Beschriftung exakt wie zuvor.",
+      ],
+    },
+  },
+  {
+    version: '0.201.0-beta',
+    date: '2026-09-14',
+    time: '04:19',
+    commit: 'f33c9ed',
+    highlights: {
+      en: [
+        "Turning on two-factor authentication now gives you ten recovery codes. Keep them somewhere safe — if you ever lose your authenticator app, one of them signs you in.",
+        "Each code works exactly once, the codes are shown only when they are created, and your account page always tells you how many are left and lets you generate a new set.",
+        "Signing in with a recovery code sends you a notification straight away, so you find out immediately if it was not you.",
+      ],
+      tr: [
+        "İki faktörlü doğrulamayı açtığında artık on kurtarma kodu veriliyor. Güvenli bir yere sakla — doğrulayıcı uygulamanı kaybedersen bunlardan biri seni içeri alır.",
+        "Her kod yalnızca bir kez çalışır, kodlar sadece üretildikleri anda gösterilir ve hesap sayfan kaç kod kaldığını her zaman söyler, istediğinde yeni bir set üretir.",
+        "Kurtarma koduyla giriş yapıldığında sana hemen bildirim gider; bu sen değilsen anında haberin olur.",
+      ],
+      de: [
+        "Wenn du die Zwei-Faktor-Authentifizierung aktivierst, bekommst du jetzt zehn Wiederherstellungscodes. Bewahre sie sicher auf — falls du deine Authenticator-App verlierst, bringt dich einer davon hinein.",
+        "Jeder Code funktioniert genau einmal, die Codes werden nur bei ihrer Erstellung angezeigt, und deine Kontoseite zeigt immer, wie viele noch übrig sind, und erzeugt auf Wunsch einen neuen Satz.",
+        "Eine Anmeldung mit einem Wiederherstellungscode löst sofort eine Benachrichtigung aus, damit du es umgehend erfährst, wenn das nicht du warst.",
+      ],
+    },
+  },
+  {
+    version: '0.200.0-beta',
+    date: '2026-09-14',
+    time: '04:14',
+    commit: 'c0a5e5e',
+    highlights: {
+      en: [
+        "Your plan's project allowance is now actually enforced when a project is created — Free plans get 3, Pro 25, Enterprise unlimited.",
+        "Hitting it refuses only the new project and says how many you are using out of how many; everything you already have keeps working, and archiving or upgrading frees room.",
+      ],
+      tr: [
+        "Planınızdaki proje hakkı artık proje oluştururken gerçekten uygulanıyor — Free 3, Pro 25, Enterprise sınırsız.",
+        "Sınıra gelindiğinde yalnızca yeni proje reddediliyor ve kaç haktan kaçını kullandığınız yazılıyor; mevcut projeleriniz olduğu gibi çalışmaya devam ediyor, arşivlemek ya da planı yükseltmek yer açıyor.",
+      ],
+      de: [
+        "Das Projektkontingent Ihres Tarifs wird beim Anlegen jetzt tatsächlich durchgesetzt — Free 3, Pro 25, Enterprise unbegrenzt.",
+        "Wird es erreicht, scheitert nur das neue Projekt, mit der Angabe wie viele von wie vielen belegt sind; bestehende Projekte bleiben unberührt, und Archivieren oder ein höherer Tarif schafft Platz.",
+      ],
+    },
+  },
+  {
+    version: '0.198.0-beta',
+    date: '2026-09-14',
+    time: '03:40',
+    commit: '55d37bf',
+    highlights: {
+      en: [
+        "Lost your authenticator and your recovery codes? An administrator can now reset two-factor authentication for you, and you are told by e-mail who did it.",
+      ],
+      tr: [
+        "Doğrulayıcı uygulamanı ve kurtarma kodlarını kaybettiysen artık bir yönetici iki adımlı doğrulamanı sıfırlayabiliyor; bunu kimin yaptığı sana e-postayla bildiriliyor.",
+      ],
+      de: [
+        "Authenticator und Wiederherstellungscodes verloren? Eine Administration kann die Zwei-Faktor-Authentifizierung jetzt zurücksetzen — und du erfährst per E-Mail, wer es war.",
+      ],
+    },
+  },
+  {
+    version: '0.197.4-beta',
+    date: '2026-09-14',
+    time: '03:30',
+    commit: '5da215b',
+    highlights: {
+      en: [
+        "A marketing organization that hasn't set a custom brand now shows its own name in the header instead of \"Internship CRM\".",
+      ],
+      tr: [
+        "Özel marka belirlememiş bir pazarlama organizasyonu artık başlıkta \"Internship CRM\" yerine kendi adını gösteriyor.",
+      ],
+      de: [
+        "Eine Marketing-Organisation ohne eigene Marke zeigt jetzt ihren eigenen Namen in der Kopfzeile statt \"Internship CRM\".",
+      ],
+    },
+  },
+  {
+    version: '0.197.3-beta',
+    date: '2026-09-14',
+    time: '03:27',
+    commit: 'f8146d1',
+    highlights: {
+      en: [
+        "Fixed: on a shared device, pages the app had stored for offline use could be shown to the next person signing in. The app now stores only public files, and signing out clears everything it stored.",
+        "The offline page and the \"install app\" prompt now also work before you sign in.",
+      ],
+      tr: [
+        "Düzeltildi: paylaşılan bir cihazda uygulamanın çevrimdışı kullanım için sakladığı sayfalar, sonra giriş yapan kişiye gösterilebiliyordu. Uygulama artık yalnızca herkese açık dosyaları saklıyor ve çıkış yapıldığında sakladığı her şeyi siliyor.",
+        "Çevrimdışı sayfası ve \"uygulamayı yükle\" önerisi artık giriş yapmadan önce de çalışıyor.",
+      ],
+      de: [
+        "Behoben: Auf einem gemeinsam genutzten Gerät konnten für die Offline-Nutzung gespeicherte Seiten der nächsten anmeldenden Person angezeigt werden. Die App speichert jetzt nur noch öffentliche Dateien, und beim Abmelden wird alles Gespeicherte gelöscht.",
+        "Die Offline-Seite und der Hinweis \"App installieren\" funktionieren jetzt auch schon vor der Anmeldung.",
+      ],
+    },
+  },
+  {
+    version: '0.197.1-beta',
+    date: '2026-09-14',
+    time: '03:14',
+    commit: 'a75cd07',
+    highlights: {
+      en: [
+        "A project's contributor-terms setting is now the programme's decision on the server too, not just in the form — a mentee-created project always keeps the platform default.",
+        "A project owner whose membership row predates the member list is no longer locked out of their own roster.",
+        "Editing one project and then clicking the pencil on another no longer carries the first project's values over.",
+      ],
+      tr: [
+        "Bir projenin katkı sözleşmesi ayarı artık yalnızca formda değil sunucuda da programın kararı — mentee'nin açtığı proje her zaman platform varsayılanını korur.",
+        "Üye listesinden eski olan sahiplik kaydına sahip proje sahipleri artık kendi ekip listesinden dışlanmıyor.",
+        "Bir projeyi düzenlerken başka bir projenin kalemine basmak artık ilk projenin değerlerini taşımıyor.",
+      ],
+      de: [
+        "Die Contributor-Terms-Einstellung eines Projekts entscheidet das Programm jetzt auch serverseitig, nicht nur im Formular — ein von einem Mentee angelegtes Projekt behält immer die Plattform-Vorgabe.",
+        "Projekt-Eigentümer, deren Eigentum nur über den alten Zeiger hinterlegt ist, werden nicht mehr aus ihrer eigenen Mitgliederliste ausgesperrt.",
+        "Wer ein Projekt bearbeitet und dann auf den Stift eines anderen klickt, überträgt nicht mehr die Werte des ersten Projekts.",
+      ],
+    },
+  },
+  {
     version: '0.197.0-beta',
     date: '2026-09-11',
     time: '17:54',

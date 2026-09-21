@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **The marketing host now has its own landing page** (#2356, epic #2348). Below the hero, the marketing landing still rendered the internship argument in full — the mentee/mentor/company loop, the role picker, three audience sections written for students, mentors and hiring companies, the free-core band, the how-it-works steps, the five-roles grid, mentor/mentee success stories, a per-role FAQ, and \"Apply as a mentor\" / \"Talk to us as a company\" CTA buttons. Those sections describe a mentoring loop and are nonsense to a sales team, so for a MARKETING host they are no longer rendered; the page is now hero → feature cards → funnel diagram → \"and a lot more\" → transparency → one CTA. The sections that remain are re-worded through the MARKETING overlay (leads, accounts, deals; a New lead → Contacted → Proposal → Won funnel; a marketing CTA), and the featured feature cards are filtered by the vertical's capabilities so a marketing visitor is not sold \"Mentor self-service\" or intern projects (`Feature.capability`, `src/lib/features.ts`). The internship landing is byte-identical.",
-  "notes": {
-    "en": ["The marketing product now has its own landing page: a lean page about leads, accounts and deals, without the mentoring sections that only make sense for the internship product."],
-    "tr": ["Pazarlama ürününün artık kendi landing sayfası var: müşteri adayları, firmalar ve anlaşmalar üzerine yalın bir sayfa — yalnızca staj ürününde anlamlı olan mentorluk bölümleri olmadan."],
-    "de": ["Das Marketing-Produkt hat jetzt eine eigene Landingpage: eine schlanke Seite über Leads, Accounts und Deals — ohne die Mentoring-Abschnitte, die nur im Praktikums-Produkt Sinn ergeben."]
-  }
-}
