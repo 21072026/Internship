@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 import crypto from 'crypto';
 
 // A recurring project meeting is a rule, not a pile of rows (#1110). These tests
@@ -147,5 +148,84 @@ test('a recurring project meeting is a rule: no rows, one calendar entry, gone w
     await cleanupByEmail(menteeA.email);
     await cleanupByEmail(menteeB.email);
     await cleanupByEmail(mentorEmail);
+  }
+});
+
+// A series outlives its project: the FK is `SetNull`, so deleting the project
+// leaves the rule behind with `projectId = null`. Such an orphan used to be
+// checked against nothing but "is a mentor" (#2487) — any mentor in the
+// organisation could cancel it, or adopt it into a project of their own through
+// PUT and edit it from there. It now belongs to whoever wrote it, or an admin,
+// the way a personal to-do with no project does.
+test('a series whose project was deleted is only its author\u2019s or an admin\u2019s to touch', async ({ page }) => {
+  const creatorEmail = uniqueEmail('ms-orphan-creator');
+  const strangerEmail = uniqueEmail('ms-orphan-stranger');
+  const adminEmail = uniqueEmail('ms-orphan-admin');
+  const creator = await seedUser(creatorEmail, 'CreatorPass123', 'MENTOR', 'Orphan Creator');
+  const stranger = await seedUser(strangerEmail, 'StrangerPass123', 'MENTOR', 'Orphan Stranger');
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Orphan Admin');
+
+  // The stranger owns a project of their own — the one they would adopt the
+  // orphan into.
+  const strangersProject = await prisma.project.create({
+    data: {
+      name: `Stranger Project ${Date.now()}`,
+      ownerType: 'MENTOR',
+      ownerUserId: stranger.id,
+      members: { create: [{ userId: stranger.id, role: 'OWNER' }] },
+    },
+  });
+  const doomedProject = await prisma.project.create({
+    data: {
+      name: `Doomed Project ${Date.now()}`,
+      ownerType: 'MENTOR',
+      ownerUserId: creator.id,
+      members: { create: [{ userId: creator.id, role: 'OWNER' }] },
+    },
+  });
+  const [creatorsSeries, adminsSeries] = await Promise.all(
+    ['Orphan for its author', 'Orphan for an admin'].map((title) =>
+      prisma.meetingSeries.create({
+        data: { projectId: doomedProject.id, title, daysOfWeek: [1], timeOfDay: '09:00', timeZone: 'UTC', createdById: creator.id },
+      })
+    )
+  );
+
+  try {
+    // The project goes away; the rules stay behind with no project above them.
+    await prisma.project.delete({ where: { id: doomedProject.id } });
+    expect((await prisma.meetingSeries.findUniqueOrThrow({ where: { id: creatorsSeries.id } })).projectId).toBeNull();
+
+    // A mentor who had nothing to do with it: refused on both verbs, and the
+    // row is exactly as it was.
+    await signInAndSettle(page, strangerEmail, 'StrangerPass123', '/mentor');
+    const strangerCancel = await page.request.delete('/api/meeting-series', { data: { id: creatorsSeries.id } });
+    expect(strangerCancel.status()).toBe(403);
+    const adopt = await page.request.put('/api/meeting-series', {
+      data: { id: creatorsSeries.id, projectId: strangersProject.id },
+    });
+    expect(adopt.status()).toBe(403);
+    const untouched = await prisma.meetingSeries.findUniqueOrThrow({ where: { id: creatorsSeries.id } });
+    expect(untouched.active).toBe(true);
+    expect(untouched.projectId).toBeNull();
+
+    // Its author may still cancel it.
+    await signInAsFreshUser(page, creatorEmail, 'CreatorPass123', '/mentor');
+    const authorCancel = await page.request.delete('/api/meeting-series', { data: { id: creatorsSeries.id } });
+    expect(authorCancel.ok()).toBeTruthy();
+    expect((await authorCancel.json()).series.active).toBe(false);
+
+    // And so may an admin.
+    await signInAsFreshUser(page, adminEmail, 'AdminPass123', '/admin');
+    const adminCancel = await page.request.delete('/api/meeting-series', { data: { id: adminsSeries.id } });
+    expect(adminCancel.ok()).toBeTruthy();
+    expect((await adminCancel.json()).series.active).toBe(false);
+  } finally {
+    await prisma.meetingSeries.deleteMany({ where: { id: { in: [creatorsSeries.id, adminsSeries.id] } } });
+    await prisma.projectMember.deleteMany({ where: { projectId: strangersProject.id } });
+    await prisma.project.deleteMany({ where: { id: { in: [strangersProject.id, doomedProject.id] } } });
+    await cleanupByEmail(creatorEmail);
+    await cleanupByEmail(strangerEmail);
+    await cleanupByEmail(adminEmail);
   }
 });

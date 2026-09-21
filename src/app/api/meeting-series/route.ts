@@ -69,6 +69,29 @@ async function ensureProjectAccess(
 }
 
 /**
+ * Who may change or cancel an *existing* series. With a project above it, the
+ * project decides (`ensureProjectAccess`). Without one — the project was
+ * deleted and the FK is `SetNull`, so the rule outlived it as an orphan — the
+ * row falls back to whoever wrote it, or an admin: the same line project-tasks
+ * draws for a personal to-do with no project, and the one `meetings/[id]/end`
+ * already draws for a series occurrence (#2487). Before this, the orphan
+ * case was checked against nothing but "is a mentor", so any mentor in the
+ * organisation could cancel anyone's leftover series, or adopt it into a
+ * project of their own through PUT and edit it from there.
+ *
+ * #2013 (a standing 1:1 on a relation, no project) adds its relation branch
+ * here; the project branch is never loosened.
+ */
+async function ensureSeriesAccess(
+  user: { id: string; role: string; companyId?: string | null },
+  series: { projectId: string | null; createdById: string }
+): Promise<{ error?: NextResponse }> {
+  if (series.projectId) return ensureProjectAccess(user, series.projectId);
+  if (user.role === 'ADMIN' || series.createdById === user.id) return {};
+  return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+}
+
+/**
  * Drop every `Meeting` row this series ever generated. Nothing writes them any
  * more, but deployments carry years of them; leaving one behind is exactly the
  * ghost entry this rewrite is about. Notes taken in a meeting survive — the
@@ -277,10 +300,20 @@ export async function PUT(request: Request) {
     const current = await prisma.meetingSeries.findUnique({ where: { id } });
     if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    // The row being changed comes first (#2487). It used to be checked only
+    // against the *target* project, so an orphaned series (project deleted, FK
+    // SetNull) could be adopted by any mentor into a project of their own, and a
+    // move between projects never asked whether you could touch the one it was
+    // leaving.
+    const currentAccess = await ensureSeriesAccess(session.user, current);
+    if (currentAccess.error) return currentAccess.error;
+
     const targetProjectId = incoming.projectId ?? current.projectId;
     if (!targetProjectId) return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
-    const access = await ensureProjectAccess(session.user, targetProjectId);
-    if (access.error) return access.error;
+    if (targetProjectId !== current.projectId) {
+      const access = await ensureProjectAccess(session.user, targetProjectId);
+      if (access.error) return access.error;
+    }
 
     const data: {
       projectId?: string;
@@ -336,6 +369,12 @@ export async function DELETE(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // A meeting series hangs off a project (#2356): a projects-module write. At
+  // the top and unconditional, like POST and PUT — the gate is about the actor's
+  // org, not the row, and a series that lost its project is still a leftover of
+  // this module (#2487).
+  const capGate = await requireCapability(session.user.orgId, 'projects');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
@@ -344,12 +383,10 @@ export async function DELETE(request: Request) {
     const current = await prisma.meetingSeries.findUnique({ where: { id: parsed.data.id } });
     if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    if (current.projectId) {
-      const capGate = await requireCapability(session.user.orgId, 'projects');
-      if (capGate) return capGate;
-      const access = await ensureProjectAccess(session.user, current.projectId);
-      if (access.error) return access.error;
-    }
+    // Every row, including one whose project is gone — that case used to skip
+    // straight to the purge (#2487).
+    const access = await ensureSeriesAccess(session.user, current);
+    if (access.error) return access.error;
 
     const removedMeetings = await purgeGeneratedMeetings(parsed.data.id);
     const series = await prisma.meetingSeries.update({

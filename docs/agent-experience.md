@@ -7017,3 +7017,31 @@ dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
   ayrı issue açmamış), o emsali takip etmek doğru çağrı. Ayrı issue açmak yerine önce
   `search_issues` ile "strict mode violation resolved to 2 elements" gibi genel bir sorguyla
   şemsiye issue'yu bul.
+
+## 2026-09-21 — Nullable FK + `SetNull` = "yetim satır" yetki boşluğu; worktree'de eslint çift plugin (#2487)
+
+- **`if (row.projectId) { yetki kontrolü }` deseni bir yetki boşluğudur, eğer FK `onDelete: SetNull`
+  ise.** `MeetingSeries.projectId` nullable + `SetNull`; proje silinince seri yetim kalıyor ve DELETE
+  handler'ı yalnızca `if (current.projectId)` içinde proje erişimi + capability kapısı çalıştırdığı
+  için org'daki HER mentor yetim seriyi iptal edebiliyordu. PUT de yalnızca *hedef* projeyi
+  kontrol ettiğinden aynı satır iki istekte "evlat edinilip" düzenlenebiliyordu — yani tek
+  başına DELETE'i düzeltmek kozmetik olurdu. Kural: **`String?` + `SetNull` bir FK gördüğünde
+  "bu kolon null olduğunda kim sahibi?" sorusunun kodda bir cevabı olmalı**; cevap yoksa satır
+  herkesin. Tutarlı desen zaten repoda vardı: project-tasks'ın kişisel görev kuralı
+  (`createdById === user.id || ADMIN`) ve `meetings/[id]/end`'in seri katılımcı kuralı — yeni
+  bir kural uydurmadan önce `grep -rn "createdById === " src` ile emsali bul. `Cascade` olan
+  çocuklar (ProjectTask, Meeting) hiç yetim kalmaz; `SetNull` olan ikisi (MeetingSeries,
+  Conversation) kalır — `grep -n 'onDelete: SetNull' prisma/schema.prisma` ile listelenebilir.
+- **Worktree içinde `npx eslint <dosya>` "couldn't determine the plugin @next/next uniquely"
+  ile patlıyor**: worktree `.claude/worktrees/<ad>/` altında olduğu için üst repo'nun
+  `.eslintrc.json`'u da cascade'e giriyor ve iki `node_modules` iki plugin kopyası veriyor.
+  Çözüm: `npx eslint --no-eslintrc -c .eslintrc.json --resolve-plugins-relative-to . <dosya>`.
+  `npm run lint` (next lint) bundan etkilenmiyor ama `e2e/`'yi de gezmiyor.
+- **Dal değiştirince `npx tsc --noEmit`'in `emailService.ts`'te 15 hata vermesi senin hatan
+  değil, bayat Prisma client'ıdır** — CLAUDE.md'nin "after switching branches run
+  `npx prisma generate`" satırı tam bunun için. Önce generate, sonra tsc; aksi hâlde yarım
+  saat alakasız hata okursun.
+- **Yerel e2e DB'si (`internship_e2e`) de dal değiştirince bayatlar**: spec'i koşturmadan
+  `DATABASE_URL=mysql://e2e:e2epass@127.0.0.1:3306/internship_e2e npx prisma db push
+  --skip-generate --accept-data-loss` — bu yerel, izole DB'dir; CLAUDE.md'nin "shared
+  preview/prod'a db push yapma" kuralı buna uygulanmaz.
