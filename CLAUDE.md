@@ -511,6 +511,18 @@ workaround, #636, and it compiled on every PR push).
   is a signal to inspect first (`git log --oneline main..origin/main` and
   `origin/main..main`), not to force through. If the actual file contents match between the
   two tips, `git reset --hard origin/main` is safe.
+- **One served-host allowlist** (`src/lib/servedHosts.ts`, #2356): one container serves several
+  public hosts (interncrm.com + marketing.ersah.in, their preview twins, a topic env's own
+  `pr<N>` host), and NextAuth resolves every `callbackUrl` against `NEXTAUTH_URL` without ever
+  seeing the request. So a redirect or an absolute same-app link is built from the REQUEST —
+  `requestOrigin(headers)` on the server, `absoluteHere(path)` on the client — and
+  `callbacks.redirect` keeps an absolute target only when its hostname is in `servedHosts()`
+  (the hostnames of `NEXTAUTH_URL`/`NEXT_PUBLIC_APP_URL` + `MARKETING_HOSTS`; exact match, no
+  wildcard, no new env var). Never build a browser-facing URL from `NEXTAUTH_URL` or
+  `NEXT_PUBLIC_APP_URL` again; those stay for e-mail links and IdP/OAuth-registered endpoints,
+  which cannot follow the request host by nature. The rule is unit-tested
+  (`npm run test:served-hosts`) and pinned end-to-end with forged proxy headers
+  (`e2e/host-coherent-redirects.spec.ts`).
 - **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
   inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted
   verbatim), forwards it to the handler and echoes it on **every** response, error responses

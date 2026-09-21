@@ -168,6 +168,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/servedHosts.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the served-host allowlist: an exact-match check is all that stands between a cross-host redirect and an open redirect (#2488)',
+    },
+  ],
+  [
     'src/lib/requestId.ts',
     {
       floor: 95,

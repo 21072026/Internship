@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
+import { absoluteHere } from '@/lib/safeRedirect';
 
 // Landing page the ACS route redirects to after verifying the SAML assertion.
 // It consumes the single-use grant via the `sso` NextAuth provider to establish
@@ -17,7 +18,7 @@ function Complete() {
       setFailed(true);
       return;
     }
-    signIn('sso', { grant: token, callbackUrl: '/', redirect: true }).catch(() => setFailed(true));
+    signIn('sso', { grant: token, callbackUrl: absoluteHere('/'), redirect: true }).catch(() => setFailed(true));
   }, [params]);
 
   return (

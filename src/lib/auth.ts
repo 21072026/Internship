@@ -13,6 +13,7 @@ import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/li
 import { IMPERSONATION_SESSION_MAX_MS } from '@/lib/impersonationHistory';
 import { AUTH_SSO_REQUIRED } from '@/lib/authErrors';
 import { isPasswordLoginBlocked } from '@/lib/ssoEnforcement';
+import { resolveRedirectTarget } from '@/lib/servedHosts';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -626,6 +627,17 @@ export const authOptions: NextAuthOptions = {
         if (token.name) session.user.name = token.name as string;
       }
       return session;
+    },
+    // Host-coherent redirects (#2488). Every callbackUrl NextAuth hands back to
+    // the browser (signOut always, signIn only with redirect:true) is normalised
+    // here with baseUrl = origin(NEXTAUTH_URL) — the INTERNSHIP host — and this
+    // callback never sees the request, so it cannot know the page was served
+    // from the marketing host. The client therefore sends an ABSOLUTE
+    // same-origin url (safeRedirect.ts absoluteHere) and this keeps it iff its
+    // host is one this deployment serves; everything else falls back to baseUrl,
+    // exactly as NextAuth's default did. Byte-identical on the internship host.
+    redirect({ url, baseUrl }) {
+      return resolveRedirectTarget(url, baseUrl);
     },
   },
   events: {

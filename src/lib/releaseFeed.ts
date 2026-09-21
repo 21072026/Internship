@@ -12,6 +12,7 @@
 import { defaultLocale, type Locale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
 import { getAllReleaseNotes, type ReleaseNote } from '@/lib/releaseNotes';
+import { configuredOrigin, requestOrigin } from '@/lib/servedHosts';
 
 /** Where the feed is served — one constant, so the route, the page's
  *  `rel="alternate"` metadata and the visible link cannot disagree. */
@@ -22,22 +23,16 @@ export const RELEASE_FEED_PATH = '/release-notes/feed.xml';
 const MAX_ITEMS = 50;
 
 /**
- * The origin absolute links are built from. Same precedence as
- * `appBase()` in lib/ssoSaml.ts — configured value first, never a hardcoded
- * domain — with the request's own origin as a last resort so a deployment that
- * sets neither still emits working links instead of localhost ones.
+ * The origin absolute feed/page links are built from (#2356): the VALIDATED
+ * request origin when the caller can hand over its headers — a marketing
+ * visitor's feed link must not point at the internship host — else the
+ * configured origin (NEXTAUTH_URL, then NEXT_PUBLIC_APP_URL, the same precedence
+ * as `appBase()` in lib/ssoSaml.ts, never a hardcoded domain). A host this
+ * deployment does not serve also falls back to the configured origin, so the
+ * value can never be attacker-chosen.
  */
-export function publicOrigin(requestUrl?: string): string {
-  const configured = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
-  if (configured) return configured.replace(/\/$/, '');
-  if (requestUrl) {
-    try {
-      return new URL(requestUrl).origin;
-    } catch {
-      // fall through to the local default
-    }
-  }
-  return 'http://localhost:3000';
+export function publicOrigin(get?: (name: string) => string | null | undefined): string {
+  return get ? requestOrigin(get) : configuredOrigin();
 }
 
 /** The feed URL for one locale. `en` is the default, so it carries no query. */

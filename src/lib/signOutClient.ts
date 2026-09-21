@@ -1,6 +1,7 @@
 'use client';
 
 import { signOut } from 'next-auth/react';
+import { absoluteHere } from '@/lib/safeRedirect';
 
 // How long the sign-out waits for the service worker to confirm it emptied its
 // caches before giving up and doing the deletion from the page itself. Short on
@@ -88,5 +89,8 @@ export async function signOutEverywhere(callbackUrl = '/auth/signin'): Promise<v
   // Before the redirect, not after: `signOut()` navigates, and a purge started
   // on a page that is being torn down is a purge that may not finish.
   await purgeServiceWorkerCaches();
-  await signOut({ callbackUrl });
+  // Absolute on THIS origin (#2488): a relative callbackUrl is resolved by
+  // NextAuth against NEXTAUTH_URL — the internship host — so a marketing user
+  // used to land on the other product after signing out.
+  await signOut({ callbackUrl: absoluteHere(callbackUrl) });
 }

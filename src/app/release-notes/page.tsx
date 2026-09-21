@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { GraduationCap, Rss, Sparkles } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
@@ -10,24 +11,30 @@ import { ReleaseNoteMedia } from '@/components/ReleaseNoteMedia';
 import { GITHUB_URL } from '@/components/landing/links';
 
 // Discoverability half of the feed (#1383): browsers and readers pick a feed up
-// from this link, so subscribing is one click from the page. Static metadata is
-// locale-independent, hence the default-locale feed — the other two languages
-// are the same URL with `?lang=`, and the visible link below follows the reader.
-export const metadata: Metadata = {
-  alternates: {
-    types: {
-      'application/rss+xml': [
-        { url: releaseFeedUrl(publicOrigin()), title: 'Internship CRM — release notes' },
-      ],
+// from this link, so subscribing is one click from the page. Locale-independent,
+// hence the default-locale feed — the other two languages are the same URL with
+// `?lang=`, and the visible link below follows the reader. Dynamic rather than
+// static (#2356) only so the feed URL is built on the host the page was served
+// from: on the marketing host it must not advertise the internship host's feed.
+export async function generateMetadata(): Promise<Metadata> {
+  const h = await headers();
+  return {
+    alternates: {
+      types: {
+        'application/rss+xml': [
+          { url: releaseFeedUrl(publicOrigin((n) => h.get(n))), title: 'Internship CRM — release notes' },
+        ],
+      },
     },
-  },
-};
+  };
+}
 
 // Public, user-facing "what's new" page — friendly feature highlights per
 // release, localized. Distinct from CHANGELOG.md (developer-facing, in the repo).
 export default async function ReleaseNotesPage() {
   const { locale, t } = await getServerDictionary();
-  const feedUrl = releaseFeedUrl(publicOrigin(), locale);
+  const h = await headers();
+  const feedUrl = releaseFeedUrl(publicOrigin((n) => h.get(n)), locale);
 
   return (
     <PublicShell>
