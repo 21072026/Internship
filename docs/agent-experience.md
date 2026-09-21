@@ -7082,3 +7082,15 @@ dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
 - **Ağır workflow'lar limit'e çarpıyor:** 71 ajanlı review'da çürütücülerin HEPSİ düştü; yalın
   (4-5 ajan, tek yargıç/açı) sürümler bitti. Bulgu başına ≤1 çürütücü, ya da bulguları kendin
   koddan teyit et.
+- **Bir listenin ikinci kopyası:** `ACCENT_COLORS`'a 'magenta' eklendi, UI sundu, ama
+  `PUT /api/profile`'ın zod `z.enum([...])`'u kendi altı-renklik kopyasını taşıyordu → 400.
+  Değer listesi genişletirken `grep -rn "'amber'"` gibi *son üyeyi* ara (enum'lar, seed'ler,
+  e-posta renk haritaları, `schema.prisma` yorumları); doğrulayıcı listeyi kaynaktan okusun
+  (`z.enum(ACCENT_COLORS)` — zod 3.25 readonly tuple kabul ediyor). Regresyon testi *en yeni*
+  üyeyi seçsin ki bir sonraki ekleme de aynı teste takılsın.
+- **Playwright `CI=1` = sadece `next start`:** build ayrı adımdır; worktree'de önce
+  `npm run build`. Aynı `.next` içinde dev ve prod artefaktı karışınca (`next dev` sonrası
+  `next start` ya da tersi) `ENOENT app-paths-manifest.json` yağmuru → `rm -rf .next`, yeniden
+  build. Bu dev-modu ENOENT'i gerçek test hatası değildir; ilk koşudaki "element not found"
+  bundandı.
+

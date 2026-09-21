@@ -428,7 +428,7 @@ model User {
   // UI density preference ('comfortable' | 'compact'); applied at sign-in.
   // Null = comfortable (the default spacing).
   density                 String?
-  // UI accent color ('blue' | 'green' | 'purple' | 'rose' | 'teal' | 'amber');
+  // UI accent color (one of ACCENT_COLORS in src/lib/accent.ts, e.g. 'blue' | 'magenta');
   // drives the app's primary color via data-accent. Null = environment default
   // (green in preview, blue in production).
   accentColor             String?
