@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Orphaned meeting series are no longer anyone's to cancel** (#2487). `MeetingSeries.projectId` is nullable with `onDelete: SetNull`, so a series whose project was deleted survives as an orphan — and `DELETE /api/meeting-series` ran its project-access check and the `'projects'` capability gate only inside `if (current.projectId)`, leaving any mentor in the organisation free to deactivate (and purge the generated meetings of) any such row; `PUT` checked only the *target* project, so the same row could be adopted into a project of one's own and edited from there. A new `ensureSeriesAccess()` decides for every existing row: with a project, the project (unchanged); without one, its author or an admin — the line `project-tasks` already draws for a personal to-do. `DELETE` and `PUT` both check the current row through it (a move additionally checks the target project), and `DELETE`'s capability gate now sits at the top of the handler, unconditional, like `POST`/`PUT`. `e2e/meeting-series.spec.ts` gains the orphan case. Read paths were never affected: `GET` requires a `projectId`, the reminder cron skips project-less series, the calendar expands through projects.",
+  "notes": {
+    "en": [
+      "A recurring meeting whose project has been deleted can now only be cancelled or edited by the mentor who set it up, or by an administrator."
+    ],
+    "tr": [
+      "Projesi silinmiş bir tekrarlayan toplantıyı artık yalnızca onu kuran mentor ya da bir yönetici iptal edebilir veya düzenleyebilir."
+    ],
+    "de": [
+      "Ein wiederkehrendes Meeting, dessen Projekt gelöscht wurde, kann jetzt nur noch von der Person, die es angelegt hat, oder von einer Administration abgesagt oder bearbeitet werden."
+    ]
+  }
+}
