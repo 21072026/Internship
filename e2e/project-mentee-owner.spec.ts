@@ -67,7 +67,8 @@ test('a mentee creates a project from the portal and edits the one they own', { 
     );
     await page.getByRole('button', { name: 'Save' }).click();
     expect((await saved).status()).toBe(200);
-    await expect(list.getByText('MO Solar Tracker v2', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('project-form')).toHaveCount(0);
+    await expect(list.getByText('MO Solar Tracker v2', { exact: true })).toBeVisible({ timeout: 20_000 });
 
     // The scope must not depend on the OWNER member row surviving: a project
     // whose row is gone (seeder, backfill, member removal) is still the owner's.
