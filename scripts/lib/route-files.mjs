@@ -6,14 +6,21 @@
 // asks who is calling). A second, slightly different walker is how a route ends
 // up invisible to one of them while looking covered, so there is only this one.
 //
+// Every extension the App Router accepts for a route module is matched, not
+// just `route.ts`: a `route.tsx` or `route.js` is a real handler, and a file
+// neither guard can see is the silent-pass both are built to avoid.
+//
 // Paths come back POSIX-separated and sorted, so a failure message reads the
 // same on every machine.
 
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+/** `route.ts` and every other extension Next accepts for a route module. */
+export const ROUTE_FILE = /^route\.(ts|tsx|js|jsx|mjs|cjs)$/;
+
 /**
- * Every `route.ts` under `dir`, recursively.
+ * Every route module under `dir`, recursively.
  * @param {string} dir directory to walk (e.g. 'src/app/api')
  * @returns {string[]} file paths, POSIX-separated, sorted
  */
@@ -22,7 +29,7 @@ export function routeFiles(dir) {
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry);
     if (statSync(path).isDirectory()) out.push(...routeFiles(path));
-    else if (entry === 'route.ts') out.push(path);
+    else if (ROUTE_FILE.test(entry)) out.push(path);
   }
   return out.map((p) => p.replace(/\\/g, '/')).sort();
 }

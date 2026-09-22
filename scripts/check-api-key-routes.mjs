@@ -95,7 +95,7 @@ for (const file of files) {
 
   // 4. an undocumented endpoint is an endpoint nobody knows is scoped.
   if (authenticated) {
-    const path = '/' + file.slice(`${V1_DIR}/`.length, -'/route.ts'.length);
+    const path = '/' + file.slice(`${V1_DIR}/`.length).replace(/\/route\.[^/]+$/, '');
     if (!spec.includes(`'${path}'`)) {
       problems.push(
         `${file}  is not described in ${SPEC} — add '${path}' with the scope it requires.`,
