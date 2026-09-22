@@ -152,6 +152,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteLinks: { d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away, and a private note keeps a wall of links legible.' },
         },
       },
+      // /pricing (#2475). The marketing product has NO published price list —
+      // the packaging has not been decided — so the page hides every section
+      // that would have to state one (see src/app/pricing/page.tsx) and these
+      // strings replace the internship framing of what is left. Nothing here
+      // invents a number, a plan or a seat: the two claims that survive are the
+      // ones that are true whatever the packaging turns out to be (self-hosting
+      // is free; there is no checkout, you get an invoice after a conversation).
+      pricing: {
+        heroBadge: 'Marketing pricing is not published yet',
+        heroTitle: 'What we can tell you about the price today',
+        heroSubtitle: 'The packaging for the marketing product has not been set yet, so there is no price list on this page — we would rather show you nothing than a number we would have to take back. What is already true, whatever the packaging turns out to be, is below.',
+        discountsTitle: 'What is already true',
+      },
     },
     tr: {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
@@ -250,6 +263,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteLinks: { d: 'Adresini bilmediğin birini davet et: alanı boş bırak, elden verebileceğin tek kullanımlık ve 7 gün geçerli bir bağlantı üretilsin. Bağlantıyla kaydolan kişi doğrudan gönderene bağlanır ve özel bir not, birbirine benzeyen bağlantıları ayırt edilebilir kılar.' },
         },
       },
+      pricing: {
+        heroBadge: 'Pazarlama fiyatlandırması henüz yayınlanmadı',
+        heroTitle: 'Fiyat hakkında bugün söyleyebileceklerimiz',
+        heroSubtitle: 'Pazarlama ürününün paketlemesi henüz belirlenmedi; bu yüzden bu sayfada fiyat listesi yok — geri almak zorunda kalacağımız bir rakam göstermektense hiçbir şey göstermemeyi tercih ederiz. Paketleme ne olursa olsun bugün de doğru olanlar aşağıda.',
+        discountsTitle: 'Şimdiden doğru olanlar',
+      },
     },
     de: {
       nav: { candidates: 'Leads' },
@@ -345,6 +364,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           externalGuests: { d: 'Ein Meeting besteht nicht immer nur aus dem eigenen Team. Tippe eine beliebige E-Mail-Adresse in die Planung, und diese Person ist im selben Raum eingeladen — mit denselben Ja/Nein-Buttons, ohne Konto, ohne Registrierung und mit .ics für den eigenen Kalender. Du siehst, wer zugesagt hat, und eine an die falsche Adresse gegangene Einladung lässt sich zurückziehen; ihr Link funktioniert dann nicht mehr.' },
           inviteLinks: { d: 'Lade jemanden ein, dessen Adresse du nicht kennst: Feld leer lassen, und es entsteht ein einmalig gültiger 7-Tage-Link zum persönlichen Übergeben. Wer sich damit registriert, ist sofort mit der einladenden Person verbunden — und eine private Notiz hält eine Wand aus Links unterscheidbar.' },
         },
+      },
+      pricing: {
+        heroBadge: 'Die Marketing-Preise sind noch nicht veröffentlicht',
+        heroTitle: 'Was wir heute über den Preis sagen können',
+        heroSubtitle: 'Die Paketierung des Marketing-Produkts steht noch nicht fest, deshalb gibt es auf dieser Seite keine Preisliste — lieber zeigen wir nichts als eine Zahl, die wir zurücknehmen müssten. Was unabhängig von der Paketierung schon heute gilt, steht unten.',
+        discountsTitle: 'Was schon heute gilt',
       },
     },
   },

@@ -15461,11 +15461,32 @@ export function getDictionary(locale: Locale): Dict {
 // getServerDictionary), never through useT() on the client — e.g. the landing
 // marketing copy. They are stripped from the dictionary serialized into every
 // page's client payload to keep it lean (#502).
-export const SERVER_ONLY_NAMESPACES = ['landing', 'featureCatalog', 'trust', 'accessibility'] as const;
+//
+// `pricing` joined them in #2475. Its only reader is the /pricing server
+// component, and it is ~65 strings of one vertical's price model — the free
+// core, the plan bands, the matched-pair meter — which were being serialized
+// into the client payload of every page on every host, the MARKETING one
+// included. Membership here is enforced by the type: a client component that
+// reaches for `t.pricing` no longer compiles.
+export const SERVER_ONLY_NAMESPACES = ['landing', 'featureCatalog', 'trust', 'accessibility', 'pricing'] as const;
 export type ClientDictionary = Omit<Dictionary, (typeof SERVER_ONLY_NAMESPACES)[number]>;
 
-export function getClientDictionary(locale: Locale): ClientDictionary {
-  const clientDict: Partial<Dictionary> = { ...getDictionary(locale) };
+/**
+ * Strip the server-only namespaces from an already-resolved dictionary.
+ *
+ * Separate from {@link getClientDictionary} because the root layout must apply
+ * the vertical overlay FIRST and strip afterwards (#2475). Stripping first and
+ * merging after put every server-only namespace the overlay touches straight
+ * back into the client payload: the deep merge adds a key the base no longer
+ * has, so a MARKETING host was shipping the whole marketing `landing` overlay
+ * to the browser — the exact payload SERVER_ONLY_NAMESPACES exists to avoid.
+ */
+export function toClientDictionary(dict: Dictionary): ClientDictionary {
+  const clientDict: Partial<Dictionary> = { ...dict };
   for (const ns of SERVER_ONLY_NAMESPACES) delete clientDict[ns];
   return clientDict as ClientDictionary;
+}
+
+export function getClientDictionary(locale: Locale): ClientDictionary {
+  return toClientDictionary(getDictionary(locale));
 }

@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import './globals.css';
 import { Providers } from './providers';
 import { getLocale } from '@/i18n/server';
-import { getClientDictionary } from '@/i18n/dictionaries';
+import { getDictionary, toClientDictionary } from '@/i18n/dictionaries';
 import { resolveRequestVertical } from '@/i18n/server';
 import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
 import { productNameFor } from '@/lib/verticals';
@@ -87,8 +87,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Same vertical overlay the server dictionary gets (#2354), so the client
   // payload and server render agree. INTERNSHIP resolves to an empty overlay,
   // so this is identical to the base client dict for today's product.
+  //
+  // Overlay FIRST, strip after (#2475): the deep merge ADDS a namespace the
+  // base does not have, so stripping first meant every server-only namespace
+  // the overlay touches — `landing` above all — was merged back into the
+  // browser payload on a marketing host.
   const vertical = await resolveRequestVertical();
-  const dict = applyVerticalOverlay(getClientDictionary(locale), locale, vertical);
+  const dict = toClientDictionary(applyVerticalOverlay(getDictionary(locale), locale, vertical));
   const cookieStore = await cookies();
   let theme = cookieStore.get('theme')?.value;
   let fontSize = cookieStore.get('fontSize')?.value;
