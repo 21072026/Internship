@@ -3,9 +3,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { resolvePipelineStages, outcomeStageKeysFrom } from '@/lib/pipelineStages';
 import { onPathKeys } from '@/lib/pipeline';
-import { biggestDropOff, stageConversions, timeToHire, type Journey } from '@/lib/funnelKpi';
+import {
+  biggestDropOff,
+  cohortMonths,
+  conversionByEntryMonth,
+  DEFAULT_RETENTION_BUCKETS,
+  retentionTriangle,
+  stageConversions,
+  timeToHire,
+  type Journey,
+} from '@/lib/funnelKpi';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 
@@ -104,6 +113,54 @@ export async function GET(request: Request) {
     const conversions = stageConversions(order, journeys);
     const tth = timeToHire(order, journeys);
 
+    // Cohorts (#2420 / #2425). Both read the SAME `journeys` the two numbers
+    // above are computed from — there is one mapping of StatusChange rows to
+    // journeys in this route and everything on the card agrees because of it.
+    //
+    // Which stages: the tenant's own, resolved through the #1882 outcome rule
+    // rather than named. `first` is the stage a record starts on, so "entry
+    // month" is the month it arrived; `finished` is what this tenant means by
+    // won (for the built-in catalogue HIRED_660 *and* EMPLOYED_700, which is
+    // exactly the set "the last on-path key" would get wrong); `offPath` is
+    // what it means by lost, so a stage merely deleted from the set later is
+    // never read as a customer leaving.
+    const outcome = outcomeStageKeysFrom(stages);
+    const toKey = outcome.finished[0] ?? null;
+    // The months to report. With no range the screen is showing everything, so
+    // the cohorts cover the last twelve months — long enough for the widest
+    // retention bucket to have closed for at least one row.
+    //
+    // The POPULATION is still the one the whole card describes: journeys that
+    // STARTED inside the window (see the query above). So a lead that arrived
+    // before the window and won inside it is in neither the cohort rows nor
+    // the conversion rows — deliberately, because a card whose sections each
+    // answered for a different set of records is worse than one that answers
+    // for a stated set. Widen the range to widen the population.
+    const windowEnd = to ?? new Date();
+    const windowStart =
+      rangeOk && from
+        ? from
+        : new Date(Date.UTC(windowEnd.getUTCFullYear(), windowEnd.getUTCMonth() - 11, 1));
+    const months = cohortMonths(windowStart, windowEnd);
+
+    const cohortConversion = {
+      fromKey: outcome.first,
+      toKey,
+      // No won stage at all (a set with no on-path stage) leaves the months in
+      // place with null rates rather than dropping the section to an empty
+      // array, so the screen renders the same shape either way.
+      months: conversionByEntryMonth(order, journeys, outcome.first, toKey ?? '', months),
+    };
+    const retention = {
+      wonKeys: outcome.finished,
+      wonLabel: outcome.finishedLabel,
+      buckets: DEFAULT_RETENTION_BUCKETS,
+      cohorts: retentionTriangle(order, journeys, months, DEFAULT_RETENTION_BUCKETS, {
+        wonKeys: outcome.finished,
+        offPath: outcome.offPath,
+      }),
+    };
+
     // Mentor capacity — only for a vertical that has mentors at all (#2423). A
     // MARKETING org's ADMIN/MENTOR rows are reps, and measuring them against a
     // "mentor ceiling" would be a confident answer to a question that tenant
@@ -118,6 +175,8 @@ export async function GET(request: Request) {
       biggestDropOff: biggestDropOff(conversions),
       timeToHire: tth,
       capacity,
+      cohortConversion,
+      retention,
       // Echoed so the screen can say which journeys these numbers describe.
       journeys: journeys.length,
     });

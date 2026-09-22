@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "- **Cohort conversion and a retention triangle on the analytics page** (#2420, #2425, story #2393). Two pure functions next to `stageConversions()` in `src/lib/funnelKpi.ts`, both fed by the `Journey[]` the funnel route already builds from `StatusChange` rows. `conversionByEntryMonth()` groups a conversion by the month the record ENTERED the first stage rather than the month it converted — a deal that closes months later is credited to the month it arrived, which is what stops a month from reading above 100% (the numerator and denominator are now decided by the same `furthestIndex()` pass, so the excess is impossible rather than unlikely, and the cohort denominators add up to the `entered` column of the stage-to-stage card). `retentionTriangle()` cohorts by the month a record first reached the tenant's won stage and reports, per 1/3/6/12-month bucket, the share that later arrived at a loss stage; **a bucket whose window has not closed yet returns `null`, never `0`**, and renders as `—`. Churn is deliberately defined as \"any off-path arrival after the winning arrival\" rather than as a new CHURNED stage in the marketing preset: a preset stage would only exist for tenants provisioned after it landed and every org already created would report a permanent 0% churn. Stage keys are resolved per tenant through `outcomeStageKeysFrom()` (#1882) — no `DEAL_WON`/`CHURNED_900`/`CANCELLATION_NOTICE_800` literal anywhere — and month boundaries reuse the repo's single UTC half-open month (`periodOf`/`periodRange`). `GET /api/admin/analytics/funnel` returns both as `cohortConversion` and `retention`; the analytics page renders them as a new Cohorts card. Unit tests: `scripts/test/funnel-cohorts.test.mjs` (15 assertions, `npm run test:funnel-cohorts`), with a 90% line floor on `funnelKpi.ts`.",
+  "notes": {
+    "en": [
+      "The analytics page has a new Cohorts card: conversion grouped by the month a record entered the pipeline, so a deal that closes months later counts towards the month it arrived and no month can read above 100%.",
+      "Next to it, retention after your won stage — of the records won in a month, how many had left 1, 3, 6 and 12 months later. A period that has not finished yet shows a dash instead of 0%, because a cohort won last month has had no chance to leave."
+    ],
+    "tr": [
+      "Analitik sayfasına yeni bir Kohortlar kartı eklendi: dönüşüm, kaydın pipeline'a girdiği aya göre gruplandı. Aylar sonra kapanan bir anlaşma geldiği aya yazılıyor, böylece hiçbir ayın oranı %100'ün üzerine çıkmıyor.",
+      "Yanında, kazanılan aşamanızdan sonrası için elde tutma: bir ayda kazanılan kayıtların 1, 3, 6 ve 12 ay sonra kaçının ayrılmış olduğu. Henüz dolmamış bir dönem %0 yerine tire gösteriyor — geçen ay kazanılan bir kohortun ayrılmaya fırsatı olmamıştır."
+    ],
+    "de": [
+      "Die Analyseseite hat eine neue Kohorten-Karte: die Konversion wird nach dem Monat gruppiert, in dem ein Datensatz in die Pipeline eingetreten ist. Ein Abschluss Monate später zählt zum Monat des Eintritts, sodass keine Quote über 100% liegen kann.",
+      "Daneben die Bindung nach Ihrer Gewonnen-Stufe: von den in einem Monat gewonnenen Datensätzen, wie viele nach 1, 3, 6 und 12 Monaten abgewandert waren. Ein noch laufender Zeitraum zeigt einen Strich statt 0% — eine im Vormonat gewonnene Kohorte hatte noch keine Gelegenheit zu gehen."
+    ]
+  }
+}

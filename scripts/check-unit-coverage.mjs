@@ -95,6 +95,14 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'stage visits counted separately from candidates (#1427)' },
   ],
   [
+    'src/lib/funnelKpi.ts',
+    {
+      floor: 90,
+      measured: 92.5,
+      why: 'cohort by ENTRY month (a month cannot exceed 100%) and a null, never 0%, for a retention window that has not closed (#2420/#2425)',
+    },
+  ],
+  [
     'src/lib/stageClock.ts',
     { floor: 85, measured: 89.86, why: 'an old no-op StatusChange must not restart "days in stage" (#2264)' },
   ],

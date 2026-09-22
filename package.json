@@ -53,6 +53,7 @@
     "test:request-id": "node --test --experimental-strip-types scripts/test/request-id.test.mjs",
     "test:service-worker": "node --test scripts/test/service-worker-cache.test.mjs",
     "test:recovery-codes": "node --test --experimental-strip-types scripts/test/recovery-code-format.test.mjs",
+    "test:funnel-cohorts": "node --test --experimental-strip-types scripts/test/funnel-cohorts.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:api-key-routes": "node scripts/check-api-key-routes.mjs",
     "check:route-auth": "node scripts/check-route-auth.mjs",
