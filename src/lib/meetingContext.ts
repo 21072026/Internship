@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { canPostToConversation, getConversationIfAllowed } from '@/lib/conversations';
 
 // A meeting hangs off exactly one context (#1051). MySQL can't express
 // "exactly one of three columns is set" as a CHECK constraint, so the rule is
@@ -122,9 +123,22 @@ export async function resolveMeetingContext(
     if (participants.length === 0) {
       return { ok: false, status: 404, error: 'Conversation not found' };
     }
-    // Every participant of a chat may start a call in it; a non-participant may
-    // not, admin or otherwise — reading someone else's thread is not the point.
-    if (!participants.some((p) => p.userId === user.id)) {
+    // Starting a call in a chat WRITES into that chat — the caller posts the
+    // "📹 … started a meeting" line (#1055) — so the rule for starting one is
+    // the rule for writing one, and it is asked of the conversation itself
+    // rather than re-derived from participant rows here.
+    //
+    // Participation alone was not that rule. `Conversation.projectId` is
+    // nullable with `onDelete: SetNull`, so a project's GROUP room outlives the
+    // project as an orphan while every participant row survives — and both
+    // messaging helpers refuse an orphan outright, for everyone. Reading it and
+    // posting to it were 403 while a call in it was 201, complete with the
+    // message it drops into the thread and an invite mail to every historical
+    // participant (#2503). `canPostToConversation` already requires
+    // participation, so the check it replaces is subsumed, not dropped: a
+    // non-participant is still refused, admin or otherwise.
+    const conversation = await getConversationIfAllowed(user, input.conversationId);
+    if (!conversation || !(await canPostToConversation(user, conversation))) {
       return { ok: false, status: 403, error: 'Forbidden' };
     }
     return {
