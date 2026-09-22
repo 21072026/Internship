@@ -25,20 +25,35 @@
 //   getServerSession, so the narrow list costs no false positives today.
 //
 // WHAT IT DOES NOT CATCH
-//   Shapes, not meaning. A handler that calls getServerSession() and then
-//   ignores a null session passes here; so does one that reads a session and
-//   serves another tenant's row. Those are what e2e/authz-matrix.spec.ts and
-//   e2e/authz-idor.spec.ts are for. This guard answers one question only: did
-//   anyone ask who is calling?
+//   Shapes, not meaning. The question this answers is exactly one: does the
+//   handler ask who is calling AT ALL? A handler that calls getServerSession()
+//   and then ignores a null session passes; so does one that reads a session
+//   and serves another tenant's row; so does one that reads the session only on
+//   a branch and answers anonymous callers on the other (/api/health and
+//   /api/profile-view both do, on purpose — they are annotated in the
+//   `_conditional` section of the baseline so the file does not read as a claim
+//   it cannot support). Meaning is what e2e/authz-matrix.spec.ts and
+//   e2e/authz-idor.spec.ts are for.
 //
-// THE TWO LISTS
+// WHY A SCANNER MISTAKE IS LOUD
+//   This reads TypeScript without a TypeScript parser, so it can be wrong. It
+//   is built so that being wrong costs a red build and never a silent pass:
+//   the set of exported handler names is taken from the RAW source as well as
+//   from the blanked copy, and any method in the raw set that the reader could
+//   not find a body for is reported as unreadable. So a comment or a regex
+//   literal that confuses the blanking can only ever hide a handler from the
+//   *reader*, never from the *report*. (#2444 review: `const RE = /[']/g;`
+//   between two handlers used to blank the second `export async function POST`
+//   away entirely, and the check passed with the handler in neither list.)
+//
+// THE THREE LISTS
 //   EXEMPT is a small set of path PATTERNS whose files are not examined at all,
 //   and it therefore also covers files added under them later. It is kept to the
 //   two cases where examining the file is the wrong thing to do, and an
 //   exemption that stops suppressing anything fails the check, so it cannot rot.
 //
 //   scripts/route-auth-baseline.json is the FROZEN, per-file inventory of
-//   handlers that answer anonymously today, each with the reason it may. It is
+//   handlers that NEVER ask who is calling, each with the reason they may. It is
 //   frozen in both directions:
 //     * an anonymous handler that is not listed fails — this is the case the
 //       guard exists for, and there is no `--update` flag, so the only way to
@@ -47,6 +62,13 @@
 //     * a listed handler that has since gained a guard fails too, asking for the
 //       entry to be deleted, so the list can only shrink towards the truth;
 //     * an entry naming a file that no longer exists fails for the same reason.
+//
+//   Its `_conditional` section is the hand-kept annotation of handlers that DO
+//   ask, but answer anonymous callers on some branch — the ones the shape check
+//   is structurally unable to find. It cannot be complete (that would need a
+//   reader of meaning), but it cannot rot either: every entry must name a live
+//   route file, a method that file exports, a method the guard still judges
+//   guarded, and a reason.
 //
 // Run: node scripts/check-route-auth.mjs        (npm run check:route-auth)
 
@@ -57,8 +79,14 @@ import { routeFiles } from './lib/route-files.mjs';
 const API_DIR = 'src/app/api';
 const BASELINE_FILE = 'scripts/route-auth-baseline.json';
 
-/** The HTTP verbs Next treats as route handlers and that can change or read data. */
-export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+/**
+ * The HTTP verbs Next treats as route handlers. HEAD and OPTIONS are in the
+ * list although no route in this tree exports either: an OPTIONS handler that
+ * reads a row is exactly as exposed as a GET, and a verb the guard does not
+ * know about is waved through with no message — the one failure mode this
+ * script is built not to have.
+ */
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 /** The only two calls that count as "this handler authenticated its caller". */
 const GUARDS = /\b(getServerSession|withApiKey)\s*\(/;
@@ -80,13 +108,39 @@ const EXEMPT = {
 // Reading TypeScript without a TypeScript parser.
 // ---------------------------------------------------------------------------
 
+/** Characters after which a `/` opens a regex literal rather than dividing. */
+const BEFORE_REGEX = new Set(['(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '^', '~', '<', '>', '\n']);
+/** Keywords after which the same is true (`return /x/.test(s)`). */
+const BEFORE_REGEX_WORDS = new Set([
+  'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'case', 'do', 'else', 'yield', 'await',
+]);
+
+/** Does the `/` at `i` open a regex literal, reading backwards from it? */
+function opensRegex(source, i) {
+  let j = i - 1;
+  while (j >= 0 && (source[j] === ' ' || source[j] === '\t')) j--;
+  if (j < 0) return true;
+  const c = source[j];
+  if (BEFORE_REGEX.has(c)) return true;
+  if (!/[\w$]/.test(c)) return false;
+  let k = j;
+  while (k >= 0 && /[\w$]/.test(source[k])) k--;
+  return BEFORE_REGEX_WORDS.has(source.slice(k + 1, j + 1));
+}
+
 /**
- * Same-length copy of `source` with comment bodies and string/template contents
- * replaced by spaces. Offsets are preserved, so everything below can brace-match
- * and regex-search without a `{` inside a comment or a `'` inside a string
- * throwing it off — and without a prose mention of getServerSession (there are
- * several, including one that says a route must never have one) reading as a
- * call.
+ * Same-length copy of `source` with comment bodies, string/template contents and
+ * regex-literal contents replaced by spaces. Offsets are preserved, so
+ * everything below can brace-match and regex-search without a `{` inside a
+ * comment, a `'` inside a string or a `'` inside a character class throwing it
+ * off — and without a prose mention of getServerSession (there are several,
+ * including one that says a route must never have one) reading as a call.
+ *
+ * The regex branch uses the usual look-behind heuristic and can therefore be
+ * wrong in either direction on pathological input. Both directions are safe:
+ * over-blanking hides a guard or a closing brace and the handler is reported,
+ * under-blanking hides a handler from the reader and analyzeRoute's raw-source
+ * cross-check reports it as unreadable. Neither can pass a handler silently.
  */
 export function codeOnly(source) {
   const out = source.split('');
@@ -115,6 +169,21 @@ export function codeOnly(source) {
       }
       blank(i + 1, j);
       i = j;
+    } else if (c === '/' && opensRegex(source, i)) {
+      let j = i + 1;
+      let inClass = false;
+      for (; j < source.length; j++) {
+        const d = source[j];
+        if (d === '\\') j++;
+        else if (d === '\n') break; // unterminated: it was division after all
+        else if (d === '[') inClass = true;
+        else if (d === ']') inClass = false;
+        else if (d === '/' && !inClass) break;
+      }
+      if (j < source.length && source[j] === '/') {
+        blank(i + 1, j);
+        i = j;
+      }
     }
   }
   return out.join('');
@@ -215,6 +284,27 @@ function reachesGuard(body, locals, seen) {
   return false;
 }
 
+/** Every HTTP method name `text` exports, in any of the three shapes. */
+function exportedMethods(text) {
+  const found = new Set();
+  for (const m of text.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g)) {
+    if (HTTP_METHODS.includes(m[1])) found.add(m[1]);
+  }
+  for (const m of text.matchAll(/export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) {
+    if (HTTP_METHODS.includes(m[1])) found.add(m[1]);
+  }
+  // `export { handler as GET, handler as POST }` and `export { GET }`.
+  for (const m of text.matchAll(/export\s*\{([^}]*)\}/g)) {
+    for (const part of m[1].split(',')) {
+      const name = part.trim().split(/\s+as\s+/).pop()?.trim() ?? '';
+      if (HTTP_METHODS.includes(name)) found.add(name);
+    }
+  }
+  return found;
+}
+
+const HANDLER_DECL = new RegExp(`export\\s+(?:async\\s+)?function\\s+(${HTTP_METHODS.join('|')})\\s*\\(`, 'g');
+
 /**
  * Classify one route file's source.
  * @param {string} source the file's TypeScript
@@ -227,26 +317,18 @@ export function analyzeRoute(source) {
   const code = codeOnly(source);
   const locals = localFunctions(code);
 
-  // Every method name the file exports, whatever the shape.
-  const exported = new Set();
-  for (const m of code.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g)) {
-    if (HTTP_METHODS.includes(m[1])) exported.add(m[1]);
-  }
-  for (const m of code.matchAll(/export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) {
-    if (HTTP_METHODS.includes(m[1])) exported.add(m[1]);
-  }
-  // `export { handler as GET, handler as POST }` and `export { GET }`.
-  for (const m of code.matchAll(/export\s*\{([^}]*)\}/g)) {
-    for (const part of m[1].split(',')) {
-      const name = part.trim().split(/\s+as\s+/).pop()?.trim() ?? '';
-      if (HTTP_METHODS.includes(name)) exported.add(name);
-    }
-  }
+  // The union of what the blanked copy exports and what the RAW text does. The
+  // raw half is the one that matters: it is computed from text nothing has
+  // blanked, so no confusion inside codeOnly can make a handler disappear from
+  // the report. The price is that an `export async function GET(` written out
+  // inside a comment or a string in a route file is reported as unreadable —
+  // a loud false positive, which is the direction to be wrong in.
+  const exported = new Set([...exportedMethods(code), ...exportedMethods(source)]);
 
   const handlers = [];
   const read = new Set();
-  const handlerDecl = /export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)\s*\(/g;
-  for (const m of code.matchAll(handlerDecl)) {
+  HANDLER_DECL.lastIndex = 0;
+  for (const m of code.matchAll(HANDLER_DECL)) {
     const body = bodyAt(code, m.index + m[0].length - 1);
     if (body === null) continue;
     read.add(m[1]);
@@ -270,20 +352,32 @@ export function exemptionFor(file, patterns = EXEMPT) {
   return undefined;
 }
 
-function main() {
-  const baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));
+/**
+ * The decision layer, separated from the filesystem so the ratchet itself can
+ * be tested — it is the half with the security value, and the half a later
+ * refactor (an `--update` flag, a relaxed staleness rule) would quietly break.
+ *
+ * @param {object} input
+ * @param {string[]} input.files route files to examine, as routeFiles() returns them
+ * @param {(file: string) => string} input.read source of one file
+ * @param {object} input.baseline parsed scripts/route-auth-baseline.json
+ * @param {Record<string,string>} [input.exempt] path patterns → reason
+ * @param {(file: string) => boolean} [input.exists] does this path exist on disk
+ * @returns {{ problems: string[], examined: number, anonymous: number }}
+ */
+export function checkTree({ files, read, baseline, exempt = EXEMPT, exists = existsSync }) {
   const problems = [];
   const missing = new Map(); // file -> methods that need a baseline entry
   const usedExemptions = new Set();
-  const analysed = new Map(); // file -> Set of methods this reader could judge
+  const analysed = new Map(); // file -> Map(method -> guarded)
   let examined = 0;
   let anonymous = 0;
 
-  const walked = new Set(routeFiles(API_DIR));
+  const walked = new Set(files);
 
   for (const file of walked) {
-    const exemption = exemptionFor(file);
-    const { handlers, unreadable } = analyzeRoute(readFileSync(file, 'utf8'));
+    const exemption = exemptionFor(file, exempt);
+    const { handlers, unreadable } = analyzeRoute(read(file));
     const entry = baseline[file];
     const allowed = new Set(Array.isArray(entry?.methods) ? entry.methods : []);
 
@@ -303,7 +397,7 @@ function main() {
       continue;
     }
     examined++;
-    analysed.set(file, new Set(handlers.map((h) => h.method)));
+    analysed.set(file, new Map(handlers.map((h) => [h.method, h.guarded])));
 
     for (const { method, guarded } of handlers) {
       if (guarded) {
@@ -333,28 +427,34 @@ function main() {
     );
   }
 
+  /** Shared shape rules for both sections of the baseline. */
+  const checkEntry = (section, file, entry) => {
+    if (!exists(file)) {
+      problems.push(`${BASELINE_FILE}${section} names ${file}, which no longer exists — delete the entry.`);
+      return false;
+    }
+    if (!walked.has(file)) {
+      problems.push(
+        `${BASELINE_FILE}${section} names ${file}, which is not a route file under ${API_DIR} — an ` +
+          'entry that matches nothing excuses nothing, and reads like it does.',
+      );
+      return false;
+    }
+    if (typeof entry?.why !== 'string' || entry.why.trim().length < 20) {
+      problems.push(
+        `${BASELINE_FILE}${section} entry for ${file} has no usable "why" — every open route states, ` +
+          'in the entry, what stands in for the session (a signed token, a shared secret, or ' +
+          '"nothing, it is public and carries no personal data").',
+      );
+    }
+    return true;
+  };
+
   // The baseline may not name a file that is gone, or a method that is not open
   // any more: a stale line reads as a reviewed decision it no longer is.
   for (const [file, entry] of Object.entries(baseline)) {
     if (file.startsWith('_')) continue;
-    if (!existsSync(file)) {
-      problems.push(`${BASELINE_FILE} names ${file}, which no longer exists — delete the entry.`);
-      continue;
-    }
-    if (!walked.has(file)) {
-      problems.push(
-        `${BASELINE_FILE} names ${file}, which is not a route file under ${API_DIR} — an entry ` +
-          'that matches nothing excuses nothing, and reads like it does.',
-      );
-      continue;
-    }
-    if (typeof entry?.why !== 'string' || entry.why.trim().length < 20) {
-      problems.push(
-        `${BASELINE_FILE} entry for ${file} has no usable "why" — every open route states, in ` +
-          'the entry, what stands in for the session (a signed token, a shared secret, or ' +
-          '"nothing, it is public and carries no personal data").',
-      );
-    }
+    if (!checkEntry('', file, entry)) continue;
     for (const method of entry?.methods ?? []) {
       if (!HTTP_METHODS.includes(method)) {
         problems.push(`${BASELINE_FILE} entry for ${file} lists ${method}, which is not an HTTP handler.`);
@@ -367,7 +467,42 @@ function main() {
     }
   }
 
-  for (const [pattern, reason] of Object.entries(EXEMPT)) {
+  // `_conditional` annotates handlers that DO authenticate but answer anonymous
+  // callers on a branch — invisible to a shape check, so the section is written
+  // by hand. It is held to the same "cannot rot" rules, plus one of its own: a
+  // method listed here must still be judged guarded, or it belongs in the
+  // frozen list above where the ratchet can see it.
+  for (const [file, entry] of Object.entries(baseline._conditional ?? {})) {
+    if (file.startsWith('_')) continue;
+    if (baseline[file]) {
+      problems.push(
+        `${BASELINE_FILE} lists ${file} in both the frozen baseline and _conditional — a handler ` +
+          'either never asks who is calling or asks and answers anyway; it cannot be both.',
+      );
+      continue;
+    }
+    if (!checkEntry(' _conditional', file, entry)) continue;
+    for (const method of entry?.methods ?? []) {
+      if (!HTTP_METHODS.includes(method)) {
+        problems.push(
+          `${BASELINE_FILE} _conditional entry for ${file} lists ${method}, which is not an HTTP handler.`,
+        );
+      } else if (analysed.has(file) && !analysed.get(file).has(method)) {
+        problems.push(
+          `${BASELINE_FILE} _conditional entry for ${file} lists ${method}, which the file does not ` +
+            'export — delete it.',
+        );
+      } else if (analysed.has(file) && analysed.get(file).get(method) === false) {
+        problems.push(
+          `${BASELINE_FILE} _conditional entry for ${file} says ${method} authenticates on some ` +
+            'branch, but it no longer calls getServerSession() or withApiKey() at all — move it to ' +
+            'the frozen baseline above, where the ratchet counts it.',
+        );
+      }
+    }
+  }
+
+  for (const [pattern, reason] of Object.entries(exempt)) {
     if (!usedExemptions.has(pattern)) {
       problems.push(
         `EXEMPT in scripts/check-route-auth.mjs still excuses ${pattern} ("${reason.slice(0, 60)}…"), ` +
@@ -376,6 +511,17 @@ function main() {
       );
     }
   }
+
+  return { problems, examined, anonymous };
+}
+
+function main() {
+  const baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));
+  const { problems, examined, anonymous } = checkTree({
+    files: routeFiles(API_DIR),
+    read: (file) => readFileSync(file, 'utf8'),
+    baseline,
+  });
 
   if (problems.length > 0) {
     console.error('route auth FAILED — an API handler must authenticate its caller (#2444):\n');

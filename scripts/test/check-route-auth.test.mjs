@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { analyzeRoute, codeOnly, exemptionFor, HTTP_METHODS } from '../check-route-auth.mjs';
+import { analyzeRoute, checkTree, codeOnly, exemptionFor, HTTP_METHODS } from '../check-route-auth.mjs';
 
 // scripts/check-route-auth.mjs reads TypeScript with a scanner rather than a
 // parser, and its two failure modes are both silent on the tree it ships with.
@@ -189,9 +189,242 @@ test('exemptions match a directory prefix or an exact file, nothing else', () =>
   assert.equal(exemptionFor('src/app/api/v1x/route.ts', patterns), undefined);
 });
 
-test('the shipped baseline is well formed', () => {
+// --- the scanner's blind spots -------------------------------------------
+
+test('a regex literal holding a quote does not swallow the next handler', () => {
+  // Reported in review of #2444: codeOnly() had no case for a regex literal, so
+  // the `'` in a character class opened a string that blanked everything up to
+  // the next quote — including the whole of the handler below it. The handler
+  // then appeared in NEITHER `handlers` nor `unreadable`, and the check passed
+  // with an unguarded route it had never looked at. That is the exact failure
+  // this guard exists to prevent, so it is pinned here.
+  const source = `
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  return NextResponse.json({ ok: !!session });
+}
+
+const APOSTROPHE = /[']/g;
+
+export async function POST(request: Request) {
+  await prisma.user.update({ where: { id: body.id }, data: { role: 'ADMIN' } });
+  return NextResponse.json({ ok: true });
+}
+`;
+  const { handlers, unreadable } = analyzeRoute(source);
+  assert.deepEqual(unreadable, []);
+  assert.deepEqual(handlers, [
+    { method: 'GET', guarded: true },
+    { method: 'POST', guarded: false },
+  ]);
+});
+
+test('a regex literal holding a brace does not end the body early', () => {
+  const source = `
+export async function GET(request: Request) {
+  const re = /[{}]/g;
+  const session = await getServerSession(authOptions);
+  return NextResponse.json({ ok: !!session, re: re.source });
+}
+`;
+  assert.equal(verdict(source, 'GET'), true);
+});
+
+test('division is not read as a regex literal', () => {
+  // The other direction of the same heuristic: over-blanking would eat the
+  // guard call and report a private handler as open.
+  const source = `
+export async function GET(request: Request) {
+  const half = total / 2;
+  const session = await getServerSession(authOptions);
+  return NextResponse.json({ half, ok: !!session });
+}
+`;
+  assert.equal(verdict(source, 'GET'), true);
+});
+
+test('a handler the blanking loses is reported, never dropped', () => {
+  // The structural promise: `exported` is built from the RAW source as well as
+  // the blanked copy, so no confusion inside codeOnly can hide a handler from
+  // the report. Here the look-behind heuristic deliberately reads `/['"]/` as
+  // division (the character before it is `)`), the fake string swallows both
+  // bodies — and both methods still come back, loudly, as unreadable.
+  const source = `
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (session) /['"]/g.test(session.user.id);
+  return NextResponse.json({ ok: true });
+}
+
+export async function POST(request: Request) {
+  await prisma.user.update({ where: { id: body.id }, data: { role: 'ADMIN' } });
+  return NextResponse.json({ ok: true });
+}
+`;
+  const { handlers, unreadable } = analyzeRoute(source);
+  assert.deepEqual(handlers, []);
+  assert.deepEqual(unreadable, ['GET', 'POST']);
+});
+
+test('HEAD and OPTIONS are handlers like any other', () => {
+  // No route in the tree exports either today. A verb the guard does not know
+  // is a verb it waves through in silence, which is the one thing it must not
+  // do, so they are in HTTP_METHODS before the first one is written.
+  assert.ok(HTTP_METHODS.includes('HEAD') && HTTP_METHODS.includes('OPTIONS'));
+  const source = `
+export async function OPTIONS(request: Request) {
+  return NextResponse.json(await prisma.company.findMany());
+}
+`;
+  assert.equal(verdict(source, 'OPTIONS'), false);
+});
+
+// --- the ratchet ----------------------------------------------------------
+//
+// The detector above is the half with a safety net; main()'s decision layer is
+// the half with the security value, and the half a later edit (an `--update`
+// flag, a softer staleness rule) would quietly undo. checkTree() is that layer
+// with the filesystem lifted out, so the four failures the guard promises can
+// be driven from fixtures instead of reproduced by hand.
+
+const GUARDED = `
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return NextResponse.json({ ok: true });
+}
+`;
+const OPEN = `
+export async function GET(request: Request) {
+  return NextResponse.json(await prisma.company.findMany());
+}
+`;
+const WHY = 'a written reason long enough to be a reason';
+
+/** checkTree over an in-memory tree; `exempt` defaults to one live pattern. */
+function check({ tree, baseline = {}, exempt = { 'src/app/api/v1/': 'covered by the api-key guard' } }) {
+  const files = { 'src/app/api/v1/x/route.ts': OPEN, ...tree };
+  return checkTree({
+    files: Object.keys(files),
+    read: (file) => files[file],
+    baseline,
+    exempt,
+    exists: (file) => file in files,
+  });
+}
+
+test('ratchet: a clean tree reports nothing', () => {
+  const { problems, examined, anonymous } = check({
+    tree: { 'src/app/api/a/route.ts': GUARDED, 'src/app/api/b/route.ts': OPEN },
+    baseline: { 'src/app/api/b/route.ts': { methods: ['GET'], why: WHY } },
+  });
+  assert.deepEqual(problems, []);
+  assert.equal(examined, 2);
+  assert.equal(anonymous, 1);
+});
+
+test('ratchet: a new anonymous handler that is not listed fails', () => {
+  const { problems } = check({ tree: { 'src/app/api/new/route.ts': OPEN } });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /src\/app\/api\/new\/route\.ts {2}GET answers without calling/);
+  // The message hands over a paste-ready entry, but nothing writes it: adding
+  // one costs writing the reason by hand.
+  assert.match(problems[0], /"methods": \["GET"\]/);
+});
+
+test('ratchet: a listed handler that has since gained a guard fails', () => {
+  const { problems } = check({
+    tree: { 'src/app/api/a/route.ts': GUARDED },
+    baseline: { 'src/app/api/a/route.ts': { methods: ['GET'], why: WHY } },
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /now authenticates, but is still listed/);
+});
+
+test('ratchet: a baseline entry naming a file that is gone fails', () => {
+  const { problems } = check({
+    tree: { 'src/app/api/a/route.ts': GUARDED },
+    baseline: { 'src/app/api/deleted/route.ts': { methods: ['GET'], why: WHY } },
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /no longer exists — delete the entry/);
+});
+
+test('ratchet: an exemption that suppresses nothing fails', () => {
+  const { problems } = check({
+    tree: { 'src/app/api/a/route.ts': GUARDED },
+    exempt: { 'src/app/api/nothing-here/': 'a pattern that stopped covering anything' },
+  });
+  // The v1 fixture is open but no longer excused, so it is reported too.
+  assert.equal(problems.length, 2);
+  assert.ok(problems.some((p) => /still excuses src\/app\/api\/nothing-here\//.test(p)));
+});
+
+test('ratchet: a baseline entry with no usable reason fails', () => {
+  const { problems } = check({
+    tree: { 'src/app/api/b/route.ts': OPEN },
+    baseline: { 'src/app/api/b/route.ts': { methods: ['GET'], why: 'public' } },
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /no usable "why"/);
+});
+
+test('ratchet: a baseline entry naming a method the file does not export fails', () => {
+  const { problems } = check({
+    tree: { 'src/app/api/b/route.ts': OPEN },
+    baseline: { 'src/app/api/b/route.ts': { methods: ['GET', 'DELETE'], why: WHY } },
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /lists DELETE, which the file does not export/);
+});
+
+test('ratchet: an unreadable handler shape fails instead of passing', () => {
+  const { problems } = check({
+    tree: { 'src/app/api/odd/route.ts': 'export const GET = async (r: Request) => NextResponse.json({});' },
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /exports GET in a shape this guard cannot read/);
+});
+
+test('_conditional: an entry that stopped authenticating must move to the baseline', () => {
+  // The annotation of "asks, but answers anonymous callers on a branch" is
+  // written by hand, so it is held to a rule that cannot rot: the day the
+  // handler stops asking at all, the entry fails and it goes where the ratchet
+  // counts it.
+  const { problems } = check({
+    tree: { 'src/app/api/health/route.ts': OPEN },
+    baseline: { _conditional: { 'src/app/api/health/route.ts': { methods: ['GET'], why: WHY } } },
+  });
+  assert.equal(problems.length, 2);
+  assert.ok(problems.some((p) => /move it to the frozen baseline/.test(p)));
+  assert.ok(problems.some((p) => /answers without calling/.test(p)));
+});
+
+test('_conditional: a handler cannot be in both sections', () => {
+  const { problems } = check({
+    tree: { 'src/app/api/health/route.ts': GUARDED },
+    baseline: {
+      'src/app/api/health/route.ts': { methods: ['GET'], why: WHY },
+      _conditional: { 'src/app/api/health/route.ts': { methods: ['GET'], why: WHY } },
+    },
+  });
+  assert.ok(problems.some((p) => /both the frozen baseline and _conditional/.test(p)));
+});
+
+test('_conditional: a well-formed annotation of a guarded handler reports nothing', () => {
+  const { problems } = check({
+    tree: { 'src/app/api/health/route.ts': GUARDED },
+    baseline: { _conditional: { 'src/app/api/health/route.ts': { methods: ['GET'], why: WHY } } },
+  });
+  assert.deepEqual(problems, []);
+});
+
+test('the shipped baseline is well formed, in both sections', () => {
   const baseline = JSON.parse(readFileSync('scripts/route-auth-baseline.json', 'utf8'));
-  const entries = Object.entries(baseline).filter(([key]) => !key.startsWith('_'));
+  const entries = [
+    ...Object.entries(baseline),
+    ...Object.entries(baseline._conditional ?? {}),
+  ].filter(([key]) => !key.startsWith('_'));
   assert.ok(entries.length > 0, 'a frozen baseline with nothing in it records nothing');
   for (const [file, entry] of entries) {
     assert.ok(Array.isArray(entry.methods) && entry.methods.length > 0, `${file}: methods`);
