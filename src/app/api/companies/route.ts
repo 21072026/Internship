@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required').max(TEXT_LIMITS.companyName),
@@ -39,8 +40,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Fail-closed role scoping (#2431). This handler used to stop at `if
+    // (!session)`, so every signed-in role — MENTEE and SOURCE included — read
+    // every company in the tenant, `contactEmail` and all. The scope is decided
+    // once, in `authzScope.ts` (ADMIN everything, COMPANY its own row, MENTOR
+    // the companies of its relations); a role with no builder is refused here.
+    // Convention, not invention: scope UNDEFINED for the role → 403 (+ an
+    // `authz.scope_denied` activity row); a row that exists but lies outside a
+    // defined scope → simply absent from the list, and 404 on the detail route.
+    const scope = await scopeForRole(session.user, 'company');
+    if (!scope) {
+      await logScopeDenial(session.user, 'GET /api/companies');
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     return await withTenantScope(session, async () => {
       const companies = await prisma.company.findMany({
+        // `andScope` copies the builder's object; for ADMIN it is `{}`, which
+        // Prisma treats exactly like no `where` at all.
+        where: andScope(scope),
         include: {
           needs: true,
           _count: { select: { mentorships: true } },
