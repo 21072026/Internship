@@ -37,6 +37,20 @@ test('marketingHosts: the single default when unset, the env list when set', () 
   assert.ok(!marketingHosts().has('marketing.ersah.in'), 'the default is replaced, not merged');
 });
 
+test('marketingHosts: an EMPTY or whitespace-only MARKETING_HOSTS is "unset", not an empty list (#2428)', () => {
+  // infra/deploy-prod.sh passes `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"`, so a
+  // prod env file with no value yields '' in the container. Prod's marketing
+  // domain served the internship landing for as long as '' counted as configured.
+  for (const raw of ['', '   ', '\n']) {
+    setEnv({ MARKETING_HOSTS: raw });
+    assert.deepEqual([...marketingHosts()], ['marketing.ersah.in'], `raw=${JSON.stringify(raw)}`);
+    assert.ok(isServedHost('marketing.ersah.in'), 'the default marketing host is a served host');
+  }
+  // A list of only separators is still "nothing configured" → default applies.
+  setEnv({ MARKETING_HOSTS: ' , ' });
+  assert.deepEqual([...marketingHosts()], []);
+});
+
 test('configuredOrigin: NEXTAUTH_URL first, then NEXT_PUBLIC_APP_URL, then the dev default — always a bare origin', () => {
   assert.equal(configuredOrigin(), 'http://localhost:3000');
   setEnv({ NEXT_PUBLIC_APP_URL: 'https://preview.interncrm.com/' });

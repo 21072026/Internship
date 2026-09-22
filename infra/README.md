@@ -84,6 +84,45 @@ self-contained nginx server block for `pr<N>.interncrm.com` into `$NGINX_CONF_DI
 from step 2 and `proxy_pass`es to the topic's port; teardown removes it. Both
 reload nginx afterwards.
 
+### The marketing host: `marketing.ersah.in` (#2428, epic #2348)
+
+The MARKETING vertical's public landing is served **from the same prod
+container** as `interncrm.com` — two urls, two products, one deployment (#2355).
+What makes the box answer for the second domain:
+
+- **DNS** — an explicit `A` record `marketing.ersah.in → 92.5.120.186`, blessed
+  through the `dns-records.yml` workflow (the `*.ersah.in` wildcard and the MX
+  records were deliberately left alone: mail for that apex lives elsewhere).
+- **TLS** — the domain is on a *different apex* than the `*.interncrm.com`
+  wildcard, so it has its own certificate: `wildcard-cert.yml domain=ersah.in`
+  issues `*.ersah.in` by dns-01 into `/etc/caddy/certs/ersah.in.{cer,key}`.
+- **Site file** — `/etc/caddy/sites/marketing.ersah.in.caddy`, one
+  `reverse_proxy 127.0.0.1:3200` to the prod container (preview's
+  `preview-marketing.ersah.in.caddy` points at `:3201`). Same shape as the
+  topic site files `topic-deploy.sh` writes; nothing else is special about it.
+- **Which host means MARKETING** is the app's business, not Caddy's:
+  `src/lib/hostVertical.ts` reads `X-Forwarded-Host`/`Host` and compares it with
+  `MARKETING_HOSTS` (comma-separated bare hostnames). **Unset, empty or
+  whitespace-only means the default `marketing.ersah.in`**, so **prod's env file
+  sets nothing**. Preview does set `MARKETING_HOSTS='preview-marketing.ersah.in'`
+  in `/etc/internship-crm/preview.env` — and by setting it, preview stops
+  answering for the prod domain (the list replaces the default, it does not
+  extend it). `deploy-prod.sh` threads the variable as
+  `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"`, i.e. an env file with no value
+  puts an **empty string** in the container; the app treats that as unset
+  (`src/lib/servedHosts.ts` `marketingHosts()`, unit-tested — the same set the #2488 redirect allowlist reads, so an empty value also made the marketing domain a non-served host) — it once did not, and the prod
+  marketing domain served the internship landing until #2428 (2026-09-21).
+- Signed-in users never go through this: their vertical is their
+  `Organization.vertical`. The host decides copy and chrome only (see the TRUST
+  NOTE in `hostVertical.ts`).
+
+Verify after a deploy (both must hold):
+
+```bash
+curl -s https://marketing.ersah.in/ | grep -o '<title>[^<]*</title>'   # names SaleVali, not "Internship CRM"
+curl -s https://marketing.ersah.in/api/health | jq '{status,sha}'      # same sha as interncrm.com
+```
+
 ### Proxy hops and `TRUSTED_PROXY_COUNT` (#858)
 
 Every vhost sets `X-Forwarded-For $proxy_add_x_forwarded_for`, which **appends**

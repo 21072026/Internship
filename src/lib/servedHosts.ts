@@ -32,9 +32,22 @@ export function hostnameOf(hostHeader: string | null | undefined): string | null
   return first.replace(/:\d+$/, '') || null;
 }
 
-/** The hosts that serve the MARKETING landing (MARKETING_HOSTS, comma-separated). */
+/**
+ * The hosts that serve the MARKETING landing (MARKETING_HOSTS, comma-separated).
+ *
+ * Unset, EMPTY and whitespace-only all mean the default (#2428). The deploy
+ * script threads the variable into the container as
+ * `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"` (infra/deploy-prod.sh), so an env
+ * file that never mentions it — prod's, by design, because .env.example says the
+ * default covers the live domain — puts an EMPTY STRING here, not an absent
+ * variable. `??` took that as a configured empty list, the set came out empty,
+ * and marketing.ersah.in served the internship landing (and, once #2488 shared
+ * this set with the redirect allowlist, was not a served host either). The
+ * trim() is what keeps prod, which configures nothing, on the default.
+ */
 export function marketingHosts(): Set<string> {
-  const raw = process.env.MARKETING_HOSTS ?? DEFAULT_MARKETING_HOST;
+  const configured = process.env.MARKETING_HOSTS;
+  const raw = configured && configured.trim() ? configured : DEFAULT_MARKETING_HOST;
   const out = new Set<string>();
   for (const entry of raw.split(',')) {
     const h = hostnameOf(entry);
