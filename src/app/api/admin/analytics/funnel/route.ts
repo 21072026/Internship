@@ -7,6 +7,7 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { onPathKeys } from '@/lib/pipeline';
 import { biggestDropOff, stageConversions, timeToHire, type Journey } from '@/lib/funnelKpi';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 // Hiring-funnel KPIs (#815): the two numbers HR reports upward — stage-to-stage
 // conversion and time-to-hire — plus mentor capacity, all from the StatusChange
@@ -17,6 +18,46 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 // to exist. What counts as "finished" is the last on-path stage of that order,
 // and its key is returned so the screen can name it rather than implying a
 // universal definition of "hired".
+
+// Mentor capacity, derived through the SAME function the mentor's own screen
+// and the admin assignment dialog use (#941/#942), so this report can never
+// contradict the badge shown next to a mentor's name. Lifted out of the handler
+// (#2423) so it is only *called* for a vertical that carries mentors at all; it
+// still runs inside the caller's tenant scope, which the async context carries.
+async function mentorCapacity() {
+  const mentors = await prisma.user.findMany({
+    where: { role: { in: ['MENTOR', 'ADMIN'] }, isActive: true },
+    select: {
+      id: true,
+      fullName: true,
+      mentorCapacity: true,
+      acceptingMentees: true,
+      _count: { select: { mentorRelations: { where: { status: 'ACTIVE' } } } },
+    },
+  });
+  return mentors
+    .map((m) => {
+      const activeMenteeCount = m._count.mentorRelations;
+      const availability = getMentorAvailability({
+        mentorCapacity: m.mentorCapacity,
+        activeMenteeCount,
+        acceptingMentees: m.acceptingMentees,
+      });
+      return {
+        id: m.id,
+        fullName: m.fullName,
+        activeMenteeCount,
+        mentorCapacity: m.mentorCapacity,
+        status: availability.status,
+        capacityKnown: availability.capacityKnown,
+        // Genuinely past the ceiling, not merely at it — the report's job is
+        // to surface the ones carrying more than they agreed to.
+        overloaded: m.mentorCapacity != null && activeMenteeCount > m.mentorCapacity,
+      };
+    })
+    .sort((a, b) => b.activeMenteeCount - a.activeMenteeCount);
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
@@ -48,7 +89,8 @@ export async function GET(request: Request) {
       },
     });
 
-    const stages = await resolvePipelineStages((session.user as { orgId?: string | null }).orgId ?? null);
+    const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
+    const [stages, capabilities] = await Promise.all([resolvePipelineStages(orgId), shellCapabilities(orgId)]);
     const order = onPathKeys(stages);
 
     const journeys: Journey[] = relations.map((r) => ({
@@ -62,40 +104,13 @@ export async function GET(request: Request) {
     const conversions = stageConversions(order, journeys);
     const tth = timeToHire(order, journeys);
 
-    // Mentor capacity, derived through the SAME function the mentor's own
-    // screen and the admin assignment dialog use (#941/#942), so this report
-    // can never contradict the badge shown next to a mentor's name.
-    const mentors = await prisma.user.findMany({
-      where: { role: { in: ['MENTOR', 'ADMIN'] }, isActive: true },
-      select: {
-        id: true,
-        fullName: true,
-        mentorCapacity: true,
-        acceptingMentees: true,
-        _count: { select: { mentorRelations: { where: { status: 'ACTIVE' } } } },
-      },
-    });
-    const capacity = mentors
-      .map((m) => {
-        const activeMenteeCount = m._count.mentorRelations;
-        const availability = getMentorAvailability({
-          mentorCapacity: m.mentorCapacity,
-          activeMenteeCount,
-          acceptingMentees: m.acceptingMentees,
-        });
-        return {
-          id: m.id,
-          fullName: m.fullName,
-          activeMenteeCount,
-          mentorCapacity: m.mentorCapacity,
-          status: availability.status,
-          capacityKnown: availability.capacityKnown,
-          // Genuinely past the ceiling, not merely at it — the report's job is
-          // to surface the ones carrying more than they agreed to.
-          overloaded: m.mentorCapacity != null && activeMenteeCount > m.mentorCapacity,
-        };
-      })
-      .sort((a, b) => b.activeMenteeCount - a.activeMenteeCount);
+    // Mentor capacity — only for a vertical that has mentors at all (#2423). A
+    // MARKETING org's ADMIN/MENTOR rows are reps, and measuring them against a
+    // "mentor ceiling" would be a confident answer to a question that tenant
+    // never asked; the empty list is what the screen and the Excel export
+    // already read as "no capacity section". INTERNSHIP carries the module, so
+    // its report is unchanged.
+    const capacity = capabilities.includes('mentorship') ? await mentorCapacity() : [];
 
     return NextResponse.json({
       order,
