@@ -12,6 +12,9 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   pending_meeting: 'purple',
   no_open_goal: 'info',
   missing_weekly_reports: 'danger',
+  // Amber, not red: an expired trial is a decision waiting to be made, not
+  // something already broken.
+  trial_expired: 'warning',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
@@ -26,6 +29,7 @@ export function MentorAttentionQueue({ items, dormantCount = 0, t }: { items: At
     pending_meeting: labels.pendingMeeting,
     no_open_goal: labels.noOpenGoal,
     missing_weekly_reports: t.weeklyReports.missingAttention,
+    trial_expired: labels.trialExpired,
   };
 
   return (
