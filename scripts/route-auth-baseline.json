@@ -1,0 +1,137 @@
+{
+  "_comment": "Every exported API handler that NEVER calls getServerSession() or withApiKey() at all, with the reason it may (#2444). scripts/check-route-auth.mjs reads this list and it is frozen in both directions: an anonymous handler that is not listed fails the build (there is no --update flag — the entry and its reason are written by hand so a reviewer reads them in the diff), and a listed handler that has since gained a guard fails too, asking for the line to be deleted. So the list can only shrink towards the truth. Most entries below are deliberate and permanent — a signed token, a shared secret or a genuinely public read stands in for the session, and the 'why' says which. That is the point: the question 'which handlers never ask who is calling?' has one written answer instead of 250 files to re-read. It is NOT the whole anonymous surface: a handler that reads a session on one branch and serves anonymous callers on the other passes the shape check by construction, and those are annotated by hand in _conditional below.",
+
+  "_conditional": {
+    "_comment": "Handlers that DO call getServerSession() — so the frozen list above cannot hold them — but still answer a caller who has no session, on some branch. A shape check is structurally unable to find these, so this section is written by hand and makes no claim to be complete; it exists so the file is not read as a claim it cannot support. It cannot rot, though: scripts/check-route-auth.mjs requires every entry to name a live route file, a method that file exports, and a method it still judges guarded — the day one of these stops asking entirely, the entry fails and the handler must move up into the frozen baseline where the ratchet counts it.",
+
+    "src/app/api/health/route.ts": {
+      "methods": ["GET"],
+      "why": "Liveness probe (#2444, #1674). resolveAccess() reads a session only when HEALTH_TOKEN is set or the caller asked for jobs/limits/leases; on the default path — which is every environment today — it returns the fail-open summary to an anonymous caller without a session, a database query or a lease read. Everything behind the proof gate (queue depth, dead-letter size, rate-limit and lease state) is fail-CLOSED and stays admin-only."
+    },
+    "src/app/api/profile-view/route.ts": {
+      "methods": ["POST"],
+      "why": "Counts a view of a public profile. The session is read only to avoid counting the owner viewing their own page; an anonymous visitor is the normal case and does increment the counter. The write is bounded to profileViews on a user who has already set publicProfile, de-duplicated per viewer for an hour by cookie, and reads nothing back."
+    }
+  },
+
+  "src/app/api/apply/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "The public 'apply to this mentor' link (#1188). The applicant has no account — creating one is what POST does — so the mentor id in the URL is the whole address. GET only says whether the link is open and who the mentor is; POST is rate-limited to 15/10min."
+  },
+  "src/app/api/auth/forgot/route.ts": {
+    "methods": ["POST"],
+    "why": "Password reset request: whoever needs it cannot sign in by definition. Answers the same 200 for every address so it cannot enumerate accounts, and is rate-limited to 5/15min."
+  },
+  "src/app/api/auth/remember/refresh/route.ts": {
+    "methods": ["POST"],
+    "why": "Silent re-authentication from a trusted device (#1495). The session JWT has expired — that is why the browser is here — so the remember-me cookie is the credential; readRememberToken()/rotateTrustedDevice() verify and rotate it, and the reply is a single-use grant, not a session."
+  },
+  "src/app/api/auth/remember/route.ts": {
+    "methods": ["DELETE"],
+    "why": "'Forget this device'. Presenting the cookie is enough to give it up, and revoking only your own remembered device harms nobody. POST (enrolment) in the same file does require a session — that is the direction that matters."
+  },
+  "src/app/api/auth/reset/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "Password reset by emailed single-use token; the token is the credential. GET only reports whether a token is still valid, so the reset page can say 'expired' before the user types a new password."
+  },
+  "src/app/api/auth/sso/[slug]/acs/route.ts": {
+    "methods": ["POST"],
+    "why": "SAML Assertion Consumer Service: the IdP posts a signed assertion through the browser and the signature, checked against the tenant's stored certificate, is the credential. Pre-auth by definition — this is where the session is issued."
+  },
+  "src/app/api/auth/sso/[slug]/login/route.ts": {
+    "methods": ["GET"],
+    "why": "SP-initiated SSO: resolves the tenant and redirects to the IdP. Pre-auth by definition, and it falls back to the password page when SSO is not active so a wrong slug never dead-ends."
+  },
+  "src/app/api/auth/sso/[slug]/metadata/route.ts": {
+    "methods": ["GET"],
+    "why": "The tenant's SAML SP metadata (#1931) — the two URLs we already publish plus the NameID format, no secret and no tenant data. It is what the customer's IT team reads WHILE configuring SSO, i.e. before anyone there can sign in."
+  },
+  "src/app/api/auth/verify-email/route.ts": {
+    "methods": ["POST"],
+    "why": "Email confirmation by single-use token; the token is the credential, and confirming the address is itself what opens the account on an open sign-up."
+  },
+  "src/app/api/calendar/[token]/route.ts": {
+    "methods": ["GET"],
+    "why": "One meeting's .ics, addressed by the unguessable RSVP token (#1446). External guests have no account here, so the token is the only credential they could hold, and the file tells them nothing the invite email did not. Rate-limited to 60/10min."
+  },
+  "src/app/api/calendar/feed/[token]/route.ts": {
+    "methods": ["GET"],
+    "why": "Personal ICS subscription feed (#915). Calendar apps cannot sign in; the per-user token from /api/account/ics-feed is the credential and is rotatable there. Deliberately PII-minimal — a title and a time per event, no join links, no participant names."
+  },
+  "src/app/api/company-inquiry/route.ts": {
+    "methods": ["POST"],
+    "why": "The public /for-companies enquiry form. Companies have no self-service sign-up (a COMPANY user is only born from an InvitationToken), so this form is the only bridge. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
+  },
+  "src/app/api/consent/renew/route.ts": {
+    "methods": ["POST"],
+    "why": "Re-consent from the retention reminder email; verifyConsentRenewToken() is the credential and it can do exactly one thing — refresh that user's own consent stamp."
+  },
+  "src/app/api/cron/start/route.ts": {
+    "methods": ["POST"],
+    "why": "Registers the node-cron schedules in this server process, called once at boot by src/instrumentation.ts. A boot hook has no session; CRON_SECRET in a header, compared with timingSafeEqual, is the credential, and an unconfigured secret answers 503 rather than opening the door. (GET /api/cron, which RUNS the jobs, is admin-only and not on this list.)"
+  },
+  "src/app/api/email-action/route.ts": {
+    "methods": ["POST"],
+    "why": "One-click actions from a notification email — mark as read, the five reactions (#1204). The signed token is the credential, the same trust model as the Reply-To tokens; POST rather than GET so a mail client prefetching links cannot act for the reader."
+  },
+  "src/app/api/inbound-email/poll/route.ts": {
+    "methods": ["POST"],
+    "why": "Drains one batch from the reply mailbox, ticked by a timer in src/instrumentation.ts. INBOUND_SECRET is mandatory here (timingSafeEqual) precisely because the handler makes the server open an outbound IMAP connection; the 'imap-bridge' lease gate deliberately sits behind the secret check."
+  },
+  "src/app/api/inbound-email/route.ts": {
+    "methods": ["POST"],
+    "why": "Inbound-mail provider webhook. A provider holds no session: the credential is the INBOUND_SECRET header (timingSafeEqual, required outright in production since #870) plus the per-thread HMAC reply token, which must verify AND belong to a participant before anything is written."
+  },
+  "src/app/api/invite/opened/route.ts": {
+    "methods": ["POST"],
+    "why": "Stamps openedAt when an invitee opens their registration link — by definition before they have an account. Idempotent, writes one timestamp, and ignores used or expired invitations."
+  },
+  "src/app/api/mentor-applications/route.ts": {
+    "methods": ["POST"],
+    "why": "The public 'become a mentor' application (#904): anyone may apply without an account, and no User is created until an admin approves (#905/#933). GET in the same file is the admin review queue and does take a session."
+  },
+  "src/app/api/newsletter/unsubscribe/route.ts": {
+    "methods": ["POST"],
+    "why": "Unsubscribe from the newsletter straight out of the email (#1469); the signed token is the authorisation. Demanding a password first is how a reader reaches for the spam button instead, which costs the deliverability of every message this app sends, password resets included."
+  },
+  "src/app/api/public-contact/[userId]/route.ts": {
+    "methods": ["POST"],
+    "why": "The contact form on a public profile: the sender has no account. Anti-spam is a honeypot field, a minimum render-to-submit time and 3 messages/hour/IP; the message goes to the profile owner's own notifications, nowhere else."
+  },
+  "src/app/api/public/stats/route.ts": {
+    "methods": ["GET"],
+    "why": "The landing page's three integers (#1099) — no names, no ids, no PII of any kind. Backed by a 10-minute in-process cache so anonymous traffic cannot turn into count() storms, and rate-limited like every other public endpoint."
+  },
+  "src/app/api/public/stories/route.ts": {
+    "methods": ["GET"],
+    "why": "The public story feed (#1100). Every record has passed four server-side gates — published, shared, author consent, subject consent — all re-checked on this request, so a revoked consent drops the story immediately. No scores, no original comment, no contact fields."
+  },
+  "src/app/api/re-engagement/leave/route.ts": {
+    "methods": ["POST"],
+    "why": "'Stop writing to me', straight from the email (#834). verifyLeaveToken() is the authorisation: requiring a password before somebody can stop being contacted is how you end up contacting people who wanted out. POST, so a prefetching mail client cannot press it for them."
+  },
+  "src/app/api/register/route.ts": {
+    "methods": ["POST"],
+    "why": "Registration. There is no session to read before the account exists; what authorises the write is the InvitationToken (or the org's open sign-up policy), checked inside the handler."
+  },
+  "src/app/api/rsvp/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "Meeting RSVP from the emailed link (#1446). Meeting.rsvpToken and MeetingGuest.rsvpToken are the credentials — an external guest has no account — and are looked up separately, never as one query over a shared column, with identical answers so a revoked guest invitation cannot be told from a wrong token."
+  },
+  "src/app/api/unsubscribe/one-click/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "RFC 8058 one-click unsubscribe — the URL advertised in List-Unsubscribe-Post and pressed by Gmail, Apple Mail and Outlook. They send no cookie and there is no user agent to challenge; the signed token is the whole credential. An authenticated one-click unsubscribe is a contradiction in terms (#1444)."
+  },
+  "src/app/api/unsubscribe/prefs/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "The preference centre behind the /u/<token> page (#1444). The signed token reads and writes one user's own notification switches and tells the caller the address the mail went to — which is the address they are reading it in. Nothing else is reachable."
+  },
+  "src/app/api/unsubscribe/route.ts": {
+    "methods": ["POST"],
+    "why": "Unsubscribe from a mail footer (#1444). The header comment of that file states at length why there must never be a session check anywhere in this directory: the link only ever reaches the person it is about, and the token can change nothing but that person's own notification preferences."
+  },
+  "src/app/api/webhooks/jaas/route.ts": {
+    "methods": ["POST"],
+    "why": "The JaaS event feed (who is in the video room). A webhook holds no session: JAAS_WEBHOOK_SECRET, compared with timingSafeEqual from either a header or the query string, is the credential, an unset secret answers 404 as if the feature did not exist, and everything written is display-only state."
+  }
+}
