@@ -39,9 +39,14 @@ test('each curated template is its own shape, not a relabelled canonical set', a
   const canonicalKeys = new Set(canonical.stages.map((s) => s.key));
 
   for (const template of PROGRAM_TEMPLATES.filter((t) => t.key !== 'canonical_pipeline')) {
-    // 5-8 stages: a set you cannot read at a glance is a spreadsheet.
+    // 5-9 stages: a set you cannot read at a glance is a spreadsheet. The
+    // upper bound was 8 until the marketing funnel grew its trial phase
+    // (#2413) — a product sold on a trial needs both a "running" and an
+    // "elapsed, waiting for a decision" waiting room, and collapsing the two
+    // would make the 7/3/0 reminder ladder unaskable. The house-style note at
+    // the top of src/lib/programTemplates.ts carries the same number.
     expect(template.stages.length, `${template.key} stage count`).toBeGreaterThanOrEqual(5);
-    expect(template.stages.length, `${template.key} stage count`).toBeLessThanOrEqual(8);
+    expect(template.stages.length, `${template.key} stage count`).toBeLessThanOrEqual(9);
     // No curated template reuses a canonical key — that is what makes it a
     // different shape rather than a rename, and it keeps the default keys out
     // of this file (scripts/check-stage-keys.mjs, #1886).

@@ -192,6 +192,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/trialReminderRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a trial reminder is due on a CALENDAR day, so a trial ending hours before the tick is not skipped (#2413)',
+    },
+  ],
+  [
     'src/lib/twoFactorResetRule.ts',
     {
       floor: 95,

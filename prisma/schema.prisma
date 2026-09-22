@@ -2041,6 +2041,21 @@ model MentorshipRelation {
   // months later is written to again rather than being silently written off.
   dormantNudgeCount       Int              @default(0)
   dormantNudgeSentAt      DateTime?
+  // The contractual trial window of a MARKETING funnel record (#2413, story
+  // #2392). Both nullable and both additive: a mentorship relation never has a
+  // trial, and a marketing record only has one once it reaches the TRIAL_ACTIVE
+  // stage — so an untouched row keeps meaning exactly what it meant before, and
+  // `db push` can add the columns over a populated table.
+  //
+  // NO NEW TABLE, and deliberately NOT `stageDeadline`. `stageDeadline` is an
+  // INTERNAL service level: src/lib/stageSla.ts rewrites it on every stage
+  // change and the deadline sweep warns once after it is breached. A trial end
+  // is the opposite kind of date — it is agreed with the customer, it survives
+  // every stage change, and it is the thing the reminders are counted back
+  // from. Storing it in `stageDeadline` would make an SLA edit move a
+  // contractual date, and moving the record to another stage would erase it.
+  trialStartedAt          DateTime?
+  trialEndsAt             DateTime?
   // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
   // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
   // different mentor and an admin approved it. Nullable and additive: an
@@ -2102,6 +2117,9 @@ model MentorshipRelation {
   @@index([lifecycleState])
   @@index([pipelineStatus])
   @@index([previousRelationId])
+  // The daily trial sweep asks for one org's relations in one stage whose trial
+  // ends inside the next week; this is the column that narrows it.
+  @@index([trialEndsAt])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -3109,6 +3127,7 @@ model WeeklyReportReminder {
   @@index([weekStart])
   @@index([recipientId, weekStart])
 }
+
 
 // Structured hiring demand (#806). CompanyNeed remains in place during the
 // compatibility window; legacyCompanyNeedId makes the manual backfill safe to

@@ -15,10 +15,15 @@ import type { Locale } from '@/i18n/config';
  *
  * HOUSE STYLE — a new template follows these rules or it does not belong here:
  *
- *   - Five to eight stages. A stage set you cannot read in one glance is a
- *     spreadsheet, not a pipeline. The canonical thirteen-stage set is the one
- *     exception, and it is here because it is the product default, not because
- *     it is a good starting shape for everyone.
+ *   - Five to nine stages. A stage set you cannot read in one glance is a
+ *     spreadsheet, not a pipeline. The bound was five to EIGHT until the
+ *     marketing funnel grew its trial phase (#2413): a product that is sold on
+ *     a trial needs both a "running" and an "elapsed, waiting for a decision"
+ *     waiting room, and collapsing the two would make the reminder ladder
+ *     unaskable. Nine is still one glance; ten is where the next person has to
+ *     argue the case rather than round it up again. The canonical thirteen-stage
+ *     set is the one exception, and it is here because it is the product
+ *     default, not because it is a good starting shape for everyone.
  *   - A stage is a WAITING ROOM someone can sit in, named for the state they
  *     are in — "Screening call", "Reskilling in progress" — never for the
  *     action someone else has to take. If nobody can sit in it for a day, it is
@@ -506,6 +511,24 @@ const CAREER_TRANSITION: ProgramTemplate = {
  * organization is most likely to recognise as its own.
  */
 /**
+ * The two trial stage keys, named once (#2413, story #2392).
+ *
+ * A trial is the one stage of the marketing funnel that other code has to be
+ * able to FIND: the daily reminder sweep asks "which of this tenant's records
+ * are in the trial stage?", and the auto-advance (#2417) moves an elapsed trial
+ * out of it. They are exported as constants — and resolved against the
+ * tenant's own `PipelineStage` rows through `resolvePipelineStages()`, never
+ * compared against a literal at the query site — so there is exactly one
+ * spelling of each in the tree and a tenant that removed the stage is simply
+ * skipped rather than silently swept with nothing.
+ *
+ * Keys, not labels: a tenant is free to rename "Trial running" to whatever it
+ * calls the thing, and the sweep must keep working afterwards.
+ */
+export const TRIAL_ACTIVE_STAGE_KEY = 'TRIAL_ACTIVE';
+export const TRIAL_EXPIRED_STAGE_KEY = 'TRIAL_EXPIRED';
+
+/**
  * A sales/marketing funnel: a lead from first sight to won or lost (#2353). This
  * is the MARKETING vertical's starting stage set — the coreCRM analogue of the
  * canonical mentorship pipeline, for a tenant that tracks accounts through a
@@ -526,13 +549,17 @@ const MARKETING_FUNNEL: ProgramTemplate = {
       labels: { en: 'Contacted', tr: 'İletişime geçildi', de: 'Kontaktiert' } },
     { key: 'LEAD_QUALIFIED', order: 2, isTerminal: false, isOffPath: false, color: '#8b5cf6',
       labels: { en: 'Qualified', tr: 'Nitelendirildi', de: 'Qualifiziert' } },
-    { key: 'DEAL_PROPOSAL', order: 3, isTerminal: false, isOffPath: false, color: '#f59e0b',
+    { key: TRIAL_ACTIVE_STAGE_KEY, order: 3, isTerminal: false, isOffPath: false, color: '#06b6d4',
+      labels: { en: 'Trial running', tr: 'Deneme sürüyor', de: 'Testphase läuft' } },
+    { key: TRIAL_EXPIRED_STAGE_KEY, order: 4, isTerminal: false, isOffPath: false, color: '#eab308',
+      labels: { en: 'Trial expired', tr: 'Deneme süresi doldu', de: 'Testphase abgelaufen' } },
+    { key: 'DEAL_PROPOSAL', order: 5, isTerminal: false, isOffPath: false, color: '#f59e0b',
       labels: { en: 'Proposal sent', tr: 'Teklif gönderildi', de: 'Angebot gesendet' } },
-    { key: 'DEAL_NEGOTIATION', order: 4, isTerminal: false, isOffPath: false, color: '#f97316',
+    { key: 'DEAL_NEGOTIATION', order: 6, isTerminal: false, isOffPath: false, color: '#f97316',
       labels: { en: 'Negotiation', tr: 'Pazarlık', de: 'Verhandlung' } },
-    { key: 'DEAL_WON', order: 5, isTerminal: true, isOffPath: false, color: '#16a34a',
+    { key: 'DEAL_WON', order: 7, isTerminal: true, isOffPath: false, color: '#16a34a',
       labels: { en: 'Won', tr: 'Kazanıldı', de: 'Gewonnen' } },
-    { key: 'DEAL_LOST', order: 6, isTerminal: true, isOffPath: true, color: '#6b7280',
+    { key: 'DEAL_LOST', order: 8, isTerminal: true, isOffPath: true, color: '#6b7280',
       labels: { en: 'Lost', tr: 'Kaybedildi', de: 'Verloren' } },
   ],
   // A marketing cadence in days: a fresh lead is contacted next-day, and a deal
@@ -541,6 +568,19 @@ const MARKETING_FUNNEL: ProgramTemplate = {
     { stageKey: 'LEAD_NEW', days: 1 },
     { stageKey: 'LEAD_CONTACTED', days: 3 },
     { stageKey: 'LEAD_QUALIFIED', days: 7 },
+    // TRIAL_ACTIVE deliberately has NO service level. An SLA sets
+    // `MentorshipRelation.stageDeadline`, which src/lib/stageSla.ts rewrites on
+    // every stage change and the deadline sweep warns about once — an internal
+    // "you have not touched this in N days" clock. A trial already has a clock,
+    // and it is a contractual one (`trialEndsAt`, #2413) counted down by the
+    // trial reminders. Two overlapping clocks on the same stage would nag the
+    // owner twice about the same account, in different words, on different
+    // days.
+    // TRIAL_EXPIRED is the opposite case: the trial is over, nothing is
+    // counting down any more, and the account is waiting for a human to decide
+    // whether it becomes a proposal or a loss. Three days is how long that
+    // decision may sit before it is genuinely overdue.
+    { stageKey: TRIAL_EXPIRED_STAGE_KEY, days: 3 },
     { stageKey: 'DEAL_PROPOSAL', days: 5 },
     { stageKey: 'DEAL_NEGOTIATION', days: 7 },
   ],
