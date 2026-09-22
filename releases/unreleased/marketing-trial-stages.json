@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Trial stages in the marketing funnel, and the rule that decides who gets warned before one runs out** (#2413, #2412, #2414, story #2392, epic #2348). The `marketing_funnel` preset gains `TRIAL_ACTIVE` and `TRIAL_EXPIRED` between `LEAD_QUALIFIED` and `DEAL_PROPOSAL`; both are on-path (an expired trial is a record waiting for a decision, not a drop-out, so the later auto-advance needs no drop-off reason) and only `TRIAL_EXPIRED` carries an SLA — a trial already has a contractual clock and two clocks on one stage nag twice. `MentorshipRelation` gains nullable `trialStartedAt`/`trialEndsAt` (no new table, and deliberately not `stageDeadline`, which `stageSla.ts` rewrites on every stage change). New dependency-free `src/lib/trialReminderRule.ts` selects the due (record, threshold) pairs by CALENDAR-DAY difference in UTC, on an exact match: a trial ending seven days out is caught whatever hour the tick runs, the subject's number is always true, and an elapsed trial can never match again — which is what makes old claim rows prunable. 13 unit assertions in `scripts/test/trial-reminder-rule.test.mjs` with fixed dates and an injected clock, floored at 95% line coverage. `src/lib/trialReminders.ts` adds the Prisma half (`findDueTrialReminders`), resolving the trial stage through the tenant's own `PipelineStage` rows so an org without one is skipped rather than swept. New `TrialReminder` claim table (`@@unique([relationId, threshold])`, cascade from the relation) registered in `TENANT_MODELS` and given a 365-day retention entry; it claims BEFORE sending, the house convention, because the thresholds are a ladder — a reminder lost to an SMTP hiccup is followed by the next one, whereas a duplicate is the mail that gets the sender filtered. A `trials` copy block lands in all three dictionaries, three subjects over one shared body, reusing the existing `stage-deadline` category with no new preference key. The job that sends them is #2415.",
+  "notes": {
+    "en": [
+      "A marketing pipeline now has trial stages: an account can sit in \"Trial running\" and move to \"Trial expired\" while somebody decides what happens next."
+    ],
+    "tr": [
+      "Pazarlama hattına deneme aşamaları eklendi: bir hesap \"Deneme sürüyor\" aşamasında bekleyebiliyor, sonrasında karar verilene kadar \"Deneme süresi doldu\" aşamasına geçiyor."
+    ],
+    "de": [
+      "Die Marketing-Pipeline hat jetzt Testphasen-Stufen: Ein Konto kann in \"Testphase läuft\" stehen und wechselt danach zu \"Testphase abgelaufen\", bis jemand entscheidet, wie es weitergeht."
+    ]
+  }
+}
