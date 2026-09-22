@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAsFreshUser } from './helpers/auth';
-import { MATRIX, type MatrixUser, type Role } from './fixtures/authz-matrix';
+import { COMPANY_ID_PARAM, MATRIX, type MatrixUser, type Role } from './fixtures/authz-matrix';
 
 /**
  * Executable role × endpoint read matrix (#899).
@@ -107,7 +107,9 @@ test.beforeAll(async () => {
   });
 
   users.ADMIN = { id: admin.id, role: 'ADMIN' };
-  users.MENTOR = { id: mentor.id, role: 'MENTOR' };
+  // The mentor's one relation points at "our" company — the only company its
+  // `company` scope may reach (#2432).
+  users.MENTOR = { id: mentor.id, role: 'MENTOR', relationCompanyIds: [own.id] };
   users.MENTEE = { id: mentee.id, role: 'MENTEE' };
   users.COMPANY = { id: company.id, role: 'COMPANY', companyId: null };
   users.SOURCE = { id: source.id, role: 'SOURCE', sourceId: src.id };
@@ -146,39 +148,108 @@ for (const role of Object.keys(LANDING) as Role[]) {
 
     for (const entry of MATRIX) {
       const expectation = entry.expect[role];
-      const res = await page.request.get(entry.path);
 
-      // Story #807 intentionally tightened this one matrix cell. Keep the
-      // fixture unassigned so the general smoke suite locks the early denial.
-      if (role === 'COMPANY' && entry.path === '/api/mentorship') {
-        expect(res.status()).toBe(403);
-        expect((await res.json()).code).toBe('company_not_assigned');
-        continue;
-      }
+      // A detail path is probed with the caller's own company AND the foreign
+      // one (#2432): a scope that is right for the id you own and wrong for
+      // the one you don't is exactly the shape of leak this table exists for.
+      const probes = entry.path.includes(COMPANY_ID_PARAM)
+        ? [ownCompanyId, otherCompanyId].map((id) => ({ path: entry.path.replace(COMPANY_ID_PARAM, id), id }))
+        : [{ path: entry.path, id: undefined as string | undefined }];
 
-      if (expectation === 'deny') {
-        expect([401, 403], `${role} ${entry.path} must be refused`).toContain(res.status());
-        continue;
-      }
+      for (const probe of probes) {
+        const res = await page.request.get(probe.path);
 
-      expect(res.status(), `${role} ${entry.path}`).toBe(200);
-      if (!entry.collection) continue;
+        // Story #807 intentionally tightened this one matrix cell. Keep the
+        // fixture unassigned so the general smoke suite locks the early denial.
+        if (role === 'COMPANY' && entry.path === '/api/mentorship') {
+          expect(res.status()).toBe(403);
+          expect((await res.json()).code).toBe('company_not_assigned');
+          continue;
+        }
 
-      const rows = (await res.json())[entry.collection] as Record<string, unknown>[] | undefined;
-      expect(Array.isArray(rows), `${entry.path} should return ${entry.collection}[]`).toBe(true);
+        if (expectation === 'deny') {
+          expect([401, 403], `${role} ${probe.path} must be refused`).toContain(res.status());
+          continue;
+        }
 
-      if (expectation === 'own') {
-        const owns = (row: Record<string, unknown>) =>
-          role === 'SOURCE' ? sourceOwns(row, entry.path) : entry.ownership(row, user);
-        const foreign = (rows ?? []).filter((row) => !owns(row));
-        expect(
-          foreign,
-          `${role} received ${foreign.length} row(s) from ${entry.path} it does not own`
-        ).toEqual([]);
+        if (entry.single) {
+          // In scope → 200 and the row is the caller's; outside a defined scope
+          // → 404, the same answer a non-existent id gets (never 403 — that is
+          // the UNDEFINED-scope answer, asserted through `deny` cells above).
+          const mayRead = expectation === 'all' || (probe.id !== undefined && entry.ownership({ id: probe.id }, user));
+          if (!mayRead) {
+            expect(res.status(), `${role} ${probe.path} is outside its scope`).toBe(404);
+            continue;
+          }
+          expect(res.status(), `${role} ${probe.path}`).toBe(200);
+          const row = (await res.json())[entry.collection] as Record<string, unknown> | undefined;
+          expect(row && typeof row === 'object', `${probe.path} should return ${entry.collection}`).toBe(true);
+          expect((row as { id?: string }).id, `${probe.path} answered with a different row`).toBe(probe.id);
+          continue;
+        }
+
+        expect(res.status(), `${role} ${probe.path}`).toBe(200);
+        if (!entry.collection) continue;
+
+        const rows = (await res.json())[entry.collection] as Record<string, unknown>[] | undefined;
+        expect(Array.isArray(rows), `${probe.path} should return ${entry.collection}[]`).toBe(true);
+
+        if (expectation === 'own') {
+          const owns = (row: Record<string, unknown>) =>
+            role === 'SOURCE' ? sourceOwns(row, entry.path) : entry.ownership(row, user);
+          const foreign = (rows ?? []).filter((row) => !owns(row));
+          expect(
+            foreign,
+            `${role} received ${foreign.length} row(s) from ${probe.path} it does not own`
+          ).toEqual([]);
+        }
       }
     }
   });
 }
+
+/**
+ * The company book, as its own named case (#2396/#2431): the matrix above
+ * already refuses MENTEE and SOURCE, but the story's acceptance criterion is
+ * spelled "cannot read companies", so a regression should read as that. Also
+ * the half the matrix cannot see: a MENTOR's `own` cell passes vacuously if its
+ * scope is EMPTY, so the own company must actually come back — and a refusal
+ * must leave the `authz.scope_denied` audit row `logScopeDenial()` promises,
+ * which is the whole reason MENTEE/SOURCE get 403 rather than a quiet `[]`.
+ */
+test('MENTEE and SOURCE cannot read the company book; a mentor reads only its own companies', { tag: '@smoke' }, async ({ page }) => {
+  for (const role of ['MENTEE', 'SOURCE'] as const) {
+    await signInAsFreshUser(page, emails[role], PASSWORD, LANDING[role]);
+    const list = await page.request.get('/api/companies');
+    expect(list.status(), `${role} must be refused the company list`).toBe(403);
+    expect(await list.text(), `${role} must not receive a company row`).not.toContain(ownCompanyId);
+    const detail = await page.request.get(`/api/companies/${ownCompanyId}`);
+    expect(detail.status(), `${role} must be refused a company it is even related to`).toBe(403);
+
+    // `logScopeDenial()` is awaited before the 403 goes out, so the rows exist.
+    // The detail route logs the route PATTERN, never the requested id — an
+    // attacker-chosen string has no business in `ActivityLog.targetId`.
+    for (const target of ['GET /api/companies', 'GET /api/companies/[id]']) {
+      const denial = await prisma.activityLog.findFirst({
+        where: { action: 'authz.scope_denied', actorId: users[role].id, targetId: target },
+      });
+      expect(denial, `${role}'s refusal of ${target} must be audited as authz.scope_denied`).not.toBeNull();
+    }
+  }
+
+  await signInAsFreshUser(page, emails.MENTOR, PASSWORD, LANDING.MENTOR);
+  const res = await page.request.get('/api/companies');
+  expect(res.status()).toBe(200);
+  const ids = ((await res.json()).companies as { id: string }[]).map((c) => c.id);
+  expect(ids, 'the company of the mentor\'s own relation must be readable').toContain(ownCompanyId);
+  expect(ids, 'the foreign company must not').not.toContain(otherCompanyId);
+  // The detail payload's nested relations follow the `relation` scope: the
+  // mentor sees its own relation at this company and nobody else's.
+  const detail = await page.request.get(`/api/companies/${ownCompanyId}`);
+  expect(detail.status()).toBe(200);
+  const relations = ((await detail.json()).company.mentorships as { id: string; mentorId: string }[]);
+  expect(relations.map((r) => r.id)).toEqual([ownRelationId]);
+});
 
 /**
  * The specific shape of the original leak, kept as its own named case so a
