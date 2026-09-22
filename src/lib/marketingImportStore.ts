@@ -43,6 +43,7 @@ import {
 import {
   applyPlannedAccounts,
   diffMarketingAccounts,
+  leadStandInEmail,
   makeMarketingValidator,
   previewWriter,
   type MarketingAccountRow,
@@ -191,17 +192,21 @@ async function placeOnFunnel(
   if (!leadId) {
     // The lead person: a record, never an account. Password-less
     // (`NO_LOGIN_PASSWORD`, which `bcrypt.compare` can never match), never
-    // invited, `emailVerified` left at its default — exactly the row the
-    // mentor-entered mentee and the public application already mint
-    // (src/lib/menteeAccount.ts). Role MENTEE because the Role enum is frozen
-    // (#2348) and MENTEE is the side of a relation a lead occupies.
+    // invited, and — the part that actually makes it a record rather than a
+    // login — on a GENERATED STAND-IN ADDRESS, not the merchant's mailbox, so
+    // the `/api/auth/forgot` → `/api/auth/reset` path has nowhere to mail
+    // (src/lib/menteeAccount.ts names that as the precondition; see
+    // "The lead person's address" in ./marketingImport.ts). The real address is
+    // on `Company.contactEmail`, which is where #2407 asks for it.
+    // Role MENTEE because the Role enum is frozen (#2348) and MENTEE is the
+    // side of a relation a lead occupies.
     const created = await tx.user.create({
       data: {
         orgId: context.orgId,
-        email: funnel.emailKey,
+        email: funnel.leadEmail,
         password: NO_LOGIN_PASSWORD,
         role: 'MENTEE',
-        fullName: funnel.leadChanges.fullName ?? funnel.emailKey,
+        fullName: funnel.leadChanges.fullName ?? funnel.leadEmail,
         skills: [],
         companyId,
         phone: funnel.leadChanges.phone ?? null,
@@ -346,8 +351,15 @@ export async function runMarketingAccountImport(
       parse: () => parseDelimited(options.text, { delimiter: options.delimiter }),
       validate,
       resolve: async (rows) => {
-        const emailKeys = [
+        const contactKeys = [
           ...new Set(rows.map((r) => normalizeEmailKey(r.value.contactEmail)).filter(Boolean)),
+        ];
+        // Both addresses a lead of this file could be stored under: the real
+        // one (an applicant, or a mentor-entered mentee) and the stand-in a
+        // previous run of this importer created for the same contact.
+        const emailKeys = [
+          ...contactKeys,
+          ...contactKeys.map((k) => leadStandInEmail(k, orgId ?? '')),
         ];
         const ownerEmails = [...new Set(rows.map((r) => r.value.ownerEmail).filter(Boolean))];
         const [snapshot, owners] = await Promise.all([
@@ -363,6 +375,7 @@ export async function runMarketingAccountImport(
           defaultOwnerId: owner.id,
           defaultOwnerEmail: owner.email,
           ownerIdByEmail: new Map(owners.map((o) => [o.email.toLowerCase(), o.id])),
+          orgKey: orgId ?? '',
           authoritative: options.authoritative === true,
         });
       },

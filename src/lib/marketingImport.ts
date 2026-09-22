@@ -51,6 +51,7 @@ import {
   type ValidatedRow,
 } from './importPreview';
 import { normalizeEmailKey, normalizeNameKey, normalizePhoneKey } from './duplicateDetection';
+import { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 import { planFieldUpdates } from './externalSyncPolicy';
 import { TEXT_LIMITS } from './textLimits';
 
@@ -194,6 +195,69 @@ export function accountNameKey(name: string, country: string): string {
 export function accountMatchKey(row: { name: string; country: string; vatId: string }): string {
   const vat = normalizeVatKey(row.vatId);
   return vat ? `vat:${vat}` : `name:${accountNameKey(row.name, row.country)}`;
+}
+
+// ── The lead person's address (#2407) ────────────────────────────────────────
+//
+// WHY THE LEAD USER DOES NOT CARRY THE MERCHANT'S REAL MAILBOX.
+//   `MentorshipRelation.menteeId` is a required FK, so a funnel record needs a
+//   `User` row and the import mints one. `src/lib/menteeAccount.ts` explains why
+//   such a record is nevertheless not an account — but it names the precondition
+//   out loud: "every recovery path is a dead end … that mail goes to the
+//   stand-in address". A sentinel password alone is NOT that dead end.
+//   `POST /api/auth/forgot` mails a reset link to any existing user and
+//   `POST /api/auth/reset` consumes it, neither of them asking
+//   `isPendingActivation()`. Minting one lead per row on the merchant's real
+//   mailbox would therefore hand every imported contact — people who never
+//   asked for a portal login — a password they can set themselves.
+//
+//   So the lead's `email` is a generated stand-in on the domain that exists for
+//   exactly this (`import.local`, `PLACEHOLDER_EMAIL_DOMAIN`), the same shape
+//   `scripts/import-csv.mjs` already writes. The merchant's real address is not
+//   lost: it is written to `Company.contactEmail`, which is where #2407 asks
+//   for it, and a mentor who decides this person should have a login corrects
+//   the address through `PATCH /api/mentor/mentees/[id]` — the documented path
+//   for precisely these rows.
+//
+//   The stand-in is DERIVED, not random: the same contact in the same
+//   organization always produces the same address, which is what makes the
+//   second run of a file find its lead again instead of minting a twin. The org
+//   is part of the input because `User.email` is globally unique — two tenants
+//   importing the same contact must not collide on one row.
+
+/** FNV-1a, 32-bit. Dependency-free and deterministic; a disambiguator, not a MAC. */
+function fnv1a32(input: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+/**
+ * The address the lead `User` is CREATED with. `orgKey` is the run's `orgId`
+ * (`''` for the single-tenant install).
+ */
+export function leadStandInEmail(contactEmailKey: string, orgKey: string): string {
+  const slug = contactEmailKey
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 96);
+  return `${slug || 'lead'}.${fnv1a32(`${orgKey}|${contactEmailKey}`)}@${PLACEHOLDER_EMAIL_DOMAIN}`;
+}
+
+/**
+ * How a stored lead is indexed. A real address is indexed by its normalized
+ * key; a stand-in — which `normalizeEmailKey` blanks on purpose — by the
+ * literal address, so a lead this importer created is found again. An erased
+ * account is indexed by neither: matching one would resurrect it.
+ */
+export function leadIndexKey(email: string): string {
+  const normalized = normalizeEmailKey(email);
+  if (normalized) return normalized;
+  const literal = email.trim().toLowerCase();
+  return isPlaceholderEmail(literal) ? literal : '';
 }
 
 /**
@@ -438,8 +502,14 @@ export interface MarketingFunnelPlan {
   /** The user who owns this funnel record — `mentorId`. */
   ownerId: string;
   ownerEmail: string;
-  /** The lead person's normalized address; also the User's `email`. */
+  /** The merchant contact's own address, normalized. The row's lead identity. */
   emailKey: string;
+  /**
+   * The `email` a CREATED lead User carries — a generated stand-in, never the
+   * merchant's mailbox (see "The lead person's address" above). Ignored when
+   * `leadId` is set: an existing person keeps the address they already have.
+   */
+  leadEmail: string;
   /** Existing lead User, or null when the row creates one. */
   leadId: string | null;
   leadChanges: MarketingLeadWrite;
@@ -475,6 +545,9 @@ export interface MarketingDiffContext {
   defaultOwnerEmail: string;
   /** Lower-cased address → user id, for rows that name their own owner. */
   ownerIdByEmail: ReadonlyMap<string, string>;
+  /** The run's organization id, `''` for the single-tenant install. Part of the
+   * lead stand-in address, because `User.email` is globally unique. */
+  orgKey: string;
   /**
    * When true the file overwrites a value it disagrees with; when false (the
    * default) it only fills gaps. One policy for every external writer —
@@ -514,6 +587,74 @@ function withoutRestatedPhone<T extends { phone?: string } | { contactPhone?: st
   return copy;
 }
 
+// ── Matching a row to an account ─────────────────────────────────────────────
+//
+// THE COUNTRY MAY BE MISSING ON ONE SIDE.
+//   `Company.country` and `Company.vatId` are introduced by this very change,
+//   so on the day the importer first runs EVERY account the tenant already
+//   holds has both NULL. The strong key cannot match anything, and an exact
+//   name+country key would read the stored `"acme gmbh␀"` and the file's
+//   `"acme gmbh␀DE"` as two merchants — duplicating the whole account master on
+//   the one run that matters, silently, because `absent` is empty and the run
+//   after it matches the fresh twin and reports UNCHANGED.
+//
+//   So a blank country on EITHER side falls back to the name alone, and only
+//   when that name belongs to exactly one account: two "Acme GmbH" rows in DE
+//   and TR are still two merchants, and a countryless row naming them is
+//   genuinely ambiguous — reported as such, never guessed. A loosely matched
+//   account has its country filled in as a gap, so the next run keys exactly.
+
+interface AccountLike {
+  name: string;
+  vatId: string | null;
+  country: string | null;
+}
+
+interface AccountIndex<T extends AccountLike> {
+  byVat: Map<string, T>;
+  byNameCountry: Map<string, T>;
+  /** Every account under its name alone — the loose half of the key. */
+  byName: Map<string, T[]>;
+}
+
+function emptyAccountIndex<T extends AccountLike>(): AccountIndex<T> {
+  return { byVat: new Map(), byNameCountry: new Map(), byName: new Map() };
+}
+
+function indexAccount<T extends AccountLike>(index: AccountIndex<T>, account: T): void {
+  const vat = normalizeVatKey(account.vatId);
+  if (vat && !index.byVat.has(vat)) index.byVat.set(vat, account);
+  const nameCountry = accountNameKey(account.name, account.country ?? '');
+  if (!index.byNameCountry.has(nameCountry)) index.byNameCountry.set(nameCountry, account);
+  const nameOnly = normalizeNameKey(account.name);
+  const bucket = index.byName.get(nameOnly);
+  if (bucket) bucket.push(account);
+  else index.byName.set(nameOnly, [account]);
+}
+
+type AccountMatch<T> = { kind: 'none' } | { kind: 'one'; target: T } | { kind: 'ambiguous'; count: number };
+
+/** VAT id first, then name+country, then the loose name half described above. */
+function matchAccount<T extends AccountLike>(
+  index: AccountIndex<T>,
+  value: { name: string; country: string; vatId: string },
+): AccountMatch<T> {
+  const vat = normalizeVatKey(value.vatId);
+  const byVat = vat ? index.byVat.get(vat) : undefined;
+  if (byVat) return { kind: 'one', target: byVat };
+
+  const exact = index.byNameCountry.get(accountNameKey(value.name, value.country));
+  if (exact) return { kind: 'one', target: exact };
+
+  // Only the pairs where one side says nothing about the country: when both
+  // name a country and the two differ, they are two merchants.
+  const candidates = index.byName.get(normalizeNameKey(value.name)) ?? [];
+  const loose = candidates.filter((c) => !value.country || !normalizeCountry(c.country ?? ''));
+  if (loose.length === 1) return { kind: 'one', target: loose[0] };
+  if (loose.length > 1) return { kind: 'ambiguous', count: loose.length };
+  return { kind: 'none' };
+}
+
 /**
  * Decide, for every valid row, what it is. Pure — this is the function the
  * whole task is really about, so it is the one with the assertions behind it.
@@ -529,45 +670,74 @@ export function diffMarketingAccounts(
   snapshot: MarketingTargetSnapshot,
   context: MarketingDiffContext,
 ): ResolveResult<MarketingPlanValue> {
-  const byVat = new Map<string, MarketingAccountTarget>();
-  const byName = new Map<string, MarketingAccountTarget>();
-  for (const account of snapshot.accounts) {
-    const vat = normalizeVatKey(account.vatId);
-    if (vat && !byVat.has(vat)) byVat.set(vat, account);
-    const nameKey = accountNameKey(account.name, account.country ?? '');
-    if (!byName.has(nameKey)) byName.set(nameKey, account);
-  }
+  const index = emptyAccountIndex<MarketingAccountTarget>();
+  for (const account of snapshot.accounts) indexAccount(index, account);
 
   const leadByEmail = new Map<string, MarketingLeadTarget>();
   for (const lead of snapshot.leads) {
-    const key = normalizeEmailKey(lead.email);
+    const key = leadIndexKey(lead.email);
     if (key && !leadByEmail.has(key)) leadByEmail.set(key, lead);
   }
 
   const plan: MarketingPlannedRow[] = [];
-  const seenAccountKeys = new Map<string, number>();
+  // Accounts this run has already planned to CREATE, under the same index, so a
+  // later row naming the same merchant resolves onto the first row's plan
+  // rather than racing it into a twin. They carry a row number instead of an
+  // id: there is no id yet, and a plan is not a row.
+  const planned = emptyAccountIndex<AccountLike & { row: number }>();
+  // Existing accounts an earlier row already claimed — two rows updating one
+  // account is the same duplicate, one step later.
+  const claimedBy = new Map<string, number>();
   const seenLeadKeys = new Map<string, number>();
+
+  const skip = (row: number, key: string, value: MarketingAccountRow, reason: string) => {
+    plan.push({
+      row,
+      key,
+      status: 'SKIP',
+      reason,
+      value: { input: value, account: { targetId: null, changes: {}, changed: [], withheld: [] }, funnel: null, warnings: [] },
+    });
+  };
 
   for (const { row, key, value } of rows) {
     // Two rows for the same account in one file: the first wins and the second
     // is reported. Without this the second row races the `@@unique([orgId,
-    // vatId])` index and takes its whole chunk down with it.
-    const firstSeen = seenAccountKeys.get(key);
-    if (firstSeen !== undefined) {
-      plan.push({
-        row,
-        key,
-        status: 'SKIP',
-        reason: `duplicate account in file (first seen at row ${firstSeen})`,
-        value: { input: value, account: { targetId: null, changes: {}, changed: [], withheld: [] }, funnel: null, warnings: [] },
-      });
+    // vatId])` index and takes its whole chunk down with it. The check is on
+    // the account a row RESOLVES to, never on the identity it claims: one file
+    // listing a merchant twice — the VAT filled in on one line only — holds two
+    // different claimed keys and is still one account.
+    const inFile = matchAccount(planned, value);
+    if (inFile.kind === 'one') {
+      skip(row, key, value, `duplicate account in file (first seen at row ${inFile.target.row})`);
       continue;
     }
-    seenAccountKeys.set(key, row);
+    if (inFile.kind === 'ambiguous') {
+      skip(row, key, value, `duplicate account in file (matches ${inFile.count} earlier rows by name; add a country or vat_id)`);
+      continue;
+    }
 
-    const vat = normalizeVatKey(value.vatId);
-    const target =
-      (vat ? byVat.get(vat) : undefined) ?? byName.get(accountNameKey(value.name, value.country));
+    const found = matchAccount(index, value);
+    if (found.kind === 'ambiguous') {
+      skip(
+        row,
+        key,
+        value,
+        `ambiguous: ${found.count} existing accounts are named "${value.name}" — add a country or vat_id column`,
+      );
+      continue;
+    }
+    const target = found.kind === 'one' ? found.target : undefined;
+    if (target) {
+      const claimed = claimedBy.get(target.id);
+      if (claimed !== undefined) {
+        skip(row, key, value, `duplicate account in file (first seen at row ${claimed})`);
+        continue;
+      }
+      claimedBy.set(target.id, row);
+    } else {
+      indexAccount(planned, { row, name: value.name, vatId: value.vatId || null, country: value.country || null });
+    }
 
     const incoming: MarketingAccountWrite = {
       name: value.name,
@@ -694,7 +864,11 @@ function planFunnel(
   }
   deps.seenLeadKeys.set(emailKey, deps.row);
 
-  const lead = deps.leadByEmail.get(emailKey);
+  // An existing person is reused whichever address they carry: the real one
+  // (someone applied, or a mentor typed them in) or the stand-in a previous run
+  // of this importer created. Only a CREATE gets the stand-in.
+  const leadEmail = leadStandInEmail(emailKey, context.orgKey);
+  const lead = deps.leadByEmail.get(emailKey) ?? deps.leadByEmail.get(leadEmail);
   const incomingLead: MarketingLeadWrite = {
     fullName: blankToUndefined(value.contactName),
     phone: blankToUndefined(value.contactPhone),
@@ -723,8 +897,9 @@ function planFunnel(
     leadChanges = planned.changes;
     leadChanged = planned.changed;
   } else {
-    // A contact with no name: the address is the only name there is. Better a
-    // findable lead than a blank `fullName` on a required column.
+    // A contact with no name: the merchant's own address is the only name there
+    // is — the real one, not the stand-in, because `fullName` is what a person
+    // reads. Better a findable lead than a blank `fullName` on a required column.
     leadChanges = { ...incomingLead, fullName: value.contactName || emailKey };
     leadChanged = Object.keys(leadChanges).filter((f) => leadChanges[f as keyof MarketingLeadWrite] !== undefined);
   }
@@ -755,6 +930,7 @@ function planFunnel(
     ownerId,
     ownerEmail,
     emailKey,
+    leadEmail,
     leadId: lead?.id ?? null,
     leadChanges,
     leadChanged,
@@ -788,6 +964,24 @@ export const previewWriter: MarketingAccountWriter = {
     return row.targetId ?? null;
   },
 };
+
+/**
+ * What an operator reads when a row is refused.
+ *
+ * `AlreadyMentoredError` is the one refusal this design cares most about — the
+ * lead already belongs to another owner, and re-pointing `mentorId` in place
+ * would re-attribute that owner's work (docs/mentor-transfer.md). Its message
+ * is the literal `already_mentored`: the right thing for an API to answer as a
+ * code, and useless in a CLI report. Matched on `name` rather than `instanceof`
+ * so this module stays free of the Prisma-aware half.
+ */
+export function writeFailureReason(error: unknown, row: MarketingPlannedRow): string {
+  if (error instanceof Error && error.name === 'AlreadyMentoredError') {
+    const contact = row.value.funnel?.emailKey ?? 'the contact';
+    return `${contact} already has an active owner in this organization — transfer the record instead of importing it (already_mentored)`;
+  }
+  return importErrorMessage(error);
+}
 
 /**
  * Apply the planned rows of one chunk through `writer` and report each outcome.
@@ -831,7 +1025,7 @@ export async function applyPlannedAccounts(
         row: row.row,
         key: row.key,
         status: 'ERROR',
-        reason: importErrorMessage(error),
+        reason: writeFailureReason(error, row),
         value: row.value,
       });
     }

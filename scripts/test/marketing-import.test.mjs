@@ -34,6 +34,7 @@ const {
   accountMatchKey,
   applyPlannedAccounts,
   diffMarketingAccounts,
+  leadStandInEmail,
   makeMarketingValidator,
   normalizeVatKey,
   parseChannels,
@@ -42,10 +43,17 @@ const {
   MARKETING_IMPORT_COLUMNS,
   MARKETING_COLUMNS_WITHOUT_TARGET,
 } = await import('../../src/lib/marketingImport.ts');
-const { parseDelimited, runImport } = await import('../../src/lib/importPreview.ts');
+const { importErrorMessage, parseDelimited, runImport } = await import('../../src/lib/importPreview.ts');
+// The real refusal the production writer throws — not a message this file
+// invents. Its `message` is the literal 'already_mentored', so a test asserting
+// an English sentence on a fake would prove nothing about what an operator sees.
+const { AlreadyMentoredError } = await import('../../src/lib/activeMentorship.ts');
 
 const STAGES = ['LEAD_NEW', 'LEAD_CONTACTED', 'LEAD_QUALIFIED', 'DEAL_PROPOSAL', 'DEAL_WON', 'DEAL_LOST'];
 const OWNER = { id: 'owner-1', email: 'owner@example.com' };
+const ORG = 'org-1';
+/** The address a lead CREATED by the import carries (see #2407 in the module). */
+const standIn = (contactEmail) => leadStandInEmail(contactEmail, ORG);
 
 const HEADER =
   'name,legal_name,country,city,vat_id,website,industry,locale,stage,source,monthly_transactions,mrr,owner_email,channels,contact_name,contact_email,contact_phone';
@@ -85,8 +93,9 @@ function memoryWriter(store) {
     if (!lead) {
       lead = {
         id: `user-${store.nextId++}`,
-        email: funnel.emailKey,
-        fullName: funnel.leadChanges.fullName ?? funnel.emailKey,
+        // The stand-in, never the merchant's mailbox — mirrors the Prisma writer.
+        email: funnel.leadEmail,
+        fullName: funnel.leadChanges.fullName ?? funnel.leadEmail,
         phone: funnel.leadChanges.phone ?? null,
         city: funnel.leadChanges.city ?? null,
         country: funnel.leadChanges.country ?? null,
@@ -100,7 +109,7 @@ function memoryWriter(store) {
     }
     const active = store.relations.find((r) => r.menteeId === lead.id && r.status === 'ACTIVE');
     if (active && active.mentorId !== funnel.ownerId) {
-      throw new Error('This mentee already has an active mentorship relation');
+      throw new AlreadyMentoredError(lead.id, active.id);
     }
     if (!active) {
       store.relations.push({
@@ -145,6 +154,7 @@ async function runFile(text, store, options = {}) {
         defaultOwnerId: OWNER.id,
         defaultOwnerEmail: OWNER.email,
         ownerIdByEmail: new Map(options.owners ?? []),
+        orgKey: ORG,
         authoritative: options.authoritative === true,
       }),
     apply: (chunk) => applyPlannedAccounts(chunk, writer),
@@ -305,6 +315,101 @@ test('two rows for one account in one file: the first wins, the second is a SKIP
   assert.match(report.rows[1].reason, /duplicate account in file \(first seen at row 1\)/);
 });
 
+test('an account stored before this change — country NULL — matches a row that names one', async () => {
+  // THE REGRESSION THIS PINS. `Company.country` and `Company.vatId` arrive with
+  // this feature, so on the first run every account the tenant already holds
+  // has both NULL. An exact name+country key reads the stored "acme gmbh␀" and
+  // the file's "acme gmbh␀DE" as two merchants and duplicates the entire
+  // account master — invisibly, because `absent` is empty and the NEXT run
+  // matches the fresh twin and reports UNCHANGED.
+  const store = memoryStore({
+    accounts: [{ id: 'co-existing', name: 'Nordlicht Handel GmbH', vatId: null, country: null, industry: null, contactName: null, contactEmail: null, contactPhone: null }],
+  });
+  const report = await runFile(
+    `${HEADER}\nNordlicht Handel GmbH,,DE,Hamburg,,,Retail,,,,,,,,,,\n`,
+    store,
+    { apply: true },
+  );
+  assert.equal(report.counts.CREATE, 0);
+  assert.equal(report.counts.UPDATE, 1);
+  assert.equal(report.rows[0].targetId, 'co-existing');
+  assert.equal(store.accounts.length, 1);
+  // The country is filled in as a gap, so the run after this one keys exactly.
+  assert.equal(store.accounts[0].country, 'DE');
+  const second = await runFile(
+    `${HEADER}\nNordlicht Handel GmbH,,DE,Hamburg,,,Retail,,,,,,,,,,\n`,
+    store,
+    { apply: true },
+  );
+  assert.equal(second.counts.UNCHANGED, 1);
+  assert.equal(store.accounts.length, 1);
+});
+
+test('the mirror case: a stored country and a file that omits it still match', async () => {
+  const store = memoryStore({
+    accounts: [{ id: 'co-de', name: 'Depot Nord', vatId: null, country: 'DE', industry: null, contactName: null, contactEmail: null, contactPhone: null }],
+  });
+  const report = await runFile(`${HEADER}\nDepot Nord,,,,,,Logistics,,,,,,,,,,\n`, store, { apply: true });
+  assert.equal(report.counts.UPDATE, 1);
+  assert.equal(store.accounts.length, 1);
+});
+
+test('two countries and a countryless row is ambiguous — reported, never guessed', async () => {
+  const store = memoryStore({
+    accounts: [
+      { id: 'co-de', name: 'Acme', vatId: null, country: 'DE', industry: null, contactName: null, contactEmail: null, contactPhone: null },
+      { id: 'co-tr', name: 'Acme', vatId: null, country: 'TR', industry: null, contactName: null, contactEmail: null, contactPhone: null },
+    ],
+  });
+  const report = await runFile(`${HEADER}\nAcme,,,,,,Retail,,,,,,,,,,\n`, store, { apply: true });
+  assert.equal(report.counts.SKIP, 1);
+  assert.equal(report.counts.CREATE, 0);
+  assert.match(report.rows[0].reason, /ambiguous: 2 existing accounts/);
+  assert.equal(store.accounts.length, 2, 'an ambiguous row writes nothing');
+});
+
+test('the same merchant twice in one file — VAT on one line only — is one account', async () => {
+  // The guard keys on the account a row RESOLVES to, not the identity it
+  // CLAIMS: `vat:DE123456789` and `name:acme gmbh␀DE` are two different claimed
+  // keys for one merchant, and a claim-keyed guard never fires.
+  const store = memoryStore();
+  const report = await runFile(
+    `${HEADER}\nAcme GmbH,,DE,,DE123456789,,,,,,,,,,,,\nAcme GmbH,,DE,,,,,,,,,,,,,,\n`,
+    store,
+    { apply: true },
+  );
+  assert.equal(report.counts.CREATE, 1);
+  assert.equal(report.counts.SKIP, 1);
+  assert.match(report.rows[1].reason, /duplicate account in file \(first seen at row 1\)/);
+  assert.equal(store.accounts.length, 1);
+});
+
+test('two rows resolving onto one EXISTING account: the second is a SKIP, not a double write', async () => {
+  const store = memoryStore({
+    accounts: [{ id: 'co-1', name: 'Acme GmbH', vatId: 'DE123456789', country: 'DE', industry: null, contactName: null, contactEmail: null, contactPhone: null }],
+  });
+  const report = await runFile(
+    `${HEADER}\nAcme GmbH,,DE,,DE123456789,,Retail,,,,,,,,,,\nAcme GmbH,,DE,,,,Logistics,,,,,,,,,,\n`,
+    store,
+    { apply: true },
+  );
+  assert.equal(report.counts.SKIP, 1);
+  assert.match(report.rows[1].reason, /duplicate account in file \(first seen at row 1\)/);
+  assert.equal(store.accounts[0].industry, 'Retail');
+});
+
+test('two genuinely different merchants of the same name in one file are two accounts', async () => {
+  const store = memoryStore();
+  const report = await runFile(
+    `${HEADER}\nAcme,,DE,,,,,,,,,,,,,,\nAcme,,TR,,,,,,,,,,,,,,\n`,
+    store,
+    { apply: true },
+  );
+  assert.equal(report.counts.CREATE, 2);
+  assert.equal(report.counts.SKIP, 0);
+  assert.equal(store.accounts.length, 2);
+});
+
 // ── apply + idempotency (#2391/#2405) ────────────────────────────────────────
 
 const FIXTURE_TEXT = [
@@ -345,7 +450,7 @@ test('a row with a stage but no contact keeps its account and warns about the st
 test('the lead person is created from the primary contact and carries the account', async () => {
   const store = memoryStore();
   await runFile(FIXTURE_TEXT, store, { apply: true });
-  const lead = store.leads.find((l) => l.email === 'lena@nordlicht.example');
+  const lead = store.leads.find((l) => l.email === standIn('lena@nordlicht.example'));
   assert.equal(lead.fullName, 'Lena Sommer');
   assert.equal(lead.preferredLanguage, 'de');
   assert.equal(lead.referralSource, 'Messe');
@@ -367,7 +472,7 @@ test('a stage move on an existing funnel record is an UPDATE, not a second recor
   const report = await runFile(moved, store, { apply: true });
   assert.equal(report.counts.UPDATE, 1);
   assert.equal(store.relations.length, 2);
-  const lead = store.leads.find((l) => l.email === 'lena@nordlicht.example');
+  const lead = store.leads.find((l) => l.email === standIn('lena@nordlicht.example'));
   assert.equal(store.relations.find((r) => r.menteeId === lead.id).pipelineStatus, 'DEAL_PROPOSAL');
 });
 
@@ -387,10 +492,95 @@ test('the lead of a row whose contact already has another owner is an ERROR, not
   const report = await runFile(FIXTURE_TEXT, store, { apply: true });
   const row = report.rows.find((r) => r.value.input.name === 'Nordlicht Handel GmbH');
   assert.equal(row.status, 'ERROR');
-  assert.match(row.reason, /active mentorship/i);
+  // The operator reads a sentence, not the API's `already_mentored` code — and
+  // the sentence names the contact, so the refusal can be acted on.
+  assert.match(row.reason, /lena@nordlicht\.example already has an active owner/);
+  assert.match(row.reason, /already_mentored/);
   assert.equal(store.relations.find((r) => r.id === 'rel-x').mentorId, 'other-owner');
   // The other two rows still landed: one refused row does not cost the chunk.
   assert.equal(report.counts.CREATE, 2);
+});
+
+// ── the lead person is a record, not a login (#2407) ─────────────────────────
+
+test('the lead User is created on a stand-in address, never the merchant mailbox', async () => {
+  // A funnel record needs a `User` (the relation's `menteeId` is a required FK),
+  // but that row must not be a login somebody can claim. A sentinel password is
+  // not enough on its own: `/api/auth/forgot` mails a reset link to ANY existing
+  // user and `/api/auth/reset` consumes it, neither asking `isPendingActivation`.
+  // What makes the recovery path a dead end is the ADDRESS
+  // (src/lib/menteeAccount.ts says so) — so the real mailbox stays on the
+  // Company row and the lead gets a generated one.
+  const store = memoryStore();
+  await runFile(FIXTURE_TEXT, store, { apply: true });
+  for (const lead of store.leads) {
+    assert.ok(lead.email.endsWith('@import.local'), `${lead.email} is a real mailbox`);
+  }
+  assert.ok(!store.leads.some((l) => l.email === 'lena@nordlicht.example'));
+  const account = store.accounts.find((a) => a.name === 'Nordlicht Handel GmbH');
+  assert.equal(account.contactEmail, 'lena@nordlicht.example', 'the real address is on the account');
+});
+
+test('the stand-in is derived, so the same contact resolves to the same lead next run', () => {
+  assert.equal(standIn('lena@nordlicht.example'), standIn('lena@nordlicht.example'));
+  // Two organizations importing one contact must not collide: `User.email` is
+  // globally unique, so a shared stand-in would be a cross-tenant P2002.
+  assert.notEqual(
+    leadStandInEmail('lena@nordlicht.example', 'org-1'),
+    leadStandInEmail('lena@nordlicht.example', 'org-2'),
+  );
+  assert.notEqual(standIn('lena@nordlicht.example'), standIn('other@nordlicht.example'));
+});
+
+test('a person already in the CRM under their real address is reused, not duplicated', async () => {
+  const store = memoryStore({
+    leads: [{ id: 'user-real', email: 'lena@nordlicht.example', fullName: 'Lena Sommer', phone: null, city: null, country: null, preferredLanguage: null, referralSource: null, companyId: null }],
+  });
+  const report = await runFile(FIXTURE_TEXT, store, { apply: true });
+  assert.equal(report.counts.ERROR, 0);
+  assert.equal(store.leads.length, 2, 'the existing person is reused');
+  assert.ok(store.relations.some((r) => r.menteeId === 'user-real'));
+});
+
+// ── the ERROR row carries a reason an operator can act on (#2406) ────────────
+
+test('a Prisma-shaped failure does not report an EMPTY reason', async () => {
+  // Prisma formats every known request error starting with a BLANK LINE, so the
+  // old `split('\n')[0]` produced "" for exactly the failures a writer raises:
+  // the operator lost a row and was told nothing. P2002 on `User.email` is the
+  // realistic one — a contact whose address already belongs to another tenant.
+  const prismaish = Object.assign(
+    new Error('\nInvalid `prisma.user.create()` invocation:\n\nUnique constraint failed on the fields: (`email`)'),
+    { code: 'P2002', name: 'PrismaClientKnownRequestError' },
+  );
+  assert.equal(prismaish.message.split('\n')[0], '', 'the message really does start blank');
+  const reason = importErrorMessage(prismaish);
+  assert.ok(reason.length > 0);
+  // The searchable code, then the sentence that says what went wrong — not the
+  // "Invalid `prisma.user.create()` invocation:" banner that precedes it.
+  assert.equal(reason, 'P2002: Unique constraint failed on the fields: (`email`)');
+
+  // A validation error puts the argument echo between the banner and the
+  // sentence. The echo is the query — it is skipped, never persisted.
+  const validationish = new Error('\nInvalid `prisma.user.create()` invocation:\n\n{\n  data: {\n+   email: String\n  }\n}\n\nArgument `email` is missing.');
+  const validationReason = importErrorMessage(validationish);
+  assert.equal(validationReason, 'Argument `email` is missing.');
+  assert.ok(!/[{}]/.test(validationReason));
+
+  const thrower = {
+    async createAccount() {
+      throw prismaish;
+    },
+    async updateAccount() {
+      throw prismaish;
+    },
+  };
+  const results = await applyPlannedAccounts(
+    [{ row: 1, key: 'name:acme', status: 'CREATE', value: { input: { name: 'Acme' }, account: { targetId: null, changes: {}, changed: [], withheld: [] }, funnel: null, warnings: [] } }],
+    thrower,
+  );
+  assert.equal(results[0].status, 'ERROR');
+  assert.match(results[0].reason, /P2002/);
 });
 
 // ── dry-run honesty ──────────────────────────────────────────────────────────

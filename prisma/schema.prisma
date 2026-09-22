@@ -1282,6 +1282,14 @@ model Company {
   // rather than an address book. A real table waits until several contacts per
   // account are actually needed (epic-07).
   //
+  // READ EXPOSURE: `GET /api/companies` and `GET /api/companies/[id]` gate on
+  // "is there a session" and read the row with `include` and no `select`, so
+  // every Company scalar reaches every authenticated user of the tenant. That
+  // broad read is #2431. A named person's direct line and a tax identification
+  // number are a different category from name/industry/address, so these three
+  // plus `vatId` are stripped for non-ADMIN readers at both routes
+  // (`src/lib/companyVisibility.ts`) until #2431 scopes the whole payload.
+  //
   // Deliberately NO unique constraint on contactEmail. A global `@unique` — what
   // the inherited Marketing schema had on `Contact.email` — punches straight
   // through the tenant boundary (docs/tenant-isolation.md): two tenants may each

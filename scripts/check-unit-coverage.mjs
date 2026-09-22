@@ -203,7 +203,7 @@ const FLOORS = new Map([
     'src/lib/marketingImport.ts',
     {
       floor: 95,
-      measured: 99.29,
+      measured: 99.13,
       why: 'the account match key: VAT beats the name, and the name half must survive İ/ı/ü/ß — a plain toLowerCase() creates a twin account on every run (#2405)',
     },
   ],

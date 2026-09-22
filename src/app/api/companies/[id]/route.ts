@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { redactCompanyForReader } from '@/lib/companyVisibility';
 
 const updateCompanySchema = z.object({
   name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
@@ -54,7 +55,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ company });
+    // The tax id and the named contact's direct line are ADMIN-only
+    // (src/lib/companyVisibility.ts). The rest of this payload is still wider
+    // than it should be — that is #2431.
+    return NextResponse.json({ company: redactCompanyForReader(company, session.user.role) });
     });
   } catch (error) {
     console.error('Get company error:', error);

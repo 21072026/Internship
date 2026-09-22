@@ -62,7 +62,7 @@ checked per field: a value past its cap is a row-level `ERROR`, never a silent t
 | `owner_email` (`owner`, `betreuer`) | no | e-mail of an `ADMIN`/`MENTOR` in this org; blank = `--owner` | `MentorshipRelation.mentorId` |
 | `channels` (`kanale`, `kanallar`) | no | `;`-separated list, trimmed and de-duplicated (`Amazon;eBay;OTTO`) | *nothing yet* — #2408 |
 | `contact_name` (`ansprechpartner`) | no | free text, ≤ 191 | `Company.contactName` **and** the lead's `User.fullName` |
-| `contact_email` (`email`, `e-mail`) | no | an address; `@import.local` / `@erased.local` refused | `Company.contactEmail` **and** the lead's `User.email` |
+| `contact_email` (`email`, `e-mail`) | no | an address; `@import.local` / `@erased.local` refused | `Company.contactEmail`. It is also the lead person's **identity** for matching — but a lead this importer *creates* is stored under a generated stand-in address, never this one (see "What it writes") |
 | `contact_phone` (`telefon`, `phone`) | no | free text, ≤ 40; compared by normalised digits, so a re-spelling is not a change | `Company.contactPhone` **and** the lead's `User.phone` |
 
 ### The `stage` column takes MARKETING funnel keys only
@@ -109,6 +109,22 @@ designed yet.
    A.Ş.` and `ISTANBUL TEKSTIL A.S.` would be two accounts on every run. Country is the
    other half because `address` is free text: two merchants of the same name in two
    countries must stay two accounts.
+3. **A country missing on one side falls back to the name alone** — but only when exactly
+   one stored account bears that name. `Company.country` and `Company.vatId` arrive with
+   this feature, so on the first run every account the tenant already holds has both
+   `NULL`: an exact name+country key would compare the stored `acme gmbh␀` against the
+   file's `acme gmbh␀DE` and duplicate the whole account master on the one run that
+   matters. A loosely matched account has its `country` filled in as a gap, so the next run
+   keys exactly. If two stored accounts share the name in **different** countries and the
+   row names none, the row is a `SKIP` reading *ambiguous* — add a `country` or `vat_id`
+   column. It is never guessed.
+
+**`ß` does not fold to `ss`.** The normaliser transliterates İ/ı/ş/ğ/ü/ö/ç and strips
+accents, but leaves `ß` as its own letter, so `Grüße Süßwaren` and `Grüsse Süsswaren` are
+two accounts. #2405's criterion names `ß` among the characters that must "match correctly";
+the deliberate reading here is that matching correctly means *not* fusing two spellings a
+human wrote differently — one is a legal name, the other a transcription — and the run stays
+idempotent for either spelling on its own. A file that mixes both needs a `vat_id`.
 
 Resolution is **batched**: one query loads the organisation's accounts, one loads the lead
 users the file names, one loads their relations — not three per row. (The name half is
@@ -117,7 +133,9 @@ from raw names would be a second, weaker normaliser, which is the bug this is he
 prevent.)
 
 Two rows for the same account **in one file**: the first wins, the second is reported as
-`SKIP` naming the row it duplicates.
+`SKIP` naming the row it duplicates. The check is on the account a row **resolves to**, not
+on the identity it claims — one merchant listed twice with the VAT filled in on only one of
+the two lines holds two different claimed keys and is still one account.
 
 ## Row outcomes
 
@@ -146,8 +164,12 @@ else's work ([`mentor-transfer.md`](mentor-transfer.md), #419).
 ## What it writes
 
 - `Company` — created or updated (see the table above).
-- The **lead person** — a `User` with `role: 'MENTEE'`, `companyId` set to the account, and
-  a sentinel password (`NO_LOGIN_PASSWORD`) that `bcrypt.compare` can never match. No
+- The **lead person** — a `User` with `role: 'MENTEE'`, `companyId` set to the account, a
+  sentinel password (`NO_LOGIN_PASSWORD`) that `bcrypt.compare` can never match, and a
+  **generated stand-in address** on `import.local` rather than the merchant's mailbox. The
+  sentinel alone would not be enough: `/api/auth/forgot` mails a reset link to any existing
+  user and `/api/auth/reset` consumes it, so a real address would make every imported
+  contact a claimable login. The real address stays on `Company.contactEmail`. No
   invitation and no "set your password" mail is sent, ever. Rationale and the deviation it
   represents: [`marketing-vertical/pipeline-record.md`](marketing-vertical/pipeline-record.md).
 - The **funnel record** — a `MentorshipRelation` (owner, lead, account, stage), created

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { redactCompanyForReader } from '@/lib/companyVisibility';
 
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required').max(TEXT_LIMITS.companyName),
@@ -48,7 +49,12 @@ export async function GET() {
         orderBy: { name: 'asc' },
       });
 
-      return NextResponse.json({ companies });
+      // The tax id and the named contact's direct line are ADMIN-only
+      // (src/lib/companyVisibility.ts). The rest of this payload is still wider
+      // than it should be — that is #2431.
+      return NextResponse.json({
+        companies: companies.map((c) => redactCompanyForReader(c, session.user.role)),
+      });
     });
   } catch (error) {
     console.error('Get companies error:', error);
