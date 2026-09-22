@@ -22,6 +22,7 @@ import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity }
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
 import { overdueBefore } from '@/lib/taskDue';
+import { visibleToViewer } from '@/lib/todoVisibility';
 import { formatDate } from '@/lib/relativeTime';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
@@ -3022,19 +3023,44 @@ function activityDigestTable(items: MenteeActivity[], locale?: string | null): s
 //
 // The caller passes the reach: a mentor's own mentees by id, an admin's
 // organisation by orgId — ProjectTask carries no orgId of its own and this runs
-// in a cron with no tenant context, so the scope has to be said out loud.
+// in a cron with no tenant context, so the scope has to be said out loud. Reach
+// is not permission, though: within it the same privacy rule applies that
+// /api/todos applies to a page, and it is the one in src/lib/todoVisibility.ts.
 const OVERDUE_DIGEST_LIMIT = 10;
+// How far down the late-to-do list the block looks before it prints the first
+// ten. The privacy filter below runs in JS — it compares two columns of the same
+// row — so the query has to bring back more than it prints, or ten private lines
+// at the top would hide the eleventh, readable one. It also makes "and N more"
+// an actual count instead of the "and 1 more" that `take: LIMIT + 1` could say.
+const OVERDUE_DIGEST_SCAN = 100;
 
-async function overdueTodoBlock(reach: Prisma.ProjectTaskWhereInput, locale: Locale): Promise<string> {
+async function overdueTodoBlock(
+  reach: Prisma.ProjectTaskWhereInput,
+  locale: Locale,
+  recipientId: string
+): Promise<string> {
   const rows = await prisma.projectTask.findMany({
     where: { ...reach, done: false, archivedAt: null, dueDate: { lt: overdueBefore() } },
     orderBy: { dueDate: 'asc' },
-    take: OVERDUE_DIGEST_LIMIT + 1,
-    select: { id: true, title: true, dueDate: true, assignee: { select: { fullName: true } } },
+    take: OVERDUE_DIGEST_SCAN,
+    select: {
+      id: true,
+      title: true,
+      dueDate: true,
+      // The three columns the privacy rule reads (src/lib/todoVisibility.ts).
+      projectId: true,
+      createdById: true,
+      assigneeId: true,
+      assignee: { select: { fullName: true } },
+    },
   });
-  if (rows.length === 0) return '';
+  // A line somebody wrote for themselves on their own list is theirs: /api/todos
+  // hides it from their mentor and from an admin alike, and a mail may not carry
+  // what no page will show. Same predicate as the team list, one copy (#2440).
+  const visible = visibleToViewer(rows, recipientId);
+  if (visible.length === 0) return '';
   const A = getDictionary(locale).notifications.activityDigestEmail;
-  const items = rows
+  const items = visible
     .slice(0, OVERDUE_DIGEST_LIMIT)
     .map((row) => {
       const line = A.overdueLine
@@ -3045,8 +3071,8 @@ async function overdueTodoBlock(reach: Prisma.ProjectTaskWhereInput, locale: Loc
       return `<li style="margin:2px 0;">${esc(line)}</li>`;
     })
     .join('');
-  const rest = rows.length > OVERDUE_DIGEST_LIMIT
-    ? `<p style="color:#6b7280;font-size:12px;">${esc(A.overdueMore.replace('{n}', String(rows.length - OVERDUE_DIGEST_LIMIT)))}</p>`
+  const rest = visible.length > OVERDUE_DIGEST_LIMIT
+    ? `<p style="color:#6b7280;font-size:12px;">${esc(A.overdueMore.replace('{n}', String(visible.length - OVERDUE_DIGEST_LIMIT)))}</p>`
     : '';
   return `<h3 style="margin:20px 0 6px;color:#b91c1c;font-size:15px;">${esc(A.overdueHeading)}</h3>
     <ul style="margin:0;padding-left:18px;font-size:13px;color:#374151;">${items}</ul>${rest}`;
@@ -3076,7 +3102,8 @@ export async function sendDailyActivityDigests() {
     // Their own mentees, the same people the table above is about.
     const overdue = await overdueTodoBlock(
       { assigneeId: { in: items.map((i) => i.menteeId) } },
-      mLocale
+      mLocale,
+      m.id
     );
     try {
       await sendEmail({
@@ -3113,7 +3140,7 @@ export async function sendDailyActivityDigests() {
       // Their own organisation. An admin with no org reads nobody's to-dos here
       // rather than everybody's: this job binds no tenant context.
       const overdue = a.orgId
-        ? await overdueTodoBlock({ assignee: { is: { orgId: a.orgId } } }, aLocale)
+        ? await overdueTodoBlock({ assignee: { is: { orgId: a.orgId } } }, aLocale, a.id)
         : '';
       try {
         await sendEmail({

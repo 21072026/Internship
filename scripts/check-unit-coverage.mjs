@@ -103,6 +103,14 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'a to-do due TODAY is not late, and a date names a calendar day (#2440)' },
   ],
   [
+    'src/lib/todoVisibility.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a to-do somebody wrote for themselves must not reach a team list or a digest mail (#2440)',
+    },
+  ],
+  [
     // Not floored because somebody wrote tests for it: `stageClock.ts` imports
     // it for the terminal/off-path stage set, so the stage-clock test exercises
     // it transitively. The floor records the protection that exists, which is

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { notify } from '@/lib/notify';
 import { resolveTemplateTitle, serializeTaskTemplate, taskTemplateSelect } from '@/lib/goalTemplates';
+import { visibleToViewer } from '@/lib/todoVisibility';
 import { defaultLocale } from '@/i18n/config';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import type { Prisma } from '@prisma/client';
@@ -45,6 +46,8 @@ const listSelect = {
   templateId: true,
   assigneeId: true,
   createdById: true,
+  // Not serialized — it is one half of the privacy rule (src/lib/todoVisibility.ts).
+  projectId: true,
   template: taskTemplateSelect,
   project: { select: { id: true, name: true } },
   author: { select: { id: true, fullName: true } },
@@ -78,6 +81,7 @@ type Row = {
   templateId: string | null;
   assigneeId: string | null;
   createdById: string | null;
+  projectId: string | null;
   template: { id: string; title: string; translations: unknown; archivedAt: Date | null } | null;
   project: { id: string; name: string } | null;
   author: { id: string; fullName: string } | null;
@@ -133,10 +137,13 @@ function serialize(row: Row, viewer: { id: string; role: string }, ownerId: stri
  */
 async function teamMemberIds(viewer: { id: string; role: string }): Promise<string[]> {
   if (viewer.role === 'ADMIN') {
+    // Deliberately uncapped, unlike TEAM_LIMIT below: a cap here would drop
+    // *people* from the answer rather than shorten the list, and which people
+    // would depend on storage order. It selects one indexed column, and
+    // `withTenantScope` has already narrowed it to this organisation.
     const users = await prisma.user.findMany({
       where: { isActive: true },
       select: { id: true },
-      take: 2000,
     });
     return users.map((u) => u.id);
   }
@@ -191,12 +198,10 @@ export async function GET(request: Request) {
         take: TEAM_LIMIT,
         select: listSelect,
       })) as Row[];
-      const visible = rows.filter(
-        // The same carve-out `mayReach`'s caller applies per person: a line
-        // somebody wrote for themselves is theirs, and a team view is still
-        // somebody else's view.
-        (row) => row.assigneeId === viewerId || row.project !== null || row.createdById !== row.assigneeId
-      );
+      // The same carve-out the per-person read applies: a line somebody wrote
+      // for themselves is theirs, and a team view is still somebody else's
+      // view. One predicate, shared with the digest (src/lib/todoVisibility.ts).
+      const visible = visibleToViewer(rows, viewerId);
       return NextResponse.json({
         todos: visible.map((row) => serialize(row, session.user, row.assigneeId ?? viewerId)),
         open: [],
