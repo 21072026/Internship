@@ -149,16 +149,47 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
       data: { to: `new-${marker}@e2e.local`, subject: 'recent', status: 'SENT' },
     });
 
+    // TrialReminder: the suppression ledger behind the trial reminder ladder
+    // (#2414). A claim row hangs off a funnel record, so a relation is what
+    // carries it here. Two rows either side of the window, on two thresholds —
+    // the unique key is (relationId, threshold), so one record cannot hold the
+    // same mark twice.
+    const trialRelation = await prisma.mentorshipRelation.create({
+      data: { mentorId: active.id, menteeId: quiet.id, pipelineStatus: 'TRIAL_ACTIVE' },
+    });
+    const oldClaim = await prisma.trialReminder.create({
+      data: { relationId: trialRelation.id, threshold: 7, sentAt: ancient() },
+    });
+    const newClaim = await prisma.trialReminder.create({
+      data: { relationId: trialRelation.id, threshold: 3, sentAt: recent() },
+    });
+
     const result = await runRetentionPrune();
 
     // No entry may fail: a failure here is a broken query, not a clean table.
     expect(result.failed).toEqual([]);
     expect(result.results.map((r) => r.key).sort()).toEqual(
-      ['activityLog', 'emailLog', 'job', 'notification', 'orphanApplicant', 'pageView', 'pushSubscription'].sort()
+      [
+        'activityLog',
+        'emailLog',
+        'job',
+        'notification',
+        'orphanApplicant',
+        'pageView',
+        'pushSubscription',
+        'trialReminder',
+      ].sort()
     );
 
     const gone = async (
-      model: 'activityLog' | 'pageView' | 'pushSubscription' | 'job' | 'emailLog' | 'notification',
+      model:
+        | 'activityLog'
+        | 'pageView'
+        | 'pushSubscription'
+        | 'job'
+        | 'emailLog'
+        | 'notification'
+        | 'trialReminder',
       id: string
     ) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -171,6 +202,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(await gone('job', succeeded.id)).toBe(true);
     expect(await gone('emailLog', oldMail.id)).toBe(true);
     expect(await gone('notification', oldReadNotif.id)).toBe(true);
+    expect(await gone('trialReminder', oldClaim.id)).toBe(true);
 
     // Kept: inside the window.
     expect(await gone('activityLog', newActivity.id)).toBe(false);
@@ -178,6 +210,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(await gone('job', pending.id)).toBe(false);
     expect(await gone('emailLog', newMail.id)).toBe(false);
     expect(await gone('notification', newReadNotif.id)).toBe(false);
+    expect(await gone('trialReminder', newClaim.id)).toBe(false);
 
     // Kept although out of window, each for its own stated reason.
     expect(await gone('job', deadLettered.id)).toBe(false); // the operator still needs these
@@ -209,6 +242,12 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     await prisma.activityLog.deleteMany({ where: { actorId: { in: [quiet.id, active.id] } } });
     await prisma.emailLog.deleteMany({ where: { to: { contains: marker } } });
     await prisma.job.deleteMany({ where: { name: { startsWith: marker } } });
+    // The claim rows go with the relation (cascade), and the relation goes with
+    // the users in cleanupByEmail — but say it here too, so a failure before the
+    // sweep does not leave the pair behind.
+    await prisma.mentorshipRelation.deleteMany({
+      where: { OR: [{ mentorId: active.id }, { menteeId: quiet.id }] },
+    }).catch(() => {});
     await cleanupByEmail(quietEmail);
     await cleanupByEmail(activeEmail);
   }

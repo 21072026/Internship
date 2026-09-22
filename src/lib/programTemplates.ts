@@ -15,15 +15,18 @@ import type { Locale } from '@/i18n/config';
  *
  * HOUSE STYLE — a new template follows these rules or it does not belong here:
  *
- *   - Five to nine stages. A stage set you cannot read in one glance is a
- *     spreadsheet, not a pipeline. The bound was five to EIGHT until the
- *     marketing funnel grew its trial phase (#2413): a product that is sold on
- *     a trial needs both a "running" and an "elapsed, waiting for a decision"
- *     waiting room, and collapsing the two would make the reminder ladder
- *     unaskable. Nine is still one glance; ten is where the next person has to
- *     argue the case rather than round it up again. The canonical thirteen-stage
- *     set is the one exception, and it is here because it is the product
- *     default, not because it is a good starting shape for everyone.
+ *   - Five to eight stages — nine only for a shape that carries the TRIAL PAIR.
+ *     A stage set you cannot read in one glance is a spreadsheet, not a
+ *     pipeline. The single allowance was argued for the marketing funnel
+ *     (#2413): a product that is sold on a trial needs both a "running" and an
+ *     "elapsed, waiting for a decision" waiting room, and collapsing the two
+ *     would make the reminder ladder unaskable. Nine is still one glance, but
+ *     the allowance is tied to the pair being present rather than granted to
+ *     everybody, so the next template cannot round the bound up again by
+ *     citing this one. The guard in e2e/program-templates.unit.spec.ts enforces
+ *     exactly that. The canonical thirteen-stage set is the other exception,
+ *     and it is here because it is the product default, not because it is a
+ *     good starting shape for everyone.
  *   - A stage is a WAITING ROOM someone can sit in, named for the state they
  *     are in — "Screening call", "Reskilling in progress" — never for the
  *     action someone else has to take. If nobody can sit in it for a day, it is
