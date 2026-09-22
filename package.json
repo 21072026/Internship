@@ -74,6 +74,8 @@
     "test:stress": "node scripts/stress-test.mjs",
     "test:load": "k6 run k6/nightly-load.js",
     "import:csv": "node scripts/import-csv.mjs",
+    "import:marketing-accounts": "node --experimental-strip-types scripts/import-marketing-accounts.mjs",
+    "test:marketing-import": "node --test --experimental-strip-types scripts/test/marketing-import.test.mjs",
     "postinstall": "prisma generate",
     "seed:templates": "node prisma/seed-templates.mjs",
     "seed:demo": "node prisma/seed-demo.mjs",

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 
 const updateCompanySchema = z.object({
@@ -78,7 +79,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ company });
+    // Which ROW this reader may fetch is the scope above (#2431); which
+    // COLUMNS of it a non-admin may read is src/lib/companyVisibility.ts — the
+    // tax id and the named contact's direct line are ADMIN-only even for a
+    // MENTOR who legitimately reads this company.
+    return NextResponse.json({ company: redactCompanyForReader(company, session.user.role) });
     });
   } catch (error) {
     console.error('Get company error:', error);

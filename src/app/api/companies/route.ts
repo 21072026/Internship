@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 
 const companySchema = z.object({
@@ -78,7 +79,13 @@ export async function GET() {
         orderBy: { name: 'asc' },
       });
 
-      return NextResponse.json({ companies });
+      // Which ROWS came back is the scope above (#2431); which COLUMNS of
+      // them a non-admin may read is src/lib/companyVisibility.ts — the tax id
+      // and the named contact's direct line are ADMIN-only even for a MENTOR
+      // who legitimately reads this company.
+      return NextResponse.json({
+        companies: companies.map((c) => redactCompanyForReader(c, session.user.role)),
+      });
     });
   } catch (error) {
     console.error('Get companies error:', error);
