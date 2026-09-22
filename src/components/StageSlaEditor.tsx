@@ -90,13 +90,13 @@ export function StageSlaEditor() {
           which box it belonged to. */}
       <div className="flex items-center gap-3 text-xs text-gray-500 mb-1 px-1">
         <span className="flex-1" />
-        <span className="w-24">{t.stageSla.days}</span>
-        <span className="w-24">{t.stageSla.wipLimit}</span>
+        <span className="w-16 sm:w-24">{t.stageSla.days}</span>
+        <span className="w-16 sm:w-24">{t.stageSla.wipLimit}</span>
       </div>
       <div className="space-y-2" data-testid="stage-sla-rows">
         {rows.map((r, i) => (
           <div key={r.key} className="flex items-center gap-3 text-sm">
-            <span className="flex-1 truncate text-gray-700 dark:text-gray-300">
+            <span className="flex-1 min-w-0 truncate text-gray-700 dark:text-gray-300">
               {r.label}
               {r.isOffPath && <span className="ml-2 text-xs text-gray-400">({t.stageSla.offPath})</span>}
             </span>
@@ -113,7 +113,7 @@ export function StageSlaEditor() {
                 const days = v === '' ? null : Number(v);
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, days } : row)));
               }}
-              className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
             />
             <input
               type="number"
@@ -134,7 +134,7 @@ export function StageSlaEditor() {
                 const wipLimit = v === '' ? null : Number(v);
                 setRows((p) => p.map((row, j) => (j === i ? { ...row, wipLimit } : row)));
               }}
-              className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
+              className="w-16 sm:w-24 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-sm"
             />
           </div>
         ))}

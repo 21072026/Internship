@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Stage-SLA row labels were unreadably narrow on a phone in German** (e2e-full red on `mobile-layout-coverage.spec.ts`, `/admin/settings`). Each row in `StageSlaEditor` is `<label> <days input> <wip-limit input>`, with both number inputs pinned to `w-24` (96px) regardless of viewport; at 360px the two fixed-width inputs plus gaps left the flex-1 label only ~62px to truncate into — well under the layout audit's 110px readability floor — for every German pipeline-stage label (`\"220 · Warte auf Freigabe\"`, `\"490 · Praktikum abgeschlossen\"`, …). The two inputs (and their `Days`/`Board limit` column headers) now use `w-16 sm:w-24`, freeing enough width for the label to clear the floor on a phone while staying byte-identical at `sm:` and above; the label also gains `min-w-0` so `flex-1 truncate` can shrink past its content's intrinsic width rather than relying on there being enough slack to avoid it. Desktop is unaffected.",
+  "notes": {
+    "en": ["Fixed the per-stage wait-time settings on a phone: stage names no longer get cut down to a couple of characters."],
+    "tr": ["Telefonda aşama başına bekleme süresi ayarları düzeltildi: aşama adları artık birkaç harfe sıkışmıyor."],
+    "de": ["Die Service-Level-Einstellungen je Phase auf dem Handy repariert: Phasennamen werden nicht mehr auf ein paar Zeichen zusammengequetscht."]
+  }
+}
