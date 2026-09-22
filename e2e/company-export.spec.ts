@@ -139,7 +139,7 @@ test('an admin exports one company with every attached record, and it is audited
     .toBeGreaterThanOrEqual(1);
 });
 
-test('a mentor exports only what it may read; a role with no company scope is refused', async ({ page }) => {
+test('a mentor exports only the parts of the account it may read', async ({ page }) => {
   // The mentor is named in the relation, so the company IS in its scope — but
   // the commercial book that hangs off it is not.
   await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');
@@ -153,7 +153,9 @@ test('a mentor exports only what it may read; a role with no company scope is re
     expect(mentorData[section], `${section} is withheld, not emptied`).toBeNull();
   }
   expect(mentorData.statusChanges[0].reasonNote, 'the drop-off prose is ADMIN-only').toBeUndefined();
+});
 
+test('a role with no company scope is refused the export, and the refusal is audited', async ({ page }) => {
   // MENTEE has no `company` builder at all → 403, an audit row, and not one
   // byte of the account in the body.
   await signInAsFreshUser(page, menteeEmail, PASSWORD, '/portal');
