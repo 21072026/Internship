@@ -246,7 +246,8 @@ async function pruneFinishedJobs(ctx: RetentionContext) {
  *
  * No personal data is in the row (a relation id, a number and a timestamp), so
  * this is a hygiene window rather than a data-protection one — which is exactly
- * why it is the longest of the eight.
+ * why it is a year, longer than every window here that holds something about a
+ * person (only companyUsage, hygiene for the same reason, is longer).
  */
 async function pruneTrialReminders(ctx: RetentionContext) {
   const { processed, capped } = await pruneInBatches({
@@ -263,6 +264,41 @@ async function pruneTrialReminders(ctx: RetentionContext) {
       ).map((r) => r.id),
     handleBatch: async (ids) =>
       (await prisma.trialReminder.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
+/**
+ * Daily product-usage rows (#2446).
+ *
+ * The only entry here whose table is not telemetry and not personal data: one
+ * row per merchant account per day, fetched from the product the tenant sells
+ * (docs/marketing-vertical/salevali-usage-feed.md). It is in the registry for
+ * the reason PageView is — an unbounded table that gains rows every night
+ * regardless of what anyone does — and it arrives the way the registry contract
+ * says a new table arrives: one entry, no second schedule.
+ *
+ * Dated by `date` (the day the usage happened), not by `createdAt`: a backfill
+ * that imports two years of history writes old days today, and a `createdAt`
+ * rule would keep every one of them for the full window while deleting nothing.
+ */
+async function pruneCompanyUsage(ctx: RetentionContext) {
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.companyUsage.findMany({
+          // Served by @@index([date]) — the whole reason that index exists, and
+          // the PageView lesson quoted on it.
+          where: { date: { lt: ctx.cutoff } },
+          orderBy: { date: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.companyUsage.deleteMany({ where: { id: { in: ids } } })).count,
   });
   return { deleted: processed, capped };
 }
@@ -535,6 +571,16 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     },
   },
   {
+    key: 'companyUsage',
+    // No setting, like emailLog: this window is a product decision about how
+    // much history the signals need, not an operator preference about somebody's
+    // personal data. The day it becomes one it gets a SETTING_DEFAULTS key here.
+    defaultDays: 400,
+    reason:
+      'One row per account per day, for ever, from a feed nobody has to touch — the PageView shape, and the reason it is in the registry before anything writes to it. 400 days is a full year plus a month, so a year-on-year comparison still has both of its endpoints, and it is far past the widest reader: the sparkline asks for 90 days and the churn rule for 120 (30 trailing against the 30 before it, on accounts with at least 60 days of history). Business volume rather than personal data, so the number defends a table size instead of a promise to a data subject — which is also why it is the longest window here.',
+    run: pruneCompanyUsage,
+  },
+  {
     key: 'notification',
     // Declared so the summary line, and an operator reading this list, can see
     // which knob drives it. The number the runner derives from it is the GLOBAL
@@ -553,7 +599,7 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     // a table with no personal data in it is a knob nobody reads.
     defaultDays: 365,
     reason:
-      'A claim row says "this threshold was already handled for this trial", and that question is only asked while the trial is still counting down — a year later the trial resolved long ago and the row is a suppression ledger nobody reads. Safe to delete because the selector matches an EXACT calendar-day difference, so an elapsed trial can never match a threshold again (src/lib/trialReminderRule.ts); the row carries no personal data, which is why it gets the longest window of the eight rather than the shortest.',
+      'A claim row says "this threshold was already handled for this trial", and that question is only asked while the trial is still counting down — a year later the trial resolved long ago and the row is a suppression ledger nobody reads. Safe to delete because the selector matches an EXACT calendar-day difference, so an elapsed trial can never match a threshold again (src/lib/trialReminderRule.ts); the row carries no personal data, which is why it gets a year rather than one of the short windows above (only companyUsage, a hygiene window for the same reason, is longer).',
     run: pruneTrialReminders,
   },
 ];

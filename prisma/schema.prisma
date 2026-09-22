@@ -160,6 +160,7 @@ model Organization {
   subscription         Subscription?
   orgEntitlements      OrgEntitlement[]
   usageRollups         UsageRollup[]
+  companyUsage         CompanyUsage[]
   webhooks             Webhook[]
   announcements        Announcement[]
   newsletters          Newsletter[]
@@ -1317,6 +1318,27 @@ model Company {
   size         String?
   address      String?
   quota        Int?
+  // The id this account carries in the product the tenant sells (#2446) — the
+  // SaleVali merchant id for a MARKETING org, whatever a later feed keys on for
+  // anyone else. Nullable and unbackfilled: a company typed in by hand, or
+  // imported from the old spreadsheet, never has one, and a required column
+  // would fail the import that creates it.
+  //
+  // NOT `@unique`, for the same reason User.externalId (see its comment) and
+  // Job.idempotencyKey are not: a global unique reaches across the tenant
+  // boundary, and the per-tenant version buys nothing it is asked for — MySQL
+  // treats NULLs in a unique index as DISTINCT, so `@@unique([orgId, externalId])`
+  // de-duplicates nothing at all while every row still holds a null, i.e. today.
+  //
+  // `vatId` above IS `@@unique([orgId, vatId])`, and the difference is who
+  // writes: a VAT number is typed by a human through the account form and the
+  // import, where a rejected write is an answerable message about the row in
+  // front of them. An external id is stamped by a background feed with nobody
+  // watching, and this epic's rule is that an ambiguous id is REPORTED (count +
+  // sample), never guessed at and never turned into a failed chunk at 03:00.
+  // The index below is what that lookup reads ("which company of THIS org is
+  // external id X?"). Contract: docs/marketing-vertical/salevali-usage-feed.md.
+  externalId   String?       @db.VarChar(191)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -1335,9 +1357,70 @@ model Company {
   // single row because nothing stops a second enquiry from the same company
   // later being linked to the account it already has.
   fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
+  usage             CompanyUsage[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
+  // Tenant-leading, like every other lookup index in TENANT_MODELS: under
+  // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
+  // `findMany({ where: { externalId } })`, and without this it would filter the
+  // whole table row by row.
+  @@index([orgId, externalId])
+}
+
+// One day of product usage for one account (#2446, story #2399).
+//
+// The grain is ACCOUNT × DAY, and that is the whole reason this table exists
+// next to `UsageRollup` rather than inside it: UsageRollup is the billing meter
+// — (org, metric, calendar MONTH), written absolutely by the nightly rollup
+// (src/lib/metering.ts) — and a churn signal made of monthly totals arrives six
+// weeks after the merchant stopped trading. Nothing here is billable and
+// nothing here gates anything; it is a signal.
+//
+// Filled by the nightly usage sync (#2447) from the feed described in
+// docs/marketing-vertical/salevali-usage-feed.md. No job, endpoint or screen
+// reads it yet — this slice is the table and the contract only.
+model CompanyUsage {
+  id String @id @default(cuid())
+
+  // Nullable, mirroring Company's own `orgId` (the phase-1 tenant models): a
+  // single-tenant installation has companies with no org, and a required column
+  // here would make them unable to hold usage at all. Registered in
+  // TENANT_MODELS (src/lib/orgContext.ts), which also means every SESSIONLESS
+  // writer — the cron sync, a backfill — must bind `runWithOrg(feed.orgId, …)`
+  // or pass `orgId` itself, exactly as src/lib/rosterIngestStore.ts does.
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id])
+  companyId String
+  // A DAY, not an instant. `@db.Date` for the same reason ProgramCost's period
+  // is: usage belongs to a calendar day at the source, and a DateTime would
+  // shift it by a timezone offset when it is read back on another continent —
+  // which for this table would mean two rows for the same day, or none.
+  date      DateTime      @db.Date
+
+  // Counts, both absolute (never deltas): re-fetching an overlapping window
+  // OVERWRITES a day rather than adding to it, which is what makes the sync
+  // idempotent. `orders` is optional because the feed may not carry it.
+  transactions Int  @default(0)
+  orders       Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // The upsert key: one row per account per day, so the overlapping re-fetch
+  // the sync doctrine prescribes cannot produce a second row for a day it
+  // already has. It doubles as the index the 90-day sparkline range scan reads
+  // — a separate `@@index([companyId, date])` would be a byte-identical second
+  // B-tree, maintained on every insert into the fastest-growing table here.
+  @@unique([companyId, date])
+  // Date-leading, for the one question the composite index above cannot serve:
+  // "the oldest rows across ALL accounts, older than X". That is precisely the
+  // PageView lesson (see its `@@index([createdAt])` and the note on it) — the
+  // retention sweep in src/lib/retentionEntries.ts asks exactly that, nightly,
+  // on a table that gains one row per account per day for ever.
+  @@index([date])
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per

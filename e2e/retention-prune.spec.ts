@@ -16,7 +16,10 @@ import { RETAINED_NOTIFICATION_TYPES } from '../src/lib/notificationRetention';
 // Everything is seeded well outside every window (400 days) or well inside it
 // (one day), so the assertions do not depend on the configured numbers; the
 // windows themselves are asserted where they are decided, in
-// src/lib/retentionEntries.ts.
+// src/lib/retentionEntries.ts. One exception, and it is the reason `ancient()`
+// is not simply reused everywhere: `companyUsage` (#2446) has the longest window
+// in the registry, 400 days, so `ancient()` sits ON its edge rather than outside
+// it — that table is seeded with `ancientUsage()` below.
 //
 // Counts are asserted per seeded row rather than against the run's totals: this
 // spec runs on a shared database, and the sweep legitimately removes other
@@ -24,6 +27,8 @@ import { RETAINED_NOTIFICATION_TYPES } from '../src/lib/notificationRetention';
 
 const DAY = 24 * 60 * 60 * 1000;
 const ancient = () => new Date(Date.now() - 400 * DAY);
+// Outside the longest window in the registry (companyUsage, 400 days).
+const ancientUsage = () => new Date(Date.now() - 500 * DAY);
 const recent = () => new Date(Date.now() - DAY);
 // Between the two: outside a short window, comfortably inside a long one.
 const middleAged = () => new Date(Date.now() - 60 * DAY);
@@ -164,6 +169,19 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
       data: { relationId: trialRelation.id, threshold: 3, sentAt: recent() },
     });
 
+    // CompanyUsage: one row per account per day, dated by the day the usage
+    // happened rather than by when it was written (#2446) — a backfill imports
+    // old days today, so a `createdAt` rule would keep them all for ever. Both
+    // rows belong to the same account, which is the only way the two assertions
+    // below distinguish the window from "the sweep deleted the company".
+    const usageAccount = await prisma.company.create({ data: { name: `${marker} usage account` } });
+    const oldUsage = await prisma.companyUsage.create({
+      data: { companyId: usageAccount.id, date: ancientUsage(), transactions: 11, orders: 2 },
+    });
+    const newUsage = await prisma.companyUsage.create({
+      data: { companyId: usageAccount.id, date: recent(), transactions: 12 },
+    });
+
     const result = await runRetentionPrune();
 
     // No entry may fail: a failure here is a broken query, not a clean table.
@@ -171,6 +189,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(result.results.map((r) => r.key).sort()).toEqual(
       [
         'activityLog',
+        'companyUsage',
         'emailLog',
         'job',
         'notification',
@@ -189,7 +208,8 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         | 'job'
         | 'emailLog'
         | 'notification'
-        | 'trialReminder',
+        | 'trialReminder'
+        | 'companyUsage',
       id: string
     ) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -203,6 +223,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(await gone('emailLog', oldMail.id)).toBe(true);
     expect(await gone('notification', oldReadNotif.id)).toBe(true);
     expect(await gone('trialReminder', oldClaim.id)).toBe(true);
+    expect(await gone('companyUsage', oldUsage.id)).toBe(true);
 
     // Kept: inside the window.
     expect(await gone('activityLog', newActivity.id)).toBe(false);
@@ -211,6 +232,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(await gone('emailLog', newMail.id)).toBe(false);
     expect(await gone('notification', newReadNotif.id)).toBe(false);
     expect(await gone('trialReminder', newClaim.id)).toBe(false);
+    expect(await gone('companyUsage', newUsage.id)).toBe(false);
 
     // Kept although out of window, each for its own stated reason.
     expect(await gone('job', deadLettered.id)).toBe(false); // the operator still needs these
@@ -248,6 +270,8 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     await prisma.mentorshipRelation.deleteMany({
       where: { OR: [{ mentorId: active.id }, { menteeId: quiet.id }] },
     }).catch(() => {});
+    // The usage rows cascade with their account.
+    await prisma.company.deleteMany({ where: { name: { startsWith: marker } } });
     await cleanupByEmail(quietEmail);
     await cleanupByEmail(activeEmail);
   }
