@@ -7121,3 +7121,30 @@ elde kalan tek numarayı kullandı. Geriye dönük düzeltmenin maliyeti: 6 issu
 Derlenmiş `CHANGELOG.md` girdileri ise düzeltilemiyor — yayımlanmış sürüm notu tarihsel
 kayıt; yalnızca `releases/unreleased/` altındaki **henüz derlenmemiş** fragment'ler
 düzeltilebilir. Yani yanlış numara CHANGELOG'a derlendikten sonra kalıcıdır.
+## 2026-09-22 — "e2e-full kırmızı" panik yapmadan üç komutta teşhis
+
+Merge'ünüzün ardından zamanlanmış `e2e-full` kırmızıysa, ilk iş **sizin mi** olduğunu ayırmaktır;
+süit günlerdir kırmızı olabilir ve uyarı e-postası da gitmiyor olabilir (#2322: GitHub-hosted
+runner'dan SMTP'ye bağlantı zaman aşımına uğruyor — yani kırmızı sessizdir).
+
+- **Hata listesini `✘` ile çıkar, `--log-failed`'i greplemekle değil.** `gh run view <id>
+  --log-failed` çıktısı raporun TÜM test listesini içerir; `grep -oE "e2e/...spec.ts:[0-9]+"`
+  yüzlerce yanlış pozitif verir. Doğrusu: `grep -oE "✘ *[0-9]+ \[chromium\] › e2e/[a-z0-9-]+\.spec\.ts:[0-9]+"`.
+- **Son 3-4 koşunun başarısız spec kümelerini `comm` ile karşılaştır.** Kronik olanlar (bizde
+  `analytics-trends:48`, `mobile-chat-layout:32`, `mobile-layout-coverage:359`) her koşuda var;
+  yalnızca kümeler arası FARK incelenmeye değer.
+- **`✘` sonrası `✓ (retry #1)` = flake, karar verme sinyali değil.** Ama tersi de doğru değil:
+  "iki denemede de düştü" tek başına regresyon kanıtı DEĞİLDİR — strict-mode ihlali ilk sorguda
+  fırlatılır, `expect` onu yeniden denemez, dolayısıyla 15 sn timeout hiç devreye girmez ve aynı
+  yarış iki denemede de 1.6-2.0 sn'de düşer.
+- **`resolved to 2 elements` bu repoda bilinen, eski ve yaygın bir kusurdur** (#2312/#2316/#2479;
+  son 15 zamanlanmış koşunun 9'unda, ~9 farklı spec'te). Kaynakta testid **bir kez** geçiyorsa ve
+  sayfa bileşeni bir kez render ediliyorsa, yeni bir hata aramayın — `goto` sonrası ilk strict
+  assertion'ın açtığı pencereye bakın.
+- **Yerel "geçti" yeterli değil, ama "üretemedim" de bilgidir.** Prod build ile 3/3 geçmesi +
+  6 worker'la zorlamanın yalnızca `ERR_CONNECTION_REFUSED` üretmesi (tek sunucu yük altında
+  düşüyor), yerelde bu yarışın üretilemediğini gösterir; kanıt tarihsel koşulardan gelir.
+- **JSON artefaktı, HTML raporundan daha kullanışlı.** `gh run download <id> -n e2e-json-shard-<n>`
+  küçük ve makinede okunur; kendi eklediğiniz spec'lerin gerçekten yeşil olduğunu oradan
+  doğrulayın (HTML raporun `data/` klasöründe yalnızca ekran görüntüsü + trace vardır).
+
