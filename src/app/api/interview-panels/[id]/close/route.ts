@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -12,7 +13,12 @@ import { logActivity } from '@/lib/activity';
 // beat scoring.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Placement write (#2364), gated before the role check like every other
+  // handler of the module.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
+  if (session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

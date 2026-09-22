@@ -97,9 +97,28 @@ test('a meeting started from a group chat drops its link into that chat', async 
   const starterEmail = uniqueEmail('gc-starter');
   const starter = await seedUser(starterEmail, 'MentorPass123', 'MENTOR', 'GC Starter');
   const other = await seedUser(uniqueEmail('gc-other'), 'x', 'MENTEE', 'GC Other');
+  // Project-backed on purpose. A GROUP conversation is only ever a project's
+  // room in this app — the messaging helpers refuse one with no `projectId`
+  // outright, for everyone (the free-room test below says the same) — and since
+  // #2503 starting a call asks exactly those helpers, so a bare ad-hoc group
+  // here would 403 for a reason this test is not about.
+  const project = await prisma.project.create({
+    data: {
+      name: `Instant Team Chat Project ${Date.now()}`,
+      ownerType: 'MENTOR',
+      ownerUserId: starter.id,
+      members: {
+        create: [
+          { userId: starter.id, role: 'OWNER' },
+          { userId: other.id, role: 'MENTEE' },
+        ],
+      },
+    },
+  });
   const conversation = await prisma.conversation.create({
     data: {
       type: 'GROUP',
+      projectId: project.id,
       participants: { create: [{ userId: starter.id }, { userId: other.id }] },
     },
   });
@@ -115,6 +134,7 @@ test('a meeting started from a group chat drops its link into that chat', async 
 
     const meeting = await prisma.meeting.findUnique({ where: { id: body.meetingId } });
     expect(meeting?.conversationId).toBe(conversation.id);
+    // Exactly one context: the chat, never the chat AND its project.
     expect(meeting?.projectId).toBeNull();
 
     // The people already reading the thread shouldn't have to dig the link out
@@ -131,6 +151,8 @@ test('a meeting started from a group chat drops its link into that chat', async 
     await prisma.notification.deleteMany({ where: { userId: { in: [starter.id, other.id] } } });
     await prisma.conversationParticipant.deleteMany({ where: { conversationId: conversation.id } });
     await prisma.conversation.deleteMany({ where: { id: conversation.id } });
+    await prisma.projectMember.deleteMany({ where: { projectId: project.id } });
+    await prisma.project.deleteMany({ where: { id: project.id } });
     await cleanupByEmail(other.email);
     await cleanupByEmail(starterEmail);
   }
@@ -214,8 +236,22 @@ test('someone outside the chat cannot start a meeting in it', async ({ page }) =
   const outsider = await seedUser(outsiderEmail, 'MentorPass123', 'MENTOR', 'GC Outsider');
   const a = await seedUser(uniqueEmail('gc-a'), 'x', 'MENTOR', 'GC A');
   const b = await seedUser(uniqueEmail('gc-b'), 'x', 'MENTEE', 'GC B');
+  // A real project room, so the outsider is refused for being an outsider and
+  // not merely because the room has no project (#2503).
+  const project = await prisma.project.create({
+    data: {
+      name: `Instant Team Outsider Project ${Date.now()}`,
+      ownerType: 'MENTOR',
+      ownerUserId: a.id,
+      members: { create: [{ userId: a.id, role: 'OWNER' }, { userId: b.id, role: 'MENTEE' }] },
+    },
+  });
   const conversation = await prisma.conversation.create({
-    data: { type: 'GROUP', participants: { create: [{ userId: a.id }, { userId: b.id }] } },
+    data: {
+      type: 'GROUP',
+      projectId: project.id,
+      participants: { create: [{ userId: a.id }, { userId: b.id }] },
+    },
   });
 
   try {
@@ -231,8 +267,70 @@ test('someone outside the chat cannot start a meeting in it', async ({ page }) =
     await prisma.message.deleteMany({ where: { conversationId: conversation.id } });
     await prisma.conversationParticipant.deleteMany({ where: { conversationId: conversation.id } });
     await prisma.conversation.deleteMany({ where: { id: conversation.id } });
+    await prisma.projectMember.deleteMany({ where: { projectId: project.id } });
+    await prisma.project.deleteMany({ where: { id: project.id } });
     await cleanupByEmail(b.email);
     await cleanupByEmail(a.email);
     await cleanupByEmail(outsiderEmail);
+  }
+});
+
+// A project's group room outlives the project: `Conversation.projectId` is
+// nullable with `onDelete: SetNull`, so deleting the project leaves the room
+// behind as an orphan with every participant row intact. Both messaging helpers
+// refuse an orphan outright, for everyone — reading it and posting to it are
+// 403 — but starting a call in it went through its own participant lookup and
+// answered 201, dropped a message into the very thread nobody may post to, and
+// mailed an invite to every historical participant (#2503).
+test('a call cannot be started in a group room whose project was deleted', async ({ page }) => {
+  const memberEmail = uniqueEmail('oc-member');
+  const owner = await seedUser(uniqueEmail('oc-owner'), 'x', 'MENTOR', 'OC Owner');
+  const member = await seedUser(memberEmail, 'MemberPass123', 'MENTOR', 'OC Member');
+  const project = await prisma.project.create({
+    data: {
+      name: `Orphan Room Project ${Date.now()}`,
+      ownerType: 'MENTOR',
+      ownerUserId: owner.id,
+      members: { create: [{ userId: owner.id, role: 'OWNER' }, { userId: member.id, role: 'MENTOR' }] },
+    },
+  });
+  const conversation = await prisma.conversation.create({
+    data: {
+      type: 'GROUP',
+      projectId: project.id,
+      participants: { create: [{ userId: owner.id }, { userId: member.id }] },
+    },
+  });
+
+  try {
+    await prisma.project.delete({ where: { id: project.id } });
+    // The room really is orphaned rather than gone: SetNull, not Cascade.
+    expect((await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } })).projectId).toBeNull();
+
+    await signInAndSettle(page, memberEmail, 'MemberPass123', '/mentor');
+
+    // The baseline the call has to match: messaging is closed to a participant.
+    expect((await page.request.get(`/api/messages?conversationId=${conversation.id}`)).status()).toBe(403);
+    const posted = await page.request.post('/api/messages', {
+      multipart: { conversationId: conversation.id, body: 'still here?' },
+    });
+    expect(posted.status()).toBe(403);
+
+    const call = await page.request.post('/api/meetings/instant', {
+      data: { conversationId: conversation.id, title: 'Call in a dead room' },
+    });
+    expect(call.status()).toBe(403);
+
+    // Nothing was created and nothing was written into the thread.
+    expect(await prisma.meeting.count({ where: { conversationId: conversation.id } })).toBe(0);
+    expect(await prisma.message.count({ where: { conversationId: conversation.id } })).toBe(0);
+  } finally {
+    await prisma.meeting.deleteMany({ where: { conversationId: conversation.id } });
+    await prisma.message.deleteMany({ where: { conversationId: conversation.id } });
+    await prisma.conversationParticipant.deleteMany({ where: { conversationId: conversation.id } });
+    await prisma.conversation.deleteMany({ where: { id: conversation.id } });
+    await prisma.project.deleteMany({ where: { id: project.id } });
+    await cleanupByEmail(memberEmail);
+    await cleanupByEmail(owner.email);
   }
 });

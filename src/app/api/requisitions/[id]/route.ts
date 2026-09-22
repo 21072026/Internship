@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -33,7 +34,13 @@ export async function GET(_request: Request, { params }: Context) {
 
 export async function PATCH(request: Request, { params }: Context) {
   const { id } = await params;
-  const scope = scopeFor(await getServerSession(authOptions));
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 });
+  // Placement write (#2364), gated before scopeFor()'s role check for the same
+  // reason as POST /api/requisitions: one answer per module, not one per role.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
+  const scope = scopeFor(session);
   if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);

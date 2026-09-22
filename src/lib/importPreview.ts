@@ -278,10 +278,35 @@ export function chunkRows<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Message text that is safe to persist: never a stack, never a query. */
+/**
+ * Message text that is safe to persist: never a stack, never a query.
+ *
+ * The FIRST NON-EMPTY line, not the first line. Prisma formats every known
+ * request error (P2002 on a unique index, P2000 on an oversized value, P2003 on
+ * a foreign key) starting with a blank line, so `split('\n')[0]` was the empty
+ * string for exactly the failures a writer raises — an import row reported as
+ * ERROR with nothing after the dash. The error's `code`, when it has one, is
+ * kept in front: `P2002` is what the operator searches for.
+ */
 export function importErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
-  return raw.split('\n')[0].slice(0, 300);
+  const lines = raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  let text = lines[0] ?? 'unknown error';
+  // Prisma follows the blank line with a banner naming the call; the sentence
+  // AFTER it is the one that says what actually went wrong ("Unique constraint
+  // failed on the fields: (`email`)"). Only a sentence is promoted — anything
+  // brace-shaped is the argument echo, and this function must never persist a
+  // query or the values in one.
+  if (/^Invalid `[^`]+` invocation/.test(text)) {
+    const detail = lines.slice(1).find((l) => /^[A-Za-z]/.test(l) && !/[{}]/.test(l));
+    if (detail) text = detail;
+  }
+  const rawCode = (error as { code?: unknown } | null)?.code;
+  const code = typeof rawCode === 'string' && rawCode.length > 0 && rawCode.length <= 24 ? rawCode : '';
+  return (code && !text.startsWith(code) ? `${code}: ${text}` : text).slice(0, 300);
 }
 
 /**

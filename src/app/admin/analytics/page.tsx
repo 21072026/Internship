@@ -17,6 +17,7 @@ import { useT } from '@/i18n/client';
 import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import type { VerticalCapability } from '@/lib/verticals';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -42,6 +43,12 @@ interface Analytics {
   // screen then keeps its own translated wording.
   finishedLabel?: string;
   finishedLabelIsCustom?: boolean;
+  // The tenant's module set (#2423), resolved server-side through the same
+  // shellCapabilities() path the sidebar and the write gate use. A card that
+  // describes a module this vertical does not carry is not rendered. Missing
+  // from an older server's payload → everything is shown, the same fail-open
+  // direction as the shell gate.
+  capabilities?: VerticalCapability[];
 }
 
 type RangePreset = '30' | '90' | '6m' | '12m' | 'all';
@@ -81,9 +88,9 @@ interface Aging {
   dropReasons: DropReason[];
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value, testId }: { label: string; value: string | number; testId?: string }) {
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-4">
+    <div className="rounded-xl border border-gray-100 bg-white p-4" data-testid={testId}>
       <p className="text-2xl font-bold text-gray-900">{value}</p>
       <p className="text-xs text-gray-500 mt-1">{label}</p>
     </div>
@@ -147,6 +154,17 @@ export default function AdminAnalyticsPage() {
   const conversionLabel = outcomeName
     ? t.analytics.conversionToStage.replace('{stage}', outcomeName)
     : t.analytics.conversion;
+
+  // Module gate (#2423). INTERNSHIP carries every capability, so for it every
+  // card below renders exactly as before. A MARKETING org has no mentors, no
+  // meetings with an RSVP, no self-service sign-up door and no intern
+  // projects — the cards about those would only ever show zeros and empty
+  // states, so they are not drawn. Mentor CAPACITY needs no check here: the
+  // funnel route returns an empty list for such a tenant, which the section
+  // and the export already read as "nothing to show".
+  const has = (capability: VerticalCapability) => !data?.capabilities || data.capabilities.includes(capability);
+  const showMentorship = has('mentorship');
+  const showProjects = has('projects');
 
   useEffect(() => {
     const qs = rangeQuery(range);
@@ -251,7 +269,9 @@ export default function AdminAnalyticsPage() {
         columns: [a.fullReportMonth, a.trendNewRelations, a.trendInteractions],
         rows: data.trends.months.map((m, i) => [m, data.trends!.newRelations[i], data.trends!.interactions[i]]),
       }] : []),
-      { name: 'Mentors', columns: ['Mentor', a.active, outcomeWord], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) },
+      ...(showMentorship
+        ? [{ name: 'Mentors', columns: ['Mentor', a.active, outcomeWord], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) }]
+        : []),
       { name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, outcomeHeading, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) },
       { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, outcomeHeading, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
       ...(dropReasonRows.length > 0
@@ -312,16 +332,20 @@ export default function AdminAnalyticsPage() {
         <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat label={t.analytics.totalRelations} value={data.totalRelations} />
-        <Stat label={conversionLabel} value={`${data.conversionToHired}%`} />
+        <Stat label={conversionLabel} value={`${data.conversionToHired}%`} testId="headline-conversion" />
         <Stat label={t.analytics.interactions} value={data.engagement.interactions} />
-        <Stat label={t.analytics.rsvpRate} value={data.rsvp.acceptanceRate === null ? '—' : `${data.rsvp.acceptanceRate}%`} />
+        {showMentorship && (
+          <Stat label={t.analytics.rsvpRate} value={data.rsvp.acceptanceRate === null ? '—' : `${data.rsvp.acceptanceRate}%`} testId="headline-rsvp" />
+        )}
       </div>
 
       {/* Signup funnel (#1191): registered → verified → active for the last 7
           and 30 days. Its job is to expose a SILENT failure — if verification
           mail stops arriving, everything else still looks fine. Rates are
-          computed live; a window with no sign-ups shows "—" and never warns. */}
-      {data.signupFunnel && data.signupFunnel.length > 0 && (
+          computed live; a window with no sign-ups shows "—" and never warns.
+          Mentorship-only (#2423): the door it watches is the candidates' own
+          sign-up; a marketing tenant's team arrives by invitation. */}
+      {showMentorship && data.signupFunnel && data.signupFunnel.length > 0 && (
         <Card className="mb-6" data-testid="signup-funnel-card">
           <CardHeader><CardTitle>{t.analytics.signupFunnel.title}</CardTitle></CardHeader>
           <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{t.analytics.signupFunnel.hint}</p>
@@ -496,8 +520,10 @@ export default function AdminAnalyticsPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+      {/* One column when the mentor card is not drawn (#2423), so the funnel
+          does not sit next to an empty half of the row. */}
+      <div className={`grid grid-cols-1 gap-6${showMentorship ? ' lg:grid-cols-2' : ''}`}>
+        <Card data-testid="pipeline-funnel-card">
           <CardHeader><CardTitle>{t.analytics.funnel}</CardTitle></CardHeader>
           <div className="space-y-1.5">
             {stages.map((s) => {
@@ -517,6 +543,7 @@ export default function AdminAnalyticsPage() {
           </div>
         </Card>
 
+        {showMentorship && (
         <Card data-testid="mentor-workload-card">
           <CardHeader><CardTitle>{t.analytics.mentorWorkload}</CardTitle></CardHeader>
           {data.mentorWorkload.length === 0 ? (
@@ -536,10 +563,11 @@ export default function AdminAnalyticsPage() {
             </div>
           )}
         </Card>
+        )}
       </div>
 
-      {data.projectWorkload && data.projectWorkload.length > 0 && (
-        <Card className="mt-6">
+      {showProjects && data.projectWorkload && data.projectWorkload.length > 0 && (
+        <Card className="mt-6" data-testid="projects-card">
           <CardHeader><CardTitle>{t.analytics.projects}</CardTitle></CardHeader>
           <div className="divide-y divide-gray-50">
             {data.projectWorkload.map((p) => (
@@ -603,7 +631,7 @@ export default function AdminAnalyticsPage() {
 
       {aging && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          <Card>
+          <Card data-testid="stage-aging-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 {t.analytics.aging.stageAging}
@@ -649,7 +677,7 @@ export default function AdminAnalyticsPage() {
             )}
           </Card>
 
-          <Card>
+          <Card data-testid="oldest-stuck-card">
             <CardHeader><CardTitle>{t.analytics.aging.oldestStuck}</CardTitle></CardHeader>
             {aging.oldestStuck.length === 0 ? (
               <p className="text-sm text-gray-400">—</p>
@@ -723,8 +751,10 @@ export default function AdminAnalyticsPage() {
 
       {/* Match quality (#2040): how often the mentor suggestion is taken, and
           at which rank position. Not premium-gated — it is the answer to the
-          first question every buyer asks about the matching. */}
-      <MatchQuality />
+          first question every buyer asks about the matching — but it IS about
+          mentor suggestions, so a vertical without mentors does not get it
+          (#2423). */}
+      {showMentorship && <MatchQuality />}
 
       {premium === true && (
         <>

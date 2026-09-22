@@ -173,6 +173,22 @@ jobs:
       # every route behind it.
       - name: the public API is entered through one door (#1546)
         run: npm run check:api-key-routes
+      # The line that makes an API handler private — getServerSession() and the
+      # 401 under it — is one you add by remembering to, and nothing fails when
+      # it is missing: the route compiles, the test that exercises it signs in
+      # first, and eslint has no rule for it. Across ~250 route files that is not
+      # a question review can keep answering. Every handler that answers
+      # anonymously is written down, with its reason, in
+      # scripts/route-auth-baseline.json; a new one that is not fails here.
+      - name: every API handler asks who is calling (#2444)
+        run: npm run check:route-auth
+      # A vertical capability switches a MODULE off, and it only does so if the
+      # gate is on every one of that module's write paths. Hiding the nav entry
+      # (#2351) is not access control, and the leaked-writer class has now been
+      # caught by human review twice (#2352, #2363) and never by a check. This
+      # walks back from each write to the handler that reaches it.
+      - name: every writer of a gated module passes the capability gate (#2364)
+        run: npm run check:capability-writers
       # MentorApplication.adminNote is private admin commentary; an e-mail
       # template that rendered it would show an applicant what an admin wrote
       # about them. Nothing in the type system says so, so a file-level guard

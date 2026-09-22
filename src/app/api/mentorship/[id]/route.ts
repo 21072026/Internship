@@ -74,7 +74,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
               reEngageAt: true,
             },
           },
-          company: true,
+          // Was `company: true` — every Company scalar, so `contactEmail`,
+          // `address`, `description` and `quota` shipped to the relation's
+          // MENTEE and MENTOR alike. Those are the exact columns #2431 scopes
+          // `/api/companies` for, and every consumer of this payload
+          // (admin/candidates/[id], mentor/mentees/[id], the two boards) reads
+          // only `id`, `name` and `industry`. The mentee's own view of their
+          // placement company, contact address included, is the portal journey
+          // page — a deliberate render there, not a scalar dump here.
+          company: { select: { id: true, name: true, industry: true } },
           interactions: { orderBy: { date: 'desc' } },
           statusChanges: {
             orderBy: { createdAt: 'desc' },

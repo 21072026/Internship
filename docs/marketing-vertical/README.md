@@ -29,8 +29,19 @@ her görev, bu repoda zaten var olana karşı denetlenip **KEEP / ADAPT / DROP**
 olarak sınıflandı ve DROP olanların neden gereksiz olduğu, karşılığı olan dosya
 adıyla yazıldı.
 
+## Önce oku: veri modeli kararı
+
+Backlog'un hiçbir görevinin kendi başına cevaplayamadığı tek soru var: bu şemada bir
+**funnel kaydı hangi satır?** Cevap — hesap = `Company`, funnel kaydı =
+`MentorshipRelation` (sahip = `mentorId`, lead kişi = `menteeId`, hesap = `companyId`),
+lead kişi = `MENTEE` rolünde bir `User` — [`pipeline-record.md`](pipeline-record.md)
+dosyasında, gerekçeleriyle ve neyi **dışladığıyla** birlikte yazılı (epic #2348, açık
+karar 1). Bütün epic'ler bunu varsayar. **Maliyet sahibi hâlâ değiştirebilir**; değişmediği
+sürece tek bir PR sessizce farklı davranamaz.
+
 ## Dosyalar
 
+- `pipeline-record.md` — funnel kaydı nedir (bağlayıcı varsayılan karar)
 - `CURATION.md` — görev görev karar listesi (asıl okunacak dosya)
 - `backlog/INDEX.md` — devralınan epic tablosu
 - `backlog/epic-01..09-*.md` — devralınan epic'ler, olduğu gibi

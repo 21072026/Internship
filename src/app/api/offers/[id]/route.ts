@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import type { Session } from 'next-auth';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -122,6 +123,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Placement write (#2364): every offer transition — edit, send, accept,
+  // decline, withdraw — is refused for a vertical without 'placements'.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   const role = session.user.role;
   // COMPANY never mutates an offer — read-only per #809.
   if (role !== 'ADMIN' && role !== 'MENTEE') {
