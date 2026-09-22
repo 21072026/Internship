@@ -1,12 +1,14 @@
 'use client';
 import { useT } from "@/i18n/client";
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useModalFocus } from '@/components/ui/useModalFocus';
+import { COMPANY_SORT_KEYS, DEFAULT_COMPANY_SORT, type CompanySort } from '@/lib/companySort';
 
 
 import { CompanyForm } from '@/components/forms/CompanyForm';
@@ -23,11 +25,27 @@ interface Company {
   _count: { mentorships: number };
 }
 
+const PAGE_SIZE = 24;
+
 export default function CompaniesPage() {
   const t = useT();
   const [companies, setCompanies] = useState<Company[]>([]);
+  // The company <select> below provisions a login and must offer EVERY company,
+  // not the page currently on screen — so it reads the same route with `all=1`
+  // rather than borrowing the paged list (#2437).
+  const [allCompanies, setAllCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<CompanySort>(DEFAULT_COMPANY_SORT);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [impact, setImpact] = useState<{
+    cascade: Record<string, number>;
+    detach: Record<string, number>;
+  } | null>(null);
+  const [impactFailed, setImpactFailed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [entitlingCompany, setEntitlingCompany] = useState<Company | null>(null);
@@ -71,27 +89,57 @@ export default function CompaniesPage() {
     }
   };
 
-  const fetchCompanies = async () => {
+  // Search, ordering and paging are all decided by the server (#2436/#2437):
+  // the page asks for one page of rows and renders exactly what comes back.
+  // There is deliberately no client-side `filter()` or re-sort left — with a
+  // page of 24 rows, filtering in the browser would hide matches that are on
+  // another page and quietly turn "search" into "search this screen".
+  const fetchCompanies = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/companies');
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(PAGE_SIZE),
+        sort,
+      });
+      if (search.trim()) params.set('search', search.trim());
+      const res = await fetch(`/api/companies?${params}`);
       const data = await res.json();
       setCompanies(data.companies || []);
+      setTotal(typeof data.total === 'number' ? data.total : (data.companies?.length ?? 0));
     } catch {
       setError(t.companiesPage.loadFailed);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, search, sort, t]);
 
-  useEffect(() => {
-    fetchCompanies();
+  const fetchAllCompanies = useCallback(async () => {
+    try {
+      const res = await fetch('/api/companies?all=1');
+      const data = await res.json();
+      setAllCompanies(data.companies || []);
+    } catch {
+      /* The login picker is secondary; the list above already reports failures. */
+    }
   }, []);
 
-  const filteredCompanies = companies.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.industry?.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    const timeout = setTimeout(fetchCompanies, 300);
+    return () => clearTimeout(timeout);
+  }, [fetchCompanies]);
+
+  useEffect(() => {
+    fetchAllCompanies();
+  }, [fetchAllCompanies]);
+
+  // A new search term or a different order restarts at page 1 — page 4 of the
+  // previous result set is an empty screen with no explanation.
+  useEffect(() => {
+    setPage(1);
+  }, [search, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const handleCreate = async (data: {
     name: string;
@@ -109,7 +157,7 @@ export default function CompaniesPage() {
       const body = await res.json();
       throw new Error(body.error || t.companiesPage.createFailed);
     }
-    await fetchCompanies();
+    await Promise.all([fetchCompanies(), fetchAllCompanies()]);
     setShowForm(false);
   };
 
@@ -130,15 +178,57 @@ export default function CompaniesPage() {
       const body = await res.json();
       throw new Error(body.error || t.companiesPage.updateFailed);
     }
-    await fetchCompanies();
+    await Promise.all([fetchCompanies(), fetchAllCompanies()]);
     setEditingCompany(null);
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(t.companiesPage.confirmDelete.replace('{name}', name))) return;
-    await fetch(`/api/companies/${id}`, { method: 'DELETE' });
-    await fetchCompanies();
+  // Deleting an account is the one action on this page that cannot be undone,
+  // and the native `confirm()` it used to go through could only repeat the
+  // company's name back (#2441). The dialog now states the consequences the
+  // schema actually produces — what cascades away with the row, and what stays
+  // behind with its company link cleared — with the counts fetched first.
+  const dd = t.companiesPage.deleteDialog;
+
+  const askDelete = async (company: Company) => {
+    setPendingDelete({ id: company.id, name: company.name });
+    setImpact(null);
+    setImpactFailed(false);
+    try {
+      const res = await fetch(`/api/companies/${company.id}/delete-impact`);
+      if (!res.ok) throw new Error('impact');
+      const data = await res.json();
+      setImpact({ cascade: data.impact?.cascade ?? {}, detach: data.impact?.detach ?? {} });
+    } catch {
+      // Say that the counts are missing rather than showing a dialog that
+      // silently implies "nothing is linked".
+      setImpactFailed(true);
+    }
   };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/companies/${pendingDelete.id}`, { method: 'DELETE' });
+      if (!res.ok) setError(t.common.deleteFailed);
+      setPendingDelete(null);
+      await Promise.all([fetchCompanies(), fetchAllCompanies()]);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const impactItems = (counts: Record<string, number>) =>
+    Object.entries(counts)
+      .map(([key, count]) =>
+        dd.item
+          .replace('{count}', String(count))
+          .replace('{label}', dd.labels[key as keyof typeof dd.labels] ?? key)
+      )
+      .join(', ');
+
+  const cascadeItems = impact ? impactItems(impact.cascade) : '';
+  const detachItems = impact ? impactItems(impact.detach) : '';
 
   return (
     <div>
@@ -175,7 +265,7 @@ export default function CompaniesPage() {
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
           >
             <option value="">{t.companiesPage.selectCompany}</option>
-            {companies.map((c) => (
+            {allCompanies.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -241,24 +331,88 @@ export default function CompaniesPage() {
         />
       )}
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-sm">
+      {/* Delete confirmation (#2441) — replaces the browser's confirm(). */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={dd.title}
+        variant="danger"
+        loading={deleting}
+        confirmLabel={dd.confirm}
+        cancelLabel={t.common.cancel}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+        message={
+          pendingDelete ? (
+            <>
+              <p>{dd.intro.replace('{name}', pendingDelete.name)}</p>
+              {impactFailed && (
+                <p className="mt-2" data-testid="company-delete-impact-failed">
+                  {dd.impactFailed}
+                </p>
+              )}
+              {impact && (
+                <>
+                  {cascadeItems && (
+                    <p className="mt-2" data-testid="company-delete-cascade">
+                      {dd.cascade.replace('{items}', cascadeItems)}
+                    </p>
+                  )}
+                  {detachItems && (
+                    <p className="mt-2" data-testid="company-delete-detach">
+                      {dd.detach.replace('{items}', detachItems)}
+                    </p>
+                  )}
+                  {!cascadeItems && !detachItems && (
+                    <p className="mt-2" data-testid="company-delete-nothing-else">
+                      {dd.nothingElse}
+                    </p>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            ''
+          )
+        }
+      />
+
+      {/* Search + order. Both are query parameters on /api/companies — the
+          search box has its own testid because AdminNav renders a sidebar
+          input[type="search"] on every admin page. */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 min-w-[12rem]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
+            data-testid="companies-search"
             placeholder={t.companiesPage.searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
           />
         </div>
+        <select
+          data-testid="companies-sort"
+          aria-label={t.companiesPage.sortLabel}
+          value={sort}
+          onChange={(e) => setSort(e.target.value as CompanySort)}
+          className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+        >
+          {COMPANY_SORT_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {t.companiesPage.sortOptions[key]}
+            </option>
+          ))}
+        </select>
+        <span className="text-sm text-gray-500" data-testid="companies-total">
+          {t.companiesPage.resultCount.replace('{count}', String(total))}
+        </span>
       </div>
 
       {/* Companies Grid */}
       {loading ? (
         <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
-      ) : filteredCompanies.length === 0 ? (
+      ) : companies.length === 0 ? (
         <Card>
           <EmptyState
             testId="admin-companies"
@@ -276,8 +430,8 @@ export default function CompaniesPage() {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredCompanies.map((company) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" data-testid="companies-list">
+          {companies.map((company) => (
             <Card key={company.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -304,7 +458,10 @@ export default function CompaniesPage() {
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(company.id, company.name)}
+                      onClick={() => askDelete(company)}
+                      data-testid={`delete-company-${company.id}`}
+                      title={dd.title}
+                      aria-label={dd.title}
                       className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -348,6 +505,18 @@ export default function CompaniesPage() {
               )}
             </Card>
           ))}
+        </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-8" data-testid="companies-pagination">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            {t.common.prev}
+          </Button>
+          <span className="text-sm text-gray-500">{page} / {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+            {t.common.next}
+          </Button>
         </div>
       )}
     </div>

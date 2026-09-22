@@ -137,7 +137,8 @@ export default function MentorshipPage() {
     try {
       const [usersRes, companiesRes] = await Promise.all([
         fetch('/api/users?view=mentorAvailability'),
-        fetch('/api/companies'),
+        // `all=1`: the company picker offers every company, not one page (#2437).
+        fetch('/api/companies?all=1'),
       ]);
       const [usersData, companiesData] = await Promise.all([usersRes.json(), companiesRes.json()]);
       // Both pickers hold the same people (#1141): admins mentor, and a mentor

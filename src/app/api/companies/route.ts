@@ -7,6 +7,13 @@ import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
+import {
+  companySortKeys,
+  compareSortKeys,
+  isDerivedSort,
+  parseCompanySort,
+  type CompanySortRelation,
+} from '@/lib/companySort';
 
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required').max(TEXT_LIMITS.companyName),
@@ -33,7 +40,16 @@ const companySchema = z.object({
     .optional(),
 });
 
-export async function GET() {
+/** Same ceiling as `/api/candidates`, for the same reason: one page is a screen. */
+const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 24;
+
+const positiveInt = (raw: string | null, fallback: number): number => {
+  const parsed = parseInt(raw ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -67,17 +83,74 @@ export async function GET() {
     const relationScope = (await scopeForRole(session.user, 'relation')) ?? { id: NO_MATCH };
     const mentorshipCount = Object.keys(relationScope).length > 0 ? { where: relationScope } : true;
 
+    const { searchParams } = new URL(request.url);
+    // Server-side ordering (#2436) and server-side search + pagination (#2437),
+    // the shape `/api/candidates` already uses. `all=1` is the same escape
+    // hatch it has: the screens that render a company <select> (assign a
+    // mentorship, pick a company for an offer or a project) need every row, not
+    // a page of them.
+    const sort = parseCompanySort(searchParams.get('sort'));
+    const search = (searchParams.get('search') ?? '').trim();
+    const all = searchParams.get('all') === '1';
+    const page = positiveInt(searchParams.get('page'), 1);
+    const pageSize = Math.min(MAX_PAGE_SIZE, positiveInt(searchParams.get('pageSize'), DEFAULT_PAGE_SIZE));
+
+    // The same two columns the client-side `filter()` used to match on, so the
+    // move to the server is not also a change of what "search" means.
+    const searchFilter = search
+      ? { OR: [{ name: { contains: search } }, { industry: { contains: search } }] }
+      : undefined;
+
     return await withTenantScope(session, async () => {
-      const companies = await prisma.company.findMany({
-        // `andScope` copies the builder's object; for ADMIN it is `{}`, which
-        // Prisma treats exactly like no `where` at all.
-        where: andScope(scope),
-        include: {
-          needs: true,
-          _count: { select: { mentorships: mentorshipCount } },
-        },
-        orderBy: { name: 'asc' },
-      });
+      // `andScope` copies the builder's object; for ADMIN with no search it is
+      // `{}`, which Prisma treats exactly like no `where` at all.
+      const where = andScope(scope, searchFilter);
+      const include = {
+        needs: true,
+        _count: { select: { mentorships: mentorshipCount } },
+      };
+
+      const total = await prisma.company.count({ where });
+      const skip = (page - 1) * pageSize;
+
+      let companies;
+      if (!isDerivedSort(sort)) {
+        companies = await prisma.company.findMany({
+          where,
+          include,
+          orderBy: sort === 'created' ? { createdAt: 'desc' } : { name: 'asc' },
+          ...(all ? {} : { skip, take: pageSize }),
+        });
+      } else {
+        // "Last stage movement" and "longest waiting in stage" are not columns
+        // on Company and cannot be reached by Prisma's `orderBy` (it only
+        // crosses a to-many relation through `_count`), so the scoped set is
+        // ranked here and the page is sliced from the ranked list — the same
+        // shape `/api/candidates` uses for its in-memory skill filter. The
+        // extra cost is one relation query, and only for these two orders.
+        const rows = await prisma.company.findMany({ where, include, orderBy: { name: 'asc' } });
+        const relations: CompanySortRelation[] = await prisma.mentorshipRelation.findMany({
+          where: { companyId: { in: rows.map((c) => c.id) } },
+          select: {
+            companyId: true,
+            startDate: true,
+            // `fromStatus`/`toStatus` come along so `stageClock` can skip the
+            // no-op rows (#2264) — the newest row is not necessarily a move.
+            statusChanges: { select: { createdAt: true, fromStatus: true, toStatus: true } },
+          },
+        });
+        const keys = companySortKeys(relations, sort);
+        // Name is the tie-breaker, including between the accounts that have no
+        // key at all: those all land at the end (compareSortKeys), and they
+        // stay alphabetical there instead of in whatever order MySQL returned.
+        const ranked = rows
+          .slice()
+          .sort(
+            (a, b) =>
+              compareSortKeys(keys.get(a.id), keys.get(b.id)) || a.name.localeCompare(b.name)
+          );
+        companies = all ? ranked : ranked.slice(skip, skip + pageSize);
+      }
 
       // Which ROWS came back is the scope above (#2431); which COLUMNS of
       // them a non-admin may read is src/lib/companyVisibility.ts — the tax id
@@ -85,6 +158,10 @@ export async function GET() {
       // who legitimately reads this company.
       return NextResponse.json({
         companies: companies.map((c) => redactCompanyForReader(c, session.user.role)),
+        total,
+        page,
+        pageSize,
+        sort,
       });
     });
   } catch (error) {

@@ -131,7 +131,8 @@ export function ProjectForm({
         setMentees(users.filter((u) => u.role === 'MENTEE'));
       })
       .catch(() => {});
-    fetch('/api/companies')
+    // `all=1`: the company picker offers every company, not one page (#2437).
+    fetch('/api/companies?all=1')
       .then((r) => (r.ok ? r.json() : { companies: [] }))
       .then((d) => setCompanies(d.companies ?? []))
       .catch(() => {});
