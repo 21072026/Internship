@@ -181,4 +181,17 @@ export const MATRIX: MatrixEntry[] = [
     expect: { ADMIN: 'all', MENTOR: 'own', MENTEE: 'deny', COMPANY: 'own', SOURCE: 'deny' },
     ownership: (row, user) => companyBelongsTo(row as { id?: string }, user),
   },
+  {
+    // The single-account JSON export (#2435). An export may never be broader
+    // than the read it hangs off, so it goes through the SAME `company` scope
+    // and therefore belongs in the same table, probed with the own and the
+    // foreign id exactly like the detail route above. What each role gets
+    // INSIDE the file is narrower still, and that is asserted by
+    // e2e/company-export.spec.ts.
+    path: `/api/companies/${COMPANY_ID_PARAM}/export`,
+    collection: 'company',
+    single: true,
+    expect: { ADMIN: 'all', MENTOR: 'own', MENTEE: 'deny', COMPANY: 'own', SOURCE: 'deny' },
+    ownership: (row, user) => companyBelongsTo(row as { id?: string }, user),
+  },
 ];

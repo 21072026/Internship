@@ -1,0 +1,21 @@
+{
+  "bump": "minor",
+  "changelog": "- **One company, one JSON file — plus a read trail and a person-level erasure that keeps the account** (#2396: #2433, #2434, #2435). New `GET /api/companies/[id]/export` hands out everything this installation holds about one account — the row, needs, requisitions, offers, shortlist interests, the enquiry it arrived through, and the interaction logs and stage changes reachable through its relations — shaped on `/api/account/export`. No new table and no new access rule: it goes through the same `company` scope as reading (#2430/#2431), so an undefined scope is a 403 + `authz.scope_denied` and a row outside a defined scope is a 404, and it is narrower still inside the file — ADMIN-only columns stay redacted, relation-derived sections follow the reader's `relation` scope, the commercial book (requisitions/offers/interests) is ADMIN+COMPANY and the enquiry is ADMIN-only, with a withheld section serialized as `null` rather than `[]`. Reading a company detail now writes a `company.view` row through the existing `logActivity()` (`src/lib/companyViewLog.ts`), de-duplicated per reader per 30-minute window so a ledger kept for `activityLogRetentionDays` does not fill with refetches — no `AccessLog` table, no second logging path. And `accountErasure.ts`, which never mentioned `companyInquiry`, now clears the person off the account it is attached to: `CompanyInquiry.contactName/email/phone/note` scrubbed, the `message` they wrote tombstoned, `Company.contactEmail/contactName/contactPhone` nulled — while the Company row, its needs, offers, requisitions and relations are untouched. Same admin endpoint, same name confirmation and password step-up. Locked by `e2e/company-export.spec.ts`, `e2e/company-view-log.spec.ts`, a new row in `e2e/fixtures/authz-matrix.ts` and a third case in `e2e/candidate-erasure.spec.ts`.",
+  "notes": {
+    "en": [
+      "Everything held about a single company can now be exported as one JSON file, including its needs, requisitions, offers, shortlist, the enquiry it came from, and the logged interactions and stage changes of its relations. The file never contains more than the person downloading it may already read, and every export is recorded.",
+      "Opening a company record is now recorded in the activity log, so \"who read this customer record?\" can be answered. Repeat views by the same person within half an hour count as one entry.",
+      "Erasing a person now also removes their name, e-mail address and telephone number from company enquiries and from the company's contact fields. The company itself, and its commercial history, stay."
+    ],
+    "tr": [
+      "Tek bir firmaya dair tutulan her şey artık tek bir JSON dosyası olarak dışa aktarılabiliyor: ihtiyaçlar, iş talepleri, teklifler, kısa liste, firmanın geldiği ilk başvuru ve ilişkilerine ait etkileşim kayıtları ile aşama değişiklikleri. Dosya, indiren kişinin zaten okuyabildiğinden fazlasını asla içermiyor ve her dışa aktarım kayda geçiyor.",
+      "Bir firma kaydının açılması artık etkinlik günlüğüne yazılıyor; böylece \"bu müşteri kaydını kim okudu?\" sorusu yanıtlanabiliyor. Aynı kişinin yarım saat içindeki tekrar görüntülemeleri tek kayıt sayılıyor.",
+      "Bir kişi silindiğinde adı, e-posta adresi ve telefonu artık firma başvurularından ve firmanın muhatap alanlarından da temizleniyor. Firmanın kendisi ve ticari geçmişi yerinde kalıyor."
+    ],
+    "de": [
+      "Alles, was zu einem einzelnen Unternehmen gespeichert ist, lässt sich jetzt als eine JSON-Datei exportieren: Bedarfe, Stellenanforderungen, Angebote, Shortlist, die ursprüngliche Anfrage sowie die protokollierten Interaktionen und Statuswechsel seiner Beziehungen. Die Datei enthält nie mehr, als die herunterladende Person ohnehin lesen darf, und jeder Export wird protokolliert.",
+      "Das Öffnen eines Unternehmensdatensatzes wird jetzt im Aktivitätsprotokoll festgehalten, sodass sich beantworten lässt, wer diesen Kundendatensatz gelesen hat. Wiederholte Aufrufe derselben Person innerhalb einer halben Stunde zählen als ein Eintrag.",
+      "Beim Löschen einer Person werden Name, E-Mail-Adresse und Telefonnummer jetzt auch aus Unternehmensanfragen und aus den Kontaktfeldern des Unternehmens entfernt. Das Unternehmen selbst und seine Geschäftshistorie bleiben erhalten."
+    ]
+  }
+}
