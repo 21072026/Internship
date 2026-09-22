@@ -7121,3 +7121,42 @@ elde kalan tek numarayı kullandı. Geriye dönük düzeltmenin maliyeti: 6 issu
 Derlenmiş `CHANGELOG.md` girdileri ise düzeltilemiyor — yayımlanmış sürüm notu tarihsel
 kayıt; yalnızca `releases/unreleased/` altındaki **henüz derlenmemiş** fragment'ler
 düzeltilebilir. Yani yanlış numara CHANGELOG'a derlendikten sonra kalıcıdır.
+
+## 2026-09-22 — CI watchdog: bir "gerçek hata mı, dosyala mı" kararı için önce kod okunur, sonra karar verilir
+
+Üç ardışık zamanlanmış `e2e-full` koşusu kırmızıydı. `analytics-trends.spec.ts:48` (#1501)
+ve `mobile-chat-layout.spec.ts:32` (#2463) zaten açık issue'lardı — arayıp bulmak `grep`'ten
+daha güvenilir: `mcp__github__search_issues` doğal dil sorgusuyla ikisini de ilk denemede
+buldu, tekrar dosyalamadım.
+
+`mobile-layout-coverage.spec.ts:359` ("operations and settings … German") ise **aynı test
+adı, farklı belirti**: kapanmış #2310/#1305 farklı rotaları (`/admin/newsletters`,
+`/admin/api-explorer`, `/mentor`) kapsıyordu, bu sefer `/admin/settings`'teki
+`StageSlaEditor` satırları 62px'e sıkışıyordu (`MIN_TEXT_WIDTH=110`). Kod zaten kanıtı
+veriyordu: satır `flex-1 truncate` etiket + iki sabit `w-24` (96px) input — 360px'te
+etikete kalan pay matematikle (62px ölçüldü, 62+12+96+12+96=278 ≈ mevcut satır genişliği)
+birebir tutarlıydı, yani "büyük/belirsiz" değil, tam olarak nerede ve ne kadar olduğu
+hesaplanabilir bir hataydı. Böyle bir durumda dosyalamak yerine düzeltmek daha doğru: kod
+zaten kanıtlıyorsa "haven't reproduced, filing" demek gecikme ekliyor, düzeltme değil.
+
+Yerel doğrulama bu konteynerde **gerçekten mümkün**: `apt-get install -y mariadb-server`
++ `service mariadb start` + `mariadb -e "CREATE DATABASE …"` birkaç saniye sürüyor (systemd
+yok ama `service` script'i çalışıyor); `/opt/pw-browsers`'taki chromium sürümü
+(`playwright-core`'un beklediğinden farklı revizyon numarasıyla, ör. 1194 vs 1243) sembolik
+link + `INSTALLATION_COMPLETE`/`DEPENDENCIES_VALIDATED` dokunuşuyla "yüklü" görünüyor ama
+**yol düzeni farklıysa** (`chrome-linux/headless_shell` vs beklenen
+`chrome-headless-shell-linux64/chrome-headless-shell`) launch yine patlıyor — sembolik link
+klasör adını çözer ama Playwright'ın header/headless-shell alt yol varsayımını çözmez.
+Çözüm: `playwright.config.ts`'in `use.launchOptions.executablePath`'ini geçici olarak asıl
+`chrome-linux/chrome` ikili dosyasına işaret ettir, testi çalıştır, **commit'ten önce geri
+al**. Bu bypass, headless-shell'i değil düz chromium'u seçer, PR gate'in kendisi buna
+ihtiyaç duymaz (kendi ortamında zaten doğru sürüm var) — yalnızca bu tek-kullanımlık yerel
+tekrar-üretim için gerekliydi.
+
+Aynı koşuda `timezone-settings.spec.ts:24` bir kere kırmızıydı ama yerelde 4/4 yeşil geçti
+ve kapanmış #2344'ten **yapısal olarak farklı** bir belirtiydi (badge güncellenmemesi değil,
+`getByTestId('timezone-select')`'in 2 birebir-aynı elemana çözülmesi — strict-mode ihlali).
+Tek koşuda görülen, yerelde tekrarlanamayan ve mevcut hiçbir kapatılmış/açık issue'yla
+örtüşmeyen bir belirti; kör düzeltme yerine kanıtla dosyaladım (#2509) — üç durumun
+("zaten dosyalı", "küçük ve kanıtlı", "tek seferlik ve tekrarlanamıyor") üçü de bu tek
+koşuda ayrı ayrı çıktı, aynı tahmin kalıbı hiçbirine uymuyordu.
