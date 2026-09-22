@@ -101,6 +101,20 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorships: 'deals',
         positions: 'needs',
         openPositions: 'Open needs',
+        // The delete dialog (#2441) is this page's THIRD dialog, and the same
+        // acceptance covers it: it names the dependants of the account being
+        // deleted, so a marketing admin was reading "1 mentorships" and "1 open
+        // positions" one click before an irreversible action.
+        //
+        // Three of the twelve labels are overridden, for the same reason as
+        // above — the rest name the same thing in both products
+        // (`entitlements`, `needAlerts`, `projects`, `users`, `fromInquiries`)
+        // or belong to the `placements` capability a MARKETING tenant does not
+        // carry (`requisitions`, `interviewRequests`, `offers`, `placements`),
+        // and are left alone rather than translated speculatively.
+        deleteDialog: {
+          labels: { needs: 'open needs', interests: 'lead interests', mentorships: 'deals' },
+        },
       },
       // The two DIALOGS /admin/companies opens are part of that page, so the
       // acceptance ("no mentorship word on /admin/companies") covers them: the
@@ -263,6 +277,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorships: 'fırsat',
         positions: 'ihtiyaç',
         openPositions: 'Açık ihtiyaçlar',
+        deleteDialog: {
+          labels: {
+            needs: 'açık ihtiyaç',
+            interests: 'müşteri adayı ilgisi',
+            mentorships: 'fırsat',
+          },
+        },
       },
       companyForm: {
         quota: 'İhtiyaç kontenjanı',
@@ -380,6 +401,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorships: 'Deals',
         positions: 'Bedarfe',
         openPositions: 'Offener Bedarf',
+        deleteDialog: {
+          labels: { needs: 'offene Bedarfe', interests: 'Lead-Interessen', mentorships: 'Deals' },
+        },
       },
       companyForm: {
         quota: 'Bedarfskontingent',

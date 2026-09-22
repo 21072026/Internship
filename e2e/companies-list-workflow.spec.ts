@@ -27,13 +27,12 @@ test('the list is ordered by the server, and accounts that never moved stage com
 }) => {
   const adminEmail = uniqueEmail('co-sort-admin');
   const mentorEmail = uniqueEmail('co-sort-mentor');
-  const menteeEmail = uniqueEmail('co-sort-mentee');
+  const menteeEmails: string[] = [];
   const pw = 'CoSortPass123';
   const tag = `sort${Date.now()}`;
 
   const admin = await seedUser(adminEmail, pw, 'ADMIN', 'Company Sort Admin');
   const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Company Sort Mentor');
-  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Company Sort Mentee');
 
   // Deliberately alphabetical in the OPPOSITE direction to both stage orders,
   // so a list that silently fell back to `name: 'asc'` cannot pass.
@@ -41,10 +40,22 @@ test('the list is ordered by the server, and accounts that never moved stage com
   const stale = await prisma.company.create({ data: { name: `BB Stale ${tag}` } });
   const never = await prisma.company.create({ data: { name: `CC Never ${tag}` } });
 
-  const relationFor = async (companyId: string, startedDaysAgo: number) =>
-    prisma.mentorshipRelation.create({
+  // A MENTEE OF ITS OWN per relation. `status` defaults to ACTIVE, and "one
+  // mentee, at most one ACTIVE mentorship" is a hard invariant (#419,
+  // docs/one-active-mentor.md), so three relations sharing one mentee would
+  // plant exactly the row shape `prisma/check-active-mentor-duplicates.mjs`
+  // exists to find — in whatever database the full suite runs against — and
+  // would start failing outright the day the `@@unique([activeMenteeKey])`
+  // backstop lands. The ordering keys are `startDate` and `statusChanges`, so
+  // who the mentee is makes no difference to what is under test.
+  const relationFor = async (companyId: string, startedDaysAgo: number) => {
+    const email = uniqueEmail('co-sort-mentee');
+    menteeEmails.push(email);
+    const mentee = await seedUser(email, pw, 'MENTEE', 'Company Sort Mentee');
+    return prisma.mentorshipRelation.create({
       data: { mentorId: mentor.id, menteeId: mentee.id, companyId, startDate: ago(startedDaysAgo) },
     });
+  };
 
   const recentRel = await relationFor(recent.id, 40);
   const staleRel = await relationFor(stale.id, 200);
@@ -111,7 +122,7 @@ test('the list is ordered by the server, and accounts that never moved stage com
     await prisma.company.deleteMany({ where: { id: { in: [recent.id, stale.id, never.id] } } });
     await cleanupByEmail(adminEmail);
     await cleanupByEmail(mentorEmail);
-    await cleanupByEmail(menteeEmail);
+    for (const email of menteeEmails) await cleanupByEmail(email);
   }
 });
 
@@ -142,8 +153,36 @@ test('search and paging happen on the server, and an empty result shows the empt
     expect(secondBody.total).toBe(3);
     expect(secondBody.companies).toHaveLength(1);
 
+    // A hand-typed page number answers, like a hand-typed `sort` does.
+    // `parseInt('9'.repeat(20))` is finite and positive but NOT a safe integer,
+    // so an unbounded `page` reaches Prisma as a non-integer `skip` and comes
+    // back a 500 — the one failure mode this route's sibling parameter has an
+    // explicit acceptance criterion against.
+    const absurd = await page.request.get(`/api/companies?search=${tag}&page=99999999999999999999`);
+    expect(absurd.status()).toBe(200);
+    expect((await absurd.json()).total).toBe(3);
+
+    // Every unbounded read this screen makes, in the order it makes them.
+    const unbounded: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().includes('/api/companies?') && r.url().includes('all=1')) unbounded.push(r.url());
+    });
+
     await page.goto('/admin/companies');
     await expect(page.getByTestId('companies-search')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('companies-list')).toBeVisible({ timeout: 20_000 });
+
+    // #2437's actual goal, asserted rather than assumed: paging the grid buys
+    // nothing if the screen behind it still downloads the whole account book on
+    // every visit. The one control that genuinely needs every account is the
+    // login picker, and it loads on first use — not on mount.
+    expect(unbounded, 'the account book must not be read just to render the page').toEqual([]);
+    const pickerLoaded = page.waitForRequest(
+      (r) => r.url().includes('/api/companies?') && r.url().includes('all=1'),
+      { timeout: 20_000 }
+    );
+    await page.getByTestId('company-login-picker').focus();
+    await pickerLoaded;
 
     // Typing in the box must produce a REQUEST carrying the term — that is what
     // "the client-side filter is gone" means in practice.

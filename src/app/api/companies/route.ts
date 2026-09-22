@@ -44,9 +44,21 @@ const companySchema = z.object({
 const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 24;
 
-const positiveInt = (raw: string | null, fallback: number): number => {
+/**
+ * A page number past this is a crafted URL, not navigation — at the maximum
+ * page size it is still a hundred million rows deep.
+ *
+ * The ceiling is not cosmetic: `parseInt('9'.repeat(20))` is finite and > 0 but
+ * not a SAFE integer, and `skip` is an `Int` as far as Prisma's runtime
+ * validator is concerned, so an unbounded `page` turns a hand-typed query
+ * string into a 500 — on the very parameter whose sibling (`sort`) has "an
+ * invalid value must not 500" as an explicit acceptance criterion.
+ */
+const MAX_PAGE = 1_000_000;
+
+const positiveInt = (raw: string | null, fallback: number, max: number): number => {
   const parsed = parseInt(raw ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
 };
 
 export async function GET(request: Request) {
@@ -92,8 +104,8 @@ export async function GET(request: Request) {
     const sort = parseCompanySort(searchParams.get('sort'));
     const search = (searchParams.get('search') ?? '').trim();
     const all = searchParams.get('all') === '1';
-    const page = positiveInt(searchParams.get('page'), 1);
-    const pageSize = Math.min(MAX_PAGE_SIZE, positiveInt(searchParams.get('pageSize'), DEFAULT_PAGE_SIZE));
+    const page = positiveInt(searchParams.get('page'), 1, MAX_PAGE);
+    const pageSize = positiveInt(searchParams.get('pageSize'), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
     // The same two columns the client-side `filter()` used to match on, so the
     // move to the server is not also a change of what "search" means.
@@ -128,9 +140,20 @@ export async function GET(request: Request) {
         // ranked here and the page is sliced from the ranked list — the same
         // shape `/api/candidates` uses for its in-memory skill filter. The
         // extra cost is one relation query, and only for these two orders.
+        //
+        // It is an UNBOUNDED cost, and that is tracked as #2528: this reads
+        // every scoped company and every StatusChange of every relation of
+        // those companies before slicing a page out. Fine for an admin's
+        // account book today; the two ways to bound it (fetch only the newest
+        // real change, or maintain the column) are written up there.
         const rows = await prisma.company.findMany({ where, include, orderBy: { name: 'asc' } });
+        // Scoped exactly like the `_count` above, and for the same reason: an
+        // ORDER derived from rows the caller may not read is still a fact about
+        // them. Unscoped, `sort=movement` would rank a MENTOR's companies by
+        // when OTHER mentors last moved a stage there — the inference the count
+        // comment three screens up refuses to allow.
         const relations: CompanySortRelation[] = await prisma.mentorshipRelation.findMany({
-          where: { companyId: { in: rows.map((c) => c.id) } },
+          where: andScope(relationScope, { companyId: { in: rows.map((c) => c.id) } }),
           select: {
             companyId: true,
             startDate: true,

@@ -165,7 +165,13 @@ export const MATRIX: MatrixEntry[] = [
     // every request, so only the row check below could have caught it.
     // MENTEE/SOURCE have no company scope at all (docs/role-access-matrix.md
     // § MARKETING dikeyi) → 403 + an `authz.scope_denied` activity row.
-    path: '/api/companies',
+    //
+    // `all=1` since #2437 paged this route. The cell under test is "every row
+    // returned belongs to the caller", and against a paged answer that claim
+    // would only ever be checked over the first 24 rows — a leak surfacing on
+    // page 2 would pass. The deny cells are unaffected: the scope refusal
+    // happens before any query parameter is read.
+    path: '/api/companies?all=1',
     collection: 'companies',
     expect: { ADMIN: 'all', MENTOR: 'own', MENTEE: 'deny', COMPANY: 'own', SOURCE: 'deny' },
     ownership: (row, user) => companyBelongsTo(row as { id?: string }, user),

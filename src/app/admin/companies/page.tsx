@@ -1,7 +1,7 @@
 'use client';
 import { useT } from "@/i18n/client";
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -33,7 +33,17 @@ export default function CompaniesPage() {
   // The company <select> below provisions a login and must offer EVERY company,
   // not the page currently on screen — so it reads the same route with `all=1`
   // rather than borrowing the paged list (#2437).
+  //
+  // ON DEMAND, not on mount. Paging the grid is pointless if the screen behind
+  // it still downloads the whole account book on every visit: with 800 accounts
+  // that unbounded read is the cost #2437 exists to remove, and it would have
+  // been paid by every admin who opened this page and never touched the login
+  // form. It now fires the first time the picker is actually used (focus covers
+  // both mouse and keyboard), and refreshes afterwards only if it was loaded.
   const [allCompanies, setAllCompanies] = useState<{ id: string; name: string }[]>([]);
+  const allLoadedRef = useRef(false);
+  /** Which company the in-flight delete-impact request was asked about. */
+  const impactForRef = useRef<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<CompanySort>(DEFAULT_COMPANY_SORT);
@@ -116,6 +126,7 @@ export default function CompaniesPage() {
 
   const fetchAllCompanies = useCallback(async () => {
     try {
+      allLoadedRef.current = true;
       const res = await fetch('/api/companies?all=1');
       const data = await res.json();
       setAllCompanies(data.companies || []);
@@ -124,14 +135,21 @@ export default function CompaniesPage() {
     }
   }, []);
 
+  /** First use of the picker loads it; later uses reuse what is already there. */
+  const loadPickerOnce = useCallback(() => {
+    if (!allLoadedRef.current) void fetchAllCompanies();
+  }, [fetchAllCompanies]);
+
+  /** A create/update/delete only has to refresh a picker somebody opened. */
+  const refreshPickerIfLoaded = useCallback(
+    () => (allLoadedRef.current ? fetchAllCompanies() : Promise.resolve()),
+    [fetchAllCompanies]
+  );
+
   useEffect(() => {
     const timeout = setTimeout(fetchCompanies, 300);
     return () => clearTimeout(timeout);
   }, [fetchCompanies]);
-
-  useEffect(() => {
-    fetchAllCompanies();
-  }, [fetchAllCompanies]);
 
   // A new search term or a different order restarts at page 1 — page 4 of the
   // previous result set is an empty screen with no explanation.
@@ -157,7 +175,7 @@ export default function CompaniesPage() {
       const body = await res.json();
       throw new Error(body.error || t.companiesPage.createFailed);
     }
-    await Promise.all([fetchCompanies(), fetchAllCompanies()]);
+    await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
     setShowForm(false);
   };
 
@@ -178,7 +196,7 @@ export default function CompaniesPage() {
       const body = await res.json();
       throw new Error(body.error || t.companiesPage.updateFailed);
     }
-    await Promise.all([fetchCompanies(), fetchAllCompanies()]);
+    await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
     setEditingCompany(null);
   };
 
@@ -190,6 +208,12 @@ export default function CompaniesPage() {
   const dd = t.companiesPage.deleteDialog;
 
   const askDelete = async (company: Company) => {
+    // The counts are fetched per company and arrive whenever they arrive. Open
+    // A, cancel, open B, and A's slower answer would otherwise land in B's
+    // dialog — one account's consequences under another account's name, one
+    // click before an irreversible delete. Every answer is therefore tagged
+    // with the account it was asked about and a late one is dropped.
+    impactForRef.current = company.id;
     setPendingDelete({ id: company.id, name: company.name });
     setImpact(null);
     setImpactFailed(false);
@@ -197,12 +221,19 @@ export default function CompaniesPage() {
       const res = await fetch(`/api/companies/${company.id}/delete-impact`);
       if (!res.ok) throw new Error('impact');
       const data = await res.json();
+      if (impactForRef.current !== company.id) return;
       setImpact({ cascade: data.impact?.cascade ?? {}, detach: data.impact?.detach ?? {} });
     } catch {
       // Say that the counts are missing rather than showing a dialog that
       // silently implies "nothing is linked".
+      if (impactForRef.current !== company.id) return;
       setImpactFailed(true);
     }
+  };
+
+  const closeDeleteDialog = () => {
+    impactForRef.current = null;
+    setPendingDelete(null);
   };
 
   const confirmDelete = async () => {
@@ -211,8 +242,8 @@ export default function CompaniesPage() {
     try {
       const res = await fetch(`/api/companies/${pendingDelete.id}`, { method: 'DELETE' });
       if (!res.ok) setError(t.common.deleteFailed);
-      setPendingDelete(null);
-      await Promise.all([fetchCompanies(), fetchAllCompanies()]);
+      closeDeleteDialog();
+      await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
     } finally {
       setDeleting(false);
     }
@@ -260,7 +291,9 @@ export default function CompaniesPage() {
         {clMsg && <p className="text-sm text-gray-700 mb-3">{clMsg}</p>}
         <div className="flex flex-wrap items-end gap-2">
           <select
+            data-testid="company-login-picker"
             value={clCompanyId}
+            onFocus={loadPickerOnce}
             onChange={(e) => setClCompanyId(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
           >
@@ -340,7 +373,7 @@ export default function CompaniesPage() {
         confirmLabel={dd.confirm}
         cancelLabel={t.common.cancel}
         onConfirm={confirmDelete}
-        onCancel={() => setPendingDelete(null)}
+        onCancel={closeDeleteDialog}
         message={
           pendingDelete ? (
             <>

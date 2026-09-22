@@ -1,11 +1,21 @@
 // How the company/account list is ordered (#2436).
 //
-// Four orders, one rule each, and one thing they all share: an account that has
-// never moved through the pipeline sorts LAST. That is the whole lesson of the
-// inherited task — MySQL puts NULLs FIRST on an ascending sort and LAST on a
-// descending one, so "no data" silently becomes "the most interesting row" in
+// Four orders, and one rule they share wherever it can apply: an account that
+// has never moved through the pipeline sorts LAST. That is the whole lesson of
+// the inherited task — MySQL puts NULLs FIRST on an ascending sort and LAST on
+// a descending one, so "no data" silently becomes "the most interesting row" in
 // half of the orders unless somebody says otherwise. Here nobody has to
 // remember: `compareSortKeys` is the only comparator, and it is explicit.
+//
+// "WHEREVER IT CAN APPLY" is the honest reading of #2436's "rows with no stage
+// movement come last in every sort", and worth stating rather than leaving to
+// be re-derived. The rule is about a MISSING key, which is why the issue
+// phrases the mechanism as `orderBy: { sort: 'asc', nulls: 'last' }` — a
+// nulls-last instruction is meaningless without nulls. `movement` and `waiting`
+// are keyed on stage movement and an account can lack one, so those two carry
+// it. `name` and `created` are total orders over columns every row has: a
+// never-moved account sorts alphabetically, or by when it was added, among the
+// rest, because that is what those two orders were asked for.
 //
 // Dependency-free on purpose (only `stageClock`, which is itself client-safe):
 // the route decides WHICH rows it may read, this module decides only what order
