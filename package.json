@@ -56,6 +56,7 @@
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:api-key-routes": "node scripts/check-api-key-routes.mjs",
     "check:route-auth": "node scripts/check-route-auth.mjs",
+    "check:capability-writers": "node scripts/check-capability-writers.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
     "check:locale-dates": "node scripts/check-locale-dates.mjs",
     "check:events": "node scripts/check-events.mjs",

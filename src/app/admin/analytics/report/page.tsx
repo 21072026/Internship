@@ -9,6 +9,7 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
 import { formatDate } from '@/lib/relativeTime';
+import type { VerticalCapability } from '@/lib/verticals';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -17,6 +18,10 @@ interface Analytics {
   mentorWorkload: { id: string; fullName: string; active: number; hired: number }[];
   trends?: { months: string[]; newRelations: number[]; interactions: number[] };
   range?: { from: string; to: string };
+  // The tenant's module set (#2423) — same field, same meaning as on the
+  // analytics screen this report prints. Missing (older server) → show
+  // everything, the fail-open direction of the shell gate.
+  capabilities?: VerticalCapability[];
 }
 interface CohortRow { id: string; name: string; term?: string | null; total: number; inProgress: number; hired: number; conversionToHired: number; avgDaysToHired: number | null; interactionsPerRelation: number }
 interface SourceRow { id: string; name: string; mentees: number; inPipeline: number; hired: number; conversionToHired: number }
@@ -126,15 +131,20 @@ export default function AnalyticsReportPage() {
         </Section>
       )}
 
-      <Section title={c.mentorWorkload}>
-        <table className="w-full"><thead><tr>
-          <th className={th}>Mentor</th><th className={th}>{c.active}</th><th className={th}>{c.hired}</th>
-        </tr></thead><tbody>
-          {data.mentorWorkload.map((m) => (
-            <tr key={m.id}><td className={td}>{m.fullName}</td><td className={td}>{m.active}</td><td className={td}>{m.hired}</td></tr>
-          ))}
-        </tbody></table>
-      </Section>
+      {/* The printed report is the same screen on paper, so it follows the same
+          module gate (#2423): a vertical without the mentorship module gets no
+          mentor section rather than a heading over an empty table. */}
+      {(!data.capabilities || data.capabilities.includes('mentorship')) && (
+        <Section title={c.mentorWorkload}>
+          <table className="w-full"><thead><tr>
+            <th className={th}>Mentor</th><th className={th}>{c.active}</th><th className={th}>{c.hired}</th>
+          </tr></thead><tbody>
+            {data.mentorWorkload.map((m) => (
+              <tr key={m.id}><td className={td}>{m.fullName}</td><td className={td}>{m.active}</td><td className={td}>{m.hired}</td></tr>
+            ))}
+          </tbody></table>
+        </Section>
+      )}
 
       <Section title={c.cohortCompareTitle}>
         {cohorts && cohorts.length > 0 ? (

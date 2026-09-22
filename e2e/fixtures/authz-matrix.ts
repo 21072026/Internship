@@ -28,12 +28,36 @@ export interface MatrixUser {
   role: Role;
   companyId?: string | null;
   sourceId?: string | null;
+  /**
+   * Companies reachable through a relation this user is named in — the seeded
+   * ground truth for MENTOR's company cells. A company row does not say which
+   * relations point at it, so the spec fills this from what it created rather
+   * than trusting the response to describe itself (same idea as SOURCE).
+   */
+  relationCompanyIds?: string[];
 }
+
+/**
+ * Where the spec substitutes the seeded company ids. An entry whose `path`
+ * carries it is probed TWICE — once with the caller's own company, once with
+ * the foreign one — and the `ownership` predicate decides, per probe, whether
+ * the expected answer is 200 (in scope) or 404 (outside a defined scope).
+ */
+export const COMPANY_ID_PARAM = ':companyId';
 
 export interface MatrixEntry {
   path: string;
-  /** Key in the JSON response holding the array of rows. */
+  /** Key in the JSON response holding the array of rows (or the one row, see `single`). */
   collection: string;
+  /**
+   * The response holds ONE row under `collection`, not an array (a detail
+   * route). For an `own` cell the spec then expects **200** when `ownership`
+   * accepts the probed id and **404** when it does not — never 403, which is
+   * reserved for a role whose scope is UNDEFINED (`deny`). That split is the
+   * repo convention documented in `src/lib/authzScope.ts` and
+   * `docs/role-access-matrix.md`, not something this fixture invents.
+   */
+  single?: boolean;
   expect: Record<Role, Expectation>;
   /** True when `row` legitimately belongs to `user`. Only consulted for `own`. */
   ownership: (row: Record<string, unknown>, user: MatrixUser) => boolean;
@@ -59,6 +83,23 @@ function relationBelongsTo(rel: Relation | undefined, user: MatrixUser): boolean
       // The list payload doesn't carry the mentee's sourceId, so the spec
       // resolves ownership against the seeded set instead of guessing here.
       return false;
+    default:
+      return false;
+  }
+}
+
+/**
+ * A company row is the caller's when it is their own account (COMPANY) or is
+ * reached through a relation they are named in (MENTOR). MENTEE and SOURCE
+ * never own one: their cells are `deny`, so this is not consulted for them.
+ */
+function companyBelongsTo(row: { id?: string }, user: MatrixUser): boolean {
+  if (!row.id) return false;
+  switch (user.role) {
+    case 'COMPANY':
+      return !!user.companyId && row.id === user.companyId;
+    case 'MENTOR':
+      return (user.relationCompanyIds ?? []).includes(row.id);
     default:
       return false;
   }
@@ -117,5 +158,27 @@ export const MATRIX: MatrixEntry[] = [
     collection: 'mentees',
     expect: { ADMIN: 'deny', MENTOR: 'deny', MENTEE: 'deny', COMPANY: 'deny', SOURCE: 'own' },
     ownership: () => true, // the route scopes to the caller's own source by construction
+  },
+  {
+    // The company book (#2396/#2432). Until #2431 this answered every signed-in
+    // role with every company in the tenant, contactEmail included — a 200 on
+    // every request, so only the row check below could have caught it.
+    // MENTEE/SOURCE have no company scope at all (docs/role-access-matrix.md
+    // § MARKETING dikeyi) → 403 + an `authz.scope_denied` activity row.
+    path: '/api/companies',
+    collection: 'companies',
+    expect: { ADMIN: 'all', MENTOR: 'own', MENTEE: 'deny', COMPANY: 'own', SOURCE: 'deny' },
+    ownership: (row, user) => companyBelongsTo(row as { id?: string }, user),
+  },
+  {
+    // The detail route, probed with the own AND the foreign company id. Scope
+    // undefined (MENTEE/SOURCE) → 403 for both; id outside a defined scope
+    // (the foreign company for MENTOR, both for an unassigned COMPANY) → 404,
+    // indistinguishable from an id that does not exist.
+    path: `/api/companies/${COMPANY_ID_PARAM}`,
+    collection: 'company',
+    single: true,
+    expect: { ADMIN: 'all', MENTOR: 'own', MENTEE: 'deny', COMPANY: 'own', SOURCE: 'deny' },
+    ownership: (row, user) => companyBelongsTo(row as { id?: string }, user),
   },
 ];

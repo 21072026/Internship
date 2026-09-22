@@ -36,6 +36,12 @@ export interface ScopeMap {
   /** MentorshipRelation itself, and anything reached through it (interaction logs). */
   relation: Prisma.MentorshipRelationWhereInput;
   project: Prisma.ProjectWhereInput;
+  /**
+   * Company — the partner-company record of INTERNSHIP and the account master
+   * of the MARKETING vertical (#2396/#2430). Decided in
+   * `docs/role-access-matrix.md` § "MARKETING dikeyi"; keep the two in step.
+   */
+  company: Prisma.CompanyWhereInput;
 }
 
 export type ScopedResource = keyof ScopeMap;
@@ -100,6 +106,42 @@ const BUILDERS: {
     // read every project, private ones included. Limited to the public
     // showcase, same as a mentee.
     SOURCE: async () => ({ isPublic: true }),
+  },
+  // Company rows carry `contactEmail`, `address` and — in the MARKETING
+  // vertical — the whole customer book. Until #2431 `GET /api/companies` was
+  // guarded by `if (!session)` alone, so every signed-in role read every
+  // company in the tenant. Two roles deliberately have NO builder here (→ 403):
+  //
+  //   MENTEE — in INTERNSHIP the mentee reaches "their" company through the
+  //            relation (`/api/mentorship`, whose payload includes it); in
+  //            MARKETING the MENTEE row is the lead contact, a *record*, not an
+  //            operator. No shipped screen calls `/api/companies` as a mentee
+  //            (the only non-admin caller, `ProjectForm`, fetches it behind
+  //            `showOwnerPicker={isAdmin}`), so a builder would be a grant with
+  //            no consumer.
+  //   SOURCE — refers candidates; a partner institution has no business with
+  //            the customer book at all, and no screen asks for it.
+  //
+  // `{ id: NO_MATCH }` (200 + empty list) was the alternative for both. 403 is
+  // the deliberate choice: an empty list reads as "there are no companies",
+  // a 403 reads as "not yours to ask" — and `logScopeDenial` then makes a
+  // client that starts asking visible in the activity log instead of silently
+  // receiving `[]`.
+  company: {
+    // Admins see the whole tenant by design — `{}` keeps the admin screens
+    // byte-identical to before the scope existed.
+    ADMIN: async () => ({}),
+    // Companies reachable through a relation the mentor is personally named
+    // in — both sides, mirroring the `relation` builder above (#1141): the same
+    // person can mentor one relation and be mentored in another, and a company
+    // reached through a relation of theirs is theirs to read. Never "companies
+    // I might want to place someone at".
+    MENTOR: async (u) => ({
+      mentorships: { some: { OR: [{ mentorId: u.id }, { menteeId: u.id }] } },
+    }),
+    // Only its own account. An unassigned COMPANY user sees nothing, not
+    // everything — same sentinel rule as the `relation` builder.
+    COMPANY: async (u) => ({ id: u.companyId ?? NO_MATCH }),
   },
 };
 
