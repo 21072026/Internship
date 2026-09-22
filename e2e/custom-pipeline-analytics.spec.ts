@@ -15,7 +15,10 @@ import { signInAndSettle, gotoSettled } from './helpers/auth';
  * guard that the screen renders the resolved order rather than a default.
  * The five reports that decide "was this person placed" are covered by
  * e2e/custom-pipeline-outcome-analytics.spec.ts (#1882) on the same fixture —
- * this spec stays about the funnel's stage ORDER.
+ * this spec stays about the funnel's stage ORDER, plus the one screen-level
+ * check of the headline conversion tile (#2419): it is labelled from the
+ * resolved finished stage, so on this fixture it reads "Custom F rate" and
+ * never "Hired".
  */
 
 const PASSWORD = 'CustomPipe123!';
@@ -52,4 +55,17 @@ test('the hiring funnel reports on a tenant’s renamed pipeline', { tag: '@smok
   await expect(page.getByTestId('funnel-kpi-card')).toBeVisible();
   await expect(page.getByTestId('conversion-STAGE_F')).toBeVisible();
   await expect(page.getByTestId('conversion-list')).not.toContainText('HIRED_660');
+
+  // The headline tile (#2419, the screen half of #1882): its label is built
+  // from the stage the conversion was counted against, so this tenant reads
+  // "Custom F rate" where the old hardcoded key set made every screen say
+  // "Hired rate" about a stage the tenant does not have. The RATIO is not
+  // asserted here: `conversionToHired` divides by every relation the deployment
+  // can see (tenant isolation is off outside the `isolation` project), so the
+  // number is not this fixture's to predict — the counting itself is asserted
+  // per-mentor and per-cohort in custom-pipeline-outcome-analytics.spec.ts.
+  const headline = page.getByTestId('headline-conversion');
+  await expect(headline).toContainText('Custom F rate');
+  await expect(headline).toContainText(/\d+%/);
+  await expect(headline).not.toContainText('Hired');
 });
