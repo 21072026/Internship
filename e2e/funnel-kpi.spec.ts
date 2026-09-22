@@ -177,3 +177,88 @@ test('the funnel endpoint reports seeded journeys, and the screen states the pop
     await cleanupByEmail(mentorEmail);
   }
 });
+
+// #2420 / #2425 — the cohort card.
+//
+// The assertion that matters is the ABSENT one: a record won this month cannot
+// have churned yet, so every retention bucket for the current cohort is still
+// open and must render as an em dash. A 0% there would be the screen claiming
+// perfect retention on the strength of no elapsed time at all.
+test('cohorts group by entry month, and a retention window that has not closed renders as a dash', async ({ page }) => {
+  test.slow();
+  const mentorEmail = uniqueEmail('cohort-mentor');
+  const menteeEmail = uniqueEmail('cohort-mentee');
+  const now = new Date();
+  // Inside the current UTC month, and no later than midnight today: the range
+  // picker sends `to` as a DATE (`2026-09-22`), so a relation created an hour
+  // ago is past the end of the window the screen asks for and would be in none
+  // of these numbers. Three days back, floored at the 1st of the month so the
+  // cohort key still matches when the test runs early in a month.
+  const seededAt = new Date(
+    Math.max(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1), now.getTime() - 3 * DAY)
+  );
+  const month = `${seededAt.getUTCFullYear()}-${String(seededAt.getUTCMonth() + 1).padStart(2, '0')}`;
+
+  try {
+    await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
+    const before = await (await page.request.get('/api/admin/analytics/funnel')).json();
+
+    const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Cohort Mentor');
+    const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Cohort Mentee');
+    const relation = await prisma.mentorshipRelation.create({
+      data: {
+        mentorId: mentor.id,
+        menteeId: mentee.id,
+        orgId: mentee.orgId,
+        status: 'ACTIVE',
+        // Entered and reached the outcome inside the CURRENT month.
+        startDate: seededAt,
+        pipelineStatus: 'HIRED_660',
+      },
+    });
+    await prisma.statusChange.create({
+      data: {
+        relationId: relation.id,
+        fromStatus: 'APPLICATION_100',
+        toStatus: 'HIRED_660',
+        changedById: mentor.id,
+        createdAt: new Date(seededAt.getTime() + 60 * 60 * 1000),
+      },
+    });
+
+    const after = await (await page.request.get('/api/admin/analytics/funnel')).json();
+
+    // Both ends of the cohorted conversion are resolved from the tenant's own
+    // order, never named: the first stage it starts on, and what it calls
+    // "finished" (#1882).
+    expect(after.cohortConversion.fromKey).toBe(after.order[0]);
+    expect(after.retention.wonKeys).toContain(after.cohortConversion.toKey);
+
+    const row = (payload: { cohortConversion: { months: { month: string; entered: number; converted: number }[] } }) =>
+      payload.cohortConversion.months.find((m) => m.month === month)!;
+    expect(row(after).entered - row(before).entered).toBe(1);
+    expect(row(after).converted - row(before).converted).toBe(1);
+    // The structural guarantee of #2420, checked on real data rather than only
+    // in the unit test: no month can be over 100%.
+    for (const m of after.cohortConversion.months) {
+      expect(m.converted).toBeLessThanOrEqual(m.entered);
+      if (m.rate !== null) expect(m.rate).toBeLessThanOrEqual(100);
+    }
+
+    const cohort = after.retention.cohorts.find((c: { month: string }) => c.month === month)!;
+    const beforeCohort = before.retention.cohorts.find((c: { month: string }) => c.month === month)!;
+    expect(cohort.won - beforeCohort.won).toBe(1);
+    for (const bucket of cohort.buckets) {
+      expect(bucket.rate).toBeNull();
+      expect(bucket.churned).toBeNull();
+    }
+
+    await page.goto('/admin/analytics');
+    await expect(page.getByTestId('cohort-kpi-card')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId(`cohort-conversion-${month}`)).toContainText('%');
+    await expect(page.getByTestId(`retention-${month}-1`)).toHaveText('—');
+  } finally {
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});
