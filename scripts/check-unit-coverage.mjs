@@ -199,6 +199,14 @@ const FLOORS = new Map([
       why: 'who may clear someone else\'s second factor: never a peer admin, never self, never while impersonating (#1543)',
     },
   ],
+  [
+    'src/lib/leadAttribution.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'conversion counted against the TENANT\'s finished stages, and a SOURCE login never attributed to itself (#2421)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────

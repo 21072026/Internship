@@ -5,28 +5,39 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
+import { outcomeStageKeys } from '@/lib/pipelineStages';
+import { FUNNEL_LEAD_ROLE } from '@/lib/leadAttribution';
+import { getLocale } from '@/i18n/server';
 
-// Pipeline stages that count as a successful outcome for conversion stats.
-const HIRED: string[] = ['HIRED_660', 'EMPLOYED_700'];
-
-// GET — all sources with mentee counts + conversion (hired) breakdown (admin).
+// GET — all sources with lead counts + conversion breakdown (admin).
+//
+// Both halves of the count come from a rule stated elsewhere, never from a
+// literal here (#2421): the finished stages are the TENANT's own set resolved by
+// `outcomeStageKeys()` (a hardcoded HIRED_660/EMPLOYED_700 reported 0% for every
+// source of an org on its own catalogue, #1882), and who may be counted toward a
+// source is src/lib/leadAttribution.ts.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const locale = await getLocale();
+
   return await withTenantScope(session, async () => {
+  const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
+  const outcome = await outcomeStageKeys(orgId, locale);
+
   const sources = await prisma.source.findMany({
     orderBy: { name: 'asc' },
     include: { _count: { select: { users: true } } },
   });
 
-  // For each source, how many of its mentees reached a "hired" stage.
+  // For each source, how many of its leads reached a finished stage.
   const hiredRows = await prisma.user.groupBy({
     by: ['sourceId'],
     where: {
-      role: 'MENTEE',
+      role: FUNNEL_LEAD_ROLE,
       sourceId: { not: null },
-      menteeRelations: { some: { pipelineStatus: { in: HIRED } } },
+      menteeRelations: { some: { pipelineStatus: { in: outcome.finished } } },
     },
     _count: { _all: true },
   });
