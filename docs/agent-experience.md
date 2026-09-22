@@ -7246,3 +7246,42 @@ belirli bir testid'le aramaktan daha güvenilir.
 - **Arka planda Playwright koşarken dosya düzenleme.** `next dev` anında yeniden derler,
   "Fast Refresh had to perform a full reload" client state'i siler ve alakasız testler
   `element(s) not found` ile düşer. Koşu bitmeden kaynak dosyaya dokunma.
+
+## 2026-09-22 — Marketing dikeyi backlog dalgası: paralel worktree'ler, env tuzağı, merge sırası
+
+- **`${VAR:-}` ile threadlenen bir env değişkeninde `??` yanlış operatördür.** `marketing.ersah.in`
+  prod'da aylardır internship landing'i gösteriyordu ve DNS/cert/Caddy'nin hepsi doğruydu.
+  `infra/deploy-prod.sh` her opsiyonel değişkeni `-e VAR="${VAR:-}"` ile geçiriyor, yani env
+  dosyasında **olmayan** bir değişken container'a **boş string** olarak iner. `process.env.X ?? D`
+  boş string'i geçerli değer sayar → `MARKETING_HOSTS` kümesi boş → host varsayılana düşer.
+  `.env.example` "prod'a değer gerekmez" diye söz veriyordu, kod tutmuyordu (#2428). Aynı desen
+  `deploy-prod.sh:137`'deki capture listesindeki her opsiyonel değişkende var. Doğru biçim:
+  `const v = process.env.X; const raw = v && v.trim() ? v : DEFAULT`.
+- **"DNS + cert + Caddy tamam" kesmenin bittiği anlamına gelmiyor.** `/api/health` her iki host'ta
+  da yeşildi ve hiçbir şey söylemedi. Tek geçerli kanıt sayfanın kendisi:
+  `curl -s https://<host>/ | grep -o '<title>[^<]*</title>'`.
+- **Paralel worktree kurarken `node_modules`'ü klonluyorsan kaynağın tam olduğundan emin ol.**
+  `cp -cR` ile kopyalanan eksik bir `node_modules` (yarım `npm install`) Playwright tiplerinin
+  **ana checkout'tan** çözülmesine yol açtı ve ~200 hayali `tsc` hatası üretti. Belirti: hata metni
+  iki farklı `node_modules/playwright-core` yolunu yan yana gösteriyor. Çare: kaynakta `npm ci`,
+  sonra klonları tazele.
+- **Base değişince `npx prisma generate`.** main'i bir dala merge ettikten sonra 18 `tsc` hatası
+  aldım; hepsi yeni merge edilmiş bir modelin (TrialReminder) bayat client'ta olmamasındandı.
+  CLAUDE.md bunu zaten yazıyor; merge sonrası da geçerli, yalnız branch değişiminde değil.
+- **N paralel dilim = N kere aynı liste dosyasında çakışma.** `package.json` scripts,
+  `.github/workflows/ci.yml` checks job'ı, `scripts/check-unit-coverage.mjs` FLOORS,
+  `verticalOverlays.ts`, `dictionaries.ts`, `prisma/schema.prisma`. Çoğu "iki tarafı da tut" ama
+  **tuttuğunu kanıtla**: `package.json` parse ediyor mu ve iki script de var mı, `ci.yml` parse
+  ediyor mu ve iki adım da listede mi, `prisma validate` geçiyor mu. Bu repo bir keresinde kör
+  birleştirmeyle bir Prisma modelinin kapanış parantezini yutmuştu.
+- **Gerçek çakışma bazen tasarım sorusudur, metin sorusu değil.** İki dal aynı iki route'a dokundu:
+  biri `authzScope` ile **hangi satır**, diğeri `companyVisibility` ile **hangi kolon** sorusunu
+  cevaplıyordu. Doğru çözüm ikisini de tutmak ve artık yanlış olan yorumları ("satır kapsamı henüz
+  yok — bkz. #2431") düzeltmekti; birini seçmek gerçek bir korumayı düşürürdü.
+- **Bir ajan dalgasını kesmek iş kaybettirmez, ama bunu sen sağlamalısın.** Kesilen dilimlerin
+  yarım işini `wip:` commit'i olarak commit'leyip push et ve devralan oturuma "bu bitmiş iş değil,
+  satır satır doğrula" diye yaz. Bir sonraki ajana verilen playbook'a "worktree'de `wip:` commit'i
+  bulabilirsin, onu kendi commit'lerine katla" adımını eklemek bunu ucuz hale getirdi.
+- **Usage limiti bir dalganın tamamını çöpe atabilir.** 7 ajanlık ilk koşu model kotası dolduğu için
+  hepsi birden düştü (iki kez, iki farklı modelde). Dilimleri 3-4'lük gruplara bölmek ve yarım işi
+  worktree'de bırakmak, ikinci denemede hiçbir şeyin sıfırdan başlamamasını sağladı.
