@@ -1856,6 +1856,12 @@ model ProjectTask {
   // Set when this to-do came from the shared pool: the text is read from the
   // template, in the reader's language, every time it is displayed.
   templateId  String?
+  // When it is meant to be finished (#2440). Nullable and nullable it stays: a
+  // to-do without a date is the normal case, so "overdue" is a claim only about
+  // the rows that carry one, and undated ones sort to the END of the list.
+  // Read as a CALENDAR DAY, never as an instant — src/lib/taskDue.ts is the one
+  // place that decides what "late" means.
+  dueDate     DateTime?
 
   project  Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee User?                @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
