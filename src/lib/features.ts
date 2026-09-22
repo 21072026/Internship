@@ -8,6 +8,27 @@
 // strings), newer entries use the `featureCatalog` block. Both namespaces are
 // server-only, so consumers must be server components (landing and /features
 // both are).
+//
+// CAPABILITY TAGS (#2500 for the landing grid, #2475 for the catalogue).
+// `capability` answers exactly one question: does this card's PROMISE still hold
+// for a vertical that does not have that module? Both readers — the landing's
+// featured grid and the /features catalogue — drop a card whose capability the
+// request's vertical lacks, so a marketing visitor is never sold mentors,
+// evaluations, placements or intern projects.
+//
+// A card that is true for EVERY vertical carries NO capability. That is the
+// default on purpose: the core CRM cards (pipeline, companies, messaging,
+// documents), the platform cards and the privacy cards must survive into every
+// vertical, and a catalogue where everything is tagged would make each new
+// vertical start from an almost empty page. Untagged is therefore a claim —
+// "this holds wherever coreCRM runs" — not an omission.
+//
+// Tag by what the card DESCRIBES, not by which module happens to ship it. The
+// career newsletter is delivered by `messaging`, which MARKETING has, but what
+// the card promises (CV and interview advice written for mentees) only exists
+// inside a mentoring programme, so it carries `mentorship`. Same for the pricing
+// card: the published price list has one metering unit, the active matched PAIR,
+// which is a statement about the internship product alone.
 
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -30,10 +51,9 @@ export interface Feature {
   color: string;
   // Featured entries render as the landing page's feature cards.
   featured?: boolean;
-  // The vertical capability this card advertises (#2500). The landing filters
-  // its featured grid by the host vertical's capability set, so a marketing
-  // visitor is not sold "Mentor self-service" or intern projects. Untagged =
-  // shown to every vertical. /features keeps showing the whole catalogue.
+  // The vertical capability this card's promise depends on — see the tagging
+  // rule at the top of this file (#2500/#2475). Untagged = shown to every
+  // vertical. Both the landing grid and /features filter on it.
   capability?: VerticalCapability;
   title: string;
   desc: string;
@@ -60,44 +80,44 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'platform', category: 'platform', icon: Sparkles, color: 'indigo', featured: true, title: L.fPlatformT, desc: L.fPlatformD },
     // Catalogue-only (newer features; strings in featureCatalog.items).
     { key: 'messaging', category: 'collaboration', icon: MessageCircle, color: 'blue', title: C.messaging.t, desc: C.messaging.d },
-    { key: 'activityReport', category: 'insights', icon: Activity, color: 'green', title: C.activityReport.t, desc: C.activityReport.d },
-    { key: 'menteeInsights', category: 'insights', icon: Eye, color: 'teal', title: C.menteeInsights.t, desc: C.menteeInsights.d },
-    { key: 'menteeOwnProject', category: 'collaboration', icon: FolderKanban, color: 'purple', title: C.menteeOwnProject.t, desc: C.menteeOwnProject.d },
-    { key: 'talentPool', category: 'companies', icon: Search, color: 'purple', title: C.talentPool.t, desc: C.talentPool.d },
-    { key: 'aiPackage', category: 'insights', icon: Bot, color: 'indigo', title: C.aiPackage.t, desc: C.aiPackage.d },
+    { key: 'activityReport', category: 'insights', icon: Activity, color: 'green', capability: 'mentorship', title: C.activityReport.t, desc: C.activityReport.d },
+    { key: 'menteeInsights', category: 'insights', icon: Eye, color: 'teal', capability: 'mentorship', title: C.menteeInsights.t, desc: C.menteeInsights.d },
+    { key: 'menteeOwnProject', category: 'collaboration', icon: FolderKanban, color: 'purple', capability: 'projects', title: C.menteeOwnProject.t, desc: C.menteeOwnProject.d },
+    { key: 'talentPool', category: 'companies', icon: Search, color: 'purple', capability: 'placements', title: C.talentPool.t, desc: C.talentPool.d },
+    { key: 'aiPackage', category: 'insights', icon: Bot, color: 'indigo', capability: 'mentorship', title: C.aiPackage.t, desc: C.aiPackage.d },
     { key: 'security', category: 'trust', icon: KeyRound, color: 'amber', title: C.security.t, desc: C.security.d },
-    { key: 'selfServe', category: 'tracking', icon: UserPlus, color: 'teal', title: C.selfServe.t, desc: C.selfServe.d },
-    { key: 'projectTeams', category: 'collaboration', icon: Users2, color: 'sky', title: C.projectTeams.t, desc: C.projectTeams.d },
-    { key: 'joinRequests', category: 'tracking', icon: Share2, color: 'rose', title: C.joinRequests.t, desc: C.joinRequests.d },
-    { key: 'mentorSelfApply', category: 'tracking', icon: GraduationCap, color: 'blue', title: C.mentorSelfApply.t, desc: C.mentorSelfApply.d },
+    { key: 'selfServe', category: 'tracking', icon: UserPlus, color: 'teal', capability: 'mentorship', title: C.selfServe.t, desc: C.selfServe.d },
+    { key: 'projectTeams', category: 'collaboration', icon: Users2, color: 'sky', capability: 'projects', title: C.projectTeams.t, desc: C.projectTeams.d },
+    { key: 'joinRequests', category: 'tracking', icon: Share2, color: 'rose', capability: 'projects', title: C.joinRequests.t, desc: C.joinRequests.d },
+    { key: 'mentorSelfApply', category: 'tracking', icon: GraduationCap, color: 'blue', capability: 'mentorship', title: C.mentorSelfApply.t, desc: C.mentorSelfApply.d },
     { key: 'calendar', category: 'collaboration', icon: CalendarDays, color: 'indigo', title: C.calendar.t, desc: C.calendar.d },
-    { key: 'todos', category: 'collaboration', icon: ListChecks, color: 'green', title: C.todos.t, desc: C.todos.d },
-    { key: 'dualRole', category: 'collaboration', icon: Sprout, color: 'purple', title: C.dualRole.t, desc: C.dualRole.d },
+    { key: 'todos', category: 'collaboration', icon: ListChecks, color: 'green', capability: 'mentorship', title: C.todos.t, desc: C.todos.d },
+    { key: 'dualRole', category: 'collaboration', icon: Sprout, color: 'purple', capability: 'mentorship', title: C.dualRole.t, desc: C.dualRole.d },
     { key: 'timezones', category: 'platform', icon: Globe, color: 'sky', title: C.timezones.t, desc: C.timezones.d },
-    { key: 'offers', category: 'tracking', icon: Briefcase, color: 'orange', title: C.offers.t, desc: C.offers.d },
-    { key: 'weeklyReports', category: 'tracking', icon: NotebookPen, color: 'teal', title: C.weeklyReports.t, desc: C.weeklyReports.d },
-    { key: 'requisitions', category: 'companies', icon: BriefcaseBusiness, color: 'purple', title: C.requisitions.t, desc: C.requisitions.d },
-    { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', title: C.interviewRequests.t, desc: C.interviewRequests.d },
+    { key: 'offers', category: 'tracking', icon: Briefcase, color: 'orange', capability: 'placements', title: C.offers.t, desc: C.offers.d },
+    { key: 'weeklyReports', category: 'tracking', icon: NotebookPen, color: 'teal', capability: 'evaluations', title: C.weeklyReports.t, desc: C.weeklyReports.d },
+    { key: 'requisitions', category: 'companies', icon: BriefcaseBusiness, color: 'purple', capability: 'placements', title: C.requisitions.t, desc: C.requisitions.d },
+    { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', capability: 'placements', title: C.interviewRequests.t, desc: C.interviewRequests.d },
     { key: 'videoCalls', category: 'collaboration', icon: Video, color: 'green', title: C.videoCalls.t, desc: C.videoCalls.d },
     { key: 'externalGuests', category: 'collaboration', icon: UserPlus, color: 'amber', title: C.externalGuests.t, desc: C.externalGuests.d },
     { key: 'demo', category: 'platform', icon: FlaskConical, color: 'amber', title: C.demo.t, desc: C.demo.d },
-    { key: 'publicProfiles', category: 'platform', icon: Share2, color: 'blue', title: C.publicProfiles.t, desc: C.publicProfiles.d },
-    { key: 'stories', category: 'trust', icon: Quote, color: 'rose', title: C.stories.t, desc: C.stories.d },
-    { key: 'newsletter', category: 'collaboration', icon: MailOpen, color: 'indigo', title: C.newsletter.t, desc: C.newsletter.d },
+    { key: 'publicProfiles', category: 'platform', icon: Share2, color: 'blue', capability: 'mentorship', title: C.publicProfiles.t, desc: C.publicProfiles.d },
+    { key: 'stories', category: 'trust', icon: Quote, color: 'rose', capability: 'evaluations', title: C.stories.t, desc: C.stories.d },
+    { key: 'newsletter', category: 'collaboration', icon: MailOpen, color: 'indigo', capability: 'mentorship', title: C.newsletter.t, desc: C.newsletter.d },
     { key: 'inviteLinks', category: 'tracking', icon: Link2, color: 'teal', title: C.inviteLinks.t, desc: C.inviteLinks.d },
     { key: 'invitationBoard', category: 'tracking', icon: MailCheck, color: 'blue', title: C.invitationBoard.t, desc: C.invitationBoard.d },
-    { key: 'outcomeComms', category: 'trust', icon: MessageSquareHeart, color: 'rose', title: C.outcomeComms.t, desc: C.outcomeComms.d },
+    { key: 'outcomeComms', category: 'trust', icon: MessageSquareHeart, color: 'rose', capability: 'placements', title: C.outcomeComms.t, desc: C.outcomeComms.d },
     { key: 'emailGroups', category: 'trust', icon: MailMinus, color: 'teal', title: C.emailGroups.t, desc: C.emailGroups.d },
     { key: 'trustedDevices', category: 'trust', icon: Fingerprint, color: 'indigo', title: C.trustedDevices.t, desc: C.trustedDevices.d },
-    { key: 'dormantCheckIn', category: 'tracking', icon: MailQuestion, color: 'amber', title: C.dormantCheckIn.t, desc: C.dormantCheckIn.d },
+    { key: 'dormantCheckIn', category: 'tracking', icon: MailQuestion, color: 'amber', capability: 'mentorship', title: C.dormantCheckIn.t, desc: C.dormantCheckIn.d },
     { key: 'trustCenter', category: 'trust', icon: ScrollText, color: 'sky', title: C.trustCenter.t, desc: C.trustCenter.d },
-    { key: 'matchQuality', category: 'insights', icon: Target, color: 'blue', title: C.matchQuality.t, desc: C.matchQuality.d },
+    { key: 'matchQuality', category: 'insights', icon: Target, color: 'blue', capability: 'mentorship', title: C.matchQuality.t, desc: C.matchQuality.d },
     { key: 'accessibility', category: 'trust', icon: Accessibility, color: 'sky', title: C.accessibility.t, desc: C.accessibility.d },
     { key: 'multiTenancy', category: 'platform', icon: Building2, color: 'purple', title: C.multiTenancy.t, desc: C.multiTenancy.d },
     { key: 'whiteLabel', category: 'platform', icon: Palette, color: 'rose', title: C.whiteLabel.t, desc: C.whiteLabel.d },
     { key: 'enterpriseSso', category: 'trust', icon: KeyRound, color: 'indigo', title: C.enterpriseSso.t, desc: C.enterpriseSso.d },
     { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
-    { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', title: C.rematch.t, desc: C.rematch.d },
-    { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', title: C.pricing.t, desc: C.pricing.d },
+    { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
+    { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
   ];
 }

@@ -137,6 +137,21 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         featuresTitle: 'Everything your team needs to close',
         featuresSubtitle: 'Purpose-built for tracking customers and moving deals forward.',
       },
+      // The public feature catalogue (#2475). `/features` renders whatever
+      // getFeatures() returns for this vertical; the cards themselves are
+      // filtered by capability in src/lib/features.ts, and what is left here is
+      // the frame plus the three core cards whose wording still said
+      // "mentor"/"mentee" although the feature itself is core CRM.
+      featureCatalog: {
+        title: 'Everything SaleVali can do',
+        subtitle: 'The full feature catalogue — from first contact to a closed deal, for your whole team.',
+        categories: { collaboration: 'Working together' },
+        items: {
+          videoCalls: { d: 'Start a call with a lead, an account team or a chat in one click and hold it in a side panel next to their record, on our own Jitsi tenant — no accounts, no install, and no time limit. If a call has to fall back to the free public room, the panel says so before anyone joins, with a one-click way to keep talking. The link is emailed to everyone invited and works in any browser.' },
+          externalGuests: { d: 'A meeting is not always only your own team. Type any email address into the scheduler and that person is invited to the same room with the same Yes/No buttons — no account, no sign-up, and an .ics for their own calendar. You see who accepted, and an invitation sent to the wrong address can be withdrawn, which stops its link working.' },
+          inviteLinks: { d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away, and a private note keeps a wall of links legible.' },
+        },
+      },
     },
     tr: {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
@@ -225,6 +240,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         featuresTitle: 'Kapatmak için ekibinin ihtiyacı olan her şey',
         featuresSubtitle: 'Müşterileri takip etmek ve anlaşmaları ilerletmek için tasarlandı.',
       },
+      featureCatalog: {
+        title: 'SaleVali neler yapabilir',
+        subtitle: 'Tüm özellik kataloğu — ilk temastan kapanan anlaşmaya, tüm ekibiniz için.',
+        categories: { collaboration: 'Birlikte çalışma' },
+        items: {
+          videoCalls: { d: 'Bir müşteri adayı, firma ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kaydın yanındaki yan panelde kendi Jitsi kiracımızda açılır — hesap yok, kurulum yok, süre sınırı yok. Görüşme ücretsiz herkese açık odaya düşmek zorunda kalırsa panel bunu kimse katılmadan önce söyler ve konuşmayı sürdürmenin tek tıklık yolunu verir. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
+          externalGuests: { d: 'Bir toplantı her zaman yalnızca kendi ekibinizden ibaret değildir. Planlayıcıya herhangi bir e-posta adresi yaz; o kişi aynı odaya, aynı Evet/Hayır butonlarıyla davet edilsin — hesap yok, kayıt yok, kendi takvimi için .ics var. Kimin kabul ettiğini görürsün ve yanlış adrese giden bir davet geri alınabilir; bağlantısı da o anda çalışmayı bırakır.' },
+          inviteLinks: { d: 'Adresini bilmediğin birini davet et: alanı boş bırak, elden verebileceğin tek kullanımlık ve 7 gün geçerli bir bağlantı üretilsin. Bağlantıyla kaydolan kişi doğrudan gönderene bağlanır ve özel bir not, birbirine benzeyen bağlantıları ayırt edilebilir kılar.' },
+        },
+      },
     },
     de: {
       nav: { candidates: 'Leads' },
@@ -310,6 +335,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroSubtitle: 'Verfolgen Sie Ihre Kunden vom ersten Kontakt bis zum Abschluss. Sehen Sie auf einen Blick, wo jeder Deal steht, wer ihn zuletzt bearbeitet hat und was als Nächstes zu tun ist — statt es aus einer Tabelle zusammenzusuchen.',
         featuresTitle: 'Alles, was Ihr Team zum Abschluss braucht',
         featuresSubtitle: 'Entwickelt, um Kunden zu verfolgen und Deals voranzutreiben.',
+      },
+      featureCatalog: {
+        title: 'Alles, was SaleVali kann',
+        subtitle: 'Der vollständige Funktionskatalog — vom Erstkontakt bis zum Abschluss, für Ihr ganzes Team.',
+        categories: { collaboration: 'Zusammenarbeit' },
+        items: {
+          videoCalls: { d: 'Starte mit einem Klick einen Anruf mit einem Lead, einem Account-Team oder einem Chat — er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Muss ein Anruf auf den freien öffentlichen Raum ausweichen, sagt das Panel das, bevor jemand beitritt, samt Ein-Klick-Weg zum Weiterreden. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
+          externalGuests: { d: 'Ein Meeting besteht nicht immer nur aus dem eigenen Team. Tippe eine beliebige E-Mail-Adresse in die Planung, und diese Person ist im selben Raum eingeladen — mit denselben Ja/Nein-Buttons, ohne Konto, ohne Registrierung und mit .ics für den eigenen Kalender. Du siehst, wer zugesagt hat, und eine an die falsche Adresse gegangene Einladung lässt sich zurückziehen; ihr Link funktioniert dann nicht mehr.' },
+          inviteLinks: { d: 'Lade jemanden ein, dessen Adresse du nicht kennst: Feld leer lassen, und es entsteht ein einmalig gültiger 7-Tage-Link zum persönlichen Übergeben. Wer sich damit registriert, ist sofort mit der einladenden Person verbunden — und eine private Notiz hält eine Wand aus Links unterscheidbar.' },
+        },
       },
     },
   },
