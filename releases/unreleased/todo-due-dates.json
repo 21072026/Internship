@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "- **A to-do can carry a due date, and a late one says so** (#2440, story #2397). New nullable `ProjectTask.dueDate`: `/api/todos` orders by it ascending with NULLS LAST (undated to-dos sort to the end instead of burying the dated ones), `POST /api/todos` and `PATCH /api/project-tasks/[id]` accept `YYYY-MM-DD` or an ISO instant (null clears it), and the date is set from the add box, the mentor's \"give it\" box and the row's edit mode. What \"late\" means lives in one dependency-free, unit-tested module, `src/lib/taskDue.ts`: a CALENDAR-DAY comparison, so a to-do due today at 09:00 is not late in the afternoon, and the stored value names a UTC day while \"today\" is the reader's own — only a day strictly before today is overdue. The row's chip reuses `StageClockChip`'s tones (red overdue, amber due-today, grey upcoming) and always carries the words as well as the tone (WCAG 1.4.1), with a counter tile above the list. `/api/todos?scope=team` answers the same list for everyone the reader may reach — ADMIN their organisation, MENTOR their own mentees, anyone else 403 — on the existing to-dos page rather than a second one, and keeps the list's privacy rule: a line somebody wrote for themselves is not on anybody else's screen. The daily activity digest gained an overdue block that rides along with the mail already going out (no new send, no new recipient).",
+  "notes": {
+    "en": [
+      "To-dos can now have a due date. Late ones are marked “Overdue” — in words, not just in red — and a counter shows how many; a to-do due today is not late. Undated to-dos sit at the end of the list.",
+      "Mentors and admins can see one list of everything their people are carrying, on the same to-dos page."
+    ],
+    "tr": [
+      "Yapılacaklara artık bitiş tarihi verilebiliyor. Geciken maddeler “Gecikti” yazısıyla — yalnızca renkle değil — işaretleniyor ve kaç tane olduğu sayılıyor; bugün biten bir madde gecikmiş sayılmıyor. Tarihsiz maddeler listenin sonunda duruyor.",
+      "Mentorlar ve yöneticiler sorumlu oldukları kişilerin tüm yapacağını aynı sayfada tek listede görebiliyor."
+    ],
+    "de": [
+      "Aufgaben können jetzt ein Fälligkeitsdatum haben. Überfällige werden als „Überfällig“ ausgewiesen — als Text, nicht nur in Rot — und gezählt; heute fällig heißt nicht zu spät. Aufgaben ohne Datum stehen am Ende der Liste.",
+      "Mentorinnen, Mentoren und Admins sehen auf derselben Seite eine Liste mit allem, was ihre Leute offen haben."
+    ]
+  }
+}
