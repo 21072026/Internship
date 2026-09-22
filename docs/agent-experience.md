@@ -7196,3 +7196,30 @@ worker'lı yerel bir çalıştırmada hiç tetiklenmiyor. #2509'u #2479'un (ayn�
 tek bir issue'yla örtüşmüyor" ikisi birlikte bile "yeni ve izole" anlamına gelmiyor — önce
 `resolved to 2 elements` / `strict mode violation` gibi **belirti imzasıyla** arama yapmak,
 belirli bir testid'le aramaktan daha güvenilir.
+
+## 2026-09-22 — Yetim satırı kapatan taraf ile açık bırakan taraf aynı modelde olabilir (#2503)
+
+- **"Bu modelin yetim hâli fail-closed" diye bakıp geçme — modeli okuyan HER yol aynı yardımcıyı
+  çağırmıyor olabilir.** #2487'den sonra `SetNull` olan ikinci çocuğa (`Conversation`) bakıldı.
+  Mesajlaşma tarafı gerçekten kapalıydı: `getConversationIfAllowed` ve `canPostToConversation`
+  projesi silinmiş bir GROUP odasını herkese (admin dahil) reddediyor. Ama
+  `resolveMeetingContext`'in CONVERSATION dalı `Conversation` satırını **hiç yüklemiyordu** —
+  doğrudan `conversationParticipant` sorguluyordu, dolayısıyla `type`/`projectId` görmüyordu.
+  Sonuç: okuma 403, yazma 403, **görüşme başlatma 201** — üstelik kimsenin yazamadığı akışa
+  mesaj düşürüyor ve tüm eski katılımcılara davet maili gidiyor. Ders: yetki kontrolünü
+  "modelin yardımcıları fail-closed mı" diye değil, **`grep -rn 'prisma.<childTable>.findMany'`
+  ile yardımcıyı ATLAYAN sorguları arayarak** doğrula. Ebeveyn satırını hiç okumayan bir çocuk
+  tablo sorgusu, ebeveyne bağlı her kuralı sessizce atlar.
+- **Bir davranışı düzeltirken "bu testi bozdum" ile "bu test hatayı kural sanıyordu"yu ayır.**
+  `instant-meeting-team.spec.ts`'teki bir test **projesiz** GROUP odası kurup 201 bekliyordu;
+  yani tam olarak bulduğum açığı doğru davranış diye çiviliyordu. Aynı dosyadaki kardeş test
+  ise yorumunda tersini yazıyor ("A GROUP conversation is only ever a project's room in this
+  app"). Repo kendi değişmez kuralını bir testte belgeleyip başka bir testte ihlal ediyorsa,
+  düzeltilecek olan testtir — ama bunu PR'da açıkça söyle, yoksa "fix'ini geçirmek için testi
+  değiştirmiş" gibi görünür.
+- **`ERR_CONNECTION_REFUSED` ile gelen toplu e2e kırmızısı senin değişikliğin değildir.** Arka
+  planda bıraktığın önceki Playwright koşusunun `webServer`'ı port 3000'i tutup ölürken yenisi
+  adopte edemiyor; değişiklikle alakasız specler (ilişki yolundaki instant-meeting testleri
+  bile) düşüyor. Yeni koşudan önce `lsof -nP -iTCP:3000 -sTCP:LISTEN -t | xargs -r kill -9`.
+  Hata metnini oku: `TimeoutError ... account-menu-button` = ortam/secret sorunu,
+  `ERR_CONNECTION_REFUSED` = sunucu hiç ayakta değil; ikisi de kod değil.
