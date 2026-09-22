@@ -5,8 +5,9 @@ import { signInAndSettle } from './helpers/auth';
 // Vertical write-path gate (#2352, epic #2348). Hiding a module from the nav
 // (#2351) is not access control — the route is still reachable by a direct POST.
 // A mutating handler for a mentorship-specific module now calls
-// requireCapability() first, so a MARKETING org (no mentorship/evaluations
-// module) is refused with 403 code:capability_unavailable, whatever the role.
+// requireCapability() first, so a MARKETING org (no mentorship/evaluations/
+// projects/placements module) is refused with 403 code:capability_unavailable,
+// whatever the role.
 // INTERNSHIP carries every capability, so every handler behaves as before —
 // asserted by the INTERNSHIP case landing on a normal validation path, not a 403.
 
@@ -42,6 +43,22 @@ const GATED = [
   { path: '/api/projects/00000000-0000-0000-0000-000000000000/task-templates', cap: 'projects' },
   { path: '/api/projects/00000000-0000-0000-0000-000000000000/tasks', cap: 'projects' },
   { path: '/api/meeting-series', cap: 'projects' },
+  // Placements (#2364): offers, requisitions, interview requests and panel
+  // creation/roster/lifecycle. MARKETING does not carry 'placements', so every
+  // mutating handler refuses BEFORE its own role check — which is why the
+  // COMPANY-only interview-request POST still answers capability_unavailable to
+  // this admin. The id-bearing gates run before the row lookup, so a dummy id
+  // reaches them; PATCH handlers are exercised with their real method.
+  { path: '/api/offers', cap: 'placements' },
+  { path: '/api/offers/00000000-0000-0000-0000-000000000000', cap: 'placements', method: 'PATCH' },
+  { path: '/api/requisitions', cap: 'placements' },
+  { path: '/api/requisitions/00000000-0000-0000-0000-000000000000', cap: 'placements', method: 'PATCH' },
+  { path: '/api/interview-requests', cap: 'placements' },
+  { path: '/api/interview-requests/00000000-0000-0000-0000-000000000000', cap: 'placements', method: 'PATCH' },
+  { path: '/api/interview-panels', cap: 'placements' },
+  { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000', cap: 'placements', method: 'PATCH' },
+  { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000/close', cap: 'placements' },
+  { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000/reopen', cap: 'placements' },
 ];
 
 async function adminIn(vertical: 'INTERNSHIP' | 'MARKETING') {
@@ -55,15 +72,15 @@ async function adminIn(vertical: 'INTERNSHIP' | 'MARKETING') {
   return { org, email };
 }
 
-test('a MARKETING org is refused at every mentorship write path with capability_unavailable', async ({ page }) => {
+test('a MARKETING org is refused at every gated write path with capability_unavailable', async ({ page }) => {
   const { org, email } = await adminIn('MARKETING');
   try {
     await signInAndSettle(page, email, 'WGatePass123', '/admin');
-    for (const { path } of GATED) {
+    for (const { path, method } of GATED) {
       // A deliberately empty body: the gate runs before validation, so a gated
       // vertical never even reaches the 400. Proves the gate is FIRST.
-      const res = await page.request.post(path, { data: {} });
-      expect(res.status(), `${path} should be gated`).toBe(403);
+      const res = await page.request.fetch(path, { method: method ?? 'POST', data: {} });
+      expect(res.status(), `${method ?? 'POST'} ${path} should be gated`).toBe(403);
       const body = await res.json();
       expect(body.code, `${path} body.code`).toBe('capability_unavailable');
     }
@@ -77,8 +94,8 @@ test('an INTERNSHIP org is NOT gated — the same posts pass the capability chec
   const { org, email } = await adminIn('INTERNSHIP');
   try {
     await signInAndSettle(page, email, 'WGatePass123', '/admin');
-    for (const { path } of GATED) {
-      const res = await page.request.post(path, { data: {} });
+    for (const { path, method } of GATED) {
+      const res = await page.request.fetch(path, { method: method ?? 'POST', data: {} });
       // INTERNSHIP carries every capability, so the gate is a no-op: the empty
       // body falls through to the handler's own validation/authorization, which
       // is anything BUT capability_unavailable (400 validation, 403 role, etc.).

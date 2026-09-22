@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import type { Prisma } from '@prisma/client';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -69,6 +70,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const scope = authScope(await getServerSession(authOptions));
   if ('error' in scope) return scope.error;
+  // A requisition is the placement module's demand side (#2364): a vertical
+  // without 'placements' is refused before validation and before any write.
+  const capGate = await requireCapability(scope.session.user.orgId, 'placements');
+  if (capGate) return capGate;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);
     const protectedList = protectedFields(body);

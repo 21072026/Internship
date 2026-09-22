@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -15,6 +16,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Placement write (#2364).
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const { id } = await params;

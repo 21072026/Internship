@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -35,6 +36,9 @@ export async function PATCH(request: Request, { params }: Context) {
   const { id } = await params;
   const scope = scopeFor(await getServerSession(authOptions));
   if ('error' in scope) return scope.error;
+  // Placement write (#2364).
+  const capGate = await requireCapability(scope.session.user.orgId, 'placements');
+  if (capGate) return capGate;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);
     const protectedList = protectedFields(body);

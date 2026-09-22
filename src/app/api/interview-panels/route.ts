@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -27,6 +28,10 @@ export async function POST(request: Request) {
   if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Convening a panel is a placement write (#2364); SCORING one stays under
+  // 'evaluations' (#2352, [id]/score) because it writes Evaluation rows.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => ({})));
