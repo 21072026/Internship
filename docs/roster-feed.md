@@ -23,6 +23,12 @@ ones to preserve if you change any of it.
 There is **one** parser and **one** dry-run engine in the tree. A second of either is the
 bug this design exists to prevent — see below.
 
+The roster feed is the engine's first consumer, not its only one. The **marketing account
+import** (#2391) is the second: same `runImport`, same parser, its own four hooks in
+`src/lib/marketingImport.ts` / `src/lib/marketingImportStore.ts`, its column contract in
+[`marketing-import.md`](marketing-import.md). Read that one for the worked example of
+adding a consumer.
+
 ## The two properties that matter
 
 **1. The dry run is honest.** A dry run is the same call with a writer that does not write

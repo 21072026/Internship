@@ -1,0 +1,5 @@
+name,legal_name,country,city,vat_id,website,industry,locale,stage,source,monthly_transactions,mrr,owner_email,channels,contact_name,contact_email,contact_phone
+Nordlicht Handel GmbH,Nordlicht Handel GmbH,DE,Hamburg,DE811234567,https://nordlicht.example,Retail,de,LEAD_QUALIFIED,Messe,420,"1.250,00",,Amazon;eBay;OTTO,Lena Sommer,lena.sommer@nordlicht.example,+49 40 1234567
+İstanbul Tekstil A.Ş.,İstanbul Tekstil Sanayi ve Ticaret A.Ş.,TR,İstanbul,,https://ist-tekstil.example,Textile,tr,LEAD_CONTACTED,Referans,90,"0,00",,Shopify,Ayşe Yıldız,ayse.yildiz@ist-tekstil.example,+90 555 123 45 67
+Depot Nord Logistik GmbH,,DE,Kiel,DE999888777,https://depot-nord.example,Logistics,de,DEAL_WON,Empfehlung,1200,"3.400,00",,WooCommerce,,,
+Grüße Süßwaren GmbH,Grüße Süßwaren GmbH,AT,Wien,ATU12345678,https://gruesse.example,Food,de,DEAL_PROPOSAL,Webformular,75,"149,00",,Shopify;Amazon,Jonas Bauer,jonas.bauer@gruesse.example,+43 1 2345678
