@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { andScope, logScopeDenial, scopeForRole } from '@/lib/authzScope';
 import {
   REQUISITION_LIMITS, REQUISITION_STATUSES, closedAtForStatus, normalizeSkills,
   protectedFields, requisitionInputSchema, validateRequisitionOwner,
@@ -37,6 +38,16 @@ export async function GET(request: Request) {
     if (status && !REQUISITION_STATUSES.includes(status as (typeof REQUISITION_STATUSES)[number])) {
       return NextResponse.json({ error: 'Invalid status', code: 'invalid_status' }, { status: 400 });
     }
+    // The company picker in this payload is a Company read, so it takes the
+    // `company` scope from authzScope.ts (#2431) instead of a hand-rolled
+    // `role === 'COMPANY'` filter: ADMIN → `{}` (unchanged), COMPANY → its own
+    // row. `authScope()` above already refused every other role, so `null`
+    // here is a defect, and it fails closed like everywhere else.
+    const companyScope = await scopeForRole(scope.session.user, 'company');
+    if (!companyScope) {
+      await logScopeDenial(scope.session.user, 'GET /api/requisitions');
+      return NextResponse.json({ error: 'Forbidden', code: 'forbidden' }, { status: 403 });
+    }
     const where: Prisma.RequisitionWhereInput = {
       orgId: scope.orgId,
       ...(scope.session.user.role === 'COMPANY'
@@ -53,7 +64,7 @@ export async function GET(request: Request) {
       }),
       prisma.requisition.count({ where }),
       prisma.company.findMany({
-        where: { orgId: scope.orgId, ...(scope.session.user.role === 'COMPANY' ? { id: scope.session.user.companyId! } : {}) },
+        where: andScope(companyScope, { orgId: scope.orgId }),
         select: { id: true, name: true }, orderBy: { name: 'asc' },
       }),
       prisma.user.findMany({
