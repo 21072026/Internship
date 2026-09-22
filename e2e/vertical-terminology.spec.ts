@@ -93,7 +93,7 @@ async function seedFunnelFixture(orgId: string, vertical: string, personPrefix: 
       pipelineStatus: stages[0]?.key ?? 'APPLICATION_100',
     },
   });
-  return { companyId: company.id, emails: [ownerEmail, personEmail] };
+  return { companyId: company.id, ownerId: owner.id, emails: [ownerEmail, personEmail] };
 }
 
 async function teardown(orgId: string, emails: string[], companyId?: string) {
@@ -140,6 +140,24 @@ test('a MARKETING admin reads deal language on /admin/companies — and no mento
     await expect(page.getByText('1 needs', { exact: true })).toBeVisible();
     await expect(page.getByText('Open needs', { exact: true })).toBeVisible();
     expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+
+    // The page's own two dialogs are part of the page, and a negative assertion
+    // that never opens them proves nothing about them: the create/edit form
+    // (this button, and the day-one empty state's CTA) said "Internship Quota"
+    // / "Internship Needs", and the premium-features modal behind the Sparkles
+    // button on every card said "Mentor and mentee features are always free".
+    await page.getByRole('button', { name: 'Add company', exact: true }).click();
+    await expect(page.locator('#company-form-title')).toBeVisible();
+    await expect(page.getByText('Account needs', { exact: true })).toBeVisible();
+    await expect(page.getByText('Need quota', { exact: true })).toBeVisible();
+    expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.locator('#company-form-title')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Premium features', exact: true }).first().click();
+    await expect(page.locator('#company-entitlements-title')).toBeVisible();
+    await expect(page.getByText('Rep and lead features are always free')).toBeVisible();
+    expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
   } finally {
     await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
   }
@@ -154,6 +172,13 @@ test('an INTERNSHIP admin still reads the original /admin/companies strings (#24
     await expect(page.getByText('Manage partner companies and their internship needs')).toBeVisible();
     await expect(page.getByText('1 mentorships', { exact: true })).toBeVisible();
     await expect(page.getByText('Open positions', { exact: true })).toBeVisible();
+    // The mirror of the two dialogs above: unchanged for today's product.
+    await page.getByRole('button', { name: 'Add company', exact: true }).click();
+    await expect(page.getByText('Internship Needs', { exact: true })).toBeVisible();
+    await expect(page.getByText('Internship Quota', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('button', { name: 'Premium features', exact: true }).first().click();
+    await expect(page.getByText('Mentor and mentee features are always free')).toBeVisible();
   } finally {
     await teardown(intn.org.id, [intn.email, ...fixture.emails], fixture.companyId);
   }
@@ -177,6 +202,15 @@ test('a MARKETING admin reads funnel language on the board — and no mentorship
     // Stage names come from MARKETING_FUNNEL itself, not from an overlay.
     await expect(page.getByTestId('board-column-title-LEAD_NEW')).toHaveText('New lead');
     expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+
+    // Every card's owner chip opens a PersonHoverCard that announces the
+    // person's role. It is mounted only while open, so the assertion above
+    // cannot see it however long it looks — and it read "Mentor" until #2427.
+    await page.getByTestId(`person-trigger-${fixture.ownerId}`).click();
+    const card = page.getByTestId('person-card');
+    await expect(card).toBeVisible();
+    await expect(card.getByText('Rep', { exact: true })).toBeVisible();
+    expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
   } finally {
     await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
   }
@@ -194,6 +228,8 @@ test('an INTERNSHIP admin still reads the original board strings (#2427)', async
     ).toBeVisible();
     await expect(page.getByTestId('board-search')).toHaveAttribute('placeholder', 'Find a mentee or mentor...');
     await expect(page.getByText('Pre-internship', { exact: true })).toBeVisible();
+    await page.getByTestId(`person-trigger-${fixture.ownerId}`).click();
+    await expect(page.getByTestId('person-card').getByText('Mentor', { exact: true })).toBeVisible();
   } finally {
     await teardown(intn.org.id, [intn.email, ...fixture.emails], fixture.companyId);
   }
