@@ -46,6 +46,25 @@ export const TEXT_LIMITS = {
   companyContactEmail: 191,
   /** Company.size — VARCHAR(191); the field holds a bracket label ("11-50") */
   companySize: 40,
+  /**
+   * Company.contactName — VARCHAR(191). The primary contact on an account
+   * (#2407); a person's name, so the same bound as every other name column.
+   */
+  companyContactName: 191,
+  /**
+   * Company.contactPhone — VARCHAR(191). Capped far below the column, like
+   * `companySize`: the longest E.164 number is 15 digits, and everything past
+   * ~40 characters with separators and an extension is a paste, not a number.
+   */
+  companyContactPhone: 40,
+  /**
+   * Company.vatId — VARCHAR(191). The longest VAT identification number in the
+   * EU scheme is 14 characters after the country prefix; 64 leaves room for a
+   * non-EU tax id without letting a pasted paragraph reach the match key.
+   */
+  companyVatId: 64,
+  /** Company.country — VARCHAR(2): an ISO-3166-1 alpha-2 code, nothing else. */
+  companyCountry: 2,
   /** CompanyNeed.position — VARCHAR(191) */
   companyNeedPosition: 191,
   /** CompanyNeed.period — VARCHAR(191) */

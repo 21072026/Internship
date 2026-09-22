@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **A call can no longer be started in a group room whose project was deleted** (#2503, following #2487 for `MeetingSeries`). `Conversation.projectId` is nullable with `onDelete: SetNull`, so a project's GROUP room outlives the project as an orphan while every `ConversationParticipant` row survives — the project-delete path never prunes them. The messaging layer is fail-closed on that orphan for everyone (`getConversationIfAllowed` and `canPostToConversation` both refuse a GROUP with no `projectId`, admins included), but `resolveMeetingContext`'s CONVERSATION branch queried `conversationParticipant` directly and never loaded the `Conversation` row, so it never saw `type` or `projectId`: reading the room and posting to it answered 403 while `POST /api/meetings/instant` answered 201, created the `Meeting`, wrote the \"📹 … started a meeting\" line into the very thread nobody may post to (#1055), and mailed an invite to every historical participant. Starting a call in a chat *writes* into that chat, so the rule for starting one is now the rule for writing one: the branch authorizes through `getConversationIfAllowed` + `canPostToConversation` rather than its own participant lookup. `canPostToConversation` already requires participation, so the replaced check is subsumed, not dropped — a non-participant is still refused, admin or otherwise. Two specs in `e2e/instant-meeting-team.spec.ts` built **projectless** GROUP rooms, a state the app's own invariant does not allow (its free-room test says so in a comment); both are now project-backed, so each fails for the reason it names, and a regression case covers the orphan end to end. The capability-gate half of the same endpoint is tracked separately in #2504.",
+  "notes": {
+    "en": [
+      "When a project is deleted, its group chat is now fully closed: nobody can read it, post to it, or start a video call in it."
+    ],
+    "tr": [
+      "Bir proje silindiğinde grup sohbeti artık tamamen kapanıyor: kimse okuyamıyor, yazamıyor ve içinde görüntülü görüşme başlatamıyor."
+    ],
+    "de": [
+      "Wenn ein Projekt gelöscht wird, ist sein Gruppenchat jetzt vollständig geschlossen: Niemand kann ihn lesen, darin schreiben oder einen Videoanruf darin starten."
+    ]
+  }
+}

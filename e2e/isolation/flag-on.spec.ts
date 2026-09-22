@@ -13,8 +13,10 @@ import { seedTwoTenants, signInAsTenantActor, type TwoTenants } from '../helpers
  * flag is on.
  *
  * `GET /api/companies` is that behaviour. The handler runs
- * `prisma.company.findMany()` with no `where` at all, inside
- * `withTenantScope(session, …)`. `Company` is registered in `TENANT_MODELS`, so:
+ * `prisma.company.findMany()` inside `withTenantScope(session, …)` with the
+ * caller's role scope as its `where` — and this spec signs in as an ADMIN,
+ * whose `company` scope is `{}` (#2431), so the query still carries no filter
+ * of its own. `Company` is registered in `TENANT_MODELS`, so:
  *
  *   flag ON   the middleware injects the caller's orgId → tenant A's admin sees
  *             tenant A's company and not tenant B's;

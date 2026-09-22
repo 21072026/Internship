@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Company records are role-scoped** (#2396: #2429, #2430, #2431, #2432). `GET /api/companies` and `GET /api/companies/[id]` stopped at `if (!session)`, so every signed-in role — MENTEE and SOURCE included — read every company in the tenant, `contactEmail` and address included. `authzScope.ts` gains a `company` resource (ADMIN all, COMPANY its own row, MENTOR the companies of relations it is named in; MENTEE/SOURCE have no builder → 403 + `authz.scope_denied`), the two routes and the requisitions company picker read it, the detail route's nested relations and the list route's `_count.mentorships` follow the `relation` scope, and `docs/role-access-matrix.md` gets the MARKETING section that decides all five frozen roles. `GET /api/mentorship/[id]` also stops handing the relation's mentor and mentee the whole `Company` row (`contactEmail`, `address`, `description`, `quota`) and selects `{ id, name, industry }` like every other indirect reader. Locked by two new rows in `e2e/fixtures/authz-matrix.ts`, a named case per scoped role and a per-role unit test.",
+  "notes": {
+    "en": ["Company records are now visible only to the roles that need them: admins see all, a company account sees its own record, a mentor sees the companies of their own relations. Mentee and partner-source accounts can no longer list companies."],
+    "tr": ["Firma kayıtları artık yalnızca ihtiyacı olan rollere görünür: admin tümünü, şirket hesabı kendi kaydını, mentor kendi ilişkilerindeki firmaları görür. Menti ve kaynak hesapları firma listesini artık okuyamaz."],
+    "de": ["Unternehmensdatensätze sehen jetzt nur noch die Rollen, die sie brauchen: Admins alle, ein Unternehmenskonto den eigenen Eintrag, Mentoren die Unternehmen ihrer eigenen Beziehungen. Mentee- und Quellen-Konten können die Unternehmensliste nicht mehr lesen."]
+  }
+}

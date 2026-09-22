@@ -192,6 +192,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/trialReminderRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a trial reminder is due on a CALENDAR day, so a trial ending hours before the tick is not skipped (#2413)',
+    },
+  ],
+  [
     'src/lib/twoFactorResetRule.ts',
     {
       floor: 95,
@@ -204,7 +212,15 @@ const FLOORS = new Map([
     {
       floor: 95,
       measured: 100.0,
-      why: 'conversion counted against the TENANT\'s finished stages, and a SOURCE login never attributed to itself (#2421)',
+      why: 'conversion counted against the TENANT\'s finished stages, and ONE filtered population behind both halves of every ratio \u2014 a SOURCE login never attributed to itself (#2421)',
+    },
+  ],
+  [
+    'src/lib/marketingImport.ts',
+    {
+      floor: 95,
+      measured: 99.13,
+      why: 'the account match key: VAT beats the name, and the name half must survive İ/ı/ü/ß — a plain toLowerCase() creates a twin account on every run (#2405)',
     },
   ],
 ]);

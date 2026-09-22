@@ -224,6 +224,49 @@ async function pruneFinishedJobs(ctx: RetentionContext) {
   return { deleted: processed, capped };
 }
 
+/**
+ * Trial reminder claim rows (#2414, story #2392).
+ *
+ * WHY THIS ONE IS PRUNED AT ALL, when the three claim tables it was copied from
+ * are not. `WeeklyReportReminder`, `DocumentRequirementReminder` and
+ * `MeetingSeriesReminder` are keyed to something that stops recurring — a week,
+ * a requirement, a meeting occurrence — and they disappear with their parent
+ * row through the same `onDelete: Cascade` this table has. So does this one;
+ * what it adds is the case the cascade never reaches: a tenant whose funnel
+ * records legitimately live for years accumulates claim rows that answer a
+ * question nobody can still ask.
+ *
+ * WHY DELETING ONE CANNOT RESURRECT A REMINDER. The selector matches an EXACT
+ * calendar-day difference (src/lib/trialReminderRule.ts), so once a trial has
+ * elapsed the difference is negative and can never equal a threshold again.
+ * Pruning a claim for a long-finished trial therefore un-suppresses nothing.
+ * If that rule is ever loosened to "at most N days left", this entry has to go
+ * in the same diff — an old claim row would then be the only thing standing
+ * between an expired trial and a fresh mail about it.
+ *
+ * No personal data is in the row (a relation id, a number and a timestamp), so
+ * this is a hygiene window rather than a data-protection one — which is exactly
+ * why it is the longest of the eight.
+ */
+async function pruneTrialReminders(ctx: RetentionContext) {
+  const { processed, capped } = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.trialReminder.findMany({
+          where: { sentAt: { lt: ctx.cutoff } },
+          orderBy: { sentAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.trialReminder.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, capped };
+}
+
 /** The configured window for one org, falling back to the code default. */
 async function notificationWindowFor(orgId: string | null): Promise<number> {
   const fallback = Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10);
@@ -503,6 +546,15 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A bell entry is a rendered sentence about a person plus a link to their record — the same category of personal data EmailLog is pruned for, and until #1646 the one table nobody ever deleted from. 180 days matches PageView, the other per-user history table, so the product defends one number rather than two. An unread row, and anything younger than 30 days, is never touched whatever the setting says; the consent and impersonation notices (RETAINED_NOTIFICATION_TYPES) are never touched at all.',
     run: pruneNotifications,
+  },
+  {
+    key: 'trialReminder',
+    // No setting: nothing an operator would ever want to tune, and a knob for
+    // a table with no personal data in it is a knob nobody reads.
+    defaultDays: 365,
+    reason:
+      'A claim row says "this threshold was already handled for this trial", and that question is only asked while the trial is still counting down — a year later the trial resolved long ago and the row is a suppression ledger nobody reads. Safe to delete because the selector matches an EXACT calendar-day difference, so an elapsed trial can never match a threshold again (src/lib/trialReminderRule.ts); the row carries no personal data, which is why it gets the longest window of the eight rather than the shortest.',
+    run: pruneTrialReminders,
   },
 ];
 

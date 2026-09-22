@@ -163,6 +163,7 @@ model Organization {
   webhooks             Webhook[]
   announcements        Announcement[]
   newsletters          Newsletter[]
+  trialReminders       TrialReminder[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -1274,6 +1275,43 @@ model Company {
   // TEXT: the company form offers 2 000 characters, far past VARCHAR(191).
   description  String?       @db.Text
   contactEmail String?
+  // The primary contact on the account (#2407) — "who do we call", beside the
+  // address column that already existed. Three plain columns rather than a
+  // `CompanyContact` table on purpose: there is no Contact model here, a
+  // `companyId` User would hand a phone number an auth identity it does not
+  // need, and CompanyInquiry's contact columns are an inbound-request record
+  // rather than an address book. A real table waits until several contacts per
+  // account are actually needed (epic-07).
+  //
+  // READ EXPOSURE: `GET /api/companies` and `GET /api/companies/[id]` gate on
+  // "is there a session" and read the row with `include` and no `select`, so
+  // every Company scalar reaches every authenticated user of the tenant. That
+  // broad read is #2431. A named person's direct line and a tax identification
+  // number are a different category from name/industry/address, so these three
+  // plus `vatId` are stripped for non-ADMIN readers at both routes
+  // (`src/lib/companyVisibility.ts`) until #2431 scopes the whole payload.
+  //
+  // Deliberately NO unique constraint on contactEmail. A global `@unique` — what
+  // the inherited Marketing schema had on `Contact.email` — punches straight
+  // through the tenant boundary (docs/tenant-isolation.md): two tenants may each
+  // hold the same merchant, and one would then be unable to save its own row.
+  // Were uniqueness ever wanted here it could only be `@@unique([orgId, ...])`.
+  contactName  String?
+  contactPhone String?
+  // VAT identification number (#2405). The account's strongest identity across
+  // systems, and therefore the account import's FIRST matching key; the fallback
+  // is normalized name + country (docs/marketing-import.md).
+  //
+  // Unique per ORG, never globally: the same merchant may legitimately be an
+  // account of two tenants. MySQL permits many NULLs inside a unique index, so
+  // accounts that carry no VAT number are unconstrained — which is every row the
+  // internship product has today, and why this can be added to a populated
+  // table at all.
+  vatId        String?
+  // ISO-3166-1 alpha-2, upper case. The other half of the fallback match key:
+  // `address` is free text and cannot answer "which country is this account
+  // in", so two merchants of the same name in two countries were one row.
+  country      String?       @db.VarChar(2)
   industry     String?
   logoUrl      String?
   size         String?
@@ -1297,6 +1335,9 @@ model Company {
   // single row because nothing stops a second enquiry from the same company
   // later being linked to the account it already has.
   fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
+
+  // Org-scoped, not global — see the `vatId` comment above.
+  @@unique([orgId, vatId])
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -2041,6 +2082,21 @@ model MentorshipRelation {
   // months later is written to again rather than being silently written off.
   dormantNudgeCount       Int              @default(0)
   dormantNudgeSentAt      DateTime?
+  // The contractual trial window of a MARKETING funnel record (#2413, story
+  // #2392). Both nullable and both additive: a mentorship relation never has a
+  // trial, and a marketing record only has one once it reaches the TRIAL_ACTIVE
+  // stage — so an untouched row keeps meaning exactly what it meant before, and
+  // `db push` can add the columns over a populated table.
+  //
+  // NO NEW TABLE, and deliberately NOT `stageDeadline`. `stageDeadline` is an
+  // INTERNAL service level: src/lib/stageSla.ts rewrites it on every stage
+  // change and the deadline sweep warns once after it is breached. A trial end
+  // is the opposite kind of date — it is agreed with the customer, it survives
+  // every stage change, and it is the thing the reminders are counted back
+  // from. Storing it in `stageDeadline` would make an SLA edit move a
+  // contractual date, and moving the record to another stage would erase it.
+  trialStartedAt          DateTime?
+  trialEndsAt             DateTime?
   // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
   // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
   // different mentor and an admin approved it. Nullable and additive: an
@@ -2091,6 +2147,7 @@ model MentorshipRelation {
   offers                Offer[]
   weeklyReports         WeeklyReport[]
   weeklyReportReminders WeeklyReportReminder[]
+  trialReminders        TrialReminder[]
   placement             Placement?
   rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
   previousRelation      MentorshipRelation?    @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
@@ -2102,6 +2159,9 @@ model MentorshipRelation {
   @@index([lifecycleState])
   @@index([pipelineStatus])
   @@index([previousRelationId])
+  // The daily trial sweep asks for one org's relations in one stage whose trial
+  // ends inside the next week; this is the column that narrows it.
+  @@index([trialEndsAt])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -3108,6 +3168,53 @@ model WeeklyReportReminder {
   @@unique([relationId, weekStart])
   @@index([weekStart])
   @@index([recipientId, weekStart])
+}
+
+// One row per reminder already claimed for a trial (#2414, story #2392).
+//
+// WHAT IT IS FOR
+//   The trial sweep runs daily and must not write to the same account twice for
+//   the same threshold. `@@unique([relationId, threshold])` is what makes that
+//   structural rather than a matter of getting a query right: the claim is a
+//   `createMany({ skipDuplicates: true })`, so two overlapping ticks — or two
+//   replicas — cannot both win the same (relation, threshold) pair.
+//
+// CLAIM FIRST, THEN SEND — the house convention, kept deliberately.
+//   The source backlog for this epic asked for the row to be written AFTER a
+//   successful send. This repo does the opposite and says why:
+//   `sendMeetingReminders` (src/services/emailService.ts) — "Marking first
+//   means a mid-send failure loses a reminder rather than duplicating one — the
+//   far less annoying failure mode" — and `sendWeeklyReportReminders` claims
+//   the same way. This table follows the house convention, for a reason that is
+//   specific to trials rather than merely conventional: the thresholds are a
+//   LADDER. A 7-day reminder lost to an SMTP hiccup is still followed by the
+//   3-day and the 0-day one, so the account is not lost in silence — which is
+//   the whole point of story #2392 — whereas send-then-claim risks mailing the
+//   same owner about the same account twice on a retry, and the owner who is
+//   mailed twice is the owner who filters the sender out. Trust the ladder,
+//   not the retry.
+//
+// NOT PART OF THE CLAIM KEY: the recipient. The question this table answers is
+// "has this threshold been handled for this account?", and that must stay true
+// however the record is reassigned mid-trial — a re-assignment is not a reason
+// to mail the new owner about the same day again.
+model TrialReminder {
+  // Nullable orgId, like every phase-1 tenant model: the row is written by a
+  // sessionless cron, which stamps the relation's own orgId explicitly.
+  orgId      String?
+  org        Organization? @relation(fields: [orgId], references: [id])
+  id         String        @id @default(cuid())
+  relationId String
+  // Days remaining when the reminder was claimed: 7, 3 or 0
+  // (TRIAL_REMINDER_THRESHOLDS in src/lib/trialReminderRule.ts). An Int rather
+  // than an enum so the ladder can be re-tuned without a schema change.
+  threshold  Int
+  sentAt     DateTime      @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([relationId, threshold])
+  @@index([sentAt])
 }
 
 // Structured hiring demand (#806). CompanyNeed remains in place during the

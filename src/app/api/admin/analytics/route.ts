@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { buildSignupWindow, type SignupCounts } from '@/lib/signupFunnel';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { getLocale } from '@/i18n/server';
 
 // GET — aggregate analytics for the admin dashboard:
@@ -110,10 +111,19 @@ export async function GET(request: Request) {
   // which a customer that renamed its pipeline does not have, so the headline
   // conversion and every mentor's outcome count read zero. For an org on the
   // built-in catalogue `finished` is exactly those two keys.
-  const outcome = await outcomeStageKeys(
-    (session.user as { orgId?: string | null }).orgId ?? null,
-    locale,
-  );
+  const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
+  const [outcome, capabilities] = await Promise.all([
+    outcomeStageKeys(orgId, locale),
+    // The tenant's module set (#2423), resolved through the SAME path the
+    // sidebar and the write gate use (`shellCapabilities`), so the screen can
+    // hide the cards that describe a module this vertical does not carry —
+    // mentor workload, RSVP, the signup funnel and match quality need
+    // `mentorship`, the projects card needs `projects`. The numbers themselves
+    // are still computed: they are tenant-scoped and correct, only meaningless
+    // to a tenant without the module. INTERNSHIP carries every capability, so
+    // its payload and screen are unchanged.
+    shellCapabilities(orgId),
+  ]);
   const finished = new Set(outcome.finished);
   const mentorWorkload = mentors
     .map((m) => ({
@@ -152,6 +162,9 @@ export async function GET(request: Request) {
     // translated wording — byte-identical text for a default-catalogue tenant.
     finishedLabel: outcome.finishedLabel,
     finishedLabelIsCustom: outcome.finishedLabelIsCustom,
+    // Which modules the cards above are about (#2423) — see the comment where
+    // it is resolved. A consumer that finds the field missing shows everything.
+    capabilities,
   });
   });
 }
