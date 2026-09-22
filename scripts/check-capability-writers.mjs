@@ -11,16 +11,22 @@
  * "switched off" for a vertical that can still reach it with a direct POST.
  *
  * THE RULE. For every `*.<model>.<create|update|delete|upsert|…>(` call under
- * `src/`, walk back to the nearest preceding exported mutating HTTP handler
- * (`export async function POST|PUT|PATCH|DELETE`) and require that the text
- * between that handler's first line and the write contains a
- * `requireCapability(..., '<capability>')` call for the model's capability. A
- * write with no enclosing mutating handler is not a request path at all, so its
- * FILE must carry an explicit, reasoned entry in EXEMPT below — never a comment
- * somewhere else.
+ * `src/`, walk back to the nearest preceding TOP-LEVEL EXPORT. That export owns
+ * the write; if it is a mutating HTTP handler (`POST|PUT|PATCH|DELETE`), the
+ * text between its first line and the write must contain a
+ * `requireCapability(..., '<capability>')` call for the model's capability. Any
+ * other enclosing export — a `GET`, a helper — means the write is not behind a
+ * gated request path at all, so its FILE must carry an explicit, reasoned entry
+ * in EXEMPT below — never a comment somewhere else.
+ *
+ * Walking back to the nearest export of ANY name, rather than to the nearest
+ * *mutating handler*, is what makes a second handler underneath a gated one
+ * visible in both directions: `export async function GET()` writing the model
+ * below a gated POST is a leak, and before #2364's review it passed silently
+ * because the backward walk skipped straight over GET to POST's gate.
  *
  * WHAT IT CANNOT SEE, stated plainly so nobody reads a pass as a proof:
- *  - A write inside a helper function *declared after* the handler is attributed
+ *  - A write inside a NON-EXPORTED helper declared after a handler is attributed
  *    to that handler, so the guard would accept it on the handler's gate. That
  *    matches the truth in this tree today (the helpers that write these models
  *    live in `src/lib`, which has no handlers at all and is therefore handled by
@@ -89,7 +95,17 @@ function sourceFiles(dir) {
 
 const modelNames = Object.keys(MODELS).join('|');
 const writeCall = new RegExp(`\\.(${modelNames})\\.(${WRITE_METHODS.join('|')})\\s*\\(`, 'g');
-const handlerStart = new RegExp(`export\\s+async\\s+function\\s+(${MUTATING_HANDLERS.join('|')})\\s*\\(`, 'g');
+// EVERY exported top-level binding, not only the mutating handlers: a handler's
+// region ends where the next export begins. Matching only POST/PUT/PATCH/DELETE
+// left `export async function GET()` invisible, so a write inside a read handler
+// declared BELOW a gated POST was credited to that POST's gate — the exact leak
+// this guard exists to catch, and the ordering exists in the tree today
+// (src/app/api/interview-panels/route.ts declares POST above GET). The `const`
+// arm covers `export const POST = async (…) => {}`, which Next.js accepts too.
+const exportStart = new RegExp(
+  'export\\s+(?:async\\s+)?(?:function\\s+(\\w+)|const\\s+(\\w+)\\s*=)',
+  'g',
+);
 
 const problems = [];
 const unusedExemptions = new Set(Object.keys(EXEMPT));
@@ -100,10 +116,10 @@ for (const file of sourceFiles(root)) {
   const source = readFileSync(file, 'utf8');
   if (!new RegExp(`\\.(${modelNames})\\.`).test(source)) continue;
 
-  const handlers = [];
-  handlerStart.lastIndex = 0;
-  for (let m = handlerStart.exec(source); m; m = handlerStart.exec(source)) {
-    handlers.push({ at: m.index, method: m[1] });
+  const exported = [];
+  exportStart.lastIndex = 0;
+  for (let m = exportStart.exec(source); m; m = exportStart.exec(source)) {
+    exported.push({ at: m.index, name: m[1] ?? m[2] });
   }
 
   writeCall.lastIndex = 0;
@@ -112,7 +128,10 @@ for (const file of sourceFiles(root)) {
     const [, model, method] = m;
     const capability = MODELS[model];
     const line = source.slice(0, m.index).split('\n').length;
-    const handler = [...handlers].reverse().find((h) => h.at < m.index);
+    // The write belongs to the nearest export ABOVE it, whatever that export is;
+    // only a mutating handler can carry a gate.
+    const enclosing = [...exported].reverse().find((e) => e.at < m.index);
+    const handler = enclosing && MUTATING_HANDLERS.includes(enclosing.name) ? enclosing : null;
 
     if (!handler) {
       if (EXEMPT[file]) {
@@ -121,19 +140,25 @@ for (const file of sourceFiles(root)) {
       }
       problems.push(
         `${file}:${line}  ${model}.${method}() is not inside an exported POST/PUT/PATCH/DELETE ` +
-          'handler, so no capability gate can run in front of it. Move it behind a gated handler, ' +
+          `handler${enclosing ? ` (the nearest export above it is \`${enclosing.name}\`)` : ''}, so no ` +
+          'capability gate can run in front of it. Move it behind a gated handler, ' +
           `or add ${file} to EXEMPT in this script with the reason it is sessionless.`,
       );
       continue;
     }
 
     const preamble = source.slice(handler.at, m.index);
-    if (new RegExp(`requireCapability\\([^)]*'${capability}'\\s*\\)`).test(preamble)) {
+    // Bounded, not paren-free. `[^)]*` could not cross the closing paren of a
+    // nested call, so the idiomatic
+    // `requireCapability(resolveOrgId(session), 'placements')` was reported as
+    // ungated — the "cries wolf" direction this guard cannot afford. `[^;]`
+    // keeps the match inside the one statement that opened the call.
+    if (new RegExp(`requireCapability\\([^;]{0,200}?'${capability}'`).test(preamble)) {
       gatedWrites++;
       continue;
     }
     problems.push(
-      `${file}:${line}  ${handler.method} writes ${model}.${method}() without ` +
+      `${file}:${line}  ${handler.name} writes ${model}.${method}() without ` +
         `requireCapability(…, '${capability}') in front of it. Gate the handler right after its ` +
         'session check, the way src/app/api/offers/route.ts does (#2364).',
     );

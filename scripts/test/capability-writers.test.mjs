@@ -97,10 +97,10 @@ test('the wrong capability does not satisfy the gate', () => {
   assert.match(out, /requireCapability\(…, 'placements'\)/);
 });
 
-test('a GET handler above the write does not count as the gate', () => {
+test('a write in a read handler is not a gated write path', () => {
   // The backward walk must land on a MUTATING handler; a read handler carries
   // no gate and must not shadow one.
-  const { code } = check({
+  const { code, out } = check({
     'app/api/offers/route.ts': `
 export async function GET() {
   await prisma.offer.updateMany({ where: {}, data: {} });
@@ -108,7 +108,64 @@ export async function GET() {
 }
 `,
   });
-  assert.equal(code, 1);
+  assert.equal(code, 1, out);
+  assert.match(out, /nearest export above it is `GET`/);
+});
+
+test('a GET declared UNDER a gated handler does not inherit its gate', () => {
+  // The same leak as the second-handler test, with a READ verb. The backward
+  // walk used to look only for POST/PUT/PATCH/DELETE, so it stepped straight
+  // over this GET and credited the write to the POST's gate above it — and the
+  // ordering is real: src/app/api/interview-panels/route.ts declares POST above
+  // GET. Asserted with the gated POST present, which is what made the old
+  // version of this test pass for the wrong reason (its fixture had no POST at
+  // all, so it only re-asserted the "no handler" branch).
+  const { code, out } = check({
+    'app/api/offers/route.ts': `${GATED_POST}
+export async function GET() {
+  await prisma.offer.updateMany({ where: {}, data: {} });
+  return NextResponse.json({});
+}
+`,
+  });
+  assert.equal(code, 1, out);
+  assert.match(out, /offer\.updateMany\(\)/);
+  assert.match(out, /nearest export above it is `GET`/);
+});
+
+test('a gate whose orgId comes from a helper call is still a gate', () => {
+  // TOO BROAD guard: `requireCapability(resolveOrgId(session), 'placements')`
+  // is the repo's other idiom for the same call (src/lib/orgScope.ts), and a
+  // paren-free scan could not cross `resolveOrgId(session)`'s closing paren, so
+  // a correctly gated handler was reported as ungated.
+  const { code, out } = check({
+    'app/api/offers/route.ts': GATED_POST.replace(
+      'requireCapability(session.user.orgId,',
+      'requireCapability(resolveOrgId(session),',
+    ),
+  });
+  assert.equal(code, 0, out);
+});
+
+test('an arrow-function handler export is checked like a declared one', () => {
+  // Next.js accepts `export const POST = async (…) => {}`; the region walk is
+  // name-based, so this form gets the same treatment rather than falling
+  // through to "not inside a handler".
+  const ungated = `
+export const DELETE = async (request: Request) => {
+  await prisma.offer.deleteMany({ where: {} });
+  return NextResponse.json({ ok: true });
+};
+`;
+  assert.equal(check({ 'app/api/offers/route.ts': ungated }).code, 1);
+  const gated = ungated.replace(
+    'await prisma.offer.deleteMany',
+    `const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
+  await prisma.offer.deleteMany`,
+  );
+  const run = check({ 'app/api/offers/route.ts': gated });
+  assert.equal(run.code, 0, run.out);
 });
 
 test('a write outside any handler fails unless the file is exempted by name', () => {
