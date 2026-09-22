@@ -30,7 +30,7 @@ export interface Feature {
   color: string;
   // Featured entries render as the landing page's feature cards.
   featured?: boolean;
-  // The vertical capability this card advertises (#2356). The landing filters
+  // The vertical capability this card advertises (#2500). The landing filters
   // its featured grid by the host vertical's capability set, so a marketing
   // visitor is not sold "Mentor self-service" or intern projects. Untagged =
   // shown to every vertical. /features keeps showing the whole catalogue.

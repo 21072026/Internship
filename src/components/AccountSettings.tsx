@@ -142,7 +142,7 @@ export function AccountSettings() {
   const [pushDeviceBusy, setPushDeviceBusy] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
   // The accent the picker shows before a choice is the VERTICAL's default
-  // (#2356): magenta on a marketing tenant, blue/green otherwise — the same
+  // (#2492): magenta on a marketing tenant, blue/green otherwise — the same
   // value the root layout painted, so the selected swatch matches the page.
   const vertical = useVertical();
   const [theme, setTheme] = useState<Theme>('system');
@@ -413,7 +413,7 @@ export function AccountSettings() {
       });
       // The cookie above keeps this device right either way; only claim
       // "updated" when the account actually took it (a rejected save used to
-      // flash the same toast, #2356).
+      // flash the same toast, #2492).
       if (res.ok) flash(t.account.updated);
     } catch {
       // cookie + attribute already applied locally

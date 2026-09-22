@@ -7,7 +7,7 @@ import { resolveBranding, type ResolvedBranding } from '@/lib/branding';
 export async function getOrgBranding(
   orgId: string | null | undefined,
   // Name to use when there is NO org (signed-out) instead of the product default
-  // (#2356). Lets a marketing host's public wordmark read its own product name
+  // (#2498). Lets a marketing host's public wordmark read its own product name
   // rather than "Internship CRM". Ignored once an org is resolved — a signed-in
   // tenant's own brandName always wins.
   noOrgFallbackName?: string | null,

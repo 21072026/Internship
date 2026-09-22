@@ -15,7 +15,7 @@ import { GITHUB_URL } from '@/components/landing/links';
 // from this link, so subscribing is one click from the page. Locale-independent,
 // hence the default-locale feed — the other two languages are the same URL with
 // `?lang=`, and the visible link below follows the reader. Dynamic rather than
-// static (#2356) only so the feed URL is built on the host the page was served
+// static (#2488) only so the feed URL is built on the host the page was served
 // from: on the marketing host it must not advertise the internship host's feed.
 export async function generateMetadata(): Promise<Metadata> {
   const h = await headers();

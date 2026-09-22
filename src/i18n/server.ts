@@ -44,7 +44,7 @@ export async function getLocale(): Promise<Locale> {
 // (and any failure). One indexed lookup, and only when a session cookie is
 // present — a public view resolves to the default with no query, so the overlay
 // layer costs the live single-tenant product nothing (#1197).
-// Wrapped in React's per-request cache() (#2356): the root layout asks for the
+// Wrapped in React's per-request cache() (#2492): the root layout asks for the
 // vertical from generateMetadata, generateViewport and its body, and PublicShell
 // and the footer ask again — one session decode + one Prisma lookup per request,
 // not five.

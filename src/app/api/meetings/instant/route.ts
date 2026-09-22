@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
     const { title, relationIds, projectId, conversationId } = parsed.data;
-    // An instant meeting on a project is a projects-module write (#2356).
+    // An instant meeting on a project is a projects-module write (#2502).
     if (projectId) {
       const capGate = await requireCapability(session.user.orgId, 'projects');
       if (capGate) return capGate;

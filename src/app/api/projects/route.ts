@@ -119,7 +119,7 @@ const CAN_CREATE = new Set(['ADMIN', 'MENTOR', 'MENTEE']);
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // Intern projects are not a MARKETING capability (#2356): refuse the write
+  // Intern projects are not a MARKETING capability (#2499): refuse the write
   // even when the nav entry is hidden, so a hand-typed URL cannot create one.
   const capGate = await requireCapability(session.user.orgId, 'projects');
   if (capGate) return capGate;

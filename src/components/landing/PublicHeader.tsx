@@ -42,7 +42,7 @@ export function PublicHeader({
   /** Set when the visitor is signed in — the route to their own dashboard. */
   dashboardHref?: string;
   /**
-   * Set by PublicShell for a MARKETING host (#2356): drops the internship-only
+   * Set by PublicShell for a MARKETING host (#2500): drops the internship-only
    * nav entries (/for-companies, /projects). Resolved on the server because
    * this client component cannot read the vertical itself.
    */
@@ -51,7 +51,7 @@ export function PublicHeader({
   const t = useT();
   const locale = useLocale();
   const n = t.publicNav;
-  // The wordmark is the vertical's product name (#2356): "SaleVali" on a
+  // The wordmark is the vertical's product name (#2501): "SaleVali" on a
   // marketing host, "Internship CRM" everywhere else — the footer, tab title
   // and signed-in shell already read the same source.
   const productName = productNameFor(useVertical());
@@ -89,7 +89,7 @@ export function PublicHeader({
   //
   // `/for-companies` and `/projects` are internship destinations — the partner-
   // company pitch and the intern project showcase — so a marketing host's shell
-  // asks for them to be left out (#2356); the flag is resolved server-side in
+  // asks for them to be left out (#2500); the flag is resolved server-side in
   // PublicShell because this component cannot read the vertical itself.
   const links = [
     { href: '/features', label: n.features },

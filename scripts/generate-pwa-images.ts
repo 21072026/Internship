@@ -1,5 +1,5 @@
 // Generates the PWA raster assets that are committed under public/ (#2084),
-// one set per product mark (#2356):
+// one set per product mark (#2492):
 //
 //   public/icon[-salevali]-192.png, -512.png     manifest icons (purpose: any)
 //   public/icon[-salevali]-512-maskable.png      full-bleed tile for launchers that mask

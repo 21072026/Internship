@@ -48,7 +48,7 @@ export interface VerticalDefinition {
   key: VerticalKey;
   capabilities: readonly VerticalCapability[];
   // The product name shown to a SIGNED-OUT visitor, where there is no org brand
-  // to read (#2356). A signed-in tenant always overrides this with its own
+  // to read (#2498). A signed-in tenant always overrides this with its own
   // `Organization.brandName`; this is only the public-landing / no-org fallback,
   // so a marketing host stops reading "Internship CRM" in its wordmark and tab
   // title. One marketing customer today (SaleVali); a second would move this to
@@ -84,7 +84,7 @@ export const VERTICALS: readonly VerticalDefinition[] = [
     productName: 'SaleVali',
     // A marketing CRM tracks accounts through a funnel; it has no mentors, no
     // evaluation cycle, no placement, no partner-institution intake — and no
-    // intern projects (#2356): "Projects" is the internship product's team/task
+    // intern projects (#2499): "Projects" is the internship product's team/task
     // workspace, so a marketing tenant must not see the nav entry or be able to
     // write through its APIs.
     capabilities: ['companies', 'pipeline', 'messaging', 'documents'],
@@ -133,7 +133,7 @@ export function verticalHasCapability(value: unknown, capability: VerticalCapabi
   return verticalDefinition(value).capabilities.includes(capability);
 }
 
-// The signed-out product name for a vertical (#2356) — the wordmark/tab-title
+// The signed-out product name for a vertical (#2498) — the wordmark/tab-title
 // fallback when there is no org brand to read. Total function via toVerticalKey.
 export function productNameFor(value: unknown): string {
   return verticalDefinition(value).productName;

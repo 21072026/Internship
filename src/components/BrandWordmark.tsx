@@ -14,7 +14,7 @@ export async function BrandWordmark({ className, oneLine = false }: { className?
   const session = await getServerSession(authOptions);
   const orgId = session?.user?.orgId;
   // Signed out (no org) on a marketing host, the wordmark should read the
-  // vertical's product name, not "Internship CRM" (#2356). A signed-in tenant's
+  // vertical's product name, not "Internship CRM" (#2498). A signed-in tenant's
   // own brandName always overrides this. INTERNSHIP resolves to the same default
   // as before, so single-tenant chrome is unchanged.
   const noOrgFallbackName = orgId ? undefined : productNameFor(await hostVertical());

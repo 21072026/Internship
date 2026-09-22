@@ -24,7 +24,7 @@ export function Providers({
   children: React.ReactNode;
   locale: Locale;
   dict: ClientDictionary;
-  /** The request's vertical (#2356), resolved by the root layout. */
+  /** The request's vertical (#2501), resolved by the root layout. */
   vertical: VerticalKey;
 }) {
   return (

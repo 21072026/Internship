@@ -21,7 +21,7 @@ import { DemoLink } from './DemoLink';
 export async function PublicFooter() {
   const { t } = await getServerDictionary();
   const n = t.publicNav;
-  // Vertical product name (#2356): a marketing host's footer wordmark and
+  // Vertical product name (#2498): a marketing host's footer wordmark and
   // copyright read "SaleVali", not "InternshipCRM". INTERNSHIP is unchanged.
   const vertical = await resolveRequestVertical();
   const isMarketing = vertical === 'MARKETING';
@@ -33,7 +33,7 @@ export async function PublicFooter() {
       links: [
         { href: '/features', label: n.features },
         // Internship-only destinations are left out for a marketing host
-        // (#2356): the partner-company pitch, the intern project showcase, the
+        // (#2500): the partner-company pitch, the intern project showcase, the
         // mentor application and the contributor-IP terms describe the
         // mentoring product, not a sales CRM.
         ...(isMarketing ? [] : [{ href: '/for-companies', label: n.forCompanies }]),
@@ -46,7 +46,7 @@ export async function PublicFooter() {
         // The demo links to itself from its own footer — hide it there.
         // `demoPlacement` is what routes this one through DemoLink below, so
         // the click is measured and the URL carries its own utm_content (#1391).
-        // …and not on a marketing host either (#2356): the demo is the
+        // …and not on a marketing host either (#2501): the demo is the
         // internship demo, with mentor/mentee accounts.
         ...(IS_DEMO_MODE || isMarketing
           ? []

@@ -4,7 +4,7 @@ import { GraduationCap } from 'lucide-react';
 import { useVertical } from '@/lib/verticalClient';
 import { SaleValiMark } from '@/components/SaleValiMark';
 
-// The product mark for the request's vertical (#2356). INTERNSHIP keeps the
+// The product mark for the request's vertical (#2492). INTERNSHIP keeps the
 // graduation cap it always had; a MARKETING host shows the SaleVali "V". Reads
 // the vertical from the seam the root layout provides, so a client component
 // (PublicHeader, the auth pages) and a server component (BrandWordmark,

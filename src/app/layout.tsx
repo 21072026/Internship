@@ -19,7 +19,7 @@ import { SystemThemeSync } from '@/components/SystemThemeSync';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { appleSplashLinks } from '@/lib/appleSplash';
 
-// Vertical-aware tab title / app name (#2356). INTERNSHIP is byte-identical to
+// Vertical-aware tab title / app name (#2498). INTERNSHIP is byte-identical to
 // the previous static metadata (several landing e2e specs assert the exact
 // title), so only a marketing host/tenant reads its own product name instead of
 // "Internship CRM". resolveRequestVertical is session-first, host-second, so it
@@ -35,7 +35,7 @@ export async function generateMetadata(): Promise<Metadata> {
     : 'A comprehensive CRM for managing mentor-mentee relationships and internship programs',
   applicationName: productName,
   appleWebApp: { capable: true, statusBarStyle: 'default', title: productName },
-  // The favicon / home-screen icon follow the vertical too (#2356). Both SVGs
+  // The favicon / home-screen icon follow the vertical too (#2492). Both SVGs
   // live in public/: the file-based app/icon.svg convention cannot branch on
   // the host, and Next ignores it anyway once `icons` is set here. Each branch
   // carries a raster fallback after the SVG — Safari loads no SVG favicon and
@@ -61,7 +61,7 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-// The browser-UI tint follows the vertical (#2356) — `themeColorFor` is the
+// The browser-UI tint follows the vertical (#2492) — `themeColorFor` is the
 // one place the two colours live, shared with the /messages viewport and the
 // manifest. resolveRequestVertical is cached per request, so this is free.
 export async function generateViewport(): Promise<Viewport> {

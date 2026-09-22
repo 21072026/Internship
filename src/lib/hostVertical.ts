@@ -44,7 +44,7 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
 // the host-resolved vertical is COSMETIC — copy, landing sections, chrome — and
 // must not decide anything with cross-user weight (tenant scoping, roles, data
 // access). The ONE permitted authz-adjacent use is /api/register refusing a
-// token-less sign-up on a MARKETING host (#2356): its failure mode under a
+// token-less sign-up on a MARKETING host (#2501): its failure mode under a
 // forged header is refusing the forger's own request, nothing else. Anything
 // beyond that must key off a signal the request cannot influence (the session's
 // org, the invitation row), never this header.

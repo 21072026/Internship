@@ -48,7 +48,7 @@ export function splashPixels(d: AppleSplashDevice): { w: number; h: number } {
 }
 
 /**
- * Image variants, one per product mark (#2356): '' is the internship cap,
+ * Image variants, one per product mark (#2492): '' is the internship cap,
  * 'salevali' the SaleVali tile. The suffix is part of the file name so both
  * sets sit side by side under public/splash/.
  */
