@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
-import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
+import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required').max(TEXT_LIMITS.companyName),
@@ -54,6 +54,18 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // The relation count is data about rows, not a harmless total: unfiltered,
+    // it tells a MENTOR how many mentorships a company has altogether — other
+    // mentors' included — which is exactly what the detail route's nested
+    // `mentorships` are scoped against. So the count follows the same
+    // `relation` scope. ADMIN's scope is `{}`; the plain `true` is kept there
+    // so the admin query stays byte-identical to the one this handler always
+    // ran. Only ADMIN/MENTOR/COMPANY reach this line (the others were refused
+    // above) and all three have a `relation` builder, so the fallback is a
+    // fail-closed guard, not a path.
+    const relationScope = (await scopeForRole(session.user, 'relation')) ?? { id: NO_MATCH };
+    const mentorshipCount = Object.keys(relationScope).length > 0 ? { where: relationScope } : true;
+
     return await withTenantScope(session, async () => {
       const companies = await prisma.company.findMany({
         // `andScope` copies the builder's object; for ADMIN it is `{}`, which
@@ -61,7 +73,7 @@ export async function GET() {
         where: andScope(scope),
         include: {
           needs: true,
-          _count: { select: { mentorships: true } },
+          _count: { select: { mentorships: mentorshipCount } },
         },
         orderBy: { name: 'asc' },
       });

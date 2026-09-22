@@ -150,10 +150,20 @@ Detay ucundaki iç içe `mentorships` (menti ad + e-posta) firmayla birlikte
 ulaşan mentor o firmadaki *diğer* mentorların mentilerini okuyamaz. `ADMIN`'in
 `{}`'i ve `COMPANY`'nin `companyId = own` kapsamı yükü olduğu gibi bırakır.
 
+Aynı kural **liste** ucundaki `_count.mentorships` için de geçerlidir: satırları
+kapsamlayıp toplamı kapsamlamamak, mentora o firmadaki *bütün* ilişkilerin
+adedini söylerdi. Sayaç da `relation` kapsamından geçer; `ADMIN`'in boş kapsamı
+sayacı filtresiz bırakır, yani admin sorgusu bayt-bayt aynı kalır.
+
 ### Firmayı dolaylı okuyan uçlar
 
-`grep prisma.company.find src/` (2026-09-22) — tamamı ya bu kapsamı kullanır ya
-da zaten fail-closed bir desenle yazılmıştır:
+İki grep birlikte (2026-09-22) — **ikisi de gerekli**: `grep prisma.company.find
+src/` firmayı id ile arayan yolları bulur, ama bir ilişkiye/teklife takılı
+`include` ile okunan firmayı **bulmaz**; onun için
+`grep -rE "company: (true|\{)" src/` gerekir. İlk denemede yalnızca birincisi
+çalıştırıldı ve `/api/mentorship/[id]`'nin `company: true`'su gözden kaçtı.
+Aşağıdakilerin tamamı ya bu kapsamı kullanır ya da zaten fail-closed bir
+desenle yazılmıştır:
 
 | Uç / modül | Desen | Not |
 |---|---|---|
@@ -161,7 +171,9 @@ da zaten fail-closed bir desenle yazılmıştır:
 | `GET /api/requisitions` (yükteki firma seçici) | `scopeForRole(user, 'company')` | Route girişte `ADMIN`/`COMPANY` dışını 403'lüyor; elle yazılmış `role === 'COMPANY'` filtresi kapsam builder'ıyla değiştirildi |
 | `POST /api/requisitions`, `/api/company/interests`, `/api/company/*` | girişte rol allowlist'i + `companyId = session.user.companyId` | Firma id'si oturumdan gelir, gövdeden değil |
 | `/api/search` firma dalı | `role === 'ADMIN'` ternary'si | Diğer roller `[]` |
-| `/api/mentorship*`, `/api/offers*`, `/api/interview-requests`, `/api/requisitions/[id]`, `/api/candidates`, `/api/users/[id]`, `/api/account/export` | satırın kendi kapsamı + `include: { company: { select: { id, name } } }` | Firma **id ile aranmıyor**; zaten çağırana ait bir satırdan (ilişki, teklif, talep) geçilerek okunuyor ve yalnızca `id`+`name` dönüyor — `contactEmail`/`address` bu yollardan hiç çıkmıyor. Bu yüzden `company` kapsamı değil, satırın kendi kapsamı doğru katmandır |
+| `/api/mentorship` (liste), `/api/mentorship/[id]`, `/api/offers*`, `/api/interview-requests`, `/api/requisitions/[id]`, `/api/candidates`, `/api/users/[id]`, `/api/account/export` | satırın kendi kapsamı + `include: { company: { select: … } }` | Firma **id ile aranmıyor**; zaten çağırana ait bir satırdan (ilişki, teklif, talep) geçilerek okunuyor. Seçilen kolonlar dar: `{ id, name }` (offers, interview-requests, requisitions/[id], candidates), `{ name }` (account/export), `{ id, name, industry }` (mentorship listesi, mentorship/[id], users/[id]). **`contactEmail`/`address`/`description`/`quota` bu uçlardan çıkmaz.** Bu yüzden `company` kapsamı değil, satırın kendi kapsamı doğru katmandır |
+| `/api/mentorship/[id]` — **düzeltilmiş geçmiş** | — | Bu uç #2431'e kadar `company: true` idi: ilişkinin MENTOR'u ve MENTEE'si **bütün** Company skalerlerini (`contactEmail`, `address`, `description`, `quota`) okuyordu. Bu PR'ın ilk hâli tabloyu yanlış yazıp uca "yalnızca `id`+`name`" demişti; inceleme yakaladı. Uç artık `{ id, name, industry }` seçiyor — payload'ın üç tüketicisi (`admin/candidates/[id]`, `mentor/mentees/[id]`, iki pano) zaten yalnızca bu üçünü okuyordu |
+| `/portal/journey` (sunucu bileşeni, uç değil) | `menteeRelationWhere(menteeId)` — menti **kendi** ilişkisi | Tek kalan `company: true`. Menti kendi yerleştiği firmanın `name`/`industry`/`contactEmail`/`description` alanlarını ekranda görür; bu **bilinçli bir ürün kararıdır** (staj yerinin muhatabı), API üzerinden ham satır dönüşü değil. Kapsam katmanı burada ilişkinin kendisidir: menti başka hiçbir firmaya ulaşamaz |
 | `/api/admin/*` | `ADMIN` allowlist'i | |
 | `resolveOwner()` ([`projectAccess.ts`](../src/lib/projectAccess.ts)) | yalnız admin'in sahip seçicisinden çağrılır; varlık kontrolü, veri döndürmez | |
 | `/api/register`, `companyProvisioning.ts`, `emailService.ts` cron'u | oturumsuz | Kapsam katmanının konusu değil; tenant bağlamını kendileri geçer |

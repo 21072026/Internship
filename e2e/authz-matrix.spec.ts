@@ -37,6 +37,13 @@ const emails: Record<Role, string> = {
 // The "other side": a second mentor/mentee pair nobody above may see.
 const otherMentorEmail = uniqueEmail('mx-other-mentor');
 const otherMenteeEmail = uniqueEmail('mx-other-mentee');
+// A COMPANY user that IS assigned to a company. `users.COMPANY` above is
+// deliberately unassigned (the #807 `/api/mentorship` contract probe), which
+// makes its company scope `{ id: '__none__' }` — so its matrix `own` cells pass
+// on an empty list and would keep passing if the builder were narrowed to
+// nothing at all. This second account is the positive half at route level
+// (#2432): it must read its own row and 404 on the foreign one.
+const assignedCompanyEmail = uniqueEmail('mx-company-assigned');
 
 const users = {} as Record<Role, MatrixUser>;
 let ownCompanyId = '';
@@ -53,15 +60,17 @@ test.beforeAll(async () => {
     data: { name: `Matrix Org ${Date.now()}`, slug: `matrix-org-${Date.now()}` },
   });
   orgId = org.id;
-  const [admin, mentor, mentee, company, source, otherMentor, otherMentee] = await Promise.all([
-    seedUser(emails.ADMIN, PASSWORD, 'ADMIN', 'Matrix Admin'),
-    seedUser(emails.MENTOR, PASSWORD, 'MENTOR', 'Matrix Mentor'),
-    seedUser(emails.MENTEE, PASSWORD, 'MENTEE', 'Matrix Mentee'),
-    seedUser(emails.COMPANY, PASSWORD, 'COMPANY', 'Matrix Company'),
-    seedUser(emails.SOURCE, PASSWORD, 'SOURCE', 'Matrix Source'),
-    seedUser(otherMentorEmail, 'x', 'MENTOR', 'Other Mentor'),
-    seedUser(otherMenteeEmail, 'x', 'MENTEE', 'Other Mentee'),
-  ]);
+  const [admin, mentor, mentee, company, source, otherMentor, otherMentee, assignedCompany] =
+    await Promise.all([
+      seedUser(emails.ADMIN, PASSWORD, 'ADMIN', 'Matrix Admin'),
+      seedUser(emails.MENTOR, PASSWORD, 'MENTOR', 'Matrix Mentor'),
+      seedUser(emails.MENTEE, PASSWORD, 'MENTEE', 'Matrix Mentee'),
+      seedUser(emails.COMPANY, PASSWORD, 'COMPANY', 'Matrix Company'),
+      seedUser(emails.SOURCE, PASSWORD, 'SOURCE', 'Matrix Source'),
+      seedUser(otherMentorEmail, 'x', 'MENTOR', 'Other Mentor'),
+      seedUser(otherMenteeEmail, 'x', 'MENTEE', 'Other Mentee'),
+      seedUser(assignedCompanyEmail, PASSWORD, 'COMPANY', 'Matrix Assigned Company'),
+    ]);
 
   const [own, other] = await Promise.all([
     prisma.company.create({ data: { name: `Matrix Own ${Date.now()}`, orgId } }),
@@ -85,6 +94,11 @@ test.beforeAll(async () => {
     prisma.user.update({ where: { id: mentee.id }, data: { sourceId: src.id, orgId } }),
     prisma.user.update({ where: { id: otherMentor.id }, data: { orgId } }),
     prisma.user.update({ where: { id: otherMentee.id }, data: { orgId } }),
+    // The assigned counterpart: same tenant, and it owns "our" company.
+    prisma.user.update({
+      where: { id: assignedCompany.id },
+      data: { orgId, companyId: own.id },
+    }),
   ]);
   sourcedMenteeIds.add(mentee.id);
 
@@ -118,7 +132,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await prisma.interactionLog.deleteMany({ where: { relationId: { in: [ownRelationId, foreignRelationId] } } });
   await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [ownRelationId, foreignRelationId] } } });
-  for (const email of [...Object.values(emails), otherMentorEmail, otherMenteeEmail]) {
+  for (const email of [...Object.values(emails), otherMentorEmail, otherMenteeEmail, assignedCompanyEmail]) {
     await cleanupByEmail(email);
   }
   await prisma.company.deleteMany({ where: { id: { in: [ownCompanyId, otherCompanyId] } } });
@@ -212,8 +226,11 @@ for (const role of Object.keys(LANDING) as Role[]) {
  * The company book, as its own named case (#2396/#2431): the matrix above
  * already refuses MENTEE and SOURCE, but the story's acceptance criterion is
  * spelled "cannot read companies", so a regression should read as that. Also
- * the half the matrix cannot see: a MENTOR's `own` cell passes vacuously if its
- * scope is EMPTY, so the own company must actually come back — and a refusal
+ * the half the matrix cannot see: an `own` cell passes vacuously when the
+ * scope is EMPTY, so both roles that HAVE a company scope must actually get
+ * their row back — the mentor's related company and the assigned company
+ * account's own record. Without that positive half, narrowing either builder
+ * to "nothing at all" would still leave the whole matrix green. And a refusal
  * must leave the `authz.scope_denied` audit row `logScopeDenial()` promises,
  * which is the whole reason MENTEE/SOURCE get 403 rather than a quiet `[]`.
  */
@@ -249,6 +266,40 @@ test('MENTEE and SOURCE cannot read the company book; a mentor reads only its ow
   expect(detail.status()).toBe(200);
   const relations = ((await detail.json()).company.mentorships as { id: string; mentorId: string }[]);
   expect(relations.map((r) => r.id)).toEqual([ownRelationId]);
+});
+
+/**
+ * The positive half of the COMPANY cells (#2432). The matrix's COMPANY user is
+ * deliberately unassigned for the #807 contract probe, so its company scope is
+ * `{ id: '__none__' }`: the list comes back empty, the detail probes 404, and
+ * every one of those assertions would still pass if `BUILDERS.company.COMPANY`
+ * were changed to return `NO_MATCH` unconditionally. Only an ASSIGNED account
+ * proves the builder is composed correctly by the routes rather than merely
+ * denying everything.
+ *
+ * Deliberately NOT `@smoke`, unlike its sibling above: the risks are
+ * asymmetric. A WIDENING regression is a live leak and belongs on the PR gate;
+ * an over-NARROWING one costs a company account a list no shipped COMPANY
+ * screen reads today (the company portal goes through `/api/company/*`), so
+ * the 4×/day full run is the right place for it and the smoke set stays small
+ * (CLAUDE.md).
+ */
+test('an assigned COMPANY account reads its own company and nothing else', async ({ page }) => {
+  await signInAsFreshUser(page, assignedCompanyEmail, PASSWORD, '/company');
+
+  const list = await page.request.get('/api/companies');
+  expect(list.status()).toBe(200);
+  const ids = ((await list.json()).companies as { id: string }[]).map((c) => c.id);
+  expect(ids, 'an assigned company account reads exactly its own row').toEqual([ownCompanyId]);
+
+  const own = await page.request.get(`/api/companies/${ownCompanyId}`);
+  expect(own.status(), 'its own company is readable by id').toBe(200);
+  expect(((await own.json()).company as { id: string }).id).toBe(ownCompanyId);
+
+  // Outside a DEFINED scope → 404, the same answer a non-existent id gets.
+  // 403 is reserved for a role whose scope is undefined (MENTEE/SOURCE above).
+  const foreign = await page.request.get(`/api/companies/${otherCompanyId}`);
+  expect(foreign.status(), 'a foreign company is a 404, never a 403 or a 200').toBe(404);
 });
 
 /**
