@@ -93,6 +93,14 @@ Anahtar `Company.externalId` — SaleVali'deki hesabın kendi kimliği.
   sözleşmedir (makineden makineye lead ingest, #2450) ve kendi idempotency
   kuralı vardır.
 
+> **Hesap içe aktarımının anahtarıyla karıştırmayın.** Tablodaki hesapları
+> eşleştiren şey `vat_id`, yoksa normalize ad + ülke
+> ([`docs/marketing-import.md`](../marketing-import.md) § *Matching*, #2405).
+> Bu besleme o eşleştirmeyi yapmaz: yalnızca `externalId` üzerinden **zaten var
+> olan** bir hesabı bulur. Boş bir `externalId`'yi doldurmak (bir boşluğu
+> kapatmak) beslemenin `Company` üzerinde yaptığı tek yazmadır; başka hiçbir
+> alana dokunmaz.
+
 ## Alanlar ve tanecik: hesap × gün
 
 | Sütun | Tip | Zorunlu | Anlamı |

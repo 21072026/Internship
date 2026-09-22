@@ -271,12 +271,15 @@ async function pruneTrialReminders(ctx: RetentionContext) {
 /**
  * Daily product-usage rows (#2446).
  *
- * The only entry here whose table is not telemetry and not personal data: one
- * row per merchant account per day, fetched from the product the tenant sells
- * (docs/marketing-vertical/salevali-usage-feed.md). It is in the registry for
- * the reason PageView is — an unbounded table that gains rows every night
- * regardless of what anyone does — and it arrives the way the registry contract
- * says a new table arrives: one entry, no second schedule.
+ * The one entry whose rows come from OUTSIDE this product: one row per merchant
+ * account per day, fetched from the product the tenant sells
+ * (docs/marketing-vertical/salevali-usage-feed.md). Like the trial claim rows
+ * above it carries no personal data, so this is a hygiene window rather than a
+ * data-protection one — but nothing else here grows on a schedule that no user
+ * of this app controls. It is in the registry for the reason PageView is — an
+ * unbounded table that gains rows every night regardless of what anyone does —
+ * and it arrives the way the registry contract says a new table arrives: one
+ * entry, no second schedule.
  *
  * Dated by `date` (the day the usage happened), not by `createdAt`: a backfill
  * that imports two years of history writes old days today, and a `createdAt`
