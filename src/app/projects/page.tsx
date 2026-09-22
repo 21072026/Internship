@@ -1,18 +1,58 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { Github, ExternalLink, ArrowLeft } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { getServerDictionary } from '@/i18n/server';
+import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
+import { DEFAULT_VERTICAL, VERTICAL_KEYS, verticalHasCapability } from '@/lib/verticals';
 
 export const dynamic = 'force-dynamic';
 
 // Public showcase of community/company projects opted into visibility.
 export default async function PublicProjectsPage() {
   const { t } = await getServerDictionary();
+
+  // WHICH PRODUCT'S SHOWCASE IS THIS (#2457)?
+  //
+  // The query below used to be `{ isPublic: true }` with no scope at all, so
+  // one deployment serving two products listed every tenant's public projects
+  // in one grid, owner names included. Not a privacy breach — the rows are
+  // opt-in public — but a marketing visitor was reading an internship showcase
+  // and vice versa, which is the thing epic #2348 exists to stop. The route is
+  // public, so there is no session to scope by; the signal is the same one the
+  // landing uses (`resolveRequestVertical`: the signed-in org first, the request
+  // host second).
+  //
+  // MARKETING answers 404, not an empty grid. "Projects" is the internship
+  // product's team/task workspace and MARKETING does not carry the `projects`
+  // capability at all (#2473/#2499) — its nav does not offer this route and its
+  // APIs refuse to write one. An empty state would claim the product has a
+  // showcase that nobody has published to; `notFound()` says the honest thing,
+  // that this page is not part of this product. The capability set decides it,
+  // so a vertical that later gains `projects` gets the showcase with no edit
+  // here.
+  //
+  // TRUST NOTE: this is exactly the COSMETIC use of the host signal that
+  // hostVertical.ts permits — the rows are already public on their own host, so
+  // a forged X-Forwarded-Host reveals nothing that visiting the other host
+  // would not. Never extend this pattern to non-public rows.
+  const vertical = await resolveRequestVertical();
+  if (!verticalHasCapability(vertical, 'projects')) notFound();
+
+  // The default vertical is "everything that is not another vertical", not
+  // `org.vertical = 'INTERNSHIP'`: `Project.orgId` is nullable (rows that
+  // predate multi-tenancy) and `toVerticalKey` resolves any unrecognised stored
+  // key to the default, so an equality filter here would quietly drop legacy
+  // projects out of the live showcase.
+  const otherVerticals = VERTICAL_KEYS.filter((key) => key !== vertical);
+  const verticalScope =
+    vertical === DEFAULT_VERTICAL
+      ? { OR: [{ orgId: null }, { org: { vertical: { notIn: otherVerticals } } }] }
+      : { org: { vertical } };
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   // Signed-in visitors arrive here from inside the app (e.g. "Browse the project
   // showcase" on /portal/projects), but this route lives outside the role shell,
@@ -22,7 +62,7 @@ export default async function PublicProjectsPage() {
   const backHref = session ? roleHome(session.user.role) : '/';
   const backLabel = session ? t.projects.backDashboard : t.projects.backHome;
   const projects = await prisma.project.findMany({
-    where: { isPublic: true },
+    where: { isPublic: true, ...verticalScope },
     orderBy: { updatedAt: 'desc' },
     select: {
       id: true, name: true, description: true, technologies: true, repoUrl: true, demoUrl: true,
