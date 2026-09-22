@@ -69,6 +69,9 @@ const PROJECT_WRITERS = ['src/app/api/projects/route.ts', 'src/app/api/projects/
 const GOAL_WRITERS = ['src/app/api/goals/route.ts', 'src/app/api/goals/[id]/route.ts'];
 const ORG_WRITERS = ['src/app/api/admin/organizations/route.ts'];
 const PROFILE_WRITERS = ['src/app/api/profile/route.ts', 'src/components/ProfileForm.tsx'];
+// The marketing account import (#2406) is the only writer of the four account
+// columns #2405/#2407 added; its validator carries their caps.
+const MARKETING_IMPORT_WRITERS = ['src/lib/marketingImport.ts'];
 
 export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   Company: {
@@ -81,6 +84,13 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     logoUrl: { limit: 'companyLogoUrl', files: COMPANY_WRITERS },
     size: { limit: 'companySize', files: COMPANY_WRITERS },
     address: { limit: 'companyAddress', files: COMPANY_WRITERS },
+    // No company FORM writes these yet (#2405/#2407): the importer's validator
+    // is the writer that has to carry their caps. A form that starts offering
+    // them adds itself here beside the importer.
+    contactName: { limit: 'companyContactName', files: MARKETING_IMPORT_WRITERS },
+    contactPhone: { limit: 'companyContactPhone', files: MARKETING_IMPORT_WRITERS },
+    vatId: { limit: 'companyVatId', files: MARKETING_IMPORT_WRITERS },
+    country: { limit: 'companyCountry', files: MARKETING_IMPORT_WRITERS },
   },
   CompanyNeed: {
     id: ID,

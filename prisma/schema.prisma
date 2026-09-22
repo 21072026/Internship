@@ -1274,6 +1274,35 @@ model Company {
   // TEXT: the company form offers 2 000 characters, far past VARCHAR(191).
   description  String?       @db.Text
   contactEmail String?
+  // The primary contact on the account (#2407) — "who do we call", beside the
+  // address column that already existed. Three plain columns rather than a
+  // `CompanyContact` table on purpose: there is no Contact model here, a
+  // `companyId` User would hand a phone number an auth identity it does not
+  // need, and CompanyInquiry's contact columns are an inbound-request record
+  // rather than an address book. A real table waits until several contacts per
+  // account are actually needed (epic-07).
+  //
+  // Deliberately NO unique constraint on contactEmail. A global `@unique` — what
+  // the inherited Marketing schema had on `Contact.email` — punches straight
+  // through the tenant boundary (docs/tenant-isolation.md): two tenants may each
+  // hold the same merchant, and one would then be unable to save its own row.
+  // Were uniqueness ever wanted here it could only be `@@unique([orgId, ...])`.
+  contactName  String?
+  contactPhone String?
+  // VAT identification number (#2405). The account's strongest identity across
+  // systems, and therefore the account import's FIRST matching key; the fallback
+  // is normalized name + country (docs/marketing-import.md).
+  //
+  // Unique per ORG, never globally: the same merchant may legitimately be an
+  // account of two tenants. MySQL permits many NULLs inside a unique index, so
+  // accounts that carry no VAT number are unconstrained — which is every row the
+  // internship product has today, and why this can be added to a populated
+  // table at all.
+  vatId        String?
+  // ISO-3166-1 alpha-2, upper case. The other half of the fallback match key:
+  // `address` is free text and cannot answer "which country is this account
+  // in", so two merchants of the same name in two countries were one row.
+  country      String?       @db.VarChar(2)
   industry     String?
   logoUrl      String?
   size         String?
@@ -1297,6 +1326,9 @@ model Company {
   // single row because nothing stops a second enquiry from the same company
   // later being linked to the account it already has.
   fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
+
+  // Org-scoped, not global — see the `vatId` comment above.
+  @@unique([orgId, vatId])
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
