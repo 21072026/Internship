@@ -34,11 +34,14 @@ export async function GET(_request: Request, { params }: Context) {
 
 export async function PATCH(request: Request, { params }: Context) {
   const { id } = await params;
-  const scope = scopeFor(await getServerSession(authOptions));
-  if ('error' in scope) return scope.error;
-  // Placement write (#2364).
-  const capGate = await requireCapability(scope.session.user.orgId, 'placements');
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 });
+  // Placement write (#2364), gated before scopeFor()'s role check for the same
+  // reason as POST /api/requisitions: one answer per module, not one per role.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
+  const scope = scopeFor(session);
+  if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);
     const protectedList = protectedFields(body);

@@ -13,12 +13,14 @@ import { logActivity } from '@/lib/activity';
 // beat scoring.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  // Placement write (#2364).
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Placement write (#2364), gated before the role check like every other
+  // handler of the module.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
+  if (session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   return await withTenantScope(session, async () => {
     const { id } = await params;

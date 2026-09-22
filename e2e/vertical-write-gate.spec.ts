@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 
@@ -48,7 +48,9 @@ const GATED = [
   // mutating handler refuses BEFORE its own role check — which is why the
   // COMPANY-only interview-request POST still answers capability_unavailable to
   // this admin. The id-bearing gates run before the row lookup, so a dummy id
-  // reaches them; PATCH handlers are exercised with their real method.
+  // reaches them; PATCH handlers are exercised with their real method. An admin
+  // passes every handler's role check, so this table cannot actually see the
+  // gate/role ORDER — the mentee test further down is what pins it.
   { path: '/api/offers', cap: 'placements' },
   { path: '/api/offers/00000000-0000-0000-0000-000000000000', cap: 'placements', method: 'PATCH' },
   { path: '/api/requisitions', cap: 'placements' },
@@ -110,6 +112,69 @@ test('an INTERNSHIP org is NOT gated — the same posts pass the capability chec
       // is anything BUT capability_unavailable (400 validation, 403 role, etc.).
       const body = await res.json().catch(() => ({}));
       expect(body.code, `${path} must not be capability-gated for INTERNSHIP`).not.toBe('capability_unavailable');
+    }
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+// The handlers of the module whose OWN role check would answer first if the gate
+// sat behind it: both requisitions routes (ADMIN|COMPANY, via authScope) and the
+// two panel handlers whose session check used to be fused with a role check. The
+// admin table above cannot see the difference, because an admin passes every one
+// of those role checks. A MENTEE passes none of them, so this is where "gate
+// before the role check" is actually observable: without it the same MARKETING
+// tenant would hear `forbidden`/401 here and `capability_unavailable` on
+// /api/offers — one module telling two different stories about whether it exists.
+const ROLE_CHECKED: { path: string; method?: string }[] = [
+  { path: '/api/requisitions' },
+  { path: '/api/requisitions/00000000-0000-0000-0000-000000000000', method: 'PATCH' },
+  { path: '/api/interview-panels' },
+  { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000/close' },
+];
+
+async function menteeInMarketing() {
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const org = await prisma.organization.create({
+    data: { name: `WGate MARKETING mentee ${stamp}`, slug: `wgate-mentee-${stamp}`, vertical: 'MARKETING' },
+  });
+  const email = uniqueEmail('wgate-marketing-mentee');
+  const mentee = await seedUser(email, 'WGatePass123', 'MENTEE', 'MARKETING Mentee');
+  await prisma.user.update({ where: { id: mentee.id }, data: { orgId: org.id } });
+  return { org, email };
+}
+
+// Neither shared sign-in helper fits this user. `signInAndSettle` waits for the
+// account-menu button, and this mentee never reaches a page that has one: the
+// mentee portal is itself a mentorship-vertical shell (#2351), so a MARKETING
+// mentee is bounced from '/portal' to the bare '/account' settings page.
+// `signInAsFreshUser` waits for that URL with `waitForURL`'s default
+// `waitUntil: 'load'`, which '/account' does not reach inside the budget under
+// `next dev`. Nothing here clicks anything — every assertion is an API call —
+// so the only thing worth waiting for is the session cookie itself.
+async function signInForApiCalls(page: Page, email: string, password: string) {
+  await page.goto('/auth/signin');
+  await page.fill('input[type="email"], input[name="email"]', email);
+  await page.fill('input[type="password"]', password);
+  await page.click('button[type="submit"]');
+  await expect
+    .poll(async () => (await (await page.request.get('/api/auth/session')).json())?.user?.email ?? null, {
+      timeout: 45_000,
+    })
+    .toBe(email);
+}
+
+test('a MARKETING mentee is refused by the capability gate, not by the handler role check', async ({ page }) => {
+  test.slow();
+  const { org, email } = await menteeInMarketing();
+  try {
+    await signInForApiCalls(page, email, 'WGatePass123');
+    for (const { path, method } of ROLE_CHECKED) {
+      const res = await page.request.fetch(path, { method: method ?? 'POST', data: {} });
+      expect(res.status(), `${method ?? 'POST'} ${path} should answer the capability gate`).toBe(403);
+      const body = await res.json();
+      expect(body.code, `${path} body.code`).toBe('capability_unavailable');
     }
   } finally {
     await cleanupByEmail(email);

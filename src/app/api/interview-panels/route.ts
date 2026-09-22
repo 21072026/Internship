@@ -25,13 +25,16 @@ const createSchema = z.object({
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // Convening a panel is a placement write (#2364); SCORING one stays under
-  // 'evaluations' (#2352, [id]/score) because it writes Evaluation rows.
+  // 'evaluations' (#2352, [id]/score) because it writes Evaluation rows. The
+  // gate runs before the role check, so a vertical without 'placements' gets
+  // the same answer here as on every other handler of the module.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
+  if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   return await withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => ({})));
