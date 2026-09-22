@@ -479,6 +479,13 @@ const en = {
     orphanFilter: 'Orphan applicants',
     orphanBadge: 'Orphan applicant',
     orphanHint: 'Applied through a public link, was declined, and has never signed in — scheduled for anonymisation.',
+    // "My candidates" quick filter (#2438) and bulk owner assignment (#2439).
+    // Owner = the mentor on the candidate's live relation; this repo has no
+    // separate owner column.
+    mineFilter: 'My candidates',
+    bulkOwnerLabel: 'Owner',
+    bulkAssignOwner: 'Assign owner',
+    bulkOwnerReassigned: '{n} reassigned',
   },
   candidateDetail: {
     companyInterest: { interested: 'Company is interested', shortlisted: 'Shortlisted by company', pass: 'Company passed' },
@@ -5673,6 +5680,10 @@ const tr: Dict = {
     orphanFilter: 'Sahipsiz başvurular',
     orphanBadge: 'Sahipsiz başvuru',
     orphanHint: 'Genel bağlantıdan başvurdu, reddedildi ve hiç giriş yapmadı — anonimleştirilmek üzere sırada.',
+    mineFilter: 'Bana atananlar',
+    bulkOwnerLabel: 'Sahip',
+    bulkAssignOwner: 'Sahip ata',
+    bulkOwnerReassigned: '{n} kayıt yeniden atandı',
   },
   candidateDetail: {
     companyInterest: { interested: 'Şirket ilgileniyor', shortlisted: 'Şirket kısa listeye aldı', pass: 'Şirket geçti' },
@@ -10783,6 +10794,10 @@ const de: Dict = {
     orphanFilter: 'Verwaiste Bewerbungen',
     orphanBadge: 'Verwaiste Bewerbung',
     orphanHint: 'Über einen öffentlichen Link beworben, abgelehnt und nie angemeldet — zur Anonymisierung vorgemerkt.',
+    mineFilter: 'Meine Kandidaten',
+    bulkOwnerLabel: 'Zuständig',
+    bulkAssignOwner: 'Zuständigkeit zuweisen',
+    bulkOwnerReassigned: '{n} neu zugewiesen',
   },
   candidateDetail: {
     companyInterest: { interested: 'Unternehmen interessiert', shortlisted: 'Vom Unternehmen auf die Shortlist gesetzt', pass: 'Unternehmen hat abgesagt' },

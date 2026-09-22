@@ -10,16 +10,33 @@ import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 import { resolveOrgId } from '@/lib/orgScope';
 import { MAX_TAGS_PER_USER } from '@/lib/tags';
+import { transferMentorship } from '@/lib/mentorTransfer';
 
 const bodySchema = z.object({
   candidateIds: z.array(z.string().min(1)).min(1).max(200),
-  action: z.enum(['activate', 'deactivate', 'advanceStage', 'addTag', 'removeTag']),
+  action: z.enum(['activate', 'deactivate', 'advanceStage', 'addTag', 'removeTag', 'assignOwner']),
   // Required by addTag/removeTag (#887) and ignored by everything else.
   tagId: z.string().min(1).optional(),
+  // Required by assignOwner (#2439) and ignored by everything else. The new
+  // owner is a mentor: this repo's owner column IS `MentorshipRelation.mentorId`.
+  ownerId: z.string().min(1).optional(),
 });
 
-// POST — bulk activate/deactivate/advanceStage candidates from the admin
-// candidates grid (EPIC: HR bulk operations). Scoped to role MENTEE as
+/**
+ * The reason every row of a bulk owner assignment is recorded with (#2439).
+ *
+ * Fixed rather than taken from the request body: the bulk control exists for
+ * the two cases where nobody picks a reason per person — somebody left the team
+ * or a portfolio was split — and `mentor_unavailable` is precisely what that
+ * means on the outgoing side. A per-row reason belongs to the single-record
+ * dialog (`POST /api/mentorship/[id]/transfer`), which still offers the whole
+ * vocabulary. The note below rides along into the ActivityLog entry so the
+ * audit trail says which of the two paths wrote the row.
+ */
+const BULK_OWNER_REASON = 'mentor_unavailable' as const;
+
+// POST — bulk activate/deactivate/advanceStage/tag/assignOwner candidates from
+// the admin candidates grid (EPIC: HR bulk operations). Scoped to role MENTEE as
 // defense in depth — this endpoint can never touch an admin/mentor account
 // even if the caller somehow sent the wrong IDs.
 export async function POST(request: Request) {
@@ -98,6 +115,82 @@ export async function POST(request: Request) {
       // Named explicitly so the UI can say "3 were already at the limit"
       // instead of quietly doing less than the admin asked for.
       skippedAtLimit: targets.length - eligible.length,
+    });
+  }
+
+  // Bulk owner assignment (#2439). Its own branch, above the stage actions, for
+  // the same reason bulk tagging is: this one does not touch `pipelineStatus`
+  // at all, and #740 is a standing reminder to leave `advanceStage` alone.
+  //
+  // WHY THIS IS NOT ONE `updateMany` ON `mentorId`: changing the mentor of a
+  // relation is `transferMentorship()` (#2289, docs/mentor-transfer.md). Only a
+  // pairing with NO history may be re-pointed in place; one that carries any
+  // work is closed ENDED_REASSIGNED and chained to a successor, because
+  // `InteractionLog` has no author column and attribution runs purely through
+  // `relation.mentorId` — a bulk `updateMany` would silently credit every
+  // meeting the outgoing mentor ran to the incoming one, for a hundred people
+  // at once. The helper also re-asks the one-active-mentor guard (#419) inside
+  // its own transaction. So this loops, one relation per iteration, and is
+  // deliberately slow rather than fast and wrong.
+  if (action === 'assignOwner') {
+    const ownerId = parsed.data.ownerId;
+    if (!ownerId) return NextResponse.json({ error: 'ownerId is required', code: 'owner_required' }, { status: 400 });
+
+    // One up-front check of the incoming owner, so a bad id answers 400 instead
+    // of reporting "0 reassigned" after 200 individually-refused transfers.
+    // transferMentorship re-validates it per call regardless.
+    const owner = await prisma.user.findFirst({
+      where: { id: ownerId, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } },
+      select: { id: true },
+    });
+    if (!owner) return NextResponse.json({ error: 'Invalid owner', code: 'invalid_owner' }, { status: 400 });
+
+    // Same MENTEE-only scoping as every other branch here, and ACTIVE only:
+    // ownership is a property of the live pairing. A selected candidate with no
+    // live relation has no owner to change — assigning one would be creating a
+    // mentorship, which is POST /api/mentorship's job and not something a
+    // checkbox in a grid should do silently.
+    const relations = await prisma.mentorshipRelation.findMany({
+      where: { menteeId: { in: candidateIds }, status: 'ACTIVE', mentee: { role: 'MENTEE' } },
+      select: { id: true, mentorId: true },
+    });
+
+    // Eligibility PER ROW, never once for the batch (the addTag branch above
+    // set that precedent): one refusal — an unassignable row, a mentee who is
+    // already on this owner, a pairing somebody closed while this ran — skips
+    // that row and nothing else.
+    let reassigned = 0;
+    for (const rel of relations) {
+      if (rel.mentorId === ownerId) continue;
+      const result = await transferMentorship({
+        relationId: rel.id,
+        toMentorId: ownerId,
+        reasonCode: BULK_OWNER_REASON,
+        reasonNote: 'bulk owner assignment',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        request,
+      });
+      if (result.status === 200) reassigned++;
+    }
+
+    await logActivity({
+      action: 'candidates.bulk.assignOwner',
+      actorId: session.user.id,
+      actorEmail: session.user.email ?? null,
+      targetType: 'user',
+      targetId: ownerId,
+      detail: `${reassigned} of ${candidateIds.length} reassigned`,
+      request,
+    });
+
+    // `updated` is what was ACTUALLY reassigned, not what was selected — the
+    // grid reports "N reassigned" from this number, so a skipped row can never
+    // be read as a moved one.
+    return NextResponse.json({
+      ok: true,
+      updated: reassigned,
+      skipped: candidateIds.length - reassigned,
     });
   }
 

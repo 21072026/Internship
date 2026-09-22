@@ -35,6 +35,15 @@ export async function GET(request: Request) {
     // The rule itself is never restated here — src/lib/orphanApplicant.ts owns
     // it, and this route asks that module both times.
     const orphanOnly = searchParams.get('orphan') === '1';
+    // "My candidates" (#2438). The owner of a funnel record in this repo is
+    // `MentorshipRelation.mentorId` — Company deliberately has no owner column
+    // — so `?mine=1` resolves to "has a LIVE relation whose mentor is me".
+    // Scoped to ACTIVE on purpose: a pairing I finished (or was moved off) is
+    // somebody else's row now, and listing it under "mine" is how a shared
+    // queue grows ghosts. It is merged into the same `some` as the stage /
+    // company / project filters, so all of them have to hold on ONE relation
+    // and none of them resets the others.
+    const mine = searchParams.get('mine') === '1';
     // Pagination. `all=1` returns everything (used by CSV/Excel export so the
     // download isn't limited to the current page).
     const all = searchParams.get('all') === '1';
@@ -62,6 +71,10 @@ export async function GET(request: Request) {
     }
 
     const relSome: Record<string, unknown> = {};
+    if (mine) {
+      relSome.mentorId = session.user.id;
+      relSome.status = 'ACTIVE';
+    }
     if (pipelineStatus) relSome.pipelineStatus = pipelineStatus;
     if (company) relSome.company = { name: company };
     if (project) relSome.project = { name: { contains: project } };
