@@ -72,7 +72,15 @@ async function adminIn(vertical: 'INTERNSHIP' | 'MARKETING') {
   return { org, email };
 }
 
+// Both tests walk the whole table behind ONE sign-in — 22 round trips as of
+// #2364, which is more than the 60s default allows against a local `next dev`
+// server, where the first hit on each of those routes compiles it. CI builds
+// the app (`npm run start`) and gets through the table in seconds; this keeps
+// the local run from going red for a reason that has nothing to do with the
+// gate. Splitting per capability would trade the timeout for four more
+// sign-ins, which is the slower half of the test.
 test('a MARKETING org is refused at every gated write path with capability_unavailable', async ({ page }) => {
+  test.slow();
   const { org, email } = await adminIn('MARKETING');
   try {
     await signInAndSettle(page, email, 'WGatePass123', '/admin');
@@ -91,6 +99,7 @@ test('a MARKETING org is refused at every gated write path with capability_unava
 });
 
 test('an INTERNSHIP org is NOT gated — the same posts pass the capability check', async ({ page }) => {
+  test.slow();
   const { org, email } = await adminIn('INTERNSHIP');
   try {
     await signInAndSettle(page, email, 'WGatePass123', '/admin');
