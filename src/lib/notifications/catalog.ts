@@ -208,6 +208,16 @@ export const NOTIFICATION_EVENTS = [
   // ending to mail anybody about (src/lib/mentorTransfer.ts). Its sibling
   // `reassignedAway` — a real transfer — does mail, reusing the re-match notice.
   { key: 'mentorship.assignmentCorrected', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
+  // The batch shape of the two rows above (#2439, POST /api/admin/candidates/bulk).
+  // A portfolio hand-over names ONE incoming mentor on up to 200 rows and
+  // usually drains one outgoing mentor, so the per-row notices would reach the
+  // same person 200 times — the storm the sibling advanceStage branch keeps a
+  // `notifiedMentees` set to prevent. The bulk caller suppresses them and sends
+  // exactly one of these per mentor, carrying the count instead of a name.
+  // In-app ONLY, and deliberately: the whole point is that the mailbox does not
+  // receive the batch (the per-row e-mail is suppressed with the notice).
+  { key: 'mentorship.bulkAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'dashboard', params: ['count'] },
+  { key: 'mentorship.bulkReassignedAway', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'dashboard', params: ['count'] },
 
   // Goals, evaluations, and the projects they hang off.
   { key: 'goal.assigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['title'] },

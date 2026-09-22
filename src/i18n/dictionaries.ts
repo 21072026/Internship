@@ -480,11 +480,14 @@ const en = {
     orphanBadge: 'Orphan applicant',
     orphanHint: 'Applied through a public link, was declined, and has never signed in — scheduled for anonymisation.',
     // "My candidates" quick filter (#2438) and bulk owner assignment (#2439).
-    // Owner = the mentor on the candidate's live relation; this repo has no
-    // separate owner column.
+    // The "owner" of a candidate in this repo IS the mentor on their live
+    // relation — there is no separate owner column — so the base dictionary
+    // says mentor, next to the grid's own "Mentor" column and the per-row
+    // `assignMentor.label`. "Owner" is the MARKETING word for the same person
+    // and lives in verticalOverlays.ts, the same way mineFilter does.
     mineFilter: 'My candidates',
-    bulkOwnerLabel: 'Owner',
-    bulkAssignOwner: 'Assign owner',
+    bulkOwnerLabel: 'Mentor',
+    bulkAssignOwner: 'Assign mentor',
     bulkOwnerReassigned: '{n} reassigned',
   },
   candidateDetail: {
@@ -2051,6 +2054,16 @@ const en = {
       'mentorship.mentorChanged': 'Your mentor has changed — {mentorName} is now your mentor.',
       'mentorship.reassignedAway': 'Your mentorship with {menteeName} has ended — they are continuing with another mentor.',
       'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your mentee.',
+      // Bulk owner assignment (#2439). ONE row each, whatever the batch size:
+      // an admin handing a portfolio over names the same incoming mentor on
+      // every row and usually drains one outgoing mentor, so the per-row
+      // notices above are suppressed for a batch and these carry the total.
+      // Phrased as "label: {count}" rather than "{count} mentees were…" so one
+      // template is grammatical at every size — the repo's other way out of
+      // this is a singular/plural key PAIR (project.newGoal/newGoals), and a
+      // pair here would need the mentee's name on one side and not the other.
+      'mentorship.bulkAssigned': 'New mentees assigned to you: {count}.',
+      'mentorship.bulkReassignedAway': 'Mentorships ended, the mentees continuing with another mentor: {count}.',
       'application.received': '{name} applied to be your mentee.',
       'mentorship.connected': '{name} joined through your invitation — you are now connected.',
       'mentorship.autoLinkSkipped':
@@ -5681,8 +5694,8 @@ const tr: Dict = {
     orphanBadge: 'Sahipsiz başvuru',
     orphanHint: 'Genel bağlantıdan başvurdu, reddedildi ve hiç giriş yapmadı — anonimleştirilmek üzere sırada.',
     mineFilter: 'Bana atananlar',
-    bulkOwnerLabel: 'Sahip',
-    bulkAssignOwner: 'Sahip ata',
+    bulkOwnerLabel: 'Mentör',
+    bulkAssignOwner: 'Mentör ata',
     bulkOwnerReassigned: '{n} kayıt yeniden atandı',
   },
   candidateDetail: {
@@ -7217,6 +7230,9 @@ const tr: Dict = {
       'mentorship.mentorChanged': 'Mentörün değişti — artık mentörün {mentorName}.',
       'mentorship.reassignedAway': '{menteeName} ile mentorluğun sona erdi — başka bir mentörle devam ediyor.',
       'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin mentee’in değil.',
+      // Toplu sahip atama (#2439). Parti ne kadar büyük olursa olsun tek satır.
+      'mentorship.bulkAssigned': 'Sana atanan yeni mentee sayısı: {count}.',
+      'mentorship.bulkReassignedAway': 'Sona eren mentorluk sayısı (mentee’ler başka bir mentörle devam ediyor): {count}.',
       'application.received': '{name} mentee’n olmak için başvurdu.',
       'mentorship.connected': '{name} davetinle katıldı — artık bağlantıdasınız.',
       'mentorship.autoLinkSkipped':
@@ -10795,8 +10811,8 @@ const de: Dict = {
     orphanBadge: 'Verwaiste Bewerbung',
     orphanHint: 'Über einen öffentlichen Link beworben, abgelehnt und nie angemeldet — zur Anonymisierung vorgemerkt.',
     mineFilter: 'Meine Kandidaten',
-    bulkOwnerLabel: 'Zuständig',
-    bulkAssignOwner: 'Zuständigkeit zuweisen',
+    bulkOwnerLabel: 'Mentor',
+    bulkAssignOwner: 'Mentor zuweisen',
     bulkOwnerReassigned: '{n} neu zugewiesen',
   },
   candidateDetail: {
@@ -12332,6 +12348,9 @@ const de: Dict = {
       'mentorship.mentorChanged': 'Dein Mentor hat sich geändert — {mentorName} ist jetzt dein Mentor.',
       'mentorship.reassignedAway': 'Dein Mentoring mit {menteeName} ist beendet — die Person setzt es mit einem anderen Mentor fort.',
       'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Mentee.',
+      // Sammelzuweisung (#2439). Jeweils eine Zeile, egal wie groß der Stapel.
+      'mentorship.bulkAssigned': 'Neu zugewiesene Mentees: {count}.',
+      'mentorship.bulkReassignedAway': 'Beendete Mentorings, die Mentees setzen sie mit einem anderen Mentor fort: {count}.',
       'application.received': '{name} hat sich als dein Mentee beworben.',
       'mentorship.connected': '{name} ist über deine Einladung beigetreten — ihr seid jetzt verbunden.',
       'mentorship.autoLinkSkipped':

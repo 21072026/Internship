@@ -156,6 +156,23 @@ test('bulk owner assignment follows the transfer rule per row and reports what a
     expect(successor.previousRelationId).toBe(workedRel.id);
     expect(successor.pipelineStatus).toBe('INTERNSHIP_IN_PROGRESS_450');
 
+    // ONE notice per person, not one per row. Both mentees moved to the same
+    // incoming owner off the same outgoing one, so the per-row "a mentee was
+    // assigned to you" notification (and its e-mail) is suppressed for a batch
+    // and replaced by a single summary carrying the count — the same rule the
+    // advanceStage branch keeps a `notifiedMentees` set for. Asserted on the
+    // rows rather than on mail, which no e2e environment sends.
+    const newOwnerNotices = await prisma.notification.findMany({ where: { userId: newOwner.id } });
+    expect(newOwnerNotices).toHaveLength(1);
+    expect(newOwnerNotices[0].type).toBe('mentorship.bulkAssigned');
+    expect((newOwnerNotices[0].params as { count?: number } | null)?.count).toBe(2);
+    const oldOwnerNotices = await prisma.notification.findMany({ where: { userId: oldOwner.id } });
+    expect(oldOwnerNotices).toHaveLength(1);
+    expect(oldOwnerNotices[0].type).toBe('mentorship.bulkReassignedAway');
+    expect((oldOwnerNotices[0].params as { count?: number } | null)?.count).toBe(2);
+    // The mentee is a different person on every row, so they keep theirs.
+    expect(await prisma.notification.count({ where: { userId: fresh.id, type: 'mentorship.mentorChanged' } })).toBe(1);
+
     // The invariant the whole operation exists to keep: exactly one live mentor.
     for (const menteeId of [fresh.id, worked.id]) {
       const live = await prisma.mentorshipRelation.count({ where: { menteeId, status: 'ACTIVE' } });
@@ -240,6 +257,18 @@ test('the "my candidates" filter composes with search, rides in the URL, and fol
     await page.reload();
     await expect(page.getByTestId('candidates-mine-filter')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId(`candidate-card-${ownMentee.id}`)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId(`candidate-card-${theirMentee.id}`)).toHaveCount(0);
+
+    // The stage chip and this toggle live in the same address bar, and clearing
+    // one must not take the other with it: that is the "shareable view" the
+    // issue asks for, and the chip used to replace the whole query string.
+    await page.goto('/admin/candidates?status=APPLICATION_100&mine=1');
+    await expect(page.getByTestId('candidates-status-filter-chip')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('candidates-mine-filter')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('candidates-status-filter-chip').getByRole('button', { name: 'clear filter' }).click();
+    await expect(page).toHaveURL(/mine=1/);
+    await expect(page).not.toHaveURL(/status=/);
+    await expect(page.getByTestId('candidates-mine-filter')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId(`candidate-card-${theirMentee.id}`)).toHaveCount(0);
 
     // Back to everything, then hand the other owner's mentee over through the

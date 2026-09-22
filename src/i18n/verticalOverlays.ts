@@ -44,7 +44,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   MARKETING: {
     en: {
       nav: { candidates: 'Leads' },
-      candidates: { title: 'Leads', subtitle: 'Browse and search leads', mineFilter: 'My accounts' },
+      candidates: {
+        title: 'Leads',
+        subtitle: 'Browse and search leads',
+        mineFilter: 'My accounts',
+        // The person on the live relation. INTERNSHIP calls them the mentor,
+        // MARKETING calls them the owner — same row, same column (#2439).
+        bulkOwnerLabel: 'Owner',
+        bulkAssignOwner: 'Assign owner',
+      },
       // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
       publicNav: {
@@ -142,7 +150,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
       nav: { candidates: 'Müşteri Adayları' },
-      candidates: { title: 'Müşteri Adayları', subtitle: 'Müşteri adaylarını görüntüle ve ara', mineFilter: 'Benim müşterilerim' },
+      candidates: {
+        title: 'Müşteri Adayları',
+        subtitle: 'Müşteri adaylarını görüntüle ve ara',
+        mineFilter: 'Benim müşterilerim',
+        bulkOwnerLabel: 'Sahip',
+        bulkAssignOwner: 'Sahip ata',
+      },
       publicNav: {
         homeLink: 'SaleVali — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
@@ -228,7 +242,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     },
     de: {
       nav: { candidates: 'Leads' },
-      candidates: { title: 'Leads', subtitle: 'Leads durchsuchen', mineFilter: 'Meine Kunden' },
+      candidates: {
+        title: 'Leads',
+        subtitle: 'Leads durchsuchen',
+        mineFilter: 'Meine Kunden',
+        bulkOwnerLabel: 'Zuständig',
+        bulkAssignOwner: 'Zuständigkeit zuweisen',
+      },
       publicNav: {
         homeLink: 'SaleVali — zur Startseite',
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',

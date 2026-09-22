@@ -198,10 +198,24 @@ in place, a worked one is closed and chained. A bulk `updateMany` on `mentorId`
 is exactly the write this document exists to forbid, and at batch size it would
 re-attribute a hundred mentors' interaction logs in one request.
 
-Three consequences worth knowing before you touch it:
+Four consequences worth knowing before you touch it:
 
-- **It is slow on purpose.** One transaction (and one round of notifications)
-  per row, capped at the endpoint's existing 200 ids. Correct beats fast here.
+- **It is slow on purpose.** One transaction per row, capped at the endpoint's
+  existing 200 ids. Correct beats fast here. The loop is not transactional and
+  commits row by row, so an error is caught and the batch answers with what it
+  managed plus `partial: true` rather than dropping the count on the floor;
+  re-running it is safe, because a row already on that owner is skipped.
+- **Each mentor is told ONCE, not once per row.** Every row of a batch names
+  the same incoming mentor, and a hand-over usually drains one outgoing mentor
+  too, so the per-row notices of the single-record path would arrive up to 200
+  times for one person — with an e-mail each. The caller passes `batched: true`,
+  which silences both mentor notices inside `transferMentorship()`, and sends
+  one `mentorship.bulkAssigned` / `mentorship.bulkReassignedAway` notification
+  per mentor afterwards, carrying the count. Those two are **in-app only**: the
+  suppressed e-mails are the point, not a casualty. The MENTEE's notice and
+  mail are untouched — that is a different person on every row, one each.
+  This mirrors the `notifiedMentees` set in the same file's `advanceStage`
+  branch; if you add a third caller that loops, it needs the same flag.
 - **Eligibility is per row.** A selected candidate with no `ACTIVE` relation has
   no owner to change — assigning one would be *creating* a mentorship, which is
   `POST /api/mentorship`'s job — and one already on that owner is a no-op. Both
@@ -241,5 +255,6 @@ and never render the server's English `error` literal.
   with history handed over (stage carried, chain set, history left where it was),
   and the `already_mentored` body naming the current mentor.
 - `e2e/admin-bulk-candidates.spec.ts` — the bulk caller: one batch holding both
-  shapes plus a candidate with no pairing at all, asserted row by row, and the
-  report counting only what moved.
+  shapes plus a candidate with no pairing at all, asserted row by row, the
+  report counting only what moved, and exactly one summary notification for each
+  of the two mentors instead of one per row.

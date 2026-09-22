@@ -318,7 +318,14 @@ export default function CandidatesPage() {
               type="button"
               onClick={() => {
                 setStatusFilter('');
-                window.history.replaceState(null, '', '/admin/candidates');
+                // Drop the stage param, keep everything else. This used to
+                // replace the whole query string with a bare path, which since
+                // #2438 silently wiped `mine=1` out of the address bar while
+                // the filter stayed ON — the shared URL then showed a colleague
+                // a different list than the one it was copied from.
+                const url = new URL(window.location.href);
+                url.searchParams.delete('status');
+                window.history.replaceState(null, '', `${url.pathname}${url.search}`);
               }}
               className="text-blue-500 hover:text-blue-800"
               aria-label="clear filter"
