@@ -6,7 +6,7 @@ import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
-import { FUNNEL_LEAD_ROLE } from '@/lib/leadAttribution';
+import { attributedLeadWhere } from '@/lib/leadAttribution';
 import { getLocale } from '@/i18n/server';
 
 // GET — all sources with lead counts + conversion breakdown (admin).
@@ -16,6 +16,13 @@ import { getLocale } from '@/i18n/server';
 // `outcomeStageKeys()` (a hardcoded HIRED_660/EMPLOYED_700 reported 0% for every
 // source of an org on its own catalogue, #1882), and who may be counted toward a
 // source is src/lib/leadAttribution.ts.
+//
+// The ratio's DENOMINATOR is filtered by the same `attributedLeadWhere()` as its
+// numerator. It was not: a bare `_count` of the relation counts every User with
+// that `sourceId`, and on a SOURCE login that column records which source the
+// account speaks for rather than who referred it — so on this very screen, where
+// a partner institution having its own login is the normal case, a source with
+// one partner login and one hired lead reported 50% instead of 100%.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -28,14 +35,14 @@ export async function GET() {
 
   const sources = await prisma.source.findMany({
     orderBy: { name: 'asc' },
-    include: { _count: { select: { users: true } } },
+    include: { _count: { select: { users: { where: attributedLeadWhere() } } } },
   });
 
   // For each source, how many of its leads reached a finished stage.
   const hiredRows = await prisma.user.groupBy({
     by: ['sourceId'],
     where: {
-      role: FUNNEL_LEAD_ROLE,
+      ...attributedLeadWhere(),
       sourceId: { not: null },
       menteeRelations: { some: { pipelineStatus: { in: outcome.finished } } },
     },

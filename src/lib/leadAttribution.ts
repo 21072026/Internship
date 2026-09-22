@@ -36,15 +36,32 @@
 //   2. A `sourceId` that is not a referral. On a SOURCE login, `sourceId`
 //      records *which source that account speaks for* — not who referred them
 //      (src/lib/referrer.ts spells this out, and `encodeReferrer` already
-//      honours it). Counting those would show a source as having referred
-//      itself. The old filter excluded them by accident; now it is excluded on
-//      purpose, from the module that owns the rule.
+//      honours it). Counting one would show a source as having referred itself,
+//      and on the `sourcing` module's own screen that is the NORMAL case: a
+//      partner institution with a login has exactly such a row pointing at it.
+//
+//      Rule 1 already excludes those accounts today, because the lead role is
+//      not SOURCE. So this is not a second filter bolted onto the query — it is
+//      the reason the population may never be widened without re-checking, and
+//      `attributedLeadRoles()` below is where that check lives: it filters the
+//      role list through `sourceIsReferral`, so the day a role is added here,
+//      one whose `sourceId` is not a referral is dropped rather than counted.
 //
 // Widening the population to "everyone except SOURCE" was considered and
 // rejected: it would count admins and reps as unattributed leads in the
 // `unsourced` bucket, which is the one number on this report whose whole job is
 // to be honest about what is untracked.
+//
+// ── ONE POPULATION, NUMERATOR AND DENOMINATOR ──────────────────────────────
+//
+// Every query behind a number on this report spreads `attributedLeadWhere()`:
+// the per-source total, the per-source finished count and the `unsourced`
+// bucket. They used to be spelled out one by one, and `GET /api/admin/sources`
+// got it wrong — its numerator filtered on the role while its denominator was a
+// bare `_count` of every User pointing at the source, so a source with a partner
+// login and one won lead reported 50% conversion instead of 100%.
 
+import type { Role } from '@prisma/client';
 import { sourceIsReferral } from './referrer';
 
 /**
@@ -53,14 +70,31 @@ import { sourceIsReferral } from './referrer';
  * `menteeId` User an internship mentee is. See the header for why this is one
  * named constant rather than a per-vertical lookup.
  */
-export const FUNNEL_LEAD_ROLE = 'MENTEE';
+export const FUNNEL_LEAD_ROLE: Role = 'MENTEE';
 
 /**
- * May this person be counted toward the source they point at? Both rules from
- * the header in one place, so a caller cannot honour half of it.
+ * Every role this report may attribute to a source. One entry today; a list,
+ * because that is what makes the SOURCE guard below reachable rather than
+ * decorative.
  */
-export function countsTowardSource(role: string | null | undefined): boolean {
-  return role === FUNNEL_LEAD_ROLE && sourceIsReferral(role);
+export const ATTRIBUTED_LEAD_ROLES: readonly Role[] = [FUNNEL_LEAD_ROLE];
+
+/**
+ * The roles actually counted: the list above, minus any role whose `sourceId`
+ * is not a referral pointer (rule 2 in the header). Takes the list as an
+ * argument so the rule can be exercised against a widened one.
+ */
+export function attributedLeadRoles(roles: readonly Role[] = ATTRIBUTED_LEAD_ROLES): Role[] {
+  return roles.filter((r) => sourceIsReferral(r));
+}
+
+/**
+ * The Prisma `where` fragment that defines the attributed population. Both
+ * halves of every ratio on this report spread this one fragment — see the
+ * header's last section for the bug that made that a rule.
+ */
+export function attributedLeadWhere(): { role: { in: Role[] } } {
+  return { role: { in: attributedLeadRoles() } };
 }
 
 /** One attributed person: the stage key of every funnel record they lead. */

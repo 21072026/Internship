@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
+import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // Lead attribution for a MARKETING tenant (#2421, story #2393).
 //
@@ -16,10 +17,19 @@ import { signInAndSettle } from './helpers/auth';
 //      The spec therefore asserts BOTH halves: no Sources nav entry, and the
 //      attribution table on the analytics page.
 //
-//   2. THE COUNT. "Creating an account with source X makes X's count 1" — the
-//      acceptance criterion folded into this task from #2398 (T-8.1.3, the
-//      campaigns e2e that has no subject because there is no Campaign model;
-//      `Source` carries marketing attribution instead).
+//   2. THE COUNT, on this tenant's OWN stage catalogue. The org is provisioned
+//      with the MARKETING preset, so its finished stage is DEAL_WON and the
+//      canonical HIRED_660/EMPLOYED_700 exist nowhere in it — which is the whole
+//      point: a hardcoded finished set reports 0% from every source here, for
+//      ever (#1882), and a fixture left on the default catalogue would pass
+//      either way. Both attribution endpoints are asserted, because only
+//      /api/admin/sources still carried that literal before this slice.
+//      "Creating an account with source X makes X's count 1" is the acceptance
+//      criterion folded into this task from #2398 (T-8.1.3, the campaigns e2e
+//      that has no subject because there is no Campaign model; `Source` carries
+//      marketing attribution instead) — and the source here ALSO has a partner
+//      login of its own pointing at it, the normal case on the sourcing screen,
+//      which must not inflate the denominator into "2 leads, 50% conversion".
 //
 // The premium gate is deliberately still in the way: attribution is a paid
 // report for every vertical (see the route header for the reasoning), so the
@@ -37,10 +47,29 @@ test('a MARKETING admin reaches lead attribution from /admin/analytics, and a so
   const org = await prisma.organization.create({
     data: { name: `Attr MKT ${stamp}`, slug: `attr-mkt-${stamp}`, vertical: 'MARKETING' },
   });
+  // The tenant's own funnel: its finished stage is DEAL_WON, not HIRED_660.
+  const preset = defaultTemplateForVertical('MARKETING');
+  if (!preset) throw new Error('MARKETING must provision a stage preset');
+  const presetStages = templateStagePayload(preset, 'en').stages;
+  await prisma.pipelineStage.createMany({
+    data: presetStages.map((st) => ({
+      orgId: org.id,
+      key: st.key,
+      label: st.label,
+      order: st.order,
+      isTerminal: st.isTerminal,
+      isOffPath: st.isOffPath,
+      color: st.color,
+    })),
+  });
+  const wonStage = presetStages.find((st) => st.isTerminal && !st.isOffPath);
+  if (!wonStage) throw new Error('the marketing preset must have a won stage');
+
   const adminEmail = uniqueEmail('attr-admin');
   const repEmail = uniqueEmail('attr-rep');
   const leadEmail = uniqueEmail('attr-lead');
   const untrackedEmail = uniqueEmail('attr-untracked');
+  const partnerEmail = uniqueEmail('attr-partner');
   const pw = 'AttrPass123';
 
   const admin = await seedUser(adminEmail, pw, 'ADMIN', 'Attribution Admin');
@@ -51,14 +80,19 @@ test('a MARKETING admin reaches lead attribution from /admin/analytics, and a so
   const untracked = await seedUser(untrackedEmail, 'x', 'MENTEE', 'Untracked Lead');
 
   const source = await prisma.source.create({ data: { name: `Trade fair ${stamp}`, orgId: org.id } });
+  // The source's OWN login. On a SOURCE account `sourceId` records which source
+  // the account speaks for, not who referred it (src/lib/referrer.ts) — so this
+  // row must land in neither the numerator nor the denominator.
+  const partner = await seedUser(partnerEmail, 'x', 'SOURCE', 'Attribution Partner');
 
   await prisma.user.updateMany({ where: { id: { in: [admin.id, rep.id, untracked.id] } }, data: { orgId: org.id } });
   await prisma.user.update({ where: { id: lead.id }, data: { orgId: org.id, sourceId: source.id } });
+  await prisma.user.update({ where: { id: partner.id }, data: { orgId: org.id, sourceId: source.id } });
 
-  // The lead is in the funnel and reached the finished stage of this org's
-  // (default) catalogue — so the source converted, not merely delivered.
+  // The lead is in the funnel and reached the finished stage of THIS org's
+  // catalogue — so the source converted, not merely delivered.
   const relation = await prisma.mentorshipRelation.create({
-    data: { mentorId: rep.id, menteeId: lead.id, pipelineStatus: 'HIRED_660' },
+    data: { mentorId: rep.id, menteeId: lead.id, pipelineStatus: wonStage.key },
   });
 
   try {
@@ -90,6 +124,20 @@ test('a MARKETING admin reaches lead attribution from /admin/analytics, and a so
     // The unsourced bucket is still reported, and our untracked lead is in it.
     expect(body.unsourced).toBeGreaterThanOrEqual(1);
 
+    // The other attribution endpoint agrees — the one that until this slice
+    // counted against a hardcoded HIRED_660/EMPLOYED_700 (0% here, for ever) and
+    // divided by an unfiltered count of everyone pointing at the source (which
+    // includes the partner login above, i.e. 1/2 = 50%).
+    const listed = await page.request.get('/api/admin/sources');
+    expect(listed.ok()).toBeTruthy();
+    const stat = ((await listed.json()) as {
+      sources: { id: string; mentees: number; hired: number; conversion: number }[];
+    }).sources.find((x) => x.id === source.id);
+    expect(stat).toBeTruthy();
+    expect(stat!.mentees).toBe(1);
+    expect(stat!.hired).toBe(1);
+    expect(stat!.conversion).toBe(100);
+
     // And the table is actually on the page a MARKETING admin can open.
     await page.goto('/admin/analytics');
     const card = page.getByTestId('source-conversion');
@@ -105,6 +153,7 @@ test('a MARKETING admin reaches lead attribution from /admin/analytics, and a so
   } finally {
     await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
     await prisma.mentorshipRelation.deleteMany({ where: { id: relation.id } });
+    await cleanupByEmail(partnerEmail);
     await cleanupByEmail(leadEmail);
     await cleanupByEmail(untrackedEmail);
     await cleanupByEmail(repEmail);

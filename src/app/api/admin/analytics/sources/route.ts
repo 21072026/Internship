@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
 import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
-import { FUNNEL_LEAD_ROLE, sourceAttributionRows } from '@/lib/leadAttribution';
+import { attributedLeadWhere, sourceAttributionRows } from '@/lib/leadAttribution';
 import { getLocale } from '@/i18n/server';
 
 // GET — lead attribution: per referral source, how many people came in and what
@@ -62,7 +62,7 @@ export async function GET() {
         id: true,
         name: true,
         users: {
-          where: { role: FUNNEL_LEAD_ROLE },
+          where: attributedLeadWhere(),
           select: { menteeRelations: { select: { pipelineStatus: true } } },
         },
       },
@@ -80,7 +80,7 @@ export async function GET() {
     // People with no source at all, so the report accounts for everyone — the
     // untracked share is itself the answer to "how much of this do we know?",
     // and it is the reason no separate "no campaign" bucket is needed.
-    const unsourced = await prisma.user.count({ where: { role: FUNNEL_LEAD_ROLE, sourceId: null } });
+    const unsourced = await prisma.user.count({ where: { ...attributedLeadWhere(), sourceId: null } });
 
     return NextResponse.json({
       sources: rows,

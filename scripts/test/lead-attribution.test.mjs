@@ -11,6 +11,8 @@
 //       argument, and the tests use a non-canonical one on purpose.
 //     • counting a SOURCE login as a person that source referred shows the
 //       source as having referred itself (src/lib/referrer.ts).
+//     • filtering the NUMERATOR of a conversion ratio and not its denominator
+//       reports a source that has a partner login at half its real rate.
 //     • a person with two funnel records, one won and one open, is ONE
 //       conversion, not two and not zero.
 //
@@ -25,9 +27,8 @@ import { register } from 'node:module';
 // the runner needs the shared extensionless hook. Dynamic import, after
 // register() — a static one is hoisted above it (see the hook's header).
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
-const { FUNNEL_LEAD_ROLE, countsTowardSource, sourceAttributionRows } = await import(
-  '../../src/lib/leadAttribution.ts'
-);
+const { FUNNEL_LEAD_ROLE, ATTRIBUTED_LEAD_ROLES, attributedLeadRoles, attributedLeadWhere, sourceAttributionRows } =
+  await import('../../src/lib/leadAttribution.ts');
 const { encodeReferrer, sourceIsReferral } = await import('../../src/lib/referrer.ts');
 
 // A tenant that renamed its pipeline — deliberately NOT the canonical keys.
@@ -37,16 +38,26 @@ test('a SOURCE account is never counted toward the source it speaks for', () => 
   // The column means "which source this account speaks for" on that one role,
   // so reading it as a referral makes a source look like its own best channel.
   assert.equal(sourceIsReferral('SOURCE'), false);
-  assert.equal(countsTowardSource('SOURCE'), false);
-  // And the two rules agree with the encoder that already shipped the same one.
+  // The guard is on the ROLE LIST, not on a per-person predicate: today the
+  // lead role alone already excludes SOURCE, so the only way to prove the rule
+  // is to hand the filter a widened list — exactly what a later slice adding a
+  // role here would do. SOURCE must not survive it.
+  assert.deepEqual(attributedLeadRoles([FUNNEL_LEAD_ROLE, 'SOURCE']), [FUNNEL_LEAD_ROLE]);
+  assert.deepEqual(attributedLeadRoles(['SOURCE']), []);
+  assert.ok(!attributedLeadWhere().role.in.includes('SOURCE'));
+  // And the rule agrees with the encoder that already shipped the same one.
   assert.equal(encodeReferrer({ sourceId: 's1', role: 'SOURCE' }), '');
   assert.equal(encodeReferrer({ sourceId: 's1', role: FUNNEL_LEAD_ROLE }), 'source:s1');
 });
 
-test('only the funnel lead side is counted — staff attributed to a source are not leads', () => {
-  assert.equal(countsTowardSource(FUNNEL_LEAD_ROLE), true);
-  for (const role of ['ADMIN', 'MENTOR', 'COMPANY', null, undefined, '']) {
-    assert.equal(countsTowardSource(role), false, `${String(role)} must not count as a lead`);
+test('the queried population is the funnel lead side — staff are neither leads nor unsourced', () => {
+  // This is the fragment BOTH halves of every ratio spread (the per-source
+  // total, the per-source finished count and the `unsourced` bucket), so a
+  // denominator can no longer count people a numerator would never count.
+  assert.deepEqual(attributedLeadWhere(), { role: { in: [FUNNEL_LEAD_ROLE] } });
+  assert.deepEqual([...ATTRIBUTED_LEAD_ROLES], [FUNNEL_LEAD_ROLE]);
+  for (const role of ['ADMIN', 'MENTOR', 'COMPANY', 'SOURCE']) {
+    assert.ok(!attributedLeadWhere().role.in.includes(role), `${role} must not be counted as a lead`);
   }
 });
 
