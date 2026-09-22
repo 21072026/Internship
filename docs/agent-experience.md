@@ -7223,3 +7223,26 @@ belirli bir testid'le aramaktan daha güvenilir.
   bile) düşüyor. Yeni koşudan önce `lsof -nP -iTCP:3000 -sTCP:LISTEN -t | xargs -r kill -9`.
   Hata metnini oku: `TimeoutError ... account-menu-button` = ortam/secret sorunu,
   `ERR_CONNECTION_REFUSED` = sunucu hiç ayakta değil; ikisi de kod değil.
+
+## 2026-09-22 — Gövdeyi okuyan bir kapı, aynı nesneye başka anahtarla gelen isteği görmez (#2504)
+
+- **Bir yetenek/yetki kapısı `if (body.projectId)` şeklindeyse, o modüle ait nesneye BAŞKA bir
+  anahtarla ulaşan her yol kapının dışındadır.** `/api/meetings/instant` `projects` kapısını
+  yalnızca gövdede `projectId` varken çalıştırıyordu; proje grup sohbetinden başlatılan çağrı
+  `conversationId` taşıdığı için kapıyı hiç görmüyordu. Sonuç tuhaf bir asimetri: odayı
+  *yaratmak* (`POST /api/conversations`) kapılı, o odada *görüşme yapmak* serbest. Ders: kapıyı
+  "hangi alan geldi" üzerinden değil, **"istek hangi modülün nesnesine dokunuyor"** üzerinden
+  kur; gövdede birden fazla bağlam anahtarı kabul eden her endpoint'te (`relationIds` /
+  `projectId` / `conversationId` gibi) her anahtarın hangi modüle çıktığını tek tek sor.
+- **Çözerken "tam olarak bir bağlam" değişmezini bozma.** Meeting satırı #1051 gereği tek
+  bağlam taşır; sohbetten başlatılan görüşmenin `projectId`'si null kalmalı. O yüzden sahip
+  projeyi satıra yazmak yerine çözümleyiciden **ayrı bir alan** (`owningProjectId`) olarak
+  dışarı verdim — kapı onu okuyor, satır eskisi gibi yazılıyor. Bir değişmezi korumak için
+  fazladan alan eklemek, değişmezi esnetmekten iyidir.
+- **`git checkout <dal>` commit edilmemiş değişiklikleri YANINDA taşır.** `git add -A` sonrası
+  başka dala geçince 2504'ün üç dosyalık değişikliği ebeveyn dala "sızmış" göründü (worktree'de
+  `git stash` de yasak, çünkü stack paylaşımlı). Dal değiştirmeden önce **her zaman**
+  `git status --short` çalıştır; iş bitmemişse geçici WIP commit at, sonra geç.
+- **Arka planda Playwright koşarken dosya düzenleme.** `next dev` anında yeniden derler,
+  "Fast Refresh had to perform a full reload" client state'i siler ve alakasız testler
+  `element(s) not found` ile düşer. Koşu bitmeden kaynak dosyaya dokunma.
