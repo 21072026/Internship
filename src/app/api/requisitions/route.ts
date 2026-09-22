@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import type { Prisma } from '@prisma/client';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -78,7 +79,17 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const scope = authScope(await getServerSession(authOptions));
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 });
+  // A requisition is the placement module's demand side (#2364): a vertical
+  // without 'placements' is refused before its OWN role check, before
+  // validation and before any write. authScope() runs after the gate on
+  // purpose: gating behind it would answer `forbidden` to a MENTEE of a
+  // MARKETING org and `capability_unavailable` to that org's admin, i.e. the
+  // same module reporting itself present on one route and absent on another.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
+  const scope = authScope(session);
   if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
@@ -210,6 +211,10 @@ const createSchema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // An offer is the placement module's tail (#2364): a vertical without
+  // 'placements' is refused before the role check and before any write.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   if (session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
