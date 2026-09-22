@@ -35,11 +35,19 @@ test('a new MARKETING org is provisioned with the marketing funnel, an INTERNSHI
       where: { orgId: mktId }, orderBy: { order: 'asc' }, select: { key: true, isTerminal: true, isOffPath: true },
     });
     expect(mktStages.map((s) => s.key)).toEqual([
-      'LEAD_NEW', 'LEAD_CONTACTED', 'LEAD_QUALIFIED', 'DEAL_PROPOSAL', 'DEAL_NEGOTIATION', 'DEAL_WON', 'DEAL_LOST',
+      'LEAD_NEW', 'LEAD_CONTACTED', 'LEAD_QUALIFIED', 'TRIAL_ACTIVE', 'TRIAL_EXPIRED',
+      'DEAL_PROPOSAL', 'DEAL_NEGOTIATION', 'DEAL_WON', 'DEAL_LOST',
     ]);
     // Won is a terminal on-path finish; Lost is the off-path exit.
     expect(mktStages.find((s) => s.key === 'DEAL_WON')).toMatchObject({ isTerminal: true, isOffPath: false });
     expect(mktStages.find((s) => s.key === 'DEAL_LOST')).toMatchObject({ isTerminal: true, isOffPath: true });
+    // The trial pair (#2413) is provisioned and BOTH are on-path. TRIAL_EXPIRED
+    // being on-path is load-bearing: an expired trial is a record waiting for a
+    // decision, not a drop-out, so the auto-advance (#2417) that moves it there
+    // does not have to invent a drop-off reason — and it still leaves through
+    // DEAL_WON or DEAL_LOST like anything else.
+    expect(mktStages.find((s) => s.key === 'TRIAL_ACTIVE')).toMatchObject({ isTerminal: false, isOffPath: false });
+    expect(mktStages.find((s) => s.key === 'TRIAL_EXPIRED')).toMatchObject({ isTerminal: false, isOffPath: false });
     // No canonical internship key leaked in.
     expect(mktStages.some((s) => s.key.includes('APPLICATION') || s.key.includes('INTERNSHIP'))).toBe(false);
 

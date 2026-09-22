@@ -163,6 +163,7 @@ model Organization {
   webhooks             Webhook[]
   announcements        Announcement[]
   newsletters          Newsletter[]
+  trialReminders       TrialReminder[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -2081,6 +2082,21 @@ model MentorshipRelation {
   // months later is written to again rather than being silently written off.
   dormantNudgeCount       Int              @default(0)
   dormantNudgeSentAt      DateTime?
+  // The contractual trial window of a MARKETING funnel record (#2413, story
+  // #2392). Both nullable and both additive: a mentorship relation never has a
+  // trial, and a marketing record only has one once it reaches the TRIAL_ACTIVE
+  // stage — so an untouched row keeps meaning exactly what it meant before, and
+  // `db push` can add the columns over a populated table.
+  //
+  // NO NEW TABLE, and deliberately NOT `stageDeadline`. `stageDeadline` is an
+  // INTERNAL service level: src/lib/stageSla.ts rewrites it on every stage
+  // change and the deadline sweep warns once after it is breached. A trial end
+  // is the opposite kind of date — it is agreed with the customer, it survives
+  // every stage change, and it is the thing the reminders are counted back
+  // from. Storing it in `stageDeadline` would make an SLA edit move a
+  // contractual date, and moving the record to another stage would erase it.
+  trialStartedAt          DateTime?
+  trialEndsAt             DateTime?
   // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
   // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
   // different mentor and an admin approved it. Nullable and additive: an
@@ -2131,6 +2147,7 @@ model MentorshipRelation {
   offers                Offer[]
   weeklyReports         WeeklyReport[]
   weeklyReportReminders WeeklyReportReminder[]
+  trialReminders        TrialReminder[]
   placement             Placement?
   rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
   previousRelation      MentorshipRelation?    @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
@@ -2142,6 +2159,9 @@ model MentorshipRelation {
   @@index([lifecycleState])
   @@index([pipelineStatus])
   @@index([previousRelationId])
+  // The daily trial sweep asks for one org's relations in one stage whose trial
+  // ends inside the next week; this is the column that narrows it.
+  @@index([trialEndsAt])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -3148,6 +3168,53 @@ model WeeklyReportReminder {
   @@unique([relationId, weekStart])
   @@index([weekStart])
   @@index([recipientId, weekStart])
+}
+
+// One row per reminder already claimed for a trial (#2414, story #2392).
+//
+// WHAT IT IS FOR
+//   The trial sweep runs daily and must not write to the same account twice for
+//   the same threshold. `@@unique([relationId, threshold])` is what makes that
+//   structural rather than a matter of getting a query right: the claim is a
+//   `createMany({ skipDuplicates: true })`, so two overlapping ticks — or two
+//   replicas — cannot both win the same (relation, threshold) pair.
+//
+// CLAIM FIRST, THEN SEND — the house convention, kept deliberately.
+//   The source backlog for this epic asked for the row to be written AFTER a
+//   successful send. This repo does the opposite and says why:
+//   `sendMeetingReminders` (src/services/emailService.ts) — "Marking first
+//   means a mid-send failure loses a reminder rather than duplicating one — the
+//   far less annoying failure mode" — and `sendWeeklyReportReminders` claims
+//   the same way. This table follows the house convention, for a reason that is
+//   specific to trials rather than merely conventional: the thresholds are a
+//   LADDER. A 7-day reminder lost to an SMTP hiccup is still followed by the
+//   3-day and the 0-day one, so the account is not lost in silence — which is
+//   the whole point of story #2392 — whereas send-then-claim risks mailing the
+//   same owner about the same account twice on a retry, and the owner who is
+//   mailed twice is the owner who filters the sender out. Trust the ladder,
+//   not the retry.
+//
+// NOT PART OF THE CLAIM KEY: the recipient. The question this table answers is
+// "has this threshold been handled for this account?", and that must stay true
+// however the record is reassigned mid-trial — a re-assignment is not a reason
+// to mail the new owner about the same day again.
+model TrialReminder {
+  // Nullable orgId, like every phase-1 tenant model: the row is written by a
+  // sessionless cron, which stamps the relation's own orgId explicitly.
+  orgId      String?
+  org        Organization? @relation(fields: [orgId], references: [id])
+  id         String        @id @default(cuid())
+  relationId String
+  // Days remaining when the reminder was claimed: 7, 3 or 0
+  // (TRIAL_REMINDER_THRESHOLDS in src/lib/trialReminderRule.ts). An Int rather
+  // than an enum so the ladder can be re-tuned without a schema change.
+  threshold  Int
+  sentAt     DateTime      @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([relationId, threshold])
+  @@index([sentAt])
 }
 
 // Structured hiring demand (#806). CompanyNeed remains in place during the

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { canPostToConversation, getConversationIfAllowed } from '@/lib/conversations';
 
 // A meeting hangs off exactly one context (#1051). MySQL can't express
 // "exactly one of three columns is set" as a CHECK constraint, so the rule is
@@ -28,7 +29,31 @@ export interface Invitee {
 }
 
 export type ResolvedMeetingContext =
-  | { ok: true; kind: MeetingContextKind; relationIds: string[]; projectId: string | null; conversationId: string | null; invitees: Invitee[] }
+  | {
+      ok: true;
+      kind: MeetingContextKind;
+      relationIds: string[];
+      projectId: string | null;
+      conversationId: string | null;
+      /**
+       * The project this meeting is *of*, for capability purposes only — which
+       * is not the same question as `projectId` above.
+       *
+       * `projectId` is the meeting's own context and stays null for a
+       * CONVERSATION, because a meeting hangs off exactly ONE context (#1051)
+       * and writing both would break that rule. But a call started in a
+       * project's group room is still a projects-module write, and the caller
+       * only names the room (`conversationId`), so the gate had nothing to read
+       * and never ran (#2504). This carries the owning project out to the route
+       * without touching the context the row is written with.
+       *
+       * Null for RELATION: a mentorship 1:1 is core mentorship, not the projects
+       * module, even when the relation happens to carry a project. Null for a
+       * DIRECT conversation for the same reason.
+       */
+      owningProjectId: string | null;
+      invitees: Invitee[];
+    }
   | { ok: false; status: 400 | 403 | 404; error: string };
 
 interface SessionUser {
@@ -108,6 +133,7 @@ export async function resolveMeetingContext(
       relationIds: [],
       projectId: input.projectId,
       conversationId: null,
+      owningProjectId: input.projectId,
       invitees: members
         .filter((m) => m.userId !== user.id)
         .map((m) => ({ userId: m.userId, ...m.user, email: m.user.email })),
@@ -122,9 +148,22 @@ export async function resolveMeetingContext(
     if (participants.length === 0) {
       return { ok: false, status: 404, error: 'Conversation not found' };
     }
-    // Every participant of a chat may start a call in it; a non-participant may
-    // not, admin or otherwise — reading someone else's thread is not the point.
-    if (!participants.some((p) => p.userId === user.id)) {
+    // Starting a call in a chat WRITES into that chat — the caller posts the
+    // "📹 … started a meeting" line (#1055) — so the rule for starting one is
+    // the rule for writing one, and it is asked of the conversation itself
+    // rather than re-derived from participant rows here.
+    //
+    // Participation alone was not that rule. `Conversation.projectId` is
+    // nullable with `onDelete: SetNull`, so a project's GROUP room outlives the
+    // project as an orphan while every participant row survives — and both
+    // messaging helpers refuse an orphan outright, for everyone. Reading it and
+    // posting to it were 403 while a call in it was 201, complete with the
+    // message it drops into the thread and an invite mail to every historical
+    // participant (#2503). `canPostToConversation` already requires
+    // participation, so the check it replaces is subsumed, not dropped: a
+    // non-participant is still refused, admin or otherwise.
+    const conversation = await getConversationIfAllowed(user, input.conversationId);
+    if (!conversation || !(await canPostToConversation(user, conversation))) {
       return { ok: false, status: 403, error: 'Forbidden' };
     }
     return {
@@ -133,6 +172,8 @@ export async function resolveMeetingContext(
       relationIds: [],
       projectId: null,
       conversationId: input.conversationId,
+      // A GROUP room's project; null for a DIRECT chat, which carries none.
+      owningProjectId: conversation.projectId,
       invitees: participants
         .filter((p) => p.userId !== user.id)
         .map((p) => ({ userId: p.userId, ...p.user, email: p.user.email })),
@@ -159,6 +200,7 @@ export async function resolveMeetingContext(
     relationIds: relations.map((r) => r.id),
     projectId: null,
     conversationId: null,
+    owningProjectId: null,
     invitees: relations.map((r) => ({
       userId: r.mentee.id,
       ...r.mentee,

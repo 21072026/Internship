@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import type { Prisma } from '@prisma/client';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { andScope, logScopeDenial, scopeForRole } from '@/lib/authzScope';
 import {
   REQUISITION_LIMITS, REQUISITION_STATUSES, closedAtForStatus, normalizeSkills,
   protectedFields, requisitionInputSchema, validateRequisitionOwner,
@@ -37,6 +39,16 @@ export async function GET(request: Request) {
     if (status && !REQUISITION_STATUSES.includes(status as (typeof REQUISITION_STATUSES)[number])) {
       return NextResponse.json({ error: 'Invalid status', code: 'invalid_status' }, { status: 400 });
     }
+    // The company picker in this payload is a Company read, so it takes the
+    // `company` scope from authzScope.ts (#2431) instead of a hand-rolled
+    // `role === 'COMPANY'` filter: ADMIN → `{}` (unchanged), COMPANY → its own
+    // row. `authScope()` above already refused every other role, so `null`
+    // here is a defect, and it fails closed like everywhere else.
+    const companyScope = await scopeForRole(scope.session.user, 'company');
+    if (!companyScope) {
+      await logScopeDenial(scope.session.user, 'GET /api/requisitions');
+      return NextResponse.json({ error: 'Forbidden', code: 'forbidden' }, { status: 403 });
+    }
     const where: Prisma.RequisitionWhereInput = {
       orgId: scope.orgId,
       ...(scope.session.user.role === 'COMPANY'
@@ -53,7 +65,7 @@ export async function GET(request: Request) {
       }),
       prisma.requisition.count({ where }),
       prisma.company.findMany({
-        where: { orgId: scope.orgId, ...(scope.session.user.role === 'COMPANY' ? { id: scope.session.user.companyId! } : {}) },
+        where: andScope(companyScope, { orgId: scope.orgId }),
         select: { id: true, name: true }, orderBy: { name: 'asc' },
       }),
       prisma.user.findMany({
@@ -67,7 +79,17 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const scope = authScope(await getServerSession(authOptions));
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 });
+  // A requisition is the placement module's demand side (#2364): a vertical
+  // without 'placements' is refused before its OWN role check, before
+  // validation and before any write. authScope() runs after the gate on
+  // purpose: gating behind it would answer `forbidden` to a MENTEE of a
+  // MARKETING org and `capability_unavailable` to that org's admin, i.e. the
+  // same module reporting itself present on one route and absent on another.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
+  const scope = authScope(session);
   if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);

@@ -195,6 +195,14 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // from) — the explicit stamp is what makes those two paths correct, and the
   // registration is what keeps every later reader inside its own tenant.
   'TwoFactorRecoveryCode',
+  // Trial reminder claims (#2414, story #2392). One row per (funnel record,
+  // threshold) already handled. It is written by a sessionless cron, which
+  // stamps `orgId` from the relation it hangs off — the same pattern the
+  // notification ledger and the roster feeds use; the registration is what
+  // keeps every LATER reader (an admin screen, a support query, the retention
+  // sweep's own counting) inside one tenant. Without it a per-org report of
+  // "who did we warn about an expiring trial?" would answer across tenants.
+  'TrialReminder',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

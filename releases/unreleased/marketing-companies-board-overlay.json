@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **A marketing tenant's company list and stage board stop speaking mentorship** (#2426, #2427, story #2394). `src/i18n/verticalOverlays.ts` gains MARKETING overrides in EN/TR/DE for every string those two *screens* render — the namespaces `companiesPage`, `board` and `adminBoard`, plus the surfaces the pages reach that live elsewhere: the two day-one empty states (`emptyStates.companies.adminBody`, `emptyStates.board.adminBody`), the company create/edit dialog (`companyForm.quota`/`needs`/`noNeeds` — \"Internship Quota\", \"Internship Needs\", \"…to add internship positions\"), the premium-features dialog behind the Sparkles button on every company card (`entitlements.subtitle`, \"Mentor and mentee features are always free\") and the person hover card every board owner chip opens (`personCard.roleMentor`/`roleMentee`, `candidates.mentor` — the same two words `dashboard.mentors`/`mentees` already rename). On the page itself: the subtitle (\"…their internship needs\"), the company-login hint, the two counter badges (`mentorships`/`positions` → deals/needs), `board.emptyStage`, the board subtitle and search placeholder (\"Find a mentee or mentor…\"), the WIP-saturation note and all three group headings. `adminBoard.groups.custom` is included because MARKETING_FUNNEL's stage keys are its own (`LEAD_*`/`DEAL_*`), so `groupResolvedStages()` files every column under `custom` — \"Custom stages\" was the one heading a provisioned marketing tenant actually saw; `pre`/`internship` are still overridden for an org switched to MARKETING while sitting on the canonical stage keys. No new dictionary key, no new table and no second translation layer for stage names: those come from the template's own `labels` through `stageLabel()`. `e2e/vertical-terminology.spec.ts` now visits both screens as a MARKETING admin (with the vertical's stage preset seeded, as `provisionStagePreset()` writes it), *opens* both dialogs and the hover card, and asserts the rendered text of the content region matches no mentorship word — with mirror assertions that an INTERNSHIP admin still reads the original strings in the same places. `e2e/vertical-overlays.unit.spec.ts` adds the dictionary-level half: no key of those namespaces reads mentee/mentor/internship (or staj/Praktikum) under the MARKETING overlay in any of the three locales, so a key added to one of them later is checked the day it lands.",
+  "notes": {
+    "en": [
+      "A marketing organisation's company list and stage board — including their dialogs and hover cards — now speak its own language: accounts, leads and deals instead of mentorships, mentees and internships."
+    ],
+    "tr": [
+      "Pazarlama organizasyonunun firma listesi ve aşama panosu — açtıkları pencereler ve kart önizlemeleri dahil — artık kendi dilini konuşuyor: mentorluk, mentee ve staj yerine müşteri hesabı, müşteri adayı ve fırsat."
+    ],
+    "de": [
+      "Unternehmensliste und Phasen-Board einer Marketing-Organisation — samt ihrer Dialoge und Hover-Karten — sprechen jetzt ihre eigene Sprache: Accounts, Leads und Deals statt Mentorings, Mentees und Praktika."
+    ]
+  }
+}

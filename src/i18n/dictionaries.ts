@@ -918,6 +918,38 @@ const en = {
     hint: 'Your profile and application stay exactly as they are either way.',
     cta: 'Open my portal',
   },
+  // Trial reminder mail (#2412, story #2392) — the copy the trial ladder sends
+  // seven days, three days and zero days before a trial ends.
+  //
+  // IT REUSES THE EXISTING 'stage-deadline' E-MAIL CATEGORY, which already sits
+  // in the `task_reminders` group (src/lib/emailGroups.ts). There is deliberately
+  // no new NOTIFICATION_CATEGORIES entry and no new preference key: a trial
+  // reminder is the same kind of mail as the stage-deadline nudge — "this record
+  // needs you before a date" — and somebody who muted one meant to mute both.
+  //
+  // ONE BODY, THREE SUBJECTS. Only the subject line changes with the threshold;
+  // the body is a single text that reads correctly at all three marks, so three
+  // near-identical templates cannot drift apart. The subject's number is always
+  // true because the selector fires on the exact calendar day
+  // (src/lib/trialReminderRule.ts) — never as a catch-up on a later one.
+  //
+  // PROPER NOUNS ARE NOT TRANSLATED. The marketplace and platform names a
+  // merchant sells on — Amazon, eBay, OTTO, Shopify, WooCommerce — are written
+  // identically in en/tr/de, and so is {company}, which is interpolated verbatim
+  // from the account record. Neither is ever translated or transliterated.
+  //
+  // Keep the {placeholder} tokens identical across en/tr/de: the sender
+  // interpolates by name, not by position.
+  trials: {
+    subject7: 'Trial ends in 7 days: {company}',
+    subject3: 'Trial ends in 3 days: {company}',
+    subject0: 'Trial ends today: {company}',
+    heading: 'A trial is running out',
+    greeting: 'Hi {name},',
+    body: 'The trial for {company} ends on {date}. It does not renew by itself — if nobody gets in touch, the account simply lapses.',
+    hint: 'Open the record to see where it stands and what was agreed last.',
+    cta: 'Open the record',
+  },
   mentor: {
     attention: {
       title: 'Needs attention',
@@ -3646,7 +3678,7 @@ const en = {
     items: {
       canonical_pipeline: { name: 'Canonical internship pipeline', desc: 'The thirteen stages the product ships with, from first contact to employed, including the two off-path endings. The most detailed shape — the right one when you follow a long hiring journey.' },
       graduate_internship: { name: 'Graduate internship', desc: 'Application, screening call, match with a host team, the internship itself with a midpoint check, and a hiring decision at the end. Eight stages, service levels and two required documents.' },
-    marketing_funnel: { name: 'Marketing funnel', desc: 'A sales pipeline for a marketing team: a lead from first sight through contact, qualification, proposal and negotiation to won or lost. Seven stages with a fast follow-up cadence.' },
+    marketing_funnel: { name: 'Marketing funnel', desc: 'A sales pipeline for a marketing team: a lead from first sight through contact, qualification, a trial that runs and then expires, proposal and negotiation to won or lost. Nine stages with a fast follow-up cadence.' },
       onboarding_buddy: { name: 'Onboarding buddy programme', desc: 'For people who are already hired: pairing, the first week, and the 30-, 60- and 90-day check-ins. A calendar rather than a selection funnel, with a weekly nudge.' },
       leadership_cohort: { name: 'Leadership cohort', desc: 'A development group on a fixed calendar: nomination, enrolment, agreed goals, a midpoint review and a final showcase. Everyone who enrols is expected to graduate.' },
       career_transition: { name: 'Career transition', desc: 'Support for someone changing field: intake, a mapped skills gap, a long reskilling stage, applications and interviews. “On hold” sits off the path but is not an ending, because people pause and come back.' },
@@ -6106,6 +6138,19 @@ const tr: Dict = {
     finalBody: 'Bu, başvurunla ilgili son hatırlatmamız. Hâlâ ilgileniyorsan yanıtla ya da giriş yap; ilgilenmiyorsan hiçbir şey yapmana gerek yok, bir daha yazmayacağız.',
     hint: 'Her durumda profilin ve başvurun olduğu gibi duruyor.',
     cta: 'Portalıma git',
+  },
+  // Deneme hatırlatma e-postası (#2412). Gerekçe ve kurallar en sözlüğünde;
+  // özel adlar (Amazon, eBay, OTTO, Shopify, WooCommerce ve {company}) üç dilde
+  // de aynı yazılır, çevrilmez.
+  trials: {
+    subject7: 'Deneme 7 gün sonra bitiyor: {company}',
+    subject3: 'Deneme 3 gün sonra bitiyor: {company}',
+    subject0: 'Deneme bugün bitiyor: {company}',
+    heading: 'Bir deneme süresi doluyor',
+    greeting: 'Merhaba {name},',
+    body: '{company} için deneme {date} tarihinde bitiyor. Deneme kendiliğinden yenilenmez — kimse temasa geçmezse hesap öylece kapanır.',
+    hint: 'Kaydı açıp nerede kaldığını ve en son neyin konuşulduğunu görebilirsin.',
+    cta: 'Kaydı aç',
   },
   mentor: {
     attention: {
@@ -8777,7 +8822,7 @@ const tr: Dict = {
     items: {
       canonical_pipeline: { name: 'Standart staj hattı', desc: 'Üründe hazır gelen on üç aşama: ilk temastan işe yerleşmeye kadar, iki hat dışı sonla birlikte. En ayrıntılı şekil — uzun bir işe alım yolculuğunu izliyorsanız doğru seçim.' },
       graduate_internship: { name: 'Mezun stajı', desc: 'Başvuru, ön görüşme, ekiple eşleştirme, ara değerlendirmeli stajın kendisi ve sonunda işe alım kararı. Sekiz aşama, hizmet süreleri ve iki zorunlu belge.' },
-    marketing_funnel: { name: 'Pazarlama hunisi', desc: 'Pazarlama ekibi için satış hattı: bir aday ilk temastan başlayıp iletişim, nitelendirme, teklif ve pazarlıktan geçerek kazanıldı ya da kaybedildiye ulaşır. Hızlı takip temposuyla yedi aşama.' },
+    marketing_funnel: { name: 'Pazarlama hunisi', desc: 'Pazarlama ekibi için satış hattı: bir aday ilk temastan başlayıp iletişim, nitelendirme, süren ve sonra dolan bir deneme, teklif ve pazarlıktan geçerek kazanıldı ya da kaybedildiye ulaşır. Hızlı takip temposuyla dokuz aşama.' },
       onboarding_buddy: { name: 'İşe alıştırma (buddy) programı', desc: 'Zaten işe alınmış kişiler için: eşleştirme, ilk hafta ve 30., 60., 90. gün görüşmeleri. Seçim hunisi değil, bir takvim; haftalık hatırlatmayla.' },
       leadership_cohort: { name: 'Liderlik kohortu', desc: 'Sabit takvimle ilerleyen bir gelişim grubu: adaylık, kayıt, belirlenen hedefler, dönem ortası değerlendirme ve bitirme sunumu. Kaydolan herkesin programı tamamlaması beklenir.' },
       career_transition: { name: 'Kariyer geçişi', desc: 'Alan değiştiren biri için destek: tanışma görüşmesi, çıkarılan beceri açığı, uzun bir yeniden beceri kazanma aşaması, başvurular ve görüşmeler. “Beklemede” hattın dışındadır ama bir son değildir; insanlar ara verip geri döner.' },
@@ -11216,6 +11261,19 @@ const de: Dict = {
     finalBody: 'Das ist unsere letzte Erinnerung zu deiner Bewerbung. Wenn dein Interesse noch besteht, antworte einfach oder melde dich an; andernfalls musst du nichts tun, und wir schreiben nicht wieder.',
     hint: 'Dein Profil und deine Bewerbung bleiben in jedem Fall unverändert.',
     cta: 'Zu meinem Portal',
+  },
+  // Erinnerung zur auslaufenden Testphase (#2412). Begründung und Regeln stehen
+  // im englischen Wörterbuch; Eigennamen (Amazon, eBay, OTTO, Shopify,
+  // WooCommerce und {company}) werden in allen drei Sprachen gleich geschrieben.
+  trials: {
+    subject7: 'Testphase endet in 7 Tagen: {company}',
+    subject3: 'Testphase endet in 3 Tagen: {company}',
+    subject0: 'Testphase endet heute: {company}',
+    heading: 'Eine Testphase läuft aus',
+    greeting: 'Hallo {name},',
+    body: 'Die Testphase für {company} endet am {date}. Sie verlängert sich nicht von selbst — meldet sich niemand, läuft der Zugang einfach aus.',
+    hint: 'Öffne den Datensatz, um zu sehen, wo er steht und was zuletzt besprochen wurde.',
+    cta: 'Datensatz öffnen',
   },
   mentor: {
     attention: {
@@ -13888,7 +13946,7 @@ const de: Dict = {
     items: {
       canonical_pipeline: { name: 'Kanonische Praktikums-Pipeline', desc: 'Die dreizehn mitgelieferten Stufen vom Erstkontakt bis zur Anstellung, samt der beiden Abbruch-Enden. Die ausführlichste Form — richtig, wenn Sie einen langen Einstellungsweg begleiten.' },
       graduate_internship: { name: 'Absolventenpraktikum', desc: 'Bewerbung, Erstgespräch, Zuordnung zu einem Team, das Praktikum selbst mit Zwischenbewertung und am Ende die Einstellungsentscheidung. Acht Stufen, Fristen und zwei Pflichtdokumente.' },
-    marketing_funnel: { name: 'Marketing-Funnel', desc: 'Eine Vertriebspipeline für ein Marketing-Team: ein Lead vom ersten Kontakt über Kontaktaufnahme, Qualifizierung, Angebot und Verhandlung bis gewonnen oder verloren. Sieben Stufen mit schneller Nachfass-Kadenz.' },
+    marketing_funnel: { name: 'Marketing-Funnel', desc: 'Eine Vertriebspipeline für ein Marketing-Team: ein Lead vom ersten Kontakt über Kontaktaufnahme, Qualifizierung, eine laufende und dann abgelaufene Testphase, Angebot und Verhandlung bis gewonnen oder verloren. Neun Stufen mit schneller Nachfass-Kadenz.' },
       onboarding_buddy: { name: 'Onboarding-Buddy-Programm', desc: 'Für bereits eingestellte Personen: Zuordnung, erste Woche und die Gespräche nach 30, 60 und 90 Tagen. Ein Kalender statt eines Auswahltrichters, mit wöchentlicher Erinnerung.' },
       leadership_cohort: { name: 'Führungskräfte-Kohorte', desc: 'Eine Entwicklungsgruppe mit festem Kalender: Nominierung, Aufnahme, vereinbarte Ziele, Halbzeitgespräch und Abschlusspräsentation. Wer aufgenommen wird, soll das Programm auch abschließen.' },
       career_transition: { name: 'Berufliche Neuorientierung', desc: 'Begleitung beim Wechsel des Berufsfelds: Aufnahmegespräch, erfasste Kompetenzlücke, eine lange Umschulungsphase, Bewerbungen und Vorstellungsgespräche. „Pausiert“ liegt abseits des Wegs, ist aber kein Ende — Menschen unterbrechen und kommen zurück.' },

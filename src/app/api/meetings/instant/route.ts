@@ -53,6 +53,19 @@ export async function POST(request: Request) {
     const ctx = await resolveMeetingContext(session.user, { relationIds, projectId, conversationId });
     if (!ctx.ok) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
+    // The other half of the same gate (#2504). A call started from a project's
+    // group chat names only the room, so the check above — which reads the body
+    // — saw no `projectId` and let it through, even though the room is a
+    // projects-module object whose own creation IS gated
+    // (`POST /api/conversations`). The room's project is known only once the
+    // context resolves, so the gate lands here: still before the link is
+    // resolved and before anything is written. A DIRECT chat carries no project
+    // and is core messaging, so it is untouched.
+    if (ctx.owningProjectId && ctx.owningProjectId !== projectId) {
+      const capGate = await requireCapability(session.user.orgId, 'projects');
+      if (capGate) return capGate;
+    }
+
     // The head-count decides the host: the JaaS tenant while the month's
     // participant allowance still has room for this room, the public instance
     // otherwise (#2011). resolveMeetingContext already excluded the organizer
