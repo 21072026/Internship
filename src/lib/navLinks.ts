@@ -53,7 +53,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'placements' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
   // templates, programme cohorts, mentor/mentee success stories and the
-  // partner-company enquiry inbox are internship modules (#2356). A MARKETING
+  // partner-company enquiry inbox are internship modules (#2499). A MARKETING
   // tenant carries none of these capabilities, so the links drop out of its
   // sidebar — and the projects write APIs are gated on the same capability.
   { href: '/admin/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },

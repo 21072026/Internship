@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 
-// SaleVali branding on the marketing host (#2356): the accent, the mark, the
+// SaleVali branding on the marketing host (#2492): the accent, the mark, the
 // favicon/home-screen icons, the browser tint and the manifest all follow the
 // vertical. Host-forged like host-vertical-landing.spec.ts — the default
 // MARKETING_HOSTS is 'marketing.ersah.in', so no env change is needed. The

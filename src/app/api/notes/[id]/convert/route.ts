@@ -79,7 +79,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ goal }, { status: 201 });
     }
 
-    // Converting to a PROJECT_TASK is a projects-module write (#2356), gated the
+    // Converting to a PROJECT_TASK is a projects-module write (#2502), gated the
     // same way POST /api/projects/[id]/tasks is — MARKETING carries no projects.
     const projectsGate = await requireCapability(session.user.orgId, 'projects');
     if (projectsGate) return projectsGate;

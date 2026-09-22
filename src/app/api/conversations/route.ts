@@ -35,7 +35,7 @@ async function handlePost(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
     if ('projectId' in parsed.data && parsed.data.projectId) {
-      // The project's group conversation is a projects-module write (#2356).
+      // The project's group conversation is a projects-module write (#2502).
       const capGate = await requireCapability(session.user.orgId, 'projects');
       if (capGate) return capGate;
       if (!(await isActiveProjectMember(session.user.id, parsed.data.projectId))) {

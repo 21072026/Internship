@@ -147,7 +147,7 @@ export async function POST(request: Request) {
       const projectId: string | null = parsed.data.projectId || null;
       if (projectId) {
         // Pre-linking an invitation to a project is a projects-module write
-        // (#2356): acceptance upserts a ProjectMember.
+        // (#2502): acceptance upserts a ProjectMember.
         const capGate = await requireCapability(session.user.orgId, 'projects');
         if (capGate) return capGate;
         if (!(await isProjectOwner(session.user, projectId))) {

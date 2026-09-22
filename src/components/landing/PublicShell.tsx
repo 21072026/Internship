@@ -39,7 +39,7 @@ export async function PublicShell({
   // very bug it would be fixing.
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   const dashboardHref = session ? roleHome(session.user.role) : undefined;
-  // Which product's chrome (#2356). The header is a client component (the menu
+  // Which product's chrome (#2500). The header is a client component (the menu
   // needs state) so it cannot resolve the vertical itself; the shell resolves
   // it here — session-first, host-second — and hands down one flag. A
   // marketing host's header drops the partner-company pitch and the intern
@@ -48,7 +48,7 @@ export async function PublicShell({
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      {/* A marketing host is invitation-only (#2356): no self-serve Register
+      {/* A marketing host is invitation-only (#2501): no self-serve Register
           button — token-less sign-up would mint a MENTEE in the internship org. */}
       <PublicHeader showRegister={showRegister && !isMarketing} dashboardHref={dashboardHref} hideInternshipLinks={isMarketing} />
       <main id="main-content" className="flex-1">

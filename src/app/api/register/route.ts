@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     }
 
     const { token, password, fullName } = parsed.data;
-    // A MARKETING host is invitation-only (#2356): there is no marketing
+    // A MARKETING host is invitation-only (#2501): there is no marketing
     // self-serve sign-up, and a token-less registration here would mint a
     // MENTEE in the internship default org. Refuse before any DB work. This is
     // the one authz-adjacent use of the host-resolved vertical the TRUST NOTE in

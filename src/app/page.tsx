@@ -39,7 +39,7 @@ export default async function HomePage() {
 
   // Fed from the single-source catalogue (#584/#588): the landing shows the
   // featured subset; /features shows everything.
-  // Which product is this landing selling (#2356)? Host-resolved for a
+  // Which product is this landing selling (#2500)? Host-resolved for a
   // signed-out visitor, org-resolved when signed in. The internship landing is
   // byte-identical (INTERNSHIP carries every capability and `isMarketing` is
   // false); a MARKETING host gets a lean page — hero, features, funnel, "and
@@ -261,7 +261,7 @@ export default async function HomePage() {
       </section>
 
       {/* Internship-only argument: the loop, the role picker, the three audience
-          sections, the free-core band and the how-it-works steps (#2356). */}
+          sections, the free-core band and the how-it-works steps (#2500). */}
       {!isMarketing && (<>
       {/* The loop */}
       <section id="loop" className="py-16 px-4 bg-white scroll-mt-16">
@@ -513,7 +513,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Roles — the five internship roles; a marketing tenant has one (#2356). */}
+      {/* Roles — the five internship roles; a marketing tenant has one (#2500). */}
       {!isMarketing && (
       <section className="py-16 px-4 bg-white">
         <div className="max-w-5xl mx-auto">
@@ -593,7 +593,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Mentor/mentee stories and the per-role FAQ are internship-only (#2356). */}
+      {/* Mentor/mentee stories and the per-role FAQ are internship-only (#2500). */}
       {!isMarketing && (<>
       {/* Success stories (#1100) — rendered ONLY when at least one published,
           consent-gated story exists; otherwise this section is not in the DOM
@@ -652,13 +652,13 @@ export default async function HomePage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">{L.ctaTitle}</h2>
           <p className="text-blue-100 mb-8">{L.ctaSubtitle}</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            {/* Marketing is invitation-only (#2356): its one door is sign-in, not
+            {/* Marketing is invitation-only (#2501): its one door is sign-in, not
                 the token-less mentee sign-up. */}
             <Link href={isMarketing ? '/auth/signin' : '/auth/register'} className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors dark:!bg-white dark:!text-blue-700 dark:hover:!bg-blue-100">
               {L.ctaMentee} <ArrowRight className="h-5 w-5" />
             </Link>
             {/* The mentor and company sides are internship audiences; a
-                marketing visitor has one door (#2356). */}
+                marketing visitor has one door (#2500). */}
             {!isMarketing && (<>
             <Link
               href={mentorHref}

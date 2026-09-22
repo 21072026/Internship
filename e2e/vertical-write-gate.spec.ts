@@ -25,7 +25,7 @@ const GATED = [
   // /api/evaluations is not closed while this stays open (review of #2363). The
   // gate runs before the panel lookup, so a dummy id still reaches it.
   { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000/score', cap: 'evaluations' },
-  // Intern projects (#2356): MARKETING dropped 'projects', so the static POST,
+  // Intern projects (#2502): MARKETING dropped 'projects', so the static POST,
   // the id-bearing writers (their gate runs before the project lookup, so a
   // dummy id still reaches it) and meeting-series (gate at the handler top) are
   // all refused. The body-conditional gates — invite/conversations/instant with

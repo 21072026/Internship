@@ -23,7 +23,7 @@ export const RELEASE_FEED_PATH = '/release-notes/feed.xml';
 const MAX_ITEMS = 50;
 
 /**
- * The origin absolute feed/page links are built from (#2356): the VALIDATED
+ * The origin absolute feed/page links are built from (#2488): the VALIDATED
  * request origin when the caller can hand over its headers — a marketing
  * visitor's feed link must not point at the internship host — else the
  * configured origin (NEXTAUTH_URL, then NEXT_PUBLIC_APP_URL, the same precedence

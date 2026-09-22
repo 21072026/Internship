@@ -45,7 +45,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     en: {
       nav: { candidates: 'Leads' },
       candidates: { title: 'Leads', subtitle: 'Browse and search leads' },
-      // Public chrome + auth pages (#2356): the header aria-label, footer
+      // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
       publicNav: {
         homeLink: 'SaleVali — go to the home page',
@@ -56,7 +56,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         registerSubtitle: 'Register with your invitation',
         tokenHint: 'Paste the invitation token from your e-mail. Accounts on this product are created by invitation.',
       },
-      // The admin dashboard (#2356). People = leads, the pipeline relation = a
+      // The admin dashboard (#2498). People = leads, the pipeline relation = a
       // deal — so "mentee/mentor/mentorship" become "lead/rep/deal" and nothing
       // reads "internship" to a marketing tenant.
       dashboard: {
@@ -81,7 +81,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
       },
       landing: {
-        // The lean marketing landing (#2356): the sections that survive for a
+        // The lean marketing landing (#2500): the sections that survive for a
         // MARKETING host — hero, chips, feature cards, the funnel diagram, "and
         // more", transparency, CTA — re-worded for a sales team. The internship
         // argument (loop, role picker, audiences, free core, how-it-works, roles,

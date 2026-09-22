@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
-// Host-coherent redirects (#2356). One deployment serves several public hosts
+// Host-coherent redirects (#2488). One deployment serves several public hosts
 // (interncrm.com + marketing.ersah.in; their preview twins; a topic env's own
 // pr<N> host). NextAuth resolves every callbackUrl against NEXTAUTH_URL — the
 // internship host — and never sees the request, so a marketing visitor who

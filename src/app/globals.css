@@ -339,7 +339,7 @@ html[data-accent="amber"] {
   --accent-800:#92400e; --accent-900:#78350f;
   --accent-tint:rgba(120,53,15,0.25); --accent-tint-hover:rgba(120,53,15,0.35);
 }
-/* SaleVali magenta (#2356) — the MARKETING vertical's default. Anchored on the
+/* SaleVali magenta (#2492) — the MARKETING vertical's default. Anchored on the
    brand: 50/100 = brand light/mid tints, 500 = brand primary #cc33e5 (fills,
    progress bars, rings — never text on it), 600 = #b929cf so white text on
    primary buttons is 4.9:1 and the link colour is 4.7:1 on the gray-50 body,

@@ -82,7 +82,7 @@ const updateProfileSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']).optional(),
   fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
   density: z.enum(['comfortable', 'compact']).optional(),
-  // Read from the one list (#2356): a colour added to ACCENT_COLORS is
+  // Read from the one list (#2492): a colour added to ACCENT_COLORS is
   // otherwise pickable in the UI and rejected here with a 400 — 'magenta' was.
   accentColor: z.enum(ACCENT_COLORS).optional(),
 });

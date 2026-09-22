@@ -58,7 +58,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
 
   const task = await taskFor(session.user, taskId);
   if (!task) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  // A project-bound task is a projects-module write (#2356); a personal to-do
+  // A project-bound task is a projects-module write (#2502); a personal to-do
   // (projectId null) is not, so the gate is conditional.
   if (task.projectId) {
     const capGate = await requireCapability(session.user.orgId, 'projects');
@@ -159,7 +159,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   const task = await taskFor(session.user, taskId);
   if (!task) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  // A project-bound task is a projects-module write (#2356); a personal to-do
+  // A project-bound task is a projects-module write (#2502); a personal to-do
   // (projectId null) is not, so the gate is conditional.
   if (task.projectId) {
     const capGate = await requireCapability(session.user.orgId, 'projects');

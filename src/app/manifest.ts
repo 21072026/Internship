@@ -10,7 +10,7 @@ import { themeColorFor } from '@/lib/accent';
 // so the few strings here stay English, while everything a signed-in person
 // reads (including /share, the share target below) goes through the EN/TR/DE
 // dictionaries as usual.
-// Two products, one manifest route (#2356): a manifest is fetched without
+// Two products, one manifest route (#2492): a manifest is fetched without
 // cookies, so the only vertical signal is the host — hostVertical(), never the
 // session. A marketing host installs as "SaleVali" with the brand icon and tint;
 // everything else is byte-identical to the internship manifest below.

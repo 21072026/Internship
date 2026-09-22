@@ -236,7 +236,7 @@ export async function POST(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // A meeting series hangs off a project (#2356): a projects-module write.
+  // A meeting series hangs off a project (#2502): a projects-module write.
   const capGate = await requireCapability(session.user.orgId, 'projects');
   if (capGate) return capGate;
 
@@ -286,7 +286,7 @@ export async function PUT(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // A meeting series hangs off a project (#2356): a projects-module write.
+  // A meeting series hangs off a project (#2502): a projects-module write.
   const capGate = await requireCapability(session.user.orgId, 'projects');
   if (capGate) return capGate;
 
@@ -369,7 +369,7 @@ export async function DELETE(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // A meeting series hangs off a project (#2356): a projects-module write. At
+  // A meeting series hangs off a project (#2502): a projects-module write. At
   // the top and unconditional, like POST and PUT — the gate is about the actor's
   // org, not the row, and a series that lost its project is still a leftover of
   // this module (#2487).

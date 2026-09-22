@@ -52,7 +52,7 @@ test('a user can pick an accent color; it applies live and persists across reloa
   }
 });
 
-// Regression (#2356): the profile validator used to carry its own copy of the
+// Regression (#2492): the profile validator used to carry its own copy of the
 // colour list, so the newest swatch was pickable in the UI and rejected by the
 // API with a 400 — the swatch flipped and quietly flipped back. Pick the newest
 // colour rather than a long-standing one so a future addition trips this too.

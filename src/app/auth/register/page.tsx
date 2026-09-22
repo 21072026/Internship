@@ -37,7 +37,7 @@ function RegisterForm() {
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // A marketing host is invitation-only (#2356): the token field is open by
+  // A marketing host is invitation-only (#2501): the token field is open by
   // default and the mentor application is not offered.
   const isMarketing = useVertical() === 'MARKETING';
   const [error, setError] = useState('');

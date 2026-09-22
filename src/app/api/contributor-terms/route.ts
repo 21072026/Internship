@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   // evidence that says nothing, which is worse than no evidence.
   let key = parsed.data.key;
   if (parsed.data.projectId) {
-    // A project-bound acceptance is a projects-module write (#2356); the
+    // A project-bound acceptance is a projects-module write (#2502); the
     // platform-level acceptance (no projectId) is not.
     const capGate = await requireCapability(session.user.orgId, 'projects');
     if (capGate) return capGate;

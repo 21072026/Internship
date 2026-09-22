@@ -48,7 +48,7 @@ test('INTERNSHIP carries every capability any vertical declares', () => {
 
 test('MARKETING drops the mentorship-specific modules and keeps the CRM core', () => {
   const caps = verticalCapabilities('MARKETING');
-  // 'projects' left MARKETING in #2356: intern team/task projects are not a
+  // 'projects' left MARKETING in #2499: intern team/task projects are not a
   // marketing concept, and the nav entry + write APIs are gated on it.
   for (const gone of ['mentorship', 'evaluations', 'placements', 'sourcing', 'projects']) {
     assert.ok(!caps.includes(gone), `MARKETING should not carry "${gone}"`);
@@ -120,7 +120,7 @@ test('the catalogue carries no unresolvable pointers into other catalogues', () 
 });
 
 test('every vertical has a non-empty product name, and productNameFor resolves it', () => {
-  // The signed-out wordmark / tab-title fallback (#2356). A blank one would put
+  // The signed-out wordmark / tab-title fallback (#2498). A blank one would put
   // an empty brand on a marketing landing, so pin that each entry has one and
   // that the two we ship read as expected.
   for (const v of VERTICALS) {

@@ -7094,3 +7094,30 @@ dosyaları scratchpad'e kopyala, `git fetch` + `git reset --hard origin/main` +
   build. Bu dev-modu ENOENT'i gerçek test hatası değildir; ilk koşudaki "element not found"
   bundandı.
 
+
+## 2026-09-22 — Yanlış issue referansı temizlerken: grep sınıflandırmaz, `git log -L` sınıflandırır (#2497)
+
+Yedi dikey PR'ı kodda `#2356` diye anıldı; #2356 aslında epic #2349'un
+MT_ENFORCE_ISOLATION dilimi ve hâlâ açık. ~78 geçişin hepsi aynı numarayı taşıdığı için
+metne bakarak "bu dikey mi izolasyon mu" ayrımı yapmak imkânsızdı — birkaç yorum ikisine de
+uyuyor (`src/app/projects/[id]/page.tsx` org-scope'u izolasyon, `src/app/api/projects/route.ts`
+yetenek kapısı dikey; ikisi de "projects" diyor). Çalışan yöntem: her satır için
+`git log -1 --format=%s -L <n>,<n>:<dosya>` ile o satırı **hangi commit'in yazdığına** bakmak;
+commit başlığı zaten PR numarasını taşıyor, sınıflandırma böylece tahminden çıkıp veriye
+dayanıyor. Bitişik iki yorum farklı işlere çıkabiliyor (`page.tsx` 655 → #2477, 661 → #2474),
+yani dosya granülaritesi yetmiyor — satır granülaritesi şart.
+
+Uygulama tarafında iki küçük ders:
+- Önce `file:line new_number` şeklinde bir **harita dosyası** yaz, sonra "her hedef satır tam
+  olarak bir kez `2356` içeriyor mu" diye ön-kontrol çalıştır, sonra satır-adresli
+  `sed -i '' "${l}s/…/…/"` uygula. Harita eksik kalırsa (bende `page.tsx:596` düştü) uygulama
+  sonrası `grep` farkı hemen gösteriyor — global `sed` ile çalışsaydım fark görünmezdi.
+- `git log -L` çıktısını `while read` ile döngüye sokarken zsh'ın kelime bölme tuzağı için
+  `while IFS= read -r` kullan (CLAUDE.md'deki kural burada da geçerli).
+
+Süreç dersi: bir **spike** "uygulama ayrı dilim(ler)e ayrılır" diyerek kapanıyorsa, o
+dilimlere issue açılmadan uygulama PR'ı açılmasın. #2355 kapandı, dilim açılmadı, yedi PR
+elde kalan tek numarayı kullandı. Geriye dönük düzeltmenin maliyeti: 6 issue + 47 dosya.
+Derlenmiş `CHANGELOG.md` girdileri ise düzeltilemiyor — yayımlanmış sürüm notu tarihsel
+kayıt; yalnızca `releases/unreleased/` altındaki **henüz derlenmemiş** fragment'ler
+düzeltilebilir. Yani yanlış numara CHANGELOG'a derlendikten sonra kalıcıdır.

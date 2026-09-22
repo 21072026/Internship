@@ -54,7 +54,7 @@ export async function RoleShell({
 
   const isAdmin = role === 'ADMIN';
   const isMentor = role === 'MENTOR';
-  // The vertical's capability set (#2351/#2356). The /admin layout already
+  // The vertical's capability set (#2351/#2499). The /admin layout already
   // resolves this and hands it to AdminNav; this shell — worn by /todos,
   // /interviews, /messages, /newsletters, /mentors — did not, so AdminNav fell
   // back to "not passed = every link" and a MARKETING admin saw the full
