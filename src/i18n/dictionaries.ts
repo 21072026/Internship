@@ -958,6 +958,9 @@ const en = {
       unansweredQuestion: 'Unanswered question',
       pendingMeeting: 'Pending meeting request',
       noOpenGoal: 'No open goal or to-do',
+      // #2418: a trial that has run out is a record WAITING FOR A DECISION —
+      // it belongs in the queue the owner already reads, not on a new board card.
+      trialExpired: 'Trial expired — decide',
       daysAgo: '{d} days since last interaction',
       dormantHidden: '{n} first contacts hidden — messaged, never replied',
     },
@@ -2013,6 +2016,7 @@ const en = {
     events: {
       'stale_mentee.noContact': 'No recent contact with {menteeName}.',
       'deadline.stagePassed': 'Stage deadline passed for {menteeName}.',
+      'trial.endingSoon': '{company}: {days} days left on the trial.',
       'weekly_report_reminder.due': 'Your weekly report for this week is still missing.',
       'meeting_reminder.startingSoon': 'Meeting "{title}" starts in {minutes} min ({when}).',
       'meeting_reminder.seriesSoon': '"{title}" ({project}) starts soon — {when}.',
@@ -6160,6 +6164,7 @@ const tr: Dict = {
       unansweredQuestion: 'Yanıtsız soru',
       pendingMeeting: 'Bekleyen toplantı talebi',
       noOpenGoal: 'Açık hedef veya yapılacak yok',
+      trialExpired: 'Deneme süresi doldu — karar verin',
       daysAgo: 'Son etkileşimden bu yana {d} gün',
       dormantHidden: '{n} ilk temas gizlendi — mesaj gönderildi, yanıt gelmedi',
     },
@@ -7188,6 +7193,7 @@ const tr: Dict = {
     events: {
       'stale_mentee.noContact': '{menteeName} ile bir süredir etkileşim kaydedilmedi.',
       'deadline.stagePassed': '{menteeName} için aşama son tarihi geçti.',
+      'trial.endingSoon': '{company}: denemenin bitmesine {days} gün kaldı.',
       'weekly_report_reminder.due': 'Bu haftaki haftalık raporun hâlâ eksik.',
       'meeting_reminder.startingSoon': '"{title}" toplantısı {minutes} dk içinde başlıyor ({when}).',
       'meeting_reminder.seriesSoon': '"{title}" ({project}) yakında başlıyor — {when}.',
@@ -11283,6 +11289,7 @@ const de: Dict = {
       unansweredQuestion: 'Unbeantwortete Frage',
       pendingMeeting: 'Ausstehende Terminanfrage',
       noOpenGoal: 'Kein offenes Ziel oder Aufgabe',
+      trialExpired: 'Testphase abgelaufen — entscheiden',
       daysAgo: '{d} Tage seit der letzten Interaktion',
       dormantHidden: '{n} Erstkontakte ausgeblendet — angeschrieben, keine Antwort',
     },
@@ -12311,6 +12318,7 @@ const de: Dict = {
     events: {
       'stale_mentee.noContact': 'Kein aktueller Kontakt mit {menteeName}.',
       'deadline.stagePassed': 'Die Phasen-Frist für {menteeName} ist abgelaufen.',
+      'trial.endingSoon': '{company}: noch {days} Tage Testphase.',
       'weekly_report_reminder.due': 'Dein Wochenbericht für diese Woche fehlt noch.',
       'meeting_reminder.startingSoon': 'Das Meeting "{title}" beginnt in {minutes} Min. ({when}).',
       'meeting_reminder.seriesSoon': '"{title}" ({project}) beginnt bald — {when}.',

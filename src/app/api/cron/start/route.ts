@@ -5,6 +5,7 @@ import { initNewsletterCron } from '@/lib/newsletterDispatch';
 import { initDeadLetterAlertCron } from '@/lib/jobs/dlqAlert';
 import { initRetentionCron } from '@/lib/retentionEntries';
 import { initUsageRollupCron } from '@/lib/jobs/usageRollup';
+import { initTrialRemindersCron } from '@/lib/jobs/trialReminders';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -48,5 +49,11 @@ export async function POST(request: Request) {
   // service. It ports to the leader-elected scheduler (#1676) as a plain
   // handler, timer and all.
   initUsageRollupCron();
+  // The daily trial sweep (#2415, story #2392). Registered here for the same
+  // reason as the four above: it imports emailService to send the reminder, so
+  // registering it inside initCronJobs would close a one-way import into a
+  // cycle. It also expires the trials that ran out overnight, which is why it
+  // runs early (05:20 UTC) rather than behind the mail-heavy slots.
+  initTrialRemindersCron();
   return NextResponse.json({ ok: true, started: true });
 }
