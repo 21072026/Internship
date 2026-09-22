@@ -53,6 +53,90 @@ test('admin can anonymize a candidate (wrong-name confirm is rejected)', async (
   }
 });
 
+/**
+ * Erase the person, keep the company (#2434).
+ *
+ * The enquiry a merchant arrived through and the account's primary contact both
+ * hold a named human's e-mail, name and telephone number, and `accountErasure`
+ * did not mention either table — so an "erased" account's row said "Erased
+ * candidate" while the same person's details sat untouched on the company next
+ * to it. The commercial record itself (the Company row, its name, its needs)
+ * must survive, which is the other half of what is asserted here.
+ *
+ * Deliberately the SAME endpoint and the SAME step-up as the two tests above —
+ * this task added no screen and no second erasure path — so the wrong-password
+ * probe below is also the assertion that the gate still stands.
+ */
+test('erasing a person clears the enquiry and the company contact, and keeps the company', async ({ page }) => {
+  const adminEmail = uniqueEmail('erase-admin3');
+  const contactEmail = uniqueEmail('erase-contact');
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Erase Admin 3');
+  const person = await seedUser(contactEmail, 'x', 'MENTEE', 'Company Contact Person');
+  const company = await prisma.company.create({
+    data: {
+      name: `Erasure Co ${Date.now()}`,
+      contactEmail,
+      contactName: 'Company Contact Person',
+      contactPhone: '+49 30 123456',
+    },
+  });
+  const inquiry = await prisma.companyInquiry.create({
+    data: {
+      companyName: company.name,
+      contactName: 'Company Contact Person',
+      email: contactEmail,
+      phone: '+49 30 123456',
+      message: 'We would like to host two interns.',
+      note: 'Called back on Tuesday.',
+      convertedCompanyId: company.id,
+    },
+  });
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', adminEmail);
+    await page.fill('input[type="password"]', 'AdminPass123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    // Step-up still guards the path: a wrong admin password changes nothing.
+    const refused = await page.request.post(`/api/admin/users/${person.id}/erase`, {
+      data: { mode: 'delete', confirmName: 'Company Contact Person', adminPassword: 'WrongPass123' },
+    });
+    expect(refused.status()).toBe(400);
+    expect((await prisma.companyInquiry.findUnique({ where: { id: inquiry.id } }))?.email).toBe(contactEmail);
+
+    const ok = await page.request.post(`/api/admin/users/${person.id}/erase`, {
+      data: { mode: 'delete', confirmName: 'Company Contact Person', adminPassword: 'AdminPass123' },
+    });
+    expect(ok.status()).toBe(200);
+
+    const after = await prisma.companyInquiry.findUnique({ where: { id: inquiry.id } });
+    expect(after, 'the enquiry row itself survives — it is where the account came from').not.toBeNull();
+    expect(after?.email).not.toBe(contactEmail);
+    expect(after?.email).toMatch(/^erased-.*@erased\.local$/);
+    expect(after?.contactName).toBe('Erased contact');
+    expect(after?.phone).toBeNull();
+    expect(after?.note, 'free text written ABOUT them is scrubbed').toBeNull();
+    expect(after?.message, 'what they wrote is tombstoned').toBeNull();
+    expect(after?.companyName, 'the account is not personal data').toBe(company.name);
+
+    const companyAfter = await prisma.company.findUnique({ where: { id: company.id } });
+    expect(companyAfter, 'the company and its commercial history stay').not.toBeNull();
+    expect(companyAfter?.name).toBe(company.name);
+    expect(companyAfter?.contactEmail).toBeNull();
+    expect(companyAfter?.contactName, 'the named person goes with the address').toBeNull();
+    expect(companyAfter?.contactPhone).toBeNull();
+
+    expect(await prisma.user.findUnique({ where: { id: person.id } })).toBeNull();
+  } finally {
+    await prisma.companyInquiry.deleteMany({ where: { id: inquiry.id } });
+    await prisma.company.deleteMany({ where: { id: company.id } });
+    await prisma.user.deleteMany({ where: { id: person.id } });
+    await cleanupByEmail(adminEmail);
+  }
+});
+
 test('admin can permanently delete a candidate; the erase endpoint refuses self-targeting and a missing password', async ({ page }) => {
   const adminEmail = uniqueEmail('erase-admin2');
   const menteeEmail = uniqueEmail('erase-mentee2');

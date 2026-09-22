@@ -34,6 +34,63 @@ async function forgetEmailLog(userId: string): Promise<void> {
   await prisma.newsletterSend.deleteMany({ where: { OR: [{ email: user.email }, { userId }] } });
 }
 
+// ── The person on a company record (#2434) ───────────────────────────────────
+//
+// "Erase the person, keep the company." A merchant's account is the
+// organisation's commercial history — its offers, its requisitions, its
+// interactions, the enquiry it arrived through. The NAMED HUMAN on those rows is
+// not: `CompanyInquiry.contactName/email/phone/note` and the three
+// `Company.contact*` columns are one person's identity and direct line, and
+// until this function existed neither erasure path mentioned `companyInquiry` at
+// all — an erased account's row said "Erased candidate" while their name, e-mail
+// and telephone number sat untouched on the enquiry next to it.
+//
+// The link is the ADDRESS, not a foreign key: there is no `Contact` model in
+// this repo and neither table references `User`. Same shape as
+// `forgetEmailLog()` above, and the same hard ordering — read the address
+// BEFORE the row is rewritten or deleted, or there is nothing left to match on.
+//
+// The module's own tombstone/scrub split, applied:
+//   WROTE  → `message` is the person's own words in their enquiry, so it is
+//            tombstoned (nulled) exactly like `MentorshipRequest.message`.
+//   ABOUT  → `contactName`/`email`/`phone` identify them and `note` is what an
+//            admin wrote about them; those are scrubbed while the row lives on.
+// `companyName`, `openRoles`, `status`, the conversion link and every date stay:
+// they are facts about the ACCOUNT ("who they are hiring for, what became of the
+// enquiry"), which is precisely the history this task must not destroy. The
+// `Company` row itself is never deleted, and neither are its needs, offers,
+// requisitions, interests or relations.
+//
+// Required columns cannot be nulled, so they get the same tombstone shape the
+// `User` row already uses (`Erased …` / `erased-<id>@erased.local`) rather than
+// a second vocabulary. Re-running is harmless: a second pass reads the already
+// tombstoned address and finds the rows it wrote.
+async function forgetCompanyContact(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  const email = user?.email;
+  if (!email) return;
+  const tombstoneEmail = `erased-${userId}@erased.local`;
+  await prisma.$transaction([
+    prisma.companyInquiry.updateMany({
+      where: { email },
+      data: {
+        contactName: 'Erased contact',
+        email: tombstoneEmail,
+        phone: null,
+        note: null,
+        message: null,
+      },
+    }),
+    // The primary contact ON the account (#2407): three columns describing one
+    // named person, so clearing only the address would leave their name and
+    // their direct line on the record. The company keeps everything else.
+    prisma.company.updateMany({
+      where: { contactEmail: email },
+      data: { contactEmail: null, contactName: null, contactPhone: null },
+    }),
+  ]);
+}
+
 // ── Free text: what each surface gets, and why (#2052) ───────────────────────
 //
 // Rewriting the `User` row is not erasure. Everything the person ever typed —
@@ -135,6 +192,8 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
 
 export async function hardDeleteUser(userId: string): Promise<void> {
   await forgetEmailLog(userId);
+  // Before the row goes: both tables are matched by the address on it (#2434).
+  await forgetCompanyContact(userId);
   // BEFORE the relations go: deleting a relation cascades to its meetings, and
   // `PersonalNote.meetingId` is SetNull — so a note taken in this person's
   // meeting would survive with its text intact and its only link to them
@@ -157,8 +216,10 @@ export async function hardDeleteUser(userId: string): Promise<void> {
 
 export async function anonymizeUser(userId: string): Promise<void> {
   // Before the address is rewritten to erased-*@erased.local below, or the log
-  // keeps the real one forever.
+  // keeps the real one forever. Same ordering constraint for the company-side
+  // contact columns, which are matched on that address too (#2434).
   await forgetEmailLog(userId);
+  await forgetCompanyContact(userId);
   await prisma.$transaction([
     // Remove uploaded file bytes; anonymize doesn't need the CV/photo to remain.
     prisma.cvFile.deleteMany({ where: { userId } }),
