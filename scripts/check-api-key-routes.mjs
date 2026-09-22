@@ -23,6 +23,10 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+// One walker over the route tree, shared with scripts/check-route-auth.mjs
+// (#2444): two guards that disagree about which files exist would each think
+// the other one covered the route neither of them saw.
+import { routeFiles } from './lib/route-files.mjs';
 
 const V1_DIR = 'src/app/api/v1';
 const DOOR = 'src/lib/apiKey.ts';
@@ -32,16 +36,6 @@ const SPEC = 'src/app/api/v1/openapi.json/route.ts';
 const UNAUTHENTICATED = new Set([SPEC]);
 
 const problems = [];
-
-function routeFiles(dir) {
-  const out = [];
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry);
-    if (statSync(path).isDirectory()) out.push(...routeFiles(path));
-    else if (entry === 'route.ts') out.push(path);
-  }
-  return out;
-}
 
 function sourceFiles(dir) {
   const out = [];
@@ -74,7 +68,7 @@ for (const file of sourceFiles('src')) {
   }
 }
 
-const files = routeFiles(V1_DIR).map((f) => f.replace(/\\/g, '/'));
+const files = routeFiles(V1_DIR);
 const spec = readFileSync(SPEC, 'utf8');
 
 for (const file of files) {
