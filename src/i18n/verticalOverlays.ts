@@ -44,7 +44,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   MARKETING: {
     en: {
       nav: { candidates: 'Leads' },
-      candidates: { title: 'Leads', subtitle: 'Browse and search leads' },
+      // `mentor` is the "Mentor: {name}" line on a candidate row AND inside the
+      // person hover card, which the board renders on every card's owner chip.
+      candidates: { title: 'Leads', subtitle: 'Browse and search leads', mentor: 'Rep' },
       // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
       publicNav: {
@@ -78,6 +80,88 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentors: 'Invite your first reps',
           inviteMentees: 'Add your first leads',
           assignMentorship: 'Create the first deal',
+        },
+      },
+      // The company list (#2426, story #2394). A marketing tenant's companies
+      // are the ACCOUNTS it sells to: the relation counter is a deal, a
+      // CompanyNeed is what the account needs, and a company login follows its
+      // leads. "Companies" itself stays — the Company model is the account
+      // master in both products, and the nav says the same word.
+      //
+      // This is the WHOLE of `companiesPage` whose English still reads like the
+      // internship product ("…their internship needs", "mentorships",
+      // "positions", "its linked candidates"). Every other key in the namespace
+      // is either neutral (title, search, the failure toasts) or names a field
+      // that means the same thing in both products, so it is left alone — an
+      // overlay entry that changes nothing is noise the next reader has to
+      // re-derive.
+      companiesPage: {
+        subtitle: 'Manage the accounts you sell to and what each one needs',
+        addLoginHint: 'Create a read-only login for a company to follow its linked leads.',
+        mentorships: 'deals',
+        positions: 'needs',
+        openPositions: 'Open needs',
+      },
+      // The two DIALOGS /admin/companies opens are part of that page, so the
+      // acceptance ("no mentorship word on /admin/companies") covers them: the
+      // create/edit form — whose empty-state CTA is the first control a day-one
+      // tenant clicks — and the premium-features modal behind the Sparkles
+      // button on every card. Only the keys whose English still names the
+      // internship product are overridden; the rest of both namespaces is field
+      // labels that mean the same thing in either product.
+      companyForm: {
+        quota: 'Need quota',
+        needs: 'Account needs',
+        noNeeds: 'No needs added yet. Click "Add Need" to record what this account needs.',
+      },
+      entitlements: {
+        subtitle: 'Enable premium features for {name}. Rep and lead features are always free.',
+      },
+      // The stage board (#2427): every card is a lead owned by a rep, the pair
+      // is a deal.
+      //
+      // Stage NAMES need nothing here, deliberately: a MARKETING org is
+      // provisioned with MARKETING_FUNNEL (provisionStagePreset), whose stages
+      // carry their own en/tr/de labels that stageLabel() resolves. A second
+      // translation layer for stage names is exactly what #2427 rules out.
+      //
+      // `board.emptyStage` has no reader in src today — the admin board renders
+      // an empty column rather than a message. It is overridden anyway: the key
+      // is live in all three locales, and whoever renders it next must not
+      // reintroduce "No mentees in this stage" on a marketing board.
+      //
+      // The group headings need all three: MARKETING_FUNNEL's keys are its own
+      // (LEAD_*/DEAL_*), so groupResolvedStages() files every one of them under
+      // `custom` — that is the ONE heading a provisioned marketing tenant
+      // actually sees, and "Custom stages" describes a deviation from a
+      // programme it does not run. `pre`/`internship` still get an override
+      // because an org switched to MARKETING while sitting on the canonical
+      // stage keys renders them, and those two read "Pre-internship"/"Internship".
+      board: { emptyStage: 'No leads in this stage' },
+      adminBoard: {
+        subtitle: 'Every lead across every rep — drag a card, or use the stage menu on it, to change its stage',
+        searchPlaceholder: 'Find a lead or rep...',
+        wipSaturated: 'Every column on this board is over its work-in-progress limit, so the amber warning no longer points anywhere and is hidden. Set a limit that matches how this pipeline actually runs — one number for the board, or one per stage.',
+        groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
+      },
+      // PersonHoverCard is shared chrome, but the board opens one on EVERY
+      // card's owner chip (hover, tap or keyboard focus), and it announces the
+      // person's role — so "Mentor"/"Mentee" are on the very screen #2427
+      // names. These are the same two words `dashboard.mentors`/`mentees`
+      // already rename, so the decision is not a new one. The rest of the
+      // namespace (admin/company/source, "Open profile", "Message") is neutral
+      // and left alone.
+      personCard: { roleMentor: 'Rep', roleMentee: 'Lead' },
+      // The day-one empty states of the same two screens (both rendered by the
+      // pages #2426/#2427 name, so the acceptance "no mentorship word on
+      // /admin/companies or the board" is not met without them): a fresh tenant
+      // reads these before anything else, so they must not explain internships.
+      emptyStates: {
+        board: {
+          adminBody: 'Every deal shows up here as a card, in the stage it has reached. Add the first leads and their cards appear as soon as a rep owns them.',
+        },
+        companies: {
+          adminBody: 'Companies are the accounts you sell to: once one exists you can attach what it needs, its contact people and the deals open against it.',
         },
       },
       landing: {
@@ -142,7 +226,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
       nav: { candidates: 'Müşteri Adayları' },
-      candidates: { title: 'Müşteri Adayları', subtitle: 'Müşteri adaylarını görüntüle ve ara' },
+      candidates: { title: 'Müşteri Adayları', subtitle: 'Müşteri adaylarını görüntüle ve ara', mentor: 'Temsilci' },
       publicNav: {
         homeLink: 'SaleVali — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
@@ -171,6 +255,37 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentors: 'İlk temsilcilerini davet et',
           inviteMentees: 'İlk müşteri adaylarını ekle',
           assignMentorship: 'İlk fırsatı oluştur',
+        },
+      },
+      companiesPage: {
+        subtitle: 'Sattığın müşteri firmalarını ve ihtiyaçlarını yönet',
+        addLoginHint: 'Bir şirketin kendi müşteri adaylarını izlemesi için salt-okunur giriş oluştur.',
+        mentorships: 'fırsat',
+        positions: 'ihtiyaç',
+        openPositions: 'Açık ihtiyaçlar',
+      },
+      companyForm: {
+        quota: 'İhtiyaç kontenjanı',
+        needs: 'Firma ihtiyaçları',
+        noNeeds: 'Henüz ihtiyaç eklenmedi. Bu firmanın neye ihtiyacı olduğunu kaydetmek için "İhtiyaç ekle"ye tıkla.',
+      },
+      entitlements: {
+        subtitle: '{name} için premium özellikleri aç. Temsilci ve müşteri adayı özellikleri her zaman ücretsizdir.',
+      },
+      board: { emptyStage: 'Bu aşamada müşteri adayı yok' },
+      adminBoard: {
+        subtitle: 'Tüm temsilcilerin tüm müşteri adayları — aşamayı kartı sürükleyerek ya da kartın aşama menüsünden değiştir',
+        searchPlaceholder: 'Müşteri adayı veya temsilci bul...',
+        wipSaturated: 'Panodaki her sütun kendi iş limitinin üzerinde; bu yüzden turuncu uyarı artık bir yeri işaret etmiyor ve gizlendi. Bu hattın gerçekten nasıl yürüdüğüne uyan bir limit belirle — pano için tek sayı ya da aşama başına birer tane.',
+        groups: { pre: 'Müşteri Adayları', internship: 'Fırsatlar', custom: 'Satış hunisi' },
+      },
+      personCard: { roleMentor: 'Temsilci', roleMentee: 'Müşteri adayı' },
+      emptyStates: {
+        board: {
+          adminBody: 'Her fırsat burada, ulaştığı aşamada bir kart olarak görünür. İlk müşteri adaylarını ekle; bir temsilci sahiplendiği anda kartları burada belirir.',
+        },
+        companies: {
+          adminBody: 'Şirketler sattığın müşteri hesaplarıdır: bir şirket eklediğinde ona ihtiyaçlarını, iletişim kişilerini ve açık fırsatlarını bağlayabilirsin.',
         },
       },
       landing: {
@@ -228,7 +343,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     },
     de: {
       nav: { candidates: 'Leads' },
-      candidates: { title: 'Leads', subtitle: 'Leads durchsuchen' },
+      candidates: { title: 'Leads', subtitle: 'Leads durchsuchen', mentor: 'Vertriebsmitarbeiter' },
       publicNav: {
         homeLink: 'SaleVali — zur Startseite',
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',
@@ -257,6 +372,37 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentors: 'Laden Sie Ihre ersten Mitarbeiter ein',
           inviteMentees: 'Fügen Sie Ihre ersten Leads hinzu',
           assignMentorship: 'Ersten Deal anlegen',
+        },
+      },
+      companiesPage: {
+        subtitle: 'Kunden-Accounts und ihren Bedarf verwalten',
+        addLoginHint: 'Erstelle einen Zugang mit Lesezugriff, damit ein Unternehmen seine verknüpften Leads einsehen kann.',
+        mentorships: 'Deals',
+        positions: 'Bedarfe',
+        openPositions: 'Offener Bedarf',
+      },
+      companyForm: {
+        quota: 'Bedarfskontingent',
+        needs: 'Bedarf des Accounts',
+        noNeeds: 'Noch kein Bedarf hinzugefügt. Klicke auf "Bedarf hinzufügen", um festzuhalten, was dieser Account braucht.',
+      },
+      entitlements: {
+        subtitle: 'Premium-Funktionen für {name} aktivieren. Funktionen für Vertriebsmitarbeiter und Leads sind immer kostenlos.',
+      },
+      board: { emptyStage: 'Keine Leads in dieser Phase' },
+      adminBoard: {
+        subtitle: 'Alle Leads aller Vertriebsmitarbeiter — ziehe eine Karte oder nutze ihr Phasenmenü, um die Phase zu ändern',
+        searchPlaceholder: 'Lead oder Vertriebsmitarbeiter finden...',
+        wipSaturated: 'Jede Spalte dieses Boards liegt über ihrem Arbeitslimit, damit zeigt die bernsteinfarbene Warnung nirgendwo mehr hin und wird ausgeblendet. Lege ein Limit fest, das zu dieser Pipeline passt — eine Zahl für das ganze Board oder eine je Phase.',
+        groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
+      },
+      personCard: { roleMentor: 'Vertriebsmitarbeiter', roleMentee: 'Lead' },
+      emptyStates: {
+        board: {
+          adminBody: 'Jeder Deal erscheint hier als Karte, in der Phase, die er erreicht hat. Lege die ersten Leads an — sobald ein Vertriebsmitarbeiter sie übernimmt, taucht ihre Karte auf.',
+        },
+        companies: {
+          adminBody: 'Unternehmen sind die Accounts, an die du verkaufst: sobald eines existiert, kannst du ihm seinen Bedarf, Ansprechpersonen und die offenen Deals zuordnen.',
         },
       },
       landing: {
