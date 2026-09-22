@@ -51,7 +51,9 @@ test('the server enforces tenant isolation (MT_ENFORCE_ISOLATION is on)', async 
 
   // page.request shares the browser context's cookies, so this is the signed-in
   // admin's own call — the same one the companies screen makes.
-  const res = await page.request.get('/api/companies');
+  // `all=1` since #2437 paged this route — an unpaged answer is the only one
+  // in which "tenant B's company is absent" means isolation rather than luck.
+  const res = await page.request.get('/api/companies?all=1');
   expect(res.status()).toBe(200);
   const body = (await res.json()) as { companies: Array<{ id: string; name: string }> };
   const ids = body.companies.map((c) => c.id);
@@ -71,7 +73,7 @@ test('enforcement holds in both directions', async ({ page }) => {
   // pass mean "scoped by the caller's org".
   await signInAsTenantActor(page, tenants.orgB.admin);
 
-  const res = await page.request.get('/api/companies');
+  const res = await page.request.get('/api/companies?all=1');
   expect(res.status()).toBe(200);
   const body = (await res.json()) as { companies: Array<{ id: string }> };
   const ids = body.companies.map((c) => c.id);
