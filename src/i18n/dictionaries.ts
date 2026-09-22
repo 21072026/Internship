@@ -4134,7 +4134,7 @@ const en = {
       overloaded: 'Over ceiling',
     },
     // Cohorts (#2420 / #2425): the two questions a month-by-month funnel answers
-    // that a snapshot cannot â who converted out of the people who arrived
+    // that a snapshot cannot — who converted out of the people who arrived
     // together, and how much of what we won we still have.
     cohortKpi: {
       title: 'Cohorts',

@@ -243,6 +243,22 @@ test('a stage merely REMOVED from the order is not read as a customer leaving', 
   assert.equal(withoutList[0].buckets[0].churned, 1, 'no off-path list: off the path is the only reading left');
 });
 
+test('an EMPTY off-path list falls back, rather than reporting nobody ever leaves', () => {
+  // `outcomeStageKeysFrom()` returns [] for a tenant whose stage set has no
+  // off-path row, and the route passes that straight through. Read as a set it
+  // would answer "not a loss" to every key, and the whole triangle would print
+  // a confident 0% — the same permanent-0%-churn answer the design note
+  // rules out, arrived at from the other direction.
+  const journeys = [journey('LEAD_NEW', '2026-01-02', [['DEAL_WON', '2026-01-10'], ['GONE', '2026-01-25']])];
+  const now = new Date('2026-06-01T00:00:00Z');
+
+  const empty = retentionTriangle(ORDER, journeys, ['2026-01'], [1], { now, offPath: [] });
+  assert.deepEqual(empty[0].buckets[0], { months: 1, churned: 1, rate: 100 });
+
+  const absent = retentionTriangle(ORDER, journeys, ['2026-01'], [1], { now });
+  assert.deepEqual(absent[0].buckets[0], empty[0].buckets[0], '[] and undefined must read the same');
+});
+
 // ── the month list both take ─────────────────────────────────────────────────
 
 test('cohortMonths walks whole UTC months inclusive, across a year boundary', () => {
@@ -253,6 +269,20 @@ test('cohortMonths walks whole UTC months inclusive, across a year boundary', ()
   assert.deepEqual(cohortMonths(new Date('2026-03-04T00:00:00Z'), new Date('2026-03-28T00:00:00Z')), ['2026-03']);
   assert.deepEqual(cohortMonths(new Date('2026-05-01T00:00:00Z'), new Date('2026-04-01T00:00:00Z')), [], 'reversed range');
   assert.deepEqual(cohortMonths(new Date('nope'), new Date('2026-04-01T00:00:00Z')), []);
+});
+
+test('cohortMonths drops a month the period grammar rejects, instead of 500ing the endpoint', () => {
+  // `?from=0999-01-01` parses fine as a Date, and `periodOf` formats year 999
+  // as '999-01' — which `periodRange()` throws on. That throw is inside the
+  // funnel handler, so an out-of-range year on the query string used to be a
+  // 500 rather than an empty card.
+  const months = cohortMonths(new Date('0999-01-01T00:00:00Z'), new Date('0999-03-01T00:00:00Z'));
+  assert.deepEqual(months, []);
+  assert.deepEqual(retentionTriangle(ORDER, [], months, [1]), [], 'and nothing downstream throws');
+
+  // The valid tail of a range that starts out of bounds is still reported.
+  const spanning = cohortMonths(new Date('0999-11-01T00:00:00Z'), new Date('1000-02-01T00:00:00Z'));
+  assert.deepEqual(spanning, ['1000-01', '1000-02']);
 });
 
 test('cohortMonths keeps the newest months when a hand-typed range is absurdly wide', () => {

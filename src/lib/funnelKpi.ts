@@ -15,7 +15,7 @@
 //      about. So the result carries the population it was computed over, and
 //      the UI states it.
 
-import { periodOf, periodRange, type Period } from './meteringRules';
+import { isPeriod, periodOf, periodRange, type Period } from './meteringRules';
 
 export interface Journey {
   /** The stage the relation started in. */
@@ -359,7 +359,14 @@ export function retentionTriangle(
   const wonKeys = new Set(
     options.wonKeys && options.wonKeys.length > 0 ? options.wonKeys : order.slice(-1),
   );
-  const lossKeys = options.offPath ? new Set(options.offPath) : null;
+  // An EMPTY list falls back exactly as an absent one does. A tenant whose
+  // stage set marks nothing off-path would otherwise hand in `[]`, which as a
+  // Set answers "not a loss" to every key and prints a triangle of confident
+  // 0%s — the permanent-0%-churn answer the note above exists to avoid,
+  // reached from the other direction. The fallback still has something to say
+  // for that org.
+  const lossKeys =
+    options.offPath && options.offPath.length > 0 ? new Set(options.offPath) : null;
   const isLoss = (key: string) => (lossKeys ? lossKeys.has(key) : !onPath.has(key));
 
   // month -> { won, churnedAt[] }. One pass over the journeys, then one pass
@@ -425,6 +432,13 @@ export function retentionTriangle(
  * is twelve months; the cap only stops a hand-typed `?from=1970-01-01` from
  * asking for six hundred columns, and it keeps the newest ones because those
  * are the rows anyone is reading.
+ *
+ * This is also the choke point for what a month key may LOOK like. A year
+ * outside 1000-9999 — `?from=0999-01-01`, which `new Date()` parses happily —
+ * formats as `999-01`, which `periodRange()` rejects with a throw; a range no
+ * screen can produce would then 500 the endpoint instead of rendering an empty
+ * card. Anything the period grammar does not accept is dropped here, so every
+ * consumer below can take a `CohortMonth` at its word.
  */
 export function cohortMonths(from: Date, to: Date, max = 36): CohortMonth[] {
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) return [];
@@ -436,5 +450,5 @@ export function cohortMonths(from: Date, to: Date, max = 36): CohortMonth[] {
     out.push(periodOf(d));
     cursor = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
   }
-  return out.slice(-max);
+  return out.filter((m) => isPeriod(m)).slice(-max);
 }

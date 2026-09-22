@@ -74,10 +74,27 @@ export async function GET(request: Request) {
   }
 
   return await withTenantScope(session, async () => {
-    // Optional window: a journey counts when it STARTED inside it. Filtering by
-    // "finished inside the window" would silently select for fast journeys —
-    // the slow ones simply have not finished yet — and report a time-to-hire
-    // that is too good.
+    // Optional window. TWO populations come out of it, because the sections of
+    // this report key their rows on two different dates and no single filter is
+    // right for both:
+    //
+    //   · stage conversion, time-to-hire and the entry-month cohorts are keyed
+    //     by the date a record ENTERED, so their population is "started inside
+    //     the window". Filtering those by "finished inside the window" would
+    //     silently select for fast journeys — the slow ones simply have not
+    //     finished yet — and report a time-to-hire that is too good.
+    //   · the retention triangle (#2425) is keyed by the date a record was WON.
+    //     A deal that arrived in January and was won in May belongs to May's
+    //     cohort, and dropping it because January is outside the window would
+    //     bias the table towards short sales cycles in the worst possible
+    //     place: the OLDEST row of any window is the only one whose 1- and
+    //     3-month buckets have closed, and under a start-date filter it could
+    //     only ever hold deals that started and closed in the same month. A
+    //     past month's retention would then change when the user switched the
+    //     range preset, which a historical number must never do.
+    //
+    // So: one query, widened to "the window touched this record", and the
+    // narrower set taken from it in memory — no second round trip.
     const { searchParams } = new URL(request.url);
     const parseDate = (v: string | null): Date | null => {
       if (!v) return null;
@@ -89,7 +106,18 @@ export async function GET(request: Request) {
     const rangeOk = from && to && from.getTime() <= to.getTime();
 
     const relations = await prisma.mentorshipRelation.findMany({
-      where: rangeOk ? { startDate: { gte: from!, lte: to! } } : {},
+      where: rangeOk
+        ? {
+            // Started in the window, OR started earlier and moved inside it —
+            // a win IS a StatusChange, so this is exactly the superset the
+            // retention cohorts need and nothing more.
+            startDate: { lte: to! },
+            OR: [
+              { startDate: { gte: from! } },
+              { statusChanges: { some: { createdAt: { gte: from!, lte: to! } } } },
+            ],
+          }
+        : {},
       select: {
         id: true,
         pipelineStatus: true,
@@ -102,13 +130,20 @@ export async function GET(request: Request) {
     const [stages, capabilities] = await Promise.all([resolvePipelineStages(orgId), shellCapabilities(orgId)]);
     const order = onPathKeys(stages);
 
-    const journeys: Journey[] = relations.map((r) => ({
+    // Everything the window touched — the population the retention triangle is
+    // read over, because a record's cohort there is the month it was WON.
+    const activeJourneys: Journey[] = relations.map((r) => ({
       // Where the journey began: the stage the first recorded move came FROM,
       // else — for a relation that never moved — where it sits now.
       startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
       startedAt: r.startDate.getTime(),
       changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
     }));
+    // … of which the ones that also STARTED in it: every entry-keyed number
+    // below, unchanged from before the cohorts landed.
+    const journeys: Journey[] = rangeOk
+      ? activeJourneys.filter((j) => j.startedAt >= from!.getTime())
+      : activeJourneys;
 
     const conversions = stageConversions(order, journeys);
     const tth = timeToHire(order, journeys);
@@ -129,13 +164,6 @@ export async function GET(request: Request) {
     // The months to report. With no range the screen is showing everything, so
     // the cohorts cover the last twelve months — long enough for the widest
     // retention bucket to have closed for at least one row.
-    //
-    // The POPULATION is still the one the whole card describes: journeys that
-    // STARTED inside the window (see the query above). So a lead that arrived
-    // before the window and won inside it is in neither the cohort rows nor
-    // the conversion rows — deliberately, because a card whose sections each
-    // answered for a different set of records is worse than one that answers
-    // for a stated set. Widen the range to widen the population.
     const windowEnd = to ?? new Date();
     const windowStart =
       rangeOk && from
@@ -151,11 +179,16 @@ export async function GET(request: Request) {
       // array, so the screen renders the same shape either way.
       months: conversionByEntryMonth(order, journeys, outcome.first, toKey ?? '', months),
     };
+    // Keys, not labels. `resolvePipelineStages` above was called without a
+    // locale, so the labels it carries are English; the screen names a stage
+    // through `useStageLabel()`, which has the tenant's own labels in the
+    // reader's language (#2268). A server-side consumer that needs the name
+    // (an export, say) resolves the stages itself with `await getLocale()` —
+    // it does not read one off this payload.
     const retention = {
       wonKeys: outcome.finished,
-      wonLabel: outcome.finishedLabel,
       buckets: DEFAULT_RETENTION_BUCKETS,
-      cohorts: retentionTriangle(order, journeys, months, DEFAULT_RETENTION_BUCKETS, {
+      cohorts: retentionTriangle(order, activeJourneys, months, DEFAULT_RETENTION_BUCKETS, {
         wonKeys: outcome.finished,
         offPath: outcome.offPath,
       }),
@@ -178,6 +211,8 @@ export async function GET(request: Request) {
       cohortConversion,
       retention,
       // Echoed so the screen can say which journeys these numbers describe.
+      // The entry-keyed population: what every number on the card but the
+      // retention triangle is computed over.
       journeys: journeys.length,
     });
   });

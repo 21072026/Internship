@@ -127,8 +127,10 @@ interface FunnelKpi {
     months: { month: string; entered: number; converted: number; rate: number | null }[];
   };
   retention: {
+    // Keys only. The stage's NAME comes from `useStageLabel()` below, which
+    // carries the tenant's own labels in the reader's language (#2268); a label
+    // resolved server-side without a locale would be English for everyone.
     wonKeys: string[];
-    wonLabel: string;
     buckets: number[];
     cohorts: {
       month: string;
