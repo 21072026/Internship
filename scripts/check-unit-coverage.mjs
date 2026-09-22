@@ -199,6 +199,14 @@ const FLOORS = new Map([
       why: 'who may clear someone else\'s second factor: never a peer admin, never self, never while impersonating (#1543)',
     },
   ],
+  [
+    'src/lib/marketingImport.ts',
+    {
+      floor: 95,
+      measured: 99.29,
+      why: 'the account match key: VAT beats the name, and the name half must survive İ/ı/ü/ß — a plain toLowerCase() creates a twin account on every run (#2405)',
+    },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────
