@@ -80,6 +80,65 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'Create the first deal',
         },
       },
+      // The company list (#2426, story #2394). A marketing tenant's companies
+      // are the ACCOUNTS it sells to: the relation counter is a deal, a
+      // CompanyNeed is what the account needs, and a company login follows its
+      // leads. "Companies" itself stays — the Company model is the account
+      // master in both products, and the nav says the same word.
+      //
+      // This is the WHOLE of `companiesPage` whose English still reads like the
+      // internship product ("…their internship needs", "mentorships",
+      // "positions", "its linked candidates"). Every other key in the namespace
+      // is either neutral (title, search, the failure toasts) or names a field
+      // that means the same thing in both products, so it is left alone — an
+      // overlay entry that changes nothing is noise the next reader has to
+      // re-derive.
+      companiesPage: {
+        subtitle: 'Manage the accounts you sell to and what each one needs',
+        addLoginHint: 'Create a read-only login for a company to follow its linked leads.',
+        mentorships: 'deals',
+        positions: 'needs',
+        openPositions: 'Open needs',
+      },
+      // The stage board (#2427): every card is a lead owned by a rep, the pair
+      // is a deal.
+      //
+      // Stage NAMES need nothing here, deliberately: a MARKETING org is
+      // provisioned with MARKETING_FUNNEL (provisionStagePreset), whose stages
+      // carry their own en/tr/de labels that stageLabel() resolves. A second
+      // translation layer for stage names is exactly what #2427 rules out.
+      //
+      // `board.emptyStage` has no reader in src today — the admin board renders
+      // an empty column rather than a message. It is overridden anyway: the key
+      // is live in all three locales, and whoever renders it next must not
+      // reintroduce "No mentees in this stage" on a marketing board.
+      //
+      // The group headings need all three: MARKETING_FUNNEL's keys are its own
+      // (LEAD_*/DEAL_*), so groupResolvedStages() files every one of them under
+      // `custom` — that is the ONE heading a provisioned marketing tenant
+      // actually sees, and "Custom stages" describes a deviation from a
+      // programme it does not run. `pre`/`internship` still get an override
+      // because an org switched to MARKETING while sitting on the canonical
+      // stage keys renders them, and those two read "Pre-internship"/"Internship".
+      board: { emptyStage: 'No leads in this stage' },
+      adminBoard: {
+        subtitle: 'Every lead across every rep — drag a card, or use the stage menu on it, to change its stage',
+        searchPlaceholder: 'Find a lead or rep...',
+        wipSaturated: 'Every column on this board is over its work-in-progress limit, so the amber warning no longer points anywhere and is hidden. Set a limit that matches how this pipeline actually runs — one number for the board, or one per stage.',
+        groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
+      },
+      // The day-one empty states of the same two screens (both rendered by the
+      // pages #2426/#2427 name, so the acceptance "no mentorship word on
+      // /admin/companies or the board" is not met without them): a fresh tenant
+      // reads these before anything else, so they must not explain internships.
+      emptyStates: {
+        board: {
+          adminBody: 'Every deal shows up here as a card, in the stage it has reached. Add the first leads and their cards appear as soon as a rep owns them.',
+        },
+        companies: {
+          adminBody: 'Companies are the accounts you sell to: once one exists you can attach what it needs, its contact people and the deals open against it.',
+        },
+      },
       landing: {
         // The lean marketing landing (#2500): the sections that survive for a
         // MARKETING host — hero, chips, feature cards, the funnel diagram, "and
@@ -173,6 +232,28 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'İlk fırsatı oluştur',
         },
       },
+      companiesPage: {
+        subtitle: 'Sattığın müşteri firmalarını ve ihtiyaçlarını yönet',
+        addLoginHint: 'Bir şirketin kendi müşteri adaylarını izlemesi için salt-okunur giriş oluştur.',
+        mentorships: 'fırsat',
+        positions: 'ihtiyaç',
+        openPositions: 'Açık ihtiyaçlar',
+      },
+      board: { emptyStage: 'Bu aşamada müşteri adayı yok' },
+      adminBoard: {
+        subtitle: 'Tüm temsilcilerin tüm müşteri adayları — aşamayı kartı sürükleyerek ya da kartın aşama menüsünden değiştir',
+        searchPlaceholder: 'Müşteri adayı veya temsilci bul...',
+        wipSaturated: 'Panodaki her sütun kendi iş limitinin üzerinde; bu yüzden turuncu uyarı artık bir yeri işaret etmiyor ve gizlendi. Bu hattın gerçekten nasıl yürüdüğüne uyan bir limit belirle — pano için tek sayı ya da aşama başına birer tane.',
+        groups: { pre: 'Müşteri Adayları', internship: 'Fırsatlar', custom: 'Satış hunisi' },
+      },
+      emptyStates: {
+        board: {
+          adminBody: 'Her fırsat burada, ulaştığı aşamada bir kart olarak görünür. İlk müşteri adaylarını ekle; bir temsilci sahiplendiği anda kartları burada belirir.',
+        },
+        companies: {
+          adminBody: 'Şirketler sattığın müşteri hesaplarıdır: bir şirket eklediğinde ona ihtiyaçlarını, iletişim kişilerini ve açık fırsatlarını bağlayabilirsin.',
+        },
+      },
       landing: {
         chipStages: 'Adaydan kapanan anlaşmaya tek hat',
         chipRoles: 'Açık kaynak — AGPL-3.0',
@@ -257,6 +338,28 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentors: 'Laden Sie Ihre ersten Mitarbeiter ein',
           inviteMentees: 'Fügen Sie Ihre ersten Leads hinzu',
           assignMentorship: 'Ersten Deal anlegen',
+        },
+      },
+      companiesPage: {
+        subtitle: 'Kunden-Accounts und ihren Bedarf verwalten',
+        addLoginHint: 'Erstelle einen Zugang mit Lesezugriff, damit ein Unternehmen seine verknüpften Leads einsehen kann.',
+        mentorships: 'Deals',
+        positions: 'Bedarfe',
+        openPositions: 'Offener Bedarf',
+      },
+      board: { emptyStage: 'Keine Leads in dieser Phase' },
+      adminBoard: {
+        subtitle: 'Alle Leads aller Vertriebsmitarbeiter — ziehe eine Karte oder nutze ihr Phasenmenü, um die Phase zu ändern',
+        searchPlaceholder: 'Lead oder Vertriebsmitarbeiter finden...',
+        wipSaturated: 'Jede Spalte dieses Boards liegt über ihrem Arbeitslimit, damit zeigt die bernsteinfarbene Warnung nirgendwo mehr hin und wird ausgeblendet. Lege ein Limit fest, das zu dieser Pipeline passt — eine Zahl für das ganze Board oder eine je Phase.',
+        groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
+      },
+      emptyStates: {
+        board: {
+          adminBody: 'Jeder Deal erscheint hier als Karte, in der Phase, die er erreicht hat. Lege die ersten Leads an — sobald ein Vertriebsmitarbeiter sie übernimmt, taucht ihre Karte auf.',
+        },
+        companies: {
+          adminBody: 'Unternehmen sind die Accounts, an die du verkaufst: sobald eines existiert, kannst du ihm seinen Bedarf, Ansprechpersonen und die offenen Deals zuordnen.',
         },
       },
       landing: {
