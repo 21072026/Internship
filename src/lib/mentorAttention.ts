@@ -121,6 +121,13 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
     // No "how long has it been waiting" is computed here on purpose:
     // lib/stageClock.ts owns time-in-stage and the board already shows it. This
     // branch answers only "is this one waiting for a decision?".
+    //
+    // Know what that board number currently says for an AUTOMATICALLY expired
+    // trial, though: the sweep writes an `AuditLog` row and no `StatusChange`
+    // (it has no `User` to put in the required FK), and `StatusChange` is the
+    // only thing the stage clock reads — so such a record shows the age of the
+    // whole trial rather than the age of the decision. #2527 fixes that at the
+    // source; nothing here should paper over it with a second calculation.
     if (r.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY) reasons.push('trial_expired');
     if (r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450') {
       const currentWeek = utcWeekStart(new Date(now));

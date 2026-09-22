@@ -19,7 +19,11 @@ import {
 //      run reports `sent: 0` — the claim row is what makes the sweep safe to
 //      re-trigger, and it is the story's own acceptance criterion;
 //   3. a trial that has already run out is moved out of TRIAL_ACTIVE, once
-//      (#2417).
+//      (#2417);
+//   4. an owner who has muted the 'deadlines' category is counted as `skipped`
+//      and NOT as `sent`, and gets no bell row — the distinction the JSON exists
+//      to make, and the one a `notifyIfAllowed()` call cannot report because it
+//      returns void whether it wrote a row or not.
 //
 // NOT re-asserted here: that the cron ENDPOINTS refuse an anonymous caller.
 // `e2e/cron-start.spec.ts` owns that as a @smoke test and writing it twice would
@@ -37,7 +41,9 @@ const adminEmail = uniqueEmail(`trialjob-admin-${STAMP}`);
 const ownerEmail = uniqueEmail(`trialjob-owner-${STAMP}`);
 const leadEmail = uniqueEmail(`trialjob-lead-${STAMP}`);
 const staleLeadEmail = uniqueEmail(`trialjob-stale-${STAMP}`);
-const emails = [adminEmail, ownerEmail, leadEmail, staleLeadEmail];
+const mutedOwnerEmail = uniqueEmail(`trialjob-muted-owner-${STAMP}`);
+const mutedLeadEmail = uniqueEmail(`trialjob-muted-lead-${STAMP}`);
+const emails = [adminEmail, ownerEmail, leadEmail, staleLeadEmail, mutedOwnerEmail, mutedLeadEmail];
 
 let orgId = '';
 
@@ -79,9 +85,18 @@ test('the trial-reminders job warns once, expires what has run out, and does not
   const owner = await seedUser(ownerEmail, 'TrialPass123!', 'MENTOR', 'Trial Job Owner');
   const lead = await seedUser(leadEmail, 'TrialPass123!', 'MENTEE', 'Trial Job Lead');
   const staleLead = await seedUser(staleLeadEmail, 'TrialPass123!', 'MENTEE', 'Stale Trial Lead');
-  for (const u of [owner, lead, staleLead]) {
+  const mutedOwner = await seedUser(mutedOwnerEmail, 'TrialPass123!', 'MENTOR', 'Muted Trial Owner');
+  const mutedLead = await seedUser(mutedLeadEmail, 'TrialPass123!', 'MENTEE', 'Muted Trial Lead');
+  for (const u of [owner, lead, staleLead, mutedOwner, mutedLead]) {
     await prisma.user.update({ where: { id: u.id }, data: { orgId: org.id } });
   }
+  // One switch mutes BOTH channels: `emailAllowed()` falls through to the same
+  // category predicate the bell uses (src/lib/notificationPrefs.ts), so this is
+  // the "muted both channels" recipient the result type documents.
+  await prisma.user.update({
+    where: { id: mutedOwner.id },
+    data: { notificationPrefs: { deadlines: false } },
+  });
 
   // The tenant's own stage rows, from the shipped preset — the trial keys are
   // resolved through them, never written as literals at a query site.
@@ -125,6 +140,24 @@ test('the trial-reminders job warns once, expires what has run out, and does not
     },
   });
 
+  // Due at the three-day mark, but owned by somebody who switched the category
+  // off. The claim row is still written (the threshold IS handled — they chose
+  // the silence), no bell row is, and the tick must count this as `skipped`.
+  const mutedEndsAt = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 3, 12, 0),
+  );
+  const muted = await prisma.mentorshipRelation.create({
+    data: {
+      orgId: org.id,
+      mentorId: mutedOwner.id,
+      menteeId: mutedLead.id,
+      companyId: company.id,
+      pipelineStatus: TRIAL_ACTIVE_STAGE_KEY,
+      trialStartedAt: new Date(mutedEndsAt.getTime() - 30 * DAY),
+      trialEndsAt: mutedEndsAt,
+    },
+  });
+
   await page.goto('/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', adminEmail);
   await page.fill('input[type="password"]', 'AdminPass123');
@@ -138,7 +171,11 @@ test('the trial-reminders job warns once, expires what has run out, and does not
   const first = await page.request.get(url);
   expect(first.ok()).toBeTruthy();
   const firstBody = (await first.json()).trialReminders;
-  expect(firstBody).toMatchObject({ considered: 1, sent: 1, skipped: 0, failed: 0, expired: 1, orgs: 1 });
+  // `skipped: 1` is the muted owner and `sent: 1` the reachable one — the whole
+  // point of keeping the two buckets apart. `failed: 0` is the other half of
+  // #2415's criterion: a channel that throws is counted there, so a run that
+  // reports zero really did have nothing go wrong.
+  expect(firstBody).toMatchObject({ considered: 2, sent: 1, skipped: 1, failed: 0, expired: 1, orgs: 1 });
 
   // ONE claim row, for the seven-day mark.
   const claims = await prisma.trialReminder.findMany({ where: { relationId: relation.id } });
@@ -151,6 +188,13 @@ test('the trial-reminders job warns once, expires what has run out, and does not
   expect(bell.length).toBe(1);
   expect((bell[0].params as { company?: string; days?: string }).company).toBe(company.name);
   expect((bell[0].params as { days?: string }).days).toBe('7');
+
+  // The muted owner: threshold claimed, nothing delivered. Without the explicit
+  // category gate this row would have been created and the tick would have
+  // reported `sent: 2`.
+  const mutedClaims = await prisma.trialReminder.findMany({ where: { relationId: muted.id } });
+  expect(mutedClaims.map((c) => c.threshold)).toEqual([3]);
+  expect(await prisma.notification.count({ where: { userId: mutedOwner.id } })).toBe(0);
 
   // The already-elapsed trial moved, and the live one did not.
   expect((await prisma.mentorshipRelation.findUnique({ where: { id: stale.id } }))!.pipelineStatus)
@@ -172,6 +216,8 @@ test('the trial-reminders job warns once, expires what has run out, and does not
   expect(secondBody).toMatchObject({ considered: 0, sent: 0, skipped: 0, failed: 0, expired: 0 });
 
   expect(await prisma.trialReminder.count({ where: { relationId: relation.id } })).toBe(1);
+  expect(await prisma.trialReminder.count({ where: { relationId: muted.id } })).toBe(1);
   expect(await prisma.notification.count({ where: { userId: owner.id, type: 'trial.endingSoon' } })).toBe(1);
+  expect(await prisma.notification.count({ where: { userId: mutedOwner.id } })).toBe(0);
   expect(await prisma.auditLog.count({ where: { action: 'trial.expire', targetId: stale.id } })).toBe(1);
 });
