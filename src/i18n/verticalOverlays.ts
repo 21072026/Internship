@@ -80,6 +80,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'Create the first deal',
         },
       },
+      // Lead attribution on /admin/analytics (#2421). `cohortTotal`/`cohortHired`
+      // are the shared column headers of both the attribution and the cohort
+      // table, so overriding them dresses the two consistently. `cohortHired` is
+      // only a FALLBACK on the attribution table: a tenant that named its own
+      // finished stage sees that name instead (#1882).
+      analytics: {
+        cohortTotal: 'Leads',
+        cohortHired: 'Won',
+        sourceConversionTitle: 'Conversion by source',
+        sourceConversionEmpty: 'No sources yet — assign leads a source to see conversion per source.',
+        sourceUnsourced: '{n} lead(s) have no source and are not shown above.',
+      },
       landing: {
         // The lean marketing landing (#2500): the sections that survive for a
         // MARKETING host — hero, chips, feature cards, the funnel diagram, "and
@@ -173,6 +185,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'İlk fırsatı oluştur',
         },
       },
+      analytics: {
+        cohortTotal: 'Müşteri adayı',
+        cohortHired: 'Kazanılan',
+        sourceConversionTitle: 'Kaynağa göre dönüşüm',
+        sourceConversionEmpty: 'Henüz kaynak yok — kaynak bazlı dönüşümü görmek için müşteri adaylarına kaynak ata.',
+        sourceUnsourced: '{n} müşteri adayının kaynağı yok ve yukarıda gösterilmiyor.',
+      },
       landing: {
         chipStages: 'Adaydan kapanan anlaşmaya tek hat',
         chipRoles: 'Açık kaynak — AGPL-3.0',
@@ -258,6 +277,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentees: 'Fügen Sie Ihre ersten Leads hinzu',
           assignMentorship: 'Ersten Deal anlegen',
         },
+      },
+      analytics: {
+        cohortTotal: 'Leads',
+        cohortHired: 'Gewonnen',
+        sourceConversionTitle: 'Konversion nach Quelle',
+        sourceConversionEmpty: 'Noch keine Quellen — weise Leads eine Quelle zu, um die Konversion pro Quelle zu sehen.',
+        sourceUnsourced: '{n} Lead(s) ohne Quelle werden oben nicht angezeigt.',
       },
       landing: {
         chipStages: 'Eine Pipeline vom Lead bis zum Abschluss',
