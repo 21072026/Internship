@@ -157,16 +157,30 @@ test('a MARKETING admin sees the funnel cards and none of the mentorship ones', 
     // The headline counter of #2419, on the data side: "finished" for this
     // tenant resolves to its OWN last on-path stage (DEAL_WON), so the seeded
     // relation counts — against the old `HIRED_660 + EMPLOYED_700` literal this
-    // org holds neither key and every outcome number was a confident zero. The
-    // per-owner count is the assertable one: `conversionToHired` divides by
-    // every relation the deployment can see, and tenant isolation is still off
-    // outside the `isolation` project (`MT_ENFORCE_ISOLATION`), so the ratio
-    // itself is not this fixture's to predict.
+    // org holds neither key and every outcome number was a confident zero.
     expect(payload.finishedLabel).toBe('Won');
     expect(payload.finishedLabelIsCustom).toBe(true);
     const owner = (payload.mentorWorkload as { id: string; hired: number }[])
       .find((m) => m.id === seeded.ownerId);
     expect(owner?.hired).toBe(1);
+
+    // …and the RATIO, without predicting a fixture-specific number:
+    // `conversionToHired` divides by every relation the deployment can see
+    // (tenant isolation is off outside the `isolation` project,
+    // `MT_ENFORCE_ISOLATION`), so 100% is not this fixture's to expect. The
+    // payload carries BOTH sides of that division, though, and for this tenant
+    // `finished` is exactly ['DEAL_WON'] — the last on-path stage of
+    // MARKETING_FUNNEL, DEAL_LOST being off-path. So the headline must be the
+    // DEAL_WON share of that very same funnel map, whatever else sits in the
+    // database. A numerator built from keys this org does not have (the
+    // pre-#1882 `HIRED_660 + EMPLOYED_700`) fails the identity, where a mere
+    // "renders some percentage" was happy with the 0% that bug produced.
+    const funnel = payload.funnel as Record<string, number>;
+    expect(funnel.DEAL_WON ?? 0).toBeGreaterThanOrEqual(1);
+    expect(payload.totalRelations).toBeGreaterThanOrEqual(funnel.DEAL_WON);
+    expect(payload.conversionToHired).toBe(
+      Math.round((funnel.DEAL_WON / payload.totalRelations) * 100),
+    );
 
     await gotoSettled(page, '/admin/analytics');
     // …and on the screen side: the tile is LABELLED from that resolved stage.
@@ -174,7 +188,11 @@ test('a MARKETING admin sees the funnel cards and none of the mentorship ones', 
     // such stage.
     const headline = page.getByTestId('headline-conversion');
     await expect(headline).toContainText('Won rate', { timeout: 20_000 });
-    await expect(headline).toContainText(/\d+%/);
+    // The number on the tile is the one verified above — the tile renders its
+    // value first and its label second, hence the anchor. Nothing writes
+    // between the two reads: `workers: 1`, and this fixture is all the spec
+    // creates.
+    await expect(headline).toHaveText(new RegExp(`^${payload.conversionToHired}%`));
     await expect(headline).not.toContainText('Hired');
 
     // Everything the funnel half of the page is made of is still there…
