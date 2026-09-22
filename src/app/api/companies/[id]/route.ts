@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
+import { logCompanyView } from '@/lib/companyViewLog';
 
 const updateCompanySchema = z.object({
   name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
@@ -78,6 +79,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
+
+    // Who read this customer record (#2433). AFTER the scope decided the row
+    // exists for this reader: a refusal is already audited as
+    // `authz.scope_denied`, and a 404 read nothing worth attributing. Awaited
+    // and de-duplicated per reader per window in src/lib/companyViewLog.ts; it
+    // swallows its own failures, so the payload below still goes out when the
+    // audit write does not.
+    await logCompanyView({
+      companyId: company.id,
+      companyName: company.name,
+      actorId: session.user.id,
+      actorEmail: session.user.email ?? null,
+      request,
+    });
 
     // Which ROW this reader may fetch is the scope above (#2431); which
     // COLUMNS of it a non-admin may read is src/lib/companyVisibility.ts — the
