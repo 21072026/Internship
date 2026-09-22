@@ -602,6 +602,33 @@ manifest tuned to synthetic data says nothing about a real database, and pointin
 at prod would be a PII read. Never fork that predicate: two copies that can disagree
 are not a guard. `scripts/test/demo-target.test.mjs` covers it.
 
+### The demo set is TWO tenants (#2443)
+
+`npm run seed:demo` seeds two organizations, not one:
+
+| Organization | `vertical` | Sign in as | What it shows |
+|---|---|---|---|
+| `default` | INTERNSHIP | `admin.demo@demo.example.com` | mentors, mentees, the canonical pipeline, projects, weekly reports |
+| `demo-marketing` | MARKETING | `admin.marketing@demo.example.com` | thirty German merchant accounts on the `MARKETING_FUNNEL` stage set, owned by three account managers |
+
+Both share the `DemoPass123!` password and the `@demo.example.com` namespace. The
+marketing half lives in `prisma/seed-demo-marketing.mjs` and follows
+[`docs/marketing-vertical/pipeline-record.md`](marketing-vertical/pipeline-record.md):
+the account is a `Company`, the funnel record a `MentorshipRelation`
+(`mentorId` = owner, `menteeId` = the lead person), and its stage history plain
+`StatusChange` rows — back-dated, so stage ageing and the cohort curves have a shape
+to draw rather than thirty records that all moved this morning.
+
+Two things there are worth knowing before editing it. Its stage list is a **plain-ESM
+mirror** of the shipped preset, because the seeder runs inside the runtime image
+(`node:20-slim`, which carries `prisma/` but no `src/`) and so cannot import
+`defaultTemplateForVertical()`; `scripts/test/marketing-demo-tenant.test.mjs` compares
+the two and fails `npm run test:unit` the moment they disagree — the same arrangement
+as `prisma/skill-split.mjs` ↔ `src/lib/skills.ts`. And it runs **last** in `main()`,
+after everything that hangs off `demoRelations`, so the internship oversight story
+(weekly reports, evaluations, placements) is never stapled onto a marketing record of
+a vertical that has neither capability.
+
 ### The manifest is a ratchet
 
 Each entry carries two numbers:
