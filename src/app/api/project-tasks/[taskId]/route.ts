@@ -42,6 +42,14 @@ const schema = z.object({
   title: z.string().min(1).max(TEXT_LIMITS.todoTitle).optional(),
   // null clears the assignment (back to an unassigned project goal).
   assigneeId: z.string().min(1).nullable().optional(),
+  // A day, not an instant (#2440): `YYYY-MM-DD` as an <input type="date"> sends
+  // it, or a full ISO timestamp. The day it names is read off its UTC parts —
+  // src/lib/taskDue.ts § rule 2. null clears the date. (The same five lines sit
+  // in /api/todos' create schema: a route file may not export them.)
+  dueDate: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.string().datetime()])
+    .nullable()
+    .optional(),
 });
 
 // PATCH — toggle done / archive / rename / (re)assign a task.
@@ -128,6 +136,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
     return NextResponse.json({ error: 'This goal belongs to someone else' }, { status: 403 });
   }
 
+  // A deadline is the lead's to set — or the assignee's on their own to-do:
+  // dating your own work is the point of the field, and a to-do you wrote for
+  // yourself makes you both. It is the one thing that stays settable on a
+  // SHARED to-do: the pool owns the wording, never when this person is due.
+  if (parsed.data.dueDate !== undefined && !lead && !mine) {
+    return NextResponse.json({ error: 'This to-do is not yours to schedule' }, { status: 403 });
+  }
+
   const updated = await prisma.projectTask.update({
     where: { id: taskId },
     data: {
@@ -136,6 +152,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
         ? { archivedAt: parsed.data.archived ? new Date() : null }
         : {}),
       ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+      ...(parsed.data.dueDate !== undefined
+        ? { dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null }
+        : {}),
       ...(assigneeId !== undefined ? { assigneeId } : {}),
     },
   });

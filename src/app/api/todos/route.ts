@@ -6,8 +6,10 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { notify } from '@/lib/notify';
 import { resolveTemplateTitle, serializeTaskTemplate, taskTemplateSelect } from '@/lib/goalTemplates';
+import { visibleToViewer } from '@/lib/todoVisibility';
 import { defaultLocale } from '@/i18n/config';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import type { Prisma } from '@prisma/client';
 
 // One person's to-do list, whole (#1113).
 //
@@ -27,6 +29,11 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 // Reading someone else's list: an ADMIN may, and a MENTOR may for their own
 // mentee — but only the to-dos that came from a project or from somebody else.
 // A line you wrote for yourself on your own list stays yours.
+//
+// ?scope=team answers the same question for everyone at once (#2440): an admin's
+// whole organisation, a mentor's own mentees (plus themselves). It is the same
+// authorisation rule `mayReach` applies one person at a time, and the same
+// privacy rule — a line somebody wrote for themselves is left out of it.
 
 const listSelect = {
   id: true,
@@ -35,13 +42,33 @@ const listSelect = {
   doneAt: true,
   archivedAt: true,
   createdAt: true,
+  dueDate: true,
   templateId: true,
   assigneeId: true,
   createdById: true,
+  // Not serialized — it is one half of the privacy rule (src/lib/todoVisibility.ts).
+  projectId: true,
   template: taskTemplateSelect,
   project: { select: { id: true, name: true } },
   author: { select: { id: true, fullName: true } },
+  // Whose to-do it is. Redundant on one person's own list and the whole point
+  // of the team list, where every row belongs to somebody else.
+  assignee: { select: { id: true, fullName: true } },
 } as const;
+
+// Sooner first, undated LAST (#2440). `nulls: 'last'` rather than a sort in the
+// handler: most to-dos carry no date, and letting them float to the top would
+// bury the ones that do. Finished ones still sink first, and equal dates keep
+// the newest-written-first order the list always had.
+const LIST_ORDER: Prisma.ProjectTaskOrderByWithRelationInput[] = [
+  { done: 'asc' },
+  { dueDate: { sort: 'asc', nulls: 'last' } },
+  { createdAt: 'desc' },
+];
+
+// How many rows a team list returns. It is a bound on the query, not a page:
+// the order above already puts the ones somebody has to act on first.
+const TEAM_LIMIT = 200;
 
 type Row = {
   id: string;
@@ -50,12 +77,15 @@ type Row = {
   doneAt: Date | null;
   archivedAt: Date | null;
   createdAt: Date;
+  dueDate: Date | null;
   templateId: string | null;
   assigneeId: string | null;
   createdById: string | null;
+  projectId: string | null;
   template: { id: string; title: string; translations: unknown; archivedAt: Date | null } | null;
   project: { id: string; name: string } | null;
   author: { id: string; fullName: string } | null;
+  assignee: { id: string; fullName: string } | null;
 };
 
 function serialize(row: Row, viewer: { id: string; role: string }, ownerId: string) {
@@ -70,9 +100,15 @@ function serialize(row: Row, viewer: { id: string; role: string }, ownerId: stri
     doneAt: row.doneAt,
     archived: row.archivedAt !== null,
     createdAt: row.createdAt,
+    // The day it is meant to be finished, or null. What "late" means for it is
+    // decided in one place — src/lib/taskDue.ts — never here.
+    dueDate: row.dueDate,
     project: row.project,
     // Who put it on the list — a mentor, an admin, or the person themselves.
     author: row.author && row.author.id !== ownerId ? row.author : null,
+    // Who has to do it. Only interesting when the reader is looking at more
+    // than one person's work (?scope=team); a list of one is all the same name.
+    assignee: row.assignee,
     // Present = the wording lives in the shared pool: rendered from the template
     // in the reader's language, and not this row's to reword.
     template: serializeTaskTemplate(row.template),
@@ -87,6 +123,35 @@ function serialize(row: Row, viewer: { id: string; role: string }, ownerId: stri
     canEdit: !shared && row.project === null && (author || (ownList && row.createdById === null)),
     canDelete: !shared && (author || ownList),
   };
+}
+
+/**
+ * Everyone whose to-dos `viewer` may read at once (?scope=team) — the set
+ * version of `mayReach`: an admin's whole organisation, a mentor's own mentees.
+ * The viewer is always in it: their own work is part of the team's.
+ *
+ * Both queries run inside `withTenantScope`, and both models are registered in
+ * TENANT_MODELS, so the ids can only ever be this organisation's. ProjectTask
+ * itself is NOT tenant-anchored (it is reached through User/Project), which is
+ * exactly why the task query below filters by these ids rather than by org.
+ */
+async function teamMemberIds(viewer: { id: string; role: string }): Promise<string[]> {
+  if (viewer.role === 'ADMIN') {
+    // Deliberately uncapped, unlike TEAM_LIMIT below: a cap here would drop
+    // *people* from the answer rather than shorten the list, and which people
+    // would depend on storage order. It selects one indexed column, and
+    // `withTenantScope` has already narrowed it to this organisation.
+    const users = await prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
+    return users.map((u) => u.id);
+  }
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: { mentorId: viewer.id },
+    select: { menteeId: true },
+  });
+  return [...new Set([viewer.id, ...relations.map((r) => r.menteeId)])];
 }
 
 /** Whether `viewer` may read/write `targetId`'s list. */
@@ -114,6 +179,38 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const ownerId = url.searchParams.get('userId') || viewerId;
     const archived = url.searchParams.get('archived') === '1';
+    const team = url.searchParams.get('scope') === 'team';
+
+    // The team view (#2440): one list across the people this person answers for,
+    // on the existing page rather than a second to-dos page. Nobody else has a
+    // team — a mentee's "team" is their own list, which is what they already get.
+    if (team) {
+      if (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const ids = await teamMemberIds(session.user);
+      const rows = (await prisma.projectTask.findMany({
+        where: { assigneeId: { in: ids }, archivedAt: archived ? { not: null } : null },
+        orderBy: LIST_ORDER,
+        // The cap is the database's, so it lands before the private-line filter
+        // below: a list that reaches it can come back a few rows shorter, and
+        // the rows it leaves out are the least urgent ones by construction.
+        take: TEAM_LIMIT,
+        select: listSelect,
+      })) as Row[];
+      // The same carve-out the per-person read applies: a line somebody wrote
+      // for themselves is theirs, and a team view is still somebody else's
+      // view. One predicate, shared with the digest (src/lib/todoVisibility.ts).
+      const visible = visibleToViewer(rows, viewerId);
+      return NextResponse.json({
+        todos: visible.map((row) => serialize(row, session.user, row.assigneeId ?? viewerId)),
+        open: [],
+        ownList: false,
+        scope: 'team',
+        // A team list is read here and written on the person it belongs to.
+        canAssign: false,
+      });
+    }
 
     if (!(await mayReach(session.user, ownerId))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -128,7 +225,7 @@ export async function GET(request: Request) {
         // person's list, only what a project or another person put there shows.
         ...(ownList ? {} : { OR: [{ projectId: { not: null } }, { createdById: { not: ownerId } }] }),
       },
-      orderBy: [{ done: 'asc' }, { createdAt: 'desc' }],
+      orderBy: LIST_ORDER,
       select: listSelect,
     });
 
@@ -161,6 +258,16 @@ export async function GET(request: Request) {
   });
 }
 
+// A day, not an instant (#2440): `YYYY-MM-DD` as an <input type="date"> sends
+// it, or a full ISO timestamp for a client that has one. Either way the day it
+// names is read off its UTC parts — src/lib/taskDue.ts § rule 2. null clears it.
+// (Local, not exported: a route file may only export its handlers — Next type-
+// checks that. The PATCH side keeps its own copy, five lines and one comment.)
+const dueDateSchema = z
+  .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.string().datetime()])
+  .nullable()
+  .optional();
+
 const createSchema = z
   .object({
     title: z.string().trim().min(1).max(TEXT_LIMITS.todoTitle).optional(),
@@ -169,6 +276,8 @@ const createSchema = z
     templateIds: z.array(z.string().min(1)).max(50).optional(),
     // Omit for your own list.
     assigneeId: z.string().min(1).optional(),
+    // When it is meant to be finished. Applies to every to-do this call creates.
+    dueDate: dueDateSchema,
   })
   .refine((d) => Boolean(d.title) || (d.templateIds?.length ?? 0) > 0, {
     message: 'title or templateIds is required',
@@ -222,6 +331,7 @@ export async function POST(request: Request) {
       if (parsed.data.title) rows.push({ title: parsed.data.title, templateId: null });
       if (rows.length === 0) return NextResponse.json({ error: 'Nothing to create' }, { status: 400 });
 
+      const dueDate = parsed.data.dueDate ? new Date(parsed.data.dueDate) : null;
       const created = [];
       for (const row of rows) {
         created.push(
@@ -232,6 +342,7 @@ export async function POST(request: Request) {
               assigneeId,
               createdById: viewerId,
               projectId: null,
+              dueDate,
             },
             select: listSelect,
           })

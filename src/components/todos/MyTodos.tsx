@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Hand, ListChecks, Plus } from 'lucide-react';
+import { AlertTriangle, Hand, ListChecks, Plus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -14,6 +14,7 @@ import { useCharacterCounter } from '@/hooks/useCharacterCounter';
 import { apiErrorMessage } from '@/lib/apiErrorMessage';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { TodoRow, todoText, type Todo } from '@/components/todos/TodoRow';
+import { countOverdueTasks } from '@/lib/taskDue';
 
 // One person's whole to-do list (#1113).
 //
@@ -24,7 +25,12 @@ import { TodoRow, todoText, type Todo } from '@/components/todos/TodoRow';
 // what someone gave you, what your projects need, and what you added — with the
 // finished ones one click away in the archive.
 
-export function MyTodos({ myId }: { myId: string }) {
+// Whose list is on screen. The team view (#2440) is the SAME page, one fetch
+// further: an admin's organisation or a mentor's own mentees, read-only, so
+// "who is late" does not need a second to-dos page to answer.
+type View = 'mine' | 'team';
+
+export function MyTodos({ myId, role }: { myId: string; role?: string }) {
   const t = useT();
   const locale = useLocale();
   const toast = useToast();
@@ -37,7 +43,14 @@ export function MyTodos({ myId }: { myId: string }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
+  const [dueDraft, setDueDraft] = useState('');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [view, setView] = useState<View>('mine');
+  const [team, setTeam] = useState<Todo[]>([]);
+  const [teamLoaded, setTeamLoaded] = useState(false);
+  // ADMIN always, MENTOR for their own mentees — the same rule /api/todos
+  // enforces; this only decides whether the switch is worth showing.
+  const canSeeTeam = role === 'ADMIN' || role === 'MENTOR';
 
   const load = useCallback(async () => {
     const [active, past] = await Promise.all([fetch('/api/todos'), fetch('/api/todos?archived=1')]);
@@ -50,7 +63,14 @@ export function MyTodos({ myId }: { myId: string }) {
     setLoading(false);
   }, []);
 
+  const loadTeam = useCallback(async () => {
+    const res = await fetch('/api/todos?scope=team');
+    if (res.ok) setTeam((await res.json()).todos ?? []);
+    setTeamLoaded(true);
+  }, []);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (view === 'team' && canSeeTeam) loadTeam(); }, [view, canSeeTeam, loadTeam]);
 
   const call = async (url: string, method: string, body: unknown, key: string) => {
     setBusy(key);
@@ -84,13 +104,19 @@ export function MyTodos({ myId }: { myId: string }) {
   const add = async () => {
     const title = draft.trim();
     if (!title) return;
-    if (await call('/api/todos', 'POST', { title }, 'add')) setDraft('');
+    // An empty date field is no date at all, never "today".
+    if (await call('/api/todos', 'POST', { title, dueDate: dueDraft || null }, 'add')) {
+      setDraft('');
+      setDueDraft('');
+    }
   };
 
   const toggle = (todo: Todo) => call(`/api/project-tasks/${todo.id}`, 'PATCH', { done: !todo.done }, todo.id);
   const setArchived = (todo: Todo, archived: boolean) =>
     call(`/api/project-tasks/${todo.id}`, 'PATCH', { archived }, todo.id);
-  const rename = (todo: Todo, title: string) => call(`/api/project-tasks/${todo.id}`, 'PATCH', { title }, todo.id);
+  // Wording and date travel together: one row, one edit, one request.
+  const save = (todo: Todo, patch: { title: string; dueDate: string | null }) =>
+    call(`/api/project-tasks/${todo.id}`, 'PATCH', patch, todo.id);
   const remove = (todo: Todo) => setPendingDelete({ id: todo.id, title: todoText(todo, locale) });
 
   const confirmRemove = async () => {
@@ -101,6 +127,10 @@ export function MyTodos({ myId }: { myId: string }) {
   const claim = (todo: Todo) => call(`/api/project-tasks/${todo.id}`, 'PATCH', { assigneeId: myId }, todo.id);
 
   const doneCount = useMemo(() => todos.filter((x) => x.done).length, [todos]);
+  // The counter tile. What it counts is decided in one place (src/lib/taskDue.ts):
+  // open, dated, and due on a day BEFORE today — a to-do due today is not late.
+  const shown = view === 'team' ? team : todos;
+  const overdueCount = useMemo(() => countOverdueTasks(showArchive ? [] : shown), [shown, showArchive]);
   // ProjectTask.title is VARCHAR(191). The counter only appears once the draft
   // is close to that, so the box stays quiet for the one-line to-dos that are
   // the normal case, and the limit is visible exactly when it starts to matter.
@@ -134,6 +164,64 @@ export function MyTodos({ myId }: { myId: string }) {
   return (
     <>
     <div className="space-y-6" data-testid="my-todos">
+      {(canSeeTeam || overdueCount > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {canSeeTeam && (
+            <div className="flex gap-1 rounded-lg border border-gray-200 p-1 dark:border-gray-800">
+              {(['mine', 'team'] as View[]).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  data-testid={`todos-view-${v}`}
+                  className={`rounded-md px-3 py-1 text-xs font-medium ${
+                    view === v
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:text-blue-600 dark:text-gray-300'
+                  }`}
+                >
+                  {v === 'mine' ? t.todos.mineTab : t.todos.teamTab}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* The counter tile. The number is said in words next to it — the
+              red is a second cue, never the only one (WCAG 1.4.1). */}
+          {overdueCount > 0 && (
+            <span
+              data-testid="todo-overdue-count"
+              data-overdue-count={overdueCount}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700"
+            >
+              <AlertTriangle className="h-4 w-4" aria-hidden />
+              {t.todos.overdueCount.replace('{n}', String(overdueCount))}
+            </span>
+          )}
+        </div>
+      )}
+
+      {view === 'team' ? (
+        <Card data-testid="team-todos">
+          <CardHeader>
+            <CardTitle>{t.todos.teamTitle}</CardTitle>
+            <CardDescription>{t.todos.teamHint}</CardDescription>
+          </CardHeader>
+          {!teamLoaded ? (
+            <SkeletonRows rows={4} />
+          ) : team.length === 0 ? (
+            <p className="text-sm text-gray-400">{t.todos.teamEmpty}</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 dark:divide-gray-800" data-testid="team-todo-list">
+              {/* Read-only on purpose: this is the overview. A to-do is changed
+                  where it lives — on the person, or on the list it came from. */}
+              {team.map((todo) => (
+                <TodoRow key={todo.id} todo={todo} busy={false} showAssignee />
+              ))}
+            </ul>
+          )}
+        </Card>
+      ) : (
       <Card>
         <CardHeader>
           <CardTitle>{showArchive ? t.todos.archiveTitle : t.todos.mine}</CardTitle>
@@ -170,6 +258,16 @@ export function MyTodos({ myId }: { myId: string }) {
                 </span>
               )}
             </div>
+            <input
+              type="date"
+              value={dueDraft}
+              onChange={(e) => setDueDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+              aria-label={t.todos.dueDateLabel}
+              title={t.todos.dueDateLabel}
+              data-testid="todo-due-input"
+              className="w-full shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-44"
+            />
             <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" loading={busy === 'add'} onClick={add} data-testid="todo-add">
               <Plus className="mr-1 h-3.5 w-3.5" /> {t.todos.add}
             </Button>
@@ -199,7 +297,7 @@ export function MyTodos({ myId }: { myId: string }) {
                 busy={busy === todo.id}
                 onToggle={toggle}
                 onArchive={setArchived}
-                onRename={rename}
+                onSave={save}
                 onDelete={remove}
               />
             ))}
@@ -217,10 +315,11 @@ export function MyTodos({ myId }: { myId: string }) {
 
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       </Card>
+      )}
 
       {/* Goals nobody on your projects has taken. Not yours until you say so, so
           they sit apart from the list above. */}
-      {!showArchive && open.length > 0 && (
+      {view === 'mine' && !showArchive && open.length > 0 && (
         <Card data-testid="open-project-goals">
           <CardHeader>
             <CardTitle>{t.todos.openProjectGoals}</CardTitle>

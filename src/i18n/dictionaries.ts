@@ -2281,6 +2281,10 @@ const en = {
       greetingAdmin: 'Hi {name}, system-wide mentee activity in the last 24 hours:',
       cta: 'Open full report',
       trackingNote: 'Time-on-site and page views are shown only for mentees who enabled activity tracking.',
+      // The overdue to-dos that ride along with this digest (#2440).
+      overdueHeading: 'Overdue to-dos',
+      overdueLine: '{name}: {title} \u2014 was due {date}',
+      overdueMore: 'and {n} more.',
       columns: {
         mentee: 'Mentee',
         login: 'Login',
@@ -2576,6 +2580,20 @@ const en = {
     poolEmpty: 'The shared pool is empty.',
     send: 'Send',
     selectAll: 'Select all',
+    // Due dates (#2440). "Overdue" is a calendar-day statement — a to-do due
+    // today is not late — and it is always said in WORDS, never in colour alone.
+    dueDateLabel: 'Due date',
+    dueOn: 'Due {date}',
+    dueToday: 'Due today',
+    overdueBadge: 'Overdue',
+    overdueTitle: 'Overdue \u2014 was due {date}',
+    overdueCount: '{n} overdue',
+    forPerson: 'for {name}',
+    mineTab: 'My list',
+    teamTab: 'The team',
+    teamTitle: 'The team\u2019s to-dos',
+    teamHint: 'What the people you answer for are carrying \u2014 soonest first, undated last.',
+    teamEmpty: 'Nothing on the team\u2019s list.',
   },
   upcomingMeeting: {
     inProgress: 'Meeting in progress',
@@ -3719,7 +3737,7 @@ const en = {
       inviteLinks: { t: 'Invite links without an email', d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away — a mentor’s link makes them that mentor’s mentee — and a private note keeps a wall of links legible.' },
       projectTeams: { t: 'Project teams & goals', d: 'Every project shows its real roster with each person\u2019s job (developer, tester, marketing), a recurring meeting with reminders, and shortcuts to the owner and the group chat. Goals come from a managed, multilingual template pool \u2014 handed to a member in one click, read in their own language, and kept on their own to-do list rather than in front of the whole team.' },
       joinRequests: { t: 'Join requests & referral links', d: 'Public projects accept join requests the owner approves in one click, and everyone \u2014 mentee, mentor or admin \u2014 has a personal invite link that records who brought a newcomer in.' },
-      todos: { t: 'One to-do list per person', d: 'Everything someone has to do in one place: what their mentor handed them, what their projects need, the open project goals they can claim, and what they wrote for themselves \u2014 finished ones archived rather than deleted. A to-do from the shared, multilingual pool stays linked to it: reword the pool entry once and it changes for everyone who has it, in each person\u2019s own language.' },
+      todos: { t: 'One to-do list per person', d: 'Everything someone has to do in one place: what their mentor handed them, what their projects need, the open project goals they can claim, and what they wrote for themselves \u2014 finished ones archived rather than deleted. A to-do from the shared, multilingual pool stays linked to it: reword the pool entry once and it changes for everyone who has it, in each person\u2019s own language. Each to-do can carry a due date: the soonest come first and undated ones last, a late one is marked \u201coverdue\u201d in words as well as in colour, and a mentor or admin can read one list of everything their people are carrying.' },
       dualRole: { t: 'One person, both sides', d: 'A mentor can be a mentee too. Someone who guides another person may still need guidance themselves \u2014 give a mentor a mentor of their own and the mentee portal opens up next to their mentor pages, with a view switch in the sidebar to move between them. Admins can put anyone on either side of a mentorship; nobody can be paired with themselves.' },
       timezones: { t: 'Everyone on their own clock', d: 'Each person sets their own timezone in settings and changes it whenever they move. When a meeting is scheduled, the picked time is shown on every attendee’s clock before the invite goes out — one line per timezone — so a call across three countries is confirmed at a glance. Every email that names a time says which timezone it is written in, lists the other participants’ times when they differ, and links back to the setting.' },
       weeklyReports: { t: 'Weekly internship reports', d: 'Mentees write a weekly internship report, keep drafts and print their diary; mentors review each submission, approve it or request changes. Missing reports surface in the mentor attention queue and a weekly reminder.' },
@@ -7451,6 +7469,10 @@ const tr: Dict = {
       greetingAdmin: 'Merhaba {name}, son 24 saatteki sistem geneli mentee etkinliği:',
       cta: 'Tam raporu aç',
       trackingNote: 'Sitede geçirilen süre ve sayfa görüntülemeleri yalnızca etkinlik takibini açan mentee’ler için gösterilir.',
+      // Bu özetle birlikte giden gecikmiş maddeler (#2440).
+      overdueHeading: 'Gecikmiş yapılacaklar',
+      overdueLine: '{name}: {title} \u2014 son gün {date} idi',
+      overdueMore: 've {n} tane daha.',
       columns: {
         mentee: 'Mentee',
         login: 'Giriş',
@@ -7741,6 +7763,20 @@ const tr: Dict = {
     poolEmpty: 'Ortak liste boş.',
     send: 'Gönder',
     selectAll: 'Tümünü seç',
+    // Bitiş tarihleri (#2440). "Gecikti" bir takvim günü ifadesidir: bugün biten
+    // bir madde gecikmiş değildir — ve gecikme her zaman yazıyla da söylenir.
+    dueDateLabel: 'Bitiş tarihi',
+    dueOn: 'Son gün {date}',
+    dueToday: 'Bugün son gün',
+    overdueBadge: 'Gecikti',
+    overdueTitle: 'Gecikti \u2014 son gün {date} idi',
+    overdueCount: '{n} gecikmiş',
+    forPerson: '{name} için',
+    mineTab: 'Benim listem',
+    teamTab: 'Ekip',
+    teamTitle: 'Ekibin yapılacakları',
+    teamHint: 'Sorumlu olduğun kişilerin listesi \u2014 tarihi en yakın olan önce, tarihsizler sonda.',
+    teamEmpty: 'Ekipte yapılacak bir şey yok.',
   },
   upcomingMeeting: {
     inProgress: 'Toplantı devam ediyor',
@@ -8866,7 +8902,7 @@ const tr: Dict = {
       inviteLinks: { t: 'E-postasız davet linkleri', d: 'Adresini bilmediğin birini davet et: alanı boş bırak, elden verebileceğin tek kullanımlık ve 7 gün geçerli bir bağlantı üretilsin. Bağlantıyla kaydolan kişi doğrudan gönderene bağlanır — mentörün bağlantısı onu o mentörün mentee’si yapar — ve özel bir not, birbirine benzeyen bağlantıları ayırt edilebilir kılar.' },
       projectTeams: { t: 'Proje ekipleri & hedefler', d: 'Her proje gerçek ekibini kimin ne yaptığıyla (geliştirici, tester, pazarlama) gösterir; düzenli toplantı ve hatırlatmaları, proje sahibine ve grup sohbetine kısayolları vardır. Hedefler, yönetilebilir ve çok dilli bir şablon havuzundan gelir: tek tıkla verilir, kişi kendi dilinde okur ve tüm ekibin önünde değil kendi yapılacaklar listesinde durur.' },
       joinRequests: { t: 'Katılma talepleri & referans linkleri', d: 'Açık projeler, sahibinin tek tıkla onayladığı katılma talepleri alır; mentee, mentör ve admin dahil herkesin, gelen kişiyi kimin getirdiğini kaydeden kişisel davet linki olur.' },
-      todos: { t: 'Kişi başına tek yapılacaklar listesi', d: 'Bir kişinin yapması gereken her şey tek yerde: mentorunun verdikleri, projelerinden gelenler, üstlenebileceği sahipsiz proje hedefleri ve kendine yazdıkları \u2014 bitenler silinmez, arşivlenir. Ortak ve çok dilli listeden gelen madde ona bağlı kalır: metni bir kez düzenlemek, o maddeyi alan herkeste kendi dilinde güncellenmesini sağlar.' },
+      todos: { t: 'Kişi başına tek yapılacaklar listesi', d: 'Bir kişinin yapması gereken her şey tek yerde: mentorunun verdikleri, projelerinden gelenler, üstlenebileceği sahipsiz proje hedefleri ve kendine yazdıkları \u2014 bitenler silinmez, arşivlenir. Ortak ve çok dilli listeden gelen madde ona bağlı kalır: metni bir kez düzenlemek, o maddeyi alan herkeste kendi dilinde güncellenmesini sağlar. Her maddeye bitiş tarihi verilebilir: tarihi en yakın olan önce, tarihsizler sonda görünür, gecikenler yalnızca renkle değil \u201cGecikti\u201d yazısıyla işaretlenir ve mentor ya da yönetici sorumlu olduğu herkesin listesini tek yerde okuyabilir.' },
       dualRole: { t: 'Tek ki\u015fi, iki taraf', d: 'Bir mentor ayn\u0131 zamanda mentee olabilir. Birine yol g\u00f6steren ki\u015finin kendisi de yol g\u00f6stericiye ihtiya\u00e7 duyabilir \u2014 bir mentore kendi mentoru atand\u0131\u011f\u0131nda, mentor sayfalar\u0131n\u0131n yan\u0131nda mentee portal\u0131 da a\u00e7\u0131l\u0131r ve kenar \u00e7ubu\u011fundaki g\u00f6r\u00fcn\u00fcm d\u00fc\u011fmesiyle ikisi aras\u0131nda ge\u00e7ilir. Y\u00f6neticiler bir mentorlu\u011fun iki taraf\u0131na da herkesi koyabilir; kimse kendisiyle e\u015fle\u015ftirilemez.' },
       timezones: { t: 'Herkes kendi saatinde', d: 'Herkes saat dilimini ayarlardan kendisi seçer ve taşındığında değiştirir. Bir toplantı planlanırken seçilen saat, davet gitmeden önce her katılımcının saatiyle gösterilir — her saat dilimi için bir satır — böylece üç ülkeye yayılan bir görüşme tek bakışta teyit edilir. Saat içeren her e-posta hangi saat dilimine göre yazıldığını söyler, farklıysa diğer katılımcıların saatlerini de listeler ve ayara geri bağlantı verir.' },
       weeklyReports: { t: 'Haftalık staj raporları', d: 'Mentee’ler haftalık staj raporu yazar, taslaklarını saklar ve günlüklerini yazdırır; mentörler her gönderimi onaylar veya değişiklik ister. Eksik raporlar mentörün dikkat kuyruğuna ve haftalık hatırlatmaya yansır.' },
@@ -12575,6 +12611,10 @@ const de: Dict = {
       greetingAdmin: 'Hallo {name}, systemweite Mentee-Aktivität der letzten 24 Stunden:',
       cta: 'Vollständigen Bericht öffnen',
       trackingNote: 'Verweildauer und Seitenaufrufe werden nur für Mentees angezeigt, die das Aktivitäts-Tracking aktiviert haben.',
+      // Überfällige Aufgaben, die mit dieser Übersicht mitgehen (#2440).
+      overdueHeading: 'Überfällige Aufgaben',
+      overdueLine: '{name}: {title} \u2014 war am {date} fällig',
+      overdueMore: 'und {n} weitere.',
       columns: {
         mentee: 'Mentee',
         login: 'Login',
@@ -12865,6 +12905,20 @@ const de: Dict = {
     poolEmpty: 'Der gemeinsame Pool ist leer.',
     send: 'Senden',
     selectAll: 'Alle auswählen',
+    // Fälligkeiten (#2440). "Überfällig" ist eine Aussage über den Kalendertag —
+    // heute fällig ist nicht zu spät — und steht immer als Text da, nie nur als Farbe.
+    dueDateLabel: 'Fälligkeitsdatum',
+    dueOn: 'Fällig am {date}',
+    dueToday: 'Heute fällig',
+    overdueBadge: 'Überfällig',
+    overdueTitle: 'Überfällig \u2014 war am {date} fällig',
+    overdueCount: '{n} überfällig',
+    forPerson: 'für {name}',
+    mineTab: 'Meine Liste',
+    teamTab: 'Team',
+    teamTitle: 'Aufgaben des Teams',
+    teamHint: 'Was die Menschen offen haben, für die du zuständig bist \u2014 das Nächstfällige zuerst, Undatiertes zuletzt.',
+    teamEmpty: 'Nichts auf der Liste des Teams.',
   },
   upcomingMeeting: {
     inProgress: 'Treffen läuft',
@@ -13990,7 +14044,7 @@ const de: Dict = {
       inviteLinks: { t: 'Einladungslinks ohne E-Mail', d: 'Lade jemanden ein, dessen Adresse du nicht kennst: Feld leer lassen, und es entsteht ein einmalig gültiger 7-Tage-Link zum persönlichen Übergeben. Wer sich damit registriert, ist sofort mit der einladenden Person verbunden — der Link einer Mentorin macht die Person zu deren Mentee — und eine private Notiz hält eine Wand aus Links unterscheidbar.' },
       projectTeams: { t: 'Projektteams & Ziele', d: 'Jedes Projekt zeigt sein echtes Team samt Aufgabe (Entwicklung, Test, Marketing), ein wiederkehrendes Treffen mit Erinnerungen sowie Shortcuts zum Owner und zum Gruppenchat. Ziele kommen aus einem verwalteten, mehrsprachigen Vorlagenpool: mit einem Klick vergeben, in der eigenen Sprache gelesen und auf der Aufgabenliste der Person statt vor dem ganzen Team.' },
       joinRequests: { t: 'Beitrittsanfragen & Empfehlungslinks', d: 'Öffentliche Projekte nehmen Beitrittsanfragen an, die der Owner mit einem Klick freigibt; und alle \u2014 Mentee, Mentor oder Admin \u2014 haben einen persönlichen Einladungslink, der festhält, wer jemanden gebracht hat.' },
-      todos: { t: 'Eine Aufgabenliste pro Person', d: 'Alles, was jemand zu tun hat, an einem Ort: was Mentorin oder Mentor gegeben hat, was die Projekte brauchen, offene Projektziele zum Übernehmen und eigene Notizen \u2014 Erledigtes wird archiviert, nicht gelöscht. Eine Aufgabe aus dem gemeinsamen, mehrsprachigen Pool bleibt damit verknüpft: einmal neu formuliert, ändert sie sich für alle, die sie haben \u2014 jeweils in deren Sprache.' },
+      todos: { t: 'Eine Aufgabenliste pro Person', d: 'Alles, was jemand zu tun hat, an einem Ort: was Mentorin oder Mentor gegeben hat, was die Projekte brauchen, offene Projektziele zum Übernehmen und eigene Notizen \u2014 Erledigtes wird archiviert, nicht gelöscht. Eine Aufgabe aus dem gemeinsamen, mehrsprachigen Pool bleibt damit verknüpft: einmal neu formuliert, ändert sie sich für alle, die sie haben \u2014 jeweils in deren Sprache. Jede Aufgabe kann ein Fälligkeitsdatum tragen: das Nächstfällige steht oben, Undatiertes unten, Überfälliges wird als Text und nicht nur in Farbe ausgewiesen, und Mentorinnen, Mentoren und Admins lesen auf einer Liste, was ihre Leute offen haben.' },
       dualRole: { t: 'Eine Person, beide Seiten', d: 'Ein Mentor kann auch Mentee sein. Wer andere begleitet, braucht manchmal selbst Begleitung \u2014 bekommt ein Mentor eine eigene Mentorin oder einen eigenen Mentor, \u00f6ffnet sich neben den Mentoren-Seiten das Mentee-Portal, mit einem Ansichtsschalter in der Seitenleiste zum Wechseln. Admins k\u00f6nnen beide Seiten einer Mentorschaft frei besetzen; niemand l\u00e4sst sich mit sich selbst verkn\u00fcpfen.' },
       timezones: { t: 'Jede Person auf ihrer eigenen Uhr', d: 'Jede Person legt ihre Zeitzone in den Einstellungen selbst fest und ändert sie beim Umzug. Beim Planen einer Besprechung wird die gewählte Zeit vor dem Versand der Einladung auf der Uhr jedes Teilnehmers angezeigt — eine Zeile pro Zeitzone — sodass ein Termin über drei Länder auf einen Blick bestätigt ist. Jede E-Mail mit einer Uhrzeit nennt ihre Zeitzone, listet abweichende Zeiten der anderen Teilnehmer auf und verlinkt zurück zur Einstellung.' },
       weeklyReports: { t: 'Wöchentliche Praktikumsberichte', d: 'Mentees schreiben wöchentlich einen Praktikumsbericht, speichern Entwürfe und drucken ihr Tagebuch; Mentoren genehmigen Einreichungen oder fordern Änderungen an. Fehlende Berichte erscheinen in der Aufmerksamkeit-Liste und in einer wöchentlichen Erinnerung.' },
