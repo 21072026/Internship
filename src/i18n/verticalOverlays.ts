@@ -140,13 +140,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // The public feature catalogue (#2475). `/features` renders whatever
       // getFeatures() returns for this vertical; the cards themselves are
       // filtered by capability in src/lib/features.ts, and what is left here is
-      // the frame plus the three core cards whose wording still said
-      // "mentor"/"mentee" although the feature itself is core CRM.
+      // the frame plus the four core cards whose wording still said
+      // "mentor"/"mentee"/"mentorship" although the feature itself is core CRM.
       featureCatalog: {
         title: 'Everything SaleVali can do',
         subtitle: 'The full feature catalogue — from first contact to a closed deal, for your whole team.',
         categories: { collaboration: 'Working together' },
         items: {
+          // `messaging` carries no capability tag — a shared inbox is core CRM
+          // and MARKETING has it — so the capability filter cannot reach this
+          // card, and its wording was the last place a marketing visitor read
+          // the internship relation model on /features: "per-mentorship
+          // threads". The thread is per pipeline record, which is a deal here.
+          messaging: { d: 'A unified inbox with a thread per deal, attachments and email mirroring you can reply to — answer the notification from your mail app and it lands back in the thread. Messages arrive live while the inbox is open, and can notify your device even when the app is closed. A half-written reply is kept per conversation until you send it, and you can see when the other person is writing. The answers you give over and over live in a shared pool of canned responses — written once in English, Turkish and German, inserted in your own language, one click.' },
           videoCalls: { d: 'Start a call with a lead, an account team or a chat in one click and hold it in a side panel next to their record, on our own Jitsi tenant — no accounts, no install, and no time limit. If a call has to fall back to the free public room, the panel says so before anyone joins, with a one-click way to keep talking. The link is emailed to everyone invited and works in any browser.' },
           externalGuests: { d: 'A meeting is not always only your own team. Type any email address into the scheduler and that person is invited to the same room with the same Yes/No buttons — no account, no sign-up, and an .ics for their own calendar. You see who accepted, and an invitation sent to the wrong address can be withdrawn, which stops its link working.' },
           inviteLinks: { d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away, and a private note keeps a wall of links legible.' },
@@ -258,6 +264,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Tüm özellik kataloğu — ilk temastan kapanan anlaşmaya, tüm ekibiniz için.',
         categories: { collaboration: 'Birlikte çalışma' },
         items: {
+          messaging: { d: 'Fırsat başına thread’ler, ekler ve cevaplanabilir e-posta yansıtması olan tek gelen kutusu — bildirimi kendi e-posta uygulamanızdan yanıtlayın, cevabınız thread’e düşer. Mesajlar gelen kutusu açıkken anında görünür; izin verirseniz uygulama kapalıyken de cihazınıza bildirim gelir. Yarım kalan yanıt gönderilene kadar sohbet başına saklanır ve karşı taraf yazarken bunu görürsünüz. Sürekli verdiğiniz yanıtlar ortak bir hazır yanıt havuzunda durur — İngilizce, Türkçe ve Almanca bir kez yazılır, kendi dilinizde tek tıkla eklenir.' },
           videoCalls: { d: 'Bir müşteri adayı, firma ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kaydın yanındaki yan panelde kendi Jitsi kiracımızda açılır — hesap yok, kurulum yok, süre sınırı yok. Görüşme ücretsiz herkese açık odaya düşmek zorunda kalırsa panel bunu kimse katılmadan önce söyler ve konuşmayı sürdürmenin tek tıklık yolunu verir. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
           externalGuests: { d: 'Bir toplantı her zaman yalnızca kendi ekibinizden ibaret değildir. Planlayıcıya herhangi bir e-posta adresi yaz; o kişi aynı odaya, aynı Evet/Hayır butonlarıyla davet edilsin — hesap yok, kayıt yok, kendi takvimi için .ics var. Kimin kabul ettiğini görürsün ve yanlış adrese giden bir davet geri alınabilir; bağlantısı da o anda çalışmayı bırakır.' },
           inviteLinks: { d: 'Adresini bilmediğin birini davet et: alanı boş bırak, elden verebileceğin tek kullanımlık ve 7 gün geçerli bir bağlantı üretilsin. Bağlantıyla kaydolan kişi doğrudan gönderene bağlanır ve özel bir not, birbirine benzeyen bağlantıları ayırt edilebilir kılar.' },
@@ -360,6 +367,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         subtitle: 'Der vollständige Funktionskatalog — vom Erstkontakt bis zum Abschluss, für Ihr ganzes Team.',
         categories: { collaboration: 'Zusammenarbeit' },
         items: {
+          messaging: { d: 'Ein zentraler Posteingang mit einem Thread pro Deal, Anhängen und beantwortbarer E-Mail-Spiegelung — antworte aus deinem Mailprogramm, und die Antwort landet im Thread. Nachrichten erscheinen live, solange der Posteingang offen ist, und können dein Gerät auch bei geschlossener App benachrichtigen. Eine halb geschriebene Antwort bleibt pro Gespräch erhalten, bis du sie sendest, und du siehst, wenn die andere Person schreibt. Antworten, die du immer wieder gibst, liegen in einem gemeinsamen Pool vorgefertigter Antworten — einmal auf Englisch, Türkisch und Deutsch verfasst, mit einem Klick in deiner eigenen Sprache eingefügt.' },
           videoCalls: { d: 'Starte mit einem Klick einen Anruf mit einem Lead, einem Account-Team oder einem Chat — er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Muss ein Anruf auf den freien öffentlichen Raum ausweichen, sagt das Panel das, bevor jemand beitritt, samt Ein-Klick-Weg zum Weiterreden. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
           externalGuests: { d: 'Ein Meeting besteht nicht immer nur aus dem eigenen Team. Tippe eine beliebige E-Mail-Adresse in die Planung, und diese Person ist im selben Raum eingeladen — mit denselben Ja/Nein-Buttons, ohne Konto, ohne Registrierung und mit .ics für den eigenen Kalender. Du siehst, wer zugesagt hat, und eine an die falsche Adresse gegangene Einladung lässt sich zurückziehen; ihr Link funktioniert dann nicht mehr.' },
           inviteLinks: { d: 'Lade jemanden ein, dessen Adresse du nicht kennst: Feld leer lassen, und es entsteht ein einmalig gültiger 7-Tage-Link zum persönlichen Übergeben. Wer sich damit registriert, ist sofort mit der einladenden Person verbunden — und eine private Notiz hält eine Wand aus Links unterscheidbar.' },

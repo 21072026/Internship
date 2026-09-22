@@ -36,6 +36,13 @@ test('the internship host still gets the whole feature catalogue', async ({ page
   await expect(page.getByText('Weekly internship reports', { exact: true })).toBeVisible();
   await expect(page.getByText('Offer management', { exact: true })).toBeVisible();
   await expect(page.getByText('Project teams & goals', { exact: true })).toBeVisible();
+  // The public demo card is tagged `mentorship` (the demo instance runs the
+  // internship product) — it must still be here, or the tag emptied the live
+  // catalogue instead of the marketing one.
+  await expect(page.getByText('Public live demo', { exact: true })).toBeVisible();
+  // …and the shared inbox still describes the mentorship thread here: the
+  // marketing wording is an OVERLAY, not an edit to the base dictionary.
+  await expect(page.getByTestId('feature-cat-collaboration')).toContainText('per-mentorship threads');
 });
 
 test('the marketing host gets a catalogue with no mentoring, evaluation, placement or project cards', async ({ page }) => {
@@ -51,6 +58,15 @@ test('the marketing host gets a catalogue with no mentoring, evaluation, placeme
   await expect(page.getByText('Pipeline tracking', { exact: true })).toBeVisible();
   await expect(page.getByTestId('feature-cat-collaboration')).toContainText('Working together');
 
+  // A surviving card must also READ like this product. `messaging` is core CRM,
+  // so the capability filter cannot reach it and its description was the last
+  // sentence on this page stating the internship relation model.
+  await expect(page.getByTestId('feature-cat-collaboration')).toContainText('a thread per deal');
+  await expect(page.locator('main')).not.toContainText('per-mentorship');
+  // No mentor/mentee/internship noun anywhere on the marketing catalogue — the
+  // assertion that catches the next untagged card with internship copy.
+  await expect(page.locator('main')).not.toContainText(/mentor|mentee|internship/i);
+
   for (const card of [
     'Self-serve mentee intake',
     'Weekly internship reports',
@@ -59,6 +75,9 @@ test('the marketing host gets a catalogue with no mentoring, evaluation, placeme
     'Self-serve mentor applications',
     'Talent pool & alerts (Premium)',
     'Published pricing',
+    // One demo instance exists and it is the internship one (#2501 already
+    // hides its footer link here) — so the catalogue does not advertise it.
+    'Public live demo',
   ]) {
     await expect(page.getByText(card, { exact: true })).toHaveCount(0);
   }
@@ -163,6 +182,19 @@ test('the public showcase is scoped to the host vertical, and marketing has none
     const res = await page.goto('/projects');
     expect(res?.status()).toBe(404);
     await expect(page.getByText(`Internship Showcase Project ${stamp}`)).toHaveCount(0);
+
+    // …and the 404 it lands on does not sell the other product back to it: no
+    // register button (this host is invitation-only), no mentor application, no
+    // partner-company pitch, and no link looping straight back to /projects.
+    const main = page.locator('main');
+    await expect(main).toContainText('Page not found');
+    await expect(main.getByRole('link', { name: 'Register' })).toHaveCount(0);
+    await expect(main.getByRole('link', { name: 'Become a mentor' })).toHaveCount(0);
+    await expect(main.getByRole('link', { name: 'For companies' })).toHaveCount(0);
+    await expect(main.getByRole('link', { name: 'Projects', exact: true })).toHaveCount(0);
+    // What is left still works: home, and the catalogue this product does have.
+    await expect(main.getByRole('link', { name: 'Back to home' })).toBeVisible();
+    await expect(main.getByRole('link', { name: 'Features' })).toBeVisible();
   } finally {
     await prisma.project.deleteMany({ where: { orgId: { in: [internOrg.id, marketingOrg.id] } } });
     await cleanupByEmail(internEmail);
@@ -170,4 +202,19 @@ test('the public showcase is scoped to the host vertical, and marketing has none
     await prisma.user.deleteMany({ where: { orgId: { in: [internOrg.id, marketingOrg.id] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [internOrg.id, marketingOrg.id] } } });
   }
+});
+
+// ── 404 ──────────────────────────────────────────────────────────────────────
+
+test('the internship 404 keeps all four of its doors', async ({ page }) => {
+  // The counterpart of the marketing assertions above: the gating must not have
+  // emptied the live product's 404, which is a real entry point (a stale link
+  // from a search result lands here).
+  const res = await page.goto('/no-such-page-host-vertical-spec');
+  expect(res?.status()).toBe(404);
+  const main = page.locator('main');
+  await expect(main.getByRole('link', { name: 'Register' })).toBeVisible();
+  await expect(main.getByRole('link', { name: 'Become a mentor' })).toBeVisible();
+  await expect(main.getByRole('link', { name: 'For companies' })).toBeVisible();
+  await expect(main.getByRole('link', { name: 'Projects', exact: true })).toBeVisible();
 });

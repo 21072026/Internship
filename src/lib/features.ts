@@ -28,7 +28,14 @@
 // the card promises (CV and interview advice written for mentees) only exists
 // inside a mentoring programme, so it carries `mentorship`. Same for the pricing
 // card: the published price list has one metering unit, the active matched PAIR,
-// which is a statement about the internship product alone.
+// which is a statement about the internship product alone. And the public live
+// demo: one instance, running the internship product with mentor/mentee accounts.
+//
+// A tag is not the only tool. A card whose feature IS core but whose WORDING is
+// internship-specific keeps its (absent) tag and gets a marketing sentence in
+// the vertical overlay instead — `featureCatalog.items.messaging.d` is the
+// worked example. Deleting a core card from a vertical's catalogue to fix a
+// noun would be the wrong repair.
 
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -100,7 +107,13 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', capability: 'placements', title: C.interviewRequests.t, desc: C.interviewRequests.d },
     { key: 'videoCalls', category: 'collaboration', icon: Video, color: 'green', title: C.videoCalls.t, desc: C.videoCalls.d },
     { key: 'externalGuests', category: 'collaboration', icon: UserPlus, color: 'amber', title: C.externalGuests.t, desc: C.externalGuests.d },
-    { key: 'demo', category: 'platform', icon: FlaskConical, color: 'amber', title: C.demo.t, desc: C.demo.d },
+    // The public demo is ONE instance and it runs the internship product —
+    // shared mentor/mentee accounts, an internship pipeline, "create
+    // projects". #2501 already drops its footer link on a marketing host for
+    // exactly that reason, so a card advertising it there promised something
+    // the same page's chrome refuses to link to. Same shape as `pricing`
+    // below: a statement about the internship product alone.
+    { key: 'demo', category: 'platform', icon: FlaskConical, color: 'amber', capability: 'mentorship', title: C.demo.t, desc: C.demo.d },
     { key: 'publicProfiles', category: 'platform', icon: Share2, color: 'blue', capability: 'mentorship', title: C.publicProfiles.t, desc: C.publicProfiles.d },
     { key: 'stories', category: 'trust', icon: Quote, color: 'rose', capability: 'evaluations', title: C.stories.t, desc: C.stories.d },
     { key: 'newsletter', category: 'collaboration', icon: MailOpen, color: 'indigo', capability: 'mentorship', title: C.newsletter.t, desc: C.newsletter.d },
