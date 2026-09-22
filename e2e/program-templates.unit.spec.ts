@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import {
   PROGRAM_TEMPLATES,
   TEMPLATE_LOCALES,
+  TRIAL_ACTIVE_STAGE_KEY,
+  TRIAL_EXPIRED_STAGE_KEY,
   programTemplate,
   programTemplateCopy,
   templateApplyBlockers,
@@ -39,9 +41,21 @@ test('each curated template is its own shape, not a relabelled canonical set', a
   const canonicalKeys = new Set(canonical.stages.map((s) => s.key));
 
   for (const template of PROGRAM_TEMPLATES.filter((t) => t.key !== 'canonical_pipeline')) {
-    // 5-8 stages: a set you cannot read at a glance is a spreadsheet.
+    // 5-8 stages: a set you cannot read at a glance is a spreadsheet. NINE is
+    // allowed for one argued reason and only where that reason is visibly
+    // present — a shape carrying the trial PAIR (#2413), because a product sold
+    // on a trial needs both a "running" and an "elapsed, waiting for a
+    // decision" waiting room, and collapsing the two would make the 7/3/0
+    // reminder ladder unaskable. Tied to the pair rather than to a template
+    // name, so the allowance cannot quietly become a ninth stage for everybody:
+    // the four shapes without a trial are held to the original eight. The
+    // house-style note at the top of src/lib/programTemplates.ts says the same.
+    const keys = new Set(template.stages.map((s) => s.key));
+    const carriesTrialPair = keys.has(TRIAL_ACTIVE_STAGE_KEY) && keys.has(TRIAL_EXPIRED_STAGE_KEY);
     expect(template.stages.length, `${template.key} stage count`).toBeGreaterThanOrEqual(5);
-    expect(template.stages.length, `${template.key} stage count`).toBeLessThanOrEqual(8);
+    expect(template.stages.length, `${template.key} stage count`).toBeLessThanOrEqual(
+      carriesTrialPair ? 9 : 8
+    );
     // No curated template reuses a canonical key — that is what makes it a
     // different shape rather than a rename, and it keeps the default keys out
     // of this file (scripts/check-stage-keys.mjs, #1886).
