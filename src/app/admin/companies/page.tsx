@@ -444,7 +444,7 @@ export default function CompaniesPage() {
 
       {/* Companies Grid */}
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+        <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>
       ) : companies.length === 0 ? (
         <Card>
           <EmptyState

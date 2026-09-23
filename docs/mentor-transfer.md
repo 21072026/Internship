@@ -188,6 +188,48 @@ dialog names the mentor in the way and offers the change instead of leaving the
 admin to work out the sequence. `error` and `code` are byte-identical to what
 that route always answered.
 
+## The second caller: bulk owner assignment (#2439)
+
+`POST /api/admin/candidates/bulk` with `action: 'assignOwner'` and an `ownerId`
+hands a whole selection to one owner from the candidates grid. It is **not** a
+second rule: it loops and calls `transferMentorship()` once per live relation,
+so every row is decided by the table above — an untouched pairing is corrected
+in place, a worked one is closed and chained. A bulk `updateMany` on `mentorId`
+is exactly the write this document exists to forbid, and at batch size it would
+re-attribute a hundred mentors' interaction logs in one request.
+
+Four consequences worth knowing before you touch it:
+
+- **It is slow on purpose.** One transaction per row, capped at the endpoint's
+  existing 200 ids. Correct beats fast here. The loop is not transactional and
+  commits row by row, so an error is caught and the batch answers with what it
+  managed plus `partial: true` rather than dropping the count on the floor;
+  re-running it is safe, because a row already on that owner is skipped.
+- **Each mentor is told ONCE, not once per row.** Every row of a batch names
+  the same incoming mentor, and a hand-over usually drains one outgoing mentor
+  too, so the per-row notices of the single-record path would arrive up to 200
+  times for one person — with an e-mail each. The caller passes `batched: true`,
+  which silences both mentor notices inside `transferMentorship()`, and sends
+  one `mentorship.bulkAssigned` / `mentorship.bulkReassignedAway` notification
+  per mentor afterwards, carrying the count. Those two are **in-app only**: the
+  suppressed e-mails are the point, not a casualty. The MENTEE's notice and
+  mail are untouched — that is a different person on every row, one each.
+  This mirrors the `notifiedMentees` set in the same file's `advanceStage`
+  branch; if you add a third caller that loops, it needs the same flag.
+- **Eligibility is per row.** A selected candidate with no `ACTIVE` relation has
+  no owner to change — assigning one would be *creating* a mentorship, which is
+  `POST /api/mentorship`'s job — and one already on that owner is a no-op. Both
+  are skipped, and the response's `updated` counts only what actually moved, so
+  the grid can say *"N reassigned"* instead of echoing the selection size.
+- **The reason is fixed** to `mentor_unavailable`, with the ActivityLog note
+  `bulk owner assignment`. Nobody picks a reason per person for "someone left
+  the team" or "we split the portfolio", and that code is what those mean from
+  the outgoing side. The whole vocabulary stays available on the single-record
+  dialog.
+
+Test ids on the selection bar: `bulk-owner-select`, `bulk-assign-owner`; the
+result line reuses `bulk-tag-note`.
+
 ## Refusal codes
 
 | code | status | meaning |
@@ -212,3 +254,7 @@ and never render the server's English `error` literal.
 - `e2e/mentor-transfer.spec.ts` — a mis-assignment corrected in place, a pairing
   with history handed over (stage carried, chain set, history left where it was),
   and the `already_mentored` body naming the current mentor.
+- `e2e/admin-bulk-candidates.spec.ts` — the bulk caller: one batch holding both
+  shapes plus a candidate with no pairing at all, asserted row by row, the
+  report counting only what moved, and exactly one summary notification for each
+  of the two mentors instead of one per row.

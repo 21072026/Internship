@@ -479,6 +479,16 @@ const en = {
     orphanFilter: 'Orphan applicants',
     orphanBadge: 'Orphan applicant',
     orphanHint: 'Applied through a public link, was declined, and has never signed in — scheduled for anonymisation.',
+    // "My candidates" quick filter (#2438) and bulk owner assignment (#2439).
+    // The "owner" of a candidate in this repo IS the mentor on their live
+    // relation — there is no separate owner column — so the base dictionary
+    // says mentor, next to the grid's own "Mentor" column and the per-row
+    // `assignMentor.label`. "Owner" is the MARKETING word for the same person
+    // and lives in verticalOverlays.ts, the same way mineFilter does.
+    mineFilter: 'My candidates',
+    bulkOwnerLabel: 'Mentor',
+    bulkAssignOwner: 'Assign mentor',
+    bulkOwnerReassigned: '{n} reassigned',
   },
   candidateDetail: {
     companyInterest: { interested: 'Company is interested', shortlisted: 'Shortlisted by company', pass: 'Company passed' },
@@ -990,6 +1000,9 @@ const en = {
       unansweredQuestion: 'Unanswered question',
       pendingMeeting: 'Pending meeting request',
       noOpenGoal: 'No open goal or to-do',
+      // #2418: a trial that has run out is a record WAITING FOR A DECISION —
+      // it belongs in the queue the owner already reads, not on a new board card.
+      trialExpired: 'Trial expired — decide',
       daysAgo: '{d} days since last interaction',
       dormantHidden: '{n} first contacts hidden — messaged, never replied',
     },
@@ -2045,6 +2058,7 @@ const en = {
     events: {
       'stale_mentee.noContact': 'No recent contact with {menteeName}.',
       'deadline.stagePassed': 'Stage deadline passed for {menteeName}.',
+      'trial.endingSoon': '{company}: {days} days left on the trial.',
       'weekly_report_reminder.due': 'Your weekly report for this week is still missing.',
       'meeting_reminder.startingSoon': 'Meeting "{title}" starts in {minutes} min ({when}).',
       'meeting_reminder.seriesSoon': '"{title}" ({project}) starts soon — {when}.',
@@ -2108,6 +2122,16 @@ const en = {
       'mentorship.mentorChanged': 'Your mentor has changed — {mentorName} is now your mentor.',
       'mentorship.reassignedAway': 'Your mentorship with {menteeName} has ended — they are continuing with another mentor.',
       'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your mentee.',
+      // Bulk owner assignment (#2439). ONE row each, whatever the batch size:
+      // an admin handing a portfolio over names the same incoming mentor on
+      // every row and usually drains one outgoing mentor, so the per-row
+      // notices above are suppressed for a batch and these carry the total.
+      // Phrased as "label: {count}" rather than "{count} mentees were…" so one
+      // template is grammatical at every size — the repo's other way out of
+      // this is a singular/plural key PAIR (project.newGoal/newGoals), and a
+      // pair here would need the mentee's name on one side and not the other.
+      'mentorship.bulkAssigned': 'New mentees assigned to you: {count}.',
+      'mentorship.bulkReassignedAway': 'Mentorships ended, the mentees continuing with another mentor: {count}.',
       'application.received': '{name} applied to be your mentee.',
       'mentorship.connected': '{name} joined through your invitation — you are now connected.',
       'mentorship.autoLinkSkipped':
@@ -4165,6 +4189,24 @@ const en = {
       noCeiling: 'not set',
       overloaded: 'Over ceiling',
     },
+    // Cohorts (#2420 / #2425): the two questions a month-by-month funnel answers
+    // that a snapshot cannot — who converted out of the people who arrived
+    // together, and how much of what we won we still have.
+    cohortKpi: {
+      title: 'Cohorts',
+      conversion: 'Conversion by entry month',
+      conversionHint: '{from} → {to}, grouped by the month a record ENTERED. A deal that closes months later is still credited to the month it arrived — which is what keeps a month from reading above 100%.',
+      month: 'Month',
+      entered: 'Entered',
+      converted: 'Converted',
+      retention: 'Retention after {stage}',
+      retentionHint: 'Of the records that reached {stage} in a month, the share that later moved to a lost stage. A window that has not closed yet shows —, not 0%: a young cohort has had no opportunity to leave.',
+      won: 'Reached',
+      rate: 'Rate',
+      bucket: '{n} mo',
+      legend: 'Each cell is the share of that month\u2019s cohort that had left by the end of that window.',
+      empty: 'No month in this range has a cohort yet.',
+    },
     signupFunnel: {
       title: 'Signup funnel',
       hint: 'Registered → verified → active. If verification e-mails stop arriving, sign-ups keep coming and nothing else looks wrong — this ratio is where that shows up.',
@@ -5737,6 +5779,10 @@ const tr: Dict = {
     orphanFilter: 'Sahipsiz başvurular',
     orphanBadge: 'Sahipsiz başvuru',
     orphanHint: 'Genel bağlantıdan başvurdu, reddedildi ve hiç giriş yapmadı — anonimleştirilmek üzere sırada.',
+    mineFilter: 'Bana atananlar',
+    bulkOwnerLabel: 'Mentör',
+    bulkAssignOwner: 'Mentör ata',
+    bulkOwnerReassigned: '{n} kayıt yeniden atandı',
   },
   candidateDetail: {
     companyInterest: { interested: 'Şirket ilgileniyor', shortlisted: 'Şirket kısa listeye aldı', pass: 'Şirket geçti' },
@@ -6223,6 +6269,7 @@ const tr: Dict = {
       unansweredQuestion: 'Yanıtsız soru',
       pendingMeeting: 'Bekleyen toplantı talebi',
       noOpenGoal: 'Açık hedef veya yapılacak yok',
+      trialExpired: 'Deneme süresi doldu — karar verin',
       daysAgo: 'Son etkileşimden bu yana {d} gün',
       dormantHidden: '{n} ilk temas gizlendi — mesaj gönderildi, yanıt gelmedi',
     },
@@ -7251,6 +7298,7 @@ const tr: Dict = {
     events: {
       'stale_mentee.noContact': '{menteeName} ile bir süredir etkileşim kaydedilmedi.',
       'deadline.stagePassed': '{menteeName} için aşama son tarihi geçti.',
+      'trial.endingSoon': '{company}: denemenin bitmesine {days} gün kaldı.',
       'weekly_report_reminder.due': 'Bu haftaki haftalık raporun hâlâ eksik.',
       'meeting_reminder.startingSoon': '"{title}" toplantısı {minutes} dk içinde başlıyor ({when}).',
       'meeting_reminder.seriesSoon': '"{title}" ({project}) yakında başlıyor — {when}.',
@@ -7314,6 +7362,9 @@ const tr: Dict = {
       'mentorship.mentorChanged': 'Mentörün değişti — artık mentörün {mentorName}.',
       'mentorship.reassignedAway': '{menteeName} ile mentorluğun sona erdi — başka bir mentörle devam ediyor.',
       'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin mentee’in değil.',
+      // Toplu sahip atama (#2439). Parti ne kadar büyük olursa olsun tek satır.
+      'mentorship.bulkAssigned': 'Sana atanan yeni mentee sayısı: {count}.',
+      'mentorship.bulkReassignedAway': 'Sona eren mentorluk sayısı (mentee’ler başka bir mentörle devam ediyor): {count}.',
       'application.received': '{name} mentee’n olmak için başvurdu.',
       'mentorship.connected': '{name} davetinle katıldı — artık bağlantıdasınız.',
       'mentorship.autoLinkSkipped':
@@ -9336,6 +9387,21 @@ const tr: Dict = {
       noCeiling: 'belirlenmemiş',
       overloaded: 'Tavanın üstünde',
     },
+    cohortKpi: {
+      title: 'Kohortlar',
+      conversion: 'Giriş ayına göre dönüşüm',
+      conversionHint: '{from} → {to}, kaydın GİRDİĞİ aya göre gruplanır. Aylar sonra kapanan bir anlaşma yine geldiği aya yazılır — bir ayın oranını %100’ün üzerine çıkaran hata böyle önlenir.',
+      month: 'Ay',
+      entered: 'Giren',
+      converted: 'Dönüşen',
+      retention: '{stage} sonrası elde tutma',
+      retentionHint: 'Bir ay içinde {stage} aşamasına ulaşan kayıtların, sonradan bir kayıp aşamasına geçenlerinin oranı. Penceresi henüz kapanmamış kova %0 değil — gösterir: genç bir kohortun ayrılmaya vakti olmamıştır.',
+      won: 'Ulaşan',
+      rate: 'Oran',
+      bucket: '{n} ay',
+      legend: 'Her hücre, o ayın kohortundan o pencerenin sonuna kadar ayrılmış olanların oranıdır.',
+      empty: 'Bu aralıkta henüz kohortu olan bir ay yok.',
+    },
     signupFunnel: {
       title: 'Kayıt hunisi',
       hint: 'Kaydolan → doğrulayan → aktif olan. Doğrulama e-postaları gitmeyi bırakırsa kayıtlar gelmeye devam eder ve başka hiçbir şey bozuk görünmez — bu oran tam olarak orayı gösterir.',
@@ -10891,6 +10957,10 @@ const de: Dict = {
     orphanFilter: 'Verwaiste Bewerbungen',
     orphanBadge: 'Verwaiste Bewerbung',
     orphanHint: 'Über einen öffentlichen Link beworben, abgelehnt und nie angemeldet — zur Anonymisierung vorgemerkt.',
+    mineFilter: 'Meine Kandidaten',
+    bulkOwnerLabel: 'Mentor',
+    bulkAssignOwner: 'Mentor zuweisen',
+    bulkOwnerReassigned: '{n} neu zugewiesen',
   },
   candidateDetail: {
     companyInterest: { interested: 'Unternehmen interessiert', shortlisted: 'Vom Unternehmen auf die Shortlist gesetzt', pass: 'Unternehmen hat abgesagt' },
@@ -11378,6 +11448,7 @@ const de: Dict = {
       unansweredQuestion: 'Unbeantwortete Frage',
       pendingMeeting: 'Ausstehende Terminanfrage',
       noOpenGoal: 'Kein offenes Ziel oder Aufgabe',
+      trialExpired: 'Testphase abgelaufen — entscheiden',
       daysAgo: '{d} Tage seit der letzten Interaktion',
       dormantHidden: '{n} Erstkontakte ausgeblendet — angeschrieben, keine Antwort',
     },
@@ -12406,6 +12477,7 @@ const de: Dict = {
     events: {
       'stale_mentee.noContact': 'Kein aktueller Kontakt mit {menteeName}.',
       'deadline.stagePassed': 'Die Phasen-Frist für {menteeName} ist abgelaufen.',
+      'trial.endingSoon': '{company}: noch {days} Tage Testphase.',
       'weekly_report_reminder.due': 'Dein Wochenbericht für diese Woche fehlt noch.',
       'meeting_reminder.startingSoon': 'Das Meeting "{title}" beginnt in {minutes} Min. ({when}).',
       'meeting_reminder.seriesSoon': '"{title}" ({project}) beginnt bald — {when}.',
@@ -12470,6 +12542,9 @@ const de: Dict = {
       'mentorship.mentorChanged': 'Dein Mentor hat sich geändert — {mentorName} ist jetzt dein Mentor.',
       'mentorship.reassignedAway': 'Dein Mentoring mit {menteeName} ist beendet — die Person setzt es mit einem anderen Mentor fort.',
       'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Mentee.',
+      // Sammelzuweisung (#2439). Jeweils eine Zeile, egal wie groß der Stapel.
+      'mentorship.bulkAssigned': 'Neu zugewiesene Mentees: {count}.',
+      'mentorship.bulkReassignedAway': 'Beendete Mentorings, die Mentees setzen sie mit einem anderen Mentor fort: {count}.',
       'application.received': '{name} hat sich als dein Mentee beworben.',
       'mentorship.connected': '{name} ist über deine Einladung beigetreten — ihr seid jetzt verbunden.',
       'mentorship.autoLinkSkipped':
@@ -14493,6 +14568,21 @@ const de: Dict = {
       noCeiling: 'nicht gesetzt',
       overloaded: 'Über der Grenze',
     },
+    cohortKpi: {
+      title: 'Kohorten',
+      conversion: 'Konversion nach Eintrittsmonat',
+      conversionHint: '{from} → {to}, gruppiert nach dem Monat, in dem ein Datensatz EINGETRETEN ist. Ein Abschluss Monate später zählt weiterhin zum Monat des Eintritts — genau das verhindert Quoten über 100%.',
+      month: 'Monat',
+      entered: 'Eingetreten',
+      converted: 'Konvertiert',
+      retention: 'Bindung nach {stage}',
+      retentionHint: 'Von den Datensätzen, die in einem Monat {stage} erreicht haben, der Anteil, der später in eine Verlustphase gewechselt ist. Ein noch offenes Fenster zeigt — statt 0%: eine junge Kohorte hatte noch keine Gelegenheit zu gehen.',
+      won: 'Erreicht',
+      rate: 'Quote',
+      bucket: '{n} Mon.',
+      legend: 'Jede Zelle ist der Anteil der Kohorte dieses Monats, der bis zum Ende des Fensters abgewandert war.',
+      empty: 'In diesem Zeitraum gibt es noch keinen Monat mit einer Kohorte.',
+    },
     signupFunnel: {
       title: 'Registrierungs-Funnel',
       hint: 'Registriert → verifiziert → aktiv. Bleiben Verifizierungs-E-Mails aus, kommen weiter Registrierungen und sonst wirkt nichts kaputt — genau das zeigt diese Quote.',
@@ -15614,11 +15704,32 @@ export function getDictionary(locale: Locale): Dict {
 // getServerDictionary), never through useT() on the client — e.g. the landing
 // marketing copy. They are stripped from the dictionary serialized into every
 // page's client payload to keep it lean (#502).
-export const SERVER_ONLY_NAMESPACES = ['landing', 'featureCatalog', 'trust', 'accessibility'] as const;
+//
+// `pricing` joined them in #2475. Its only reader is the /pricing server
+// component, and it is ~65 strings of one vertical's price model — the free
+// core, the plan bands, the matched-pair meter — which were being serialized
+// into the client payload of every page on every host, the MARKETING one
+// included. Membership here is enforced by the type: a client component that
+// reaches for `t.pricing` no longer compiles.
+export const SERVER_ONLY_NAMESPACES = ['landing', 'featureCatalog', 'trust', 'accessibility', 'pricing'] as const;
 export type ClientDictionary = Omit<Dictionary, (typeof SERVER_ONLY_NAMESPACES)[number]>;
 
-export function getClientDictionary(locale: Locale): ClientDictionary {
-  const clientDict: Partial<Dictionary> = { ...getDictionary(locale) };
+/**
+ * Strip the server-only namespaces from an already-resolved dictionary.
+ *
+ * Separate from {@link getClientDictionary} because the root layout must apply
+ * the vertical overlay FIRST and strip afterwards (#2475). Stripping first and
+ * merging after put every server-only namespace the overlay touches straight
+ * back into the client payload: the deep merge adds a key the base no longer
+ * has, so a MARKETING host was shipping the whole marketing `landing` overlay
+ * to the browser — the exact payload SERVER_ONLY_NAMESPACES exists to avoid.
+ */
+export function toClientDictionary(dict: Dictionary): ClientDictionary {
+  const clientDict: Partial<Dictionary> = { ...dict };
   for (const ns of SERVER_ONLY_NAMESPACES) delete clientDict[ns];
   return clientDict as ClientDictionary;
+}
+
+export function getClientDictionary(locale: Locale): ClientDictionary {
+  return toClientDictionary(getDictionary(locale));
 }

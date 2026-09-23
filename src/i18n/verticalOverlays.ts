@@ -44,9 +44,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   MARKETING: {
     en: {
       nav: { candidates: 'Leads' },
-      // `mentor` is the "Mentor: {name}" line on a candidate row AND inside the
-      // person hover card, which the board renders on every card's owner chip.
-      candidates: { title: 'Leads', subtitle: 'Browse and search leads', mentor: 'Rep' },
+      candidates: {
+        title: 'Leads',
+        subtitle: 'Browse and search leads',
+        // `mentor` is the "Mentor: {name}" line on a candidate row AND inside the
+        // person hover card, which the board renders on every card's owner chip.
+        mentor: 'Rep',
+        mineFilter: 'My accounts',
+        // The bulk control assigns the person `mentor` above names, so it says
+        // the same word — the action key stays `assignOwner` (#2439), only the
+        // label follows the vertical.
+        bulkOwnerLabel: 'Rep',
+        bulkAssignOwner: 'Assign rep',
+      },
       // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
       publicNav: {
@@ -81,6 +91,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentees: 'Add your first leads',
           assignMentorship: 'Create the first deal',
         },
+      },
+      // Lead attribution on /admin/analytics (#2421). `cohortTotal`/`cohortHired`
+      // are the shared column headers of both the attribution and the cohort
+      // table, so overriding them dresses the two consistently. `cohortHired` is
+      // only a FALLBACK on the attribution table: a tenant that named its own
+      // finished stage sees that name instead (#1882).
+      analytics: {
+        cohortTotal: 'Leads',
+        cohortHired: 'Won',
+        sourceConversionTitle: 'Conversion by source',
+        sourceConversionEmpty: 'No sources yet — assign leads a source to see conversion per source.',
+        sourceUnsourced: '{n} lead(s) have no source and are not shown above.',
       },
       // The company list (#2426, story #2394). A marketing tenant's companies
       // are the ACCOUNTS it sells to: the relation counter is a deal, a
@@ -235,12 +257,53 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         featuresTitle: 'Everything your team needs to close',
         featuresSubtitle: 'Purpose-built for tracking customers and moving deals forward.',
       },
+      // The public feature catalogue (#2475). `/features` renders whatever
+      // getFeatures() returns for this vertical; the cards themselves are
+      // filtered by capability in src/lib/features.ts, and what is left here is
+      // the frame plus the four core cards whose wording still said
+      // "mentor"/"mentee"/"mentorship" although the feature itself is core CRM.
+      featureCatalog: {
+        title: 'Everything SaleVali can do',
+        subtitle: 'The full feature catalogue — from first contact to a closed deal, for your whole team.',
+        categories: { collaboration: 'Working together' },
+        items: {
+          // `messaging` carries no capability tag — a shared inbox is core CRM
+          // and MARKETING has it — so the capability filter cannot reach this
+          // card, and its wording was the last place a marketing visitor read
+          // the internship relation model on /features: "per-mentorship
+          // threads". The thread is per pipeline record, which is a deal here.
+          messaging: { d: 'A unified inbox with a thread per deal, attachments and email mirroring you can reply to — answer the notification from your mail app and it lands back in the thread. Messages arrive live while the inbox is open, and can notify your device even when the app is closed. A half-written reply is kept per conversation until you send it, and you can see when the other person is writing. The answers you give over and over live in a shared pool of canned responses — written once in English, Turkish and German, inserted in your own language, one click.' },
+          videoCalls: { d: 'Start a call with a lead, an account team or a chat in one click and hold it in a side panel next to their record, on our own Jitsi tenant — no accounts, no install, and no time limit. If a call has to fall back to the free public room, the panel says so before anyone joins, with a one-click way to keep talking. The link is emailed to everyone invited and works in any browser.' },
+          externalGuests: { d: 'A meeting is not always only your own team. Type any email address into the scheduler and that person is invited to the same room with the same Yes/No buttons — no account, no sign-up, and an .ics for their own calendar. You see who accepted, and an invitation sent to the wrong address can be withdrawn, which stops its link working.' },
+          inviteLinks: { d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away, and a private note keeps a wall of links legible.' },
+        },
+      },
+      // /pricing (#2475). The marketing product has NO published price list —
+      // the packaging has not been decided — so the page hides every section
+      // that would have to state one (see src/app/pricing/page.tsx) and these
+      // strings replace the internship framing of what is left. Nothing here
+      // invents a number, a plan or a seat: the two claims that survive are the
+      // ones that are true whatever the packaging turns out to be (self-hosting
+      // is free; there is no checkout, you get an invoice after a conversation).
+      pricing: {
+        heroBadge: 'Marketing pricing is not published yet',
+        heroTitle: 'What we can tell you about the price today',
+        heroSubtitle: 'The packaging for the marketing product has not been set yet, so there is no price list on this page — we would rather show you nothing than a number we would have to take back. What is already true, whatever the packaging turns out to be, is below.',
+        discountsTitle: 'What is already true',
+      },
     },
     tr: {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
       nav: { candidates: 'Müşteri Adayları' },
-      candidates: { title: 'Müşteri Adayları', subtitle: 'Müşteri adaylarını görüntüle ve ara', mentor: 'Temsilci' },
+      candidates: {
+        title: 'Müşteri Adayları',
+        subtitle: 'Müşteri adaylarını görüntüle ve ara',
+        mentor: 'Temsilci',
+        mineFilter: 'Benim müşterilerim',
+        bulkOwnerLabel: 'Temsilci',
+        bulkAssignOwner: 'Temsilci ata',
+      },
       publicNav: {
         homeLink: 'SaleVali — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
@@ -270,6 +333,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentees: 'İlk müşteri adaylarını ekle',
           assignMentorship: 'İlk fırsatı oluştur',
         },
+      },
+      analytics: {
+        cohortTotal: 'Müşteri adayı',
+        cohortHired: 'Kazanılan',
+        sourceConversionTitle: 'Kaynağa göre dönüşüm',
+        sourceConversionEmpty: 'Henüz kaynak yok — kaynak bazlı dönüşümü görmek için müşteri adaylarına kaynak ata.',
+        sourceUnsourced: '{n} müşteri adayının kaynağı yok ve yukarıda gösterilmiyor.',
       },
       companiesPage: {
         subtitle: 'Sattığın müşteri firmalarını ve ihtiyaçlarını yönet',
@@ -361,10 +431,34 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         featuresTitle: 'Kapatmak için ekibinin ihtiyacı olan her şey',
         featuresSubtitle: 'Müşterileri takip etmek ve anlaşmaları ilerletmek için tasarlandı.',
       },
+      featureCatalog: {
+        title: 'SaleVali neler yapabilir',
+        subtitle: 'Tüm özellik kataloğu — ilk temastan kapanan anlaşmaya, tüm ekibiniz için.',
+        categories: { collaboration: 'Birlikte çalışma' },
+        items: {
+          messaging: { d: 'Fırsat başına thread’ler, ekler ve cevaplanabilir e-posta yansıtması olan tek gelen kutusu — bildirimi kendi e-posta uygulamanızdan yanıtlayın, cevabınız thread’e düşer. Mesajlar gelen kutusu açıkken anında görünür; izin verirseniz uygulama kapalıyken de cihazınıza bildirim gelir. Yarım kalan yanıt gönderilene kadar sohbet başına saklanır ve karşı taraf yazarken bunu görürsünüz. Sürekli verdiğiniz yanıtlar ortak bir hazır yanıt havuzunda durur — İngilizce, Türkçe ve Almanca bir kez yazılır, kendi dilinizde tek tıkla eklenir.' },
+          videoCalls: { d: 'Bir müşteri adayı, firma ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kaydın yanındaki yan panelde kendi Jitsi kiracımızda açılır — hesap yok, kurulum yok, süre sınırı yok. Görüşme ücretsiz herkese açık odaya düşmek zorunda kalırsa panel bunu kimse katılmadan önce söyler ve konuşmayı sürdürmenin tek tıklık yolunu verir. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
+          externalGuests: { d: 'Bir toplantı her zaman yalnızca kendi ekibinizden ibaret değildir. Planlayıcıya herhangi bir e-posta adresi yaz; o kişi aynı odaya, aynı Evet/Hayır butonlarıyla davet edilsin — hesap yok, kayıt yok, kendi takvimi için .ics var. Kimin kabul ettiğini görürsün ve yanlış adrese giden bir davet geri alınabilir; bağlantısı da o anda çalışmayı bırakır.' },
+          inviteLinks: { d: 'Adresini bilmediğin birini davet et: alanı boş bırak, elden verebileceğin tek kullanımlık ve 7 gün geçerli bir bağlantı üretilsin. Bağlantıyla kaydolan kişi doğrudan gönderene bağlanır ve özel bir not, birbirine benzeyen bağlantıları ayırt edilebilir kılar.' },
+        },
+      },
+      pricing: {
+        heroBadge: 'Pazarlama fiyatlandırması henüz yayınlanmadı',
+        heroTitle: 'Fiyat hakkında bugün söyleyebileceklerimiz',
+        heroSubtitle: 'Pazarlama ürününün paketlemesi henüz belirlenmedi; bu yüzden bu sayfada fiyat listesi yok — geri almak zorunda kalacağımız bir rakam göstermektense hiçbir şey göstermemeyi tercih ederiz. Paketleme ne olursa olsun bugün de doğru olanlar aşağıda.',
+        discountsTitle: 'Şimdiden doğru olanlar',
+      },
     },
     de: {
       nav: { candidates: 'Leads' },
-      candidates: { title: 'Leads', subtitle: 'Leads durchsuchen', mentor: 'Vertriebsmitarbeiter' },
+      candidates: {
+        title: 'Leads',
+        subtitle: 'Leads durchsuchen',
+        mentor: 'Vertriebsmitarbeiter',
+        mineFilter: 'Meine Kunden',
+        bulkOwnerLabel: 'Vertriebsmitarbeiter',
+        bulkAssignOwner: 'Vertriebsmitarbeiter zuweisen',
+      },
       publicNav: {
         homeLink: 'SaleVali — zur Startseite',
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',
@@ -394,6 +488,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentees: 'Fügen Sie Ihre ersten Leads hinzu',
           assignMentorship: 'Ersten Deal anlegen',
         },
+      },
+      analytics: {
+        cohortTotal: 'Leads',
+        cohortHired: 'Gewonnen',
+        sourceConversionTitle: 'Konversion nach Quelle',
+        sourceConversionEmpty: 'Noch keine Quellen — weise Leads eine Quelle zu, um die Konversion pro Quelle zu sehen.',
+        sourceUnsourced: '{n} Lead(s) ohne Quelle werden oben nicht angezeigt.',
       },
       companiesPage: {
         subtitle: 'Kunden-Accounts und ihren Bedarf verwalten',
@@ -480,6 +581,23 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroSubtitle: 'Verfolgen Sie Ihre Kunden vom ersten Kontakt bis zum Abschluss. Sehen Sie auf einen Blick, wo jeder Deal steht, wer ihn zuletzt bearbeitet hat und was als Nächstes zu tun ist — statt es aus einer Tabelle zusammenzusuchen.',
         featuresTitle: 'Alles, was Ihr Team zum Abschluss braucht',
         featuresSubtitle: 'Entwickelt, um Kunden zu verfolgen und Deals voranzutreiben.',
+      },
+      featureCatalog: {
+        title: 'Alles, was SaleVali kann',
+        subtitle: 'Der vollständige Funktionskatalog — vom Erstkontakt bis zum Abschluss, für Ihr ganzes Team.',
+        categories: { collaboration: 'Zusammenarbeit' },
+        items: {
+          messaging: { d: 'Ein zentraler Posteingang mit einem Thread pro Deal, Anhängen und beantwortbarer E-Mail-Spiegelung — antworte aus deinem Mailprogramm, und die Antwort landet im Thread. Nachrichten erscheinen live, solange der Posteingang offen ist, und können dein Gerät auch bei geschlossener App benachrichtigen. Eine halb geschriebene Antwort bleibt pro Gespräch erhalten, bis du sie sendest, und du siehst, wenn die andere Person schreibt. Antworten, die du immer wieder gibst, liegen in einem gemeinsamen Pool vorgefertigter Antworten — einmal auf Englisch, Türkisch und Deutsch verfasst, mit einem Klick in deiner eigenen Sprache eingefügt.' },
+          videoCalls: { d: 'Starte mit einem Klick einen Anruf mit einem Lead, einem Account-Team oder einem Chat — er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Muss ein Anruf auf den freien öffentlichen Raum ausweichen, sagt das Panel das, bevor jemand beitritt, samt Ein-Klick-Weg zum Weiterreden. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
+          externalGuests: { d: 'Ein Meeting besteht nicht immer nur aus dem eigenen Team. Tippe eine beliebige E-Mail-Adresse in die Planung, und diese Person ist im selben Raum eingeladen — mit denselben Ja/Nein-Buttons, ohne Konto, ohne Registrierung und mit .ics für den eigenen Kalender. Du siehst, wer zugesagt hat, und eine an die falsche Adresse gegangene Einladung lässt sich zurückziehen; ihr Link funktioniert dann nicht mehr.' },
+          inviteLinks: { d: 'Lade jemanden ein, dessen Adresse du nicht kennst: Feld leer lassen, und es entsteht ein einmalig gültiger 7-Tage-Link zum persönlichen Übergeben. Wer sich damit registriert, ist sofort mit der einladenden Person verbunden — und eine private Notiz hält eine Wand aus Links unterscheidbar.' },
+        },
+      },
+      pricing: {
+        heroBadge: 'Die Marketing-Preise sind noch nicht veröffentlicht',
+        heroTitle: 'Was wir heute über den Preis sagen können',
+        heroSubtitle: 'Die Paketierung des Marketing-Produkts steht noch nicht fest, deshalb gibt es auf dieser Seite keine Preisliste — lieber zeigen wir nichts als eine Zahl, die wir zurücknehmen müssten. Was unabhängig von der Paketierung schon heute gilt, steht unten.',
+        discountsTitle: 'Was schon heute gilt',
       },
     },
   },

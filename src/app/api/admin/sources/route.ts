@@ -5,28 +5,46 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
+import { outcomeStageKeys } from '@/lib/pipelineStages';
+import { attributedLeadWhere } from '@/lib/leadAttribution';
+import { getLocale } from '@/i18n/server';
 
-// Pipeline stages that count as a successful outcome for conversion stats.
-const HIRED: string[] = ['HIRED_660', 'EMPLOYED_700'];
-
-// GET — all sources with mentee counts + conversion (hired) breakdown (admin).
+// GET — all sources with lead counts + conversion breakdown (admin).
+//
+// Both halves of the count come from a rule stated elsewhere, never from a
+// literal here (#2421): the finished stages are the TENANT's own set resolved by
+// `outcomeStageKeys()` (a hardcoded HIRED_660/EMPLOYED_700 reported 0% for every
+// source of an org on its own catalogue, #1882), and who may be counted toward a
+// source is src/lib/leadAttribution.ts.
+//
+// The ratio's DENOMINATOR is filtered by the same `attributedLeadWhere()` as its
+// numerator. It was not: a bare `_count` of the relation counts every User with
+// that `sourceId`, and on a SOURCE login that column records which source the
+// account speaks for rather than who referred it — so on this very screen, where
+// a partner institution having its own login is the normal case, a source with
+// one partner login and one hired lead reported 50% instead of 100%.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const locale = await getLocale();
+
   return await withTenantScope(session, async () => {
+  const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
+  const outcome = await outcomeStageKeys(orgId, locale);
+
   const sources = await prisma.source.findMany({
     orderBy: { name: 'asc' },
-    include: { _count: { select: { users: true } } },
+    include: { _count: { select: { users: { where: attributedLeadWhere() } } } },
   });
 
-  // For each source, how many of its mentees reached a "hired" stage.
+  // For each source, how many of its leads reached a finished stage.
   const hiredRows = await prisma.user.groupBy({
     by: ['sourceId'],
     where: {
-      role: 'MENTEE',
+      ...attributedLeadWhere(),
       sourceId: { not: null },
-      menteeRelations: { some: { pipelineStatus: { in: HIRED } } },
+      menteeRelations: { some: { pipelineStatus: { in: outcome.finished } } },
     },
     _count: { _all: true },
   });

@@ -7246,3 +7246,45 @@ belirli bir testid'le aramaktan daha güvenilir.
 - **Arka planda Playwright koşarken dosya düzenleme.** `next dev` anında yeniden derler,
   "Fast Refresh had to perform a full reload" client state'i siler ve alakasız testler
   `element(s) not found` ile düşer. Koşu bitmeden kaynak dosyaya dokunma.
+
+## 2026-09-23 — Yeşil bir kapı neye baktığını söylemez (#1501, #1485, #2479, #2158)
+
+- **Bir denetim/kapı yeşilse, ölçtüğü şeyin gerçekten DOM'da olduğunu doğrula.** `/admin/analytics`
+  360px'te 89px taşarken mobil düzen denetimi aylardır "temiz" diyordu: `settle()` iskelet satırı
+  (`.animate-pulse`) bekliyor, o sayfa ise düz bir "Wird geladen…" gösteriyordu, yani poll anında
+  sıfır görüp dönüyor ve denetim **boş sayfayı** ölçüyordu. Bir şeyi kanıtlamadan önce
+  `document.querySelector(...)` ile "ölçtüğüm eleman orada mı?" diye sor — yoksa kapının yeşili,
+  göremediği hatayı kapatır. (#1485)
+- **`> 0` eşiği, geçmişi olan her veritabanında geçer.** Trend grafiği hatası (#1501/#1484) iki kez
+  "düzeldi" çünkü testler eşik kullanıyordu: yerelde demo verisi vardı, CI'da yoktu. Doğru şekil
+  **karşılaştırma**: sınırlı çağrı ile sınırsız çağrının aynı ayı aynı sayıyı vermesi. Önce bir
+  eşik yazıp hatayı yerinde bırakıp geçtiğini görmek, testi atmak için yeterli sebep.
+- **Her düzeltmede negatif kontrol yap.** Düzeltmeyi geçici olarak geri al, yeni testin kırmızıya
+  döndüğünü gör, sonra geri koy. Bu oturumda üç testten birini bu yüzden çöpe attım.
+- **CI'ın veri şeklini taklit et.** e2e shard'ının veritabanında *yalnızca bugün* tohumlanmış
+  satırlar var. `to=YYYY-MM-DD` günün ilk anına çözüldüğü için her kova sıfırdı; yerelde aylara
+  yayılmış demo verisi hatayı gizliyordu. "Yerelde geçiyor" bir kanıt değil, bir veri farkı olabilir.
+- **Akış (streaming) davranışını `next dev` ile göremezsin.** `loading.tsx` olan her rotanın
+  `<div hidden id="S:0">` içinde sayfanın **tam bir kopyasını** yayınladığını ancak
+  `npm run build && PORT=3100 npm start` ile servis edilen HTML'e bakarak gördüm. Playwright'ın
+  strict mode'u gizli elemanları da sayar → `resolved to 2 elements`. Şüphelendiğin şey SSR/akış
+  ise üretim derlemesine karşı prob yaz. (#2479)
+- **Prisma alan referansı yalnızca `equals` altında çalışır.** `fromStatus <> toStatus` için
+  `{ fromStatus: { not: prisma.statusChange.fields.toStatus } }` çalışma anında
+  "Unknown argument `_ref`" ile patlar; `{ NOT: { fromStatus: { equals: … } } }` çalışır. (#2264)
+- **`take: 1` çeken bir sorguda filtrelemeyi JS'e bırakma.** En yeni satır cevabın kendisi
+  olduğunda, sonradan atmak gizlenen satırı geri getirmez — filtre `where`'e girmeli.
+- **Konteyner yeniden başladıysa yerel ortam gider.** MariaDB için `mysqld_safe &` + 
+  `prisma db push --accept-data-loss`; `npm install` Playwright'ı güncellemişse beklenen chromium
+  derlemesi değişir (bende 1234 → 1243) ve `/opt/pw-browsers/chromium_headless_shell-<yeni>`
+  sembolik bağını kurmak yeterli — `playwright install` çalıştırma.
+- **`npm install` `package-lock.json`'ı sessizce değiştirebilir** (npm sürüm farkı `libc` alanlarını
+  siliyor). Commit'ten önce `git status --short` oku; alakasız kilit dosyası değişikliğini
+  `git checkout origin/main -- package-lock.json` ile geri al.
+- **`git push` "credential service temporarily unavailable" (503) verebilir.** Kod hatası değil;
+  `until git push …; do sleep 15; done` şeklinde bir döngü ile geç (koşulu ters kurmamaya dikkat).
+- **Hız limiti kovaları süreç genelindedir.** Bir e2e shard'ı tek Next sunucusuna koşar, adressiz
+  her istek `<bucket>:unknown` sayacına gider ve spec'ler arası **birikir**. `e2e/helpers/rateLimit.ts`:
+  freni *ölçen* test için `floodIp()` (sabit adres), frenin ardındaki özelliğe ulaşmak isteyen için
+  `freshIp()` (çağrı başına yeni adres). `npm run check:e2e-rate-limits` sınırı aşan spec'i PR'da
+  yakalar; yeni bir spec hız limitli bir uca yazıyorsa bu iki yardımcıdan birini kullan. (#2158/#2159)

@@ -52,7 +52,7 @@ export default function TestimonialApprovePage() {
           </div>
         </CardHeader>
         {pending === null ? (
-          <p className="py-4 text-sm text-gray-400">{t.common.loading}</p>
+          <p className="py-4 text-sm text-gray-400" data-testid="page-loading">{t.common.loading}</p>
         ) : pending.length === 0 ? (
           <p className="py-4 text-sm text-gray-500" data-testid="testimonial-approve-empty">{t.testimonials.approveEmpty}</p>
         ) : (

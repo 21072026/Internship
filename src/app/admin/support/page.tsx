@@ -197,7 +197,7 @@ export default function AdminSupportPage() {
       {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
 
       {tickets === null ? (
-        <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
+        <p className="text-center py-10 text-gray-400" data-testid="page-loading">{t.common.loading}</p>
       ) : tickets.length === 0 ? (
         <Card><p className="text-center py-10 text-gray-400">{a.empty}</p></Card>
       ) : (

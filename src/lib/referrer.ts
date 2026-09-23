@@ -31,10 +31,24 @@ export type ReferrerFields = {
   role?: string | null;
 };
 
+/**
+ * Does a person's `sourceId` mean "who referred them"? True for every role but
+ * SOURCE — see `ReferrerFields.role` above for the one account kind where the
+ * column means "which source this account speaks for" instead.
+ *
+ * Exported because reading it as a referral where it is not shows a source as
+ * having referred itself, and that mistake is easiest to make away from this
+ * file: the lead-attribution report (src/lib/leadAttribution.ts) counts people
+ * per source and used to dodge it only as a side effect of filtering on a role.
+ */
+export function sourceIsReferral(role?: string | null): boolean {
+  return role !== 'SOURCE';
+}
+
 /** The select value for a person, given their two backing columns. */
 export function encodeReferrer(fields: ReferrerFields): string {
   if (fields.referredById) return `user:${fields.referredById}`;
-  if (fields.sourceId && fields.role !== 'SOURCE') return `source:${fields.sourceId}`;
+  if (fields.sourceId && sourceIsReferral(fields.role)) return `source:${fields.sourceId}`;
   return REFERRER_NONE;
 }
 
@@ -70,7 +84,7 @@ export function referrerLabel(
   fallback = ''
 ): string {
   if (person.referredBy?.fullName) return person.referredBy.fullName;
-  if (person.source?.name && person.role !== 'SOURCE') return person.source.name;
+  if (person.source?.name && sourceIsReferral(person.role)) return person.source.name;
   if (person.referralSource) return person.referralSource;
   return fallback;
 }

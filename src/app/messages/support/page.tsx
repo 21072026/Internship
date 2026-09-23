@@ -125,7 +125,7 @@ export default function SupportChatPage() {
       <div data-testid="support-chat" className="flex min-h-0 flex-1 flex-col lg:block">
         <Card className="mb-3 flex min-h-0 flex-1 flex-col overflow-hidden p-3 lg:mb-4 lg:block lg:p-6">
           {tickets === null ? (
-          <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
+          <p className="text-center py-10 text-gray-400" data-testid="page-loading">{t.common.loading}</p>
         ) : tickets.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{s.empty}</p>
         ) : (

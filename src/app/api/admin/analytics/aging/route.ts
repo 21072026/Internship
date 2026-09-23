@@ -8,6 +8,7 @@ import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { computeStageAging } from '@/lib/stageAging';
 import { daysInStage, isStageOverdue } from '@/lib/stageClock';
 import { isStageTransition } from '@/lib/stageChange';
+import { rangeEnd, rangeStart } from '@/lib/dateRange';
 
 // GET — hiring-funnel aging & SLA.
 // - stageAging: average/median time actually SPENT in each stage, computed from
@@ -39,13 +40,10 @@ export async function GET(request: Request) {
   // window feed stageAging. oldestStuck/overdue describe the present, so they
   // are never date-filtered. Bad/inverted dates fall back to "all time".
   const { searchParams } = new URL(request.url);
-  const parseDate = (v: string | null): Date | null => {
-    if (!v) return null;
-    const d = new Date(v);
-    return Number.isNaN(d.getTime()) ? null : d;
-  };
-  const fromDate = parseDate(searchParams.get('from'));
-  const toDate = parseDate(searchParams.get('to'));
+  // Whole days (#1501). This one compares in JS (`leftAt <= toDate`), which is
+  // exactly why the shared bound is inclusive rather than the next midnight.
+  const fromDate = rangeStart(searchParams.get('from'));
+  const toDate = rangeEnd(searchParams.get('to'));
   const rangeOk = fromDate && toDate && fromDate.getTime() <= toDate.getTime();
   const inWindow = (leftAt: number) =>
     !rangeOk || (leftAt >= fromDate!.getTime() && leftAt <= toDate!.getTime());

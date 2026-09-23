@@ -101,6 +101,11 @@ export const NOTIFICATION_EVENTS = [
   // Mentor nudges and deadlines — cron-driven, batchable, task_reminders mail.
   { key: 'stale_mentee.noContact', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'mentee', params: ['menteeName'] },
   { key: 'deadline.stagePassed', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['menteeName'] },
+  // The trial ladder (#2415, story #2392). Same category and group as the stage
+  // deadline above, deliberately: both say "this record needs you before a
+  // date", and somebody who muted one meant to mute both — which is why no new
+  // category and no new preference key were added for trials.
+  { key: 'trial.endingSoon', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['company', 'days'] },
   { key: 'weekly_report_reminder.due', category: 'weeklyReports', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'dashboard', params: [] },
   { key: 'missing_document.self', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'dashboard', params: ['requirement'] },
   { key: 'missing_document.mentor', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['mentee', 'requirement'] },
@@ -208,6 +213,16 @@ export const NOTIFICATION_EVENTS = [
   // ending to mail anybody about (src/lib/mentorTransfer.ts). Its sibling
   // `reassignedAway` — a real transfer — does mail, reusing the re-match notice.
   { key: 'mentorship.assignmentCorrected', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
+  // The batch shape of the two rows above (#2439, POST /api/admin/candidates/bulk).
+  // A portfolio hand-over names ONE incoming mentor on up to 200 rows and
+  // usually drains one outgoing mentor, so the per-row notices would reach the
+  // same person 200 times — the storm the sibling advanceStage branch keeps a
+  // `notifiedMentees` set to prevent. The bulk caller suppresses them and sends
+  // exactly one of these per mentor, carrying the count instead of a name.
+  // In-app ONLY, and deliberately: the whole point is that the mailbox does not
+  // receive the batch (the per-row e-mail is suppressed with the notice).
+  { key: 'mentorship.bulkAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'dashboard', params: ['count'] },
+  { key: 'mentorship.bulkReassignedAway', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'dashboard', params: ['count'] },
 
   // Goals, evaluations, and the projects they hang off.
   { key: 'goal.assigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['title'] },

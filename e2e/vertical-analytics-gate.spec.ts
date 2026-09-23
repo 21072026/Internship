@@ -45,6 +45,12 @@ const KEPT = [
   'funnel-kpi-card',
   'stage-aging-card',
   'drop-reasons-card',
+  // Cohort conversion and the retention triangle (#2420/#2425) depend on no
+  // capability: they read the tenant's OWN stage order, so a sales funnel gets
+  // the same two tables a hiring one does. Listed here so that stays true in
+  // both directions — a later gate that hid this card from MARKETING (the
+  // vertical it was built for) would otherwise pass every test in the suite.
+  'cohort-kpi-card',
 ];
 
 type Vertical = 'INTERNSHIP' | 'MARKETING';

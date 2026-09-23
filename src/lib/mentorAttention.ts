@@ -4,8 +4,9 @@ import { getLastContacts } from '@/lib/lastContact';
 import { getSetting } from '@/lib/settings';
 import { addUtcWeeks, firstFullUtcWeek, utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
+import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired';
 
 export interface AttentionItem {
   relationId: string;
@@ -109,6 +110,25 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
     if (r.questions.length > 0) reasons.push('unanswered_question');
     if (r.meetingRequests.length > 0) reasons.push('pending_meeting');
     if (r.goals.length === 0 && !hasOpenTodo.has(r.mentee.id)) reasons.push('no_open_goal');
+    // A trial that has run out (#2418). The sweep in lib/jobs/trialReminders.ts
+    // parks the record in TRIAL_EXPIRED and then stops: nothing else happens to
+    // it until a human turns it into a proposal or a loss, so it belongs in the
+    // queue its owner already reads rather than on a new board card. The key
+    // comes from the preset that ships it (lib/programTemplates.ts), never
+    // written as a literal here; a tenant that renamed the LABEL keeps the key,
+    // and a tenant without the stage simply has no relation sitting in it.
+    //
+    // No "how long has it been waiting" is computed here on purpose:
+    // lib/stageClock.ts owns time-in-stage and the board already shows it. This
+    // branch answers only "is this one waiting for a decision?".
+    //
+    // Know what that board number currently says for an AUTOMATICALLY expired
+    // trial, though: the sweep writes an `AuditLog` row and no `StatusChange`
+    // (it has no `User` to put in the required FK), and `StatusChange` is the
+    // only thing the stage clock reads — so such a record shows the age of the
+    // whole trial rather than the age of the decision. #2527 fixes that at the
+    // source; nothing here should paper over it with a second calculation.
+    if (r.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY) reasons.push('trial_expired');
     if (r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450') {
       const currentWeek = utcWeekStart(new Date(now));
       const firstEligibleWeek = firstFullUtcWeek(r.startDate);

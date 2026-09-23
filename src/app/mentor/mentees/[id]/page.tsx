@@ -214,7 +214,7 @@ export default function MenteeDetailPage() {
     }
   };
 
-  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
+  if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
   if (!relation) return <div className="text-center py-12 text-gray-400">{t.mentor.relationNotFound}</div>;
 
   return (

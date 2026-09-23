@@ -45,7 +45,7 @@ export default function AdminMentorDetailPage() {
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
+  if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
   if (!user) return <div className="text-center py-12 text-gray-400">{t.common.notFound}</div>;
 
   const relations = user.mentorRelations ?? [];

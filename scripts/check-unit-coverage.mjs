@@ -99,6 +99,14 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'stage visits counted separately from candidates (#1427)' },
   ],
   [
+    'src/lib/funnelKpi.ts',
+    {
+      floor: 90,
+      measured: 92.5,
+      why: 'cohort by ENTRY month (a month cannot exceed 100%) and a null, never 0%, for a retention window that has not closed (#2420/#2425)',
+    },
+  ],
+  [
     'src/lib/stageClock.ts',
     { floor: 85, measured: 89.86, why: 'an old no-op StatusChange must not restart "days in stage" (#2264)' },
   ],
@@ -110,6 +118,10 @@ const FLOORS = new Map([
     // something runs it.
     'src/lib/pipeline.ts',
     { floor: 85, measured: 87.86, why: 'canonical stage list + labels, reached through the stage clock (#2264)' },
+  ],
+  [
+    'src/lib/dateRange.ts',
+    { floor: 95, measured: 100.0, why: 'a date-only `to` covers the whole day it names — the default analytics view dropped today (#1501)' },
   ],
   [
     'src/lib/lastContactRule.ts',
@@ -209,6 +221,14 @@ const FLOORS = new Map([
       floor: 95,
       measured: 100.0,
       why: 'who may clear someone else\'s second factor: never a peer admin, never self, never while impersonating (#1543)',
+    },
+  ],
+  [
+    'src/lib/leadAttribution.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'conversion counted against the TENANT\'s finished stages, and ONE filtered population behind both halves of every ratio \u2014 a SOURCE login never attributed to itself (#2421)',
     },
   ],
   [
