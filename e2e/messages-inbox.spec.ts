@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
 async function signIn(page: import('@playwright/test').Page, email: string, pw: string, home: string) {
-  await page.goto('/auth/signin');
+  await gotoSettled(page, '/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', email);
   await page.fill('input[type="password"]', pw);
   await page.click('button[type="submit"]');

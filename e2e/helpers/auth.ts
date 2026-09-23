@@ -121,4 +121,42 @@ export async function gotoSettled(page: Page, url: string) {
     await page.waitForLoadState('networkidle');
     await page.goto(url);
   }
+  await settleStreamedSuspense(page);
+}
+
+/**
+ * Wait until React has finished revealing its streamed Suspense content, so the
+ * page segment exists in the document ONCE (#2479, #2312, #2316).
+ *
+ * WHAT IS ACTUALLY THERE. A route with a `loading.tsx` is wrapped in a Suspense
+ * boundary, and React Fizz streams it in two pieces: the shell with the
+ * skeleton, then — parked at the end of `<body>` — `<div hidden id="S:0">`
+ * holding a COMPLETE copy of the resolved segment. Verified against a
+ * production build of this app: every route with a `loading.tsx` serves that
+ * container, and for `/account` it opens with the page's own `<h1>`.
+ *
+ * React 19 does not splice it in immediately. `$RC` marks the boundary and
+ * schedules the reveal up to ~300ms later. Meanwhile the client bundle
+ * hydrates and can render the boundary's children itself; when hydration wins
+ * that race the skeleton is replaced in place while `S:0` is still sitting
+ * there, and for that window the document holds two copies of every element in
+ * the segment — including its testids and its DOM ids.
+ *
+ * Playwright's strict mode counts matched elements regardless of CSS
+ * visibility (the same rule behind the `md:hidden` dual-list pitfall), so a
+ * first assertion after `page.goto` throws instead of polling: a strict-mode
+ * violation is raised on the first query and is never retried. That is the
+ * `resolved to 2 elements` signature that has hit nine specs across the
+ * scheduled suite.
+ *
+ * This is a WAIT, not a mask. A duplicate that does not go away still fails —
+ * the container is only ever transient, so if it is still there after the
+ * timeout something genuinely rendered twice and the test should say so.
+ */
+export async function settleStreamedSuspense(page: Page, timeout = 15_000) {
+  await page.waitForFunction(
+    () => !document.querySelector('body > div[hidden][id^="S:"]'),
+    undefined,
+    { timeout }
+  );
 }

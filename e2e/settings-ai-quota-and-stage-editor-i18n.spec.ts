@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { gotoSettled, signInAndSettle } from './helpers/auth';
 
 // #1625: two admin-surface gaps. `aiMonthlyQuota` was enforced by the AI gate
 // but rendered nowhere, so it could only be changed with a raw API call; and
@@ -26,7 +26,7 @@ test('the monthly AI quota round-trips through the settings form', async ({ page
     original = (await (await page.request.get('/api/admin/settings')).json()).settings.aiMonthlyQuota ?? null;
     expect(original).toMatch(/^\d{1,6}$/);
 
-    await page.goto('/admin/settings');
+    await gotoSettled(page, '/admin/settings');
 
     // AdminNav renders its own sidebar input[type="search"] on every admin
     // page, and this form holds a handful of number inputs — hence the testid.
@@ -54,7 +54,7 @@ test('the monthly AI quota round-trips through the settings form', async ({ page
       .toBe('37');
 
     // And the form shows the stored value on a fresh load rather than the default.
-    await page.goto('/admin/settings');
+    await gotoSettled(page, '/admin/settings');
     await expect(page.getByTestId('ai-monthly-quota')).toHaveValue('37', { timeout: 20_000 });
   } finally {
     if (original !== null) {
@@ -80,7 +80,7 @@ test('the pipeline-stage editor renders in Turkish with no English left', async 
     // user preference, and needs an origin to be set on.
     await page.evaluate(() => { document.cookie = 'locale=tr;path=/'; });
 
-    await page.goto(`/admin/organizations/${org.id}/pipeline`);
+    await gotoSettled(page, `/admin/organizations/${org.id}/pipeline`);
     const editor = page.getByTestId('pipeline-stages-editor');
     await expect(editor.getByRole('heading', { name: 'Pipeline aşamaları', exact: true })).toBeVisible({ timeout: 20_000 });
 

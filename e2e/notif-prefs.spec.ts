@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -10,7 +11,7 @@ test('a user can opt out of individual email categories', async ({ page }) => {
   await seedUser(email, 'UserPass123', 'MENTEE', 'NP User');
 
   try {
-    await page.goto('/auth/signin');
+    await gotoSettled(page, '/auth/signin');
     await page.fill('input[type="email"], input[name="email"]', email);
     await page.fill('input[type="password"]', 'UserPass123');
     await page.click('button[type="submit"]');
@@ -36,13 +37,13 @@ test('the audit categories opt out through the account settings UI', async ({ pa
   await seedUser(email, 'UserPass123', 'MENTEE', 'NP Cat');
 
   try {
-    await page.goto('/auth/signin');
+    await gotoSettled(page, '/auth/signin');
     await page.fill('input[type="email"], input[name="email"]', email);
     await page.fill('input[type="password"]', 'UserPass123');
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
-    await page.goto('/account');
+    await gotoSettled(page, '/account');
 
     const mentorship = page.locator('label', { hasText: 'Mentorship updates' }).getByRole('checkbox');
     const meetings = page.locator('label', { hasText: 'Meeting reminders' }).getByRole('checkbox');
@@ -87,13 +88,13 @@ test('an e-mail group opts out through account settings without clobbering the l
       data: { notificationPrefs: { documents: false, messages: true } },
     });
 
-    await page.goto('/auth/signin');
+    await gotoSettled(page, '/auth/signin');
     await page.fill('input[type="email"], input[name="email"]', email);
     await page.fill('input[type="password"]', 'UserPass123');
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
-    await page.goto('/account');
+    await gotoSettled(page, '/account');
     // Targeted by testid: the group names are full sentences of their own and a
     // `label`/`getByText` locator here would collide with the legacy list in the
     // same card (Playwright's hasText is a case-insensitive substring match).
@@ -166,7 +167,7 @@ test('turning Messages off stops the in-app notification too, not only the email
   await prisma.user.update({ where: { id: mentee.id }, data: { notificationPrefs: { messages: false } } });
 
   try {
-    await page.goto('/auth/signin');
+    await gotoSettled(page, '/auth/signin');
     await page.fill('input[type="email"], input[name="email"]', mentorEmail);
     await page.fill('input[type="password"]', pw);
     await page.click('button[type="submit"]');
@@ -214,13 +215,13 @@ test('unticking a legacy category moves the e-mail group switch it maps to, with
   await seedUser(email, 'UserPass123', 'MENTEE', 'NP Resolve');
 
   try {
-    await page.goto('/auth/signin');
+    await gotoSettled(page, '/auth/signin');
     await page.fill('input[type="email"], input[name="email"]', email);
     await page.fill('input[type="password"]', 'UserPass123');
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
-    await page.goto('/account');
+    await gotoSettled(page, '/account');
     const group = page.getByTestId('email-group-toggle-mentorship_lifecycle');
     // Enabled, not merely visible: the switches stay disabled until GET
     // /api/profile has answered, and this assertion is what makes the checks

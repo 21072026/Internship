@@ -489,6 +489,19 @@ workaround, #636, and it compiled on every PR push).
   resolves to 2 and throws; scope to `getByTestId('candidates-desktop-list')` (what the Desktop
   Chrome viewport shows) or to a specific card testid. Assume the same for any future
   mobile/desktop split.
+  **Streamed Suspense content** (#2479/#2312/#2316, the one nobody expects): a route with a
+  `loading.tsx` is wrapped in a Suspense boundary, and React Fizz streams the resolved segment
+  into `<div hidden id="S:0">` parked at the end of `<body>` — a complete second copy of the
+  page, testids and DOM ids included. React 19 reveals it up to **~300ms later**, and if
+  hydration renders the content in place first, the document holds both for that window.
+  Strict mode counts hidden elements, so the first assertion after `page.goto` throws
+  `resolved to 2 elements` instead of polling (a strict-mode violation is raised on the first
+  query and is never retried — which is why it fails on the retry too). **Navigate with
+  `gotoSettled` from `e2e/helpers/auth.ts`**, which waits the container out; it is a wait, not
+  a mask, so a duplicate that persists still fails. Nine specs across the scheduled suite hit
+  this before the wait existed. Deleting a `loading.tsx` that buys nothing (a `'use client'`
+  page with no server data, e.g. `/account`) removes the window at the source — verified: that
+  route's served HTML no longer carries an `S:` container at all.
 - **Known pre-existing CI flakes**: `e2e/account-self-service.spec.ts:52` and
   `e2e/sign-out-all.spec.ts:24` fail intermittently in the Playwright smoke job (usually
   preceded by a `[WebServer] TypeError: Cannot read properties of null (reading 'user')`
