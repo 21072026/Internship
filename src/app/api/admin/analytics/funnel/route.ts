@@ -8,6 +8,7 @@ import { onPathKeys } from '@/lib/pipeline';
 import { biggestDropOff, stageConversions, timeToHire, type Journey } from '@/lib/funnelKpi';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { rangeEnd, rangeStart } from '@/lib/dateRange';
 
 // Hiring-funnel KPIs (#815): the two numbers HR reports upward — stage-to-stage
 // conversion and time-to-hire — plus mentor capacity, all from the StatusChange
@@ -70,13 +71,9 @@ export async function GET(request: Request) {
     // the slow ones simply have not finished yet — and report a time-to-hire
     // that is too good.
     const { searchParams } = new URL(request.url);
-    const parseDate = (v: string | null): Date | null => {
-      if (!v) return null;
-      const d = new Date(v);
-      return Number.isNaN(d.getTime()) ? null : d;
-    };
-    const from = parseDate(searchParams.get('from'));
-    const to = parseDate(searchParams.get('to'));
+    // Whole days (#1501): a funnel that ends "today" includes today.
+    const from = rangeStart(searchParams.get('from'));
+    const to = rangeEnd(searchParams.get('to'));
     const rangeOk = from && to && from.getTime() <= to.getTime();
 
     const relations = await prisma.mentorshipRelation.findMany({

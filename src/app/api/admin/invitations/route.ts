@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { orgScoped, resolveOrgId } from '@/lib/orgScope';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import {
   countInvitationStatuses,
   deriveInvitationStatus,
@@ -57,12 +58,6 @@ interface BoardRow {
 
 const ROLE_VALUES = ['ADMIN', 'MENTOR', 'MENTEE'] as const;
 
-function parseDate(value: string | null): Date | null {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
 // RFC 4180 quoting: wrap in quotes and double any quote inside. The leading
 // apostrophe guard keeps a spreadsheet from evaluating a value that starts with
 // =, +, - or @ as a formula (an admin exporting invitations is exactly the
@@ -99,17 +94,18 @@ export async function GET(request: Request) {
       const status = parseInvitationStatus(url.searchParams.get('status'));
       const roleParam = url.searchParams.get('role');
       const role = (ROLE_VALUES as readonly string[]).includes(roleParam ?? '') ? roleParam : null;
-      const from = parseDate(url.searchParams.get('from'));
-      const to = parseDate(url.searchParams.get('to'));
+      // A date-only "to" means "up to the end of that day" — otherwise picking
+      // today as the upper bound returns nothing sent today. This screen found
+      // that first and fixed it inline; the rule now lives in lib/dateRange.ts
+      // and the four analytics routes that had the same three lines wrong call
+      // it too (#1501).
+      const from = rangeStart(url.searchParams.get('from'));
+      const to = rangeEnd(url.searchParams.get('to'));
       const q = (url.searchParams.get('q') ?? '').trim();
 
       const createdAt: { gte?: Date; lte?: Date } = {};
       if (from) createdAt.gte = from;
-      // A date-only "to" means "up to the end of that day" — otherwise picking
-      // today as the upper bound returns nothing sent today.
-      if (to) createdAt.lte = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('to') ?? '')
-        ? new Date(to.getTime() + 24 * 60 * 60 * 1000 - 1)
-        : to;
+      if (to) createdAt.lte = to;
 
       const where = orgScoped(
         {

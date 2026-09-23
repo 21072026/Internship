@@ -108,6 +108,10 @@ const FLOORS = new Map([
     { floor: 85, measured: 87.86, why: 'canonical stage list + labels, reached through the stage clock (#2264)' },
   ],
   [
+    'src/lib/dateRange.ts',
+    { floor: 95, measured: 100.0, why: 'a date-only `to` covers the whole day it names — the default analytics view dropped today (#1501)' },
+  ],
+  [
     'src/lib/lastContactRule.ts',
     { floor: 95, measured: 100.0, why: 'what counts as contact: 1:1 yes, group only if the mentee wrote it (#2275)' },
   ],
