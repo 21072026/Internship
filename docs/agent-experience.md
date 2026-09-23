@@ -7288,3 +7288,32 @@ belirli bir testid'le aramaktan daha güvenilir.
   freni *ölçen* test için `floodIp()` (sabit adres), frenin ardındaki özelliğe ulaşmak isteyen için
   `freshIp()` (çağrı başına yeni adres). `npm run check:e2e-rate-limits` sınırı aşan spec'i PR'da
   yakalar; yeni bir spec hız limitli bir uca yazıyorsa bu iki yardımcıdan birini kullan. (#2158/#2159)
+
+## 2026-09-23 — Bir alan adını taşırken: iki yarı aynı anda doğru olamaz (#2540)
+
+Marketing dikeyi `*.ersah.in`'den `marketing.bcsit-gmbh.de` (canlı) ve `.dev` (test) adreslerine
+taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor olan sıralama ve kapsam.
+
+- **İki yarı birbirine kilitli.** `marketingHosts()` varsayılanı *değiştirir*, genişletmez —
+  yani her an, her ortamda **tam olarak bir** ad MARKETING'dir. Kod yeni adı öğrenmeden Caddy
+  cevap verirse yeni ad internship landing'i gösterir; Caddy cevap vermeden kod taşınırsa yeni ad
+  kenarda 404 olur. Doğru sıra: (1) yeni site dosyaları + reload, (2) kodu merge et, (3) preview
+  env'i çevir, (4) doğrula, (5) eski adları 301 yap. 1-3 arası "yanlış içerik" penceresi yalnızca
+  henüz kimsenin bilmediği yeni adda geçer.
+- **Eski adı SİLME, yönlendir.** Site dosyası olmayan ad varsayılan siteye düşer ve bir marketing
+  URL'i altında internship sayfası servis eder — #2428'in ta kendisi.
+- **Yeni apex = otomatik sertifika.** Eski ad `*.ersah.in` joker dosyasını `tls` satırıyla
+  kullanıyordu; iki yeni ad kendi apex'lerinde tek isim olduğu için Caddy kendi alır ve yeniler.
+  Joker satırlarını kopyalamak, var olmayan bir dosyayı işaret etmek demekti. `.dev` HSTS preload
+  listesinde: sertifika oluşana kadar tarayıcıyla hiçbir şekilde test edilemez, yalnızca `curl`.
+- **`grep ersah.in` bu depoda tek bir şeyi göstermez.** 200'den fazla eşleşmenin çoğu **posta**:
+  gönderim alan adı, SPF/DKIM/DMARC, inbound, reply/unsubscribe token'ları, ICS UID'leri. Taşınan
+  yalnızca web host'u. Süpürmeden önce her eşleşmeyi DEĞİŞMELİ / DEĞİŞMEMELİ / TARİH diye ayır.
+- **Değer taşıyan literal'ler kendi hatalarını yakalayamaz.** Testlerdeki her host literal'i sabitle
+  birlikte değişir, dolayısıyla kötü bir revert'i hiçbiri fark etmez. Sabit değil *kural* test eden
+  bir iddia ekle: "varsayılan asla emekliye ayrılmış apex'e dönmesin".
+- **Paralel oturumlar aynı dosyalara dokunuyor.** Dal açıldıktan sonra main 8 commit ilerledi ve
+  #2523 yeni bir spec'i eski host literal'iyle getirdi. Rebase edip *yeniden* grep'lemeden merge
+  etme; aksi halde CI alakasız görünen bir sebeple kırmızıya döner.
+- **`npx prisma generate` refleks olsun.** Rebase sonrası iki kez tsc, şema değişmiş olduğu için
+  benim değişikliğimle ilgisiz hatalar verdi.
