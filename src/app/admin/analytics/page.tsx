@@ -117,6 +117,27 @@ interface FunnelKpi {
     capacityKnown: boolean;
     overloaded: boolean;
   }[];
+  // Cohorts (#2420 / #2425). `rate`, `churned` and `rate` again are null where
+  // there is no number to state — an empty month, a retention window that has
+  // not closed yet — and every one of them renders as an em dash rather than
+  // as 0%, which would be a claim.
+  cohortConversion: {
+    fromKey: string;
+    toKey: string | null;
+    months: { month: string; entered: number; converted: number; rate: number | null }[];
+  };
+  retention: {
+    // Keys only. The stage's NAME comes from `useStageLabel()` below, which
+    // carries the tenant's own labels in the reader's language (#2268); a label
+    // resolved server-side without a locale would be English for everyone.
+    wonKeys: string[];
+    buckets: number[];
+    cohorts: {
+      month: string;
+      won: number;
+      buckets: { months: number; churned: number | null; rate: number | null }[];
+    }[];
+  };
   journeys: number;
 }
 
@@ -529,6 +550,117 @@ export default function AdminAnalyticsPage() {
               </div>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Cohorts (#2420 / #2425): conversion grouped by the month a record
+          entered, and retention after the won stage. Both are month tables
+          rather than bars — the interesting cell is the one that is EMPTY, and
+          a bar chart has no way to draw "not known yet". */}
+      {kpi?.cohortConversion && kpi.retention && (
+        <Card className="mb-6" data-testid="cohort-kpi-card">
+          <CardHeader><CardTitle>{t.analytics.cohortKpi.title}</CardTitle></CardHeader>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t.analytics.cohortKpi.conversion}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5 mb-3">
+                {t.analytics.cohortKpi.conversionHint
+                  .replace('{from}', label(kpi.cohortConversion.fromKey))
+                  .replace('{to}', kpi.cohortConversion.toKey ? label(kpi.cohortConversion.toKey) : '—')}
+              </p>
+              {kpi.cohortConversion.months.length === 0 ? (
+                <p className="text-sm text-gray-500" data-testid="cohort-conversion-empty">
+                  {t.analytics.cohortKpi.empty}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="cohort-conversion-table">
+                    <thead className="text-xs text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                      <tr>
+                        <th className="py-1.5 pr-3 text-left">{t.analytics.cohortKpi.month}</th>
+                        <th className="py-1.5 pr-3 text-right">{t.analytics.cohortKpi.entered}</th>
+                        <th className="py-1.5 pr-3 text-right">{t.analytics.cohortKpi.converted}</th>
+                        <th className="py-1.5 text-right">{t.analytics.cohortKpi.rate}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {kpi.cohortConversion.months.map((m) => (
+                        <tr key={m.month} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                          <td className="py-1.5 pr-3 text-gray-600 dark:text-gray-400">{m.month}</td>
+                          <td className="py-1.5 pr-3 text-right text-gray-700 dark:text-gray-300">{m.entered}</td>
+                          <td className="py-1.5 pr-3 text-right text-gray-700 dark:text-gray-300">{m.converted}</td>
+                          <td
+                            className="py-1.5 text-right font-medium text-gray-900 dark:text-gray-100"
+                            data-testid={`cohort-conversion-${m.month}`}
+                          >
+                            {m.rate === null ? '—' : `${m.rate}%`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t.analytics.cohortKpi.retention.replace(
+                  '{stage}',
+                  kpi.retention.wonKeys.length > 0 ? label(kpi.retention.wonKeys[0]) : '—'
+                )}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5 mb-3">
+                {t.analytics.cohortKpi.retentionHint.replace(
+                  '{stage}',
+                  kpi.retention.wonKeys.length > 0 ? label(kpi.retention.wonKeys[0]) : '—'
+                )}
+              </p>
+              {kpi.retention.cohorts.length === 0 ? (
+                <p className="text-sm text-gray-500" data-testid="retention-empty">
+                  {t.analytics.cohortKpi.empty}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="retention-table">
+                    <thead className="text-xs text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                      <tr>
+                        <th className="py-1.5 pr-3 text-left">{t.analytics.cohortKpi.month}</th>
+                        <th className="py-1.5 pr-3 text-right">{t.analytics.cohortKpi.won}</th>
+                        {kpi.retention.buckets.map((b) => (
+                          <th key={b} className="py-1.5 pr-3 text-right">
+                            {t.analytics.cohortKpi.bucket.replace('{n}', String(b))}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {kpi.retention.cohorts.map((c) => (
+                        <tr key={c.month} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                          <td className="py-1.5 pr-3 text-gray-600 dark:text-gray-400">{c.month}</td>
+                          <td className="py-1.5 pr-3 text-right text-gray-700 dark:text-gray-300">{c.won}</td>
+                          {c.buckets.map((b) => (
+                            <td
+                              key={b.months}
+                              className="py-1.5 pr-3 text-right text-gray-900 dark:text-gray-100"
+                              data-testid={`retention-${c.month}-${b.months}`}
+                            >
+                              {/* An open window is NOT 0% churn — the cohort
+                                  has not had the chance to leave yet. */}
+                              {b.rate === null ? '—' : `${b.rate}%`}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-2 text-xs text-gray-400">{t.analytics.cohortKpi.legend}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </Card>
       )}
 
