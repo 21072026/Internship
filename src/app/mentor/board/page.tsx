@@ -153,7 +153,7 @@ export default function MentorBoardPage() {
       : null,
   );
 
-  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
+  if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
 
   // Search ∩ stage. Every column header count is derived from this, so the
   // numbers describe what is actually on screen rather than the unfiltered set.
