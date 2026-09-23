@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 // One 1:1 thread per pair (#1156).
 //
@@ -19,7 +20,7 @@ test.afterAll(async () => {
 });
 
 async function signIn(page: import('@playwright/test').Page, email: string, pw: string, home: string) {
-  await page.goto('/auth/signin');
+  await gotoSettled(page, '/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', email);
   await page.fill('input[type="password"]', pw);
   await page.click('button[type="submit"]');
@@ -56,7 +57,7 @@ test('a mentor sees one thread per mentee, holding both histories', async ({ pag
 
   try {
     await signIn(page, mentorEmail, pw, '/mentor');
-    await page.goto('/messages');
+    await gotoSettled(page, '/messages');
 
     // Exactly one row for this person, and none of them is the old relation URL.
     const rows = page.locator('a[href^="/messages/c/"]').filter({ hasText: 'Duplicate Mentee' });
@@ -72,7 +73,7 @@ test('a mentor sees one thread per mentee, holding both histories', async ({ pag
 
     // The mentorship URL is linked from the mentee card, the portal, notification
     // and digest emails — it keeps working by handing over to that thread.
-    await page.goto(`/messages/${rel.id}`);
+    await gotoSettled(page, `/messages/${rel.id}`);
     await expect(page).toHaveURL(new RegExp(`/messages/c/${conversation.id}$`), { timeout: 20_000 });
   } finally {
     await prisma.message.deleteMany({
