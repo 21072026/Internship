@@ -1674,6 +1674,73 @@ export async function sendOfferSentEmail({
   });
 }
 
+// The trial reminder mail (#2415, copy from #2412, story #2392).
+//
+// Lives here rather than in the job for the reason `sendOfferSentEmail` does:
+// the org brand header, the CTA block, `esc()` and `appUrl()` are this module's,
+// and a second copy of them in src/lib/jobs would drift. The job keeps the
+// DECISION (who, when, which threshold, and both preference gates); this
+// function only renders and sends — the same split lib/offerNotify.ts already
+// uses.
+//
+// ONE BODY, THREE SUBJECTS: the dictionary carries `subject7`/`subject3`/
+// `subject0` over a single shared body, so the three marks cannot drift apart.
+// The subject's number is always true because the selector fires on the exact
+// calendar day (src/lib/trialReminderRule.ts), never as a catch-up on a later
+// one. An unknown threshold falls back to the closest mark below it rather than
+// inventing a fourth subject.
+//
+// Category `stage-deadline` — deliberately an EXISTING one (task_reminders in
+// src/lib/emailGroups.ts). A trial reminder is the same kind of mail as the
+// stage-deadline nudge ("this record needs you before a date"), and somebody who
+// muted one meant to mute both. No new category, no new preference key.
+export async function sendTrialReminderEmail({
+  to,
+  fullName,
+  companyName,
+  trialEndsAt,
+  threshold,
+  link,
+  locale,
+  orgId,
+  userId,
+}: {
+  to: string;
+  fullName: string;
+  /** The account the trial belongs to. A proper noun — never translated. */
+  companyName: string;
+  trialEndsAt: Date;
+  threshold: number;
+  /** Deep link to the funnel record, already resolved for the recipient's role. */
+  link: string;
+  locale?: string | null;
+  orgId?: string | null;
+  userId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const loc = resolveLocale(locale);
+  const M = getDictionary(loc).trials;
+  const subject = threshold >= 7 ? M.subject7 : threshold >= 3 ? M.subject3 : M.subject0;
+  const endsOn = new Intl.DateTimeFormat(dateLocale(loc), { dateStyle: 'medium', timeZone: 'UTC' }).format(trialEndsAt);
+  await sendEmail({
+    to,
+    userId,
+    category: 'stage-deadline',
+    locale,
+    fromName: brand.name,
+    subject: subject.replace('{company}', companyName),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading))}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.body.replace('{company}', companyName).replace('{date}', endsOn))}</p>
+        <p style="color:#666;font-size:13px;">${esc(M.hint)}</p>
+        ${ctaBlock(brand, `${appUrl()}${link}`, esc(M.cta))}
+      </div>
+    `,
+  });
+}
+
 export async function sendOfferDecisionEmail({
   to,
   fullName,

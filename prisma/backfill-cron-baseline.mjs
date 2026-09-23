@@ -29,6 +29,19 @@
 //     so baselining it would hide the notification without preventing any mail.
 //     The daily-mail problem it looked like it caused was really the ungrouped
 //     per-relation send, fixed in checkMentorInteractionReminders instead.
+//   - MentorshipRelation.trialEndsAt / TrialReminder — the trial ladder (#2410,
+//     job src/lib/jobs/trialReminders.ts, story #2392) is baselined by a LOWER
+//     BOUND rather than by backfilled claim rows, and the bound is structural:
+//     the selector fires on an EXACT calendar-day match (src/lib/trialReminderRule.ts),
+//     so an elapsed trial is at a negative number of days remaining and equals
+//     no threshold ever again, and findDueTrialReminders bounds `trialEndsAt` to
+//     a window two days either side of the ladder, so a trial that ran out last
+//     month is never even read. The first tick therefore writes only to trials
+//     ending in exactly 7, 3 or 0 days — due work, not a backlog — under a
+//     50-per-tick send cap (TRIAL_REMINDER_MAX_PER_RUN). The job's auto-expiry
+//     is not baselined either: it sends nothing, and moving every long-dead
+//     trial out of "Trial running" on the first tick is the correction the
+//     board is waiting for, not a burst.
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
