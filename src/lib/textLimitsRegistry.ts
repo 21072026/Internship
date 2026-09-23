@@ -91,6 +91,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     contactPhone: { limit: 'companyContactPhone', files: MARKETING_IMPORT_WRITERS },
     vatId: { limit: 'companyVatId', files: MARKETING_IMPORT_WRITERS },
     country: { limit: 'companyCountry', files: MARKETING_IMPORT_WRITERS },
+    externalId: {
+      exempt:
+        'no request path writes it (#2446 is the column; the nightly usage sync that stamps it is #2447). It is not typed by a person at all — the feed matches on it and fills it as a gap — so the cap belongs on that validator, which the data contract already fixes at the column width: docs/marketing-vertical/salevali-usage-feed.md § Alanlar. A form or route that ever offers this field replaces this exemption with a limit.',
+    },
   },
   CompanyNeed: {
     id: ID,
