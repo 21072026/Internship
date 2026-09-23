@@ -43,8 +43,8 @@ export function PublicHeader({
   dashboardHref?: string;
   /**
    * Set by PublicShell for a MARKETING host (#2500): drops the internship-only
-   * nav entries (/for-companies, /projects). Resolved on the server because
-   * this client component cannot read the vertical itself.
+   * nav entries (/for-companies, /projects, /pricing). Resolved on the server
+   * because this client component cannot read the vertical itself.
    */
   hideInternshipLinks?: boolean;
 }) {
@@ -91,10 +91,20 @@ export function PublicHeader({
   // company pitch and the intern project showcase — so a marketing host's shell
   // asks for them to be left out (#2500); the flag is resolved server-side in
   // PublicShell because this component cannot read the vertical itself.
+  //
+  // `/pricing` joins them (#2475), and this one is a judgement rather than a
+  // product boundary. #2474 decided the entry stays on a marketing host, on the
+  // assumption that /pricing would be dressed for the vertical. It could not
+  // be: the cost owner has not set marketing packaging, so that page now hides
+  // every section that would have to state a price and keeps only the two
+  // claims that hold without one. A nav item labelled "Pricing" promises a
+  // price list, and a promise the page cannot keep is worse than no entry —
+  // /pricing stays reachable by URL and from the sitemap, and this line is the
+  // one to delete the day marketing prices are published.
   const links = [
     { href: '/features', label: n.features },
     ...(hideInternshipLinks ? [] : [{ href: '/for-companies', label: n.forCompanies }]),
-    { href: '/pricing', label: n.pricing },
+    ...(hideInternshipLinks ? [] : [{ href: '/pricing', label: n.pricing }]),
     ...(hideInternshipLinks ? [] : [{ href: '/projects', label: n.showcase }]),
   ];
 
