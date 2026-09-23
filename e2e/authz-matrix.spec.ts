@@ -255,7 +255,10 @@ test('MENTEE and SOURCE cannot read the company book; a mentor reads only its ow
   }
 
   await signInAsFreshUser(page, emails.MENTOR, PASSWORD, LANDING.MENTOR);
-  const res = await page.request.get('/api/companies');
+  // `all=1` since #2437 paged this route: the claim under test is "exactly the
+  // companies of this mentor's relations", and a foreign row merely sitting on
+  // page 2 would satisfy a paged assertion while the leak was real.
+  const res = await page.request.get('/api/companies?all=1');
   expect(res.status()).toBe(200);
   const ids = ((await res.json()).companies as { id: string }[]).map((c) => c.id);
   expect(ids, 'the company of the mentor\'s own relation must be readable').toContain(ownCompanyId);
@@ -287,7 +290,7 @@ test('MENTEE and SOURCE cannot read the company book; a mentor reads only its ow
 test('an assigned COMPANY account reads its own company and nothing else', async ({ page }) => {
   await signInAsFreshUser(page, assignedCompanyEmail, PASSWORD, '/company');
 
-  const list = await page.request.get('/api/companies');
+  const list = await page.request.get('/api/companies?all=1');
   expect(list.status()).toBe(200);
   const ids = ((await list.json()).companies as { id: string }[]).map((c) => c.id);
   expect(ids, 'an assigned company account reads exactly its own row').toEqual([ownCompanyId]);

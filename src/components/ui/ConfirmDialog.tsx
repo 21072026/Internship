@@ -1,12 +1,20 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Button } from './Button';
 import { useModalFocus } from './useModalFocus';
 
 export interface ConfirmDialogProps {
   open: boolean;
   title?: string;
-  message: string;
+  /**
+   * Usually one sentence, and every existing caller passes exactly that.
+   * Widened to a node for the company delete (#2441), which has to state two
+   * different consequences — what is deleted along with the account and what
+   * merely loses its link — as separate lines rather than one run-on sentence.
+   * A string stays a valid node, so nothing else changes.
+   */
+  message: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
   variant?: 'danger' | 'default';
@@ -54,9 +62,12 @@ export function ConfirmDialog({
             {title}
           </h2>
         )}
-        <p id="confirm-dialog-message" className="text-sm text-gray-600 dark:text-gray-300">
+        {/* A <div>, not a <p>: `message` may now be several elements (#2441),
+            and a <p> may not contain block content — React would hydrate it
+            into a different tree than it rendered on the server. */}
+        <div id="confirm-dialog-message" className="text-sm text-gray-600 dark:text-gray-300">
           {message}
-        </p>
+        </div>
         <div className="mt-5 flex justify-end gap-2">
           <Button
             type="button"

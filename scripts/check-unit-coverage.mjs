@@ -63,6 +63,10 @@ const TEST_DIR = 'scripts/test';
 // act on is a gate that gets deleted.
 const FLOORS = new Map([
   [
+    'src/lib/companySort.ts',
+    { floor: 95, measured: 99.12, why: 'company list ordering: unknown sort falls back, never-moved accounts last (#2436)' },
+  ],
+  [
     'src/lib/verticals.ts',
     { floor: 95, measured: 100.0, why: 'vertical catalogue: unknown key must fall back, never blank a tenant (#2350)' },
   ],

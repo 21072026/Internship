@@ -158,6 +158,20 @@ test('a MARKETING admin reads deal language on /admin/companies — and no mento
     await expect(page.locator('#company-entitlements-title')).toBeVisible();
     await expect(page.getByText('Rep and lead features are always free')).toBeVisible();
     expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(page.locator('#company-entitlements-title')).toHaveCount(0);
+
+    // The THIRD dialog (#2441): what deleting this account costs. It lists the
+    // dependants by name, so it reintroduced "1 mentorships" and "1 open
+    // positions" on a page whose acceptance is that neither word is left — the
+    // exact blind spot the comment above describes, one click before an
+    // irreversible action. The fixture gives the account one need and one
+    // funnel record, so both sides of the dialog are populated.
+    await page.getByTestId(`delete-company-${fixture.companyId}`).click();
+    await expect(page.getByTestId('company-delete-cascade')).toContainText('1 open needs');
+    await expect(page.getByTestId('company-delete-detach')).toContainText('1 deals');
+    expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+    await page.getByTestId('confirm-dialog-cancel').click();
   } finally {
     await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
   }
