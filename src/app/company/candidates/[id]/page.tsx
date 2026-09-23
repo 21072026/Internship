@@ -144,7 +144,7 @@ export default function CompanyCandidateDetailPage() {
     return () => clearTimeout(timer);
   }, [note, interest, persist]);
 
-  if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
+  if (loading) return <p className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</p>;
   if (error || !candidate) return <p className="text-center py-12 text-gray-400">{error || t.common.notFound}</p>;
 
   const links = [

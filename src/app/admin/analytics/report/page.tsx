@@ -76,7 +76,7 @@ export default function AnalyticsReportPage() {
       .finally(() => setLoading(false));
   }, [premium]);
 
-  if (premium === null) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
+  if (premium === null) return <p className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</p>;
 
   if (premium === false) {
     return (
@@ -89,7 +89,7 @@ export default function AnalyticsReportPage() {
     );
   }
 
-  if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
+  if (loading) return <p className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</p>;
 
   if (!data) return <p className="text-center py-12 text-gray-400">{t.common.notFound}</p>;
 

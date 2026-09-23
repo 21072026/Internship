@@ -184,7 +184,7 @@ export default function AdminBoardPage() {
       : null
   );
 
-  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
+  if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
 
   const now = Date.now();
   const itemsFor = (status: string) =>
