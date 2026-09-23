@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Lead attribution — \"which source actually brings customers?\" — now works for a marketing tenant, and counts against the tenant's own finished stage** (#2421, story #2393, epic #2348). No `Campaign` model was added: the existing `Source` row (plus the merged referrer pointer in `src/lib/referrer.ts`) carries marketing attribution, and the report's explicit `unsourced` bucket is the \"no campaign\" number the campaign report was wanted for. New pure, unit-tested `src/lib/leadAttribution.ts` owns two rules the two attribution routes used to restate inline: who may be counted toward a source — the funnel's lead side, and never a SOURCE login, whose `sourceId` records which source that account *speaks for* rather than who referred it — and the per-source intake/conversion arithmetic. `GET /api/admin/sources` also loses a wrong denominator: it divided a lead-filtered numerator by an unfiltered count of every account pointing at the source, so a source with its own partner login (the normal case on that screen — a SOURCE account's `sourceId` records which source it *speaks for*) reported half its real conversion. Both halves of every ratio now spread the same `attributedLeadWhere()` fragment. `GET /api/admin/sources` loses its last hardcoded `HIRED_660`/`EMPLOYED_700` literal (`outcomeStageKeys()`, #1882 — it reported 0% from every source for any org on its own stage catalogue, which is every MARKETING tenant, whose preset ends at `DEAL_WON`); `scripts/stage-keys-baseline.json` shrinks by that file. Reachability: a marketing admin gets there from `/admin/analytics`, which carries no capability tag, rather than from the `sourcing`-gated `/admin/sources` — `sourcing` is the partner-institution intake module, not a report, and widening it would have handed a marketing tenant the whole module. The premium gate deliberately stays for every vertical: `premiumAnalytics` already resolves per tenant, so which reports a tenant has is a plan question, not a product-line one. Labels come from the MARKETING terminology overlay (EN/TR/DE), not from new strings. E2E covers both halves — no Sources nav entry, attribution table on the analytics page — plus the folded #2398 / T-8.1.3 acceptance: an account created with source X makes X's count 1.",
+  "notes": {
+    "en": [
+      "Marketing teams can now see which source each lead came from and how many of them closed — on the analytics page, with the pipeline's own \"won\" stage counted instead of a fixed one."
+    ],
+    "tr": [
+      "Pazarlama ekipleri artık her müşteri adayının hangi kaynaktan geldiğini ve kaçının kazanıldığını analitik sayfasında görebiliyor — sabit bir aşama yerine hattın kendi \"kazanıldı\" aşaması sayılıyor."
+    ],
+    "de": [
+      "Marketing-Teams sehen jetzt auf der Analytik-Seite, aus welcher Quelle jeder Lead kam und wie viele davon gewonnen wurden — gezählt wird die eigene \"Gewonnen\"-Phase der Pipeline statt einer festen."
+    ]
+  }
+}

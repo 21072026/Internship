@@ -212,6 +212,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/leadAttribution.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'conversion counted against the TENANT\'s finished stages, and ONE filtered population behind both halves of every ratio \u2014 a SOURCE login never attributed to itself (#2421)',
+    },
+  ],
+  [
     'src/lib/marketingImport.ts',
     {
       floor: 95,

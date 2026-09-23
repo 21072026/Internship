@@ -92,6 +92,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'Create the first deal',
         },
       },
+      // Lead attribution on /admin/analytics (#2421). `cohortTotal`/`cohortHired`
+      // are the shared column headers of both the attribution and the cohort
+      // table, so overriding them dresses the two consistently. `cohortHired` is
+      // only a FALLBACK on the attribution table: a tenant that named its own
+      // finished stage sees that name instead (#1882).
+      analytics: {
+        cohortTotal: 'Leads',
+        cohortHired: 'Won',
+        sourceConversionTitle: 'Conversion by source',
+        sourceConversionEmpty: 'No sources yet — assign leads a source to see conversion per source.',
+        sourceUnsourced: '{n} lead(s) have no source and are not shown above.',
+      },
       // The company list (#2426, story #2394). A marketing tenant's companies
       // are the ACCOUNTS it sells to: the relation counter is a deal, a
       // CompanyNeed is what the account needs, and a company login follows its
@@ -274,6 +286,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'İlk fırsatı oluştur',
         },
       },
+      analytics: {
+        cohortTotal: 'Müşteri adayı',
+        cohortHired: 'Kazanılan',
+        sourceConversionTitle: 'Kaynağa göre dönüşüm',
+        sourceConversionEmpty: 'Henüz kaynak yok — kaynak bazlı dönüşümü görmek için müşteri adaylarına kaynak ata.',
+        sourceUnsourced: '{n} müşteri adayının kaynağı yok ve yukarıda gösterilmiyor.',
+      },
       companiesPage: {
         subtitle: 'Sattığın müşteri firmalarını ve ihtiyaçlarını yönet',
         addLoginHint: 'Bir şirketin kendi müşteri adaylarını izlemesi için salt-okunur giriş oluştur.',
@@ -397,6 +416,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteMentees: 'Fügen Sie Ihre ersten Leads hinzu',
           assignMentorship: 'Ersten Deal anlegen',
         },
+      },
+      analytics: {
+        cohortTotal: 'Leads',
+        cohortHired: 'Gewonnen',
+        sourceConversionTitle: 'Konversion nach Quelle',
+        sourceConversionEmpty: 'Noch keine Quellen — weise Leads eine Quelle zu, um die Konversion pro Quelle zu sehen.',
+        sourceUnsourced: '{n} Lead(s) ohne Quelle werden oben nicht angezeigt.',
       },
       companiesPage: {
         subtitle: 'Kunden-Accounts und ihren Bedarf verwalten',
