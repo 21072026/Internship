@@ -329,7 +329,10 @@ drops it when the PR closes; the daily topic sweep drops any that leak.
 
 Two consequences worth stating: a `prisma db push` on one PR no longer reshapes the
 schema under every other PR, and **no real preview data is reachable from a topic
-environment** — sign in with `admin.demo@demo.example.com` / `DemoPass123!`. The
+environment** — sign in with `admin.demo@demo.example.com` / `DemoPass123!`, or with
+`admin.marketing@demo.example.com` (same password) for the second, MARKETING-vertical
+demo tenant the seeder creates (#2443: thirty merchant accounts on the marketing
+funnel). The
 shared preview env at `preview.interncrm.com` keeps its own single database.
 
 Privileges usually need no setup: the script runs as root on the database host,
