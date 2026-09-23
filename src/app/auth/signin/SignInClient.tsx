@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
 import { sameOriginPath } from '@/lib/safeRedirect';
+import { useVertical } from '@/lib/verticalClient';
 
 // Whether the "keep me signed in" box was ticked last time, per browser. A UI
 // preference only: the credential itself is the httpOnly cookie the server
@@ -38,6 +39,7 @@ export interface DemoQuickLogin {
 
 export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   const t = useT();
+  const isMarketing = useVertical() === 'MARKETING';
   const locale = useLocale();
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -376,12 +378,17 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
               {t.auth.registerHere}
             </Link>
           </p>
-          <p className="text-center text-sm text-gray-500 mt-2">
-            {t.auth.wantMentor}{' '}
-            <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="apply-as-mentor-link">
-              {t.auth.applyMentorLink}
-            </Link>
-          </p>
+          {/* Same rule the register page already applies (#2540): a marketing
+              visitor is not offered the mentor application — it is the other
+              product's front door, and the page it points at 404s here. */}
+          {!isMarketing && (
+            <p className="text-center text-sm text-gray-500 mt-2">
+              {t.auth.wantMentor}{' '}
+              <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="apply-as-mentor-link">
+                {t.auth.applyMentorLink}
+              </Link>
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-center gap-4 mt-6">

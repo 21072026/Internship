@@ -7,11 +7,16 @@ import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
+import { internshipProductPage } from '@/lib/verticalPage';
 
 export const dynamic = 'force-dynamic';
 
 // Public showcase of community/company projects opted into visibility.
 export default async function PublicProjectsPage() {
+  // MARKETING has no `projects` capability (src/lib/verticals.ts), so the
+  // public showcase of community and company INTERNSHIP projects is not its
+  // page either (#2540).
+  await internshipProductPage();
   const { t } = await getServerDictionary();
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   // Signed-in visitors arrive here from inside the app (e.g. "Browse the project

@@ -102,3 +102,55 @@ test('the default host is unchanged: blue accent, the cap, the internship manife
     expect(href).not.toMatch(/salevali/);
   }
 });
+
+/**
+ * The other product's pages are not served here at all (#2540).
+ *
+ * The overlay renames a word; it cannot rewrite a page. `/features` opened with
+ * "InternshipCRM neler yapabilir" and went on to list self-service mentee
+ * applications and weekly internship reports; `/pricing` carried
+ * "Fiyatlandırma — InternshipCRM" in the tab title and explained a price
+ * metered in matched mentor/mentee pairs; `/release-notes` published 202 lines
+ * of the internship changelog. A marketing visitor reached the first two from
+ * this host's own header.
+ *
+ * Asserted as a 404 rather than "the word is gone": the pages are the wrong
+ * product's, so any amount of renaming still leaves a marketing visitor reading
+ * about interns.
+ */
+const INTERNSHIP_ONLY = ['/features', '/pricing', '/for-companies', '/apply-as-mentor', '/release-notes', '/projects'];
+
+test('internship-product pages 404 on the marketing host, and are linked from nowhere on it', async ({ page }) => {
+  test.slow();
+  await page.setExtraHTTPHeaders(MARKETING);
+
+  for (const path of INTERNSHIP_ONLY) {
+    // The headers go on the request, not via setExtraHTTPHeaders: that applies
+    // to what the PAGE fetches, while `page.request` is the context's own API
+    // client and would otherwise ask as the internship host.
+    const res = await page.request.get(path, { headers: MARKETING });
+    expect(res.status(), `${path} must not be served on a marketing host`).toBe(404);
+  }
+
+  // …and no chrome offers them, so nobody arrives at one by clicking.
+  await page.goto('/');
+  for (const path of INTERNSHIP_ONLY) {
+    await expect(page.locator(`a[href="${path}"]`), `the marketing chrome links to ${path}`).toHaveCount(0);
+  }
+  // The sign-in page carries its own mentor invitation.
+  await page.goto('/auth/signin');
+  await expect(page.getByTestId('apply-as-mentor-link')).toHaveCount(0);
+});
+
+test('the internship host still serves every one of them', async ({ page }) => {
+  test.slow();
+  // The other half of the guarantee: this change must be invisible to the
+  // product that owns these pages. A gate that 404s both hosts would pass the
+  // test above and take the live site down.
+  for (const path of INTERNSHIP_ONLY) {
+    const res = await page.request.get(path);
+    expect(res.status(), `${path} must still be served on the internship host`).toBe(200);
+  }
+  await page.goto('/');
+  await expect(page.locator('a[href="/features"]').first()).toBeVisible();
+});

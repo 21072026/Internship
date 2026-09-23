@@ -22,6 +22,7 @@ import {
   type Plan,
 } from '@/lib/plans';
 import { formatCount, formatDecimal, formatEur, formatEurCents, formatPercent } from '@/lib/money';
+import { internshipProductPage } from '@/lib/verticalPage';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * case those overrides deliberately leave alone.
  */
 export default async function PricingPage() {
+  await internshipProductPage();
   const { locale, t } = await getServerDictionary();
   const p = t.pricing;
 

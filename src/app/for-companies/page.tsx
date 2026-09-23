@@ -5,6 +5,7 @@ import { CompanyInquiryForm } from '@/components/CompanyInquiryForm';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
+import { internshipProductPage } from '@/lib/verticalPage';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ export const dynamic = 'force-dynamic';
 // company section uses (landing.audCompany*) — one source of truth, so a claim
 // can never drift between the two pages.
 export default async function ForCompaniesPage() {
+  await internshipProductPage();
   const { t } = await getServerDictionary();
   const L = t.landing;
   const c = t.forCompanies;

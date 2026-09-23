@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useT } from '@/i18n/client';
+import { useVertical } from '@/lib/verticalClient';
 
 const LAST_SEEN_KEY = 'lastSeenReleaseVersion';
 
@@ -11,6 +12,9 @@ const LAST_SEEN_KEY = 'lastSeenReleaseVersion';
 // visiting the page (or this footer once) marks it seen.
 export function VersionFooter({ version }: { version: string }) {
   const t = useT();
+  // The release feed is the internship product's changelog and 404s on a
+  // marketing host (#2540), so there the version is a fact, not a link.
+  const isMarketing = useVertical() === 'MARKETING';
   const [isNew, setIsNew] = useState(false);
 
   useEffect(() => {
@@ -24,6 +28,10 @@ export function VersionFooter({ version }: { version: string }) {
     try { localStorage.setItem(LAST_SEEN_KEY, version); } catch { /* ignore */ }
     setIsNew(false);
   };
+
+  if (isMarketing) {
+    return <span className="text-xs text-gray-600 dark:text-gray-400">v{version}</span>;
+  }
 
   return (
     <Link

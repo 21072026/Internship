@@ -31,18 +31,25 @@ export async function PublicFooter() {
     {
       title: n.colProduct,
       links: [
-        { href: '/features', label: n.features },
         // Internship-only destinations are left out for a marketing host
-        // (#2500): the partner-company pitch, the intern project showcase, the
-        // mentor application and the contributor-IP terms describe the
-        // mentoring product, not a sales CRM.
-        ...(isMarketing ? [] : [{ href: '/for-companies', label: n.forCompanies }]),
-        // #1732 — the price is a Product answer, not a legal one, and the
-        // footer is where a visitor who scrolled past the band looks for it.
-        // Un-parked with the header entry now that the page exists (#1730).
-        { href: '/pricing', label: n.pricing },
-        ...(isMarketing ? [] : [{ href: '/projects', label: n.showcase }]),
-        { href: '/release-notes', label: n.whatsNew },
+        // (#2500, widened in #2540): the partner-company pitch, the intern
+        // project showcase, the mentor application and the contributor-IP
+        // terms describe the mentoring product, not a sales CRM — and so do
+        // the feature catalogue (mentee onboarding, weekly internship
+        // reports), the price (metered in matched mentor/mentee pairs) and the
+        // release feed (the internship changelog). All three now 404 on a
+        // marketing host, so a link to them would be a link to nothing.
+        ...(isMarketing
+          ? []
+          : [
+              { href: '/features', label: n.features },
+              { href: '/for-companies', label: n.forCompanies },
+              // #1732 — the price is a Product answer, not a legal one, and the
+              // footer is where a visitor who scrolled past the band looks for it.
+              { href: '/pricing', label: n.pricing },
+              { href: '/projects', label: n.showcase },
+              { href: '/release-notes', label: n.whatsNew },
+            ]),
         // The demo links to itself from its own footer — hide it there.
         // `demoPlacement` is what routes this one through DemoLink below, so
         // the click is measured and the URL carries its own utm_content (#1391).

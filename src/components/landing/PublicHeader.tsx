@@ -91,12 +91,19 @@ export function PublicHeader({
   // company pitch and the intern project showcase — so a marketing host's shell
   // asks for them to be left out (#2500); the flag is resolved server-side in
   // PublicShell because this component cannot read the vertical itself.
-  const links = [
-    { href: '/features', label: n.features },
-    ...(hideInternshipLinks ? [] : [{ href: '/for-companies', label: n.forCompanies }]),
-    { href: '/pricing', label: n.pricing },
-    ...(hideInternshipLinks ? [] : [{ href: '/projects', label: n.showcase }]),
-  ];
+  // `/features` and `/pricing` are internship-product pages too (#2540): the
+  // catalogue lists mentee onboarding and weekly internship reports, and the
+  // price is metered in matched mentor/mentee pairs. They 404 on a marketing
+  // host (src/lib/verticalPage.ts), so linking to them from its own header is
+  // how a visitor found the wrong product in the first place.
+  const links = hideInternshipLinks
+    ? []
+    : [
+        { href: '/features', label: n.features },
+        { href: '/for-companies', label: n.forCompanies },
+        { href: '/pricing', label: n.pricing },
+        { href: '/projects', label: n.showcase },
+      ];
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 

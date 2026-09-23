@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { getFeatures, FEATURE_CATEGORIES } from '@/lib/features';
 import { PublicShell } from '@/components/landing/PublicShell';
+import { internshipProductPage } from '@/lib/verticalPage';
 
 const iconBg: Record<string, string> = {
   blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',
@@ -16,6 +17,7 @@ const iconBg: Record<string, string> = {
 // fed from the single source in src/lib/features.ts (same data as the landing
 // page's featured cards).
 export default async function FeaturesPage() {
+  await internshipProductPage();
   const { t } = await getServerDictionary();
   const F = t.featureCatalog;
   const features = getFeatures(t);
