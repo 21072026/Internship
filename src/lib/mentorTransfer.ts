@@ -78,9 +78,30 @@ export async function transferMentorship(opts: {
   actorId: string;
   actorEmail?: string | null;
   request?: Request;
+  /**
+   * This call is ONE ROW of a batch (#2439 — POST /api/admin/candidates/bulk).
+   *
+   * A batch names the same incoming mentor on every row and usually drains one
+   * outgoing mentor, so the two MENTOR notices below — each with an e-mail —
+   * would reach the same person once per row, up to 200 times. That is the
+   * storm the sibling `advanceStage` branch keeps a `notifiedMentees` set to
+   * prevent, and burst mail to one mailbox is a standing constraint here
+   * (docs/dormant-first-contacts.md; the P2024 note in emailService.ts).
+   *
+   * When set, neither mentor gets the per-row notification or e-mail — the
+   * caller sends ONE summary notification per mentor after the batch, because
+   * it is the only place that knows the totals. The MENTEE still gets both:
+   * that is a different person on every row, one notice each, and telling
+   * somebody their mentor changed is not optional.
+   *
+   * Nothing about the WRITE changes — same transaction, same guard, same audit
+   * row. This only decides who is told, and how often.
+   */
+  batched?: boolean;
 }): Promise<TransferResult> {
   const { relationId, toMentorId, reasonCode, actorId, actorEmail, request } = opts;
   const reasonNote = opts.reasonNote?.trim() || null;
+  const batched = opts.batched === true;
 
   const relation = await prisma.mentorshipRelation.findUnique({
     where: { id: relationId },
@@ -292,15 +313,16 @@ export async function transferMentorship(opts: {
   );
   // The incoming mentor gets the standard "a mentee was assigned to you" row —
   // the same one a direct assignment sends, because from their side that is
-  // exactly what happened. No echo when the admin assigned themself (#886).
-  if (toMentorId !== actorId) {
+  // exactly what happened. No echo when the admin assigned themself (#886), and
+  // none at all inside a batch: the caller sends one summary instead (`batched`).
+  if (!batched && toMentorId !== actorId) {
     await notify(toMentorId, 'mentorship_request.menteeAssigned', { menteeName: mentee.fullName }, '/mentor');
   }
   // The outgoing mentor. Two different truths, so two different messages: a
   // mis-assignment that was corrected never was their mentee, while a real
   // transfer ended a pairing they had been working. Never the reason, on the
   // same grounds #1801 keeps the re-match reason from them.
-  if (outgoing.id !== actorId) {
+  if (!batched && outgoing.id !== actorId) {
     await notify(
       outgoing.id,
       mode === 'corrected' ? 'mentorship.assignmentCorrected' : 'mentorship.reassignedAway',
@@ -327,6 +349,7 @@ export async function transferMentorship(opts: {
     }
   }
   if (
+    !batched &&
     incoming.email &&
     toMentorId !== actorId &&
     emailAllowed(incoming, 'mentorship') &&
@@ -350,6 +373,7 @@ export async function transferMentorship(opts: {
   // nothing about who decided or why. A corrected mis-assignment gets the
   // in-app row above and no mail — there is no mentorship to tell them ended.
   if (
+    !batched &&
     mode === 'transferred' &&
     outgoing.email &&
     outgoing.id !== actorId &&

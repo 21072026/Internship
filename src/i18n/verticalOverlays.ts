@@ -44,9 +44,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   MARKETING: {
     en: {
       nav: { candidates: 'Leads' },
-      // `mentor` is the "Mentor: {name}" line on a candidate row AND inside the
-      // person hover card, which the board renders on every card's owner chip.
-      candidates: { title: 'Leads', subtitle: 'Browse and search leads', mentor: 'Rep' },
+      candidates: {
+        title: 'Leads',
+        subtitle: 'Browse and search leads',
+        // `mentor` is the "Mentor: {name}" line on a candidate row AND inside the
+        // person hover card, which the board renders on every card's owner chip.
+        mentor: 'Rep',
+        mineFilter: 'My accounts',
+        // The bulk control assigns the person `mentor` above names, so it says
+        // the same word — the action key stays `assignOwner` (#2439), only the
+        // label follows the vertical.
+        bulkOwnerLabel: 'Rep',
+        bulkAssignOwner: 'Assign rep',
+      },
       // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
       publicNav: {
@@ -226,7 +236,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
       nav: { candidates: 'Müşteri Adayları' },
-      candidates: { title: 'Müşteri Adayları', subtitle: 'Müşteri adaylarını görüntüle ve ara', mentor: 'Temsilci' },
+      candidates: {
+        title: 'Müşteri Adayları',
+        subtitle: 'Müşteri adaylarını görüntüle ve ara',
+        mentor: 'Temsilci',
+        mineFilter: 'Benim müşterilerim',
+        bulkOwnerLabel: 'Temsilci',
+        bulkAssignOwner: 'Temsilci ata',
+      },
       publicNav: {
         homeLink: 'SaleVali — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
@@ -343,7 +360,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     },
     de: {
       nav: { candidates: 'Leads' },
-      candidates: { title: 'Leads', subtitle: 'Leads durchsuchen', mentor: 'Vertriebsmitarbeiter' },
+      candidates: {
+        title: 'Leads',
+        subtitle: 'Leads durchsuchen',
+        mentor: 'Vertriebsmitarbeiter',
+        mineFilter: 'Meine Kunden',
+        bulkOwnerLabel: 'Vertriebsmitarbeiter',
+        bulkAssignOwner: 'Vertriebsmitarbeiter zuweisen',
+      },
       publicNav: {
         homeLink: 'SaleVali — zur Startseite',
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',
