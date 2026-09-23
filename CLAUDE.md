@@ -154,6 +154,12 @@ workaround, #636, and it compiled on every PR push).
 | Preview | `internship-crm-preview` (+ `-2`) | 3201 (+3211) | https://preview.interncrm.com | `preview-<sha>` | push to `main` (+6h drift check, manual) |
 | Topic (per PR) | `internship-crm-pr<N>` | 3400–3499 | `https://pr<N>.interncrm.com` | `topic-pr<N>` | every push to the PR |
 
+Production and Preview each **additionally serve the MARKETING vertical's landing on a
+second hostname from the same container** — `marketing.bcsit-gmbh.de` (:3200) and
+`marketing.bcsit-gmbh.dev` (:3201), #2540. They are hand-written Caddy site files with
+automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The retired
+`*.ersah.in` marketing names redirect there, and that apex now serves **mail only**.
+
 - **Replicas (#1701):** every environment is **one container today** —
   `REPLICAS` defaults to `1` in `infra/deploy-prod.sh` and at that value the
   deploy is byte-for-byte what it always was, with no reverse-proxy call at all.
@@ -525,7 +531,7 @@ workaround, #636, and it compiled on every PR push).
   `origin/main..main`), not to force through. If the actual file contents match between the
   two tips, `git reset --hard origin/main` is safe.
 - **One served-host allowlist** (`src/lib/servedHosts.ts`, #2488): one container serves several
-  public hosts (interncrm.com + marketing.ersah.in, their preview twins, a topic env's own
+  public hosts (interncrm.com + marketing.bcsit-gmbh.de, their preview twins, a topic env's own
   `pr<N>` host), and NextAuth resolves every `callbackUrl` against `NEXTAUTH_URL` without ever
   seeing the request. So a redirect or an absolute same-app link is built from the REQUEST —
   `requestOrigin(headers)` on the server, `absoluteHere(path)` on the client — and

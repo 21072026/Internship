@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 // Host-coherent redirects (#2488). One deployment serves several public hosts
-// (interncrm.com + marketing.ersah.in; their preview twins; a topic env's own
+// (interncrm.com + marketing.bcsit-gmbh.de; their preview twins; a topic env's own
 // pr<N> host). NextAuth resolves every callbackUrl against NEXTAUTH_URL — the
 // internship host — and never sees the request, so a marketing visitor who
 // signed out used to land on the internship product. The fix: the client sends
@@ -12,12 +12,12 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 // The browser in Playwright is always on localhost, so the server half — the
 // allowlist through the real NextAuth stack and the real route handlers — is
 // proven with forged proxy headers, exactly as host-vertical-landing.spec.ts
-// does. Locally MARKETING_HOSTS is unset, so its default 'marketing.ersah.in'
+// does. Locally MARKETING_HOSTS is unset, so its default 'marketing.bcsit-gmbh.de'
 // is an allowlisted host without any env change. The client half
 // (absoluteHere) is a same-origin no-op on this host and is covered by the
 // existing sign-out specs (sign-out-all, account-self-service).
 
-const MARKETING = 'marketing.ersah.in';
+const MARKETING = 'marketing.bcsit-gmbh.de';
 const AS_MARKETING = { 'x-forwarded-host': MARKETING, 'x-forwarded-proto': 'https' };
 
 async function signOutUrl(request: APIRequestContext, callbackUrl: string, headers?: Record<string, string>) {
