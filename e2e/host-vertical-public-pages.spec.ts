@@ -10,7 +10,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
  * mentees and mentors", the active matched pair) and /projects mixed every
  * tenant's public projects into one grid. All three are sessionless, so the
  * only signal is the request host — `MARKETING_HOSTS` defaults to
- * `marketing.ersah.in`, which is why forging `x-forwarded-host` routes the
+ * `marketing.bcsit-gmbh.de`, which is why forging `x-forwarded-host` routes the
  * marketing vertical here without an env change (same trick as
  * `host-vertical-landing.spec.ts`).
  *
@@ -18,7 +18,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
  * records from #2296: a URL that changed proves nothing about the page.
  */
 
-const MARKETING_HOST = 'marketing.ersah.in';
+const MARKETING_HOST = 'marketing.bcsit-gmbh.de';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
