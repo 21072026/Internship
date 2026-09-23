@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **The marketing product moved to its own domain** (#2540, epic #2348). `marketing.bcsit-gmbh.de` is the live SaleVali host and `marketing.bcsit-gmbh.dev` the test one, replacing `marketing.ersah.in` / `preview-marketing.ersah.in`; the retired names redirect. Only the *web* hosts moved — the `ersah.in` apex keeps doing mail (sending domain, SPF/DKIM/DMARC, inbound, reply and unsubscribe tokens, ICS organisers), and the internship hosts are untouched. In the app this is one constant: `DEFAULT_MARKETING_HOST` in `src/lib/servedHosts.ts` is read both by `hostVertical.ts` (which host shows the marketing landing) and by the #2488 redirect allowlist (which host a redirect may stay on), so the two cannot drift apart — and because prod deliberately configures no `MARKETING_HOSTS`, that constant *is* the production domain. The default is deliberately still a SINGLE host: listing the `.dev` test domain there would make it a valid redirect target on production. Preview overrides it with `MARKETING_HOSTS='marketing.bcsit-gmbh.dev'`. On the box each name is on a fresh apex with no wildcard, so Caddy issues its certificate automatically rather than reusing the `*.ersah.in` files (`.dev` is HSTS-preloaded, so that certificate has to exist before a browser will connect at all). A new unit assertion fails if the default ever lands back on `ersah.in`, and both marketing hosts joined the uptime probe — the only check that can see a dead certificate or a missing Caddy site file for a name that shares its containers with a healthy one.",
+  "notes": {
+    "en": ["The marketing product now lives at marketing.bcsit-gmbh.de. The old address redirects there."],
+    "tr": ["Pazarlama ürünü artık marketing.bcsit-gmbh.de adresinde. Eski adres oraya yönlendiriyor."],
+    "de": ["Das Marketing-Produkt ist jetzt unter marketing.bcsit-gmbh.de erreichbar. Die alte Adresse leitet dorthin weiter."]
+  }
+}

@@ -84,43 +84,64 @@ self-contained nginx server block for `pr<N>.interncrm.com` into `$NGINX_CONF_DI
 from step 2 and `proxy_pass`es to the topic's port; teardown removes it. Both
 reload nginx afterwards.
 
-### The marketing host: `marketing.ersah.in` (#2428, epic #2348)
+### The marketing hosts: `marketing.bcsit-gmbh.de` / `.dev` (#2540, epic #2348)
 
-The MARKETING vertical's public landing is served **from the same prod
-container** as `interncrm.com` — two urls, two products, one deployment (#2355).
-What makes the box answer for the second domain:
+The MARKETING vertical's public landing is served **from the same containers** as
+the internship product — two urls, two products, one deployment (#2355). The live
+marketing domain is `marketing.bcsit-gmbh.de` (prod, `:3200`) and the test one is
+`marketing.bcsit-gmbh.dev` (preview, `:3201`). They replaced
+`marketing.ersah.in` / `preview-marketing.ersah.in` on 2026-09-23 (#2540); that
+apex now does **mail only**, and the two retired names redirect here.
 
-- **DNS** — an explicit `A` record `marketing.ersah.in → 92.5.120.186`, blessed
-  through the `dns-records.yml` workflow (the `*.ersah.in` wildcard and the MX
-  records were deliberately left alone: mail for that apex lives elsewhere).
-- **TLS** — the domain is on a *different apex* than the `*.interncrm.com`
-  wildcard, so it has its own certificate: `wildcard-cert.yml domain=ersah.in`
-  issues `*.ersah.in` by dns-01 into `/etc/caddy/certs/ersah.in.{cer,key}`.
-- **Site file** — `/etc/caddy/sites/marketing.ersah.in.caddy`, one
-  `reverse_proxy 127.0.0.1:3200` to the prod container (preview's
-  `preview-marketing.ersah.in.caddy` points at `:3201`). Same shape as the
-  topic site files `topic-deploy.sh` writes; nothing else is special about it.
+What makes the box answer for them:
+
+- **DNS** — an explicit `A` record per host → `92.5.120.186`, created on the
+  company domains directly (the `*.ersah.in` wildcard and its MX records were
+  deliberately left alone: mail for that apex lives elsewhere).
+- **TLS** — each name is on its own apex with **no wildcard on the box**, so
+  Caddy issues a certificate for it **automatically** (the same way the
+  `interncrm.com` apex works: its site file carries no `tls` directive). Nothing
+  to run by hand, and nothing to renew — do *not* copy the `tls /etc/caddy/certs/…`
+  lines the retired `*.ersah.in` hosts used. `.dev` is an HSTS-preloaded TLD, so
+  plain HTTP is not merely discouraged there, it is unusable: the certificate has
+  to be in place before a browser will talk to the host at all.
+- **Site file** — `/etc/caddy/sites/marketing.bcsit-gmbh.de.caddy`, one
+  `reverse_proxy 127.0.0.1:3200` to the prod container
+  (`marketing.bcsit-gmbh.dev.caddy` points at `:3201`). Same shape as the topic
+  site files `topic-deploy.sh` writes; nothing else is special about them.
 - **Which host means MARKETING** is the app's business, not Caddy's:
   `src/lib/hostVertical.ts` reads `X-Forwarded-Host`/`Host` and compares it with
   `MARKETING_HOSTS` (comma-separated bare hostnames). **Unset, empty or
-  whitespace-only means the default `marketing.ersah.in`**, so **prod's env file
-  sets nothing**. Preview does set `MARKETING_HOSTS='preview-marketing.ersah.in'`
-  in `/etc/internship-crm/preview.env` — and by setting it, preview stops
-  answering for the prod domain (the list replaces the default, it does not
-  extend it). `deploy-prod.sh` threads the variable as
+  whitespace-only means the default `marketing.bcsit-gmbh.de`**, so **prod's env
+  file sets nothing** — the constant in `src/lib/servedHosts.ts` IS the live
+  marketing domain. Preview does set
+  `MARKETING_HOSTS='marketing.bcsit-gmbh.dev'` in
+  `/etc/internship-crm/preview.env` — and by setting it, preview stops answering
+  for the prod domain (the list replaces the default, it does not extend it).
+  `deploy-prod.sh` threads the variable as
   `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"`, i.e. an env file with no value
   puts an **empty string** in the container; the app treats that as unset
-  (`src/lib/servedHosts.ts` `marketingHosts()`, unit-tested — the same set the #2488 redirect allowlist reads, so an empty value also made the marketing domain a non-served host) — it once did not, and the prod
-  marketing domain served the internship landing until #2428 (2026-09-21).
+  (`src/lib/servedHosts.ts` `marketingHosts()`, unit-tested — the same set the
+  #2488 redirect allowlist reads, so an empty value also made the marketing
+  domain a non-served host) — it once did not, and the prod marketing domain
+  served the internship landing until #2428 (2026-09-21).
 - Signed-in users never go through this: their vertical is their
   `Organization.vertical`. The host decides copy and chrome only (see the TRUST
   NOTE in `hostVertical.ts`).
 
-Verify after a deploy (both must hold):
+Moving the marketing domain again means changing **both** halves close together:
+while the app still defaults to the old name, the new host serves the internship
+landing, and the moment the default moves, the old host does. Add the new site
+file first (so the name resolves and gets its certificate), then ship the code
+default, then repoint `preview.env`, then turn the old site file into a redirect.
+
+Verify after a deploy (both must hold, on each host):
 
 ```bash
-curl -s https://marketing.ersah.in/ | grep -o '<title>[^<]*</title>'   # names SaleVali, not "Internship CRM"
-curl -s https://marketing.ersah.in/api/health | jq '{status,sha}'      # same sha as interncrm.com
+curl -s https://marketing.bcsit-gmbh.de/ | grep -o '<title>[^<]*</title>'  # names SaleVali, not "Internship CRM"
+curl -s https://marketing.bcsit-gmbh.de/api/health | jq '{status,sha}'     # same sha as interncrm.com
+curl -s https://marketing.bcsit-gmbh.dev/api/health | jq '{status,sha}'    # same sha as preview.interncrm.com
+curl -sI https://marketing.ersah.in/ | head -2                             # 308 → marketing.bcsit-gmbh.de
 ```
 
 ### Proxy hops and `TRUSTED_PROXY_COUNT` (#858)

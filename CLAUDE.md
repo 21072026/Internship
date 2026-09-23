@@ -525,7 +525,7 @@ workaround, #636, and it compiled on every PR push).
   `origin/main..main`), not to force through. If the actual file contents match between the
   two tips, `git reset --hard origin/main` is safe.
 - **One served-host allowlist** (`src/lib/servedHosts.ts`, #2488): one container serves several
-  public hosts (interncrm.com + marketing.ersah.in, their preview twins, a topic env's own
+  public hosts (interncrm.com + marketing.bcsit-gmbh.de, their preview twins, a topic env's own
   `pr<N>` host), and NextAuth resolves every `callbackUrl` against `NEXTAUTH_URL` without ever
   seeing the request. So a redirect or an absolute same-app link is built from the REQUEST —
   `requestOrigin(headers)` on the server, `absoluteHere(path)` on the client — and

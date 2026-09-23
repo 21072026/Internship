@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { seedTwoTenants, signInAsTenantActor, type TwoTenants } from '../helpers/tenants';
 
 // Two separate USER pools under enforcement (#2356). The regression this guards
-// is the one reported after the marketing.ersah.in cutover: with
+// is the one reported after the marketing-host cutover: with
 // MT_ENFORCE_ISOLATION off, one tenant's admin saw EVERY tenant's users on the
 // candidates screen. flag-on.spec proves the mechanism on companies; this pins
 // it on the user pool specifically, in both directions, because "two products,

@@ -3,7 +3,7 @@
 // A non-INTERNSHIP vertical is a different product; when its tenant has set no
 // white-label brandName, the wordmark must fall back to the ORG'S OWN NAME, not
 // to "Internship CRM" — otherwise a marketing tenant is greeted as the internship
-// product (the exact bug reported after the marketing.ersah.in cutover).
+// product (the exact bug reported after the marketing-host cutover).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

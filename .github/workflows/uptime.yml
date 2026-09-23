@@ -52,10 +52,18 @@ jobs:
         env:
           # Production first: it is the one whose failure matters most, and
           # listing it first makes the subject line read correctly.
+          # The two marketing hosts (#2540) are separate NAMES on the same
+          # containers, so what they add is exactly what /api/health cannot tell
+          # you from the internship host: that DNS, the certificate and the Caddy
+          # site file for that name are alive. Each is on its own apex with its
+          # own automatically-issued certificate, so an expiry or a deleted site
+          # file takes only that name down — silently, until someone visits.
           TARGETS: >-
             https://interncrm.com/api/health
             https://preview.interncrm.com/api/health
             https://demo.interncrm.com/api/health
+            https://marketing.bcsit-gmbh.de/api/health
+            https://marketing.bcsit-gmbh.dev/api/health
         run: |
           set -uo pipefail
           probe_all() {

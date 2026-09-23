@@ -5,10 +5,10 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 // SaleVali branding on the marketing host (#2492): the accent, the mark, the
 // favicon/home-screen icons, the browser tint and the manifest all follow the
 // vertical. Host-forged like host-vertical-landing.spec.ts — the default
-// MARKETING_HOSTS is 'marketing.ersah.in', so no env change is needed. The
+// MARKETING_HOSTS is 'marketing.bcsit-gmbh.de', so no env change is needed. The
 // default host is asserted too: the internship product must be byte-identical.
 
-const MARKETING = { 'x-forwarded-host': 'marketing.ersah.in' };
+const MARKETING = { 'x-forwarded-host': 'marketing.bcsit-gmbh.de' };
 
 test.afterAll(async () => {
   await prisma.$disconnect();
