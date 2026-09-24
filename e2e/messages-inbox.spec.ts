@@ -40,11 +40,18 @@ test('a mentor reaches messages from the header icon and sees their thread', asy
 
     await page.waitForURL((u) => u.pathname === '/messages', { timeout: 20_000 });
     // The thread lists the other participant and a preview of the last message.
-    await expect(page.getByText('Msg Mentee')).toBeVisible({ timeout: 10_000 });
+    // Scoped to the thread row's own link (href starts with /messages/c/) rather
+    // than a bare getByText('Msg Mentee'): during the client-side transition from
+    // /mentor, React keeps the previous page's DOM on screen until the new page's
+    // data is ready, and /mentor renders its own "Msg Mentee" text in the mentor
+    // attention queue — an unscoped text match is a strict-mode violation against
+    // that stale content, which a visibility timeout does not wait out.
+    const threadLink = page.locator('a[href^="/messages/c/"]').filter({ hasText: 'Msg Mentee' });
+    await expect(threadLink).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/quick question/i)).toBeVisible();
 
     // Opening the thread navigates into the pair's one conversation (#1156).
-    await page.getByText('Msg Mentee').click();
+    await threadLink.click();
     await page.waitForURL((u) => u.pathname.startsWith('/messages/c/'), { timeout: 20_000 });
   } finally {
     await cleanupByEmail(mentorEmail);
