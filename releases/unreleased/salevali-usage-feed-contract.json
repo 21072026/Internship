@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **SaleVali usage feed: the data contract and its tables** (#2445, #2446). `docs/marketing-vertical/salevali-usage-feed.md` records the transport, the identity key, the fields and the refresh window; `Company.externalId` (nullable, indexed `[orgId, externalId]`, deliberately not `@unique`) and the new `CompanyUsage` model (`@@unique([companyId, date])`, cascade from `Company`) are the tables it fills. `CompanyUsage` is registered in `TENANT_MODELS` and has a 400-day retention entry. No job, endpoint or screen reads it yet (#2447)."
-}
