@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { gotoSettled, signInAndSettle } from './helpers/auth';
+import { gotoSettled, signInAndSettle, settleStreamedSuspense } from './helpers/auth';
 
 // #1915 — the activity report exists about the mentee and used to be readable
 // only by their mentor and an admin. `/portal/insights` is their own copy of
@@ -69,6 +69,7 @@ test('a mentee reads their own activity summary, with an honest no-consent state
       data: { userId: mentee.id, type: 'ACTIVITY_TRACKING', grantedAt: new Date() },
     });
     await page.reload();
+    await settleStreamedSuspense(page);
     await expect(page.getByTestId('portal-insights-tracking')).toBeVisible();
     await expect(page.getByTestId('portal-insights-no-consent')).toHaveCount(0);
   } finally {
