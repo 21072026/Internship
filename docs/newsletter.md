@@ -105,13 +105,46 @@ Three properties are load-bearing:
   `orgId` yet — that is #1556 — which is why attribution goes through these two
   instead.)
 - **The check happens before the audience is expanded, and refuses whole.**
-  `dispatchNewsletter` resolves the recipients and evaluates every tenant in
-  them *before* it claims the issue, so a refusal never leaves a half-delivered
-  row behind, and the issue stays editable and cancellable by a human. It is
-  **all-or-nothing per issue** — if any tenant in the audience would cross its
-  band the whole issue waits, rather than being sent to the tenants that fit.
-  Excluding one would mark the issue `SENT`, and a sent issue is immutable and
-  undeletable: the skipped tenant could never receive it.
+  `dispatchNewsletter` resolves the recipients and meters them *before* it
+  claims the issue, so a refusal never leaves a half-delivered row behind, and
+  the issue stays editable and cancellable by a human. It is **all-or-nothing
+  per issue** — an issue that would cross its band waits whole, rather than
+  being sent to the part of the list that fits: a sent issue is immutable and
+  undeletable, so the rest could never receive it. Since #2357 an issue reaches
+  only **its own tenant** (`orgId: issue.orgId`), so the band that can hold it
+  is that tenant's alone — no other organization's meter can.
+- **A held issue holds only its own tenant, and says so** (#2335). The cadence
+  and the cron were still installation-wide after #2357, which left three ways
+  for one tenant's spent month to reach everybody else, or to stop mail with
+  nobody noticing. Each is closed:
+  - *The tick.* `dispatchDueNewsletters` used to attempt the ten oldest due
+    issues whatever became of them, so ten held issues from one tenant filled
+    every tick. The rule is now `runNewsletterTick`
+    (`src/lib/newsletterQuotaHold.ts`, unit-tested in
+    `scripts/test/newsletter-quota-hold.test.mjs`): a held attempt costs none of
+    the tick's budget of ten, and once a tenant has a held issue, its later ones
+    wait behind it until the next tick — in order, so a smaller later issue
+    never overtakes the one the admin queued first, and one tenant's backlog
+    costs a tick exactly one quota check.
+  - *The cadence.* `queueScheduledNewsletter`'s three gating reads (anything
+    pending, the last issue sent, the library entries already used) are scoped
+    to the default org, whose issues it queues. Unscoped, another tenant's held
+    issue counted as "the previous cycle has not gone out yet".
+  - *Visibility.* A due `SCHEDULED` issue that its band is holding carries a
+    `quotaHold` object in the history (`GET /api/admin/newsletters`, computed by
+    `newsletterQuotaHold()` with the dispatcher's own audience and meter). The
+    composer renders it as an **On hold** line with the figures and the reset
+    date. The first time a cron tick finds an issue held in a broadcast month,
+    it writes one `newsletter.quota_hold` ActivityLog row (warning; detail names
+    the org and the four figures) and mails the operator at `ALERT_EMAIL_TO`
+    (category `ops-alert`, Turkish, like the dead-letter alert). The ActivityLog
+    row is the dedupe key, so later ticks stay quiet, and it is written before
+    the mail, so the record exists even when the mail cannot leave.
+
+  What an issue *means* is unchanged. Scoping an editorial issue per tenant
+  with truthful `skipped` tallies, per-tenant child sends, or not metering
+  operator-owned issues at all are the open options on #2335, and they are the
+  maintainer's call.
 - **A refusal DISARMS what the refusal armed.** `scheduledAt` for a *send now*
   is `new Date()`, so an issue left `SCHEDULED` after a 403 is due — the
   15-minute cron would mail, unattended, exactly the issue the admin was told
