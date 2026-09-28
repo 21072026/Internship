@@ -15,6 +15,10 @@ differently on every run.
 - **What a row becomes** is [`marketing-vertical/pipeline-record.md`](marketing-vertical/pipeline-record.md):
   account = `Company`, funnel record = `MentorshipRelation`, lead person = a `MENTEE` `User`.
 - **A sample file with all four edge cases**: `scripts/fixtures/marketing-accounts-sample.csv`.
+  `scripts/fixtures/` is the one directory `.gitignore` lets a `*.csv` through — a synthetic
+  fixture goes there, a real export goes nowhere near the checkout.
+- **How to run it against real data** — backup, owner, dry run, reading the report, fixing
+  rows, apply: [Running it](#running-it).
 
 ## There is no tenant column
 
@@ -185,40 +189,255 @@ half-written, and the rest of the file still lands.
 
 ## Running it
 
+This is the runbook: what to do, in order, when you have the real customer file in hand.
+It does not restate a rule another page owns — each warning below links the page that
+does.
+
 ```bash
 # Dry run — the default. Nothing is written.
-npm run import:marketing-accounts -- --file=accounts.csv --owner=admin@example.com
+npm run import:marketing-accounts -- --file=$HOME/import/accounts.csv --owner=sales.lead@example.com
 
 # Write.
-npm run import:marketing-accounts -- --file=accounts.csv --owner=admin@example.com --apply
+npm run import:marketing-accounts -- --file=$HOME/import/accounts.csv --owner=sales.lead@example.com --apply
 ```
 
 | Flag | |
 | --- | --- |
 | `--file=<path>` | required |
-| `--owner=<email>` | required; an `ADMIN` or `MENTOR`. Their organisation is the run's organisation |
+| `--owner=<email>` | required; an `ADMIN` or `MENTOR`. Their organisation is the run's organisation — see step 2 |
 | `--apply` | write. Without it the run reports and touches nothing |
 | `--authoritative` | let the file overwrite a value it disagrees with. **Off by default**: the file only fills gaps, so a value somebody corrected in the app survives a re-run (`planFieldUpdates`, the one policy shared with SSO sync and the roster feed) |
-| `--delimiter=<c>` | force `,` `;` `\t` or `|` |
+| `--delimiter=<c>` | force `,` `;` `\t` or `\|` |
 | `--report=<path>` | write the full per-row JSON report, including the columns with no home yet |
 | `--rows=<n>` | how many per-row lines to print (default 20) |
 
-The run prints `CREATE / UPDATE / UNCHANGED / SKIP / ERROR` counts, the rows needing
-attention, and a sample of what would be written. It exits non-zero if any row errored, so
-a half-landed import is never a green run.
-
 **A dry run is the same call with a writer that does not write.** There is no `if (dryRun)`
 branch anywhere in the planning path — the preview is produced by the code that applies,
-which is the property [`roster-feed.md`](roster-feed.md) spells out and #1432 lacked.
+which is the property [`roster-feed.md`](roster-feed.md) spells out and #1432 lacked. The
+one thing a dry run cannot show is a refusal only the write itself can make (step 5, "Only
+under `--apply`").
 
-## Before you run it against real data
+### Before the first run
 
-- Keep the file out of the repo. Real customer data is not synthetic data
-  ([`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md)).
-- Dry-run first, read the `ERROR` rows, fix the file, dry-run again.
-- `--apply` twice is safe by design — the second run is all `UNCHANGED` — but the first
-  `--apply` is the one that creates people, so read the dry run's CREATE count and believe
-  it.
+- **Where it runs.** From a checkout of the commit the target database is deployed at,
+  after `npm install` (which also runs `prisma generate`), on **Node ≥ 22.6** — the CLI
+  loads the TypeScript engine under `src/lib` through `--experimental-strip-types`. It
+  cannot run inside the app container: the runtime image is `node:20-slim` and ships
+  neither `scripts/` nor `src/` (`Dockerfile`).
+- **Which database.** The one `DATABASE_URL` names: the shell's value when it is set,
+  otherwise the checkout's `.env`, which Prisma reads by itself. The CLI prints the
+  organisation it writes to, but not the database host — know which one you are pointed at
+  before you start.
+- **Rehearse on synthetic data.** `npm run seed:demo` against a local database adds a
+  MARKETING tenant (`prisma/seed-demo-marketing.mjs`) whose admin is
+  `admin.marketing@demo.example.com`, and `scripts/fixtures/marketing-accounts-sample.csv`
+  runs against it. That is as far as a contributor ever goes: a run against production or
+  the shared preview is an operator action ([`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md),
+  rules 1, 2 and 5).
+- **Take a backup first.** There is no un-import. An `--apply` writes ordinary `Company`,
+  `User`, `MentorshipRelation` and `StatusChange` rows, and the only complete way back is a
+  restore — which also throws away everything else written since the dump. So take a fresh
+  dump right before the first `--apply` against a shared database and write down which one
+  it is. Where the dumps live, how one is taken and how it is restored:
+  [`disaster-recovery.md`](disaster-recovery.md).
+- **The file is personal data, and so is everything the run prints.** The export names real
+  people with their e-mail addresses and phone numbers; the console output quotes account
+  names and, in several reasons, contact addresses; the `--report` JSON carries every input
+  field of every row. Keep all three in a directory of your own **outside** the checkout
+  (`mkdir -m 700 ~/import`), never paste them into an issue, a PR or a chat, and delete them
+  when you are done (step 7). What may be seen by whom, and for how long:
+  [`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md) and
+  [`pii-access-lifecycle.md`](pii-access-lifecycle.md).
+  Two things make "outside the checkout" matter: `npm run` executes from the checkout root,
+  so a *relative* `--file` or `--report` path resolves **inside** the repository; and
+  `.gitignore` keeps `*.csv` (and `*.tsv`, `*.xlsx`, `*.xls`, `*.ods`) away from `git add`,
+  but not a JSON report.
+
+### 1. Export the spreadsheet
+
+- One header row first; the headers are the column names or any alias from the table
+  above, in any order and any case. Blank rows are ignored.
+- Save it as **CSV UTF-8** ("CSV UTF-8 (durch Trennzeichen getrennt)" in a German Excel).
+  The delimiter is sniffed, so `;` is fine — the *encoding* is not: Excel's plain "CSV"
+  usually writes the Windows code page, the CLI reads UTF-8 only, and `Grüße Süßwaren GmbH`
+  arrives as `Gr��e S��waren GmbH`. The broken encoding on its own produces **no
+  `ERROR`**: the file validates, the broken names are stored, and a later, correctly
+  encoded run creates a twin of every such account that has no `vat_id` (the name no longer
+  matches) while leaving the broken name standing on those that have one (the file only
+  fills gaps — `left alone: name`). Check before you run:
+
+  ```bash
+  iconv -f UTF-8 -t UTF-8 ~/import/accounts.csv > /dev/null && echo "UTF-8: ok"
+  # not UTF-8? convert it rather than re-exporting by hand:
+  iconv -f WINDOWS-1252 -t UTF-8 ~/import/accounts.csv > ~/import/accounts.utf8.csv
+  ```
+
+### 2. Choose `--owner`
+
+`--owner` decides three things at once:
+
+1. **The organisation.** The run imports into the owner's organisation and nowhere else
+   ([There is no tenant column](#there-is-no-tenant-column)).
+2. **The default owner** of every funnel record whose row leaves `owner_email` blank. A
+   row's own `owner_email` wins, and must be an `ADMIN` or `MENTOR` of the same
+   organisation.
+3. **Who the activity log names** as having run the import
+   (`marketing.accounts.imported`, written on `--apply` only).
+
+So pick the person who should own the unassigned leads in the right organisation — not
+whoever happens to type the command — and use the **same** `--owner` on every re-run. A
+different one does not re-point the records an earlier run created: each of those rows is
+refused as `already_mentored` (step 5), because moving a funnel record is a transfer
+([`mentor-transfer.md`](mentor-transfer.md)), never an import side effect.
+
+### 3. Dry run
+
+```bash
+npm run import:marketing-accounts -- --file=$HOME/import/accounts.csv \
+  --owner=sales.lead@example.com --report=$HOME/import/dry-run.json
+```
+
+Nothing is written, however many times you run it.
+
+### 4. Read the output
+
+Every run starts with a header block:
+
+```text
+=== Marketing account import (DRY-RUN — no writes) ===    ← (APPLY) when it writes
+File            : /home/you/import/accounts.csv
+Owner           : sales.lead@example.com (ADMIN)          ← owns every row without owner_email
+Organization    : <org id>                                ← the tenant it writes to
+Pipeline stages : LEAD_NEW, LEAD_CONTACTED, …             ← what the `stage` column may hold
+Field policy    : fill gaps only                          ← "authoritative (overwrites)" with the flag
+Columns known   : name, legal_name, country, …
+Not stored yet  : legal_name, website, monthly_transactions, mrr, channels — …
+```
+
+and then the rows. This is the real output for a four-line synthetic file:
+
+```text
+name;country;vat_id;contact_email
+Acme Handel GmbH;DE;DE 811.234-567;
+İstanbul Tekstil A.Ş.;TR;;
+Acme Handel GmbH;DE;;
+Beispiel AG;Deutschland;;
+```
+
+```text
+Rows: 4
+  CREATE: 2
+  UPDATE: 0
+  UNCHANGED: 0
+  SKIP: 1
+  ERROR: 1
+
+Rows needing attention (2):
+  row 3 [SKIP] name:acme handel gmbh DE — duplicate account in file (first seen at row 1)
+  row 4 [ERROR] Beispiel AG — country must be an ISO-3166-1 alpha-2 code, got "Deutschland"
+
+Sample of what would be written:
+  row 1 [CREATE] Acme Handel GmbH → name, vatId, country
+  row 2 [CREATE] İstanbul Tekstil A.Ş. → name, country
+
+(Dry-run only. Re-run with --apply to write.)
+```
+
+Row 3 is a `SKIP` although it names no VAT id: it resolves onto the account row 1 is about
+to create (same name, same country), and the duplicate check is on the account a row
+*resolves to* ([Matching](#matching-which-existing-account-is-this-row-2405)). The run
+exits `1` because of row 4.
+
+- **Check the header block first.** `Organization` and `Pipeline stages` are the two lines
+  that say whether this is the right tenant. If the stages read `APPLICATION_100,
+  APPROVAL_PENDING_220, …`, the owner belongs to an *internship* organisation: every row
+  with a stage comes back `ERROR — stage "LEAD_QUALIFIED" is not one of this
+  organization's pipeline stages (APPLICATION_100, …)`. That is the wrong `--owner`, not a
+  wrong file — it is exactly what the sample file produces when it is run as the internship
+  demo admin.
+- **The counts** mean what [Row outcomes](#row-outcomes) says.
+- **Rows needing attention** lists every `ERROR` and `SKIP`, and every row that lands but
+  carries a reason — at most `--rows` of them (default 20); the rest are in the `--report`
+  file. `row N` is the N-th **data** row, so it is spreadsheet row N + 1 (the header is row
+  1) as long as the sheet has no blank rows. The next column is the row's match key —
+  `vat:<VAT id, normalised>` or `name:<name, normalised> <country>` — or, for a row that
+  failed validation, simply its name.
+- **Sample of what would be written** shows the first five `CREATE`/`UPDATE` rows and the
+  fields each would write: account fields (`vatId`, `contactPhone`, …), `lead` (a new lead
+  person) or `lead.<field>`, `funnelRecord` (a new funnel record) and `pipelineStatus` (a
+  stage move). Look at the names here: a `�` means the encoding is wrong (step 1).
+- **The exit code:** `0` — no row errored; `1` — at least one `ERROR` row, in a dry run
+  too, so a wrapper script can stop on it; `2` — the run was refused before it read a row
+  (a missing `--file`/`--owner`, `owner_not_found`, `owner_role`). A Node stack trace
+  instead of the banner means the run stopped before it produced a report — a file that
+  does not exist, an unreachable database.
+
+### 5. Fix the file, not the database
+
+Every `ERROR` and `SKIP` is fixed **in the file, or in the app** — never by editing rows in
+the database — and then you dry-run again, until the run shows `ERROR: 0` and every
+remaining reason is one you accept.
+
+| The reason says | What to do |
+| --- | --- |
+| `name is required` | the row has no account name: fill it in, or delete the row |
+| `country must be an ISO-3166-1 alpha-2 code, got "Deutschland"` | two letters: `DE`, `AT`, `TR`, `CH` |
+| `vat_id is too short to be an identity` | usually a placeholder (`-`, `n/a`): correct it or blank the cell |
+| `locale must be one of de/en/tr` | one of those three, or blank |
+| `stage "…" is not one of this organization's pipeline stages (…)` | use a **key** from the list in the message, never the label on the board. If *every* staged row says this, see step 4: the owner is in the wrong organisation |
+| `monthly_transactions must be a whole number` · `mrr is not a number` · `mrr must not be negative` | fix the number; a currency sign and `.`/`,` grouping are fine |
+| `contact_email is not an address` · `owner_email is not an address` | a typo, or two addresses in one cell — keep one |
+| `contact_email is on a reserved stand-in domain` | `@import.local` / `@erased.local` are addresses the CRM generated, not mailboxes — usually the file was exported from the CRM itself. Use the real address or blank it |
+| `<field> is longer than <n> characters` | shorten it. Nothing is truncated for you |
+| `duplicate account in file (first seen at row N)` · `(matches N earlier rows by name; …)` | `SKIP`: one merchant, two lines. The first line won; move what the other one knows into it and delete it |
+| `ambiguous: N existing accounts are named "…" — add a country or vat_id column` | `SKIP`: the CRM holds several accounts of that name in different countries. Fill `country` or `vat_id` on that row |
+
+Reasons on a row that **still lands** — nothing is lost, but something was not done:
+
+| The reason says | What to do |
+| --- | --- |
+| `left alone: industry, contactPhone` | the CRM holds a different value and the file only fills gaps. If the file is right, correct the value in the app — or re-run with `--authoritative`, which overwrites **every** disagreeing field on **every** row, so dry-run that too and read all of it |
+| `stage "…" not placed: the row has no primary contact e-mail` | a funnel record needs a person. Add `contact_email`; the next run fills the account's gap and places the stage as an `UPDATE` |
+| `stage "…" not placed: owner_email "…" is not a user of this organization` | not an `ADMIN`/`MENTOR` of this organisation: correct it, or blank it to fall back to `--owner` |
+| `stage "…" not placed: contact … is already the lead of row N` | two accounts share one contact, and one person leads one funnel record. Give the second account its own contact |
+
+**Only under `--apply`.** Two kinds of refusal come from the write itself, so a dry run
+shows those rows as the `CREATE`/`UPDATE` they were planned as, and they turn into `ERROR`
+only when you write:
+
+| The reason says | What to do |
+| --- | --- |
+| `… already has an active owner in this organization — transfer the record instead of importing it (already_mentored)` | the lead's funnel record belongs to somebody else (or to a different `--owner` from an earlier run). Put that person in the row's `owner_email`, or move the record with the transfer in the app ([`mentor-transfer.md`](mentor-transfer.md)) and re-run. Never change the owner in the database by hand |
+| any other message — usually a database error with its Prisma code (`P2002: …`) | a constraint the plan could not see, most often because somebody changed the same account in the app between the dry run and the apply. Dry-run again to see the current plan, fix what it names, re-run `--apply` |
+
+### 6. Apply
+
+```bash
+npm run import:marketing-accounts -- --file=$HOME/import/accounts.csv \
+  --owner=sales.lead@example.com --apply --report=$HOME/import/apply.json
+```
+
+Same file, same `--owner`, same flags as the last clean dry run. The first `--apply` is the
+one that creates people, so read the dry run's `CREATE` count and believe it.
+
+The output has the same shape, with `(APPLY)` in the banner. Each row is its own
+transaction, so exit code `1` means *those* rows did not land and the rest did. Fix them
+(step 5) and re-run `--apply` with the **whole** file — there is no need to cut it down to
+the failed rows: `--apply` twice is safe by design, and everything already written comes
+back `UNCHANGED`.
+
+### 7. Check, then clean up
+
+- **Dry-run the same file once more.** Every row that landed must now read `UNCHANGED`
+  (`SKIP` and `ERROR` rows stay what they were). Anything else — above all a `CREATE` —
+  means the file and the database disagree about who an account is: an encoding problem,
+  or a `name`, `country` or `vat_id` that changed between runs. Stop and find out before
+  applying again.
+- **Spot-check** a few of the created accounts and their stage in the app.
+- **Delete** the export, the `--report` files and every copy of them (downloads folder, a
+  mail attachment). The dump from "Take a backup first" stays where it is and expires on its
+  own schedule — [`disaster-recovery.md`](disaster-recovery.md) says how long, and it is
+  not to be copied anywhere either.
 
 ## Tests
 

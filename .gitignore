@@ -157,6 +157,23 @@ e2e/.state/
 *.sql.gz
 /backups/
 
+# Spreadsheet exports — a customer list or a CRM export (the candidate CSV
+# download, docs/marketing-import.md) names real people with their e-mail
+# addresses and phone numbers, so it never goes in the repo (#2409). The
+# importers read `,` `;` `\t` or `|` files, and the export is made from a
+# workbook, so the workbook formats are covered too. Upper case as well: git
+# matches case-sensitively and a Windows export is often `EXPORT.CSV`.
+*.csv
+*.CSV
+*.tsv
+*.TSV
+*.xlsx
+*.xls
+*.ods
+# The one exception: SYNTHETIC fixtures the tests and the docs use.
+!scripts/fixtures/*.csv
+!scripts/fixtures/*.tsv
+
 # Generated OpenAPI description of the internal API (scripts/openapi-generate.cjs,
 # npm run gen:openapi). Derived from src/app/api, so committing it would put a
 # ~500 KB diff in every PR that adds or renames a route — the same churn the
