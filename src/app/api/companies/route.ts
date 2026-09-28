@@ -16,6 +16,18 @@ import {
   type CompanySortRelation,
 } from '@/lib/companySort';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
+import type { Prisma } from '@prisma/client';
+
+// The `name` order, made total. `Company.name` is not unique (the marketing
+// import dedupes on name + country), and MySQL may return tied rows in a
+// different order for a different LIMIT/OFFSET — so without the id two
+// same-named accounts could repeat on one page and vanish from the next. The
+// derived orders page their never-moved tail with this same order (#2528), so
+// the two stay one definition.
+const COMPANY_NAME_ORDER: Prisma.CompanyOrderByWithRelationInput[] = [
+  { name: 'asc' },
+  { id: 'asc' },
+];
 
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required').max(TEXT_LIMITS.companyName),
@@ -132,7 +144,7 @@ export async function GET(request: Request) {
         companies = await prisma.company.findMany({
           where,
           include,
-          orderBy: sort === 'created' ? { createdAt: 'desc' } : { name: 'asc' },
+          orderBy: sort === 'created' ? { createdAt: 'desc' } : COMPANY_NAME_ORDER,
           ...(all ? {} : { skip, take: pageSize }),
         });
       } else {
@@ -215,7 +227,7 @@ export async function GET(request: Request) {
             ? prisma.company.findMany({
                 where: tailWhere,
                 include,
-                orderBy: { name: 'asc' },
+                orderBy: COMPANY_NAME_ORDER,
                 ...(slot ? { skip: slot.tailSkip, take: slot.tailTake } : {}),
               })
             : [],

@@ -82,6 +82,20 @@ test('the list is ordered by the server, and accounts that never moved stage com
       createdAt: ago(120),
     },
   });
+  // A NEWER no-op on the stale record (#2264): same stage in and out, today.
+  // It is not a move, so it must change nothing below — and it is the negative
+  // control for the no-op filter on the route's `MAX(createdAt)` aggregate
+  // (#2528): count it, and `stale` would read as moved today, flipping it with
+  // `recent` in both derived orders.
+  await prisma.statusChange.create({
+    data: {
+      relationId: staleRel.id,
+      fromStatus: 'APPROVAL_PENDING_220',
+      toStatus: 'APPROVAL_PENDING_220',
+      changedById: admin.id,
+      createdAt: ago(0),
+    },
+  });
 
   try {
     await signInAndSettle(page, adminEmail, pw, '/admin');

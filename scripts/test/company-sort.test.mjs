@@ -161,6 +161,25 @@ test('the one ranking: key first, name as the tie-breaker, keyless accounts last
   assert.deepEqual(companies.map((c) => c.id), ['z', 'b', 'y', 'a', 'c']);
 });
 
+test('the ranking is total: same key and same name fall back to the id, whatever order they came in', () => {
+  // `Company.name` is not unique and `waiting` keys on whole days, so a tie on
+  // both is ordinary. Without a last tie-break the two come back in the
+  // database's return order, which may differ between neighbouring pages.
+  const keys = new Map([
+    ['id-2', 7],
+    ['id-1', 7],
+  ]);
+  const twins = [
+    { id: 'id-2', name: 'Same GmbH' },
+    { id: 'id-1', name: 'Same GmbH' },
+    { id: 'id-4', name: 'Keyless AG' },
+    { id: 'id-3', name: 'Keyless AG' },
+  ];
+  const expected = ['id-1', 'id-2', 'id-3', 'id-4'];
+  assert.deepEqual(rankByDerivedKey(twins, keys).map((c) => c.id), expected);
+  assert.deepEqual(rankByDerivedKey(twins.slice().reverse(), keys).map((c) => c.id), expected);
+});
+
 test('the route\'s derived path (keys, ranked head, paged tail) returns the same pages as ranking everything', () => {
   // A funnel mixing every case: several records per account, a no-op-only
   // account, a record with no company, and accounts with no records at all.

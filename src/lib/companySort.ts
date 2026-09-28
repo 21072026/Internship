@@ -123,12 +123,16 @@ export function compareSortKeys(a: number | undefined, b: number | undefined): n
 }
 
 /**
- * Put companies in a derived order: by key (`compareSortKeys`), then by name.
+ * Put companies in a derived order: by key (`compareSortKeys`), then by name,
+ * then by id.
  *
  * Name is the tie-breaker, including between the accounts that have no key at
  * all: those all land at the end, and they stay alphabetical there instead of
- * in whatever order the database returned. A copy is sorted; the input is left
- * as it was.
+ * in whatever order the database returned. `Company.name` is not unique, and
+ * `waiting` keys on whole days, so two accounts can tie on both — the id makes
+ * the order total, or they would come back in the database's return order,
+ * which is free to differ between two requests for neighbouring pages. A copy
+ * is sorted; the input is left as it was.
  */
 export function rankByDerivedKey<T extends { id: string; name: string }>(
   companies: readonly T[],
@@ -137,7 +141,10 @@ export function rankByDerivedKey<T extends { id: string; name: string }>(
   return companies
     .slice()
     .sort(
-      (a, b) => compareSortKeys(keys.get(a.id), keys.get(b.id)) || a.name.localeCompare(b.name)
+      (a, b) =>
+        compareSortKeys(keys.get(a.id), keys.get(b.id)) ||
+        a.name.localeCompare(b.name) ||
+        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
     );
 }
 
@@ -156,8 +163,9 @@ export interface DerivedPageWindow {
  *
  * A derived order is two runs back to back: every account that HAS a key,
  * ranked in memory, and then every account that has none. The second run is
- * last by the rule this module exists for, and ordered by name alone, so it is
- * a plain `name asc` query the database pages by itself — the route never
+ * last by the rule this module exists for, and ordered by name alone (id
+ * breaking ties), so it is the same query as the plain `name` order and the
+ * database pages it by itself — the route never
  * loads those rows just to throw them away. A page is therefore a slice of the
  * ranked head followed, once the head runs out, by a window of that tail; this
  * function does the arithmetic so the route does not.
