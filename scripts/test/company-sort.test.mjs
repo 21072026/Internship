@@ -26,8 +26,10 @@ const {
   DEFAULT_COMPANY_SORT,
   companySortKeys,
   compareSortKeys,
+  derivedPageWindow,
   isDerivedSort,
   parseCompanySort,
+  rankByDerivedKey,
 } = await import('../../src/lib/companySort.ts');
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -130,4 +132,95 @@ test('a funnel record with no company is ignored rather than keyed under "null"'
     NOW
   );
   assert.equal(keys.size, 0);
+});
+
+// ── Bounding the two derived orders (#2528) ─────────────────────────────────
+//
+// The route no longer ranks the whole scoped set: it ranks only the accounts
+// that HAVE a key and lets the database page the keyless tail in name order.
+// That is only correct if (a) the tail really is last and alphabetical — which
+// is what `rankByDerivedKey` says about a mixed set — and (b) the page
+// arithmetic stitching the two runs together neither drops nor repeats a row.
+
+test('the one ranking: key first, name as the tie-breaker, keyless accounts last and alphabetical', () => {
+  const keys = new Map([
+    ['b', 10],
+    ['a', 10],
+    ['c', 50],
+  ]);
+  const companies = [
+    { id: 'z', name: 'Zeta' },
+    { id: 'b', name: 'Beta' },
+    { id: 'y', name: 'Alpha' },
+    { id: 'a', name: 'Acme' },
+    { id: 'c', name: 'Gamma' },
+  ];
+  const ranked = rankByDerivedKey(companies, keys).map((c) => c.id);
+  assert.deepEqual(ranked, ['c', 'a', 'b', 'y', 'z']);
+  // A copy is sorted — the caller's array keeps its order.
+  assert.deepEqual(companies.map((c) => c.id), ['z', 'b', 'y', 'a', 'c']);
+});
+
+test('the route\'s derived path (keys, ranked head, paged tail) returns the same pages as ranking everything', () => {
+  // A funnel mixing every case: several records per account, a no-op-only
+  // account, a record with no company, and accounts with no records at all.
+  const relations = [
+    moved('acme', 200, 120),
+    moved('acme', 60, 3),
+    moved('beta', 90, 40),
+    moved('gamma', 30, 40),
+    moved('delta', 10, 1),
+    untouched('epsilon', 300),
+    {
+      companyId: 'noop',
+      startDate: at(200),
+      statusChanges: [{ createdAt: at(1), fromStatus: 'TRIAL_ACTIVE', toStatus: 'TRIAL_ACTIVE' }],
+    },
+    { companyId: null, startDate: at(10), statusChanges: [{ createdAt: at(1), fromStatus: 'A', toStatus: 'B' }] },
+  ];
+  const names = ['acme', 'beta', 'gamma', 'delta', 'epsilon', 'noop', 'omega', 'kappa', 'lambda', 'mu'];
+  const companies = names.map((id) => ({ id, name: id.toUpperCase() }));
+
+  for (const sort of ['movement', 'waiting']) {
+    // The reference: what the handler did before #2528 — every company, every
+    // record, every row of history, ranked in one go.
+    const everything = rankByDerivedKey(companies, companySortKeys(relations, sort, NOW)).map((c) => c.id);
+
+    // The bounded path: the query hands each relation only its newest REAL move
+    // (a relation with none is not returned at all), so feed the keys exactly that.
+    const newestRealMove = relations.flatMap((r) => {
+      const real = r.statusChanges.filter((c) => c.fromStatus !== c.toStatus);
+      if (real.length === 0) return [];
+      const newest = real.reduce((a, b) => (a.createdAt > b.createdAt ? a : b));
+      return [{ companyId: r.companyId, startDate: r.startDate, statusChanges: [{ createdAt: newest.createdAt }] }];
+    });
+    const keys = companySortKeys(newestRealMove, sort, NOW);
+    const head = rankByDerivedKey(companies.filter((c) => keys.has(c.id)), keys).map((c) => c.id);
+    // The database's `name asc` over everything that has no key.
+    const tail = companies
+      .filter((c) => !keys.has(c.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((c) => c.id);
+
+    assert.deepEqual([...head, ...tail], everything, `${sort}: the stitched order is the full order`);
+
+    for (const pageSize of [1, 2, 3, 4, 7, 10, 25]) {
+      for (let skip = 0; skip <= companies.length + pageSize; skip += pageSize) {
+        const w = derivedPageWindow(head.length, skip, pageSize);
+        const page = [...head.slice(w.headStart, w.headEnd), ...tail.slice(w.tailSkip, w.tailSkip + w.tailTake)];
+        assert.deepEqual(page, everything.slice(skip, skip + pageSize), `${sort} skip=${skip} take=${pageSize}`);
+      }
+    }
+  }
+});
+
+test('the page window: head first, then the tail from its own start, with no row dropped or repeated', () => {
+  // Entirely inside the ranked head: no tail query at all.
+  assert.deepEqual(derivedPageWindow(100, 0, 24), { headStart: 0, headEnd: 24, tailSkip: 0, tailTake: 0 });
+  // Straddling the boundary: the rest of the head, then the tail from zero.
+  assert.deepEqual(derivedPageWindow(30, 24, 24), { headStart: 24, headEnd: 30, tailSkip: 0, tailTake: 18 });
+  // Past the head: the tail offset is the page offset minus the head's length.
+  assert.deepEqual(derivedPageWindow(30, 48, 24), { headStart: 30, headEnd: 30, tailSkip: 18, tailTake: 24 });
+  // Nothing has moved: the page is the tail's page, exactly as asked.
+  assert.deepEqual(derivedPageWindow(0, 48, 24), { headStart: 0, headEnd: 0, tailSkip: 48, tailTake: 24 });
 });

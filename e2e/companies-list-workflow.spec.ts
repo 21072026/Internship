@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 import { confirmDialog, acceptConfirmDialog, cancelConfirmDialog } from './helpers/confirm';
 
 // The daily work on the company/account list (#2436, #2437, #2441 — story #2397).
@@ -108,12 +108,42 @@ test('the list is ordered by the server, and accounts that never moved stage com
     expect(staleWait).toBeLessThan(recentWait);
     expect(recentWait).toBeLessThan(neverWait);
 
+    // Paged, not just `all=1` (#2528): the two derived orders no longer rank
+    // the whole scoped set — the accounts that moved are ranked, and the
+    // never-moved tail is paged by the database. Walking the pages must give
+    // back exactly the full order, including the page that straddles the two
+    // runs, and one page past the end must be empty rather than a repeat.
+    const pagedOrder = async (sort: string, pageSize: number) => {
+      const names: string[] = [];
+      for (let p = 1; p <= Math.ceil(3 / pageSize) + 1; p++) {
+        const res = await page.request.get(
+          `/api/companies?search=${tag}&sort=${sort}&pageSize=${pageSize}&page=${p}`
+        );
+        expect(res.ok()).toBeTruthy();
+        const body = await res.json();
+        expect(body.total).toBe(3);
+        names.push(...body.companies.map((c: { name: string }) => c.name));
+      }
+      return names;
+    };
+    for (const pageSize of [1, 2]) {
+      expect(await pagedOrder('movement', pageSize)).toEqual([recent.name, stale.name, never.name]);
+      expect(await pagedOrder('waiting', pageSize)).toEqual([stale.name, recent.name, never.name]);
+    }
+
     // An unknown value is not a 500: it falls back to the default (name A–Z).
     const bogus = await page.request.get('/api/companies?all=1&sort=definitely-not-a-sort');
     expect(bogus.status()).toBe(200);
     const bogusNames: string[] = (await bogus.json()).companies.map((c: { name: string }) => c.name);
     const ours = bogusNames.filter((n) => n.endsWith(tag));
     expect(ours).toEqual([recent.name, stale.name, never.name]);
+
+    // The same orders through a MENTOR's scope, whose company filter the
+    // derived path nests inside its relation query — a shape the admin's `{}`
+    // scope never exercises. All three funnel records are this mentor's own.
+    await signInAsFreshUser(page, mentorEmail, pw, '/mentor');
+    expect(await pagedOrder('movement', 2)).toEqual([recent.name, stale.name, never.name]);
+    expect(await pagedOrder('waiting', 2)).toEqual([stale.name, recent.name, never.name]);
   } finally {
     await prisma.statusChange.deleteMany({ where: { relationId: { in: [recentRel.id, staleRel.id] } } });
     await prisma.mentorshipRelation.deleteMany({

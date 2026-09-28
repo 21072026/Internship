@@ -60,10 +60,10 @@ export function parseCompanySort(value: string | null | undefined): CompanySort 
  * account's funnel records — the newest real `StatusChange`, and the stage
  * clock — and Prisma cannot express "order Company by max(StatusChange.createdAt)
  * across a to-many relation": `orderBy` reaches related rows only through
- * `_count`. So those two are ranked here, on the server, over the whole scoped
- * result set before the page is sliced out of it (the same shape as the
- * in-memory skill filter in `/api/candidates`). Still server-side ordering —
- * the client never re-sorts.
+ * `_count`. So those two are ranked here, on the server — but only over the
+ * accounts that HAVE a key (#2528): the rest are last by definition, in name
+ * order, which the database can page by itself (`derivedPageWindow` below).
+ * Still server-side ordering — the client never re-sorts.
  */
 export function isDerivedSort(sort: CompanySort): boolean {
   return sort === 'movement' || sort === 'waiting';
@@ -120,4 +120,62 @@ export function compareSortKeys(a: number | undefined, b: number | undefined): n
   if (a === undefined) return 1;
   if (b === undefined) return -1;
   return b - a;
+}
+
+/**
+ * Put companies in a derived order: by key (`compareSortKeys`), then by name.
+ *
+ * Name is the tie-breaker, including between the accounts that have no key at
+ * all: those all land at the end, and they stay alphabetical there instead of
+ * in whatever order the database returned. A copy is sorted; the input is left
+ * as it was.
+ */
+export function rankByDerivedKey<T extends { id: string; name: string }>(
+  companies: readonly T[],
+  keys: ReadonlyMap<string, number>
+): T[] {
+  return companies
+    .slice()
+    .sort(
+      (a, b) => compareSortKeys(keys.get(a.id), keys.get(b.id)) || a.name.localeCompare(b.name)
+    );
+}
+
+/** Which part of a derived-order page comes from where (see below). */
+export interface DerivedPageWindow {
+  /** `ranked.slice(headStart, headEnd)` — the keyed accounts on this page. */
+  headStart: number;
+  headEnd: number;
+  /** The window of the keyless tail, in name order, that fills the rest. */
+  tailSkip: number;
+  tailTake: number;
+}
+
+/**
+ * Where one page of a derived order starts and ends (#2528).
+ *
+ * A derived order is two runs back to back: every account that HAS a key,
+ * ranked in memory, and then every account that has none. The second run is
+ * last by the rule this module exists for, and ordered by name alone, so it is
+ * a plain `name asc` query the database pages by itself — the route never
+ * loads those rows just to throw them away. A page is therefore a slice of the
+ * ranked head followed, once the head runs out, by a window of that tail; this
+ * function does the arithmetic so the route does not.
+ *
+ * `keyedCount` is the length of the ranked head; `skip`/`take` are the page the
+ * caller asked for.
+ */
+export function derivedPageWindow(
+  keyedCount: number,
+  skip: number,
+  take: number
+): DerivedPageWindow {
+  const headStart = Math.min(skip, keyedCount);
+  const headEnd = Math.min(skip + take, keyedCount);
+  return {
+    headStart,
+    headEnd,
+    tailSkip: Math.max(0, skip - keyedCount),
+    tailTake: take - (headEnd - headStart),
+  };
 }
