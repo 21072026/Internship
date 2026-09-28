@@ -160,8 +160,12 @@ Cloudflare's proxy, bump `TRUSTED_PROXY_COUNT` to `2` for it in the same
 change**, or every visitor will be bucketed as the Cloudflare edge and one
 person's rate limit will throttle everyone.
 
-`0` disables the header entirely — right for a container reached directly, and
-what `playwright.config.ts` sets for the e2e webServer.
+`0` disables **both** proxy headers — `X-Forwarded-For` and `X-Real-IP` alike,
+since with nothing in front a client writes either one (#2470) — so every caller
+shares one bucket per limit. Right for a container reached directly; strict, but
+no header buys a way around it. The e2e webServer runs at `1` like production:
+its helpers send the `X-Forwarded-For` a one-hop proxy would
+(`e2e/helpers/rateLimit.ts`).
 
 ### Where the rate-limit counters live (`RATE_LIMIT_REDIS_URL`, #1696)
 

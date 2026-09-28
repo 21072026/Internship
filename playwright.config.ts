@@ -218,11 +218,17 @@ export default defineConfig({
         url: localURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
-        // Playwright talks to Next directly — there is no nginx appending to
-        // X-Forwarded-For here, so 0 is the honest setting and it is what makes
-        // the spoofing assertions in rate-limit-spoof.spec.ts meaningful (#858).
+        // Production's setting, on purpose (#2470). Nothing sits in front of
+        // this server, so the e2e helpers play the one-hop proxy themselves:
+        // `floodIp()`/`freshIp()` (e2e/helpers/rateLimit.ts) send the
+        // X-Forwarded-For such a proxy produces, and the #858 spoofing test in
+        // rate-limit.spec.ts proves a rotating LEFTMOST entry buys nothing under
+        // exactly the configuration it would be attempted against. `0` used to
+        // be set here and the helpers leaned on X-Real-IP being trusted at `0`
+        // — the hole #2470 closed; at `0` every request is now one shared
+        // bucket and the helpers' isolation would silently do nothing.
         env: {
-          TRUSTED_PROXY_COUNT: '0',
+          TRUSTED_PROXY_COUNT: '1',
           // E2E must never deliver real mail from a developer's loaded .env;
           // synchronous route mail would otherwise wait on that external SMTP.
           SMTP_USER: '',
@@ -282,7 +288,9 @@ export default defineConfig({
           // server's origin, the post-sign-in redirect walks off this server
           // and the spec signs in to the wrong one.
           NEXTAUTH_URL: ISOLATION_URL,
-          TRUSTED_PROXY_COUNT: '0',
+          // Same as the default server, so a rate-limited call made here keys
+          // the way the helpers expect (see the comment above, #2470).
+          TRUSTED_PROXY_COUNT: '1',
           SMTP_USER: '',
           SMTP_BULK_USER: '',
         },

@@ -3,18 +3,25 @@
  *
  * `enforceRateLimit` keys on `bucket:ip`, the counter store is per PROCESS, and
  * a shard runs its whole file list against ONE Next server (`workers: 1`, one
- * `webServer`). Every request that arrives without a usable address therefore
- * counts into the same `<bucket>:unknown` counter — so a spec that deliberately
- * exhausts a bucket exhausts it for every later spec touching that endpoint, for
- * the rest of the shard (the windows here are 15 minutes). That is what turned
- * `e2e-full` shard 4/4 permanently red: `rate-limit.spec.ts`'s six POSTs to
- * `/api/support` (limit 5) left `support-attachments.spec.ts` and
- * `support-chat.spec.ts` with nothing to spend.
+ * `webServer`). Every request that arrives without an address of its own
+ * therefore counts into the same counter — Next fills a missing
+ * `X-Forwarded-For` in with the socket's loopback address, or it reads as
+ * `<bucket>:unknown` — so a spec that deliberately exhausts a bucket exhausts it
+ * for every later spec touching that endpoint, for the rest of the shard (the
+ * windows here are 15 minutes). That is what turned `e2e-full` shard 4/4
+ * permanently red: `rate-limit.spec.ts`'s six POSTs to `/api/support` (limit 5)
+ * left `support-attachments.spec.ts` and `support-chat.spec.ts` with nothing to
+ * spend.
  *
- * The webServer runs with `TRUSTED_PROXY_COUNT=0` (playwright.config.ts) so that
- * the #858 spec can prove a rotating `X-Forwarded-For` buys nothing. That is
- * exactly why the isolation goes through `x-real-ip`: `clientIp()` ignores the
- * forwarded header outright under that setting and falls through to this one.
+ * HOW AN ADDRESS GETS IN (#2470). The webServer runs at `TRUSTED_PROXY_COUNT=1`
+ * (playwright.config.ts), production's setting, and these helpers send what a
+ * one-hop proxy hands the app: an `X-Forwarded-For` whose rightmost entry is the
+ * peer it saw. Nothing sits in front of the e2e server, so the helper plays that
+ * proxy. It used to go through `X-Real-IP` at `TRUSTED_PROXY_COUNT=0` instead —
+ * which only worked because `clientIp()` trusted that header at the one setting
+ * that is supposed to trust nothing, and that was the bug #2470 closed. Against
+ * a deployed env (`BASE_URL`) a real proxy appends the runner's own address to
+ * the right of these, so there the isolation is inert, as it always was.
  *
  * Two shapes, and the difference is the whole point:
  *
@@ -46,17 +53,25 @@ function address(prefix: string, index: number): string {
 const floods = new Map<string, string>();
 let freshCount = 0;
 
-/** Headers pinning a caller to one address, so repeated requests share a bucket. */
-export function floodIp(label: string): Record<string, string> {
+/**
+ * Headers pinning a caller to one address, so repeated requests share a bucket.
+ *
+ * `clientWritten` is for the #858 spoofing test alone: text the CALLER put in
+ * `X-Forwarded-For` themselves, which a proxy keeps on the left of the address
+ * it appends (`$proxy_add_x_forwarded_for`). The pinned address stays the
+ * rightmost entry, so it is still the bucket — whatever the caller wrote must
+ * buy nothing.
+ */
+export function floodIp(label: string, clientWritten?: string): Record<string, string> {
   let ip = floods.get(label);
   if (!ip) {
     ip = address(FLOOD_PREFIX, floods.size);
     floods.set(label, ip);
   }
-  return { 'X-Real-IP': ip, 'X-E2E-Caller': label };
+  return { 'X-Forwarded-For': clientWritten ? `${clientWritten}, ${ip}` : ip, 'X-E2E-Caller': label };
 }
 
 /** Headers with an address no other request in this run spends. */
 export function freshIp(label: string): Record<string, string> {
-  return { 'X-Real-IP': address(FRESH_PREFIX, freshCount++), 'X-E2E-Caller': label };
+  return { 'X-Forwarded-For': address(FRESH_PREFIX, freshCount++), 'X-E2E-Caller': label };
 }
