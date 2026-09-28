@@ -232,6 +232,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/viewLogRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the company access log is de-noised, never silenced: no setting value turns it off, a failed lookup records the read, and detail fits its VARCHAR(191) (#2433)',
+    },
+  ],
+  [
     'src/lib/marketingImport.ts',
     {
       floor: 95,

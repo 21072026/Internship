@@ -182,6 +182,39 @@ Yeni bir firma okuma yolu açan, bu tabloya satır ekler **ve** kapsamı
 `scopeForRole(user, 'company')`'den alır — ikinci bir `if (role === …)` zinciri
 yazmaz.
 
+### Kim okudu? — `company.view` erişim kaydı
+
+[#2433](https://github.com/21072026/Internship/issues/2433). `GET
+/api/companies/[id]` başarılı bir okumada `ActivityLog`'a bir `company.view`
+satırı yazar (`actorId`, `actorEmail`, `targetType: 'company'`, `targetId`,
+`detail` = firma adı, `ip`, `userAgent`). Ayrı bir `AccessLog` tablosu **yok**:
+yazma yolu `logActivity()`, saklama `activityLogRetentionDays` (365 gün,
+[`pii-access-lifecycle.md`](pii-access-lifecycle.md)), görüntüleme
+`/admin/activity` (eylem filtresi `company.view`).
+
+- **404 yazmaz** (okunan bir şey yok); **403** zaten `authz.scope_denied`
+  satırını yazmıştır.
+- **Kısa pencerede tekrar = tek satır.** Aynı eylem, aynı okuyucu, aynı firma,
+  aynı `detail` ve aynı **IP** için `viewLogWindowMinutes` (varsayılan 15 dk)
+  içinde ikinci satır yazılmaz. Farklı bir IP'den okuma yeni bir olgudur ve
+  ayrı satırdır; taklit (impersonation) sırasında yapılan okuma `detail`'de
+  `impersonated by <adminId>` ile işaretlenir, böylece kişinin kendi okumasıyla
+  birleşmez.
+- **Kayıt asla kapatılamaz:** `0` = her okuma satır; bir günü aşan değer bir
+  güne kırpılır; boş/bozuk değer 15'e düşer, "hiç yazma"ya değil. Ayar, saklama
+  pencereleri gibi `PUT /api/admin/settings` ile yazılır, formda yoktur.
+- **Hata sayfayı kırmaz:** ayar okunamazsa varsayılan, tekrar kontrolü
+  başarısız olursa satır **yazılır** (bir kopya, iz bırakmayan bir okumadan
+  ucuzdur), yazma hatası `logActivity()` içinde yutulur. Bastırma en iyi
+  çabadır: eşzamanlı iki istek ikisi de yazabilir — tam garanti bir şema
+  değişikliği (unique kısıt) gerektirirdi.
+
+Kural bağımlılıksız [`src/lib/viewLogRule.ts`](../src/lib/viewLogRule.ts)'te
+(birim testi `scripts/test/view-log-rule.test.mjs`); Prisma'ya değen yarısı
+`logViewActivity()` ([`src/lib/activity.ts`](../src/lib/activity.ts)). Başka bir
+kaydın okunmasını loglamak isteyen aynı fonksiyonu çağırır — ikinci bir log
+yolu açmaz.
+
 ## Bu matrisin dışında kalanlar / Out of scope for this matrix
 
 Aşağıdaki alanlar `scopeForRole` kullanmıyor çünkü zaten fail-closed bir desenle

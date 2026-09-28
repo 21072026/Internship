@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
+import { logViewActivity } from '@/lib/activity';
+import { viewLogDetail } from '@/lib/viewLogRule';
 
 const updateCompanySchema = z.object({
   name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
@@ -78,6 +80,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
+
+    // Access log (#2433): "who read this customer record?" is an ActivityLog
+    // question, so a successful read writes a `company.view` entry. A 404 is
+    // not a read and writes nothing; a 403 already wrote its scope denial.
+    // logViewActivity() never throws, and a repeat of the same read inside the
+    // `viewLogWindowMinutes` window writes no second row (src/lib/viewLogRule.ts).
+    // A read made while impersonating is marked in `detail`, which also keeps it
+    // from being folded into the impersonated user's own reads.
+    await logViewActivity({
+      action: 'company.view',
+      actorId: session.user.id,
+      actorEmail: session.user.email ?? null,
+      targetType: 'company',
+      targetId: company.id,
+      detail: viewLogDetail(company.name, session.user.impersonatorId),
+      request,
+    });
 
     // Which ROW this reader may fetch is the scope above (#2431); which
     // COLUMNS of it a non-admin may read is src/lib/companyVisibility.ts — the
