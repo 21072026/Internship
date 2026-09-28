@@ -571,7 +571,10 @@ export default async function HomePage() {
           <p className="mt-8 text-sm text-gray-600 bg-amber-50 border border-amber-100 rounded-xl p-5 leading-relaxed">{L.transBeta}</p>
           <div className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
             <Link href="/features" className="text-blue-600 hover:underline">{L.transLinkFeatures}</Link>
-            <Link href="/release-notes" className="text-blue-600 hover:underline">{L.transLinkReleases}</Link>
+            {/* 404s on a marketing host (#2544): the feed is the internship changelog. */}
+            {!isMarketing && (
+              <Link href="/release-notes" className="text-blue-600 hover:underline">{L.transLinkReleases}</Link>
+            )}
             <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1.5">
               <Github className="h-4 w-4" />{L.transLinkGithub}
             </a>

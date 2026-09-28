@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **The marketing host stops serving the internship pages that cannot be dressed** (#2544, epic #2348). #2523 dressed `/features` and `/pricing` per vertical and `/projects` already 404s without the `projects` capability; what was left were pages whose whole content is one product's, still served untouched on `marketing.bcsit-gmbh.de`: `/for-companies` (a pitch for placing interns), `/apply-as-mentor` and `/apply/[mentorId]` (\"how many mentees can you take on?\"), `/release-notes` (one feed for the codebase — 205 visible lines of mostly internship changelog) and `/contributor-terms` (terms for the project named \"Internship CRM\"). Renaming the nouns there would produce fluent copy about a product the visitor did not come for, so they answer **404** instead, through `src/lib/verticalPage.ts` — the same shape `/projects` already uses: `requireVerticalCapability('placements' | 'mentorship')` for module pages, so a vertical that later gains the module gets the page with no edit, and `requireDefaultVertical()` for the two product-level pages no capability owns. The chrome stops offering them in the same change — the footer's release-feed link, the landing's transparency link, the sign-in page's mentor invitation and the sidebar version chip, whose visibility rules mirror the page gates exactly so no vertical is ever handed a link that 404s for it. Measured on the marketing host: **244 → 21** visible lines naming the wrong product; the 21 left are the legal pages, which need their own wording (#2543). Pinned both ways in `e2e/host-vertical-public-pages.spec.ts`: 404 plus no links on the marketing host, 200 plus links on the internship host — and verified red with the gates disabled.",
+  "notes": {
+    "en": [
+      "The marketing site no longer shows pages that belong to the internship product — the company placement pitch, the mentor application and the internship changelog."
+    ],
+    "tr": [
+      "Pazarlama sitesi artık staj ürününe ait sayfaları göstermiyor — firma yerleştirme sayfası, mentor başvurusu ve staj ürününün sürüm notları."
+    ],
+    "de": [
+      "Die Marketing-Website zeigt keine Seiten des Praktikumsprodukts mehr — weder die Seite zur Vermittlung an Unternehmen noch die Mentorenbewerbung oder die Versionshinweise des Praktikumsprodukts."
+    ]
+  }
+}

@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
 import { sameOriginPath } from '@/lib/safeRedirect';
+import { useVertical } from '@/lib/verticalClient';
+import { verticalHasCapability } from '@/lib/verticals';
 
 // Whether the "keep me signed in" box was ticked last time, per browser. A UI
 // preference only: the credential itself is the httpOnly cookie the server
@@ -38,6 +40,9 @@ export interface DemoQuickLogin {
 
 export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   const t = useT();
+  // Mirrors the page's own gate (requireVerticalCapability('mentorship')), so
+  // no vertical is ever offered a link that 404s for it.
+  const offersMentorApplication = verticalHasCapability(useVertical(), 'mentorship');
   const locale = useLocale();
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -376,12 +381,17 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
               {t.auth.registerHere}
             </Link>
           </p>
-          <p className="text-center text-sm text-gray-500 mt-2">
-            {t.auth.wantMentor}{' '}
-            <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="apply-as-mentor-link">
-              {t.auth.applyMentorLink}
-            </Link>
-          </p>
+          {/* Same rule the register page and the landing already apply: the
+              mentor application is the `mentorship` module's front door, and it
+              404s for a vertical without that module (#2544). */}
+          {offersMentorApplication && (
+            <p className="text-center text-sm text-gray-500 mt-2">
+              {t.auth.wantMentor}{' '}
+              <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="apply-as-mentor-link">
+                {t.auth.applyMentorLink}
+              </Link>
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-center gap-4 mt-6">

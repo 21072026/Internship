@@ -44,7 +44,9 @@ export async function PublicFooter() {
         // (#2475): there is no marketing price list to send anyone to yet.
         ...(isMarketing ? [] : [{ href: '/pricing', label: n.pricing }]),
         ...(isMarketing ? [] : [{ href: '/projects', label: n.showcase }]),
-        { href: '/release-notes', label: n.whatsNew },
+        // The release feed is the internship product's changelog and 404s on a
+        // marketing host (#2544), so the marketing footer does not offer it.
+        ...(isMarketing ? [] : [{ href: '/release-notes', label: n.whatsNew }]),
         // The demo links to itself from its own footer — hide it there.
         // `demoPlacement` is what routes this one through DemoLink below, so
         // the click is measured and the URL carries its own utm_content (#1391).

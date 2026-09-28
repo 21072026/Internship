@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useT } from '@/i18n/client';
+import { useVertical } from '@/lib/verticalClient';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 
 const LAST_SEEN_KEY = 'lastSeenReleaseVersion';
 
@@ -11,6 +13,9 @@ const LAST_SEEN_KEY = 'lastSeenReleaseVersion';
 // visiting the page (or this footer once) marks it seen.
 export function VersionFooter({ version }: { version: string }) {
   const t = useT();
+  // The release feed 404s outside the default product (#2544), so there the
+  // version is a fact, not a link to someone else's changelog.
+  const linksReleaseFeed = useVertical() === DEFAULT_VERTICAL;
   const [isNew, setIsNew] = useState(false);
 
   useEffect(() => {
@@ -24,6 +29,10 @@ export function VersionFooter({ version }: { version: string }) {
     try { localStorage.setItem(LAST_SEEN_KEY, version); } catch { /* ignore */ }
     setIsNew(false);
   };
+
+  if (!linksReleaseFeed) {
+    return <span className="text-xs text-gray-600 dark:text-gray-400">v{version}</span>;
+  }
 
   return (
     <Link

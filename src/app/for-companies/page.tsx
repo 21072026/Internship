@@ -5,6 +5,7 @@ import { CompanyInquiryForm } from '@/components/CompanyInquiryForm';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
+import { requireVerticalCapability } from '@/lib/verticalPage';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,10 @@ export const dynamic = 'force-dynamic';
 // company section uses (landing.audCompany*) — one source of truth, so a claim
 // can never drift between the two pages.
 export default async function ForCompaniesPage() {
+  // The pitch is placing interns with companies (#2544) — the `placements`
+  // module, which MARKETING does not carry. `companies` alone is not enough:
+  // a marketing tenant has companies, it does not place people at them.
+  await requireVerticalCapability('placements');
   const { t } = await getServerDictionary();
   const L = t.landing;
   const c = t.forCompanies;

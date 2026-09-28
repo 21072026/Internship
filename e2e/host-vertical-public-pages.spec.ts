@@ -218,3 +218,49 @@ test('the internship 404 keeps all four of its doors', async ({ page }) => {
   await expect(main.getByRole('link', { name: 'For companies' })).toBeVisible();
   await expect(main.getByRole('link', { name: 'Projects', exact: true })).toBeVisible();
 });
+
+// ── The pages that cannot be dressed (#2544) ────────────────────────────────
+//
+// /features and /pricing could be dressed per vertical, and are (above). These
+// cannot: /for-companies is a pitch for placing interns, /apply-as-mentor asks
+// "how many mentees can you take on?", and /release-notes is one feed for the
+// whole codebase, most of it the internship changelog — 205 visible lines of it
+// on the marketing host. They answer 404 for a vertical without the module
+// (or, for the product-level pages, for any vertical but the default), and the
+// chrome stops offering them, so nobody reaches one by clicking.
+//
+// Asserted as a status plus the absence of links, in BOTH directions: a gate
+// that 404s both hosts would pass the marketing half and take the live
+// internship pages down with it.
+const NOT_DRESSABLE = ['/for-companies', '/apply-as-mentor', '/release-notes', '/contributor-terms'];
+
+test('pages that belong to the internship product 404 on the marketing host and are linked from nowhere on it', async ({ page }) => {
+  test.slow();
+  const headers = { 'x-forwarded-host': MARKETING_HOST };
+  for (const path of NOT_DRESSABLE) {
+    const res = await page.request.get(path, { headers });
+    expect(res.status(), `${path} must not be served on the marketing host`).toBe(404);
+  }
+  // A mentor's personal apply link is the same front door.
+  expect((await page.request.get('/apply/some-mentor-id', { headers })).status()).toBe(404);
+
+  await page.setExtraHTTPHeaders(headers);
+  for (const path of ['/', '/auth/signin']) {
+    await page.goto(path);
+    for (const target of [...NOT_DRESSABLE, '/apply']) {
+      await expect(page.locator(`a[href="${target}"]`), `${path} links to ${target} on the marketing host`).toHaveCount(0);
+    }
+  }
+  await expect(page.getByTestId('apply-as-mentor-link')).toHaveCount(0);
+});
+
+test('the internship host still serves every one of them, and still links to them', async ({ page }) => {
+  test.slow();
+  for (const path of NOT_DRESSABLE) {
+    expect((await page.request.get(path)).status(), `${path} must still be served on the internship host`).toBe(200);
+  }
+  await page.goto('/auth/signin');
+  await expect(page.getByTestId('apply-as-mentor-link')).toBeVisible();
+  await page.goto('/');
+  await expect(page.locator('a[href="/release-notes"]').first()).toBeAttached();
+});
