@@ -100,9 +100,13 @@ async function mayReach(
   if (viewer.role === 'ADMIN') {
     // An admin reaches the people of their own tenant, not everyone's (#2542).
     // ProjectTask has no orgId — a personal to-do's tenant is its person's —
-    // so the target is resolved here; an unknown or foreign id is refused.
+    // so the target is resolved here and a person of another tenant is refused.
+    // An id that matches nobody is refused for an org-bound admin — with the
+    // flag on, the scoped lookup reads another tenant's person as nobody — and
+    // keeps today's answer for an org-less one.
     const target = await prisma.user.findUnique({ where: { id: targetId }, select: { orgId: true } });
-    return !!target && sameOrgOrUnknown(target.orgId, viewerOrgId);
+    if (!target) return viewerOrgId === null;
+    return sameOrgOrUnknown(target.orgId, viewerOrgId);
   }
   const mentorship = await prisma.mentorshipRelation.findFirst({
     where: { mentorId: viewer.id, menteeId: targetId },

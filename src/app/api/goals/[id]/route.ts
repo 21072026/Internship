@@ -8,6 +8,7 @@ import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { withTenantScope } from '@/lib/orgContext';
 
 // 'missing' covers another tenant's goal too (#2542): Goal has no orgId, the
 // nested relation include is never scoped, so the tenant is checked here, and
@@ -35,6 +36,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (capGate) return capGate;
   const { id } = await params;
 
+  return await withTenantScope(session, async () => {
   const goal = await goalIfAllowed(session.user.id, session.user.role, id, resolveOrgId(session));
   if (goal === 'missing') return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!goal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -72,6 +74,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
   return NextResponse.json({ goal: updated });
+  });
 }
 
 // DELETE — remove a goal (participants/admin).
