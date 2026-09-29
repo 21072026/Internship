@@ -31,8 +31,11 @@ the `MARKETING_FUNNEL` preset (`src/lib/programTemplates.ts`), never a canonical
 
 ## Trial stages
 
-The trial epic (#2392 and friends) adds three stages to `MARKETING_FUNNEL`, **on-path**,
-between qualification and the proposal:
+The trial epic (#2392 and friends) added **two** stages to `MARKETING_FUNNEL`, **on-path**,
+between qualification and the proposal — shipped in #2518 (issue #2413); the preset is
+`src/lib/programTemplates.ts:546-570` and the two keys are spelled once, in
+`src/lib/trialReminderRule.ts:89` (`TRIAL_ACTIVE_STAGE_KEY`) and `:97`
+(`TRIAL_EXPIRED_STAGE_KEY`):
 
 ```
 LEAD_NEW → LEAD_CONTACTED → LEAD_QUALIFIED → TRIAL_ACTIVE → TRIAL_EXPIRED → DEAL_PROPOSAL
@@ -40,8 +43,15 @@ LEAD_NEW → LEAD_CONTACTED → LEAD_QUALIFIED → TRIAL_ACTIVE → TRIAL_EXPIRE
 ```
 
 `TRIAL_EXPIRED` is on-path, not off-path: an expired trial is a deal that still has to be
-chased, and an off-path stage stops the SLA clock and demands a drop-off reason. A sibling
-PR adds the three keys; nothing in this slice hardcodes them.
+chased, and an off-path stage stops the SLA clock and demands a drop-off reason. Nothing
+outside those two constants hardcodes the keys. `TRIAL_ACTIVE` deliberately carries no SLA
+and `TRIAL_EXPIRED` a 3-day one (`src/lib/programTemplates.ts:573-591`).
+
+How long a trial runs is the SaleVali product's rule, not this repo's: 30 free days plus a
+30-day decision window (60 + 30 for an affiliate trial) — see
+[`salevali-domain.md` § Deneme](salevali-domain.md#deneme-trial--serbest-dönem--karar-penceresi).
+The `trialLengthDays` org setting (default 30) models only the free period; where the
+decision window sits in this funnel is the open decision #2572.
 
 ## SaleVali yolculuğu (#2572 — draft, awaiting maintainer approval)
 

@@ -50,7 +50,7 @@ sürece tek bir PR sessizce farklı davranamaz.
 - `CURATION.md` — görev görev karar listesi (asıl okunacak dosya)
 - `backlog/INDEX.md` — devralınan epic tablosu
 - `backlog/epic-01..09-*.md` — devralınan epic'ler, olduğu gibi
-- `salevali-domain.md` — SaleVali'nin ticari modeli (fiyatlandırma, kanallar)
+- `salevali-domain.md` — SaleVali'nin ticari modeli: fiyat V2, deneme 30 + 30, fesih, kanallar (SaleVali koduna eşitlendi, kaynak satırlarıyla — #2574)
 - `salevali-usage-feed.md` — kullanım beslemesinin veri sözleşmesi (#2445),
   devralınan değil: bu repo'nun kararlarıyla yazıldı
 - `salevali-provider-contract.md` — SaleVali'den istenenler (#2565): `externalId`

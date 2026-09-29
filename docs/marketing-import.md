@@ -121,6 +121,13 @@ marketing tenant those come from the `MARKETING_FUNNEL` preset
 LEAD_NEW · LEAD_CONTACTED · LEAD_QUALIFIED · TRIAL_ACTIVE · TRIAL_EXPIRED · DEAL_PROPOSAL · DEAL_NEGOTIATION · DEAL_WON · DEAL_LOST
 ```
 
+(`src/lib/programTemplates.ts:551-570`; the two trial keys since #2518.) `DEAL_LOST` is the
+one off-path stage. A row placed at `TRIAL_ACTIVE` is stamped with a trial window — see
+"What it writes" below. An organisation provisioned before #2518 may not have the trial
+rows yet (nothing backfills them); the error message lists the keys it really has, and
+`infra/README.md` § "Go-live checklist for the MARKETING org" (#2579) is how an operator
+adds them.
+
 An unknown value is a row-level `ERROR` that names the keys the organisation does have.
 Nothing is hardcoded: a tenant that renamed or extended its stages is validated against
 what it actually has (`resolvePipelineStages`, and `npm run check:stage-keys` is the guard
