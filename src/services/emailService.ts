@@ -50,6 +50,7 @@ import {
   type EmailPrefUser,
 } from '@/lib/emailGroups';
 import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/lib/unsubscribeToken';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -62,6 +63,11 @@ async function emailBrand(orgId?: string | null) {
     accent: b.color || DEFAULT_ACCENT,
     logoUrl: b.logoUrl,
     supportEmail: b.supportEmail,
+    // The origin every link in this org's mail points at (#2495): its own
+    // product host when one is mapped and served, else NEXT_PUBLIC_APP_URL.
+    // Carried on the brand because the brand is already "who is this mail
+    // from" — the same org decides the logo and the host its links open.
+    appUrl: await appOriginForOrg(orgId),
   };
 }
 
@@ -703,7 +709,8 @@ export async function sendInvitationEmail({
   /** The inviter's choice, stored on InvitationToken.locale. */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // The recipient's tenant decides the product the link opens (#2495).
+  const appUrl = await appOriginForOrg(orgId);
   const registerUrl = `${appUrl}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
@@ -779,7 +786,7 @@ export async function sendPasswordResetEmail({
   /** The account's User.preferredLanguage (or, for SET_INITIAL, its creator's). */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = await appOriginForOrg(orgId); // the account's own product (#2495)
   const resetUrl = `${appUrl}/auth/reset?token=${token}`;
   const isInitial = purpose === 'SET_INITIAL';
   const brand = await emailBrand(orgId);
@@ -842,7 +849,7 @@ export async function sendVerificationEmail({
   /** The account's User.preferredLanguage. */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = await appOriginForOrg(orgId); // the account's own product (#2495)
   const verifyUrl = `${appUrl}/auth/verify?token=${token}`;
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
@@ -1275,7 +1282,7 @@ export async function sendMentorshipDecisionEmail({
         ${brandHeader(brand, heading)}
         ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
         ${body}
-        ${ctaBlock(brand, `${appUrl()}/portal`, 'Open your portal')}
+        ${ctaBlock(brand, `${brand.appUrl}/portal`, 'Open your portal')}
       </div>
     `,
   });
@@ -1307,7 +1314,7 @@ export async function sendMenteeAssignedEmail({
         ${mentorName ? `<p>Hi ${esc(mentorName)},</p>` : ''}
         <p><strong>${esc(menteeName)}</strong> has been assigned to you as a mentee. Reach out to
         them to get the mentorship started, and log your first interaction when you do.</p>
-        ${ctaBlock(brand, `${appUrl()}/mentor`, 'Open your dashboard')}
+        ${ctaBlock(brand, `${brand.appUrl}/mentor`, 'Open your dashboard')}
       </div>
     `,
   });
@@ -1341,7 +1348,7 @@ export async function sendMentorAssignedEmail({
         ${menteeName ? `<p>Hi ${esc(menteeName)},</p>` : ''}
         <p><strong>${esc(mentorName)}</strong> is now your mentor. Open your portal to say hi
         and get the mentorship started.</p>
-        ${ctaBlock(brand, `${appUrl()}/portal`, 'Open your portal')}
+        ${ctaBlock(brand, `${brand.appUrl}/portal`, 'Open your portal')}
       </div>
     `,
   });
@@ -1377,7 +1384,7 @@ export async function sendMentorshipRequestEmail({
         ${adminName ? `<p>Hi ${esc(adminName)},</p>` : ''}
         <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
         ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
-        ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, 'Review the request')}
+        ${ctaBlock(brand, `${brand.appUrl}/admin/mentorship`, 'Review the request')}
       </div>
     `,
   });
@@ -1424,7 +1431,7 @@ export async function sendRematchRequestedEmail({
         ${adminName ? `<p>${esc(R.greeting.replace('{name}', adminName))}</p>` : ''}
         <p>${esc(R.body.replace('{name}', menteeName))}</p>
         <p style="color:#6b7280;font-size:14px;">${esc(R.privacy)}</p>
-        ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, esc(R.cta))}
+        ${ctaBlock(brand, `${brand.appUrl}/admin/mentorship`, esc(R.cta))}
       </div>
     `,
   });
@@ -1462,7 +1469,7 @@ export async function sendRematchMentorNoticeEmail({
         ${mentorName ? `<p>${esc(R.greeting.replace('{name}', mentorName))}</p>` : ''}
         <p>${esc(R.body.replace('{name}', menteeName))}</p>
         <p>${esc(R.thanks)}</p>
-        ${ctaBlock(brand, `${appUrl()}/mentor`, esc(R.cta))}
+        ${ctaBlock(brand, `${brand.appUrl}/mentor`, esc(R.cta))}
       </div>
     `,
   });
@@ -1588,7 +1595,7 @@ export async function sendMentorApplicationApprovedEmail({
         ${brandHeader(brand, M.approved.heading)}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(isNewAccount ? M.approved.bodyNewAccount : M.approved.bodyExistingAccount)}</p>
-        ${ctaBlock(brand, registerUrl || `${appUrl()}/auth/signin`, isNewAccount ? M.approved.ctaRegister : M.approved.ctaSignIn)}
+        ${ctaBlock(brand, registerUrl || `${brand.appUrl}/auth/signin`, isNewAccount ? M.approved.ctaRegister : M.approved.ctaSignIn)}
       </div>
     `,
   });
@@ -1675,7 +1682,7 @@ export async function sendOfferSentEmail({
         <p>${esc(M.sent.body.replace('{position}', position).replace('{company}', companyName ? ` (${companyName})` : ''))}</p>
         ${start ? `<p><strong>${esc(M.startDate)}:</strong> ${esc(start)}</p>` : ''}
         ${expires ? `<p><strong>${esc(M.decideBy)}:</strong> ${esc(expires)}</p>` : ''}
-        ${ctaBlock(brand, `${appUrl()}/portal`, M.sent.cta)}
+        ${ctaBlock(brand, `${brand.appUrl}/portal`, M.sent.cta)}
       </div>
     `,
   });
@@ -1742,7 +1749,7 @@ export async function sendTrialReminderEmail({
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(M.body.replace('{company}', companyName).replace('{date}', endsOn))}</p>
         <p style="color:#666;font-size:13px;">${esc(M.hint)}</p>
-        ${ctaBlock(brand, `${appUrl()}${link}`, esc(M.cta))}
+        ${ctaBlock(brand, `${brand.appUrl}${link}`, esc(M.cta))}
       </div>
     `,
   });
@@ -1782,7 +1789,7 @@ export async function sendOfferDecisionEmail({
         ${brandHeader(brand, copy.heading)}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(copy.body.replace('{mentee}', menteeName).replace('{position}', position))}</p>
-        ${ctaBlock(brand, `${appUrl()}/admin/candidates`, M.cta)}
+        ${ctaBlock(brand, `${brand.appUrl}/admin/candidates`, M.cta)}
       </div>
     `,
   });
@@ -1817,7 +1824,7 @@ export async function sendRoleChangeEmail({
         ${brandHeader(brand, mentor ? M.headingMentor : M.headingMentee)}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(mentor ? M.bodyMentor : M.bodyMentee)}</p>
-        ${ctaBlock(brand, `${appUrl()}/auth/signin`, M.cta)}
+        ${ctaBlock(brand, `${brand.appUrl}/auth/signin`, M.cta)}
       </div>
     `,
   });
@@ -1858,7 +1865,7 @@ export async function sendTwoFactorResetEmail({
         ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
         <p>${esc(M.body.replace('{admin}', adminName))}</p>
         <p>${esc(M.reenrol)}</p>
-        ${ctaBlock(brand, `${appUrl()}/account`, M.cta)}
+        ${ctaBlock(brand, `${brand.appUrl}/account`, M.cta)}
         <p style="color: #6b7280; font-size: 14px;">${esc(M.notYou)}</p>
       </div>
     `,
@@ -1907,7 +1914,7 @@ export async function sendMeetingRequestEmail({
         <p><strong>${esc(requesterName)}</strong> requested a meeting: <strong>${esc(topic)}</strong>.</p>
         ${when ? `<p><strong>Proposed time:</strong> ${when}</p>` : ''}
         ${when && proposedAt ? organizerTimeLine(proposedAt, requesterTimeZone, timeZone, requesterName) : ''}
-        ${ctaBlock(brand, `${appUrl()}${link}`, 'Accept or decline')}
+        ${ctaBlock(brand, `${brand.appUrl}${link}`, 'Accept or decline')}
         ${when ? timeZoneNote(timeZone) : ''}
       </div>
     `,
@@ -1954,7 +1961,7 @@ export async function sendMeetingRequestDecisionEmail({
              ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
              ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}`
           : `<p>Your meeting request <strong>${esc(topic)}</strong> could not be accepted. You can propose another time.</p>`}
-        ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the conversation')}
+        ${ctaBlock(brand, `${brand.appUrl}${link}`, 'Open the conversation')}
         ${when ? timeZoneNote(timeZone) : ''}
       </div>
     `,
@@ -2106,7 +2113,7 @@ export async function sendProjectJoinRequestEmail({
         ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
         <p><strong>${esc(requesterName)}</strong> asked to join <strong>${esc(projectName)}</strong>.</p>
         ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>` : ''}
-        ${ctaBlock(brand, `${appUrl()}/projects/${projectId}`, 'Review the request')}
+        ${ctaBlock(brand, `${brand.appUrl}/projects/${projectId}`, 'Review the request')}
       </div>
     `,
   });
@@ -2448,7 +2455,7 @@ export async function checkNextActionReminders(now = new Date()) {
           locale: owner.preferredLanguage,
           to: owner.email,
           subject: text.subject.replace('{name}', name),
-          html: `<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}<p><a href="${appUrl()}${link}">${esc(text.cta)}</a></p>`,
+          html: `<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}<p><a href="${await appOriginForOrg(rel.orgId)}${link}">${esc(text.cta)}</a></p>`,
         });
       } catch (error) {
         failures += 1;
@@ -2531,7 +2538,7 @@ export async function sendWeeklyReportReminders(now = new Date()) {
       await sendEmail({
         to: relation.mentee.email, fromName: brand.name, category: 'weekly-report', subject: copy.reminderSubject,
         userId: relation.mentee.id, locale: relation.mentee.preferredLanguage,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.reminderHeading)}<p>${copy.reminderGreeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${copy.reminderBody.replace('{date}', formattedWeek)}</p>${ctaBlock(brand, `${appUrl()}/portal`, copy.reminderCta)}</div>`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.reminderHeading)}<p>${copy.reminderGreeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${copy.reminderBody.replace('{date}', formattedWeek)}</p>${ctaBlock(brand, `${brand.appUrl}/portal`, copy.reminderCta)}</div>`,
       }).then(() => { emailed++; }).catch((error) => logger.error('Weekly report reminder email failed', { relationId: relation.id, error: String(error) }));
     }
   }
@@ -2696,7 +2703,7 @@ export async function sendDormantCheckIns(now = new Date()) {
       userId: relation.mentee.id,
       locale: relation.mentee.preferredLanguage,
       subject: copy.subject,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${appUrl()}/portal`, copy.cta)}</div>`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${brand.appUrl}/portal`, copy.cta)}</div>`,
     })
       .then(() => { sent += 1; })
       .catch((error) => logger.error('Dormant check-in email failed', { relationId: relation.id, error: String(error) }));
@@ -3077,7 +3084,7 @@ export async function sendProjectMeetingSeriesReminders() {
                 uLocale
               )}
               ${series.fixedLink ? `<p><strong>${esc(S.link)}</strong> <a href="${series.fixedLink}">${esc(series.fixedLink)}</a></p>` : ''}
-              ${ctaBlock(brand, `${appUrl()}${link}`, esc(S.cta))}
+              ${ctaBlock(brand, `${brand.appUrl}${link}`, esc(S.cta))}
               ${timeZoneNote(user.timezone, uLocale)}
             </div>`,
           });

@@ -28,6 +28,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { sendInvitationEmail } from '@/services/emailService';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 export const INVITATION_TTL_DAYS = 7;
 
@@ -79,9 +80,9 @@ export interface CreatedInvitation {
   mailError: unknown;
 }
 
-export function invitationRegisterUrl(token: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  return `${appUrl}/auth/register?token=${token}`;
+/** The register link, on the invited tenant's own product host (#2495). */
+export async function invitationRegisterUrl(token: string, orgId: string | null | undefined): Promise<string> {
+  return `${await appOriginForOrg(orgId)}/auth/register?token=${token}`;
 }
 
 /** The persisted half of an invitation — no mail attempted yet. */
@@ -185,7 +186,7 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Cr
   return {
     invitationId: persisted.invitationId,
     token: persisted.token,
-    registerUrl: invitationRegisterUrl(persisted.token),
+    registerUrl: await invitationRegisterUrl(persisted.token, input.orgId),
     emailSent,
     mailError,
   };
