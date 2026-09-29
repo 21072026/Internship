@@ -43,8 +43,10 @@ LEAD_NEW → LEAD_CONTACTED → LEAD_QUALIFIED → TRIAL_ACTIVE → TRIAL_EXPIRE
 ```
 
 `TRIAL_EXPIRED` is on-path, not off-path: an expired trial is a deal that still has to be
-chased, and an off-path stage stops the SLA clock and demands a drop-off reason. Nothing
-outside those two constants hardcodes the keys. `TRIAL_ACTIVE` deliberately carries no SLA
+chased, and an off-path stage stops the SLA clock and demands a drop-off reason. No TypeScript
+source outside those two constants spells the keys; the one deliberate mirror is the plain-ESM
+demo seeder `prisma/seed-demo-marketing.mjs` (`:93-94`, reused at `:154-161`, `:236-241` and `:417-419`),
+which cannot import the TS constants. `TRIAL_ACTIVE` deliberately carries no SLA
 and `TRIAL_EXPIRED` a 3-day one (`src/lib/programTemplates.ts:573-591`).
 
 How long a trial runs is the SaleVali product's rule, not this repo's: 30 free days plus a

@@ -7,8 +7,10 @@ takip edilen kayıt değil, **operatördür**.
 
 Bu dosya ilk hâliyle kapatılan `21072026/Marketing` repo'sunun `src/lib/constants.ts`,
 `prisma/schema.prisma` ve `CLAUDE.md`'sinden çıkarılmıştı. **Fiyat, deneme ve fesih
-kuralları 2026-09-29'da (#2574) SaleVali'nin kendi koduna eşitlendi** — tek doğru kaynak
-artık `salevali-server` repo'sudur; aşağıdaki her rakam kaynağının dosya:satırını taşır.
+kuralları ile dil ve kanal listeleri 2026-09-29'da (#2574) SaleVali'nin kendi koduna
+eşitlendi** — tek doğru kaynak artık `salevali-server` repo'sudur; bu bölümlerdeki her
+rakam kaynağının dosya:satırını taşır. Yaşam döngüsü, SEPA ve müşteri kaynağı bölümleri
+kapatılan Marketing CRM'in modelini **tarihçe olarak** anlatır.
 Satır numaraları, bu makinedeki kardeş checkout'un (`../salevali-server`) 2026-09-29
 hâlinden okunmuştur; SaleVali tarafında bir değişiklik olursa önce kaynak, sonra bu dosya.
 
@@ -41,7 +43,10 @@ Kod yorumu V2'nin `salevali.de/de/preise` ile birebir olduğunu söyler (`admin-
 
 Kademe sınırları (100 / 1000) V1 ile aynıdır (`TIER_1_LIMIT`/`TIER_2_LIMIT`,
 `admin-helper.ts:50-52`). Kademeler **birikimlidir** — ilk kademenin fiyatı tüm hacme
-uygulanmaz. Tutarlar indirim öncesi **net** tutarlardır (`admin-helper.ts:160`).
+uygulanmaz. Tutarlar affiliate indirimi **öncesi** liste tutarlarıdır; KDV dahil mi hariç
+mi olduğu bu fonksiyondan okunamaz (aynı dosyada `pricing_summary.total` "brüt,
+indirim-öncesi" diye geçiyor, `admin-helper.ts:297`) — KDV durumu teyit edilene kadar
+satışta "net" ya da "brüt" denmez.
 
 Örnekler (`calculateTieredPriceV2`, `admin-helper.ts:212-234`):
 
@@ -65,7 +70,10 @@ kademelenir; T = 0 bile sabit ücreti doğurur. Devralınan dokümandaki
 için doğrusu 81,50 €). Satış konuşmasında V1 rakamı **kullanılmaz**.
 
 **Affiliate indirimi:** `affiliate_user` lisansındaki dönem **%20 indirimle** (× 0,8)
-fiyatlanır (`admin-helper.ts:161`); bu lisansa girişten **120 gün** sonra kullanıcı onayı
+fiyatlanır — indirim fatura oluşturulurken uygulanır (`admin-user.service.ts:109-119`,
+sürekli hâlde `tieredTotal * 0.8`). Ay ortasında premium'a geçişte fatura iki döneme
+bölünür ve yalnız A (affiliate) dönemi indirimli fiyatlanır; **sabit ücret tamamen B
+dönemine yazılır, indirilmez** (`admin-helper.ts:152-161`). Bu lisansa girişten **120 gün** sonra kullanıcı onayı
 gerekmeden `premium`'a geçer ve indirim biter (`user.service.ts:735-750`).
 
 > **Açık soru (ürün ekibine — #2574):** `POSITION_OPTIONS` içinde
@@ -109,9 +117,14 @@ bekliyor. Bugün serbest dönemi biten kayıt `TRIAL_EXPIRED`'a park edilir
 
 ## Fesih
 
-Fesih bildiriminden (`status = 'cancellation_request'`) **30 gün** sonra hesap
-`cancelled` olur (`user.service.ts:253-259`, gün hesabı `getDaysSinceLastCancellation`
-`:643`). Marketing CRM'in modelinde bu, `CANCELLATION_NOTICE_800` aşamasındaki müşteride
+Fesih bildirimi hesabı `status = 'cancellation_request'`'e alır. `account_log`'daki son
+`cancellation` kaydından **30 günden fazla** (kesin `daysDiff > 30`) geçtiyse, statü
+`cancelled`'a **bir sonraki girişte** çevrilir (`user.service.ts:253-259`, gün hesabı
+`getDaysSinceLastCancellation` `:643`; ayrıca `user.controller.ts:1814`). Bunu yapan bir
+cron **yok** — kullanıcı hiç girmezse statü `cancellation_request`'te kalır — ve
+`cancelled` bir hesap hâlâ kimlik doğrulayabilir (`user.service.ts:244`,
+`jwt.service.ts:82`). Sözleşmesel fesih süresi (Kündigungsfrist) AGB'den gelir, bu koddan
+değil; satışta 30 gün bir sözleşme süresi olarak aktarılmaz. Marketing CRM'in modelinde bu, `CANCELLATION_NOTICE_800` aşamasındaki müşteride
 sözleşme bitiş tarihi = bildirim tarihi + 30 gün demekti.
 
 ## Yaşam döngüsü aşamaları
@@ -147,15 +160,19 @@ borçlandırma ile alınıyor.
 
 ## Satış kanalları
 
-Bir tüccarın bağlı olduğu pazaryerleri, mağaza yazılımları ve kargo firmaları:
+Bir tüccarın bağlı olduğu pazaryerleri, mağaza yazılımları ve kargo firmaları. Liste
+SaleVali'nin entegrasyon klasörlerinden alınmıştır (`salevali-server/src/services/shops/`
+ve `src/services/shippers/`, 2026-09-29):
 
-**Pazaryeri/mağaza:** Amazon, eBay, Kaufland, OTTO, Etsy, Shopify, Shopware,
-WooCommerce, PrestaShop
-**Kargo:** DHL, DPD, GLS, UPS, Hermes
-**Diğer:** özel API, diğer
+**Pazaryeri/mağaza:** About You, Amazon (+ Amazon Prime/FBA), Avocadostore, bol.com,
+eBay, Etsy, Hood, Kaufland, Manomano, OTTO, PrestaShop, Shop Apotheke, Shopify (REST +
+GraphQL), Shopware 5, Shopware 6, Temu, TikTok Shop, WooCommerce
+**Kargo:** Deutsche Post, DHL, DPD, DPD Depot, FedEx, GLS, GLS ShipIT (farm), Hermes, UPS
 
-Bir müşteri birden çok kanal çalıştırır ve kanal başına tek kayıt tutulurdu
-(`[customerId, channel]` üzerinde tekil).
+Kapatılan Marketing CRM'in kanal enum'u bunun eski ve dar bir alt kümesiydi (Amazon, eBay,
+Kaufland, OTTO, Etsy, Shopify, Shopware, WooCommerce, PrestaShop; DHL, DPD, GLS, UPS,
+Hermes; artı "özel API" ve "diğer"). O CRM'de bir müşteri birden çok kanal çalıştırır ve
+kanal başına tek kayıt tutulurdu (`[customerId, channel]` üzerinde tekil).
 
 ## Müşteri kaynağı
 
@@ -164,5 +181,6 @@ Bir müşteri birden çok kanal çalıştırır ve kanal başına tek kayıt tut
 
 ## Dil
 
-SaleVali DE/EN/TR olarak satılıyor; müşterinin çalıştığı arayüz dili kayıtta
+SaleVali DE/EN/TR/FR olarak satılıyor (`salevali-server` `src/i18n/config.ts:9`
+`SUPPORTED_LANGUAGES`; client kataloğu `messages/{de,en,tr,fr}.json`); müşterinin çalıştığı arayüz dili kayıtta
 tutuluyordu.
