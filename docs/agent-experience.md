@@ -7690,3 +7690,16 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **An out-of-repo Playwright config that imports the repo's `playwright.config.ts`
   receives `{ default }`**, not the config: `--project=chromium` then says "Available
   projects:" (empty). `import m from '…/playwright.config.ts'; const base = m.default ?? m;`.
+- **An import's `leadChanges` is a diff, not the row.** `planFieldUpdates` drops a field the
+  record already holds (and one it may not overwrite), so anything derived from "what the
+  file says" — here the typed Source binding — must be planned from the incoming value, or
+  a re-import of existing records silently does nothing. Plan it in the diff so a dry run
+  reports it (`lead.source`) and a second run is UNCHANGED again.
+- **`NOT: { orgId: 'm' }` skips NULL rows** (SQL `NOT (NULL = 'm')` is NULL). "Outside this
+  tenant" for a non-default org needs an explicit `orgId: null` arm.
+- **`PUT /api/admin/settings` writes the GLOBAL row** even for a MARKETING admin (isolation
+  off). An e2e that enables `premiumAnalytics` must reset it through the route in `finally`;
+  deleting the org's Setting rows does not undo it, and the next spec that expects the 403
+  lock fails.
+- **`kill <npx pid>` leaves `next-server` listening** (it reparents to 1): kill the
+  `next-server` pid too and confirm the port is free.

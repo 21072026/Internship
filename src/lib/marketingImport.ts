@@ -57,6 +57,7 @@ import {
 import { normalizeEmailKey, normalizeNameKey, normalizePhoneKey } from './duplicateDetection';
 import { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 import { planFieldUpdates } from './externalSyncPolicy';
+import { typedSourceName } from './leadSourceName';
 import { TEXT_LIMITS } from './textLimits';
 import {
   DEFAULT_TRIAL_LENGTH_DAYS,
@@ -659,6 +660,14 @@ export interface MarketingLeadTarget {
   referralSource: string | null;
   companyId: string | null;
   /**
+   * The person's referrer today — a `Source` or a referring person (#2570).
+   * Attribution is FIRST TOUCH, so a lead with either keeps it and the row
+   * plans no `sourceName`. Optional so an older snapshot still reads; the
+   * store always selects both.
+   */
+  sourceId?: string | null;
+  referredById?: string | null;
+  /**
    * The person's role. Only a MENTEE is a lead: an ADMIN, MENTOR or COMPANY
    * user whose address is typed in as a contact is staff, and treating them as
    * the lead would fill in their profile, move their `companyId` and put them
@@ -741,6 +750,16 @@ export interface MarketingFunnelPlan {
   leadId: string | null;
   leadChanges: MarketingLeadWrite;
   leadChanged: string[];
+  /**
+   * The tenant `Source` name this row binds its lead to, or null (#2570).
+   * Decided HERE from the incoming value — never from `leadChanges`, which is
+   * a diff and omits a `referralSource` the lead already carries (or one the
+   * run was not allowed to overwrite), so re-importing a book whose leads
+   * predate attribution would bind none of them. Null when the lead already
+   * has a referrer of either kind (first touch), so the writer never creates
+   * a Source it will not use.
+   */
+  sourceName: string | null;
   /** Existing ACTIVE relation with this owner, or null when one is created. */
   relationId: string | null;
   /** The relation's stage today; null when the relation is being created. */
@@ -817,6 +836,13 @@ export interface MarketingDiffContext {
    * Defaults to the wall clock; the unit tests pin it.
    */
   now?: Date;
+  /**
+   * Which `Source` a lead is attributed to (#2570). Omitted: the file's own
+   * `source` column, typed by a person (`typedSourceName()`). A string or null:
+   * the caller already decided from machine inputs (`leadSourceName()` — the
+   * demo form's UTM parameters), null being "unknown", i.e. no Source.
+   */
+  leadSourceName?: string | null;
 }
 
 function blankToUndefined(value: string): string | undefined {
@@ -1256,7 +1282,10 @@ export function diffMarketingAccounts(
 function funnelChangedFields(funnel: MarketingFunnelPlan): string[] {
   const fields: string[] = [];
   if (!funnel.leadId) fields.push('lead');
-  else fields.push(...funnel.leadChanged.map((f) => `lead.${f}`));
+  else {
+    fields.push(...funnel.leadChanged.map((f) => `lead.${f}`));
+    if (funnel.sourceName) fields.push('lead.source');
+  }
   if (!funnel.relationId) fields.push('funnelRecord');
   else {
     if (funnel.fromStage !== funnel.toStage) fields.push('pipelineStatus');
@@ -1352,6 +1381,12 @@ function planFunnel(
     ? deps.relations.find((r) => r.menteeId === lead.id && r.status === 'ACTIVE') ?? null
     : null;
 
+  // First touch (#2570): only a lead with no referrer of either kind gets one.
+  const attributable = !lead || (!lead.sourceId && !lead.referredById);
+  const resolvedSourceName =
+    context.leadSourceName !== undefined ? context.leadSourceName : typedSourceName(value.source);
+  const sourceName = attributable ? resolvedSourceName : null;
+
   const toStage = value.stage;
   const fromStage = relation ? relation.pipelineStatus : null;
   const relationCompanyDiffers =
@@ -1441,6 +1476,9 @@ function planFunnel(
   const pending =
     !lead ||
     leadChanged.length > 0 ||
+    // An existing lead still to be attributed: re-importing a book whose leads
+    // predate #2570 binds them even when nothing else about the row changed.
+    sourceName !== null ||
     relation === null ||
     relationChanged.length > 0 ||
     fromStage !== toStage ||
@@ -1457,6 +1495,7 @@ function planFunnel(
     leadId: lead?.id ?? null,
     leadChanges,
     leadChanged,
+    sourceName,
     relationId: relation?.id ?? null,
     fromStage,
     toStage,

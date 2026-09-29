@@ -281,7 +281,12 @@ org could otherwise create "X" next to a legacy NULL-org "X" and the deploy
 backfill (NULL → default) would then fail on the index; the create path reads
 the tenant, NULL rows included, before it inserts. Sources a MARKETING admin
 created before #2570 went to the default org at a backfill, like the users and
-companies above.
+companies above — and since the old pickers were unscoped, that tenant's own
+leads can point at such a row. Both `/admin/sources` (its per-source lead count)
+and the attribution report narrow the relation to the caller's tenant, and the
+report counts a lead whose source is outside its tenant as **unsourced** rather
+than dropping it from both halves; `check-tenant-misattribution.mjs` lists those
+sources (`source <id> org=… linkedPeople=<org>:<n>`) for the reviewed one-off.
 
 ### Users: one address, two tenants (#2590)
 

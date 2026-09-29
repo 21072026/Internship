@@ -43,7 +43,6 @@ import { normalizeEmailKey } from './duplicateDetection';
 import { findUsersByEmail, worldOfOrg } from './userWorld';
 import { defaultOrgId } from './defaultOrg';
 import { findOrCreateSource } from './leadSource';
-import { typedSourceName } from './leadSourceName';
 import {
   AlreadyMentoredError,
   findActiveMentorship,
@@ -175,6 +174,9 @@ async function loadSnapshot(
           preferredLanguage: true,
           referralSource: true,
           companyId: true,
+          // First-touch attribution (#2570) reads the referrer the lead has.
+          sourceId: true,
+          referredById: true,
         },
       })
     : [];
@@ -208,8 +210,6 @@ interface WriterContext {
   offPathStages: ReadonlySet<string>;
   /** The org's `trialLengthDays`, resolved once per run (#2551). */
   trialLengthDays: number;
-  /** Which `Source` a lead this run creates is attributed to (#2570). */
-  leadSource: LeadSourceBinding;
 }
 
 /**
@@ -241,10 +241,10 @@ export type LeadSourceBinding = { kind: 'typed' } | { kind: 'fixed'; name: strin
 async function leadSourceIdFor(row: MarketingPlannedRow, context: WriterContext): Promise<string | null> {
   const funnel = row.value.funnel;
   if (!funnel || !funnel.pending) return null;
-  const name =
-    context.leadSource.kind === 'fixed'
-      ? context.leadSource.name
-      : typedSourceName(funnel.leadChanges.referralSource);
+  // Decided by the diff (`MarketingFunnelPlan.sourceName`) from the incoming
+  // value, and already null for a lead that has a referrer — so no Source is
+  // created here that the first-touch write below would then refuse.
+  const name = funnel.sourceName;
   if (!name) return null;
   const orgId = context.orgId ?? (await defaultOrgId());
   return (await findOrCreateSource(orgId, name)).id;
@@ -595,7 +595,6 @@ async function runMarketingRows(core: MarketingRunCore) {
       orgId,
       offPathStages,
       trialLengthDays,
-      leadSource: core.leadSource ?? { kind: 'typed' },
     });
     // Create-only: a CREATE is written through the import's own writer; an
     // UPDATE is what an existing account WOULD receive, so it is reported and
@@ -638,6 +637,7 @@ async function runMarketingRows(core: MarketingRunCore) {
           orgKey: orgId ?? '',
           authoritative: core.authoritative === true,
           trialLengthDays,
+          ...(core.leadSource?.kind === 'fixed' ? { leadSourceName: core.leadSource.name } : {}),
         });
       },
       apply: (chunk) =>

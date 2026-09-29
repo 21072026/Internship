@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -90,8 +91,27 @@ export async function GET() {
     // A lead whose channel is not known is counted HERE and nowhere else: the
     // attribution writers (src/lib/leadSource.ts) leave `sourceId` NULL for an
     // unknown channel rather than creating an "unknown" Source (#2570).
+    //
+    // "No source" means no source OF THIS TENANT: a lead whose `sourceId`
+    // points at another tenant's row (a source the deploy backfill gave to the
+    // default org, attached through the pre-#2570 unscoped picker) is filtered
+    // out of the list above, so it is counted here instead of vanishing from
+    // both halves. `prisma/check-tenant-misattribution.mjs` sizes those rows.
+    // An `AND` of conjuncts, so neither `OR` can replace the tenant fragment's.
+    // The "outside" half is spelled per case because SQL's NOT over a NULL is
+    // NULL: `NOT (orgId = 'm')` would silently skip a NULL-org source, which
+    // for a non-default tenant is exactly the outside row to count.
+    const outsideTenant: Prisma.SourceWhereInput | null =
+      'orgId' in tenant
+        ? { OR: [{ orgId: null }, { orgId: { not: tenant.orgId } }] }
+        : 'OR' in tenant
+          ? { AND: [{ orgId: { not: null } }, { orgId: { not: tenant.OR[0].orgId } }] }
+          : null;
+    const noSourceHere: Prisma.UserWhereInput = outsideTenant
+      ? { OR: [{ sourceId: null }, { source: { is: outsideTenant } }] }
+      : { sourceId: null };
     const unsourced = await prisma.user.count({
-      where: withinTenant({ ...attributedLeadWhere(), sourceId: null }, tenant),
+      where: withinTenant({ AND: [attributedLeadWhere(), noSourceHere] }, tenant),
     });
 
     return NextResponse.json({

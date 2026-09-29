@@ -11,7 +11,7 @@ import { getLocale } from '@/i18n/server';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
-import { findSourceByName } from '@/lib/leadSource';
+import { findOrCreateSource } from '@/lib/leadSource';
 import { SOURCE_NAME_MAX } from '@/lib/leadSourceName';
 
 // GET — all sources with lead counts + conversion breakdown (admin).
@@ -44,7 +44,11 @@ export async function GET() {
   const sources = await prisma.source.findMany({
     where: withinTenant({}, tenant),
     orderBy: { name: 'asc' },
-    include: { _count: { select: { users: { where: attributedLeadWhere() } } } },
+    // The relation count is narrowed too: a source the backfill gave to the
+    // default org can carry another tenant's leads (the pre-#2570 picker was
+    // unscoped), and counting them would both leak that tenant's numbers and
+    // skew this row's conversion against a `hired` that only counts our own.
+    include: { _count: { select: { users: { where: withinTenant(attributedLeadWhere(), tenant) } } } },
   });
 
   // For each source, how many of its leads reached a finished stage.
@@ -95,24 +99,21 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const { name, contactName, contactEmail } = parsed.data;
-  // Unique PER TENANT (#2570): `(orgId, name)`. The row is stamped with the
-  // caller's org — a session without one is the default org's, the same rule
-  // tenantWhere() reads by — and the duplicate check reads that tenant,
-  // legacy NULL-org rows included (src/lib/leadSource.ts says why a pre-read
-  // and not only the index). Another tenant's "Google" is no conflict.
+  // Unique PER TENANT (#2570): `(orgId, name)`. Created through the one
+  // writer, findOrCreateSource() — it stamps the caller's org (a session
+  // without one is the default org's, the rule tenantWhere() reads by) and
+  // reads that tenant first, legacy NULL-org rows included. An existing row —
+  // found by the pre-read or by a lost race — is this screen's 409; another
+  // tenant's "Google" is no conflict.
   const orgId = resolveOrgId(session) ?? (await defaultOrgId());
-  const conflict = () => NextResponse.json({ error: 'A source with that name already exists' }, { status: 409 });
-  if (await findSourceByName(orgId, name)) return conflict();
-  let source;
-  try {
-    source = await prisma.source.create({
-      data: { orgId, name, contactName: contactName || null, contactEmail: contactEmail || null },
-    });
-  } catch (error) {
-    // Lost a race for the same name: still the 409 the pre-read would give.
-    if ((error as { code?: string })?.code === 'P2002') return conflict();
-    throw error;
+  const result = await findOrCreateSource(orgId, name, {
+    contactName: contactName || null,
+    contactEmail: contactEmail || null,
+  });
+  if (!result.created) {
+    return NextResponse.json({ error: 'A source with that name already exists' }, { status: 409 });
   }
+  const source = await prisma.source.findUniqueOrThrow({ where: { id: result.id } });
   await logActivity({
     action: 'source.created',
     actorId: session.user.id,

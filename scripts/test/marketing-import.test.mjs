@@ -111,10 +111,15 @@ function memoryWriter(store) {
         preferredLanguage: funnel.leadChanges.preferredLanguage ?? null,
         referralSource: funnel.leadChanges.referralSource ?? null,
         companyId,
+        // The Prisma writer resolves the tenant Source by name; the name stands in.
+        sourceId: funnel.sourceName ? `src:${funnel.sourceName}` : null,
+        referredById: null,
       };
       store.leads.push(lead);
     } else {
       Object.assign(lead, funnel.leadChanges, { companyId });
+      // First touch (#2570), as the Prisma writer's conditional updateMany.
+      if (funnel.sourceName && !lead.sourceId && !lead.referredById) lead.sourceId = `src:${funnel.sourceName}`;
     }
     const active = store.relations.find((r) => r.menteeId === lead.id && r.status === 'ACTIVE');
     if (active && active.mentorId !== funnel.ownerId) {
@@ -556,6 +561,77 @@ test('a person already in the CRM under their real address is reused, not duplic
   assert.equal(report.counts.ERROR, 0);
   assert.equal(store.leads.length, 2, 'the existing person is reused');
   assert.ok(store.relations.some((r) => r.menteeId === 'user-real'));
+});
+
+// ── lead-source attribution (#2570) ─────────────────────────────────────────
+
+test('a new lead is attributed to the typed source; a second apply is still all UNCHANGED', async () => {
+  const store = memoryStore();
+  await runFile(FIXTURE_TEXT, store, { apply: true });
+  const lead = store.leads.find((l) => l.email === standIn('lena@nordlicht.example'));
+  assert.equal(lead.sourceId, 'src:Messe');
+  const second = await runFile(FIXTURE_TEXT, store, { apply: true });
+  assert.equal(second.counts.UNCHANGED, 3, 'an attributed lead plans no further binding');
+});
+
+test('re-importing a lead that predates attribution binds it, though its referralSource is unchanged', async () => {
+  // The review's case: the lead already says "Messe" in free text, so the diff's
+  // `leadChanges` omits referralSource — the binding must not be read from there.
+  const store = memoryStore();
+  await runFile(FIXTURE_TEXT, store, { apply: true });
+  for (const l of store.leads) l.sourceId = null;
+  const preview = await runFile(FIXTURE_TEXT, store);
+  const row = preview.rows.find((r) => r.value.input.name === 'Nordlicht Handel GmbH');
+  assert.equal(row.status, 'UPDATE');
+  assert.deepEqual(row.changed, ['lead.source']);
+  assert.equal(row.value.funnel.sourceName, 'Messe');
+  assert.equal(store.leads.find((l) => l.email === standIn('lena@nordlicht.example')).sourceId, null, 'a dry run binds nothing');
+
+  await runFile(FIXTURE_TEXT, store, { apply: true });
+  assert.equal(store.leads.find((l) => l.email === standIn('lena@nordlicht.example')).sourceId, 'src:Messe');
+  const third = await runFile(FIXTURE_TEXT, store, { apply: true });
+  assert.equal(third.counts.UNCHANGED, 3);
+});
+
+test('a lead that already has a referrer of either kind plans no source (first touch)', async () => {
+  const store = memoryStore();
+  await runFile(FIXTURE_TEXT, store, { apply: true });
+  const lena = store.leads.find((l) => l.email === standIn('lena@nordlicht.example'));
+  const ayse = store.leads.find((l) => l.email === standIn('ayse@ist.example'));
+  lena.sourceId = 'src:Partner X';
+  ayse.sourceId = null;
+  ayse.referredById = 'user-referrer';
+  const report = await runFile(FIXTURE_TEXT, store);
+  for (const r of report.rows.filter((r) => r.value.funnel)) {
+    assert.equal(r.value.funnel.sourceName, null, `${r.value.input.name}: no Source to create`);
+  }
+  assert.equal(report.counts.UNCHANGED, 3);
+});
+
+test('a caller-decided source name wins over the typed column, and null means no source', async () => {
+  const store = memoryStore();
+  const validate = makeMarketingValidator({ stageKeys: STAGES });
+  const plan = (leadSourceName) =>
+    runImport({
+      parse: () => parseDelimited(FIXTURE_TEXT),
+      validate,
+      resolve: async (r) =>
+        diffMarketingAccounts(r, snapshotOf(store), {
+          defaultOwnerId: OWNER.id,
+          defaultOwnerEmail: OWNER.email,
+          ownerIdByEmail: new Map(),
+          orgKey: ORG,
+          authoritative: false,
+          leadSourceName,
+        }),
+      apply: (chunk) => applyPlannedAccounts(chunk, previewWriter),
+      dryRun: true,
+    });
+  const fixed = await plan('utm:linkedin/social/autumn-2026');
+  const unknown = await plan(null);
+  const withFunnel = (report) => report.rows.filter((r) => r.value.funnel).map((r) => r.value.funnel.sourceName);
+  assert.deepEqual(withFunnel(fixed), ['utm:linkedin/social/autumn-2026', 'utm:linkedin/social/autumn-2026']);
+  assert.deepEqual(withFunnel(unknown), [null, null]);
 });
 
 // ── the ERROR row carries a reason an operator can act on (#2406) ────────────
