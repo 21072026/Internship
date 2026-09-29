@@ -7644,7 +7644,6 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - `marketing-sales-surface.spec.ts`'s stage-deadline test signs in as the seed admin
   (`admin@example.com`); a local e2e DB without `prisma db seed` fails it and skips the rest of the
   serial file — run the rest with `--grep`.
->>>>>>> origin/main
 
 ## 2026-09-29 — Marketing import: external id, dates, admin panel (#2554, #2552, #2555)
 

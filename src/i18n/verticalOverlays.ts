@@ -126,13 +126,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
-      // The /admin/settings import card (#2552 review): the second mode is the
-      // legacy people importer, which MARKETING shows next to the account import.
-      // It creates MENTEE rows — a MARKETING org's leads — so it says people.
-      settings: {
-        bulkImport: 'Bulk import people',
-        importModeMentees: 'People (leads)',
-      },
       publicNav: {
         homeLink: 'SaleVali — go to the home page',
         tagline: 'Leads, accounts and deals in one pipeline — from first contact to close.',
@@ -196,7 +189,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         outcomeAutoSendHint: 'Off by default. When off, reaching an outcome stage notifies the rep and prefills a draft they read, edit and send. When on, the templated message goes to the lead without review — a rejection cannot be recalled.',
         require2faAdminsMentors: 'Required for admins and reps',
         aiMonthlyQuotaHint: 'How many calls to the AI provider may be made per calendar month. Every AI feature draws on the same pool; only a call that actually succeeded is counted, and the counter resets on the 1st. Usage is metered across the whole installation rather than per organisation, so on a shared installation every organisation spends from the same month’s pool. Once it is spent the AI gate refuses further calls until next month — nothing else in the app is affected. 0 switches AI off entirely.',
-        bulkImport: 'Bulk import leads',
+        // The import card (#2552 review): the second mode is the legacy people
+        // importer, shown next to the account import; it creates MENTEE rows — a
+        // MARKETING org's leads — so the card says people.
+        bulkImport: 'Bulk import people',
+        importModeMentees: 'People (leads)',
       },
       analytics: {
         subtitle: 'Funnel, rep workload and activity insights',
@@ -518,13 +515,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkOwnerLabel: 'Temsilci',
         bulkAssignOwner: 'Temsilci ata',
       },
-      // The /admin/settings import card (#2552 review): the second mode is the
-      // legacy people importer, which MARKETING shows next to the account import.
-      // It creates MENTEE rows — a MARKETING org's leads — so it says people.
-      settings: {
-        bulkImport: 'Toplu kişi içe aktar',
-        importModeMentees: 'Kişiler (lead)',
-      },
       publicNav: {
         homeLink: 'SaleVali — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
@@ -577,7 +567,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         outcomeAutoSendHint: 'Varsayılan olarak kapalı. Kapalıyken sonuç aşamasına ulaşılınca temsilci bilgilendirilir ve okuyup düzenleyip göndereceği bir taslak hazırlanır. Açıkken şablon mesaj incelenmeden müşteri adayına gider — bir ret geri alınamaz.',
         require2faAdminsMentors: 'Yöneticiler ve temsilciler için zorunlu',
         aiMonthlyQuotaHint: 'Bir takvim ayında yapay zekâ sağlayıcısına kaç çağrı yapılabileceği. Tüm yapay zekâ özellikleri aynı havuzdan harcar; yalnızca başarılı olan çağrı sayılır ve sayaç ayın 1\'inde sıfırlanır. Kullanım kurum başına değil tüm kurulum genelinde ölçülür; paylaşılan bir kurulumda her kurum aynı ayın havuzundan harcar. Havuz bitince yapay zekâ kapısı bir sonraki aya kadar yeni çağrıları reddeder — uygulamanın geri kalanı etkilenmez. 0 yapay zekâyı tamamen kapatır.',
-        bulkImport: 'Müşteri adaylarını toplu içe aktar',
+        // The import card (#2552 review): the second mode is the legacy people
+        // importer, shown next to the account import; it creates MENTEE rows — a
+        // MARKETING org's leads — so the card says people.
+        bulkImport: 'Toplu kişi içe aktar',
+        importModeMentees: 'Kişiler (lead)',
       },
       analytics: {
         subtitle: 'Satış hunisi, temsilci iş yükü ve etkinlik içgörüleri',
@@ -803,13 +797,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkOwnerLabel: 'Vertriebsmitarbeiter',
         bulkAssignOwner: 'Vertriebsmitarbeiter zuweisen',
       },
-      // The /admin/settings import card (#2552 review): the second mode is the
-      // legacy people importer, which MARKETING shows next to the account import.
-      // It creates MENTEE rows — a MARKETING org's leads — so it says people.
-      settings: {
-        bulkImport: 'Personen im Stapel importieren',
-        importModeMentees: 'Personen (Leads)',
-      },
       publicNav: {
         homeLink: 'SaleVali — zur Startseite',
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',
@@ -862,7 +849,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         outcomeAutoSendHint: 'Standardmäßig aus. Aus: Beim Erreichen einer Ergebnisphase wird der Vertriebsmitarbeiter benachrichtigt und erhält einen Entwurf zum Lesen, Bearbeiten und Senden. An: Die Vorlage geht ohne Prüfung an den Lead — eine Absage lässt sich nicht zurückholen.',
         require2faAdminsMentors: 'Pflicht für Admins und Vertriebsmitarbeiter',
         aiMonthlyQuotaHint: 'Wie viele Aufrufe an den KI-Anbieter pro Kalendermonat erlaubt sind. Alle KI-Funktionen nutzen dasselbe Kontingent; gezählt wird nur ein erfolgreicher Aufruf, und der Zähler wird am 1. zurückgesetzt. Die Nutzung wird für die gesamte Installation gemessen, nicht pro Organisation — auf einer geteilten Installation verbraucht jede Organisation aus demselben Monatskontingent. Ist es aufgebraucht, lehnt die KI-Schranke weitere Aufrufe bis zum nächsten Monat ab; der Rest der App ist nicht betroffen. 0 schaltet KI komplett ab.',
-        bulkImport: 'Leads per Massenimport hinzufügen',
+        // The import card (#2552 review): the second mode is the legacy people
+        // importer, shown next to the account import; it creates MENTEE rows — a
+        // MARKETING org's leads — so the card says people.
+        bulkImport: 'Personen im Stapel importieren',
+        importModeMentees: 'Personen (Leads)',
       },
       analytics: {
         subtitle: 'Funnel, Auslastung der Vertriebsmitarbeiter und Aktivitäts-Insights',
