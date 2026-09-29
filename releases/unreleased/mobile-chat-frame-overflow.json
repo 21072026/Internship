@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Fixed the `/messages` chat frame overflowing a phone screen by 88px (#2463, #2547): since #2358 wrapped `MessagesShell` in `RoleShell`, `ResponsiveShell`'s mobile top bar (56px) and `p-4` padding sat around a frame sized to the whole viewport. `ResponsiveShell`/`RoleShell` gain `mobileChrome={false}`, which drops the top bar, drawer, padding and `min-h-screen` below `lg` while keeping the desktop sidebar; `/messages` opts in, and `e2e/mobile-chat-layout.spec.ts` now also pins that the phone chrome is gone and the desktop sidebar stays.",
+  "notes": {
+    "en": ["On a phone, a chat fills the screen again: the conversation no longer runs past the bottom edge, and the message box stays in view without scrolling the page."],
+    "tr": ["Telefonda sohbet yeniden ekranı tam dolduruyor: konuşma artık ekranın altından taşmıyor, mesaj yazma kutusu sayfayı kaydırmadan görünür kalıyor."],
+    "de": ["Auf dem Smartphone füllt ein Chat wieder genau den Bildschirm: Die Unterhaltung ragt nicht mehr über den unteren Rand hinaus, und das Eingabefeld bleibt ohne Scrollen der Seite sichtbar."]
+  }
+}
