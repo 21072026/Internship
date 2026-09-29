@@ -56,6 +56,9 @@ sürece tek bir PR sessizce farklı davranamaz.
 - `salevali-provider-contract.md` — SaleVali'den istenenler (#2565): `externalId`
   anahtarı, kullanım ve lisans olayı uçları, alan eşlemesi, SaleVali karşı işleri
 - `old-server-teardown.md` — eski Marketing kutusunun sökümü
+- `outreach-compliance.md` — SaleVali satış iletişimi kanal kuralları (UWG § 7 /
+  DSGVO, #2576); CRM izin kodlarının (#2577) hukuki metni — hukuki danışmanlık değildir,
+  Fachanwalt incelemesi bekliyor
 
 ## Neden olduğu gibi saklandı
 
