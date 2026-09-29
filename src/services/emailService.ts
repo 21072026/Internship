@@ -428,8 +428,31 @@ function unsubscribable(groupId: EmailGroupId | null, userId?: string | null): b
   return !!groupId && !!userId && !isEssentialGroup(groupId);
 }
 
+// The footer + List-Unsubscribe pair of one gated send (#2495), split out of
+// sendEmail() so the IMPLICIT origin path — a caller that passes only `userId`,
+// which most gated mails are — is testable without SMTP (the Playwright config
+// blanks SMTP_USER, so sendEmail() itself returns before it gets here).
+// `origin` is sendEmail()'s already-resolved answer (from `orgId`, or the world
+// its preference read learned, #2590); undefined means "not told", and the
+// account behind `userId` is asked — degrading to the default origin on a
+// failed lookup rather than losing the mail over its footer.
+async function optOutParts(
+  html: string,
+  userId: string,
+  groupId: EmailGroupId,
+  locale?: string | null,
+  origin?: string,
+): Promise<{ body: string; headers: Record<string, string> }> {
+  origin ??= await appUrlForUser(userId).catch(() => appUrl());
+  return {
+    body: withUnsubscribeFooter(html, unsubscribeFooterHtml(userId, groupId, locale, origin)),
+    headers: unsubscribeHeaders(userId, groupId, origin),
+  };
+}
+
 /** Test seam for e2e/email-groups-footer.unit.spec.ts — not part of the mail API. */
 export const __testable = {
+  optOutParts,
   UNSUB_FOOTER_MARKER,
   BULK_CATEGORIES,
   LEGACY_BULK_CHANNEL,
@@ -671,9 +694,8 @@ export async function sendEmail({
         ? await appUrlFor(orgId).catch(() => appUrl())
         : storedWorld !== undefined
           ? appUrlForWorld(storedWorld)
-          : await appUrlForUser(userId).catch(() => appUrl());
-    body = withUnsubscribeFooter(html, unsubscribeFooterHtml(userId!, groupId!, locale, origin));
-    computed = unsubscribeHeaders(userId!, groupId!, origin);
+          : undefined; // not told: optOutParts() asks the account behind userId
+    ({ body, headers: computed } = await optOutParts(html, userId!, groupId!, locale, origin));
   }
   // Caller last: an explicit header beats one we derived. Note the group check
   // above still ran either way — owning the *presentation* of an opt-out is not
@@ -3152,6 +3174,9 @@ export async function sendMeetingReminders() {
           userId: user.id,
           to: user.email,
           fromName: brand.name,
+          // One host per mail (#2495): the footer follows the same org the body's
+          // links were resolved from.
+          orgId: user.orgId,
           locale: uLocale,
           subject: R.subject.replace('{title}', m.title),
           html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -3395,6 +3420,7 @@ export async function sendProjectMeetingSeriesReminders() {
             userId: user.id,
             to: user.email,
             fromName: brand.name,
+            orgId: user.orgId,
             locale: uLocale,
             subject:
               lead === 'HOUR_BEFORE'
@@ -3841,6 +3867,9 @@ export async function checkReEngagementReminders() {
         // than "stop this group of mail". The group footer is additive.
         category: 're-engagement',
         userId: p.id,
+        // One host per mail (#2495): the footer follows the org the leave link
+        // above was resolved from.
+        orgId: orgOf.get(p.id) ?? null,
         subject: 'Tekrar görüşelim mi? / Shall we talk again?',
         html: `<p>Merhaba ${p.fullName},</p>
 <p>Daha önce seninle yeni bir dönem açıldığında tekrar iletişime geçmemizi kabul etmiştin. O zaman geldi.</p>
@@ -3990,6 +4019,8 @@ export async function checkCompanyNeedMatches() {
           await sendEmail({
             category: 'company-need-alert',
             userId: u.id,
+            // One host per mail (#2495): the footer follows the same org as `base`.
+            orgId: u.orgId,
             to: u.email,
             subject: 'A candidate matches your open position',
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -4090,6 +4121,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
                 locale: recipient.preferredLanguage,
                 to: recipient.email,
                 fromName: brand.name,
+                orgId: recipient.orgId,
                 subject: t.reminderSubject.replace('{requirement}', label),
                 html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
                   ${brandHeader(brand, t.reminderHeading)}
@@ -4154,6 +4186,7 @@ export async function sendWeeklyAnalyticsReport() {
     await sendEmail({
       category: 'analytics-report',
       userId: a.id,
+      orgId: a.orgId,
       to: a.email,
       subject: 'Weekly analytics report — Internship CRM',
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

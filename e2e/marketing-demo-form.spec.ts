@@ -4,6 +4,7 @@ import { signInAndSettle, gotoSettled } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
 import { doiMailCapKey, makeContactPermissionToken } from '../src/lib/contactPermissionTokens';
+import { __testable as emailInternals } from '@/services/emailService';
 
 // The demo form on the MARKETING landing (#2569) and the default lead owner
 // (#2580 item 3).
@@ -592,6 +593,34 @@ test('an invitation link opens the invited tenant’s own product host', async (
     await mkt.close();
     await int.close();
   }
+});
+
+test('a gated mail that passes only userId gets its footer and List-Unsubscribe on the recipient tenant host (#2495)', async () => {
+  // sendEmail()'s IMPLICIT origin path — the caller passes a userId and no
+  // orgId, which is what most gated mails do — resolved through
+  // the account's org (appUrlForUser). SMTP is blanked under Playwright, so the send itself
+  // short-circuits; optOutParts() is the exact step sendEmail() runs for the
+  // footer. It lives in this serial spec because it needs MARKETING_HOST mapped.
+  process.env.NEXTAUTH_SECRET ||= 'unit-test-secret';
+  const hostsOf = async (userId: string) => {
+    const { body, headers } = await emailInternals.optOutParts('<p>hi</p>', userId, 'digests');
+    const hrefs = [...body.matchAll(/href="([^"]+)"/g)].map((m) => new URL(m[1]).host);
+    const one = /<([^>]+)>/.exec(headers['List-Unsubscribe'])![1];
+    return { hrefs, one: new URL(one).host };
+  };
+
+  const mkt = await hostsOf(mktRepId);
+  expect(mkt.hrefs.length, 'the footer carries links').toBeGreaterThan(0);
+  for (const h of mkt.hrefs) expect(h, 'marketing footer link').toBe(MARKETING_HOST);
+  expect(mkt.one, 'marketing List-Unsubscribe').toBe(MARKETING_HOST);
+
+  // The default (internship) org maps no host: the configured origin, unchanged.
+  const int = await hostsOf(intAdminId);
+  for (const h of int.hrefs) expect(h, 'internship footer link').not.toBe(MARKETING_HOST);
+  expect(int.one, 'internship List-Unsubscribe').not.toBe(MARKETING_HOST);
+  // An origin sendEmail() already resolved (from `orgId`) still wins over the lookup.
+  const pinned = await emailInternals.optOutParts('<p>hi</p>', mktRepId, 'digests', null, 'https://pinned.example');
+  expect(new URL(/<([^>]+)>/.exec(pinned.headers['List-Unsubscribe'])![1]).host).toBe('pinned.example');
 });
 
 test('an unmapped marketing host is a closed form — it never writes into the internship org', { tag: '@smoke' }, async ({ page, request }) => {

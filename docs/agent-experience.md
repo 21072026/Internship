@@ -7802,3 +7802,13 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **`meeting-end.spec.ts` needs `JAAS_WEBHOOK_SECRET` on the server.** A hand-started
   `next start` without it fails that spec with 200 instead of 401. That is the environment, not
   a regression.
+- **An implicit fallback changes mails you meant to leave alone.** Making `sendEmail()` resolve
+  the footer origin from `userId` moved the footer of every gated mail, including ones whose
+  body deliberately stayed on the configured host, so one mail pointed at two hosts. When you
+  add a default like that, grep every caller that does NOT pass the new argument and decide
+  for each one; hand the ones whose body resolved its own origin the same input (on main since
+  #2590: `sendEmail({ orgId })`).
+- **A test comment saying "covered elsewhere" needs checking.** The ACS success leg was said to
+  be covered in `sso-roundtrip.spec.ts`, but no POST there sent `RelayState`. The stub IdP's
+  `/saml/sso` page echoes RelayState in its auto-POST form, so a request-only test can drive
+  login → IdP → ACS by parsing that form, without a browser.

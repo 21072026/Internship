@@ -145,8 +145,9 @@ test('SAML login started on the marketing host sends that origin as RelayState; 
 
 test('the SAML ACS finishes on the RelayState origin only when it is a bare served origin', async ({ request }) => {
   // An unknown slug is refused before any assertion is read — which is enough
-  // to see WHERE the refusal sends the browser. The success leg uses the same
-  // base() and is driven end to end in sso-roundtrip.spec.ts.
+  // to see WHERE the refusal sends the browser. The success leg (login
+  // RelayState → stub IdP echo → ACS → /auth/sso/complete on the marketing
+  // host) needs a real signed assertion and is driven in sso-roundtrip.spec.ts.
   const acs = (RelayState: string) =>
     request.post('/api/auth/sso/no-such-org/acs', { form: { SAMLResponse: 'x', RelayState }, maxRedirects: 0 });
 

@@ -25,11 +25,13 @@ const base = () => (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace
 // whoever makes the browser POST here, so it is honoured only through
 // servedOrigin() (a bare origin of a host this deployment serves, exact match —
 // no open redirect) AND only when that host belongs to the organization's own
-// world; anything else falls back to the world's origin as before.
+// world; anything else falls back to the world's origin as before. With no
+// organization at all (an unknown slug) there is only a refusal to show and no
+// grant to strand, so any served origin will do.
 async function landingOrigin(orgId: string | null | undefined, relayState: string | null): Promise<string> {
   const world = await worldOfOrg(orgId);
   const started = servedOrigin(relayState);
-  if (started && worldForHostHeader(new URL(started).host) === world) return started;
+  if (started && (!orgId || worldForHostHeader(new URL(started).host) === world)) return started;
   if (world === 'MARKETING') return originForWorld('MARKETING');
   return base();
 }

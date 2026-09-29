@@ -561,8 +561,10 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   `NEXT_PUBLIC_APP_URL` — invites, password reset, verification, the unsubscribe footer and
   List-Unsubscribe header (`sendEmail({ orgId })`, resolved from `userId` when omitted —
   the `appUrlFor*` resolvers in `emailService.ts`, #2590), newsletters, digests, meeting
-  invites and message mails use it; the one-click unsubscribe GET answers with a
-  **relative** Location. robots/sitemap
+  invites, message mails and the weekly analytics report use it. **One mail, one host:**
+  a sender whose body links come from a recipient's org passes that `orgId` to
+  `sendEmail()` so the footer resolves the same way; the one-click unsubscribe GET
+  answers with a **relative** Location. robots/sitemap
   follow the request host and list only the pages that host's vertical serves. **SSO and
   Google OAuth** (#2494) keep their ONE registered endpoint; the host a flow started on rides
   along (SAML `RelayState`; signed into the OAuth `state`) and is honoured only through
