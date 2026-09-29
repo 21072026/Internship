@@ -699,6 +699,7 @@ test('an import never overwrites a window, and re-applying the same stage is not
     { companyId: 'co-1', now: TRIAL_NOW, trialLengthDays: 30 },
   );
   assert.equal('trialEndsAt' in rerun, false);
+});
 
 // ── One lead typed in by hand (#2562) ────────────────────────────────────────
 //
