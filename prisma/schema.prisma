@@ -130,6 +130,15 @@ model Organization {
   // ISO-3166 alpha-2 ("DE", "TR"). Decides VAT treatment, so it is stored,
   // never inferred from an IP or a locale.
   billingCountry   String?
+  // The public hostname whose sessionless forms write into THIS tenant (#2569):
+  // the marketing landing's demo form on marketing.bcsit-gmbh.de lands in the
+  // org whose `publicHost` is exactly that name. An explicit mapping, never a
+  // heuristic ("the first MARKETING org"): a marketing host no org claims is a
+  // CLOSED form, not the internship tenant's inbox. Lowercase hostname, no port,
+  // no wildcard — the same exact-match rule as src/lib/servedHosts.ts. Unique, so
+  // one host can never name two tenants. Resolution + trust reasoning:
+  // src/lib/publicHostOrg.ts. Nullable, so `db push` is additive (#2298).
+  publicHost       String?  @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -1557,7 +1566,9 @@ enum CompanyInquiryStatus {
 }
 
 // A company asking to be shown the product, submitted from the public
-// /for-companies page. Companies have no self-service sign-up — a COMPANY user
+// /for-companies page (internship) or the demo form on the MARKETING landing
+// (#2569) — which tenant receives it is decided by the host, see
+// src/lib/publicHostOrg.ts. Companies have no self-service sign-up — a COMPANY user
 // is only born from an InvitationToken — so this is the bridge: the enquiry is
 // stored (rather than only emailed) so a request cannot quietly go missing in
 // an inbox, and so an admin can see what is still unanswered.
@@ -1578,6 +1589,28 @@ model CompanyInquiry {
   status             CompanyInquiryStatus @default(NEW)
   // When they accepted the privacy terms — set server-side on submit.
   consentAt          DateTime?
+  // WHICH privacy text they accepted (#2569): PRIVACY_POLICY_VERSION
+  // (src/lib/privacy.ts) at the moment of submit, stamped by the server — a
+  // consent record without the text version cannot say what was agreed to.
+  consentTextVersion String?
+  // The separate, UNCHECKED-by-default "send me product news" box on the
+  // marketing form (#2569). A plain boolean on purpose: it records what the
+  // person ticked and creates no lawful basis by itself (the consent model is
+  // #2577). NULL = the form that produced this row never asked (the internship
+  // /for-companies form).
+  marketingOptIn     Boolean?
+  // Marketplaces they sell on (MARKETING form), free text.
+  marketplaces       String?              @db.Text
+  // Where the request came from (#2569): the host that received it and the
+  // campaign parameters / referrer the browser carried. Stored RAW; binding
+  // them to a `Source` row is #2570's mapping. No IP is stored.
+  receivedHost       String?
+  utmSource          String?
+  utmMedium          String?
+  utmCampaign        String?
+  utmTerm            String?
+  utmContent         String?
+  referrer           String?              @db.Text
   handledAt          DateTime?
   handledById        String?
   note               String?              @db.Text
@@ -1592,6 +1625,12 @@ model CompanyInquiry {
   //
   // The enquiry itself is never deleted — it is the record of where the
   // relationship came from — so this is a link, not a replacement.
+  //
+  // In a MARKETING org the conversion is a funnel record instead (#2569,
+  // src/lib/inquiryLead.ts), written by the marketing import in its own
+  // transaction, so the claim is taken BEFORE it: `convertedAt` set while
+  // `convertedCompanyId` is still null means "being converted right now" (a
+  // claim older than ten minutes is a crashed attempt and may be retaken).
   convertedCompanyId String?
   convertedAt        DateTime?
 

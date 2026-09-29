@@ -134,6 +134,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'followUps', category: 'tracking', icon: CalendarClock, color: 'amber', title: C.followUps.t, desc: C.followUps.d },
     // #2560 — the account detail page; every vertical with companies has it.
     { key: 'accountDetail', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.accountDetail.t, desc: C.accountDetail.d },
+    // #2569 — the public enquiry / demo form, filed by host into the right org.
+    { key: 'webRequests', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.webRequests.t, desc: C.webRequests.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
     { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
   ];

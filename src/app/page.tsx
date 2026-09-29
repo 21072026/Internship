@@ -20,6 +20,9 @@ import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { listPublishedStories } from '@/lib/testimonials';
 import { getPublicStats } from '@/lib/publicStats';
 import { buildLiveStripPieces } from '@/lib/liveStrip';
+import { headers } from 'next/headers';
+import { CompanyInquiryForm } from '@/components/CompanyInquiryForm';
+import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostOrg';
 
 export default async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
@@ -53,6 +56,17 @@ export default async function HomePage() {
   const isMarketing = vertical === 'MARKETING';
   const caps = verticalCapabilities(vertical);
   const features = getFeatures(t).filter((f) => f.featured && (!f.capability || caps.includes(f.capability)));
+
+  // The marketing landing's demo form (#2569). /for-companies is an internship
+  // page (404 here since #2544), so the form lives on this page. It is only OPEN
+  // when an org claims this exact host (`Organization.publicHost`) — otherwise
+  // the section says so instead of rendering a form whose requests would have
+  // nowhere to go (the API answers 503 regardless). Looked up for a marketing
+  // host only: the internship landing is the most-hit page in the app and does
+  // not grow a query for a form it does not show.
+  const demoFormOpen = isMarketing
+    ? (await resolvePublicInquiryTarget(requestHostHeader(await headers()))).open
+    : false;
 
   // Consent-gated success stories (#1100). Honesty rule (§4.2): with zero
   // published stories the section does not exist — no heading, no empty grid,
@@ -649,6 +663,28 @@ export default async function HomePage() {
       </section>
       </>)}
 
+      {isMarketing && (
+        <section id="demo" className="py-16 px-4 bg-white scroll-mt-16" data-testid="landing-demo-form">
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.demoFormTitle}</h2>
+              <p className="text-gray-600 mt-3">{L.demoFormSubtitle}</p>
+            </div>
+            {demoFormOpen ? (
+              <CompanyInquiryForm variant="marketing" />
+            ) : (
+              <div
+                data-testid="landing-demo-unavailable"
+                className="rounded-2xl border border-gray-200 bg-gray-50 p-8 text-center"
+              >
+                <h3 className="font-semibold text-gray-900 mb-2">{t.forCompanies.unavailableTitle}</h3>
+                <p className="text-sm text-gray-600">{t.forCompanies.unavailableBody}</p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* CTA — one button per audience, all at the same weight */}
       <section className="py-16 px-4">
         <div className="max-w-4xl mx-auto text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-10 sm:p-14">
@@ -660,6 +696,15 @@ export default async function HomePage() {
             <Link href={isMarketing ? '/auth/signin' : '/auth/register'} className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors dark:!bg-white dark:!text-blue-700 dark:hover:!bg-blue-100">
               {L.ctaMentee} <ArrowRight className="h-5 w-5" />
             </Link>
+            {isMarketing && demoFormOpen && (
+              <a
+                href="#demo"
+                data-testid="cta-demo-request"
+                className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"
+              >
+                <Briefcase className="h-5 w-5" /> {L.demoFormCta}
+              </a>
+            )}
             {/* The mentor and company sides are internship audiences; a
                 marketing visitor has one door (#2500). */}
             {!isMarketing && (<>

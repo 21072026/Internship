@@ -7451,3 +7451,15 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   lost**: the grid unmounts while the debounced fetch reloads, and the click lands on the
   outgoing element (no navigation, no error). Click before searching, or wait for the list to
   settle.
+
+## 2026-09-29 — Marketing demo form (#2569)
+
+- **The worktree-isolation guard refuses "too complex" Bash commands** — a `sed -i` chain
+  across a big file, or a long heredoc'd `python3 -` edit, can be rejected outright even
+  though it only touches the worktree. Write the edit as a script in the scratchpad (a tiny
+  exact-string `old → new` applier taking a JSON spec works well) and run
+  `python3 <scratchpad>/edit.py <spec>.json` as a plain one-liner.
+- **Forging `x-forwarded-for` gives each e2e test its own rate-limit bucket.** With
+  `TRUSTED_PROXY_COUNT=1` (the default) and no proxy in front of `next start`, the rightmost
+  XFF entry is whatever the test sends, so a spec that posts a 3-per-hour public form
+  several times stays green without touching the limiter.

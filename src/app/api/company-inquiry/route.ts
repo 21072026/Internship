@@ -1,32 +1,52 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { defaultOrgId } from '@/lib/defaultOrg';
+import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
+import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostOrg';
+import { readInquiryAttribution } from '@/lib/inquiryAttribution';
+import { resolveDefaultLeadOwner } from '@/lib/leadOwner';
+import { convertInquiryToMarketingLead } from '@/lib/inquiryLead';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { notify } from '@/lib/notify';
 import { sendCompanyInquiryEmail } from '@/services/emailService';
 
-// A company asking for a look at the product, from the public /for-companies
-// page. Companies have no self-service sign-up (a COMPANY user is only born
-// from an InvitationToken), so this form is the bridge — and the request has to
+// A company asking for a look at the product — from the public /for-companies
+// page on an internship host, or the demo form on the MARKETING landing (#2569).
+// Companies have no self-service sign-up (a COMPANY user is only born from an
+// InvitationToken), so this form is the bridge — and the request has to
 // survive: it is stored, notified in-app and emailed, because an enquiry that
 // only exists in one inbox is an enquiry that gets lost.
 //
 // Anti-spam follows the proven pattern in /api/public-contact/[userId]: a
 // honeypot field, a minimum render-to-submit time and a per-IP rate limit. No
 // external captcha — our CSP blocks third-party scripts.
+const utmValue = z.string().max(300).optional();
+
 const schema = z.object({
   companyName: z.string().min(1).max(160),
   contactName: z.string().min(1).max(120),
   email: z.string().email().max(TEXT_LIMITS.companyContactEmail),
   phone: z.string().max(40).optional(),
   openRoles: z.string().max(300).optional(),
+  // MARKETING form (#2569): the marketplaces they sell on, free text. Ignored
+  // on an internship host, like `openRoles` is ignored on a marketing one.
+  marketplaces: z.string().max(300).optional(),
   message: z.string().max(TEXT_LIMITS.publicContactMessage).optional(),
   // Consent to the privacy notice. Checked server-side too — a UI-only check is
   // not a consent record (GDPR Art. 7).
   consent: z.boolean(),
+  // The SEPARATE product-news box (MARKETING form only), unchecked by default.
+  // Stored as the plain boolean the person left it at (#2569; the consent
+  // model it may one day feed is #2577).
+  marketingOptIn: z.boolean().optional(),
   locale: z.string().max(5).optional(),
+  // Where they came from (#2569). Cleaned and capped by readInquiryAttribution
+  // (src/lib/inquiryAttribution.ts); these bounds only refuse absurd bodies.
+  utm: z
+    .object({ source: utmValue, medium: utmValue, campaign: utmValue, term: utmValue, content: utmValue })
+    .optional(),
+  referrer: z.string().max(2000).optional(),
   // Honeypot — accept any string so a filled value validates and is dropped
   // silently by the handler (a 400 here would leak the trap to bots).
   website: z.string().max(500).optional(),
@@ -38,10 +58,38 @@ export async function POST(request: Request) {
   const limited = enforceRateLimit(request, 'company-inquiry', { limit: 3, windowMs: 60 * 60 * 1000 });
   if (limited) return limited;
 
+  // WHICH TENANT A PUBLIC ENQUIRY BELONGS TO (#1559, #2569).
+  //
+  // This form has no session, so nothing binds a tenant context and the
+  // middleware injects nothing here — `CompanyInquiry` being registered in
+  // TENANT_MODELS changes reads, not this create. The org is decided here, from
+  // the host the request arrived on, by ONE explicit rule
+  // (src/lib/publicHostRule.ts): the org whose `publicHost` is exactly this
+  // hostname; else, on an internship host, the default org (what this line
+  // always did, and what /api/register does for an uninvited sign-up); else —
+  // a marketing host no org claims — the form is CLOSED. Never "the first
+  // MARKETING org": a heuristic that picks a tenant is how a stranger's demo
+  // request lands in the wrong company's inbox. The trust reasoning for reading
+  // the host here is in src/lib/publicHostOrg.ts and src/lib/hostVertical.ts.
+  //
+  // Decided before the body is read, so a closed form answers the same 503
+  // whatever is posted to it.
+  const target = await resolvePublicInquiryTarget(requestHostHeader(request.headers));
+  if (!target.open) {
+    return NextResponse.json(
+      { code: 'form_unavailable', error: 'This form is not available right now.' },
+      { status: 503 },
+    );
+  }
+  const orgId = target.orgId;
+  const isMarketing = target.vertical === 'MARKETING';
+
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  const { companyName, contactName, email, phone, openRoles, message, consent, locale, website, renderedAt } =
-    parsed.data;
+  const { companyName, contactName, email, phone, message, consent, locale, website, renderedAt } = parsed.data;
+  // Each vertical keeps only the field its own form shows.
+  const openRoles = isMarketing ? null : parsed.data.openRoles || null;
+  const marketplaces = isMarketing ? parsed.data.marketplaces?.trim() || null : null;
 
   if (!consent) return NextResponse.json({ error: 'Consent is required' }, { status: 400 });
 
@@ -50,41 +98,67 @@ export async function POST(request: Request) {
   const tooFast = typeof renderedAt === 'number' && Date.now() - renderedAt < 3000;
   if (website || tooFast) return NextResponse.json({ ok: true });
 
-  // WHICH TENANT A PUBLIC ENQUIRY BELONGS TO (#1559).
-  //
-  // This form has no session, so nothing binds a tenant context and the
-  // middleware injects nothing here — `CompanyInquiry` being registered in
-  // TENANT_MODELS changes reads, not this create. The org therefore has to be
-  // decided in this handler, and the answer today is the DEFAULT org: there is
-  // no host/subdomain→org resolution yet (see `resolveOrgId` in
-  // src/lib/orgScope.ts), so the enquiry has no tenant signal to read, and this
-  // is the same call `/api/register` makes for an uninvited sign-up (#1272).
-  //
-  // Deliberately NOT left NULL as a super-admin triage queue: the admin list
-  // (/api/admin/company-inquiries) runs inside withTenantScope, so with
-  // isolation on a NULL-org row would match no tenant and disappear from the
-  // only screen that shows it — the "row left at orgId = NULL vanishes from the
-  // product" failure docs/tenant-isolation.md warns about. When host-based
-  // tenancy lands, this is the line that resolves the real tenant.
+  // Deliberately never NULL as a super-admin triage queue: the admin list
+  // (/api/admin/company-inquiries) filters by the caller's tenant, so a NULL-org
+  // row would disappear from the only screen that shows it — the "row left at
+  // orgId = NULL vanishes from the product" failure docs/tenant-isolation.md
+  // warns about. `target.orgId` is the mapped org or the default org.
+  const attribution = readInquiryAttribution({ utm: parsed.data.utm, referrer: parsed.data.referrer }, target.host);
   const inquiry = await prisma.companyInquiry.create({
     data: {
-      orgId: await defaultOrgId(),
+      orgId,
       companyName,
       contactName,
       email,
       phone: phone || null,
-      openRoles: openRoles || null,
+      openRoles,
+      marketplaces,
       message: message || null,
       locale: locale || null,
+      // The consent record (#2569): when, and WHICH privacy text — both from the
+      // server, never from the body. No IP is stored.
       consentAt: new Date(),
+      consentTextVersion: PRIVACY_POLICY_VERSION,
+      // NULL where the form never asked (internship), the ticked value where it did.
+      marketingOptIn: isMarketing ? parsed.data.marketingOptIn === true : null,
+      // A Host header is not length-bounded by anything upstream of us.
+      receivedHost: target.host ? target.host.slice(0, 191) : null,
+      ...attribution,
     },
     select: { id: true },
   });
 
-  // Two more places, so it cannot go unnoticed: every active admin gets an
-  // in-app notification pointing at the list, and an email.
+  // A MARKETING request with a default owner (#2580) goes straight onto that
+  // person's funnel at the first stage, through the same writer an admin's
+  // "convert" uses. Without one — or if the writer refuses (an account of that
+  // name already exists, the contact is already somebody's lead) — the enquiry
+  // stays NEW in /admin/company-inquiries, labelled unowned, for an admin to
+  // place. It is never dropped, and a failure here never turns a captured
+  // enquiry into an error for the sender.
+  let placed = false;
+  if (isMarketing && orgId) {
+    try {
+      const owner = await resolveDefaultLeadOwner(orgId);
+      if (owner) {
+        // No `request`: the public visitor's IP must not reach the activity log
+        // (the privacy notice promises this form stores none).
+        const outcome = await convertInquiryToMarketingLead({ inquiryId: inquiry.id, orgId, owner, actor: null });
+        placed = outcome.kind === 'converted';
+      }
+    } catch (e) {
+      console.error('Company inquiry lead placement failed:', e);
+    }
+  }
+
+  // Two more places, so it cannot go unnoticed: the TARGET ORG'S active admins
+  // get an in-app notification pointing at the list, and an email. Only that
+  // org's — the query used to have no org filter at all, so every tenant's
+  // admins were told about every other tenant's enquiries (#2569). On the
+  // default org a NULL-org admin counts as the default org's, the same rule
+  // tenantWhere() applies (src/lib/tenantFilter.ts).
+  const adminOrgWhere = target.via === 'default' ? { OR: [{ orgId }, { orgId: null }] } : { orgId };
   const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
+    where: { role: 'ADMIN', isActive: true, ...adminOrgWhere },
     select: { id: true, email: true, fullName: true, preferredLanguage: true, orgId: true },
   });
   await Promise.all(
@@ -102,10 +176,11 @@ export async function POST(request: Request) {
         contactName,
         fromEmail: email,
         phone: phone || null,
-        openRoles: openRoles || null,
+        openRoles,
+        marketplaces,
         message: message || null,
         locale: a.preferredLanguage,
-        orgId: a.orgId,
+        orgId: a.orgId ?? orgId,
         // The admin being written to on this iteration. `email` / `contactName`
         // are the enquiring company's, from an unauthenticated public form.
         // No call-site preference check exists here and the select deliberately
@@ -121,5 +196,6 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, id: inquiry.id });
+  // `placed` says only THAT it reached a rep, never whom.
+  return NextResponse.json({ ok: true, id: inquiry.id, placed });
 }

@@ -43,7 +43,20 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
-      nav: { candidates: 'Leads' },
+      nav: { candidates: 'Leads', companyInquiries: 'Demo requests' },
+      // The demo form on the marketing landing and the list its requests land
+      // in (#2569). The form is the internship enquiry form re-used; these are
+      // the strings that would otherwise talk about hiring and invitations.
+      forCompanies: {
+        submit: 'Request a demo',
+        successBody: 'Your request reached our sales team. We answer within two working days to find a time for the demo.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo requests',
+        subtitle: 'Requests from the demo form on your website. A request with a default lead owner is already on the pipeline; the rest wait here, unowned, until an admin adds them.',
+        emptyTitle: 'No requests waiting',
+        emptyBody: 'Demo requests from your website land here, and every admin is notified by email as they arrive.',
+      },
       candidates: {
         title: 'Leads',
         subtitle: 'Browse and search leads',
@@ -309,7 +322,17 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     tr: {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
-      nav: { candidates: 'Müşteri Adayları' },
+      nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri' },
+      forCompanies: {
+        submit: 'Demo isteyin',
+        successBody: 'Talebiniz satış ekibimize ulaştı. Demo için bir zaman bulmak üzere iki iş günü içinde dönüyoruz.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo talepleri',
+        subtitle: 'Web sitenizdeki demo formundan gelen talepler. Varsayılan aday sahibi varsa talep zaten hatta; yoksa bir yönetici ekleyene kadar burada sahipsiz bekler.',
+        emptyTitle: 'Bekleyen talep yok',
+        emptyBody: 'Web sitenizden gelen demo talepleri buraya düşer ve geldikçe tüm yöneticilere e-postayla bildirilir.',
+      },
       candidates: {
         title: 'Müşteri Adayları',
         subtitle: 'Müşteri adaylarını görüntüle ve ara',
@@ -476,7 +499,17 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
-      nav: { candidates: 'Leads' },
+      nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen' },
+      forCompanies: {
+        submit: 'Demo anfragen',
+        successBody: 'Ihre Anfrage hat unser Vertriebsteam erreicht. Wir melden uns innerhalb von zwei Werktagen, um einen Termin für die Demo zu finden.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo-Anfragen',
+        subtitle: 'Anfragen aus dem Demo-Formular Ihrer Website. Mit Standard-Zuständigkeit ist eine Anfrage schon in der Pipeline; die übrigen warten hier ohne Zuständige, bis ein Admin sie übernimmt.',
+        emptyTitle: 'Keine Anfragen offen',
+        emptyBody: 'Demo-Anfragen von Ihrer Website landen hier, und alle Admins werden bei Eingang per E-Mail benachrichtigt.',
+      },
       candidates: {
         title: 'Leads',
         subtitle: 'Leads durchsuchen',

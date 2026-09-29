@@ -50,10 +50,13 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
-  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'placements' },
+  // The enquiry inbox is shared since #2569: on an internship tenant it holds the
+  // /for-companies enquiries, on a MARKETING tenant the landing's demo requests
+  // (and is the "unowned leads" list, #2580) — both are the `companies` module.
+  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'companies' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
-  // templates, programme cohorts, mentor/mentee success stories and the
-  // partner-company enquiry inbox are internship modules (#2499). A MARKETING
+  // templates, programme cohorts and mentor/mentee success stories are
+  // internship modules (#2499). A MARKETING
   // tenant carries none of these capabilities, so the links drop out of its
   // sidebar — and the projects write APIs are gated on the same capability.
   { href: '/admin/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },

@@ -497,6 +497,19 @@ export async function createMarketingAccount(input: {
   owner: MarketingImportOwner;
   fields: ManualAccountFields;
   request?: Request;
+  /**
+   * Where the row came from, for the activity log: `manual` (the form on
+   * /admin/companies, #2562) or `inquiry` (a demo request from the public
+   * marketing form, converted by an admin or by the default owner, #2569).
+   * Same writer either way — only the log line differs.
+   */
+  origin?: 'manual' | 'inquiry';
+  /**
+   * Who did it, when that is not the owner — an admin typing a lead in for the
+   * org's default owner (#2580), or a web request placed on the default
+   * owner's funnel (actor = null: nobody signed in did it). Defaults to the owner.
+   */
+  actor?: { id: string; email: string | null } | null;
 }): Promise<ManualAccountOutcome> {
   const { owner, fields } = input;
   const stages = await runWithOrg(owner.orgId, () => resolvePipelineStages(owner.orgId));
@@ -545,11 +558,11 @@ export async function createMarketingAccount(input: {
       await runWithOrg(owner.orgId, () =>
         logActivity({
           action: 'marketing.account.created',
-          actorId: owner.id,
-          actorEmail: owner.email,
+          actorId: input.actor === undefined ? owner.id : (input.actor?.id ?? null),
+          actorEmail: input.actor === undefined ? owner.email : (input.actor?.email ?? null),
           targetType: 'Company',
           targetId: companyId,
-          detail: `manual stage=${stage}${leadId ? ` lead=${leadId}` : ''}`,
+          detail: `${input.origin ?? 'manual'} stage=${stage}${leadId ? ` lead=${leadId}` : ''}`,
           ...(input.request ? { request: input.request } : {}),
         }),
       );

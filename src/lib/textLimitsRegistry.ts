@@ -219,6 +219,16 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     openRoles: { exempt: '@db.Text, capped at 300 by the public form schema' },
     message: { limit: 'publicContactMessage', files: ['src/app/api/company-inquiry/route.ts'] },
     note: { exempt: '@db.Text, written by an admin on the triage screen' },
+    // The #2569 demo-form columns.
+    marketplaces: { exempt: '@db.Text, capped at 300 by the public form schema' },
+    consentTextVersion: SERVER_SET,
+    receivedHost: { exempt: 'the request hostname, sliced to 191 by the route before it is written' },
+    utmSource: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    utmMedium: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    utmCampaign: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    utmTerm: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    utmContent: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    referrer: { exempt: '@db.Text, origin + path capped at 500 (REFERRER_MAX) by readInquiryAttribution' },
   },
   Organization: {
     id: ID,
@@ -237,5 +247,6 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     billingEmail: { exempt: 'written by the billing flow, not typed into this form' },
     vatId: { exempt: 'written by the billing flow, not typed into this form' },
     billingCountry: ENUMERATED,
+    publicHost: { exempt: 'written only by prisma/set-public-host.mjs, which accepts a bare hostname of at most 253 characters (normalizePublicHost); no request path writes it' },
   },
 };

@@ -2009,6 +2009,7 @@ export async function sendCompanyInquiryEmail({
   fromEmail,
   phone,
   openRoles,
+  marketplaces,
   message,
   locale,
   orgId,
@@ -2021,6 +2022,8 @@ export async function sendCompanyInquiryEmail({
   fromEmail: string;
   phone?: string | null;
   openRoles?: string | null;
+  // The MARKETING demo form's "marketplaces you sell on" (#2569).
+  marketplaces?: string | null;
   message?: string | null;
   locale?: string | null;
   orgId?: string | null;
@@ -2043,6 +2046,7 @@ export async function sendCompanyInquiryEmail({
         <p><strong>${esc(companyName)}</strong> — ${esc(contactName)} (${esc(fromEmail)})</p>
         ${phone ? `<p>${esc(M.phone)}: ${esc(phone)}</p>` : ''}
         ${openRoles ? `<p>${esc(M.openRoles)}: ${esc(openRoles)}</p>` : ''}
+        ${marketplaces ? `<p>${esc(M.marketplaces)}: ${esc(marketplaces)}</p>` : ''}
         ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>` : ''}
         <p style="color:#6b7280;font-size:14px;">${esc(M.replyHint)}</p>
       </div>

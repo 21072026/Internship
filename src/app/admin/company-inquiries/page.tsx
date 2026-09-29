@@ -9,7 +9,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { ConvertInquiryModal, type ConvertibleInquiry } from '@/components/admin/ConvertInquiryModal';
-import { Building2, Mail, Phone, UserPlus } from 'lucide-react';
+import { useVertical } from '@/lib/verticalClient';
+import { Building2, Mail, Phone, UserPlus, Kanban } from 'lucide-react';
 
 interface InquiryRow {
   id: string;
@@ -29,6 +30,13 @@ interface InquiryRow {
   // of offering to create a second one.
   convertedAt: string | null;
   convertedCompany: { id: string; name: string } | null;
+  // The MARKETING demo form (#2569).
+  marketplaces: string | null;
+  marketingOptIn: boolean | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  referrer: string | null;
 }
 
 const STATUS_TABS = ['NEW', 'CONTACTED', 'CLOSED', 'ALL'] as const;
@@ -49,6 +57,12 @@ export default function CompanyInquiriesPage() {
   const [rows, setRows] = useState<InquiryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [converting, setConverting] = useState<ConvertibleInquiry | null>(null);
+  // MARKETING (#2569): "convert" places the request on the pipeline — an
+  // account, a lead and a funnel record — in one call, so there is no form to
+  // fill in, only the outcome to show on the row.
+  const isMarketing = useVertical() === 'MARKETING';
+  const [placing, setPlacing] = useState<string | null>(null);
+  const [placeResult, setPlaceResult] = useState<Record<string, { ok: boolean; text: string }>>({});
 
   const load = useCallback(() => {
     setLoading(true);
@@ -70,12 +84,60 @@ export default function CompanyInquiriesPage() {
     if (res.ok) load();
   };
 
+  const addToPipeline = async (r: InquiryRow) => {
+    setPlacing(r.id);
+    try {
+      const res = await fetch(`/api/admin/company-inquiries/${r.id}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const d = await res.json().catch(() => ({}));
+      const c = a.convert;
+      const text = res.ok
+        ? c.leadDone.replace('{company}', d.companyName ?? r.companyName)
+        : d.code === 'already_converted'
+          ? d.companyName ? c.alreadyConverted.replace('{company}', d.companyName) : c.alreadyConvertedUnnamed
+          : d.code === 'account_exists' || d.code === 'account_ambiguous' ? c.leadExists
+          : d.code === 'contact_in_funnel' ? c.leadContactInFunnel
+          : d.code === 'contact_is_user' ? c.leadContactIsUser
+          : d.code === 'already_mentored' ? c.leadAlreadyMentored
+          : d.code === 'in_progress' ? c.leadInProgress
+          : d.code === 'invalid' ? c.leadInvalid
+          : c.failed;
+      setPlaceResult((prev) => ({ ...prev, [r.id]: { ok: res.ok, text } }));
+      // Updated in place rather than reloaded: a converted request is CLOSED,
+      // so a reload of the NEW tab would make the row vanish at the very
+      // moment the admin wants to see what it became.
+      if (res.ok && d.companyId) {
+        setRows((prev) =>
+          prev.map((x) =>
+            x.id === r.id
+              ? { ...x, status: 'CLOSED', convertedAt: new Date().toISOString(), convertedCompany: { id: d.companyId, name: d.companyName ?? r.companyName } }
+              : x,
+          ),
+        );
+      }
+    } catch {
+      setPlaceResult((prev) => ({ ...prev, [r.id]: { ok: false, text: a.convert.failed } }));
+    } finally {
+      setPlacing(null);
+    }
+  };
+  const hasUnowned = isMarketing && rows.some((r) => !r.convertedCompany && r.status !== 'CLOSED');
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{a.title}</h1>
         <p className="text-gray-500 mt-1">{a.subtitle}</p>
       </div>
+
+      {hasUnowned && (
+        <p data-testid="inquiries-unowned-hint" className="text-sm bg-amber-50 text-amber-800 border border-amber-200 rounded-lg px-4 py-3">
+          {a.unownedHint}
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {STATUS_TABS.map((s) => (
@@ -106,6 +168,9 @@ export default function CompanyInquiriesPage() {
                     <Badge variant={STATUS_VARIANT[r.status]}>
                       {a.status[r.status.toLowerCase() as 'new' | 'contacted' | 'closed']}
                     </Badge>
+                    {isMarketing && !r.convertedCompany && r.status !== 'CLOSED' && (
+                      <Badge variant="warning" data-testid={`inquiry-unowned-${r.id}`}>{a.unowned}</Badge>
+                    )}
                   </CardTitle>
                   <p className="text-sm text-gray-500 mt-1">
                     {r.contactName} · {formatDate(r.createdAt, locale)}
@@ -119,7 +184,18 @@ export default function CompanyInquiriesPage() {
                       otherwise re-key it by hand on three screens. A converted
                       enquiry gets the link below instead, and the server refuses
                       a second conversion regardless of what this renders. */}
-                  {!r.convertedCompany && (
+                  {!r.convertedCompany && isMarketing && (
+                    <button
+                      onClick={() => addToPipeline(r)}
+                      disabled={placing === r.id}
+                      data-testid={`convert-inquiry-${r.id}`}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:underline disabled:opacity-50"
+                    >
+                      <Kanban className="h-4 w-4" />
+                      {placing === r.id ? a.convert.leadAdding : a.convert.leadAction}
+                    </button>
+                  )}
+                  {!r.convertedCompany && !isMarketing && (
                     <button
                       onClick={() => setConverting({ id: r.id, companyName: r.companyName, contactName: r.contactName, email: r.email })}
                       data-testid={`convert-inquiry-${r.id}`}
@@ -157,10 +233,23 @@ export default function CompanyInquiriesPage() {
                     className="flex flex-wrap items-center gap-2 bg-green-50 text-green-800 rounded-lg px-3 py-2"
                   >
                     <Building2 className="h-4 w-4" />
-                    {a.convert.convertedTo.replace('{company}', r.convertedCompany.name)}
+                    {(isMarketing ? a.convert.leadDone : a.convert.convertedTo).replace('{company}', r.convertedCompany.name)}
                     <Link href={`/admin/companies/${r.convertedCompany.id}`} className="text-blue-600 hover:underline">{a.convert.openCompany}</Link>
                   </p>
                 )}
+                {placeResult[r.id] && !placeResult[r.id].ok && (
+                  <p data-testid={`inquiry-place-result-${r.id}`} className="text-sm bg-red-50 text-red-700 rounded-lg px-3 py-2">
+                    {placeResult[r.id].text}
+                  </p>
+                )}
+                {r.marketplaces && <p className="text-gray-700"><span className="text-gray-500">{a.marketplaces}:</span> {r.marketplaces}</p>}
+                {(r.utmSource || r.utmCampaign || r.referrer) && (
+                  <p className="text-gray-700" data-testid={`inquiry-source-${r.id}`}>
+                    <span className="text-gray-500">{a.source}:</span>{' '}
+                    {[r.utmSource, r.utmMedium, r.utmCampaign].filter(Boolean).join(' / ') || r.referrer}
+                  </p>
+                )}
+                {r.marketingOptIn && <p className="text-gray-500 text-xs">{a.marketingOptIn}</p>}
                 {r.openRoles && <p className="text-gray-700"><span className="text-gray-500">{a.openRoles}:</span> {r.openRoles}</p>}
                 {r.message && <p className="text-gray-600 whitespace-pre-wrap border-l-2 border-gray-200 pl-3">{r.message}</p>}
               </div>
