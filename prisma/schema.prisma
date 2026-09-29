@@ -2884,7 +2884,11 @@ model StatusChange {
   relationId  String
   fromStatus  String
   toStatus    String
-  changedById String
+  // NULL = the system moved it (#2527): an unattended sweep such as
+  // expireTrials() has no User to name, and naming a real person (the owner, an
+  // org admin) would print a name next to something they did not do. Same
+  // precedent as ActivityLog.actorId. Readers render NULL as "System".
+  changedById String?
   createdAt   DateTime @default(now())
   // Drop-off reason (#810): required by the API when `toStatus` resolves to a
   // negative/off-path stage in the org's pipeline (PipelineStage.isOffPath —
@@ -2896,7 +2900,10 @@ model StatusChange {
   reasonNote  String?  @db.Text
 
   relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  changedBy User               @relation("StatusChangedBy", fields: [changedById], references: [id])
+  // Restrict, as it was while the column was required: erasure deletes a
+  // person's moves explicitly (accountErasure.ts), and an implicit SET NULL
+  // would silently relabel them as the system's.
+  changedBy User?              @relation("StatusChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
 }
 
 model InvitationToken {

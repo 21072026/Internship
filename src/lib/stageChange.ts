@@ -80,7 +80,8 @@ export interface StatusChangeInput {
   relationId: string;
   fromStatus: string;
   toStatus: string;
-  changedById: string;
+  /** `null` for a move the system made on its own (#2527) — never a stand-in person. */
+  changedById: string | null;
   reasonCode?: string | null;
   reasonNote?: string | null;
   /** Only for a backdated history correction; omitted rows use the DB default. */
@@ -91,7 +92,7 @@ export interface StatusChangeData {
   relationId: string;
   fromStatus: string;
   toStatus: string;
-  changedById: string;
+  changedById: string | null;
   reasonCode: string | null;
   reasonNote: string | null;
   createdAt?: Date;

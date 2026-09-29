@@ -201,11 +201,17 @@ test('the trial-reminders job warns once, expires what has run out, and does not
     .toBe(TRIAL_EXPIRED_STAGE_KEY);
   expect((await prisma.mentorshipRelation.findUnique({ where: { id: relation.id } }))!.pipelineStatus)
     .toBe(TRIAL_ACTIVE_STAGE_KEY);
-  // …and the move left an audit row written by the system actor, because
-  // StatusChange.changedById is a required FK to a real User.
+  // …and the move left an audit row written by the system actor…
   const audits = await prisma.auditLog.findMany({ where: { action: 'trial.expire', targetId: stale.id } });
   expect(audits.length).toBe(1);
   expect(audits[0].actorId).toBe('system');
+  // …and a stage-history row with no person on it (#2527), which is what the
+  // stage clock reads: without it the record reported the whole trial's age as
+  // its time in TRIAL_EXPIRED.
+  const moves = await prisma.statusChange.findMany({ where: { relationId: stale.id } });
+  expect(moves.map((m) => [m.fromStatus, m.toStatus, m.changedById])).toEqual([
+    [TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY, null],
+  ]);
 
   // SECOND RUN — the claim row is what makes this silent. Nothing new is
   // considered (the 7-day mark is spent), nothing is sent, and the expiry finds
@@ -220,4 +226,5 @@ test('the trial-reminders job warns once, expires what has run out, and does not
   expect(await prisma.notification.count({ where: { userId: owner.id, type: 'trial.endingSoon' } })).toBe(1);
   expect(await prisma.notification.count({ where: { userId: mutedOwner.id } })).toBe(0);
   expect(await prisma.auditLog.count({ where: { action: 'trial.expire', targetId: stale.id } })).toBe(1);
+  expect(await prisma.statusChange.count({ where: { relationId: stale.id } })).toBe(1);
 });
