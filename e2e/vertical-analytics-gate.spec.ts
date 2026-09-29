@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '@/lib/programTemplates';
 
 /**
@@ -150,6 +150,7 @@ test('an INTERNSHIP admin keeps every analytics card — the gate is a no-op', a
 test('a MARKETING admin sees the funnel cards and none of the mentorship ones', async ({ page }) => {
   const seeded = await seedVerticalOrg('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, seeded.adminEmail, PASSWORD, '/admin');
 
     const payload = await (await page.request.get('/api/admin/analytics')).json();

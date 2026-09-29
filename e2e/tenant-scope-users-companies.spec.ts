@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAsFreshUser } from './helpers/auth';
-import { seedTwoTenants, signInAsTenantActor, type SeededTenant, type TwoTenants } from './helpers/tenants';
+import { seedTwoTenants, signInAsTenantActor, useWorld, type SeededTenant, type TwoTenants } from './helpers/tenants';
 
 /**
  * A MARKETING admin must not read the INTERNSHIP tenant's people or companies,
@@ -184,6 +184,7 @@ test('an admin session with no org is the default org\'s, never unscoped', async
   await prisma.user.update({ where: { id: admin.id }, data: { orgId: null } });
   const { orgB } = tenants;
   try {
+    await useWorld(page, 'INTERNSHIP'); // a NULL-org account is the default (INTERNSHIP) world's (#2590)
     await signInAsFreshUser(page, adminEmail, 'NullOrg123!', '/admin');
     const session = await (await page.request.get('/api/auth/session')).json();
     expect(session?.user?.orgId ?? null, 'precondition: the session carries no org').toBeNull();
@@ -240,6 +241,9 @@ test('a NULL-org row belongs to the default org: listed there, invisible to a MA
     expect((await page.request.get(`/api/users/${mentee.id}`)).status()).toBe(404);
     expect((await page.request.get(`/api/companies/${company.id}`)).status()).toBe(404);
 
+    // Back to the default host: the previous sign-in left the context on the
+    // marketing host, where this INTERNSHIP-world admin has no session (#2590).
+    await useWorld(page, 'INTERNSHIP');
     await signInAsFreshUser(page, adminEmail, 'NullOrg123!', '/admin');
     expect(await ids(page, '/api/users?role=MENTEE', 'users')).toContain(mentee.id);
     expect(await ids(page, '/api/candidates?all=1', 'candidates')).toContain(mentee.id);

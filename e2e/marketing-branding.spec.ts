@@ -51,8 +51,9 @@ test('the marketing host wears SaleVali: magenta accent, the V mark, its own ico
 
 // /messages carries its own viewport export (viewportFit: cover), which
 // replaces the root one — so its tint has to follow the vertical by itself.
-// Session-first: the signed-in user's org is MARKETING, so this holds on any
-// host; the marketing host header only keeps the test honest about the chrome.
+// A MARKETING-org account signs in on the marketing host only (#2590: the URL
+// decides the product), so the header is set before sign-in and kept for the
+// /messages navigation — that host is both the login's world and the chrome's.
 test('signed in to a marketing org, /messages keeps the SaleVali tint and accent', async ({ page }) => {
   const org = await prisma.organization.create({
     data: { slug: `sv-tint-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`, name: 'SaleVali Tint Org', vertical: 'MARKETING' },

@@ -165,6 +165,11 @@ jobs:
         run: npm run test:request-id
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
+      # One person may hold an account in each world (#2590): a User lookup by
+      # e-mail that does not say which world it means signs someone into the
+      # wrong product, and it typechecks. Only userWorld.ts may answer that.
+      - name: a user lookup by e-mail names its world (#2590)
+        run: npm run check:user-email-lookups
       # An API-key request has no session, so nothing resolves a tenant for it
       # and the tenant middleware treats that as "do not scope": a /api/v1 route
       # that authenticates a key and then queries reads every organisation's

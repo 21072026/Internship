@@ -64,10 +64,13 @@ test.afterAll(async () => {
     await prisma.pipelineStage.deleteMany({ where: { orgId } }).catch(() => {});
   }
   for (const email of emails) {
-    const user = await prisma.user.findUnique({ where: { email } }).catch(() => null);
-    if (!user) continue;
-    await prisma.notification.deleteMany({ where: { userId: user.id } }).catch(() => {});
-    await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+    // `email` is no longer unique (one row per world, #2590); these addresses are
+    // minted per run, so this removes exactly the rows this spec seeded.
+    const users = await prisma.user.findMany({ where: { email }, select: { id: true } }).catch(() => []);
+    for (const user of users) {
+      await prisma.notification.deleteMany({ where: { userId: user.id } }).catch(() => {});
+      await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+    }
   }
   if (orgId) await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
   await prisma.$disconnect();
@@ -158,6 +161,9 @@ test('the trial-reminders job warns once, expires what has run out, and does not
     },
   });
 
+  // The org is MARKETING, so its admin signs in on the marketing host (#2590);
+  // the header stays for the cron call below (page.request shares the context).
+  await page.context().setExtraHTTPHeaders({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de' });
   await page.goto('/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', adminEmail);
   await page.fill('input[type="password"]', 'AdminPass123');

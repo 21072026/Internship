@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 
 // Vertical nav gate (#2351, epic #2348). The vertical a tenant belongs to
 // decides which modules its shell shows: INTERNSHIP carries everything (so the
@@ -50,6 +50,7 @@ test('an INTERNSHIP admin sees the full sidebar — the gate is a no-op', async 
 test('a MARKETING admin loses the mentorship/placement/sourcing links, keeps the CRM core', async ({ page }) => {
   const { org, email } = await makeAdmin('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, email, 'NavPass123', '/admin');
     const nav = page.locator('aside nav').first();
     // Core stays.
@@ -69,6 +70,7 @@ test('a MARKETING admin loses the mentorship/placement/sourcing links, keeps the
 test('a MARKETING org has no mentor shell — /mentor redirects home', async ({ page }) => {
   const { org, email } = await makeAdmin('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, email, 'NavPass123', '/admin');
     // An admin can normally open the mentor shell via mode switching; a MARKETING
     // org has no mentorship module, so the layout sends them out of it.
@@ -87,6 +89,7 @@ test('a MENTOR in a MARKETING org lands on /account, not an infinite redirect', 
   // reclassified to MARKETING.
   const { org, email } = await makeUser('MARKETING', 'MENTOR');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     // Inline sign-in, not signInAndSettle: /account is a bare settings page with
     // no account-menu for the helper to wait on. The post-login redirect chain
     // itself proves no loop — roleHome for this role is the mentorship shell, so
@@ -107,6 +110,7 @@ test('a MENTOR in a MARKETING org lands on /account, not an infinite redirect', 
 test('a MENTEE in a MARKETING org lands on /account, not an infinite redirect', async ({ page }) => {
   const { org, email } = await makeUser('MARKETING', 'MENTEE');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     // Inline sign-in, not signInAndSettle: /account is a bare settings page with
     // no account-menu for the helper to wait on. The post-login redirect chain
     // itself proves no loop — roleHome for this role is the mentorship shell, so
