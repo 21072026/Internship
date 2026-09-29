@@ -10,6 +10,39 @@ Newest entries on top.
 
 ---
 
+## 2026-09-29 — Bir kişi, iki dünya (#2590): paralel `main`, container yeniden başlaması, e2e ortamı
+
+**Aynı konuda `main` de ilerliyor olabilir: tasarlamadan önce `git log origin/main -20`.** Bu iş
+sırasında `main`'e #2607/#2610 (org'a göre e-posta bağlantı kökeni, `Organization.publicHost`)
+girdi ve benim `appUrlFor`/`originForWorld` işimle aynı yeri çözüyordu; iki kural yan yana yaşamaz.
+Çözüm iki kuralı tek fonksiyonda birleştirmekti (`appOriginForOrg`: açık `publicHost` kazanır,
+yoksa org'un dünyası). Çakışma çözerken "bizimki mi onlarınki mi" değil "tek kural hangisi" diye sor.
+
+**Yeni bir kural eski spec'leri değil, sonradan gelen spec'leri de kırar.** Host artık ürünü
+seçtiği için MARKETING org'unun kullanıcısını varsayılan hostta giren her spec kırılır; `main`'den
+sonradan gelen `marketing-sales-surface`, `marketing-demo-form`, `trial-end-extend` da öyle çıktı.
+Merge sonrası `git diff <eski-base> origin/main --name-only -- e2e | xargs grep -l MARKETING`
+ile yeni gelenleri bul ve çalıştır. Org'suz platform admin'i INTERNSHIP dünyasıdır — ona
+marketing başlığı eklemek onu da kırar (trial-reminders-job'da ajan bunu yanlış yaptı).
+
+**Container yeniden başlayabilir; arka plan workflow'u ölür, çalışma ağacı kalır.** İş bitmeden
+WIP commit + push at (stop hook zaten ister); ajanlar `git diff` ile inceleme yapıyorsa spec'e
+"taban `origin/main`, düz `git diff` commit sonrası boş görünür" notunu yaz. Workflow eşzamanlılığı
+`CPU-2` (4 çekirdekte 2 ajan) — uzun sürer, işi bölerken buna göre planla.
+
+**Yerel e2e: chromium sürümü ve süreç öldürme.** Playwright 1.63 `chromium-1243` bekliyor, kutuda
+`1194` var: `chromium-1243/chrome-linux64` ve `chromium_headless_shell-1243/chrome-headless-shell-linux64`
+dizinlerini 1194'e symlink'le (+ `INSTALLATION_COMPLETE`). `next dev` altında ilk vuruşta rota derlenir:
+50 sn'yi aşan "kırmızılar" çoğu zaman derleme/yük; izole ve ısınmış tekrar et, ardından CI'ın
+prod build'i hakem olsun. Bash'te `pkill -f "playwright|next"` **kendi kabuğunu da öldürür**
+(komut satırında o kelimeler var) — süreçleri `pgrep` + pid ile ayrı çağrıda öldür, koşuyu
+`setsid nohup script &` ile ayır ve log dosyasını `ls -la` ile doğrula (boş log = başlamadı).
+
+**Guard yazarken `RegExp` içine giren her dizgiyi tam kaçır.** `name.replace(/\$/g, ...)` CodeQL'de
+"incomplete escaping" uyarısı verdi; `[.*+?^${}()|[\]\\]` kümesiyle kaçırmak hem doğru hem temiz.
+
+---
+
 ## 2026-09-21 — Talep girdisi ile karar metnini aynı alanda tutma (#1416)
 
 **Bir kaydı açan tarafın notu ile o kayıt hakkında sonradan verilen kararın açıklaması aynı
