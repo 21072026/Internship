@@ -290,6 +290,12 @@ same row outcomes, same activity-log row:
   needing attention (all `ERROR`/`SKIP` rows and every row carrying a reason); **All rows**
   lists the rest. Row numbers and reasons are the CLI's, so steps 4 and 5 below read the
   same.
+- **The numbers line** (#2555) — counts only, read off the run's own report by
+  `marketingImportMetrics()`: accounts that land (`CREATE` + `UPDATE` + `UNCHANGED`), how many
+  of them matched an existing account, how many carry an `external_id`, and for the rows placed
+  in `TRIAL_ACTIVE` where the trial end comes from — written from the file this run, `kept`
+  (the record already has one), the `default` window, or `missing` (a trial nobody will be
+  reminded about). These are the numbers the cutover posts; nothing in them can carry a name.
 - **Bounds:** at most `TEXT_LIMITS.marketingImportFile` characters (2 000 000) and
   `MARKETING_IMPORT_MAX_ROWS` (5 000) data rows per run — split a larger table into files and
   run them one after another (each is idempotent); 30 runs per admin per 10 minutes.
@@ -577,6 +583,83 @@ back `UNCHANGED`.
   mail attachment). The dump from "Take a backup first" stays where it is and expires on its
   own schedule — [`disaster-recovery.md`](disaster-recovery.md) says how long, and it is
   not to be copied anywhere either.
+
+## Cutover checklist (#2555)
+
+The one-off move of the real SaleVali customer table into the production MARKETING
+organisation. **An operator action** — a contributor never runs it, never sees the file and
+never touches production ([`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md)). Everything
+below happens in the admin panel ([The admin panel](#the-admin-panel-2552)); the numbered
+steps of [Running it](#running-it) explain each reason and each fix. Tick every box, in
+order; stop at the first one that does not hold.
+
+**Before — preconditions (all must be true, none is done here)**
+
+- [ ] The production MARKETING organisation exists and its pipeline has the trial stages
+      (`TRIAL_ACTIVE`, `TRIAL_EXPIRED`) — verified by #2579.
+- [ ] #2542 (the cross-tenant fixes) is closed and deployed.
+- [ ] The **stage of the current paying customers** is decided (#2572, item 7), so every row's
+      `stage` cell holds a key from [the MARKETING funnel](#the-stage-column-takes-marketing-funnel-keys-only),
+      never a label.
+- [ ] The **external id** is the SaleVali `User._id` for every row (#2565's key; if #2565 decides
+      otherwise, use that — but one key for the whole file, and the same one the usage feed uses).
+- [ ] A **freeze date** for the source table is agreed and announced: nobody edits the SaleVali
+      side after the export is taken.
+- [ ] The **default owner** is chosen (the person who owns unassigned leads) — and written down,
+      because every re-run uses the same one.
+
+**The file**
+
+- [ ] Exported on the freeze date as **CSV UTF-8** ([step 1](#1-export-the-spreadsheet)), dates
+      as `YYYY-MM-DD`, and the UTF-8 check passes.
+- [ ] Stored **outside** any checkout, in a `0700` directory of your own. `.gitignore` refuses
+      `.csv`/`.tsv`/`.xls`/`.xlsx`/`.ods` in any letter case everywhere except
+      `scripts/fixtures/*.csv|tsv` (pinned by `scripts/test/gitignore-exports.test.mjs`), but the
+      safe place is still nowhere near a repository. Never attach it to an issue, a PR or a chat.
+
+**Backup**
+
+- [ ] A **fresh dump taken right before the first Apply** and its path written down — on the
+      app server, `infra/backup-db.sh --env prod` with the production `DATABASE_URL`, then
+      `cat /var/backups/internship-crm/.last-prod` ([`disaster-recovery.md`](disaster-recovery.md)).
+      There is no un-import; that dump is the way back. Dumps are pruned after `KEEP_DAYS`
+      (default 7), so if the cutover might need undoing later than that, say so to whoever owns
+      the server before starting.
+
+**Dry run, until clean**
+
+- [ ] Signed in as an ADMIN of the MARKETING organisation → `/admin/settings` → import card →
+      **Marketing accounts** → file → the chosen owner → overwrite **off** → **Preview**.
+- [ ] `ERROR` is **0**. Every `ERROR` and `SKIP` was fixed **in the source** (or in the app), a new
+      export taken, and the preview repeated ([step 5](#5-fix-the-file-not-the-database)) — never
+      by editing the database.
+- [ ] Every remaining reason on a row that lands was read and accepted, in particular every
+      `trial_ends_at is blank: the default trial window applies …` (a real running trial should
+      carry its real `trial_ends_at`) and any `… no trial reminder will be sent …`.
+- [ ] The numbers line reads as expected: `external id on` ≥ 95 % of the accounts; `missing` = 0
+      under trials.
+
+**Apply**
+
+- [ ] **Apply** (confirm once) with the same file, owner and overwrite flag as the last clean
+      preview. Any `ERROR` rows now come only from the write itself (step 5, "Only under
+      `--apply`"): fix them and apply the **whole** file again.
+- [ ] **Preview the same file again, then Apply it again: every row that landed reads
+      `Unchanged`** (`UPDATE: 0`, `CREATE: 0`). Anything else: stop and find out why
+      ([step 7](#7-check-then-clean-up)) before touching anything.
+- [ ] Spot-check a few accounts, their board card and stage, and one imported trial's end date.
+- [ ] No imported trial shows the "date missing" badge on its board card or an attention item
+      `trial_no_end_date` for its owner (#2553) — the numbers line's `missing` = 0 says the same.
+
+**Report and clean up**
+
+- [ ] Post the counts — and only counts — as a comment on story #2391: total rows, New, matched,
+      Error, external-id fill rate (`external id on` ÷ accounts), trial-end fill rate (trials
+      minus `missing`, ÷ trials). The panel's numbers line and count chips are those numbers; no
+      name, address or row goes in the comment.
+- [ ] Delete the export and every copy of it (downloads folder, mail attachment). The report
+      lives only in the browser tab — close it. The dump stays where it is, untouched, and
+      expires on its own schedule.
 
 ## One lead typed in by hand (#2562)
 

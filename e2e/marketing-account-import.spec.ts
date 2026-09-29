@@ -98,6 +98,10 @@ test('the sample file: preview writes nothing, apply lands it, a second apply is
     // (row 3) and a trial without an end date (row 6, #2554's default window).
     await expect(report.getByTestId('marketing-import-row-3')).toContainText('no primary contact e-mail');
     await expect(report.getByTestId('marketing-import-row-6')).toContainText('default trial window applies (30 days from the import day)');
+    // The PII-free cutover numbers (#2555).
+    await expect(report.getByTestId('marketing-import-metrics')).toHaveText(
+      '6 accounts (0 matched) · external id on 5 · 2 trials: end from file 1, kept 0, default window 1, missing 0',
+    );
     expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(0);
     expect(await prisma.mentorshipRelation.count({ where: { orgId: org.id } })).toBe(0);
 
@@ -146,6 +150,9 @@ test('the sample file: preview writes nothing, apply lands it, a second apply is
     await page.getByTestId('marketing-import-apply').click();
     await expect(report).toHaveAttribute('data-dry-run', 'false', { timeout: 60_000 });
     expect(await counts(page)).toEqual({ CREATE: 0, UPDATE: 0, UNCHANGED: 6, SKIP: 0, ERROR: 0 });
+    await expect(report.getByTestId('marketing-import-metrics')).toHaveText(
+      '6 accounts (6 matched) · external id on 5 · 2 trials: end from file 0, kept 2, default window 0, missing 0',
+    );
     expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(6);
     expect(await prisma.mentorshipRelation.count({ where: { orgId: org.id } })).toBe(5);
     expect(await prisma.statusChange.count({ where: { relation: { orgId: org.id } } })).toBe(0);

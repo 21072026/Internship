@@ -10,7 +10,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logger } from '@/lib/logger';
 import { findLeadOwner } from '@/lib/leadOwner';
-import { MARKETING_IMPORT_MAX_ROWS } from '@/lib/marketingImport';
+import { MARKETING_IMPORT_MAX_ROWS, marketingImportMetrics } from '@/lib/marketingImport';
 import { MarketingImportError, runMarketingAccountImport } from '@/lib/marketingImportStore';
 
 // The marketing account import, runnable in production (#2552, story #2391).
@@ -154,6 +154,8 @@ async function handlePost(request: Request) {
         authoritative: authoritative === true,
         total: report.total,
         counts: report.counts,
+        // The cutover numbers an operator posts (#2555) — counts only.
+        metrics: marketingImportMetrics(report.rows),
         rows,
         stageKeys,
         owner: { id: owner.id, email: owner.email },

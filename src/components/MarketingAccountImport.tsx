@@ -33,6 +33,14 @@ interface Report {
   dryRun: boolean;
   total: number;
   counts: Record<RowStatus, number>;
+  /** The PII-free cutover numbers (#2555), from marketingImportMetrics(). */
+  metrics?: {
+    accounts: number;
+    matched: number;
+    withExternalId: number;
+    trials: number;
+    trialEnd: Record<'file' | 'kept' | 'default' | 'missing', number>;
+  };
   rows: ReportRow[];
 }
 
@@ -240,6 +248,19 @@ export function MarketingAccountImport({
               </li>
             ))}
           </ul>
+          {report.metrics && (
+            <p className="text-xs text-gray-600 dark:text-gray-400" data-testid="marketing-import-metrics">
+              {m.metrics
+                .replace('{a}', String(report.metrics.accounts))
+                .replace('{m}', String(report.metrics.matched))
+                .replace('{x}', String(report.metrics.withExternalId))
+                .replace('{t}', String(report.metrics.trials))
+                .replace('{tf}', String(report.metrics.trialEnd.file))
+                .replace('{tk}', String(report.metrics.trialEnd.kept))
+                .replace('{td}', String(report.metrics.trialEnd.default))
+                .replace('{tm}', String(report.metrics.trialEnd.missing))}
+            </p>
+          )}
           {!report.dryRun && <p className="text-xs text-gray-600 dark:text-gray-400">{m.recheck}</p>}
 
           <div className="flex gap-2 text-xs">

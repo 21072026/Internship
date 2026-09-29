@@ -723,6 +723,14 @@ export interface MarketingFunnelPlan {
   relationChanged: string[];
   /** Dates the file disagreed with and was not allowed to overwrite. */
   relationWithheld: string[];
+  /**
+   * For a record placed in TRIAL_ACTIVE, where its trial end comes from after
+   * this row (#2554/#2555): this row writes the file's (`file`), the record
+   * already has one — including the same date the file repeats — (`kept`),
+   * the #2551 default window stamps it (`default`), or nobody gives one
+   * (`missing` — a trial no reminder will fire for). Null for any other stage.
+   */
+  trialEnd: 'file' | 'kept' | 'default' | 'missing' | null;
   /** True when anything above has to be written. */
   pending: boolean;
 }
@@ -1326,11 +1334,13 @@ function planFunnel(
   // `trialWindowFor`, applied by funnelRelationCreateData/UpdateData). The
   // dry run says so on the row, so an operator reads "30 days from the import
   // day" before it happens rather than in the reminder mails afterwards.
+  let trialEnd: MarketingFunnelPlan['trialEnd'] = null;
   if (toStage === TRIAL_ACTIVE_STAGE_KEY) {
     const endAfter = relationChanges.trialEndsAt ?? relation?.trialEndsAt ?? null;
     const startAfter = relationChanges.trialStartedAt ?? relation?.trialStartedAt ?? null;
     const entering = relation === null || fromStage !== toStage;
     const days = context.trialLengthDays ?? DEFAULT_TRIAL_LENGTH_DAYS;
+    trialEnd = relationChanges.trialEndsAt ? 'file' : relation?.trialEndsAt ? 'kept' : entering ? 'default' : 'missing';
     if (!endAfter && entering) {
       warnings.push(
         `trial_ends_at is blank: the default trial window applies (${days} days from ${startAfter ? 'trial_started_at' : 'the import day'})`,
@@ -1365,8 +1375,56 @@ function planFunnel(
     relationChanges,
     relationChanged,
     relationWithheld,
+    trialEnd,
     pending,
   };
+}
+
+// ── The cutover numbers (#2555) ──────────────────────────────────────────────
+
+/** Counts an operator reports after a run — no name, no address, no row. */
+export interface MarketingImportMetrics {
+  /** Rows that landed or would land: CREATE + UPDATE + UNCHANGED. */
+  accounts: number;
+  /** …of which matched an existing account (UPDATE + UNCHANGED). */
+  matched: number;
+  /** …of which carry an `external_id` in the file. */
+  withExternalId: number;
+  /** …of which place a funnel record in TRIAL_ACTIVE. */
+  trials: number;
+  /** Where those trials' end comes from — see `MarketingFunnelPlan.trialEnd`. */
+  trialEnd: Record<'file' | 'kept' | 'default' | 'missing', number>;
+}
+
+/**
+ * The PII-free numbers of one run (#2555 step 7: total, NEW, matched, ERROR,
+ * external-id and trial-end fill rates), read off the engine's own report —
+ * so the numbers an operator posts are the ones the run produced, not a
+ * recount. A row that did not land (SKIP, ERROR) counts toward nothing here.
+ */
+export function marketingImportMetrics(
+  rows: readonly { status: string; value?: MarketingPlanValue }[],
+): MarketingImportMetrics {
+  const metrics: MarketingImportMetrics = {
+    accounts: 0,
+    matched: 0,
+    withExternalId: 0,
+    trials: 0,
+    trialEnd: { file: 0, kept: 0, default: 0, missing: 0 },
+  };
+  for (const row of rows) {
+    if (!row.value || row.value.refused) continue;
+    if (row.status !== 'CREATE' && row.status !== 'UPDATE' && row.status !== 'UNCHANGED') continue;
+    metrics.accounts += 1;
+    if (row.status !== 'CREATE') metrics.matched += 1;
+    if (row.value.input.externalId) metrics.withExternalId += 1;
+    const end = row.value.funnel?.trialEnd;
+    if (end) {
+      metrics.trials += 1;
+      metrics.trialEnd[end] += 1;
+    }
+  }
+  return metrics;
 }
 
 // ── apply ────────────────────────────────────────────────────────────────────

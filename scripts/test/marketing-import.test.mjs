@@ -1107,3 +1107,59 @@ test('the shipped sample file runs clean, twice (#2554: external ids, dates, one
   const second = await runFile(text, store, { apply: true, stageKeys: TRIAL_STAGES });
   assert.equal(second.counts.UNCHANGED, 6);
 });
+
+// ── The cutover numbers (#2555) ──────────────────────────────────────────────
+
+const { marketingImportMetrics } = await import('../../src/lib/marketingImport.ts');
+
+test('cutover numbers: counted off the report, PII-free, and the second run reads "matched / kept"', async () => {
+  const { readFileSync } = await import('node:fs');
+  const text = readFileSync(new URL('../fixtures/marketing-accounts-sample.csv', import.meta.url), 'utf8');
+  const store = memoryStore({ now: D_NOW });
+  const first = await runFile(text, store, { apply: true, stageKeys: TRIAL_STAGES });
+  assert.deepEqual(marketingImportMetrics(first.rows), {
+    accounts: 6,
+    matched: 0,
+    withExternalId: 5,
+    trials: 2,
+    trialEnd: { file: 1, kept: 0, default: 1, missing: 0 },
+  });
+  const second = await runFile(text, store, { apply: true, stageKeys: TRIAL_STAGES });
+  assert.deepEqual(marketingImportMetrics(second.rows), {
+    accounts: 6,
+    matched: 6,
+    withExternalId: 5,
+    trials: 2,
+    // Both records already carry their end now — the file's one agrees with it.
+    trialEnd: { file: 0, kept: 2, default: 0, missing: 0 },
+  });
+  // Every value is a number: nothing from a row can travel in these.
+  const flat = JSON.stringify(marketingImportMetrics(second.rows));
+  assert.doesNotMatch(flat, /[A-Za-z]{3,}@|GmbH|Kaya/);
+});
+
+test('cutover numbers: SKIP and ERROR rows count toward nothing; a trial with no end is "missing"', async () => {
+  const store = memoryStore({
+    now: D_NOW,
+    accounts: [account({ id: 'co-a', contactEmail: 'a@alpha.example', externalId: 'SV-A' })],
+    leads: [{ id: 'lead-a', email: standIn('a@alpha.example'), fullName: 'A', phone: null, city: null, country: 'DE', preferredLanguage: null, referralSource: null, companyId: 'co-a', role: 'MENTEE' }],
+    relations: [{ id: 'rel-a', mentorId: OWNER.id, menteeId: 'lead-a', companyId: 'co-a', pipelineStatus: 'TRIAL_ACTIVE', status: 'ACTIVE', trialStartedAt: null, trialEndsAt: null, startDate: D_NOW }],
+  });
+  const report = await runFile(
+    datedFile(
+      { name: 'Alpha GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'a@alpha.example', ext: 'SV-A' },
+      { name: 'Alpha GmbH', ext: 'SV-A' },
+      { name: 'Broken', trialEnd: 'soon' },
+    ),
+    store,
+    { stageKeys: TRIAL_STAGES },
+  );
+  assert.deepEqual(report.rows.map((r) => r.status), ['UNCHANGED', 'SKIP', 'ERROR']);
+  assert.deepEqual(marketingImportMetrics(report.rows), {
+    accounts: 1,
+    matched: 1,
+    withExternalId: 1,
+    trials: 1,
+    trialEnd: { file: 0, kept: 0, default: 0, missing: 1 },
+  });
+});
