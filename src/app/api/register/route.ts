@@ -177,7 +177,11 @@ export async function POST(request: Request) {
       autoLink = { mentorId: invitation.mentorId, menteeId: invitation.menteeId, projectId: invitation.projectId };
     } else {
       // An open registration may still carry a referral link.
-      const referrer = await resolveReferrer(parsed.data.ref);
+      // WORLDS (#2590): an open registration lands in the DEFAULT org, so only a
+      // referrer of that org's world counts. Referral codes are globally unique;
+      // without the world a marketing user's code pasted here would stamp
+      // `referredById` with a person of the other product's tenant.
+      const referrer = await resolveReferrer(parsed.data.ref, await worldOfOrg(await defaultOrgId()));
       if (referrer?.isActive) referredById = referrer.id;
     }
 
