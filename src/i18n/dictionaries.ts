@@ -391,7 +391,7 @@ const en = {
     capacityNotSet: 'Capacity not set',
     activeCount: '{active} / {capacity}',
   },
-  offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.' },
+  offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.', home: 'Go to the home page' },
   common: {
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'System',
@@ -5933,7 +5933,7 @@ const tr: Dict = {
     capacityNotSet: 'Kapasite belirtilmemiş',
     activeCount: '{active} / {capacity}',
   },
-  offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.' },
+  offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.', home: 'Ana sayfaya git' },
   common: {
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'Sistem',
@@ -11338,7 +11338,7 @@ const de: Dict = {
     capacityNotSet: 'Kapazität nicht festgelegt',
     activeCount: '{active} / {capacity}',
   },
-  offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.' },
+  offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.', home: 'Zur Startseite' },
   common: {
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'System',
