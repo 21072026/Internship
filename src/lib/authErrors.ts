@@ -2,6 +2,8 @@
 // so keep this module free of server-only imports — importing `@/lib/auth`
 // from a client component would drag Prisma into the browser bundle.
 
+import { VERTICAL_KEYS, isVerticalKey, type VerticalKey } from '@/lib/verticals';
+
 /**
  * Stable code the sign-in page renders as a localized "something went wrong"
  * message. NextAuth hands a thrown authorize() error's `.message` straight to
@@ -36,6 +38,26 @@ export const AUTH_SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE';
 export const AUTH_SSO_REQUIRED = 'SSO_REQUIRED';
 
 /**
+ * The address and password are right, but the account lives in the OTHER world
+ * (docs/worlds.md): a marketing-only account tried the internship site, or the
+ * reverse. `WRONG_WORLD_<VERTICAL>` names the world the account belongs to, so
+ * the sign-in page can point at the right door instead of saying "invalid".
+ *
+ * Only ever raised AFTER the password verified — the message confirms that an
+ * account exists, and that is something the holder of the password may be told.
+ */
+const AUTH_WRONG_WORLD_PREFIX = 'WRONG_WORLD_';
+export function authWrongWorld(world: VerticalKey): string {
+  return `${AUTH_WRONG_WORLD_PREFIX}${world}`;
+}
+/** The world a `WRONG_WORLD_*` sign-in error points at, or null for any other error. */
+export function parseWrongWorld(error: string | null | undefined): VerticalKey | null {
+  if (!error || !error.startsWith(AUTH_WRONG_WORLD_PREFIX)) return null;
+  const key = error.slice(AUTH_WRONG_WORLD_PREFIX.length);
+  return isVerticalKey(key) ? key : null;
+}
+
+/**
  * The errors authorize() raises on purpose. Their text is contractual: the
  * sign-in page keys off it to show the 2FA field, offer a resend link, or
  * explain a pending review, and renders the rest as-is.
@@ -63,4 +85,5 @@ export const INTENTIONAL_AUTH_ERRORS = new Set([
   'EMAIL_NOT_VERIFIED',
   'ACCOUNT_PENDING_APPROVAL',
   AUTH_SSO_REQUIRED,
+  ...VERTICAL_KEYS.map(authWrongWorld),
 ]);

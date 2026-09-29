@@ -21,15 +21,16 @@ import { DEFAULT_VERTICAL, type VerticalKey } from '@/lib/verticals';
 // with the redirect allowlist (#2488): a host that gets the marketing landing is
 // by construction a host a redirect may stay on. `hostnameOf` is re-exported so
 // existing importers keep working.
-import { hostnameOf, marketingHosts } from '@/lib/servedHosts';
+import { hostnameOf } from '@/lib/servedHosts';
+import { worldForHostHeader } from '@/lib/hostWorld';
 export { hostnameOf };
 
 // The vertical a given host serves. Pure, so it is unit-testable without the
-// request headers.
+// request headers. The rule itself lives in hostWorld.ts (docs/worlds.md): the
+// host that shows a product's landing is the same host that signs a person
+// into that product's account, and those two must never be two copies.
 export function verticalForHost(hostHeader: string | null | undefined): VerticalKey {
-  const host = hostnameOf(hostHeader);
-  if (host && marketingHosts().has(host)) return 'MARKETING';
-  return DEFAULT_VERTICAL;
+  return worldForHostHeader(hostHeader);
 }
 
 // The vertical for the current request's host. Reads X-Forwarded-Host first,

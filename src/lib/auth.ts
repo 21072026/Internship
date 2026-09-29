@@ -11,9 +11,13 @@ import { headerSource, clientIp } from '@/lib/clientIp';
 import { guardProviders } from '@/lib/authGuard';
 import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/lib/accountLockout';
 import { IMPERSONATION_SESSION_MAX_MS } from '@/lib/impersonationHistory';
-import { AUTH_SSO_REQUIRED } from '@/lib/authErrors';
+import { AUTH_SSO_REQUIRED, authWrongWorld } from '@/lib/authErrors';
 import { isPasswordLoginBlocked } from '@/lib/ssoEnforcement';
 import { resolveRedirectTarget } from '@/lib/servedHosts';
+import { headers as requestHeaders } from 'next/headers';
+import { worldForHeaderBag, worldForHeaders, type World } from '@/lib/hostWorld';
+import { findUsersByEmail, findUsersInWorld, worldOfOrg } from '@/lib/userWorld';
+import { toVerticalKey } from '@/lib/verticals';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -45,6 +49,56 @@ const AUTH_USER_SELECT = {
   twoFactorSecret: true,
   lastTotpStep: true,
 } as const;
+
+type AuthAccount = {
+  id: string;
+  orgId: string | null;
+  password: string;
+  ssoExempt: boolean;
+};
+
+/**
+ * Which of the address's accounts is signing in. Normally there is exactly one
+ * in this world; two means two organizations of the same product hold the
+ * address, and the password is what tells them apart. A tenant that enforces
+ * SSO never has its hash compared (#1950), exactly as in the single-account
+ * path, so it can neither win nor be probed here.
+ */
+async function pickAccount<T extends AuthAccount>(pool: T[], password: string): Promise<T | null> {
+  if (pool.length <= 1) return pool[0] ?? null;
+  for (const candidate of pool) {
+    if (await isPasswordLoginBlocked(candidate)) continue;
+    if (await bcrypt.compare(password, candidate.password)) return candidate;
+  }
+  return pool[0];
+}
+
+/**
+ * A grant-based sign-in (impersonation, SSO, remember-me) mints a session for a
+ * user chosen by the grant, not by the host — so the host has to be checked
+ * against the account instead. The same rule password sign-in applies: the URL
+ * you sign in on decides which application you are in, and an account of the
+ * other product is refused with a pointer to its own door (docs/worlds.md).
+ */
+async function assertAccountMatchesHost(user: { orgId: string | null }, req: unknown): Promise<void> {
+  const host = worldForHeaderBag((req as { headers?: Record<string, string | string[] | undefined> } | undefined)?.headers);
+  const account = await worldOfOrg(user.orgId);
+  if (host !== account) throw new Error(authWrongWorld(account));
+}
+
+/**
+ * The world of the request being served, or null when there is no request to
+ * read (a cron, a script, a unit test). Read from the proxy's forwarded host —
+ * cosmetic-and-refusing only, see hostWorld.ts.
+ */
+async function requestWorld(): Promise<World | null> {
+  try {
+    const h = await requestHeaders();
+    return worldForHeaders((name) => h.get(name));
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The recovery-code door's OWN allowance (#1542): five failures per hour.
@@ -110,10 +164,17 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Too many attempts. Please try again later.');
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email },
-          select: AUTH_USER_SELECT,
-        });
+        // The URL decides the product (docs/worlds.md): the same address can be
+        // an account in the internship world AND in the marketing world, and
+        // the host this form was served from picks which one is signing in.
+        const world = worldForHeaderBag(req?.headers as Record<string, string | string[] | undefined> | undefined);
+        const inWorld = await findUsersInWorld(email, world, AUTH_USER_SELECT);
+        // No account here: the person may still have one on the other site. It
+        // takes part in the password check below (so a wrong password is
+        // charged and locked out exactly as before) but can never sign in —
+        // a right password answers "wrong door", not a session.
+        const pool = inWorld.length ? inWorld : await findUsersByEmail(email, AUTH_USER_SELECT);
+        const user = await pickAccount(pool, credentials.password);
 
         // Enforced SSO (#1950), checked BEFORE the bcrypt compare and before
         // any other account state. Two reasons for that placement: the promise
@@ -167,6 +228,13 @@ export const authOptions: NextAuthOptions = {
           throw new Error(
             within.ok && !locked ? 'Invalid email or password' : 'Too many attempts. Please try again later.'
           );
+        }
+
+        // Right address, right password, wrong product: say which door is theirs.
+        // Placed after the credential check on purpose — this confirms an
+        // account exists, which only the holder of its password may learn.
+        if (inWorld.length === 0) {
+          throw new Error(authWrongWorld(await worldOfOrg(user.orgId)));
         }
 
         // NOTE: the failure counter is NOT cleared here. It used to be, which
@@ -387,7 +455,7 @@ export const authOptions: NextAuthOptions = {
       id: 'impersonate',
       name: 'impersonate',
       credentials: { grant: { label: 'grant', type: 'text' } },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const grantToken = credentials?.grant;
         if (!grantToken) throw new Error('grant is required');
 
@@ -402,6 +470,7 @@ export const authOptions: NextAuthOptions = {
           select: AUTH_USER_SELECT,
         });
         if (!user) throw new Error('Target user not found');
+        await assertAccountMatchesHost(user, req);
 
         const isStart = grant.kind === 'START';
         const admin = isStart
@@ -430,7 +499,7 @@ export const authOptions: NextAuthOptions = {
       id: 'sso',
       name: 'sso',
       credentials: { grant: { label: 'grant', type: 'text' } },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const token = credentials?.grant;
         if (!token) throw new Error('grant is required');
 
@@ -448,6 +517,7 @@ export const authOptions: NextAuthOptions = {
         if (!user.isActive) {
           throw new Error('This account has been deactivated. Please contact an administrator.');
         }
+        await assertAccountMatchesHost(user, req);
 
         return {
           id: user.id,
@@ -476,7 +546,7 @@ export const authOptions: NextAuthOptions = {
       id: 'remember',
       name: 'remember',
       credentials: { grant: { label: 'grant', type: 'text' } },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const token = credentials?.grant;
         if (!token) throw new Error('grant is required');
 
@@ -506,6 +576,7 @@ export const authOptions: NextAuthOptions = {
         if (await isPasswordLoginBlocked(user)) {
           throw new Error(AUTH_SSO_REQUIRED);
         }
+        await assertAccountMatchesHost(user, req);
 
         return {
           id: user.id,
@@ -596,7 +667,7 @@ export const authOptions: NextAuthOptions = {
       if (token.id && typeof token.authTime === 'number') {
         const acct = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { sessionsValidFrom: true },
+          select: { sessionsValidFrom: true, org: { select: { vertical: true } } },
         });
         // A deleted account cannot be stamped — there is no row left to hold a
         // cutoff — so the lookup coming back empty is itself the revocation.
@@ -608,13 +679,25 @@ export const authOptions: NextAuthOptions = {
         } else if (acct.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
           token.invalidated = true;
         }
+
+        // A session belongs to ONE world, and only ever works on that world's
+        // host (docs/worlds.md): sign in on marketing.… and you are in the
+        // marketing product, and that stays true — a session for the other
+        // product, presented on this host, is not a session here. Recomputed on
+        // every request (never sticky), from the org's CURRENT product, so it
+        // heals itself if the host list changes. Fails open when there is no
+        // request to read a host from.
+        if (acct) {
+          const host = await requestWorld();
+          token.worldMismatch = host !== null && toVerticalKey(acct.org?.vertical) !== host;
+        }
       }
       return token;
     },
     async session({ session, token }) {
       // A token revoked by "sign out of all devices" yields no session, so
       // getServerSession()/useSession() treat the request as unauthenticated.
-      if (token?.invalidated) return null as unknown as typeof session;
+      if (token?.invalidated || token?.worldMismatch) return null as unknown as typeof session;
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
