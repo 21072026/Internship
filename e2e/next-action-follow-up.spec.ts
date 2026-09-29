@@ -104,9 +104,25 @@ test('a follow-up date reminds its owner once, then flags the record until it is
     await expect(row().getByText('Follow-up overdue')).toHaveCount(0);
     const moved2 = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.id } });
     expect(moved2.nextActionRemindedAt).toBeNull();
+
+    // The interaction-form shortcut moves the date and leaves the note alone.
+    await gotoSettled(page, `/mentor/mentees/${rel.id}`);
+    await page.getByRole('button', { name: 'Add Log' }).click();
+    const form = page.getByTestId('interaction-log-form');
+    await form.getByTestId('interaction-log-date').fill(utcDay(0));
+    await form.getByTestId('interaction-log-notes').fill('Pricing call done');
+    await form.getByTestId('interaction-log-follow-up').fill(utcDay(3));
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByTestId('interaction-list').getByText('Pricing call done')).toBeVisible({ timeout: 30_000 });
+    await expect(form).toHaveCount(0);
+    const viaShortcut = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.id } });
+    expect(viaShortcut.nextActionAt?.toISOString()).toBe(`${utcDay(3)}T00:00:00.000Z`);
+    expect(viaShortcut.nextActionNote).toBe('Call about pricing');
+    expect(await prisma.interactionLog.count({ where: { relationId: rel.id } })).toBe(1);
   } finally {
     await prisma.notification.deleteMany({ where: { userId: mentor.id } });
     await prisma.statusChange.deleteMany({ where: { relationId: rel.id } });
+    await prisma.interactionLog.deleteMany({ where: { relationId: rel.id } });
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
     await prisma.company.deleteMany({ where: { id: { in: [undated.id, dated.id] } } });
     await cleanupByEmail(menteeEmail);

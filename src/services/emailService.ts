@@ -2335,6 +2335,12 @@ export async function checkStageDeadlineReminders() {
 // won claim is not retried — the same trade the other sweeps make; the bell
 // row is written first and the record reaches the attention queue the next
 // day regardless, so the follow-up is not lost in silence.
+//
+// A failed BELL write is different: nothing reached the owner at all, so the
+// claim is released (conditionally, on the exact stamp this tick wrote) and
+// the next tick tries again, mail included. Every record runs in its own
+// try/catch — one bad row must not skip the rest of the tick, nor reject the
+// all-jobs `/api/cron` batch this sweep rides inside.
 export async function checkNextActionReminders(now = new Date()) {
   const due = await prisma.mentorshipRelation.findMany({
     where: {
@@ -2375,23 +2381,39 @@ export async function checkNextActionReminders(now = new Date()) {
     // Another tick won, or the owner changed the date in between. Quiet: one
     // of the contenders is supposed to lose.
     if (claim.count === 0) continue;
-    reminded += 1;
-
     const owner = rel.mentor;
     // What the bell and the mail call this record: the account for a funnel
     // record with a company, else the person — the trial sweep's fallback.
     const name = rel.company?.name ?? rel.mentee.fullName;
     const link = notificationLink(owner.role as NotificationRole, 'relation', { relationId: rel.id, menteeId: rel.menteeId });
-    if (notificationCategoryAllowed(owner, 'deadlines')) {
-      await notify(owner.id, 'deadline.nextActionDue', { name }, link);
+    try {
+      if (notificationCategoryAllowed(owner, 'deadlines')) {
+        await notify(owner.id, 'deadline.nextActionDue', { name }, link);
+      }
+    } catch (error) {
+      failures += 1;
+      logger.error('Next action reminder bell failed', { relationId: rel.id, userId: owner.id, error: String(error) });
+      // Give the reminder back so the next tick retries it. Conditional on our
+      // own stamp: an owner who moved the date meanwhile already re-armed it.
+      await prisma.mentorshipRelation
+        .updateMany({
+          where: { id: rel.id, nextActionAt: rel.nextActionAt, nextActionRemindedAt: now },
+          data: { nextActionRemindedAt: null },
+        })
+        .catch((releaseError) => {
+          logger.error('Next action reminder claim release failed', { relationId: rel.id, error: String(releaseError) });
+        });
+      continue;
     }
+    reminded += 1;
+
     if (emailAllowed(owner, 'deadlines') && emailGroupAllowedForCategory(owner, 'stage-deadline')) {
-      const locale = isLocale(owner.preferredLanguage ?? undefined) ? (owner.preferredLanguage as Locale) : defaultLocale;
-      const text = getDictionary(locale).notifications.nextActionEmail;
-      const noteHtml = rel.nextActionNote
-        ? `<p><strong>${esc(text.noteLabel)}</strong> ${esc(rel.nextActionNote)}</p>`
-        : '';
       try {
+        const locale = isLocale(owner.preferredLanguage ?? undefined) ? (owner.preferredLanguage as Locale) : defaultLocale;
+        const text = getDictionary(locale).notifications.nextActionEmail;
+        const noteHtml = rel.nextActionNote
+          ? `<p><strong>${esc(text.noteLabel)}</strong> ${esc(rel.nextActionNote)}</p>`
+          : '';
         await sendEmail({
           category: 'stage-deadline',
           userId: owner.id,

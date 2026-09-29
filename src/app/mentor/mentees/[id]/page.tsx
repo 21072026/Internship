@@ -148,6 +148,20 @@ export default function MenteeDetailPage() {
     setSubmitting(true);
     setFormError('');
     try {
+      // The follow-up goes FIRST because it is the idempotent half: putting the
+      // same date twice changes nothing, logging the same interaction twice
+      // does. So a failure here stops before anything is written and leaves
+      // every field filled for a retry, and a failure of the interaction
+      // below can be retried as a whole without a duplicate. The note already
+      // on the record stays: the shortcut moves the date.
+      if (followUpDate) {
+        const fu = await fetch(`/api/mentorship/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nextActionAt: followUpDate }),
+        });
+        if (!fu.ok) throw new Error(t.followUp.saveError);
+      }
       const res = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -156,15 +170,6 @@ export default function MenteeDetailPage() {
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error || 'Failed');
-      }
-      if (followUpDate) {
-        // The note already on the record stays: the shortcut moves the date.
-        const fu = await fetch(`/api/mentorship/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nextActionAt: followUpDate }),
-        });
-        if (!fu.ok) toast(t.followUp.saveError, 'error');
       }
       setFollowUpDate('');
       await fetchRelation();
