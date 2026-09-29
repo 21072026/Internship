@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 
 // The ADMIN's editor for `Company.externalId` (#2560) on /admin/companies/[id].
@@ -34,6 +35,7 @@ export function CompanyExternalIdForm({
   initial: string | null;
   labels: CompanyExternalIdLabels;
 }) {
+  const router = useRouter();
   const [value, setValue] = useState(initial ?? '');
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
@@ -42,14 +44,19 @@ export function CompanyExternalIdForm({
     e.preventDefault();
     setSaving(true);
     setStatus({ kind: 'idle' });
+    const normalized = value.trim();
     try {
       const res = await fetch(`/api/companies/${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ externalId: value.trim() || null }),
+        body: JSON.stringify({ externalId: normalized || null }),
       });
       if (res.ok) {
+        // Show what was stored (the route trims), and re-render the server
+        // page so its header badge follows the new id instead of the old one.
+        setValue(normalized);
         setStatus({ kind: 'saved' });
+        router.refresh();
         return;
       }
       const body = await res.json().catch(() => ({}));
@@ -92,12 +99,12 @@ export function CompanyExternalIdForm({
       </p>
       <div aria-live="polite">
         {status.kind === 'saved' && (
-          <p className="text-sm text-green-700" data-testid="company-external-id-saved">
+          <p className="text-sm text-green-700 dark:!text-green-300" data-testid="company-external-id-saved">
             {labels.saved}
           </p>
         )}
         {status.kind === 'taken' && (
-          <p className="text-sm text-amber-800" role="alert" data-testid="company-external-id-taken">
+          <p className="text-sm text-amber-800 dark:!text-amber-300" role="alert" data-testid="company-external-id-taken">
             {takenBefore}
             <Link href={`/admin/companies/${status.conflict.id}`} className="font-medium underline">
               {status.conflict.name}
@@ -106,7 +113,7 @@ export function CompanyExternalIdForm({
           </p>
         )}
         {status.kind === 'failed' && (
-          <p className="text-sm text-red-700" role="alert">
+          <p className="text-sm text-red-700 dark:!text-red-300" role="alert" data-testid="company-external-id-failed">
             {labels.failed}
           </p>
         )}

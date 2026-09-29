@@ -128,6 +128,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           continues: 'Continues an earlier deal owned by {name}',
         },
         needsEmpty: 'No needs recorded.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'The id this account carries in the product you sell. It is how usage data finds this account, so it must be unique within your organization.' },
       },
       companiesPage: {
         subtitle: 'Manage the accounts you sell to and what each one needs',
@@ -362,6 +364,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           continues: '{name} temsilcisindeki önceki fırsatın devamı',
         },
         needsEmpty: 'Kayıtlı ihtiyaç yok.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'Bu hesabın sattığınız üründeki kimliği. Kullanım verisi hesabı bununla bulur; bu yüzden kuruluşunuz içinde benzersiz olmalı.' },
       },
       companiesPage: {
         subtitle: 'Sattığın müşteri firmalarını ve ihtiyaçlarını yönet',
@@ -527,6 +531,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           continues: 'Setzt einen früheren Deal von {name} fort',
         },
         needsEmpty: 'Kein Bedarf erfasst.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'Die ID dieses Accounts in dem Produkt, das Sie verkaufen. Nutzungsdaten finden den Account darüber, daher muss sie in Ihrer Organisation eindeutig sein.' },
       },
       companiesPage: {
         subtitle: 'Kunden-Accounts und ihren Bedarf verwalten',

@@ -19,6 +19,7 @@ import { seedTwoTenants, signInAsTenantActor, type TwoTenants } from './helpers/
 
 let tenants: TwoTenants;
 let secondCompanyId: string;
+const chainRelationIds: string[] = [];
 const stamp = Date.now();
 const CONTACT_NAME = `Detail Contact ${stamp}`;
 const CONTACT_PHONE = '+49 30 1234 5678';
@@ -50,6 +51,10 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (tenants) await prisma.interactionLog.deleteMany({ where: { relationId: tenants.orgA.relation.id } });
+  if (tenants) {
+    await prisma.mentorshipRelation.update({ where: { id: tenants.orgA.relation.id }, data: { previousRelationId: null } });
+  }
+  if (chainRelationIds.length) await prisma.mentorshipRelation.deleteMany({ where: { id: { in: chainRelationIds } } });
   await tenants?.cleanup();
 });
 
@@ -64,8 +69,6 @@ test('ADMIN opens the account from the list and sees its whole state', { tag: '@
   await expect(link).toHaveAttribute('href', `/admin/companies/${orgA.company.id}`);
   await link.click();
   await page.waitForURL(`**/admin/companies/${orgA.company.id}`);
-  // Re-open settled: a client navigation can leave the streamed copy behind.
-  await gotoSettled(page, `/admin/companies/${orgA.company.id}`);
 
   await expect(page.getByTestId('company-detail-name')).toHaveText(orgA.company.name);
   await expect(page.getByTestId('company-detail-contact-name')).toContainText(CONTACT_NAME);
@@ -90,6 +93,40 @@ test('ADMIN opens the account from the list and sees its whole state', { tag: '@
     .toBeGreaterThan(0);
 });
 
+test('the funnel row walks the whole previousRelationId chain, and stops at the tenant boundary', async ({ page }) => {
+  const { orgA, orgB } = tenants;
+  // relation <- earlier (orgA) <- earliest (orgA) <- orgB's relation (a bad
+  // import): two hops are shown, the foreign one is not.
+  const earliest = await prisma.mentorshipRelation.create({
+    data: {
+      orgId: orgA.org.id,
+      mentorId: orgA.mentor.id,
+      menteeId: orgA.mentee.id,
+      status: 'COMPLETED',
+      previousRelationId: orgB.relation.id,
+    },
+  });
+  const earlier = await prisma.mentorshipRelation.create({
+    data: {
+      orgId: orgA.org.id,
+      mentorId: orgA.mentor.id,
+      menteeId: orgA.mentee.id,
+      status: 'COMPLETED',
+      previousRelationId: earliest.id,
+    },
+  });
+  chainRelationIds.push(earlier.id, earliest.id);
+  await prisma.mentorshipRelation.update({ where: { id: orgA.relation.id }, data: { previousRelationId: earlier.id } });
+
+  await signInAsTenantActor(page, orgA.admin);
+  await gotoSettled(page, `/admin/companies/${orgA.company.id}`);
+  const chain = page.getByTestId(`company-detail-relation-chain-${orgA.relation.id}`);
+  await expect(chain).toHaveText(
+    `Continues an earlier pairing with ${orgA.mentor.fullName}, ${orgA.mentor.fullName}`,
+  );
+  await expect(page.getByTestId('company-detail')).not.toContainText(orgB.mentor.fullName);
+});
+
 test('ADMIN sets an external id; a second account of the org cannot take it', async ({ page }) => {
   const { orgA } = tenants;
   await signInAsTenantActor(page, orgA.admin);
@@ -111,8 +148,9 @@ test('ADMIN sets an external id; a second account of the org cannot take it', as
   // The partial PUT wrote the id and nothing else.
   expect(saved.contactEmail).toBe(`buyer-${stamp}@example.com`);
 
-  await gotoSettled(page, `/admin/companies/${orgA.company.id}`);
+  // The header badge follows the save without a reload (router.refresh()).
   await expect(page.getByTestId('company-detail-external-id')).toHaveText(EXTERNAL_ID);
+  await expect(page.getByTestId('company-external-id-input')).toHaveValue(EXTERNAL_ID);
 
   // Same id on the org's second account: refused, and the refusal names the holder.
   await gotoSettled(page, `/admin/companies/${secondCompanyId}`);
@@ -127,10 +165,18 @@ test('ADMIN sets an external id; a second account of the org cannot take it', as
   const second = await prisma.company.findUniqueOrThrow({ where: { id: secondCompanyId }, select: { externalId: true } });
   expect(second.externalId).toBeNull();
 
-  // A blank clears it.
+  // A blank clears it — through the form, and the badge goes with it.
+  await gotoSettled(page, `/admin/companies/${orgA.company.id}`);
+  await expect(page.getByTestId('company-detail-external-id')).toHaveText(EXTERNAL_ID);
+  await page.getByTestId('company-external-id-input').fill('');
+  await page.getByTestId('company-external-id-save').click();
+  await expect(page.getByTestId('company-external-id-saved')).toBeVisible();
+  await expect(page.getByTestId('company-detail-external-id')).toHaveCount(0);
+  expect((await prisma.company.findUniqueOrThrow({ where: { id: orgA.company.id } })).externalId).toBeNull();
+
+  // And the API accepts a blank as "clear" too.
   const res = await page.request.put(`/api/companies/${orgA.company.id}`, { data: { externalId: '' } });
   expect(res.status()).toBe(200);
-  expect((await prisma.company.findUniqueOrThrow({ where: { id: orgA.company.id } })).externalId).toBeNull();
 });
 
 test('a non-admin never reaches the page, and its company read carries no contact fields', async ({ page }) => {
@@ -154,19 +200,19 @@ test('another tenant\'s account is a 404; the MARKETING tenant reads its own wor
   const { orgA, orgB } = tenants;
   await signInAsTenantActor(page, orgB.admin);
 
-  // The page answers with the not-found screen. Its HTTP status is 200, not
-  // 404: /admin has a loading.tsx, so the shell is already on the wire when the
-  // page's lookup calls notFound() — Next.js can only swap the streamed
-  // segment for the not-found UI (and a noindex meta), not the status line.
-  // The record API behind it IS a 404, and neither discloses the row.
+  // A real 404 at the HTTP level, not a not-found screen under a 200: the page
+  // sits outside /admin's loading.tsx (the (unstreamed) route group), so its
+  // lookup runs before the first byte. Neither the page nor the record API
+  // behind it discloses the row.
   const foreign = await page.request.get(`/admin/companies/${orgA.company.id}`);
+  expect(foreign.status()).toBe(404);
   const html = await foreign.text();
   expect(html).not.toContain(orgA.company.name);
   expect(html).not.toContain(CONTACT_NAME);
   expect(html).toContain('Page not found');
   expect((await page.request.get(`/api/companies/${orgA.company.id}`)).status()).toBe(404);
 
-  await gotoSettled(page, `/admin/companies/${orgA.company.id}`);
+  await page.goto(`/admin/companies/${orgA.company.id}`);
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await expect(page.getByTestId('company-detail')).toHaveCount(0);
 

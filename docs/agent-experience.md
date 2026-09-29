@@ -7435,9 +7435,18 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 
 - **`notFound()` in a server page below `src/app/admin/loading.tsx` answers HTTP 200.** The
   loading boundary flushes the shell before the page's lookup runs, so Next.js can only swap the
-  streamed segment for the not-found UI (plus a `noindex` meta) — the status line is already
-  sent. Assert the not-found screen and the absence of the row's data, and the API's 404; a
-  `status() === 404` check on such a page is red by construction.
+  streamed segment for the not-found UI — the status line is already sent. The fix that holds a
+  real 404: move the page into the `src/app/(unstreamed)/admin/` route group, whose `layout.tsx`
+  and `error.tsx` re-export the admin ones (same session gate, same shell, same URL) and which
+  has no `loading.tsx`. Put a page there only when it must be a 404.
+- **A partial `Company` PUT must not rewrite unsent keys**, and a client editor on a server page
+  needs `router.refresh()` after a save, or the server-rendered parts (header badge) keep the old
+  value until a reload — an e2e that reloads before asserting hides it.
+- **After a container restart the Playwright browser shim is gone**: `@playwright/test` wants
+  `chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`, the image
+  ships `-1194/chrome-linux/`. A symlink of the version dir is not enough (the inner folder
+  name differs) — create `-1243/chrome-headless-shell-linux64/` and link the files of
+  `-1194/chrome-linux/` into it, plus the two marker files.
 - **A click on a card in `/admin/companies` right after typing into its search box can be
   lost**: the grid unmounts while the debounced fetch reloads, and the click lands on the
   outgoing element (no navigation, no error). Click before searching, or wait for the list to

@@ -29,6 +29,11 @@ import { CompanyExternalIdForm } from '@/components/admin/CompanyExternalIdForm'
 // confirms nothing about foreign rows. The admin layout already refuses every
 // role but ADMIN; the role check here is a second door, not the first.
 //
+// It lives in the (unstreamed) route group, outside src/app/admin/loading.tsx,
+// so that notFound() is an HTTP 404 and not a not-found screen under a 200 —
+// see src/app/(unstreamed)/admin/layout.tsx. The URL is /admin/companies/[id]
+// all the same.
+//
 // Opening the page is a READ of the customer record, so it writes the same
 // `company.view` ActivityLog entry as GET /api/companies/[id] (#2433) — same
 // action, same window, so opening the page and then its edit dialog records one
@@ -44,6 +49,8 @@ import { CompanyExternalIdForm } from '@/components/admin/CompanyExternalIdForm'
  *  thousands of rows. */
 const RELATION_LIMIT = 100;
 const INTERACTION_LIMIT = 10;
+/** How far back the "continues an earlier pairing" chain is followed. */
+const CHAIN_DEPTH_LIMIT = 10;
 
 function Field({ label, value, testId }: { label: string; value?: string | number | null; testId?: string }) {
   if (value === undefined || value === null || value === '') return null;
@@ -89,7 +96,10 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
             trialEndsAt: true,
             nextActionAt: true,
             nextActionNote: true,
-            previousRelation: { select: { id: true, mentor: { select: { id: true, fullName: true } } } },
+            // The chain link is resolved below, through the tenant filter —
+            // not via the `previousRelation` include, which would follow the
+            // foreign key into whatever tenant it points at.
+            previousRelationId: true,
             mentor: { select: { id: true, fullName: true } },
             mentee: { select: { id: true, fullName: true } },
           },
@@ -97,6 +107,45 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
       },
     });
     if (!company) return null;
+
+    // "Continues an earlier pairing with X, Y" (#2289): the whole
+    // previousRelationId chain, newest predecessor first. mentorTransfer only
+    // chains relations inside one org, but a chain written by a bad import must
+    // not print another tenant's mentor name here, so every earlier relation is
+    // read with the same tenant filter as every other row on the page — a link
+    // that leaves the tenant simply ends the chain. One query per hop, capped:
+    // a reassignment chain is a handful long, and the cap also stops a cycle.
+    const chainRows = new Map<string, { mentorName: string; previousRelationId: string | null }>();
+    let frontier = [
+      ...new Set(company.mentorships.map((r) => r.previousRelationId).filter((v): v is string => !!v)),
+    ];
+    for (let hop = 0; hop < CHAIN_DEPTH_LIMIT && frontier.length > 0; hop++) {
+      const rows = await prisma.mentorshipRelation.findMany({
+        where: withinTenant({ id: { in: frontier } }, tenant),
+        select: { id: true, previousRelationId: true, mentor: { select: { fullName: true } } },
+      });
+      for (const row of rows) {
+        chainRows.set(row.id, { mentorName: row.mentor.fullName, previousRelationId: row.previousRelationId });
+      }
+      frontier = [
+        ...new Set(
+          rows.map((row) => row.previousRelationId).filter((v): v is string => !!v && !chainRows.has(v)),
+        ),
+      ];
+    }
+    const relations = company.mentorships.map((r) => {
+      const earlierMentors: string[] = [];
+      const seen = new Set<string>();
+      let cursor = r.previousRelationId;
+      while (cursor && !seen.has(cursor) && earlierMentors.length < CHAIN_DEPTH_LIMIT) {
+        seen.add(cursor);
+        const row = chainRows.get(cursor);
+        if (!row) break;
+        earlierMentors.push(row.mentorName);
+        cursor = row.previousRelationId;
+      }
+      return { ...r, earlierMentors };
+    });
 
     const interactions = await prisma.interactionLog.findMany({
       where: { relation: withinTenant({ companyId: company.id }, tenant) },
@@ -120,7 +169,7 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
       request: { headers: requestHeaders },
     });
 
-    return { company, interactions };
+    return { company: { ...company, mentorships: relations }, interactions };
   });
 
   if (!data) notFound();
@@ -174,7 +223,10 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
             <Field label={d.fields.createdAt} value={date(company.createdAt)} />
           </dl>
           {company.description && (
-            <p className="mb-6 whitespace-pre-line text-sm text-gray-600">{company.description}</p>
+            <div className="mb-6" data-testid="company-detail-description">
+              <p className="text-xs text-gray-500">{d.fields.description}</p>
+              <p className="whitespace-pre-line text-sm text-gray-600">{company.description}</p>
+            </div>
           )}
           <CompanyExternalIdForm companyId={company.id} initial={company.externalId} labels={d.externalId} />
         </Card>
@@ -224,9 +276,9 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
                       <Link href={`/admin/candidates/${r.mentee.id}`} className="font-medium text-blue-600 hover:underline">
                         {r.mentee.fullName}
                       </Link>
-                      {r.previousRelation && (
+                      {r.earlierMentors.length > 0 && (
                         <p className="mt-0.5 text-xs text-gray-500" data-testid={`company-detail-relation-chain-${r.id}`}>
-                          {d.funnel.continues.replace('{name}', r.previousRelation.mentor.fullName)}
+                          {d.funnel.continues.replace('{name}', r.earlierMentors.join(', '))}
                         </p>
                       )}
                     </td>

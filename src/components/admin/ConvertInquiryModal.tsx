@@ -49,6 +49,9 @@ export function ConvertInquiryModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // The account the conversion created: the success link opens it directly
+  // (#2560), the same target the enquiries list links a converted row to.
+  const [createdCompanyId, setCreatedCompanyId] = useState<string | null>(null);
   const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
 
   const fill = (template: string, values: Record<string, string>) =>
@@ -80,6 +83,7 @@ export function ConvertInquiryModal({
             ? fill(c.successNoEmail, { company: data.companyName ?? companyName, email: data.email ?? email })
             : fill(c.success, { company: data.companyName ?? companyName, email: data.email ?? email })
         );
+        setCreatedCompanyId(typeof data.companyId === 'string' ? data.companyId : null);
         onConverted();
         return;
       }
@@ -144,7 +148,8 @@ export function ConvertInquiryModal({
             </p>
             <div className="flex justify-end gap-2">
               <Link
-                href="/admin/companies"
+                href={createdCompanyId ? `/admin/companies/${createdCompanyId}` : '/admin/companies'}
+                data-testid="convert-inquiry-open-company"
                 className="inline-flex items-center text-sm text-blue-600 hover:underline px-3 py-2"
               >
                 {c.openCompany}

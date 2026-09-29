@@ -707,7 +707,7 @@ const en = {
     needsEmpty: 'No open positions.',
     externalId: {
       label: 'External id',
-      hint: 'The id this account carries in the product you sell. It is how usage data finds this account, so it must be unique within your organization.',
+      hint: 'The id this company has in your other systems. It must be unique within your organization.',
       save: 'Save',
       saved: 'External id saved.',
       taken: 'This id is already used by {name}.',
@@ -6140,7 +6140,7 @@ const tr: Dict = {
     needsEmpty: 'Açık pozisyon yok.',
     externalId: {
       label: 'Harici kimlik',
-      hint: 'Bu hesabın sattığınız üründeki kimliği. Kullanım verisi hesabı bununla bulur; bu yüzden kuruluşunuz içinde benzersiz olmalı.',
+      hint: 'Bu şirketin diğer sistemlerinizdeki kimliği. Kuruluşunuz içinde benzersiz olmalı.',
       save: 'Kaydet',
       saved: 'Harici kimlik kaydedildi.',
       taken: 'Bu kimlik zaten {name} tarafından kullanılıyor.',
@@ -11448,7 +11448,7 @@ const de: Dict = {
     needsEmpty: 'Keine offenen Stellen.',
     externalId: {
       label: 'Externe ID',
-      hint: 'Die ID dieses Accounts in dem Produkt, das Sie verkaufen. Nutzungsdaten finden den Account darüber, daher muss sie in Ihrer Organisation eindeutig sein.',
+      hint: 'Die ID dieses Unternehmens in Ihren anderen Systemen. Sie muss in Ihrer Organisation eindeutig sein.',
       save: 'Speichern',
       saved: 'Externe ID gespeichert.',
       taken: 'Diese ID wird bereits von {name} verwendet.',
