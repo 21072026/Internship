@@ -7734,3 +7734,22 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   that counts from the rows directly and signs in over `/api/auth/csrf` +
   `/api/auth/callback/credentials` (cookie jar from `getSetCookie()`) compares the API in
   seconds.
+
+
+
+## 2026-09-29 — MARKETING loss reasons (#2573)
+
+- **The shared `node_modules` Prisma client can be stale against `origin/main` even when you
+  do not touch the schema** — another workflow generated it from its own branch, and
+  `npx tsc --noEmit` then fails on unrelated models (`ProjectTask.dueDate` here). Build the
+  private overlay (symlinks + copied `.prisma`/`@prisma`) and `prisma generate` in it before
+  concluding anything from a type error outside your diff.
+- **`POST /api/status-changes` without `createdAt` is a live move, not a history note**: it
+  moves the relation too (#926), so a spec that posts a "correction" and then PUTs the same
+  stage gets a silent no-op on the PUT. Pass `createdAt` to record a past hop only.
+- **A per-vertical code list stays one label map.** Keep every code of every vertical in the
+  single `dropoff.reasons` dictionary block; the analytics breakdown and the timeline label a
+  stored code without knowing which vertical wrote it, and a unit test can assert every code
+  has an EN/TR/DE label by importing `src/i18n/dictionaries.ts` directly.
+
+- **Review follow-up (#2573):** making a list per vertical isn't finished until the copy around it is too. Grep for every string that frames the list (card titles, empty states, dialog hints) and give each a `verticalOverlays.ts` leaf. Leave a leaf out when the base text already fits (TR `dialogHint` did). Also: killing the `npx next start` wrapper PID orphans `next-server` on the port. Check `ss -ltnp` and kill the child too.

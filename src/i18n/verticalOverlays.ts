@@ -205,6 +205,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Conversion by source',
         sourceConversionEmpty: 'No sources yet — assign leads a source to see conversion per source.',
         sourceUnsourced: '{n} lead(s) have no source and are not shown above.',
+        // #2573: the drop-off card lists the MARKETING loss reasons (PRICE,
+        // COMPETITOR, …) — a sales admin reads lost deals, not drop-offs.
+        aging: {
+          dropReasonsTitle: 'Loss reasons',
+          dropReasonsEmpty: 'No lost deals recorded yet.',
+        },
+      },
+      // #2573: the reason dialog shown before a deal moves off the funnel.
+      dropoff: {
+        dialogHint: 'This stage is off the normal path — a reason keeps the loss analytics meaningful.',
       },
       // The company list (#2426, story #2394). A marketing tenant's companies
       // are the ACCOUNTS it sells to: the relation counter is a deal, a
@@ -576,7 +586,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Kaynağa göre dönüşüm',
         sourceConversionEmpty: 'Henüz kaynak yok — kaynak bazlı dönüşümü görmek için müşteri adaylarına kaynak ata.',
         sourceUnsourced: '{n} müşteri adayının kaynağı yok ve yukarıda gösterilmiyor.',
+        aging: {
+          dropReasonsTitle: 'Kayıp nedenleri',
+          dropReasonsEmpty: 'Henüz kaybedilen fırsat kaydı yok.',
+        },
       },
+      // No `dropoff.dialogHint` here: the base TR hint already says "kayıp analizi".
       companyDetail: {
         sections: { funnel: 'Fırsatlar', needs: 'Açık ihtiyaçlar' },
         funnel: {
@@ -856,6 +871,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Konversion nach Quelle',
         sourceConversionEmpty: 'Noch keine Quellen — weise Leads eine Quelle zu, um die Konversion pro Quelle zu sehen.',
         sourceUnsourced: '{n} Lead(s) ohne Quelle werden oben nicht angezeigt.',
+        aging: {
+          dropReasonsTitle: 'Verlustgründe',
+          dropReasonsEmpty: 'Noch keine verlorenen Deals erfasst.',
+        },
+      },
+      dropoff: {
+        dialogHint: 'Diese Phase liegt außerhalb des normalen Ablaufs — ein Grund hält die Verlust-Auswertung aussagekräftig.',
       },
       companyDetail: {
         sections: { funnel: 'Deals', needs: 'Offener Bedarf' },
