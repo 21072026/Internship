@@ -558,8 +558,15 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   follow the request host by nature. An **e-mail link** cannot follow a request either, so it
   follows the recipient tenant (#2495): `appOriginForOrg(orgId)` (`src/lib/orgLinkOrigin.ts`)
   returns the org's `Organization.publicHost` when this deployment serves it, else the old
-  `NEXT_PUBLIC_APP_URL` — invites, password reset and verification use it; robots/sitemap
-  follow the request host and list only the pages that host's vertical serves. The rule is unit-tested
+  `NEXT_PUBLIC_APP_URL` — invites, password reset, verification, the unsubscribe footer and
+  List-Unsubscribe header (`sendEmail({ orgId })`, resolved from `userId` when omitted —
+  the `appUrlFor*` resolvers in `emailService.ts`, #2590), newsletters, digests, meeting
+  invites and message mails use it; the one-click unsubscribe GET answers with a
+  **relative** Location. robots/sitemap
+  follow the request host and list only the pages that host's vertical serves. **SSO and
+  Google OAuth** (#2494) keep their ONE registered endpoint; the host a flow started on rides
+  along (SAML `RelayState`; signed into the OAuth `state`) and is honoured only through
+  `servedOrigin()` — a bare origin of a served host, nothing else. The rule is unit-tested
   (`npm run test:served-hosts`) and pinned end-to-end with forged proxy headers
   (`e2e/host-coherent-redirects.spec.ts`).
 - **Bir kişi, iki dünya** ([`docs/worlds.md`](docs/worlds.md), #2590): oturum açılan **URL** ürünü

@@ -78,6 +78,23 @@ Design notes worth knowing before changing any of it:
   people are asked to reconnect — no 500s. Say so in the release notes if you
   ever rotate it.
 
+### Connecting from the marketing host (#2494)
+Only ONE redirect URI is registered with Google (`NEXTAUTH_URL`'s host), and
+sessions are host-only cookies, so a user who pressed "Connect" on the
+marketing host used to come back to a host where they had no session. The
+connect route now signs the originating origin into the OAuth `state`
+(`userId.nonce.expiry.origin64.sig`; the 4-part form without an origin still
+verifies, so a flow in flight across a deploy is not refused). The callback on
+the registered host, given a state that **verifies** and whose origin passes
+`servedOrigin()` and differs from its own, answers with one redirect to the
+same callback path on that host, query untouched; that request then does
+everything a callback always did — including the check that the state belongs
+to *this* session, which is what makes a forwarded code safe. The token
+exchange sends the registered `redirect_uri` from config, so it succeeds from
+either host. **No operator step:** do not register the marketing host as a
+second redirect URI — it is not needed, and a second URI is a second thing to
+keep in sync.
+
 ## Turning it on
 
 The switch is **`GOOGLE_CALENDAR_ENABLED=1`**, and it is separate from having

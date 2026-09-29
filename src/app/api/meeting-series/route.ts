@@ -166,6 +166,8 @@ async function announceNextOccurrence(
         userId: rel.mentee.id,
         // Their own language, for the same reason (#1720).
         locale: rel.mentee.preferredLanguage,
+        // The links open this tenant's product host (#2495).
+        orgId,
         // A series occurrence has no Meeting row, so the UID is the same
         // synthetic id /api/calendar-events and the subscription feed emit for
         // it — the mailed occurrence and the subscribed one are one event.

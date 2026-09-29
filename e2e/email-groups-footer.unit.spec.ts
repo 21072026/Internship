@@ -107,6 +107,26 @@ test.describe('the unsubscribe footer', () => {
     expect(other).not.toBe(unsub);
   });
 
+  test('follows the recipient tenant’s host when one is given, and the token does not change (#2495)', () => {
+    const origin = 'https://marketing.bcsit-gmbh.de';
+    const [unsub, manage] = hrefs(unsubscribeFooterHtml('user_1', 'digests', null, origin));
+    expect(new URL(unsub).origin).toBe(origin);
+    expect(new URL(manage).origin).toBe(origin);
+    // Same token either way: the host decides which product opens, never whose
+    // preferences change.
+    const [legacy] = hrefs(unsubscribeFooterHtml('user_1', 'digests'));
+    expect(new URL(unsub).pathname).toBe(new URL(legacy).pathname);
+
+    const advertised = unsubscribeHeaders('user_1', 'digests', origin)['List-Unsubscribe'];
+    const one = new URL(advertised.slice(1, advertised.indexOf('>')));
+    expect(one.origin).toBe(origin);
+    expect(one.pathname).toBe('/api/unsubscribe/one-click');
+    // The List-Id is an identifier, not a link: it stays on the configured host
+    // so one list does not split into one per tenant.
+    const listId = unsubscribeHeaders('user_1', 'digests', origin)['List-Id'];
+    expect(listId).not.toContain('marketing.bcsit-gmbh.de');
+  });
+
   test('names the group in the reader’s own language when a locale is given', () => {
     const en = unsubscribeFooterHtml('user_1', 'digests', 'en');
     const tr = unsubscribeFooterHtml('user_1', 'digests', 'tr');

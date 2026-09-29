@@ -8,6 +8,7 @@ import {
   isServedHost,
   requestOrigin,
   resolveRedirectTarget,
+  servedOrigin,
 } from '../../src/lib/servedHosts.ts';
 
 // The served-host allowlist and the redirect rule are a security boundary
@@ -153,4 +154,50 @@ test('resolveRedirectTarget on a dev (http) base accepts the base protocol and h
   assert.equal(resolveRedirectTarget('http://marketing.bcsit-gmbh.de/auth/signin', B), 'http://marketing.bcsit-gmbh.de/auth/signin');
   assert.equal(resolveRedirectTarget('https://marketing.bcsit-gmbh.de/auth/signin', B), 'https://marketing.bcsit-gmbh.de/auth/signin');
   assert.equal(resolveRedirectTarget('http://evil.example/', B), B);
+});
+
+// servedOrigin (#2494): SAML RelayState and the Google OAuth state carry the
+// origin a sign-in started on through a third party and back. RelayState is
+// signed by nobody, so this is the open-redirect boundary for both flows.
+test('servedOrigin: a bare origin of a served host is returned, normalised', () => {
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com' });
+  assert.equal(servedOrigin('https://marketing.bcsit-gmbh.de'), 'https://marketing.bcsit-gmbh.de');
+  assert.equal(servedOrigin('https://MARKETING.bcsit-gmbh.de/'), 'https://marketing.bcsit-gmbh.de', 'case and a bare trailing slash');
+  assert.equal(servedOrigin('https://interncrm.com'), 'https://interncrm.com');
+  assert.equal(servedOrigin('https://interncrm.com:443'), 'https://interncrm.com', 'the default port is no port');
+});
+
+test('servedOrigin: anything that is not a bare served origin is refused, never repaired', () => {
+  setEnv({ NEXTAUTH_URL: 'https://interncrm.com' });
+  for (const bad of [
+    null,
+    undefined,
+    '',
+    'not a url',
+    '/relative',
+    '//marketing.bcsit-gmbh.de',
+    'https://evil.example',
+    'https://marketing.bcsit-gmbh.de.evil.example',
+    'https://marketing.bcsit-gmbh.de@evil.example',
+    'https://user:pw@marketing.bcsit-gmbh.de',
+    'https://marketing.bcsit-gmbh.de,evil.example',
+    'https://marketing.bcsit-gmbh.de/auth/signin',
+    'https://marketing.bcsit-gmbh.de/?next=https://evil.example',
+    'https://marketing.bcsit-gmbh.de/#x',
+    'https://marketing.bcsit-gmbh.de:8443',
+    'http://marketing.bcsit-gmbh.de',
+    'javascript:alert(1)',
+    'ftp://marketing.bcsit-gmbh.de',
+    'https://marketing.bcsit-gmbh.de.',
+  ]) assert.equal(servedOrigin(bad), null, `${JSON.stringify(bad)} must be refused`);
+});
+
+test('servedOrigin on a dev (http) configured origin: its own port on its own host only', () => {
+  setEnv({ NEXTAUTH_URL: 'http://localhost:3143' });
+  assert.equal(servedOrigin('http://localhost:3143'), 'http://localhost:3143');
+  assert.equal(servedOrigin('http://localhost:3143/'), 'http://localhost:3143');
+  assert.equal(servedOrigin('http://localhost:9999'), null, 'another port on the same host is not ours');
+  assert.equal(servedOrigin('http://marketing.bcsit-gmbh.de'), 'http://marketing.bcsit-gmbh.de', 'the base protocol is accepted');
+  assert.equal(servedOrigin('https://marketing.bcsit-gmbh.de'), 'https://marketing.bcsit-gmbh.de');
+  assert.equal(servedOrigin('http://marketing.bcsit-gmbh.de:3143'), null, 'the configured port is not re-attached to another host');
 });

@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { withRequestScope } from '@/lib/requestContext';
-import { originForWorld, worldForHeaders, type World } from '@/lib/hostWorld';
-import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { makeUnsubscribeToken, verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
 import { applyGroupPref } from '../applyUnsubscribe';
 
@@ -127,15 +125,11 @@ async function handleGet(request: Request) {
   // component, so this reproduces the caller's own token byte for byte — the
   // person still lands on exactly the URL the mail footer advertised.
   const canonical = makeUnsubscribeToken(scope.userId, scope.group);
-  // WORLDS (#2590): which product's host the person is sent on to. The mail's
-  // List-Unsubscribe URL now points at the recipient's OWN product (the
-  // marketing host for a marketing account), so the GET arrives on that host and
-  // must stay on it — bouncing a marketing recipient to the internship host
-  // would be the one place in the whole flow that crosses products. The world
-  // is read from the proxy's host header, but see redirectToPage: it only ever
-  // SELECTS between origins this deployment already owns, it never supplies one.
-  const world = worldForHeaders((name) => request.headers.get(name));
-  return redirectToPage(`/u/${encodeURIComponent(canonical)}`, world);
+  // WORLDS (#2590): the mail's List-Unsubscribe URL points at the recipient's
+  // OWN product, so the GET arrives on that host and must stay on it. A
+  // relative Location (#2495, see redirectToPage) cannot leave it: there is no
+  // host in it to be wrong, and nothing the request says can supply one.
+  return redirectToPage(`/u/${encodeURIComponent(canonical)}`);
 }
 
 /**
@@ -155,31 +149,16 @@ async function handleGet(request: Request) {
  *     right to say so. Fixing only the path leg left this one, which is why the
  *     first attempt at this did not clear the alert.
  *
- * With NEXT_PUBLIC_APP_URL unset we therefore emit a RELATIVE Location rather
- * than guessing a host. RFC 7231 §7.1.2 allows it, and the browser resolves it
- * against the URL it actually requested — which, for a person clicking through
- * from their mail client, is the public https one. So the fallback keeps the
- * visitor exactly where they already are instead of us echoing a host back at
- * them, which is both safer and closer to what we meant.
- *
- * WORLDS (#2590) changes the INPUT to that rule, not the rule. `world` is an
- * enum (INTERNSHIP | MARKETING) derived from the request's host header against
- * the deployment's own MARKETING_HOSTS allowlist — so the request can choose
- * between two origins the environment already defines, and can never supply,
- * extend or influence a host of its own. INTERNSHIP (every host that is not a
- * marketing host) takes the branch below exactly as before, byte for byte;
- * MARKETING takes the marketing origin from the same configuration.
+ * So the Location is RELATIVE — always, since #2495. RFC 7231 §7.1.2 allows it,
+ * and the browser resolves it against the URL it actually requested: for a
+ * person clicking through from their mail client, the public https one. It
+ * keeps the visitor exactly where they already are instead of us echoing a
+ * host back at them. That used to be only the fallback, behind an absolute
+ * NEXT_PUBLIC_APP_URL; but that variable is the INTERNSHIP host, and since the
+ * footer of a MARKETING tenant's mail points at the marketing host (#2495), an
+ * absolute base would bounce that person across to the other product. A
+ * relative Location cannot: there is no host in it to be wrong.
  */
-function redirectToPage(path: string, world: World = DEFAULT_VERTICAL): NextResponse {
-  const configured = world === DEFAULT_VERTICAL ? process.env.NEXT_PUBLIC_APP_URL : originForWorld(world);
-  if (configured) {
-    try {
-      // Parsed rather than concatenated: a stray trailing path or a typo in the
-      // variable must not turn a redirect into a 500 on the opt-out path.
-      return NextResponse.redirect(new URL(path, new URL(configured).origin), 302);
-    } catch {
-      // fall through to the relative form
-    }
-  }
+function redirectToPage(path: string): NextResponse {
   return new NextResponse(null, { status: 302, headers: { Location: path } });
 }
