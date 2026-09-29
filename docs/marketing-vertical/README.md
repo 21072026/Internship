@@ -43,6 +43,8 @@ sürece tek bir PR sessizce farklı davranamaz.
 ## Dosyalar
 
 - `pipeline-record.md` — funnel kaydı nedir (bağlayıcı varsayılan karar)
+- `funnel-decision.md` — MARKETING_FUNNEL aşamaları ve DEAL_WON sonrası müşteri
+  durumu (#2572) — **taslak, maintainer onayı bekliyor**
 - `../worlds.md` — bir kişi, iki dünya: aynı e-posta iki üründe ayrı hesap, giriş
   yapılan host'a göre ürün seçimi (#2590); devralınan değil, bu repo'nun kararı
 - `CURATION.md` — görev görev karar listesi (asıl okunacak dosya)

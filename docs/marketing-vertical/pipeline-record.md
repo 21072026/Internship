@@ -43,6 +43,14 @@ LEAD_NEW → LEAD_CONTACTED → LEAD_QUALIFIED → TRIAL_ACTIVE → TRIAL_EXPIRE
 chased, and an off-path stage stops the SLA clock and demands a drop-off reason. A sibling
 PR adds the three keys; nothing in this slice hardcodes them.
 
+## SaleVali yolculuğu (#2572 — draft, awaiting maintainer approval)
+
+What happens around the trial and **after** `DEAL_WON` (active / notice given / churned /
+won back), whether `DEAL_PROPOSAL`/`DEAL_NEGOTIATION` stay in the preset, and which stage
+existing paying customers are imported at (#2555) is written up as options with a
+recommendation in [`funnel-decision.md`](funnel-decision.md). It is **not** a decision yet;
+until it is approved, nothing may rely on it.
+
 ## What this decision rules OUT
 
 - **A second pipeline carrier.** No `Deal`, no `Opportunity`, no `pipelineStatus` on
