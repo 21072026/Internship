@@ -301,3 +301,22 @@ test('an INTERNSHIP mentor\'s empty thread keeps the mentorship welcome (#2557)'
     await teardown(intn.org.id, [intn.email, ...fixture.emails], fixture.companyId);
   }
 });
+
+// #2558: the screens a SaleVali admin uses to bring the sales team in. Only
+// the words change (the Role enum is frozen): MENTOR is a rep, MENTEE a lead.
+for (const path of ['/admin/invite', '/admin/users']) {
+  test(`a MARKETING admin reads ${path} with no mentorship word (#2558)`, async ({ page }) => {
+    const mkt = await adminIn('MARKETING');
+    const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', `term-mkt-${path.split('/').pop()}`);
+    try {
+      await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
+      await page.goto(path);
+      await expect(page.locator('#main-content h1').first()).toBeVisible({ timeout: 20_000 });
+      // The users list is fetched after the first paint: wait for the seeded rep.
+      if (path === '/admin/users') await expect(page.getByText('Robin Owner').first()).toBeVisible({ timeout: 20_000 });
+      expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+    } finally {
+      await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
+    }
+  });
+}

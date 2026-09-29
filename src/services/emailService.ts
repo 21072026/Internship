@@ -33,6 +33,9 @@ import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { buildMeetingIcs } from '@/lib/ics';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary } from '@/i18n/dictionaries';
+import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
+import { verticalFor } from '@/lib/verticalContext';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { isNextActionReminderDue, nextActionDueBefore } from '@/lib/nextActionRule';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { bulkMissingRequirements } from '@/lib/documentRequirements';
@@ -714,7 +717,10 @@ export async function sendInvitationEmail({
   const registerUrl = `${appUrl}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
-  const I = getDictionary(resolved).notifications.invitationEmail;
+  // In the inviting tenant's own vocabulary (#2558): a SaleVali invitation
+  // asks a sales rep to join, not "a mentor". INTERNSHIP's overlay is empty.
+  const vertical = orgId ? await verticalFor(orgId) : DEFAULT_VERTICAL;
+  const I = applyVerticalOverlay(getDictionary(resolved), resolved, vertical).notifications.invitationEmail;
   // An unknown role string (nothing else can reach this today) prints as-is
   // rather than as an empty gap in the sentence.
   const roleLabel = I.roles[role as keyof typeof I.roles] ?? role;
