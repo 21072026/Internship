@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { canViewProject, resolveOwner, isProjectOwner, isProjectMember } from '@/lib/projectAccess';
+import { canViewProject, resolveOwner, isProjectOwner, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -46,6 +46,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const project = await prisma.project.findUnique({ where: { id }, include });
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const team = mergeTeam(project.members, project.relations);
@@ -89,6 +91,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const project = await prisma.project.findUnique({ where: { id } });
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // Owner-only fields (#619): owners (admin / OWNER member / legacy owner)
@@ -155,7 +159,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       // given (the UI has no admin picker), so a transfer to "Admin (me)" works
       // even if the client didn't send an id.
       const ownerUserId = d.ownerType === 'ADMIN' ? d.ownerUserId || session.user.id : d.ownerUserId;
-      const owner = await resolveOwner({ ownerType: d.ownerType, ownerUserId, ownerCompanyId: d.ownerCompanyId });
+      const owner = await resolveOwner(session, { ownerType: d.ownerType, ownerUserId, ownerCompanyId: d.ownerCompanyId });
       if (!owner) return NextResponse.json({ error: 'Invalid owner' }, { status: 400 });
       Object.assign(data, owner);
       transferred = `${project.ownerType} → ${owner.ownerType}`;
@@ -187,6 +191,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const project = await prisma.project.findUnique({ where: { id } });
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // Deletion is owner-only (#619).
