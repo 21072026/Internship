@@ -2295,6 +2295,54 @@ export async function sendCompanyInquiryEmail({
   });
 }
 
+// The double opt-in confirmation for the demo form's product-news box (#2577).
+//
+// Transactional, and it must stay that way: the mail the person asked for when
+// they ticked the box, carrying exactly one question. It advertises nothing —
+// an advertising sentence here would itself be the unsolicited advertising
+// e-mail the double opt-in exists to prevent (BGH I ZR 164/09). Category
+// `consent` (essential): the recipient is not a User, so there is no preference
+// to read, and the opt-out link in the body is the way out.
+export async function sendContactPermissionConfirmationEmail({
+  to,
+  contactName,
+  companyName,
+  confirmUrl,
+  optOutUrl,
+  locale,
+  orgId,
+}: {
+  to: string;
+  contactName: string;
+  companyName: string;
+  confirmUrl: string;
+  optOutUrl: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).contactPermissionEmail;
+  await sendEmail({
+    to,
+    category: 'consent',
+    locale,
+    fromName: brand.name,
+    subject: M.subject.replace('{brand}', brand.name),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.heading)}
+        <p>${esc(M.greeting.replace('{name}', contactName))}</p>
+        <p>${esc(M.body.replace('{brand}', brand.name).replace('{company}', companyName))}</p>
+        <p style="margin: 24px 0;">
+          <a href="${esc(confirmUrl)}" style="background:${esc(brand.accent)};color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block;">${esc(M.confirm)}</a>
+        </p>
+        <p style="color:#6b7280;font-size:14px;">${esc(M.ignore)}</p>
+        <p style="color:#6b7280;font-size:14px;"><a href="${esc(optOutUrl)}" style="color:#6b7280;">${esc(M.optOut)}</a></p>
+      </div>
+    `,
+  });
+}
+
 // --- Project join requests (#51) --------------------------------------------
 
 export async function sendProjectJoinRequestEmail({

@@ -170,6 +170,7 @@ model Organization {
   orgEntitlements      OrgEntitlement[]
   usageRollups         UsageRollup[]
   companyUsage         CompanyUsage[]
+  contactPermissions   ContactPermission[]
   webhooks             Webhook[]
   announcements        Announcement[]
   newsletters          Newsletter[]
@@ -1379,22 +1380,25 @@ model Company {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  needs             CompanyNeed[]
-  mentorships       MentorshipRelation[]
-  users             User[]               @relation("CompanyUsers")
-  projects          Project[]            @relation("CompanyProjects")
-  interests         CompanyInterest[]
-  entitlements      CompanyEntitlement[]
-  needAlerts        CompanyNeedAlert[]
-  offers            Offer[]
-  requisitions      Requisition[]
-  interviewRequests InterviewRequest[]
-  placements        Placement[]
+  needs              CompanyNeed[]
+  mentorships        MentorshipRelation[]
+  users              User[]               @relation("CompanyUsers")
+  projects           Project[]            @relation("CompanyProjects")
+  interests          CompanyInterest[]
+  entitlements       CompanyEntitlement[]
+  needAlerts         CompanyNeedAlert[]
+  offers             Offer[]
+  requisitions       Requisition[]
+  interviewRequests  InterviewRequest[]
+  placements         Placement[]
   // The enquiries this company was created from (#1863). A list rather than a
   // single row because nothing stops a second enquiry from the same company
   // later being linked to the account it already has.
-  fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
-  usage             CompanyUsage[]
+  fromInquiries      CompanyInquiry[]     @relation("ConvertedFromInquiry")
+  usage              CompanyUsage[]
+  // May we write to / call this account, and on what basis (#2577)? One row
+  // per channel; docs/contact-permission.md.
+  contactPermissions ContactPermission[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -1631,10 +1635,20 @@ model CompanyInquiry {
   // src/lib/privacy.ts), stamped by the server — separate from the privacy text
   // version above; the language it was shown in is `locale`. NULL when unticked.
   marketingOptInTextVersion String?
-  // When the address owner CONFIRMED it (double opt-in). No confirmation mail
-  // exists yet, so this is NULL on every row — and while it is NULL, nothing
-  // may be mailed on the strength of the request (docs/marketing-vertical/demo-form.md).
+  // When the address owner CONFIRMED it (double opt-in, #2577): the moment
+  // they pressed the button behind the link in the confirmation mail. While it
+  // is NULL nothing may be mailed on the strength of the request; once set it
+  // becomes the account's DOI_CONFIRMED `ContactPermission`
+  // (docs/contact-permission.md).
   marketingOptInConfirmedAt DateTime?
+  // When the confirmation mail for this request went out (#2577). NULL = none
+  // was sent: the box was not ticked, or the per-recipient cap (one per address
+  // per day, `ContactConfirmationMailCap`) had already been spent.
+  marketingOptInMailSentAt  DateTime?
+  // When the address owner said "no" through the opt-out link (#2577). After
+  // this the request can no longer be confirmed, and the account's e-mail
+  // permission is revoked.
+  marketingOptOutAt         DateTime?
   // Marketplaces they sell on (MARKETING form), free text.
   marketplaces              String?              @db.Text
   // Where the request came from (#2569): the host that received it and the
@@ -1677,6 +1691,105 @@ model CompanyInquiry {
   @@index([email])
   @@index([orgId])
   @@index([convertedCompanyId])
+}
+
+// ── Contact permission (#2577, story #2575) ─────────────────────────────────
+//
+// "May we write to this account, and can we prove it?" — UWG §7 / DSGVO. One
+// row per account × channel holds the CURRENT basis plus its evidence. The rule
+// of who may write which basis is ONE file, src/lib/contactPermissionRule.ts
+// (dependency-free, unit-tested), and the only writer is
+// src/lib/contactPermission.ts. Full design: docs/contact-permission.md.
+//
+// Company-level, not a `ConsentType` on the lead User: the person we write to
+// is the account's contact (`Company.contactEmail`), who is not a User — the
+// stand-in lead User has a synthetic address nobody reads.
+enum ContactChannel {
+  EMAIL
+  PHONE
+  POST
+}
+
+// The legal basis. The same four terms as the channel-rules document (#2576).
+//   DOI_CONFIRMED          — the address owner clicked the confirmation link.
+//   EXISTING_CUSTOMER_7_3  — §7(3) UWG: a PAYING customer's address, set by an
+//                            admin by hand, with a written reason.
+//   INQUIRY_REPLY          — they asked us (demo form): we may answer THAT
+//                            request, which is not advertising permission.
+//   NONE                   — no basis. What every machine path writes.
+enum ContactPermissionBasis {
+  DOI_CONFIRMED
+  EXISTING_CUSTOMER_7_3
+  INQUIRY_REPLY
+  NONE
+}
+
+// Who wrote the current basis — part of the evidence.
+enum ContactPermissionSource {
+  DOI_LINK
+  INQUIRY
+  ADMIN
+  IMPORT
+  INGEST
+}
+
+model ContactPermission {
+  // Nullable like Company's own orgId. Registered in TENANT_MODELS; every
+  // sessionless writer (the DOI click, an inquiry placed by the form, the
+  // import) passes orgId itself — src/lib/contactPermission.ts.
+  orgId       String?
+  org         Organization?           @relation(fields: [orgId], references: [id])
+  id          String                  @id @default(cuid())
+  // Cascade: erasing the account erases its permission rows (#2559). The
+  // opt-out stays provable where it matters — on the enquiry row, which keeps
+  // its own `marketingOptOutAt` for as long as enquiries are retained.
+  companyId   String
+  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  channel     ContactChannel
+  basis       ContactPermissionBasis  @default(NONE)
+  source      ContactPermissionSource
+  // The address (EMAIL) the basis was established for. A permission is for an
+  // address, not for whatever `contactEmail` says later: if the contact
+  // changes, the old confirmation does not cover the new person.
+  address     String?                 @db.VarChar(320)
+  // Evidence of a DOI: the opt-in wording version and language shown, when the
+  // box was ticked and when the link was confirmed. No IP address (data
+  // minimisation — the demo form promises none; the signed link bound to the
+  // address plus the two timestamps is the proof).
+  textVersion String?
+  textLocale  String?                 @db.VarChar(5)
+  requestedAt DateTime?
+  confirmedAt DateTime?
+  // The enquiry the evidence came from. No foreign key: enquiries have their
+  // own retention, and the copy above is what must survive them.
+  inquiryId   String?
+  // EXISTING_CUSTOMER_7_3 / manual changes: who and why. Plain id, no FK — the
+  // ActivityLog carries the actor too.
+  grantedById String?
+  reason      String?                 @db.Text
+  // Revocation (opt-out link, or an admin). The basis is kept so the history
+  // still says what was revoked; an effective permission needs this NULL.
+  revokedAt   DateTime?
+  revokedVia  String?                 @db.VarChar(16)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@unique([companyId, channel])
+  @@index([orgId, channel, basis])
+}
+
+// The per-recipient cap on confirmation mails (#2577, #2569 § 9): at most ONE
+// double-opt-in mail per address per UTC day, whichever tenant's form asked.
+// The key is HMAC-SHA256(server secret, normalised address) + ':' + day, so this table holds no
+// address, and the cap is enforced by the primary key — two concurrent
+// submits cannot both insert it. Deliberately no orgId: the cap protects the
+// RECIPIENT, whose inbox is not per tenant. Rows older than a day are swept on
+// the next insert.
+model ContactConfirmationMailCap {
+  key       String   @id @db.VarChar(80)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 enum MentorApplicationStatus {

@@ -58,18 +58,19 @@ Until this runs, the marketing landing's form is closed — by design.
 
 - The form fields; `marketplaces` instead of `openRoles` on the marketing form.
 - **Consent record:** `consentAt` and `consentTextVersion` (= `PRIVACY_POLICY_VERSION`),
-  both written by the server. The notice at that version (`2026-09-29`) has a section on
+  both written by the server. The notice at that version (`2026-09-29.2`) has a section on
   these forms naming every field below, so the stamp points at a text that covers what the
   row keeps. Bump the version whenever what this form stores changes.
 - **Product news — a REQUEST, never a send permission.** The separate,
   **unchecked-by-default** box is stored as `marketingOptInRequested` (`NULL` = the form
   never asked, the internship form), with `marketingOptInTextVersion`
   (= `MARKETING_OPT_IN_TEXT_VERSION`, the wording's own version; the language is the row's
-  `locale`) and `marketingOptInConfirmedAt`, which stays `NULL` because no double opt-in
-  exists. A single opt-in on a public form can be ticked by anyone for anyone's address and
-  proves nothing under UWG §7(2) Nr. 2 — **no code, export or person may mail on
-  `marketingOptInRequested`**; only a non-NULL `marketingOptInConfirmedAt` would ever be a
-  basis (the consent model is #2577). The admin list says so on the row.
+  `locale`) and `marketingOptInConfirmedAt`, set only when the address owner clicks the
+  link in the confirmation mail (double opt-in, #2577). A single opt-in on a public form
+  can be ticked by anyone for anyone's address and proves nothing under UWG §7(2) Nr. 2 —
+  **no code, export or person may mail on `marketingOptInRequested`**; only the confirmed
+  click becomes a basis, as the account's `DOI_CONFIRMED` contact permission. The admin
+  list says so on the row. The whole model: [`docs/contact-permission.md`](../contact-permission.md).
 - **Source:** `utmSource/Medium/Campaign/Term/Content` (trimmed, capped at 150) and
   `referrer` — origin + path only; the query string and fragment are dropped, and a
   referrer on our own host is not a source (`src/lib/inquiryAttribution.ts`). Stored raw;
@@ -116,6 +117,7 @@ active ADMIN or MENTOR of the same org. A stale id reads as "none".
 
 ## Rate limit
 
-The `company-inquiry` bucket (3 per hour per client IP) is unchanged. No confirmation
-(double opt-in) mail is sent; if one is ever added, it needs a per-recipient cap of one
-mail per address per day (#2569 § 9).
+The `company-inquiry` bucket (3 per hour per client IP) is unchanged. A ticked
+product-news box sends one confirmation (double opt-in) mail, capped at **one per address
+per UTC day** whichever tenant's form asked (#2569 § 9, `ContactConfirmationMailCap`) —
+see [`docs/contact-permission.md`](../contact-permission.md) § Double opt-in.

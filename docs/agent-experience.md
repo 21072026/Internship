@@ -7703,3 +7703,18 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   lock fails.
 - **`kill <npx pid>` leaves `next-server` listening** (it reparents to 1): kill the
   `next-server` pid too and confirm the port is free.
+
+## 2026-09-29 — Contact permission + double opt-in (#2577)
+
+- **The "session scratchpad" is shared by parallel worktree agents.** A generic helper name
+  (`edit.py`) was rewritten twice by another agent mid-session, with a different argument
+  contract. Give every scratch file a task-unique name (`edit_2577.py`, `pw2577.config.ts`).
+- **The isolation guard also refuses `cat >> file <<'EOF'` appends** (and a heredoc'd JSON edit
+  of `route-auth-baseline.json`). Use the Edit tool for appends/inserts into repo files.
+- **A new public route under `/api/` touches four lists, not one**: the route-auth baseline, the
+  middleware's verification allowlist, `VERIFY_EXEMPT` in `scripts/openapi-generate.cjs` (checked
+  against the middleware by `check:openapi`), and — for its page — `robots.ts` plus the list in
+  `e2e/robots-sitemap.spec.ts`.
+- **Prisma's `findUnique` on a compound key works under the tenant middleware** (Prisma 5
+  `extendedWhereUnique`), so a `@@unique([companyId, channel])` lookup does not need rewriting to
+  `findFirst` when the model is registered.

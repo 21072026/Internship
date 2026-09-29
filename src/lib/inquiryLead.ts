@@ -26,6 +26,7 @@
 import { prisma } from '@/lib/prisma';
 import { runWithOrg } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
+import { applyInquiryPermission } from '@/lib/contactPermissionDoi';
 import {
   createMarketingAccount,
   type ManualAccountOutcome,
@@ -167,6 +168,15 @@ export async function convertInquiryToMarketingLead(input: {
         handledById: input.actor?.id ?? input.owner.id,
       },
     });
+    // What the enquiry proves about contacting them becomes the account's
+    // e-mail permission (#2577): INQUIRY_REPLY, or DOI_CONFIRMED if they have
+    // already confirmed the product-news box, or a revocation if they opted
+    // out. Never fatal — the account exists, and the enquiry keeps the proof.
+    try {
+      await applyInquiryPermission({ inquiryId, orgId, companyId: outcome.companyId });
+    } catch (error) {
+      console.error('Inquiry contact permission failed:', error);
+    }
     await logActivity({
       action: 'company.inquiry.converted',
       actorId: input.actor?.id ?? null,

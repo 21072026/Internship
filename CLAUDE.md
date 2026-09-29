@@ -377,6 +377,17 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   admin'in okuduğu `ActivityLog` kaydına gider, çünkü birçok okuma yolu ilişkinin tüm
   skalerlerini mentöre/mentee'ye döndürüyor ve #1801 gerekçenin hakkında olan kişiye geri
   okunmamasını kural yapıyor.
+- **Contact permission is one rule and one writer** ([`docs/contact-permission.md`](docs/contact-permission.md),
+  #2577, UWG § 7): `ContactPermission` holds, per account × channel, the basis
+  (`DOI_CONFIRMED` / `EXISTING_CUSTOMER_7_3` / `INQUIRY_REPLY` / `NONE`) and its proof. Who may
+  write which basis is `src/lib/contactPermissionRule.ts` (pure, unit-tested); the only writer is
+  `src/lib/contactPermission.ts`, and a refused write **throws**. Three rules are load-bearing:
+  **machines (import, feeds, SaleVali's pre-ticked newsletter flag) write `NONE` only** and never
+  replace a row; **nobody but the address owner's own click produces `DOI_CONFIRMED`** (no admin
+  path); and **nobody writes an advertising basis over the owner's own withdrawal**. The demo
+  form's DOI mail is capped at one per address per UTC day (`ContactConfirmationMailCap`, a
+  primary-key insert). No advertising mail to account contacts exists yet — the first one must
+  call `canSendMarketingEmail()` per recipient.
 - **Single-owner background work** (`src/lib/jobs/lease.ts`, #1701): anything that
   must run **once per environment** rather than once per process takes a `JobLease`
   — one row per lease name, a TTL, and a takeover by conditional `UPDATE`. Today

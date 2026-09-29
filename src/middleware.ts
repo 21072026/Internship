@@ -32,6 +32,11 @@ function isAllowlisted(pathname: string) {
     // itself, /one-click and /prefs.
     pathname === '/api/unsubscribe' ||
     pathname.startsWith('/api/unsubscribe/') ||
+    // The double opt-in's confirm / withdraw buttons (#2577): the signed token
+    // is the credential, and a withdrawal must work from any browser — the
+    // same argument as the unsubscribe routes above. Exact paths.
+    pathname === '/api/contact-permission/confirm' ||
+    pathname === '/api/contact-permission/opt-out' ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.

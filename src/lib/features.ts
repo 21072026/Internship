@@ -140,6 +140,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'accountDetail', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.accountDetail.t, desc: C.accountDetail.d },
     // #2569 — the public enquiry / demo form, filed by host into the right org.
     { key: 'webRequests', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.webRequests.t, desc: C.webRequests.d },
+    // #2577 — per-account contact permission with its proof, and the double opt-in.
+    { key: 'contactPermission', category: 'trust', icon: MailCheck, color: 'green', capability: 'companies', title: C.contactPermission.t, desc: C.contactPermission.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
     { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
   ];

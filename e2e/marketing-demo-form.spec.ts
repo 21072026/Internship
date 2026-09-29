@@ -3,6 +3,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
+import { makeContactPermissionToken } from '../src/lib/contactPermissionTokens';
 
 // The demo form on the MARKETING landing (#2569) and the default lead owner
 // (#2580 item 3).
@@ -324,6 +325,155 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
     const cleared = await page.request.put('/api/admin/settings', { data: { defaultLeadOwnerId: '' } });
     expect(cleared.ok()).toBeTruthy();
     expect((await cleared.json()).settings.defaultLeadOwnerId).toBe('');
+  } finally {
+    await context.close();
+  }
+});
+
+// The double opt-in and the account's contact permission (#2577). Runs after
+// the default-owner test, so the request lands on the rep's funnel by itself
+// and the account exists before the click — the path where the click has to
+// reach an existing account. (The other path — confirm first, convert later —
+// is `applyInquiryPermission` at conversion.)
+test('a ticked box mails ONE confirmation a day; the click makes the account DOI_CONFIRMED and the link takes it back', async ({ request, page, browser }) => {
+  test.setTimeout(150_000);
+  await prisma.setting.updateMany({ where: { orgId, key: 'defaultLeadOwnerId' }, data: { value: mktRepId } });
+  const companyName = `Opt In Handel ${stamp}`;
+  const email = newInquiryEmail('demo-form-doi');
+  const confirmMails = () => prisma.emailLog.count({ where: { to: email, category: 'consent' } });
+
+  const res = await postInquiry(request, MARKETING_HOST, {
+    companyName,
+    contactName: 'Dora Double',
+    email,
+    marketingOptIn: true,
+    locale: 'de',
+  });
+  expect(res.ok()).toBeTruthy();
+  // Same body whether or not a mail went out.
+  expect(await res.json()).toEqual({ ok: true });
+  const first = await prisma.companyInquiry.findFirstOrThrow({ where: { email, companyName } });
+  expect(first.marketingOptInMailSentAt).not.toBeNull();
+  expect(first.marketingOptInConfirmedAt).toBeNull();
+  expect(await confirmMails()).toBe(1);
+
+  // Converted by the default owner: the account exists and may be ANSWERED,
+  // which is not advertising permission.
+  expect(first.convertedCompanyId).not.toBeNull();
+  const companyId = first.convertedCompanyId!;
+  const beforeClick = await prisma.contactPermission.findUniqueOrThrow({
+    where: { companyId_channel: { companyId, channel: 'EMAIL' } },
+  });
+  expect(beforeClick.basis).toBe('INQUIRY_REPLY');
+  expect(beforeClick.orgId).toBe(orgId);
+
+  // A second request for the same address the same day sends no second mail.
+  const again = await postInquiry(request, MARKETING_HOST, {
+    companyName: `${companyName} Zwei`,
+    contactName: 'Dora Double',
+    email,
+    marketingOptIn: true,
+  });
+  expect(again.ok()).toBeTruthy();
+  const second = await prisma.companyInquiry.findFirstOrThrow({ where: { email, companyName: `${companyName} Zwei` } });
+  expect(second.marketingOptInRequested).toBe(true);
+  expect(second.marketingOptInMailSentAt).toBeNull();
+  expect(await confirmMails()).toBe(1);
+
+  // The address owner opens the link and presses the button (the page POSTs;
+  // opening the link alone confirms nothing).
+  const confirmToken = makeContactPermissionToken('confirm', first.id);
+  await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST, 'x-forwarded-for': clientIp() });
+  await page.goto(`/contact-permission/confirm?token=${encodeURIComponent(confirmToken)}`);
+  expect((await prisma.companyInquiry.findUniqueOrThrow({ where: { id: first.id } })).marketingOptInConfirmedAt).toBeNull();
+  await page.getByTestId('contact-permission-button').click();
+  await expect(page.getByTestId('contact-permission-done')).toBeVisible({ timeout: 15_000 });
+
+  const confirmed = await prisma.companyInquiry.findUniqueOrThrow({ where: { id: first.id } });
+  expect(confirmed.marketingOptInConfirmedAt).not.toBeNull();
+  const permission = await prisma.contactPermission.findUniqueOrThrow({
+    where: { companyId_channel: { companyId, channel: 'EMAIL' } },
+  });
+  expect(permission.basis).toBe('DOI_CONFIRMED');
+  expect(permission.source).toBe('DOI_LINK');
+  expect(permission.confirmedAt).not.toBeNull();
+  expect(permission.textVersion).toBe(MARKETING_OPT_IN_TEXT_VERSION);
+  expect(permission.textLocale).toBe('de');
+  expect(permission.address).toBe(email.toLowerCase());
+  expect(permission.revokedAt).toBeNull();
+
+  const context = await browser.newContext();
+  const admin = await context.newPage();
+  try {
+    await signInAndSettle(admin, mktAdminEmail, PW, '/admin');
+    const listed = async () => {
+      const r = await admin.request.get(`/api/companies?permission=email&search=${encodeURIComponent(companyName)}`);
+      expect(r.ok()).toBeTruthy();
+      return ((await r.json()).companies as { id: string }[]).map((c) => c.id);
+    };
+    expect(await listed()).toContain(companyId);
+    // The list filter on screen, and its badge.
+    await gotoSettled(admin, '/admin/companies');
+    await admin.getByTestId('companies-permission-filter').selectOption('email');
+    await admin.getByTestId('companies-search').fill(companyName);
+    await expect(admin.getByTestId(`company-email-permission-${companyId}`)).toBeVisible({ timeout: 15_000 });
+    // …and the owning rep's own account list.
+    const repContext = await browser.newContext();
+    try {
+      const rep = await repContext.newPage();
+      await signInAndSettle(rep, mktRepEmail, PW, '/sales');
+      await gotoSettled(rep, '/sales/accounts?permission=email');
+      await expect(rep.getByTestId(`sales-account-permission-${companyId}`)).toHaveText('Yes');
+    } finally {
+      await repContext.close();
+    }
+    await gotoSettled(admin, `/admin/companies/${companyId}`);
+    await expect(admin.getByTestId('company-detail-permission-basis-EMAIL')).toHaveAttribute('data-basis', 'DOI_CONFIRMED');
+    await expect(admin.getByTestId('company-detail-email-permission')).toHaveAttribute('data-permitted', 'true');
+
+    // An admin cannot type a double opt-in in, nor a §7(3) record without its reason.
+    const forged = await admin.request.put(`/api/admin/companies/${companyId}/contact-permission`, {
+      data: { action: 'set', channel: 'EMAIL', basis: 'DOI_CONFIRMED' },
+    });
+    expect(forged.status()).toBe(400);
+    const bare = await admin.request.put(`/api/admin/companies/${companyId}/contact-permission`, {
+      data: { action: 'set', channel: 'EMAIL', basis: 'EXISTING_CUSTOMER_7_3' },
+    });
+    expect((await bare.json()).code).toBe('reason_required');
+
+    // The opt-out link takes it back — and a confirmation after it is refused.
+    const optOut = await request.post('/api/contact-permission/opt-out', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: makeContactPermissionToken('optout', first.id) },
+    });
+    expect(optOut.ok()).toBeTruthy();
+    const revoked = await prisma.contactPermission.findUniqueOrThrow({
+      where: { companyId_channel: { companyId, channel: 'EMAIL' } },
+    });
+    expect(revoked.revokedAt).not.toBeNull();
+    expect(revoked.revokedVia).toBe('LINK');
+    expect(revoked.basis).toBe('DOI_CONFIRMED');
+    expect(await listed()).not.toContain(companyId);
+    const reconfirm = await request.post('/api/contact-permission/confirm', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: confirmToken },
+    });
+    expect(reconfirm.status()).toBe(409);
+    // A confirm token is not an opt-out token, and the reverse.
+    const crossed = await request.post('/api/contact-permission/confirm', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: makeContactPermissionToken('optout', first.id) },
+    });
+    expect(crossed.status()).toBe(400);
+    // Nobody here re-grants what the person withdrew.
+    const regrant = await admin.request.put(`/api/admin/companies/${companyId}/contact-permission`, {
+      data: { action: 'set', channel: 'EMAIL', basis: 'EXISTING_CUSTOMER_7_3', reason: 'Paid invoice 2026-0042 in March' },
+    });
+    expect(regrant.status()).toBe(400);
+    expect((await regrant.json()).code).toBe('owner_objected');
+    await gotoSettled(admin, `/admin/companies/${companyId}`);
+    await expect(admin.getByTestId('company-detail-permission-basis-EMAIL')).toHaveAttribute('data-revoked', 'true');
+    await expect(admin.getByTestId('company-detail-email-permission')).toHaveAttribute('data-permitted', 'false');
   } finally {
     await context.close();
   }

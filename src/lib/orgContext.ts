@@ -127,6 +127,14 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // its WRITES too, and a sessionless create outside a bound context would land
   // with a null org.
   'CompanyUsage',
+  // May we write to this account, and can we prove it (#2577)? One tenant
+  // reading another's permission book learns its customer list; writing one
+  // would forge a consent record. Nullable orgId (it mirrors Company's). The
+  // writers that have no session — the DOI click, a form request placed by the
+  // default owner, the import — pass `orgId` themselves
+  // (src/lib/contactPermission.ts), because registration fills orgId in only
+  // from a BOUND context.
+  'ContactPermission',
   // The notification delivery ledger (#1710). One row per (recipient, event,
   // channel) — who was told what, and why they were not. It is written by the
   // router from whatever context the caller happens to be in (a request, a

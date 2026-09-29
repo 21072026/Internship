@@ -16,6 +16,7 @@ import { CompanyForm } from '@/components/forms/CompanyForm';
 import { CompanyEntitlements } from '@/components/admin/CompanyEntitlements';
 import { NewMarketingLeadDialog } from '@/components/admin/NewMarketingLeadDialog';
 import { useVertical } from '@/lib/verticalClient';
+import { marketingEmailAllowed, type PermissionRow } from '@/lib/contactPermissionRule';
 import { Building2, Plus, Pencil, Trash2, Search, Sparkles, UserPlus, Download } from 'lucide-react';
 
 interface Company {
@@ -26,7 +27,11 @@ interface Company {
   industry?: string;
   needs: { id: string; position: string; count: number; period: string }[];
   _count: { mentorships: number };
+  // The EMAIL row only (#2577), for the permission badge.
+  contactPermissions?: PermissionRow[];
 }
+
+type PermissionFilter = 'all' | 'email';
 
 const PAGE_SIZE = 24;
 
@@ -57,6 +62,7 @@ export default function CompaniesPage() {
   const [sort, setSort] = useState<CompanySort>(DEFAULT_COMPANY_SORT);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [permission, setPermission] = useState<PermissionFilter>('all');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [impact, setImpact] = useState<{
     cascade: Record<string, number>;
@@ -155,6 +161,7 @@ export default function CompaniesPage() {
         sort,
       });
       if (search.trim()) params.set('search', search.trim());
+      if (permission === 'email') params.set('permission', 'email');
       const res = await fetch(`/api/companies?${params}`);
       const data = await res.json();
       setCompanies(data.companies || []);
@@ -164,7 +171,7 @@ export default function CompaniesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, sort, t]);
+  }, [page, search, sort, permission, t]);
 
   const fetchAllCompanies = useCallback(async () => {
     try {
@@ -197,7 +204,7 @@ export default function CompaniesPage() {
   // previous result set is an empty screen with no explanation.
   useEffect(() => {
     setPage(1);
-  }, [search, sort]);
+  }, [search, sort, permission]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -517,6 +524,18 @@ export default function CompaniesPage() {
             </option>
           ))}
         </select>
+        {/* "Has provable e-mail permission" (#2577) — a server-side filter
+            like search and sort, never a filter of the page on screen. */}
+        <select
+          data-testid="companies-permission-filter"
+          aria-label={t.companiesPage.permissionFilter.label}
+          value={permission}
+          onChange={(e) => setPermission(e.target.value as PermissionFilter)}
+          className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+        >
+          <option value="all">{t.companiesPage.permissionFilter.all}</option>
+          <option value="email">{t.companiesPage.permissionFilter.email}</option>
+        </select>
         <span className="text-sm text-gray-500" data-testid="companies-total">
           {t.companiesPage.resultCount.replace('{count}', String(total))}
         </span>
@@ -617,6 +636,12 @@ export default function CompaniesPage() {
               <div className="flex items-center gap-2 mb-4">
                 <Badge variant="info">{company._count.mentorships} {t.companiesPage.mentorships}</Badge>
                 <Badge variant="default">{company.needs.length} {t.companiesPage.positions}</Badge>
+                {company.contactEmail &&
+                  marketingEmailAllowed(company.contactPermissions?.[0], company.contactEmail) && (
+                    <Badge variant="success" data-testid={`company-email-permission-${company.id}`}>
+                      {t.companiesPage.permissionBadge}
+                    </Badge>
+                  )}
               </div>
 
               {company.needs.length > 0 && (

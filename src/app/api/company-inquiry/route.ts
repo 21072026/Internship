@@ -11,6 +11,8 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { notify } from '@/lib/notify';
 import { orgWhere } from '@/lib/tenantFilter';
 import { sendCompanyInquiryEmail } from '@/services/emailService';
+import { sendDoiConfirmation } from '@/lib/contactPermissionDoi';
+import { requestOrigin } from '@/lib/servedHosts';
 
 // A company asking for a look at the product — from the public /for-companies
 // page on an internship host, or the demo form on the MARKETING landing (#2569).
@@ -39,8 +41,9 @@ const schema = z.object({
   consent: z.boolean(),
   // The SEPARATE product-news box (MARKETING form only), unchecked by default.
   // Stored as an unconfirmed REQUEST (#2569): a single opt-in from a public form
-  // is no permission to mail anyone (UWG §7(2) Nr. 2) until double opt-in; the
-  // consent model it may one day feed is #2577.
+  // is no permission to mail anyone (UWG §7(2) Nr. 2). Ticking it sends ONE
+  // confirmation mail (double opt-in, #2577); only the click behind it makes it
+  // a permission (docs/contact-permission.md).
   marketingOptIn: z.boolean().optional(),
   locale: z.string().max(5).optional(),
   // Where they came from (#2569). Cleaned and capped by readInquiryAttribution
@@ -124,7 +127,8 @@ export async function POST(request: Request) {
       consentAt: new Date(),
       consentTextVersion: PRIVACY_POLICY_VERSION,
       // A request, not a permission — `marketingOptInConfirmedAt` stays NULL
-      // (no double opt-in exists). The wording version is stamped separately
+      // until the address owner clicks the confirmation link mailed below
+      // (#2577). The wording version is stamped separately
       // from the privacy version; the language it was shown in is `locale`.
       marketingOptInRequested: optInRequested,
       marketingOptInTextVersion: optInRequested ? MARKETING_OPT_IN_TEXT_VERSION : null,
@@ -152,6 +156,29 @@ export async function POST(request: Request) {
       }
     } catch (e) {
       console.error('Company inquiry lead placement failed:', e);
+    }
+  }
+
+  // The double opt-in (#2577): a ticked product-news box sends ONE mail asking
+  // the address owner to confirm — at most one per address per day, whichever
+  // tenant's form asked (sendDoiConfirmation holds the cap), behind this
+  // route's own 3/hour bucket. The link is built on the host the form was sent
+  // from (a served host only), so the confirmation page carries that site's
+  // branding. Like the placement above, a failure never becomes an error for
+  // the sender, and the answer below does not say whether a mail went out.
+  if (optInRequested) {
+    try {
+      await sendDoiConfirmation({
+        inquiryId: inquiry.id,
+        orgId,
+        email,
+        contactName,
+        companyName,
+        locale: locale || null,
+        origin: requestOrigin((name) => request.headers.get(name)),
+      });
+    } catch (e) {
+      console.error('Company inquiry confirmation mail failed:', e);
     }
   }
 

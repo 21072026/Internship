@@ -33,6 +33,7 @@ import { randomUUID } from 'node:crypto';
 import { runWithOrg } from './orgContext';
 import { acquireLease, releaseLease, replicaId } from './jobs/lease';
 import { logActivity } from './activity';
+import { recordMachineContactPermission } from './contactPermission';
 import { runImport, parseDelimited, type ImportReport, type ParsedTable } from './importPreview';
 import { resolvePipelineStages } from './pipelineStages';
 import { startStageKey } from './pipeline';
@@ -411,7 +412,18 @@ function databaseWriter(context: WriterContext): MarketingAccountWriter {
       return prisma.$transaction(async (tx) => {
         const company = await tx.company.create({
           data: accountCreateData(row, context.orgId),
-          select: { id: true },
+          select: { id: true, contactEmail: true },
+        });
+        // An import knows the address and nothing else (#2577): it records the
+        // e-mail channel with basis NONE, and the rule refuses anything more —
+        // whatever a column in the file claims. A demo request converted
+        // through this writer is upgraded afterwards by its own evidence
+        // (src/lib/contactPermissionDoi.ts, applyInquiryPermission).
+        await recordMachineContactPermission(tx, {
+          writer: 'import',
+          orgId: context.orgId,
+          companyId: company.id,
+          address: company.contactEmail,
         });
         await placeOnFunnel(tx, row, company.id, context, sourceId);
         return company.id;
