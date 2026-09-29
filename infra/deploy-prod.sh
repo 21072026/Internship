@@ -940,6 +940,38 @@ while [ "$REPLICA_INDEX" -le "$REPLICAS" ]; do
 done
 log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped} on ${REPLICAS} replica(s)"
 
+# ── Marketing host content check (#2579) — WARN ONLY, never fails the deploy ──
+# /api/health is the same JSON on every host this container serves, so it cannot
+# notice the marketing domain showing the internship product (an empty
+# MARKETING_HOSTS did exactly that until #2428). Ask the new container for its
+# landing AS the marketing host and read the <title>: it must name SaleVali and
+# must not say "Internship CRM" — the same rule as
+# scripts/marketing-content-probe.mjs, which the external uptime job
+# (.github/workflows/uptime.yml) enforces with an alert. This copy is deliberately
+# plain curl + sed (the box need not have Node) and only WARNS: the containers
+# are already swapped and healthy, and the fix is an env-file edit, not a
+# rollback. The host asked for is the first MARKETING_HOSTS entry, or the app's
+# default when that is empty (src/lib/servedHosts.ts). MARKETING_PROBE=0 skips it.
+marketing_content_check() {
+  local host page title
+  host="$(printf '%s' "${MARKETING_HOSTS:-}" | cut -d, -f1 | tr -d '[:space:]')"
+  [ -n "$host" ] || host=marketing.bcsit-gmbh.de
+  page="$(curl -sS --max-time 15 -H "Host: $host" "http://127.0.0.1:$PORT/" 2>/dev/null || true)"
+  # The FIRST <title> is the document's (an inline <svg> later on may carry its own).
+  title="$(printf '%s' "$page" | tr '\n' ' ' | grep -o '<title[^>]*>[^<]*</title>' | head -n1 | sed 's/<[^>]*>//g' || true)"
+  if [ -z "$title" ]; then
+    warn "marketing host $host: no <title> in the landing served on :$PORT — check it by hand (infra/README.md § The marketing hosts)"
+  elif printf '%s' "$title" | grep -q 'Internship CRM'; then
+    warn "marketing host $host serves the INTERNSHIP landing (title: $title) — check MARKETING_HOSTS in $ENV_FILE"
+  elif ! printf '%s' "$title" | grep -q 'SaleVali'; then
+    warn "marketing host $host: title '$title' does not name SaleVali"
+  else
+    log "Marketing host $host OK — title: $title"
+  fi
+  return 0
+}
+if [ "${MARKETING_PROBE:-1}" != 0 ]; then marketing_content_check || true; fi
+
 # Record the commit now live in this container so the next deploy can enforce
 # forward-only progress (see the guard above).
 mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true

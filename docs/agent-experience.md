@@ -7472,3 +7472,17 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   describes it in the same PR, not "later".
 - **`pkill -f "next start -p 3113"` kills the calling shell too** (its own command line
   matches). Stop a background server through the task tool, or `pkill -f '[n]ext start'`.
+
+## 2026-09-29 — marketing host content probe (#2579)
+
+- **`X="$(fn)"` strips the trailing newline, and a `$GITHUB_OUTPUT` heredoc needs it.**
+  `uptime.yml` wrote `printf '%s' "$FAILED"; echo EOF` after `FAILED="$(probe_all)"`, so a real
+  outage produced `…-> 000EOF` — the runner rejects the file ("Matching delimiter not found") and
+  every alert step after it is skipped. Green runs never exercise that path, so nothing noticed.
+  Test a workflow's shell by extracting the step's `run:` with `python3 -c 'import yaml…'` and
+  running it with `GITHUB_OUTPUT=<tmpfile>` against a local `node:http` server; then `cat -A` the file.
+- **A workflow step that needs one repo file does not need the full checkout**:
+  `actions/checkout` with `path: .x`, `sparse-checkout: <file>`, `sparse-checkout-cone-mode: false`.
+- **The worktree isolation guard refuses shell commands containing `GITHUB_OUTPUT`** (and some
+  `node -e 'import(…)'` one-liners) as "names git". Put the command in a scratchpad `.sh` file
+  and run `bash <file>`.

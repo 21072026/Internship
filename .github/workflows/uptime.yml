@@ -47,6 +47,17 @@ jobs:
     name: Probe public environments
     runs-on: ubuntu-latest
     steps:
+      # Just the one dependency-free script the content probe runs (#2579) —
+      # a sparse checkout of a single file, NOT the full checkout + `npm ci`
+      # further down, which only the rare transition run pays for. Into its
+      # own directory so the mailer's full checkout later cannot collide.
+      - name: Fetch the content probe
+        uses: actions/checkout@v7
+        with:
+          path: .content-probe
+          sparse-checkout: scripts/marketing-content-probe.mjs
+          sparse-checkout-cone-mode: false
+
       - name: Probe
         id: probe
         env:
@@ -64,6 +75,20 @@ jobs:
             https://demo.interncrm.com/api/health
             https://marketing.bcsit-gmbh.de/api/health
             https://marketing.bcsit-gmbh.dev/api/health
+          # ...and /api/health cannot tell you WHICH PRODUCT a host shows: it is
+          # the same JSON on every name the container serves. An empty
+          # MARKETING_HOSTS once made the prod marketing domain serve the
+          # internship landing (#2428) with this job green throughout. So the
+          # marketing pages are also read, and their <title> must name SaleVali
+          # and must not say "Internship CRM" (#2579; the rule lives in
+          # scripts/marketing-content-probe.mjs and its test). /imprint is
+          # listed too (#2543): a separate route that can go wrong on its own.
+          CONTENT_TARGETS: >-
+            https://marketing.bcsit-gmbh.de/
+            https://marketing.bcsit-gmbh.de/imprint
+            https://marketing.bcsit-gmbh.dev/
+            https://marketing.bcsit-gmbh.dev/imprint
+          CONTENT_PROBE: .content-probe/scripts/marketing-content-probe.mjs
         run: |
           set -uo pipefail
           probe_all() {
@@ -83,23 +108,56 @@ jobs:
             printf '%s' "$failed"
           }
 
-          FAILED="$(probe_all)"
+          # One line per wrong page, nothing when every title is right. The
+          # script exits 1 on a finding and its stdout is the detail. A run it
+          # cannot explain itself (a crash, exit 2 = no targets) is still a
+          # finding: a probe that silently stops probing is the failure mode
+          # #2169 exists to rule out.
+          probe_content() {
+            local out rc
+            # shellcheck disable=SC2086 # CONTENT_TARGETS is a word list on purpose
+            out="$(node "$CONTENT_PROBE" $CONTENT_TARGETS)"; rc=$?
+            if [ "$rc" -ne 0 ] && [ -z "$out" ]; then out="content probe exited $rc without a finding"; fi
+            if [ -n "$out" ]; then printf '%s\n' "$out" | sed 's/^/wrong content: /'; fi
+            return 0
+          }
+
+          # Sets DOWN_PART (reachability), CONTENT_PART (wrong page) and FAILED
+          # (both, the alert detail). `$(…)` strips the trailing newline, and
+          # it has to go back: the `detail<<EOF` block below needs its closing
+          # EOF on a line of its own, or the runner rejects the whole output
+          # file ("Matching delimiter not found") and no alert step runs.
+          probe_everything() {
+            DOWN_PART="$(probe_all)"
+            [ -z "$DOWN_PART" ] || DOWN_PART="${DOWN_PART}"$'\n'
+            CONTENT_PART="$(probe_content)"
+            [ -z "$CONTENT_PART" ] || CONTENT_PART="${CONTENT_PART}"$'\n'
+            FAILED="${DOWN_PART}${CONTENT_PART}"
+          }
+
+          probe_everything
           # One retry before declaring an outage. A single failed probe is
           # usually a deploy swapping containers or a transient network blip,
-          # and paging on those is how a monitor gets muted.
+          # and paging on those is how a monitor gets muted. The content probe
+          # is retried with it: mid-deploy a page can briefly be a 502.
           if [ -n "$FAILED" ]; then
             echo "first pass failed, retrying in 30s:"; printf '%s' "$FAILED"
             sleep 30
-            FAILED="$(probe_all)"
+            probe_everything
           fi
 
           if [ -n "$FAILED" ]; then
             echo "status=down" >> "$GITHUB_OUTPUT"
+            # `kind` only picks the wording of the alert. The alert STATE is
+            # still the one labelled issue, so an outage and a wrong page never
+            # open two incidents, and the issue closes once BOTH are fine.
+            if [ -n "$DOWN_PART" ]; then kind=unreachable; else kind=content; fi
+            echo "kind=${kind}" >> "$GITHUB_OUTPUT"
             { echo 'detail<<EOF'; printf '%s' "$FAILED"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
-            printf 'DOWN:\n%s' "$FAILED"
+            printf 'DOWN (%s):\n%s' "$kind" "$FAILED"
           else
             echo "status=up" >> "$GITHUB_OUTPUT"
-            echo "all targets 200"
+            echo "all targets 200, marketing titles correct"
           fi
 
       - name: Find the current alert state
@@ -120,14 +178,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DETAIL: ${{ steps.probe.outputs.detail }}
+          KIND: ${{ steps.probe.outputs.kind }}
         run: |
           set -euo pipefail
+          if [ "$KIND" = content ]; then TITLE="🔴 Marketing host yanlış ürünü gösteriyor"; else TITLE="🔴 Site erişilemiyor"; fi
           gh label create "$ALERT_LABEL" --repo "$GITHUB_REPOSITORY" \
             --color B60205 --description "Automatic uptime alert" 2>/dev/null || true
           BODY="$(printf 'Automatic uptime check failed twice, 30 seconds apart.\n\n```\n%s```\n\nRun: %s/%s/actions/runs/%s\n\nThis issue is the alert state: it closes itself when the checks pass again.\n' \
                   "$DETAIL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
           URL="$(gh issue create --repo "$GITHUB_REPOSITORY" --label "$ALERT_LABEL" \
-                  --title "🔴 Site erişilemiyor" --body "$BODY")"
+                  --title "$TITLE" --body "$BODY")"
           echo "created $URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
@@ -166,13 +226,17 @@ jobs:
           STATUS: ${{ steps.probe.outputs.status }}
           DETAIL: ${{ steps.probe.outputs.detail }}
           INCIDENT: ${{ steps.incident.outputs.url }}
+          KIND: ${{ steps.probe.outputs.kind }}
         run: |
           set -euo pipefail
-          if [ "$STATUS" = down ]; then
+          if [ "$STATUS" = down ] && [ "$KIND" = content ]; then
+            export ALERT_SUBJECT="🔴 Marketing host yanlış ürünü gösteriyor"
+            export ALERT_BODY="$(printf 'Marketing sayfalarının <title> etiketi SaleVali içermiyor ya da Internship CRM diyor (30 saniye arayla iki kez).\n\n%s\nOlay kaydı: %s\nİlk bakılacak yer: MARKETING_HOSTS (infra/README.md § The marketing hosts).\n' "$DETAIL" "$INCIDENT")"
+          elif [ "$STATUS" = down ]; then
             export ALERT_SUBJECT="🔴 InternCRM erişilemiyor"
             export ALERT_BODY="$(printf 'Otomatik uptime kontrolü 30 saniye arayla iki kez başarısız oldu.\n\n%s\nOlay kaydı: %s\n' "$DETAIL" "$INCIDENT")"
           else
             export ALERT_SUBJECT="🟢 InternCRM tekrar erişilebilir"
-            export ALERT_BODY="Bütün kontroller yeniden 200 dönüyor. Olay kaydı kapatıldı."
+            export ALERT_BODY="Bütün kontroller yeniden 200 dönüyor ve marketing başlıkları doğru. Olay kaydı kapatıldı."
           fi
           node scripts/send-alert-email.mjs
