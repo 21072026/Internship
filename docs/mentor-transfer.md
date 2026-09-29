@@ -117,6 +117,11 @@ so the transfer month gained an entry and (for a won account) a second win,
 while the closed predecessor never churned. The route also loads the rest of
 each chain the date window touched, so a windowed read folds whole chains too.
 A new KPI that counts journeys must read them folded the same way.
+**Not folded yet:** `/api/admin/analytics` (the per-stage chart on the same
+page and the funnel section of the print report) still groups one row per
+relation, so a handed-over account stands on its stage twice there — the
+closed `ENDED_REASSIGNED` predecessor and its successor. That is the next reader
+to fold.
 
 ### The guard, inside the transaction
 

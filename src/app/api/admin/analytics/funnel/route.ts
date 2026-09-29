@@ -23,6 +23,7 @@ import {
 import { sourceIsReferral } from '@/lib/referrer';
 import { TRIAL_ACTIVE_STAGE_KEY } from '@/lib/trialReminderRule';
 import { getSetting } from '@/lib/settings';
+import { trialLengthDaysFor } from '@/lib/trialWindow';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
@@ -110,8 +111,9 @@ const MAX_CHAIN_ROUNDS = 20;
 /**
  * Pull in, in place, every predecessor and successor of the loaded relations,
  * transitively (#2556). Runs inside the caller's tenant scope, like every
- * other query here. Without a range the first query already loaded everything,
- * so both lookups come back empty and this costs one round trip.
+ * other query here. Only called for a windowed read: without a range the first
+ * query already loaded every link, and the successor lookup would be an IN list
+ * the size of the whole table.
  */
 async function loadWholeChains(relations: RelationRow[]): Promise<void> {
   const known = new Set(relations.map((r) => r.id));
@@ -184,6 +186,12 @@ export async function GET(request: Request) {
             OR: [
               { startDate: { gte: from! } },
               { statusChanges: { some: { createdAt: { gte: from!, lte: to! } } } },
+              // A trial that started in the window is anchored on
+              // trialStartedAt, which may carry no StatusChange (an automatic
+              // move before #2527, a backfilled or imported window) — without
+              // this a past month's trial count would change with the range
+              // preset.
+              { trialStartedAt: { gte: from!, lte: to! } },
             ],
           }
         : {},
@@ -193,7 +201,9 @@ export async function GET(request: Request) {
     // is folded whole: a successor opened inside the window must not stand in
     // for a journey whose real start is its predecessor's, and a successor
     // opened after the window must not drop the win it recorded.
-    await loadWholeChains(relations);
+    // Unranged, the first query already loaded every relation of the tenant,
+    // so the set is closed under both chain directions — skip the lookups.
+    if (rangeOk) await loadWholeChains(relations);
 
     const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
     const [stages, capabilities] = await Promise.all([resolvePipelineStages(orgId), shellCapabilities(orgId)]);
@@ -287,11 +297,13 @@ export async function GET(request: Request) {
     const trialKey = stages.find((s) => s.key === TRIAL_ACTIVE_STAGE_KEY)?.key ?? null;
     let trial = null;
     if (trialKey && toKey) {
-      const [trialLength, premium] = await Promise.all([
-        getSetting('trialLengthDays', orgId),
+      // The trial length comes from the ONE rule that also stamps trialEndsAt
+      // (parseTrialLengthDays via trialLengthDaysFor), so maturity for a trial
+      // with no recorded end uses the same length the app actually applies.
+      const [trialDays, premium] = await Promise.all([
+        trialLengthDaysFor(orgId),
         getSetting('premiumAnalytics', orgId),
       ]);
-      const trialDays = Math.max(1, Number.parseInt(trialLength, 10) || 30);
       const result = trialConversion(order, trialJourneys, trialKey, toKey, months, { trialDays });
       // The per-source split is lead ATTRIBUTION, which stays behind the
       // premium tier whatever the vertical (#2421, decision 2 in
