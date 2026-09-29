@@ -232,6 +232,26 @@ test('forgot-password mints its token for the account of the host it was asked o
   expect(await unknown.text()).toBe(marketingBody);
 });
 
+test('forgot-password on the marketing host never mails an internship-only account (no cross-world rescue)', async ({ request }) => {
+  const { email, internship } = await seedTwoWorldsInternshipOnly('forgot-nocross');
+  const tokensOf = (userId: string) => prisma.passwordResetToken.count({ where: { userId } });
+
+  const onMarketing = await request.post('/api/auth/forgot', {
+    headers: { ...asHost(MARKETING_HOST), ...freshIp('worlds-forgot-nocross-m') },
+    data: { email },
+  });
+  expect(onMarketing.status()).toBe(200);
+  // No SaleVali account for this address, so nothing is minted — and nothing is
+  // mailed from the internship product either.
+  expect(await tokensOf(internship.id)).toBe(0);
+
+  const unknown = await request.post('/api/auth/forgot', {
+    headers: { ...asHost(MARKETING_HOST), ...freshIp('worlds-forgot-nocross-u') },
+    data: { email: uniqueEmail('worlds-nobody-m') },
+  });
+  expect(await unknown.text()).toBe(await onMarketing.text());
+});
+
 test('the sign-in page on the marketing host sends an internship-only person to the internship door', async ({ page }) => {
   const email = uniqueEmail('worlds-ui');
   emails.push(email);

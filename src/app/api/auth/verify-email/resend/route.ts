@@ -52,9 +52,9 @@ export async function POST(request: Request) {
   // WHICH ACCOUNT (#2590) — the same rule as /api/auth/forgot, and it is the same
   // helper on purpose: this public path has no session, so the HOST the sign-in
   // page was served from decides which product's account is meant, and an
-  // address with no account there falls back to its single account in the other
-  // world (the mail then links to that account's own product, via its `orgId`).
-  // The response is `{ ok: true }` in every case, so none of this is observable.
+  // address with no account there gets no mail — never one from the other
+  // product. The response is `{ ok: true }` in every case, so none of this is
+  // observable.
   const world = worldForHeaders((name) => request.headers.get(name));
   const targets = await findAccountsForMailedLink(email, world, {
     id: true,
