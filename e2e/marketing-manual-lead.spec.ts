@@ -137,6 +137,17 @@ test('a MARKETING admin creates a lead by hand; the same VAT a second time creat
     expect(await prisma.mentorshipRelation.count({ where: { orgId: org.id } })).toBe(1);
     expect((await prisma.company.findUniqueOrThrow({ where: { id: company.id } })).name).toBe(accountName);
 
+    // The admin's own address as the contact: staff is never a lead (409
+    // contact_is_user), nothing is written and the admin's profile is untouched.
+    const selfRes = await page.request.post('/api/admin/marketing-accounts', {
+      data: { name: `Self Typed ${stamp}`, country: 'DE', contactEmail: adminEmail.toUpperCase() },
+    });
+    expect(selfRes.status()).toBe(409);
+    expect((await selfRes.json()).code).toBe('contact_is_user');
+    expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(1);
+    expect(await prisma.mentorshipRelation.count({ where: { menteeId: admin.id } })).toBe(0);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: admin.id } })).companyId).toBeNull();
+
     // "Open existing account" opens that account's edit dialog.
     await dialog.getByTestId('new-lead-open-account').click();
     await expect(page.getByTestId('new-lead-dialog')).toHaveCount(0);

@@ -104,6 +104,8 @@ async function handlePost(request: Request) {
           );
         case 'contact_in_funnel':
           return NextResponse.json({ code: 'contact_in_funnel', leadId: outcome.leadId }, { status: 409 });
+        case 'contact_is_user':
+          return NextResponse.json({ code: 'contact_is_user' }, { status: 409 });
         case 'already_mentored':
           return NextResponse.json({ code: 'already_mentored' }, { status: 409 });
         case 'ambiguous':

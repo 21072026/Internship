@@ -485,6 +485,7 @@ canonical headers, so the same validator, match key and diff decide it, and runs
 | `CREATE` | yes — `Company` + stand-in lead + funnel record, via the import's database writer | `201`, with `companyId` and `leadId` |
 | `UPDATE` / `UNCHANGED` (the match key found an account) | **no** (`createOnlyWriter` never updates) | `409 account_exists` + `companyId` — the dialog opens that account |
 | `CREATE` whose contact already has an ACTIVE funnel record | no (`createOnlyPlan` turns it into a `SKIP`) | `409 contact_in_funnel` + `leadId` — the import would re-point that record at the new account; a form should not |
+| the contact address is a staff user (ADMIN/MENTOR/COMPANY) of the org — typically the admin's own | no (checked before planning) | `409 contact_is_user` — staff is never a lead; the file import instead creates a separate stand-in lead, because the lead lookup matches `MENTEE` users only |
 | the contact is another owner's lead (#419) | no (the writer's guard, transaction rolled back) | `409 already_mentored` |
 | `SKIP` for an ambiguous name | no | `409 account_ambiguous` |
 

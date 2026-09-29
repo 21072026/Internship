@@ -45,6 +45,7 @@ import {
 import {
   applyPlannedAccounts,
   CONTACT_IN_FUNNEL,
+  CONTACT_IS_USER,
   createOnlyPlan,
   createOnlyWriter,
   diffMarketingAccounts,
@@ -124,9 +125,13 @@ async function loadSnapshot(
 
   const leads = emailKeys.length
     ? await prisma.user.findMany({
-        where: { orgId, email: { in: emailKeys } },
+        // MENTEE only: a staff user whose address is typed in as a contact is
+        // never the lead (see `MarketingLeadTarget.role`). The diff enforces
+        // the same rule on `role`, so a snapshot built elsewhere cannot slip one in.
+        where: { orgId, email: { in: emailKeys }, role: 'MENTEE' },
         select: {
           id: true,
+          role: true,
           email: true,
           fullName: true,
           phone: true,
@@ -468,6 +473,8 @@ export type ManualAccountOutcome =
   | { kind: 'exists'; companyId: string; leadId: string | null }
   /** Several accounts share the name and neither side names a country or VAT. */
   | { kind: 'ambiguous'; reason: string }
+  /** The contact address is a staff user of this org (see CONTACT_IS_USER). */
+  | { kind: 'contact_is_user' }
   /** The contact already has an active funnel record (see CONTACT_IN_FUNNEL). */
   | { kind: 'contact_in_funnel'; leadId: string | null }
   /** The contact is another owner's lead (#419) — transfer, do not duplicate. */
@@ -499,6 +506,20 @@ export async function createMarketingAccount(input: {
   // field for — the import attaches a fixed one; a person should not.
   if (stages.find((s) => s.key === stage)?.isOffPath) {
     return { kind: 'invalid', reason: `stage "${stage}" is off the funnel path` };
+  }
+
+  // A staff address typed in as the contact — the admin's own, a colleague's —
+  // is refused before anything is planned (CONTACT_IS_USER). The import would
+  // create a separate stand-in lead for it; a form asks the person instead.
+  const contactKey = normalizeEmailKey(fields.contactEmail ?? '');
+  if (contactKey) {
+    const staff = await runWithOrg(owner.orgId, () =>
+      prisma.user.findFirst({
+        where: { orgId: owner.orgId, email: contactKey, role: { not: 'MENTEE' } },
+        select: { id: true },
+      }),
+    );
+    if (staff) return { kind: CONTACT_IS_USER };
   }
 
   const { report } = await runMarketingRows({

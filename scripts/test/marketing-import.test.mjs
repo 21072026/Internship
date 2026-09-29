@@ -795,3 +795,59 @@ test('manual: a contact already on the funnel is not re-pointed at a new account
   assert.equal(store.relations[0].companyId, 'co-old');
   assert.equal(store.relations[0].pipelineStatus, 'LEAD_CONTACTED');
 });
+
+// ── Staff is never a lead (#2562 review) ─────────────────────────────────────
+//
+// The lead lookup matches a contact address against the org's Users. Before the
+// fix it matched EVERY role, so an admin typing their own address as the
+// contact was "the lead": their profile was filled in, their companyId moved to
+// the new account and a relation with mentorId === menteeId was created. The
+// store now selects MENTEE only and the diff drops any other role it is handed;
+// the form additionally refuses such an address up front (CONTACT_IS_USER).
+
+const { isLeadRole, CONTACT_IS_USER } = await import('../../src/lib/marketingImport.ts');
+
+const ownerAsUser = {
+  id: OWNER.id,
+  email: OWNER.email,
+  fullName: 'Owner',
+  phone: null,
+  city: null,
+  country: null,
+  preferredLanguage: null,
+  referralSource: null,
+  companyId: null,
+  role: 'ADMIN',
+};
+
+test('only a MENTEE may stand in as a lead', () => {
+  assert.equal(isLeadRole('MENTEE'), true);
+  assert.equal(isLeadRole(undefined), true, 'a snapshot without the field still reads');
+  for (const role of ['ADMIN', 'MENTOR', 'COMPANY', null]) assert.equal(isLeadRole(role), false, String(role));
+  assert.equal(CONTACT_IS_USER, 'contact_is_user');
+});
+
+test('manual: the owner typing their own address as the contact never becomes the lead', async () => {
+  const store = memoryStore({ leads: [ownerAsUser] });
+  const report = await runManual(
+    { name: 'Self Typed GmbH', country: 'DE', stage: 'LEAD_NEW', contactName: 'Me', contactEmail: OWNER.email },
+    store,
+  );
+  assert.equal(report.rows[0].status, 'CREATE');
+  assert.equal(report.rows[0].value.funnel.leadId, null, 'the staff user was not matched as the lead');
+  const owner = store.leads.find((l) => l.id === OWNER.id);
+  assert.deepEqual(owner, ownerAsUser, 'the staff user was not touched');
+  assert.equal(store.relations.length, 1);
+  assert.notEqual(store.relations[0].menteeId, OWNER.id, 'no relation with mentorId === menteeId');
+  assert.equal(store.leads.find((l) => l.id === store.relations[0].menteeId).email, standIn(OWNER.email));
+});
+
+test('import: a staff address in the file gets a stand-in lead, never the staff user', async () => {
+  const colleague = { ...ownerAsUser, id: 'mentor-2', email: 'colleague@example.com', role: 'MENTOR' };
+  const store = memoryStore({ leads: [colleague] });
+  const text = `${HEADER}\nColleague Co,,DE,,,,,,LEAD_NEW,,,,,,Col,colleague@example.com,+49 30 1`;
+  const report = await runFile(text, store, { apply: true });
+  assert.equal(report.rows[0].status, 'CREATE');
+  assert.deepEqual(store.leads.find((l) => l.id === 'mentor-2'), colleague);
+  assert.notEqual(store.relations[0].menteeId, 'mentor-2');
+});

@@ -498,6 +498,20 @@ export interface MarketingLeadTarget {
   preferredLanguage: string | null;
   referralSource: string | null;
   companyId: string | null;
+  /**
+   * The person's role. Only a MENTEE is a lead: an ADMIN, MENTOR or COMPANY
+   * user whose address is typed in as a contact is staff, and treating them as
+   * the lead would fill in their profile, move their `companyId` and put them
+   * on the board as somebody's mentee (#2562 review). Optional only so that a
+   * snapshot built before the field existed still reads; the store always
+   * selects it.
+   */
+  role?: string | null;
+}
+
+/** Whether a User found by a contact address may stand in as that contact's lead. */
+export function isLeadRole(role: string | null | undefined): boolean {
+  return role === undefined || role === 'MENTEE';
 }
 
 export interface MarketingRelationTarget {
@@ -715,6 +729,9 @@ export function diffMarketingAccounts(
 
   const leadByEmail = new Map<string, MarketingLeadTarget>();
   for (const lead of snapshot.leads) {
+    // Staff is never a lead — see `MarketingLeadTarget.role`. Such a contact
+    // gets a fresh stand-in lead record, exactly like an unknown address.
+    if (!isLeadRole(lead.role)) continue;
     const key = leadIndexKey(lead.email);
     if (key && !leadByEmail.has(key)) leadByEmail.set(key, lead);
   }
@@ -1089,6 +1106,15 @@ export const previewWriter: MarketingAccountWriter = {
  * funnel card there is the wrong default. The form sends them to the lead.
  */
 export const CONTACT_IN_FUNNEL = 'contact_in_funnel';
+
+/**
+ * Why a hand-typed lead was refused before planning: its contact address is a
+ * staff user (ADMIN, MENTOR, COMPANY) of the same organization — almost always
+ * the admin's own address or a colleague's typed into the wrong field. The
+ * import in the same situation creates a separate stand-in lead (staff is
+ * never matched as a lead); a form asks the person instead.
+ */
+export const CONTACT_IS_USER = 'contact_is_user';
 
 /**
  * The create-only plan: identical to the import's, except that a CREATE whose

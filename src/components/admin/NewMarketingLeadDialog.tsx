@@ -83,6 +83,8 @@ export function NewMarketingLeadDialog({
         setOutcome({ kind: 'exists', companyId: data.companyId, leadId: data.leadId ?? null });
       } else if (data.code === 'contact_in_funnel') {
         setOutcome({ kind: 'contact_in_funnel', leadId: data.leadId ?? null });
+      } else if (data.code === 'contact_is_user') {
+        setOutcome({ kind: 'message', text: nl.contactIsUser });
       } else if (data.code === 'already_mentored') {
         setOutcome({ kind: 'message', text: nl.alreadyMentored });
       } else if (data.code === 'account_ambiguous') {
