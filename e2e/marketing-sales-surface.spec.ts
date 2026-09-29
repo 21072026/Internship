@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import {
   MARKETING_MENTOR_ADMIN_ONLY,
   MARKETING_MENTOR_PAGES,
@@ -180,6 +180,9 @@ function statusMatches(status: number, expected: SalesExpectation): boolean {
 }
 
 async function signInRep(page: Page) {
+  // The rep's account lives in the MARKETING org, so it signs in — and stays, for
+  // every later navigation and page.request call — on the marketing host (#2590).
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, repEmail, PASSWORD, '/sales');
 }
 
