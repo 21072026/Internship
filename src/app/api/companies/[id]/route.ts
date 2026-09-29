@@ -3,11 +3,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { logViewActivity } from '@/lib/activity';
+
+// Tenant (#2542): every handler here looks the company up with
+// `withinTenant({ id }, await tenantWhere(session))`, so another tenant's company is a
+// 404 — the same answer as an id that does not exist. Hand-written on purpose:
+// the central middleware only engages with MT_ENFORCE_ISOLATION on, which it
+// is nowhere today, and `assertSameOrg()` is a no-op for the same reason.
 
 const updateCompanySchema = z.object({
   name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
@@ -63,7 +70,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     return await withTenantScope(session, async () => {
     const company = await prisma.company.findFirst({
-      where: andScope(scope, { id }),
+      where: andScope(scope, withinTenant({ id }, await tenantWhere(session))),
       include: {
         needs: true,
         mentorships: {
@@ -134,6 +141,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const { needs, contactEmail, ...companyData } = parsed.data;
 
+    const inTenant = await prisma.company.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
+      select: { id: true },
+    });
+    if (!inTenant) {
+      return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+    }
+
     const company = await prisma.$transaction(async (tx) => {
       if (needs !== undefined) {
         await tx.companyNeed.deleteMany({ where: { companyId: id } });
@@ -170,6 +185,14 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     }
 
     return await withTenantScope(session, async () => {
+    const inTenant = await prisma.company.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
+      select: { id: true },
+    });
+    if (!inTenant) {
+      return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+    }
+
     await prisma.company.delete({ where: { id } });
 
     return NextResponse.json({ message: 'Company deleted successfully' });

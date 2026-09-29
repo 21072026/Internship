@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Users, candidates and companies are scoped to the caller's organization with `MT_ENFORCE_ISOLATION` off** (#2542). The tenant middleware only engages with the flag on, which it is nowhere, so since the MARKETING vertical became a second real tenant on the same database a MARKETING admin read the INTERNSHIP tenant's user list and company book and opened its mentees by id (and vice versa). The routes now narrow every query by hand through the new `tenantWhere(session)` / `withinTenant()` (`src/lib/tenantFilter.ts`, an `AND` conjunct built from the same `resolveOrgId(session)` the middleware reads): `GET /api/users` (every view, and the mentor picker), `GET /api/candidates`, `GET /api/companies` (every sort, the derived-order queries included), and every by-id handler — `GET/PATCH /api/users/[id]` (plus its referrer lookup), `GET /api/users/[id]/activity`, `POST /api/users/[id]/resend-verification`, `GET/PUT/DELETE /api/companies/[id]`, `POST /api/admin/users/[id]/{erase,reset-2fa,reset-password,sign-out-all}`, `DELETE /api/admin/users/[id]/lockout` and the company lookup of `POST /api/admin/company-users` — answers another tenant's id with the same 404 as a missing one. By-id lookups filter in the query rather than calling `assertSameOrg()`, which is a no-op while the flag is off. A row whose `orgId` is still NULL counts as the default org's (the deploy backfill's own rule), so a not-yet-backfilled row stays on the default org's screens and is invisible to every other tenant; a session with no org stays unscoped, exactly as before. The create paths that relied on the middleware to stamp `orgId` (`POST /api/companies`, `/api/admin/company-users`, `/api/admin/source-users`, `/api/source/mentees`) now stamp the caller's org themselves. Locked by `e2e/tenant-scope-users-companies.spec.ts` (an INTERNSHIP and a MARKETING tenant, both directions, lists + reads + writes with the database asked that nothing was written, plus the NULL-org rule) and a `CROSS_TENANT` block in `e2e/fixtures/authz-matrix.ts` probed as every role; `seedTwoTenants()` takes a per-tenant `vertical`. Not narrowed yet: `Source` lookups (sources are still created without an `orgId`).",
+  "notes": {
+    "en": [
+      "Organizations on the same installation no longer see each other's people or companies: user and candidate lists, the company list and every record opened by link now show only your own organization's data."
+    ],
+    "tr": [
+      "Aynı kurulumdaki organizasyonlar artık birbirlerinin kişilerini ve firmalarını görmüyor: kullanıcı ve aday listeleri, firma listesi ve bağlantıyla açılan her kayıt yalnızca kendi organizasyonunuzun verisini gösteriyor."
+    ],
+    "de": [
+      "Organisationen auf derselben Installation sehen die Personen und Firmen der jeweils anderen nicht mehr: Benutzer- und Kandidatenlisten, die Firmenliste und jeder per Link geöffnete Datensatz zeigen nur noch die Daten Ihrer eigenen Organisation."
+    ]
+  }
+}

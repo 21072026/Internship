@@ -213,6 +213,41 @@ the file pass while testing nothing.
 `MT_ENFORCE_ISOLATION` itself is **not** flipped by #1559 — that is #1572, after
 the rollout checklist below.
 
+**Users, candidates and companies joined the hand-filtered routes in #2542**,
+once the MARKETING vertical made a second real tenant on the same database and
+a MARKETING admin turned out to read the INTERNSHIP tenant's user list and
+company book with the flag off. `GET /api/users`, `GET /api/candidates` and
+`GET /api/companies` narrow their `where` to the caller's tenant, and every
+by-id handler on a user or a company (`/api/users/[id]` and its
+`activity`/`resend-verification`, `/api/companies/[id]`,
+`/api/admin/users/[id]/*`, the company lookup of `/api/admin/company-users`)
+looks the row up through the same filter, so another tenant's id is the same
+404 as a missing one. Three things to know before copying it:
+
+- **The filter goes in the query.** That is the flag-independent by-id guard —
+  **not** `assertSameOrg()`, which returns early while the flag is off.
+- **The filter is `tenantWhere(session)` (`src/lib/tenantFilter.ts`), not a bare
+  `orgScoped()`**, for one reason: a row whose `orgId` is still NULL belongs to
+  the default org (the rule `backfill-organization.mjs` applies on every deploy),
+  so the default org's admins also match `orgId IS NULL` and a not-yet-backfilled
+  row does not vanish from the only screen listing it. Every other org matches
+  its own id only. Compose it with `withinTenant()` (an `AND`, so a caller's
+  `OR` can neither widen nor replace it). Once the backfill is green and #1572
+  flips the flag there are no NULL rows, and it is the filter the middleware
+  injects.
+- **Walk the create paths.** With the flag off nothing stamps `orgId`, so a
+  create path whose rows these lists filter now stamps the caller's org itself
+  (`POST /api/companies`, `/api/admin/company-users`, `/api/admin/source-users`,
+  `/api/source/mentees`) — otherwise a new MARKETING row would be NULL, i.e. the
+  default org's.
+
+`e2e/tenant-scope-users-companies.spec.ts` proves it on the default (flag-off)
+server with an INTERNSHIP and a MARKETING tenant, both directions; the
+`CROSS_TENANT` block of `e2e/fixtures/authz-matrix.ts` is where the next such
+route goes. Left for their own changes: `Source` (created without an `orgId` by
+`/api/sources` and `/api/admin/sources`, so its lookups are not narrowed yet) and
+the remaining tenant-held routes not named above.
+
 ### Settings: per-tenant with a global fallback (#1553)
 
 `Setting` is the one tenant model that must be able to read *outside* its tenant,

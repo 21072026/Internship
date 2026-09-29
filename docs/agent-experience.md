@@ -7332,3 +7332,21 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   kova mantığı aynı, yalnızca adı farklı — aktivite günlüğünde `forgot · 127.0.0.1` görürsün.
 - **`--env-file` ile `.env` yüklemek**: worktree izolasyonu `. <(sed …)` kalıbını reddediyor.
   `node --env-file=<dosya> node_modules/@playwright/test/cli.js test …` aynı işi görüyor.
+
+## 2026-09-29 — #2542: kiracılar arası sızıntı, bayrak kapalıyken
+
+- **`assertSameOrg()` bayrak kapalıyken hiçbir şey yapmaz.** İlk satırı
+  `if (!isIsolationEnforced() …) return;` — yani "bayraktan bağımsız by-id koruma" için
+  kullanılamaz. Doğru kalıp sorgunun kendisine filtre koymak:
+  `findFirst({ where: orgScoped({ id }, resolveOrgId(session)) })` → yoksa 404.
+- **Bir listeyi org'a göre filtrelediğinde yaratma yollarını da yürü.** Bayrak kapalıyken
+  middleware `orgId` doldurmaz; `POST /api/companies` gibi elle damgalamayan bir yol
+  NULL-org satır yazar ve o satır, onu yaratan adminin artık org-kapsamlı listesinden
+  bir sonraki deploy'un backfill'ine kadar kaybolur.
+- **Worktree'de Playwright süreci yanlış veritabanına bağlanır.** `node_modules` ana repoya
+  symlink; üretilmiş Prisma client `.env`'i şemanın yanından (ana repo) okur, Next ise
+  worktree'nin `.env`'ini. Belirti: seed "başarılı", giriş 401. Çözüm: Playwright'ı
+  `DATABASE_URL=… npx playwright test …` ile çalıştır.
+- **Paralel ajanlarla `next dev` birkaç yüz testten sonra ~6 GB'a şişip makineyi
+  boğuyor** (her spec'te `page.waitForURL` zaman aşımı, kodla ilgisiz). Uzun e2e koşuları
+  için `npm run build && npx next start -p <port>` çok daha kararlı.

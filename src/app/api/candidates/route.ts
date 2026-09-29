@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { isTagMode, parseTagIds } from '@/lib/tags';
 import { markOrphanApplicants, orphanApplicantWhere } from '@/lib/orphanApplicant';
 
@@ -147,7 +148,14 @@ export async function GET(request: Request) {
     // constrains `menteeRelations` and `NOT`, and both of those keys are set
     // above by the stage filter and by nothing respectively — merging by spread
     // would silently drop one of the two rules instead of intersecting them.
-    const query = orphanOnly ? { AND: [where, orphanApplicantWhere()] } : where;
+    //
+    // Tenant (#2542): the caller's own tenant, by hand, as one more conjunct —
+    // the middleware injects nothing while MT_ENFORCE_ISOLATION is off, and
+    // this is the admin's whole candidate book (src/lib/tenantFilter.ts).
+    const query = withinTenant(
+      orphanOnly ? { AND: [where, orphanApplicantWhere()] } : where,
+      await tenantWhere(session),
+    );
 
     let candidates;
     let total: number;

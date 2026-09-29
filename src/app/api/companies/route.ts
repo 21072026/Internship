@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere } from '@/lib/tenantFilter';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
@@ -130,7 +132,21 @@ export async function GET(request: Request) {
     return await withTenantScope(session, async () => {
       // `andScope` copies the builder's object; for ADMIN with no search it is
       // `{}`, which Prisma treats exactly like no `where` at all.
-      const where = andScope(scope, searchFilter);
+      //
+      // Tenant (#2542): the role scope above says WHICH of the tenant's
+      // companies a role may read; it has never said which tenant. With
+      // MT_ENFORCE_ISOLATION off — every deployment today — the middleware
+      // injects nothing, and a MARKETING admin read the INTERNSHIP tenant's
+      // whole company book. So the tenant is one more conjunct, by hand
+      // (src/lib/tenantFilter.ts, the same `resolveOrgId(session)` the
+      // middleware reads). Every query below
+      // (count, the derived-sort head and tail, the `company: { is: where }`
+      // relation filter) is built from this one `where`.
+      const where = andScope<Prisma.CompanyWhereInput>(
+        scope,
+        (await tenantWhere(session)) as Prisma.CompanyWhereInput,
+        searchFilter,
+      );
       const include = {
         needs: true,
         _count: { select: { mentorships: mentorshipCount } },
@@ -284,6 +300,10 @@ export async function POST(request: Request) {
     const company = await prisma.company.create({
       data: {
         ...companyData,
+        // Stamped by hand (#2542): with the flag off the middleware fills
+        // nothing in, and a NULL-org company would be invisible to the very
+        // admin who just created it now that the list is org-scoped.
+        orgId: resolveOrgId(session),
         contactEmail: contactEmail || null,
         needs: needs
           ? {
