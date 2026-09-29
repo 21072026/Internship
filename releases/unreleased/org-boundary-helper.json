@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **A flag-independent org boundary for one row: `sameOrgOrUnknown()`** (#2542). `assertSameOrg` is a no-op while `MT_ENFORCE_ISOLATION` is off, which was right with one tenant; with INTERNSHIP and MARKETING now sharing one database it left fetch-by-id reads of child rows (interaction logs, documents, goals…) open across tenants, and the #2542 audit reproduced 56 such reads and writes. The new helper in `src/lib/orgScope.ts` is the one-row form of the rule `orgScoped()` has always applied to lists: a row of another org is not visible, and an unknown side (an org-less session, a row that predates multi-tenancy) stays permissive so the single-tenant state cannot break. Callers answer a mismatch with 404. Unit-tested in `scripts/test/org-boundary.test.mjs`, including that the answer does not change with the flag."
+}

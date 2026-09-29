@@ -64,3 +64,35 @@ export function assertSameOrg(rowOrgId: string | null | undefined, expectedOrgId
     throw new Error('Cross-tenant access denied');
   }
 }
+
+// ── The org boundary that holds while the middleware is still dormant (#2542) ─
+//
+// `assertSameOrg` above is a no-op unless MT_ENFORCE_ISOLATION is on, which was
+// right while there was ONE tenant. There are now two products in one database
+// (INTERNSHIP and MARKETING, epic #2348), and the flag is not yet safe to flip
+// (docs/tenant-isolation.md — the #2542 audit found 56 cross-tenant reads and
+// writes, most of them on models the middleware cannot scope at all because
+// they carry no orgId and are reached through a parent).
+//
+// So a fetch-by-id of such a child row resolves its PARENT's org and asks this.
+// It is deliberately NOT gated on the flag: an admin of org B reading org A's
+// interaction notes is wrong today, not only after the flip. And it is
+// deliberately permissive when either side is unknown — an org-less session or
+// a row that predates multi-tenancy — because that is exactly the single-tenant
+// state every existing row and every e2e-seeded user is in; refusing there would
+// take the live product down rather than close a leak.
+//
+// Callers answer a mismatch with 404, never 403: a 403 would confirm to the
+// other tenant that the id exists.
+//
+// This is the same rule `orgScoped()` already applies to lists (it has never
+// been flag-gated either), stated for one row. It is not a second tenancy
+// mechanism: when the flag is on, the middleware and this agree by
+// construction, because both read the same `resolveOrgId(session)`.
+export function sameOrgOrUnknown(
+  rowOrgId: string | null | undefined,
+  callerOrgId: string | null | undefined,
+): boolean {
+  if (!rowOrgId || !callerOrgId) return true;
+  return rowOrgId === callerOrgId;
+}
