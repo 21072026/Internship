@@ -370,7 +370,7 @@ function analyzeExpr(ctx, vs, ve, before, depth) {
 
 /** `const name = <expr>` — the nearest declaration of `name` before `before`. */
 function resolveIdentifier(ctx, name, before, depth) {
-  const decl = new RegExp(`\\b(?:const|let|var)\\s+${name.replace(/\$/g, '\\$')}\\b\\s*(?::[^=;]*?)?=(?![=>])`, 'g');
+  const decl = new RegExp(`\\b(?:const|let|var)\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b\\s*(?::[^=;]*?)?=(?![=>])`, 'g');
   let found = null;
   for (let m = decl.exec(ctx.code); m && m.index < before; m = decl.exec(ctx.code)) found = m;
   if (!found) return { ...EMPTY(), opaque: true }; // a parameter, an import, a closure we cannot see
