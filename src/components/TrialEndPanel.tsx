@@ -53,7 +53,7 @@ export function TrialEndStatus({
   if (days === 0) return <Badge variant="danger" className={className} data-testid="trial-end-status">{t.trialEnd.endsToday}</Badge>;
   return (
     <Badge variant={days <= 3 ? 'warning' : 'info'} className={className} data-testid="trial-end-status">
-      {t.trialEnd.daysLeft.replace('{d}', String(days))}
+      {days === 1 ? t.trialEnd.oneDayLeft : t.trialEnd.daysLeft.replace('{d}', String(days))}
     </Badge>
   );
 }
@@ -133,7 +133,21 @@ export function TrialEndPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (data?.code === 'in_the_past') setError(t.trialEnd.inThePast);
+        // Codes with a message of their own get exactly one message (inline),
+        // never also the generic toast. A 409 means the record moved under us:
+        // reload it so the panel stops showing a stale stage and editor.
+        const code: unknown = data?.code;
+        if (code === 'in_the_past') {
+          setError(t.trialEnd.inThePast);
+          return;
+        }
+        if (code === 'conflict' || code === 'not_in_trial' || code === 'relation_closed') {
+          // A toast, not the inline line: the reload may take the record out
+          // of a trial stage, and then this panel unmounts with its error.
+          toast(code === 'conflict' ? t.trialEnd.conflict : t.trialEnd.notEditable, 'error');
+          await onSaved?.();
+          return;
+        }
         throw new Error();
       }
       toast(data?.reopened ? t.trialEnd.reopened : t.trialEnd.saved);

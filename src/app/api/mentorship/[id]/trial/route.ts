@@ -115,10 +115,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         // its stage rather than being moved into a key it does not have.
         const reopenTo = plan.reopen ? await trialActiveStageKey(relation.orgId) : null;
 
-        // Conditional on the stage we planned against, so a sweep or a board
-        // move in between cannot be overwritten with a stale plan.
+        // Conditional on the stage AND the end date we planned against, so a
+        // sweep, a board move or a second concurrent PATCH in between cannot be
+        // overwritten with a stale plan (and the audit's "old" day stays true).
         const written = await prisma.mentorshipRelation.updateMany({
-          where: { id: relation.id, pipelineStatus: relation.pipelineStatus },
+          where: { id: relation.id, pipelineStatus: relation.pipelineStatus, trialEndsAt: relation.trialEndsAt },
           data: { trialEndsAt: plan.trialEndsAt, ...(reopenTo ? { pipelineStatus: reopenTo } : {}) },
         });
         if (written.count === 0) {

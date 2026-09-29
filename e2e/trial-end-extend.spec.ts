@@ -1,6 +1,7 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { defaultOrgId } from '../src/lib/defaultOrg';
 // Static imports, not `await import()`: Playwright resolves the `@/…` alias when
 // it transforms the spec's import graph, Node at runtime does not.
 import {
@@ -22,7 +23,8 @@ import {
 //      mark the new window still has ahead of it (3 days) and NOT a mark it
 //      already sent (7 days) — the issue's acceptance criterion;
 //   3. only the owner and a tenant ADMIN may write it: another owner of the same
-//      tenant and the lead on the record get 403, an anonymous caller 401;
+//      tenant and the lead on the record get 403, an anonymous caller 401, and
+//      an ADMIN of another tenant 404 — the id does not exist for them (#2542);
 //   4. an undated running trial shows the "date missing" badge on the board and
 //      on the record, and the badge goes once the date is entered there.
 
@@ -38,7 +40,8 @@ const ownerEmail = uniqueEmail(`trialend-owner-${STAMP}`);
 const otherOwnerEmail = uniqueEmail(`trialend-other-${STAMP}`);
 const leadEmail = uniqueEmail(`trialend-lead-${STAMP}`);
 const undatedLeadEmail = uniqueEmail(`trialend-undated-${STAMP}`);
-const emails = [platformAdminEmail, adminEmail, ownerEmail, otherOwnerEmail, leadEmail, undatedLeadEmail];
+const foreignAdminEmail = uniqueEmail(`trialend-foreign-${STAMP}`);
+const emails = [platformAdminEmail, adminEmail, ownerEmail, otherOwnerEmail, leadEmail, undatedLeadEmail, foreignAdminEmail];
 
 let orgId = '';
 let relationId = '';
@@ -93,6 +96,9 @@ test.beforeAll(async () => {
   const lead = await seedUser(leadEmail, PASSWORD, 'MENTEE', 'Trial End Lead');
   const undatedLead = await seedUser(undatedLeadEmail, PASSWORD, 'MENTEE', undatedLeadName);
   undatedLeadId = undatedLead.id;
+  // An ADMIN of the default (INTERNSHIP) tenant: a real admin, of the wrong tenant.
+  const foreignAdmin = await seedUser(foreignAdminEmail, PASSWORD, 'ADMIN', 'Trial End Foreign Admin');
+  await prisma.user.update({ where: { id: foreignAdmin.id }, data: { orgId: await defaultOrgId() } });
   await prisma.user.updateMany({
     where: { id: { in: [admin.id, owner.id, other.id, lead.id, undatedLead.id] } },
     data: { orgId: org.id },
@@ -226,6 +232,11 @@ test('only the owner and a tenant admin may set it', async ({ browser, playwrigh
   const anon = await anonymous.patch(`/api/mentorship/${relationId}/trial`, { data: { trialEndsAt: target } });
   expect(anon.status()).toBe(401);
   await anonymous.dispose();
+
+  // An admin of ANOTHER tenant does not get a 403 — the record is not theirs to
+  // know about, so it reads as not found (#2542, tenantWhere/withinTenant).
+  const foreign = await signedIn(browser, foreignAdminEmail, '/admin');
+  expect((await patchTrial(foreign, relationId, target)).status()).toBe(404);
 
   // Nothing moved.
   const row = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relationId } });

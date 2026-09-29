@@ -426,7 +426,10 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
   const moved: string[] = [];
   for (const relation of due) {
     const claim = await prisma.mentorshipRelation.updateMany({
-      where: { id: relation.id, pipelineStatus: activeKey },
+      // `trialEndsAt` is re-checked too: a hand extension (#2553) that commits
+      // between the findMany above and this write moved the end into the
+      // future, and must not be expired on the strength of the old date.
+      where: { id: relation.id, pipelineStatus: activeKey, trialEndsAt: { lt: startOfToday } },
       data: { pipelineStatus: expiredKey, ...(deadline ?? {}) },
     });
     if (claim.count === 0) continue;
