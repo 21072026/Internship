@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { canAccessCv } from '@/lib/cvAccess';
 import { downloadHeaders } from '@/lib/download';
+import { resolveOrgId } from '@/lib/orgScope';
+import { userInCallerOrg } from '@/lib/ownerOrg';
 
 // A CV the browser can safely render on our own origin. Upload only accepts PDF
 // and Word (see POST /api/cv), and the bytes are verified against the declared
@@ -13,6 +15,10 @@ import { downloadHeaders } from '@/lib/download';
 // any browser, so it keeps downloading.
 const INLINE_TYPES = new Set(['application/pdf']);
 
+// CvFile carries no orgId: it is its owner's org's (#2542). Another org's user
+// answers 404 — before the access check, so a 403 cannot confirm the id — and
+// before anything is deleted. Org-less on either side keeps today's behaviour.
+
 // GET — a user's CV (access-controlled). Downloads by default; `?inline=1`
 // displays it in the browser when the type allows (see INLINE_TYPES).
 export async function GET(request: Request, { params }: { params: Promise<{ userId: string }> }) {
@@ -20,11 +26,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ user
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { userId } = await params;
+  return await withTenantScope(session, async () => {
+  if (!(await userInCallerOrg(userId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   if (!(await canAccessCv(session.user, userId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  return await withTenantScope(session, async () => {
   const cv = await prisma.cvFile.findUnique({ where: { userId } });
   if (!cv) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -45,11 +54,14 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { userId } = await params;
+  return await withTenantScope(session, async () => {
+  if (!(await userInCallerOrg(userId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   if (!(await canAccessCv(session.user, userId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  return await withTenantScope(session, async () => {
   await prisma.cvFile.deleteMany({ where: { userId } });
   await prisma.user.update({ where: { id: userId }, data: { cvUrl: null } });
   return NextResponse.json({ ok: true });

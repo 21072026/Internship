@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { userInCallerOrg } from '@/lib/ownerOrg';
+
+// AvatarFile carries no orgId: it is its owner's org's (#2542). A signed-in
+// viewer of another org sees it only when the owner's profile is public — the
+// same rule an anonymous viewer gets, which keeps /p/[userId] working — and
+// otherwise gets 404. Org-less on either side keeps today's behaviour.
 
 // GET — fetch a user's avatar. Any authenticated user may view avatars
 // (they're shown across lists, sidebars and profiles).
@@ -16,8 +23,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
   }
 
   return await withTenantScope(session, async () => {
-  const avatar = await prisma.avatarFile.findUnique({ where: { userId } });
+  const avatar = await prisma.avatarFile.findUnique({
+    where: { userId },
+    include: { user: { select: { orgId: true, publicProfile: true } } },
+  });
   if (!avatar) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (session && !avatar.user.publicProfile && !sameOrgOrUnknown(avatar.user.orgId, resolveOrgId(session))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
   // Inline is right here — the avatar is displayed in an <img>. The only thing
   // missing was a route-level nosniff (#890).
@@ -43,6 +56,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   }
 
   return await withTenantScope(session, async () => {
+  if (!(await userInCallerOrg(userId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   await prisma.avatarFile.deleteMany({ where: { userId } });
   await prisma.user.update({ where: { id: userId }, data: { avatarUrl: null } });
   return NextResponse.json({ ok: true });

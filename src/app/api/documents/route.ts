@@ -9,6 +9,9 @@ import { logActivity } from '@/lib/activity';
 import type { DocumentType } from '@prisma/client';
 import { applicableRequirementsForUser } from '@/lib/documentRequirements';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { orgIdsOfUsers, userInCallerOrg } from '@/lib/ownerOrg';
 
 const META_SELECT = {
   id: true, ownerId: true, uploaderId: true, type: true, title: true,
@@ -24,23 +27,41 @@ const uploadSchema = z.object({
   requirementId: z.string().min(1).optional(),
 });
 
+// Document carries no orgId (#2542): an owned document belongs to its owner's
+// org, a template (no owner) to its uploader's. Both are resolved through
+// src/lib/ownerOrg.ts and compared with the caller's org; a foreign row reads as
+// absent (list) or 404 (one row). Org-less on either side keeps today's
+// behaviour.
+
 // GET ?userId= — a user's documents (access-controlled).
-// GET ?templates=1 — admin-managed template documents (any signed-in user).
+// GET ?templates=1 — admin-managed template documents (any signed-in user of the
+// uploader's org).
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
+  const callerOrgId = resolveOrgId(session);
   const url = new URL(request.url);
   if (url.searchParams.get('templates')) {
-    const documents = await prisma.document.findMany({
+    const templates = await prisma.document.findMany({
       where: { isTemplate: true },
       select: META_SELECT,
       orderBy: { createdAt: 'desc' },
     });
+    // Uploader has no @relation, so the parent's org cannot be a `where`; the
+    // template set is small, so it is filtered after one batched lookup.
+    const uploaderOrgs = callerOrgId ? await orgIdsOfUsers(templates.map((d) => d.uploaderId)) : null;
+    const documents = uploaderOrgs
+      ? templates.filter((d) => sameOrgOrUnknown(uploaderOrgs.get(d.uploaderId), callerOrgId))
+      : templates;
     return NextResponse.json({ documents });
   }
 
   const userId = url.searchParams.get('userId') || session.user.id;
+  if (!(await userInCallerOrg(userId, callerOrgId))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   if (!(await canAccessUserDocs(session.user, userId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -53,6 +74,7 @@ export async function GET(request: Request) {
     applicableRequirementsForUser(userId, 'en'),
   ]);
   return NextResponse.json({ documents, requirements });
+  });
 }
 
 // POST (multipart) — upload a document. Fields: file, title?, type?, targetUserId?, isTemplate?
@@ -60,6 +82,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   let form: FormData;
   try {
     form = await request.formData();
@@ -90,6 +113,9 @@ export async function POST(request: Request) {
   }
 
   const ownerId = isTemplate ? null : parsed.data.targetUserId || session.user.id;
+  if (ownerId && !(await userInCallerOrg(ownerId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   if (ownerId && !(await canAccessUserDocs(session.user, ownerId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -134,4 +160,5 @@ export async function POST(request: Request) {
   });
   await logActivity({ action: 'document.upload', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'document', targetId: doc.id });
   return NextResponse.json({ document: doc }, { status: 201 });
+  });
 }

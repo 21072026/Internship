@@ -6,6 +6,14 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { mayManageOrgRequirements } from '@/lib/documentRequirementAccess';
+
+// Deliberately not wrapped in withTenantScope (a super admin edits any
+// tenant's requirements; see src/lib/documentRequirementAccess.ts). The gate
+// runs against the STORED row's org (#2542) — the org the caller supplies only
+// has to agree with it, which proves nothing on its own since the caller can
+// simply send the row's real org. A requirement of an org the caller may not
+// manage is 404, exactly like a missing one, and is checked before any write.
 
 const labelsSchema = z.object({ en: z.string().trim().min(1).max(200), tr: z.string().trim().min(1).max(200), de: z.string().trim().min(1).max(200) }).strict();
 const patchSchema = z.object({
@@ -25,6 +33,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const current = await prisma.documentRequirement.findUnique({ where: { id }, select: { id: true, orgId: true, key: true } });
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!(await mayManageOrgRequirements(session, current.orgId, 'PATCH /api/admin/document-requirements/[id]'))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   if (current.orgId !== parsed.data.orgId) return NextResponse.json({ error: 'Organization mismatch' }, { status: 403 });
   if (parsed.data.appliesToStage) {
     const stages = await resolvePipelineStages(current.orgId);
@@ -49,6 +60,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!orgId) return NextResponse.json({ error: 'orgId is required' }, { status: 400 });
   const current = await prisma.documentRequirement.findUnique({ where: { id }, select: { orgId: true, key: true } });
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!(await mayManageOrgRequirements(session, current.orgId, 'DELETE /api/admin/document-requirements/[id]'))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   if (current.orgId !== orgId) return NextResponse.json({ error: 'Organization mismatch' }, { status: 403 });
   await prisma.documentRequirement.delete({ where: { id } });
   await logActivity({ action: 'document_requirement.delete', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'document_requirement', targetId: id, detail: current.key, request });
