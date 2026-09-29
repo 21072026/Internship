@@ -66,6 +66,79 @@ test('the monthly AI quota round-trips through the settings form', async ({ page
   }
 });
 
+// #2342: the form starts on code defaults (quota '200') and fills itself from
+// GET /api/admin/settings. On a slow runner the test above typed 37 before that
+// GET answered, the late load put 200 back, and the save carried no quota. The
+// form is now locked until the stored values are in. This test makes the slow
+// runner deterministic by holding the page's own GET for 3s: Playwright's
+// `fill` waits for the box to become editable, so on the fixed form it types
+// after the load; on the unfixed one it types into the defaults and loses.
+test('a value typed while the settings are still loading is not lost to the late load', async ({ page }) => {
+  const adminEmail = uniqueEmail('quota-race-admin');
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Quota Race Admin');
+  let original: string | null = null;
+
+  try {
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
+    // `page.request` is not routed, so these reads see the real API at once.
+    original = (await (await page.request.get('/api/admin/settings')).json()).settings.aiMonthlyQuota ?? null;
+    const target = original === '41' ? '42' : '41';
+
+    await page.route('**/api/admin/settings', async (route) => {
+      if (route.request().method() === 'GET') await new Promise((r) => setTimeout(r, 3_000));
+      await route.continue();
+    });
+    await page.goto('/admin/settings');
+
+    const form = page.getByTestId('settings-form');
+    // While the GET is held the form is locked, not an editable box of defaults.
+    await expect(form).toHaveAttribute('data-state', 'loading', { timeout: 20_000 });
+    await expect(page.getByTestId('ai-monthly-quota')).toBeDisabled();
+
+    await page.getByTestId('ai-monthly-quota').fill(target, { timeout: 20_000 });
+    await expect(form).toHaveAttribute('data-state', 'ready');
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/admin/settings') && r.request().method() === 'PUT');
+    await form.getByRole('button', { name: 'Save settings' }).click();
+    expect((await saved).ok()).toBe(true);
+
+    await expect
+      .poll(async () => (await (await page.request.get('/api/admin/settings')).json()).settings.aiMonthlyQuota, {
+        timeout: 15_000,
+      })
+      .toBe(target);
+  } finally {
+    await page.unroute('**/api/admin/settings').catch(() => {});
+    if (original !== null) {
+      await page.request.put('/api/admin/settings', { data: { aiMonthlyQuota: original } }).catch(() => {});
+    }
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('a settings load that fails leaves the form locked and says why', async ({ page }) => {
+  const adminEmail = uniqueEmail('quota-fail-admin');
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Quota Fail Admin');
+  try {
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
+    await page.route('**/api/admin/settings', (route) =>
+      route.request().method() === 'GET' ? route.fulfill({ status: 500, body: '{}' }) : route.continue(),
+    );
+    await page.goto('/admin/settings');
+    await expect(page.getByTestId('settings-load-error')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('settings-form')).toHaveAttribute('data-state', 'error');
+    await expect(page.getByTestId('ai-monthly-quota')).toBeDisabled();
+    await expect(page.getByTestId('settings-form').getByRole('button', { name: 'Save settings' })).toBeDisabled();
+
+    // The retry reaches the real API once the fault is gone.
+    await page.unroute('**/api/admin/settings');
+    await page.getByTestId('settings-load-error').getByRole('button').click();
+    await expect(page.getByTestId('settings-form')).toHaveAttribute('data-state', 'ready', { timeout: 20_000 });
+    await expect(page.getByTestId('settings-load-error')).toHaveCount(0);
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+});
+
 test('the pipeline-stage editor renders in Turkish with no English left', async ({ page }) => {
   const adminEmail = uniqueEmail('stage-i18n-admin');
   const admin = await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Stage I18n Admin');
