@@ -1,6 +1,6 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultOrgId } from '../src/lib/defaultOrg';
 // Static imports, not `await import()`: Playwright resolves the `@/…` alias when
 // it transforms the spec's import graph, Node at runtime does not.
@@ -59,6 +59,12 @@ function utcDay(offset: number) {
 async function signedIn(browser: Browser, email: string, landing: string): Promise<Page> {
   const context = await browser.newContext();
   const page = await context.newPage();
+  // Whose world is this account in? The platform admin and the foreign admin are
+  // INTERNSHIP-world (org-less / default org); everyone else lives in the
+  // MARKETING tenant and can only sign in on the marketing host (#2590).
+  if (email !== platformAdminEmail && email !== foreignAdminEmail) {
+    await context.setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  }
   if (landing === '/admin') {
     await signInAndSettle(page, email, PASSWORD, landing);
     return page;
@@ -246,6 +252,7 @@ test('only the owner and a tenant admin may set it', async ({ browser, playwrigh
 
 test('an undated running trial is flagged on the board and the record until a date is entered', async ({ page }) => {
   test.slow();
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org admin (#2590)
   await signInAndSettle(page, adminEmail, PASSWORD, '/admin');
 
   await gotoSettled(page, '/admin/board');
