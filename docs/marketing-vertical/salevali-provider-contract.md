@@ -14,8 +14,9 @@ kullanım işi (#2447), makineden makineye lead ingest'i (#2450).
 > diye işaretli maddeler onay olmadan uygulanmaz. Hepsi aşağıda
 > [§ Açık kararlar](#açık-kararlar) altında bir kez daha toplu duruyor.
 >
-> **Satır numaraları.** SaleVali atıfları `salevali-server` / `salevali-client`
-> `develop` dalının 2026-09-29 hâline, CRM atıfları `origin/main`'e göre. Bir
+> **Satır numaraları.** SaleVali atıfları `salevali-server` @ `62d0d86` ve
+> `salevali-client` @ `a41534f` commit'lerine (2026-09-29'daki yerel checkout'lar;
+> dal adı doğrulanmadı), CRM atıfları `origin/main`'e göre. Bir
 > satır kayarsa dosya + sembol adı doğrudur, numara değil.
 
 ## Özet: SaleVali'den istenen üç şey
@@ -61,7 +62,7 @@ Gerekçe — `_id` SaleVali'de zaten "hesabın kimliği" olarak kullanılan tek 
 - **`User.user_id` de değil.** MAIN_DB'de yeni belgede `user_id = id` diye
   kopyalanır ve yorumu "user_id kaldırılınca" der (`user.repository.ts:98-105`);
   personel hesaplarında `MAIN_DB` değerini taşır ve benzersiz değildir
-  (`admin.controller.ts:163`). Kaldırılması planlanan bir kopya anahtar olamaz.
+  (`admin.controller.ts:327`). Kaldırılması planlanan bir kopya anahtar olamaz.
 - **E-posta hiç değil.** Değişir (`PATCH /user/change-email`,
   `src/controllers/users/user.controller.ts:2255`) ve kişisel veridir; anahtar
   olarak her satırda dolaşması PII minimizasyonuna aykırı.
@@ -129,9 +130,14 @@ X-Crm-Export-Secret: <paylaşılan sır>
   diliminde kovalıyor (`tenant-usage-monthly.model.ts:26-37`). CRM'in
   `CompanyUsage.date`'i bir takvim günüdür (`prisma/schema.prisma:1423`) ve
   faturayla aynı sınırı kullanır: UTC.
-- **Geçmiş doldurulabilir.** Belgeler kalıcı olduğu için (`LogEntry`'nin aksine) ilk
-  koşu geniş pencereyle bütün geçmişi çekebilir; `from`/`to` bunun için var.
-  Tek istekte en fazla 31 gün önerilir; CRM geniş aralığı parçalar.
+- **Geçmiş doldurulabilir — ama yalnızca kovalanmış kadarı.** Kaynak belgeler
+  kalıcı olduğu için (`LogEntry`'nin aksine) geçmiş hesaplanabilir, fakat uç
+  yalnızca SV-3'ün günlük kova koleksiyonunu okur ve cron her gece yalnızca son
+  7 UTC gününü yazar. Bu yüzden SV-3 bir kerelik **tarihsel kova backfill'i**
+  içerir (her tenant'ın ilk belgesinden bugüne); o koşmadan geniş bir
+  `from`/`to` kova başlangıcından önceki günler için satır döndürmez (ve bu
+  "veri yok"tur, `0` değil). Tek istekte en fazla 31 gün önerilir; CRM geniş
+  aralığı parçalar.
 - **Yanıt yalnızca kapsam içindeki hesapları içerir** (yukarıdaki tablo) ve o
   gün hiç işlemi olmayan hesap için `0` satırı yazar — eksik satır "veri yok",
   `0` "iş yok" demektir ve churn kuralı bu ikisini ayırmak zorunda.
@@ -152,13 +158,13 @@ kalıcı değil — yalnızca log satırı:
 | Olay | SaleVali'de nerede olur | Kalıcı iz |
 |---|---|---|
 | Hesap açıldı / deneme başladı | `User` yaratan dört yol (yukarıda) | `license_history` `source: 'signup'` (`src/models/users/license/license-history.model.ts:40-53`) |
-| Yükseltme onayı | `PATCH /user/license-upgrade-confirm` (`user.controller.ts:3531`), anahtarla `:3600` → `license.is_upgrade_confirm`, `upgrade_confirm_date` (`license.model.ts:29-37`) | alan var, **tarihçe yok** |
-| Ücretliye geçiş | Günlük cron: `checkAndUpgradeTrialLicense` (`user.service.ts:801`), `checkAndTransitionAffiliateTrial` (`:870`), `checkAndUpgradeAffiliateLicense` (`:735`, affiliate_user → premium, 120 gün) — çağıran `cronjob-check-connection-email.service.ts:132-156` | `license_history` (`cron_trial_upgrade` / `cron_affiliate_trial` / `cron_affiliate_upgrade`) |
+| Yükseltme onayı | `PATCH /user/license-upgrade-confirm` (`user.controller.ts:3531`) ve anahtarla `PATCH /user/license-upgrade-confirm-by-key` (`:3600`); ikisi de `applyLicenseUpgradeConfirmation` (`:3460`) → `license.is_upgrade_confirm`, `upgrade_confirm_date` (`license.model.ts:29-37`) | Normal dal: alan var, **tarihçe yok**. Süresi dolmuş deneme dalı (aşağıda): `license_history` var |
+| Ücretliye geçiş | Günlük cron: `checkAndUpgradeTrialLicense` (`user.service.ts:801`), `checkAndTransitionAffiliateTrial` (`:870`), `checkAndUpgradeAffiliateLicense` (`:735`, affiliate_user → premium, 120 gün) — çağıran `cronjob-check-connection-email.service.ts:132-156`. **Ayrıca controller'dan anında geçiş:** `applyLicenseUpgradeConfirmation` `licenseExpired === true` ve tip `trial` iken trial → premium'u cron'u beklemeden yazar (`user.controller.ts:3467-3497`) | Cron: `license_history` (`cron_trial_upgrade` / `cron_affiliate_trial` / `cron_affiliate_upgrade`). Anında geçiş: `license_history` `source: 'user_upgrade_confirm'` / `'user_upgrade_confirm_by_key'` (`license-history.model.ts:44-45`) |
 | Pasifleşme (karar penceresi bitti) | `checkAndPassivateExpiredLicense` (`user.service.ts:547-553`) | **yalnızca** `[LICENSE_PASSIVATE]` log satırı — `status: 'passive'` yazılır, geçmiş yok |
-| Fesih talebi | `POST /user/account` → `POST /user/cancellation/verify` (`user.controller.ts:3099`, `:3374`); anket `addAccountLog(…, 'cancellation', surveys, description)` (`:3286`) | `account_log` `type: 'cancellation'` + `User.cancellation_request` (`user.model.ts:235-240`) |
-| Fesih tamamlandı (+30 gün) | **İki** yazar: cron `checkAndUpdateCancellationStatus` (`user.service.ts:666-697`) ve login sırasında tembel geçiş (`user.controller.ts:1814-1826`) | **yalnızca** `[USER_STATUS_UPDATE]` log satırı |
-| Geri dönüş | Admin reaktivasyonu (`admin.controller.ts:867-884`), e-posta anahtarıyla self-servis dönüş | `account_log` `type: 'activation'` (admin yolu) |
-| Silindi | `cancelled` + 60 gün → `deleted` (`user.service.ts:663`), `UserPurgeCronJob` | `status` |
+| Fesih talebi | `POST /user/cancellation/verify` (`user.controller.ts:3374`) yalnızca doğrulama kodunu üretip postalar; kesinleştiren `POST /user/account?action=cancellation` (`:3099`) adım 2'dir: kodu doğrular, anketi `addAccountLog(…, 'cancellation', surveys, description)` ile yazar ve `status: 'cancellation_request'` yapar (`:3286-3292`) | **Yalnızca** `account_log[type='cancellation'].surveys` / `description`. Adına rağmen `User.cancellation_request` anket değil, yanlış parola denemesi sayacıdır (`{count, created_at}`, `:3180-3194`); `cancellation_request.surveys`'i yazan kod yok |
+| Fesih tamamlandı (+30 gün) | **Üç** yazar: cron `checkAndUpdateCancellationStatus` (`user.service.ts:689`/`:693`), parola ile login (`user.service.ts:252-259`, yazma `:257`) ve Google login (`POST /user/google-auth`, `user.controller.ts:1688`; yazma `:1825`) | Cron: **yalnızca** `[USER_STATUS_UPDATE]` log satırı. İki login yolu: **hiç** iz yok |
+| Geri dönüş | **Üç** yazar: admin reaktivasyonu (`admin.controller.ts:867-884`), self-servis `POST /user/account?action=activation` (`user.controller.ts:3330-3353`) ve anahtarla yükseltme onayı (`/user/license-upgrade-confirm-by-key`, `reactivateStatus: true` → `status: 'active'`, `:3660-3663`) | Admin ve self-servis yolu: `account_log` `type: 'activation'` (+ self-serviste `AuditLog`). Anahtarla onay: `account_log` **yok** (yalnızca süresi dolmuş deneme dalında `license_history`) |
+| Silindi | Fesih talebinden 60 gün sonra (`cancelled`'dan ~30 gün sonra — gün sayısı son `cancellation` `account_log` kaydından ölçülür, `user.service.ts:699-716`) soft-delete: `status: 'deleted'` + `purge_at` (+30 gün); kalıcı silme sonra `UserPurgeCronJob`'da | `status`, `deleted_at`, `purge_at` |
 
 Bu yüzden B'nin önkoşulu SaleVali'de bir **olay kaydı** (outbox): her geçiş
 noktası, iş yazmasıyla birlikte MAIN_DB'deki ekleme-yalnız bir koleksiyona bir
@@ -236,12 +242,12 @@ yalnızca alan boş geldiğinde yedektir.
 | `account_created` | Kapsam içi `User` ilk kez yaratıldı (dört yol) — genelde deneme başlangıcı |
 | `trial_started` | Mevcut bir hesap deneme tipine alındı (admin ataması) |
 | `upgrade_confirmed` | `is_upgrade_confirm` `true` oldu |
-| `converted` | trial → premium, affiliate_trial → affiliate_user |
+| `converted` | trial → premium, affiliate_trial → affiliate_user — cron **ve** yükseltme onayının süresi dolmuş deneme dalı (`user.controller.ts:3467-3497`) |
 | `license_changed` | Diğer kapsam içi tip geçişleri (affiliate_user → premium, admin elle) |
 | `passivated` | Karar penceresi bitti, `status: 'passive'` |
 | `cancellation_requested` | Fesih doğrulandı, `status: 'cancellation_request'` |
-| `cancelled` | İhbar süresi doldu, `status: 'cancelled'` — **iki yazarın ikisi de** olay yazar (SV-1) |
-| `reactivated` | `passive` / `cancellation_request` / `cancelled` → `active` |
+| `cancelled` | İhbar süresi doldu, `status: 'cancelled'` — **üç yazarın üçü de** olay yazar (SV-1) |
+| `reactivated` | `passive` / `cancellation_request` / `cancelled` → `active` — üç yazar: admin, self-servis `action=activation`, anahtarla onay (`reactivateStatus`) |
 | `excluded` | Hesap kapsam dışına çıktı (tip allowlist dışına geçti) |
 | `deleted` | `status: 'deleted'` ya da purge — [Açık karar K-7](#k-7) |
 
@@ -347,11 +353,11 @@ kabul kriteri). Buradan açılmadı — SaleVali backlog'u o ekibin.
 
 | # | Repo | İş | Dayanak |
 |---|---|---|---|
-| **SV-1** | server | **Yaşam döngüsü outbox'ı**: MAIN_DB'de ekleme-yalnız bir koleksiyon (index `src/indexes/specs.ts`'te, `scope: 'main'`); yukarıdaki her geçiş noktası iş yazmasıyla birlikte bir satır yazar. Pasifleşme (`user.service.ts:551`) ve fesih tamamlanması — **iki** yazarı: `user.service.ts:688-693` ve `user.controller.ts:1825` — bugün yalnızca log satırı bırakıyor | Uç B'nin önkoşulu |
+| **SV-1** | server | **Yaşam döngüsü outbox'ı**: MAIN_DB'de ekleme-yalnız bir koleksiyon (index `src/indexes/specs.ts`'te, `scope: 'main'`); yukarıdaki her geçiş noktası iş yazmasıyla birlikte bir satır yazar. Pasifleşme (`user.service.ts:551`) ve fesih tamamlanması bugün en fazla bir log satırı bırakıyor. Fesih tamamlanmasının **üç** yazarı var — cron `user.service.ts:689`/`:693`, parola login `user.service.ts:257`, Google login `user.controller.ts:1825` — ve üçü de kapsanmalı; tercihen üçü tek bir paylaşılan yardımcıya (geçiş + olay) taşınır. Aynı şekilde `converted` için yükseltme onayının anında geçiş dalı (`user.controller.ts:3467-3497`) ve `reactivated` için anahtarla onayın `reactivateStatus` yolu (`:3660`) unutulmamalı | Uç B'nin önkoşulu |
 | **SV-2** | server | **Olay export ucu** `GET /integrations/crm/events` (imleç, sayfa tavanı, allowlist kapsamı) — ya da K-2 push seçilirse outbox'tan CRM'e teslim eden bir iş (`JobQueueService`, yeniden deneme) | Uç B |
-| **SV-3** | server | **Günlük kullanım kovaları + export ucu** `GET /integrations/crm/usage-daily`: `TenantUsageCronJob` her tenant'ın son 7 UTC gününü faturalama tanımıyla (`admin-user.service.ts:505-525`) MAIN_DB'deki günlük bir koleksiyona yazar; uç onu CSV verir | Uç A |
+| **SV-3** | server | **Günlük kullanım kovaları + export ucu** `GET /integrations/crm/usage-daily`: `TenantUsageCronJob` her tenant'ın son 7 UTC gününü faturalama tanımıyla (`admin-user.service.ts:505-525`) MAIN_DB'deki günlük bir koleksiyona yazar; uç onu CSV verir. Ayrıca bir kerelik **tarihsel backfill** (migration, `--dry-run` destekli): her tenant'ın ilk belgesinden bugüne günlük kovaları doldurur — yoksa uç yalnızca cron'un başladığı günden sonrasını bilir | Uç A |
 | **SV-4** | server | **Makine kimlik doğrulaması**: iki uç için amaca özel header'lı paylaşılan sır (`X-Demo-Export-Secret` emsali), sabit zamanlı karşılaştırma, `RATE_LIMITER_BY_METHOD` kaydı, `AuditLog` kaydı, OpenAPI `security: []` + kendi kontrolü; `docs/SECURITY_GUIDE.md` §13 checklist'i | A, B |
-| **SV-5** | client + server | **Fesih anketi kod göndersin, çevrilmiş etiket değil.** İstemci seçili seçeneğin **etiketini** gönderiyor (`salevali-client/.../account-dialogs/AccountCancellationDialog.jsx:106-110` → `selectedSurvey.push(item.label)`), yani sunucuda anket kullanıcının dilinde serbest metin olarak duruyor (`user.model.ts:237`, `account-log.model.ts` `surveys`). Kodlar zaten istemcide var: `service`, `price`, `dissatisfaction`, `difficulty`, `other` (:43-69). Eski kayıtlar için dört dildeki etiketten koda bir backfill | K-6, #2573 |
+| **SV-5** | client + server | **Fesih anketi kod göndersin, çevrilmiş etiket değil.** İstemci seçili seçeneğin **etiketini** gönderiyor (`salevali-client/.../account-dialogs/AccountCancellationDialog.jsx:106-110` → `selectedSurvey.push(item.label)`), yani sunucuda anket kullanıcının dilinde serbest metin olarak duruyor — yalnızca `account_log[type='cancellation'].surveys` içinde (`account-log.model.ts`; `User.cancellation_request` anket değil, parola deneme sayacıdır). Kodlar zaten istemcide var: `service`, `price`, `dissatisfaction`, `difficulty`, `other` (:43-69). Eski kayıtlar için `account_log` üzerinde dört dildeki etiketten koda bir backfill | K-6, #2573 |
 | **SV-6** | client | **Newsletter kutusu varsayılan kapalı + DOI** (`Registration.jsx:46` `newsletter: true`). Aynı nesnede `acceptTerms: true` (:45) da önceden işaretli — o SaleVali'nin kendi hukuki sorusu, bu sözleşmenin değil, ama aynı satırda görüldüğü için not edildi | C, #2577 |
 | **SV-7** | server | Ölü alan: `license.cancellation` (`LicenseCancelled`, `cancelledBy`/`cancelledAt`/`description`) hiçbir yerde yazılmıyor; ya yazılsın ya kaldırılsın. Sözleşme ona dayanmıyor | temizlik |
 | **SV-8** | server (opsiyonel) | Kayıtta UTM alanları yok (`User`/`TempUser`'da yalnızca `acquisition_source` anketi ve `reference`); #2450 UTM taşımak istiyorsa önce SaleVali yakalamalı | #2450 madde 6 |
