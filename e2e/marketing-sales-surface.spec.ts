@@ -33,6 +33,8 @@ import {
 test.describe.configure({ mode: 'serial' });
 
 const DAY = 24 * 60 * 60 * 1000;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
 const PASSWORD = 'SalesRep123!';
 const STAMP = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -55,6 +57,7 @@ const NAMES = {
 const orgIds: string[] = [];
 const companyIds: string[] = [];
 const ids: Record<string, string> = {};
+const leadIds: Record<string, string> = {};
 
 async function seedOrg(label: string) {
   const org = await prisma.organization.create({
@@ -95,6 +98,8 @@ test.beforeAll(async () => {
   const lc = await user(colleagueLeadEmail, 'MENTEE', NAMES.colleague, orgA);
   const lf = await user(foreignLeadEmail, 'MENTEE', NAMES.foreign, orgB);
   ids.ownLeadId = l1;
+  ids.repId = rep;
+  leadIds.followUp = l3;
 
   ids.ownCompanyId = await company(orgA, `Own Account ${STAMP}`);
   ids.colleagueCompanyId = await company(orgA, `Colleague Account ${STAMP}`);
@@ -107,6 +112,8 @@ test.beforeAll(async () => {
       orgId: orgA, mentorId: rep, menteeId: l1, companyId: ids.ownCompanyId,
       pipelineStatus: TRIAL_EXPIRED_STAGE_KEY,
       trialStartedAt: new Date(now - 32 * DAY), trialEndsAt: new Date(now - 2 * DAY),
+      // …and past its stage SLA too: `overdue` is in the issue's minimum set.
+      stageDeadline: new Date(now - DAY),
     },
   });
   ids.ownRelationId = expired.id;
@@ -185,6 +192,7 @@ test('a MARKETING sales rep lands on the sales surface and sees only their own r
   await expect(queue).toBeVisible();
   await expect(queue).toContainText(NAMES.expired);
   await expect(queue).toContainText('Trial expired — decide');
+  await expect(queue).toContainText('Stage overdue');
   await expect(queue).toContainText(NAMES.undated);
   await expect(queue).toContainText('Trial end date missing — enter it');
   await expect(queue).toContainText(NAMES.followUp);
@@ -256,14 +264,62 @@ test('the rep works their own record: the follow-up moves it out of the queue', 
 
   // The trial-end editor is there on the undated trial, and its save clears
   // the "date missing" reason.
+  // Driven through the rendered panel, not a raw PATCH — the panel is what the
+  // lead page wires up.
   await gotoSettled(page, `/sales/leads/${ids.undatedRelationId}`);
   await expect(page.getByTestId('trial-end-missing').first()).toBeVisible();
-  const res = await page.request.patch(`/api/mentorship/${ids.undatedRelationId}/trial`, {
-    data: { trialEndsAt: new Date(Date.now() + 10 * DAY).toISOString().slice(0, 10) },
-  });
-  expect(res.status()).toBe(200);
+  const trialEnd = new Date(Date.now() + 10 * DAY).toISOString().slice(0, 10);
+  const panel = page.getByTestId('trial-end-panel');
+  await panel.getByTestId('trial-end-input').fill(trialEnd);
+  await panel.getByTestId('trial-end-save').click();
+  await expect
+    .poll(async () => (await prisma.mentorshipRelation.findUnique({ where: { id: ids.undatedRelationId } }))?.trialEndsAt?.toISOString().slice(0, 10))
+    .toBe(trialEnd);
+  await expect(panel.getByTestId('trial-end-missing-hint')).toHaveCount(0);
   await gotoSettled(page, '/sales');
   await expect(page.getByTestId('attention-queue')).not.toContainText(NAMES.undated);
+});
+
+test('the rep logs the call they just made from the lead page', async ({ page }) => {
+  test.slow();
+  await signInRep(page);
+  await gotoSettled(page, `/sales/leads/${ids.followUpRelationId}`);
+  const note = `Discussed pricing ${STAMP}`;
+  const form = page.getByTestId('sales-lead-log-interaction');
+  await form.getByRole('button', { name: /Log interaction|Add/i }).first().click();
+  await form.getByRole('combobox').selectOption('Call');
+  await form.locator('textarea').fill(note);
+  await form.locator('button[type="submit"]').click();
+  await expect(page.getByTestId('sales-lead-interactions')).toContainText(note);
+  const logged = await prisma.interactionLog.findMany({ where: { relationId: ids.followUpRelationId } });
+  expect(logged.map((l) => [l.type, l.notes])).toEqual([['Call', note]]);
+  // A MARKETING lead is a record, not a portal user: no "your mentor logged
+  // something" bell for them.
+  expect(await prisma.notification.count({ where: { userId: leadIds.followUp, type: 'interaction.logged' } })).toBe(0);
+});
+
+test("a rep's stage-deadline reminder deep-links to their lead page", async ({ page }) => {
+  test.slow();
+  await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
+  const res = await page.request.get('/api/cron?job=stage-deadlines');
+  expect(res.ok()).toBeTruthy();
+  const bell = await prisma.notification.findFirst({ where: { userId: ids.repId, type: 'deadline.stagePassed' } });
+  expect(bell?.link).toBe(`/sales/leads/${ids.ownRelationId}`);
+});
+
+test('the rep cannot re-point their record at another account', async ({ page }) => {
+  test.slow();
+  await signInRep(page);
+  // Same tenant, somebody else's account: re-pointing is an ADMIN decision in
+  // a vertical without mentorship — else /sales/accounts would open it.
+  const same = await page.request.put(`/api/mentorship/${ids.ownRelationId}`, { data: { companyId: ids.colleagueCompanyId } });
+  expect(same.status()).toBe(403);
+  const foreign = await page.request.put(`/api/mentorship/${ids.ownRelationId}`, { data: { companyId: ids.foreignCompanyId } });
+  expect(foreign.status()).toBe(403);
+  const row = await prisma.mentorshipRelation.findUnique({ where: { id: ids.ownRelationId } });
+  expect(row?.companyId).toBe(ids.ownCompanyId);
+  await gotoSettled(page, '/sales/accounts');
+  await expect(page.getByTestId('sales-accounts-table')).not.toContainText(`Colleague Account ${STAMP}`);
 });
 
 test('admin-only endpoints refuse the rep', { tag: '@smoke' }, async ({ page }) => {

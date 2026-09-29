@@ -272,6 +272,8 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 | `/sales/accounts`, `/sales/accounts/[id]` | ✅ kendi / 404 | Sayaç yalnızca kendi kayıtları |
 | `/sales/leads/[id]` | ✅ kendi / 404 | Takip (#2563) ve deneme bitişi (#2553) editörleri |
 | `PUT /api/mentorship/[id]` (aşama, takip) | ✅ kendi / 403 | Sahip ∨ ADMIN |
+| `PUT /api/mentorship/[id]` `{companyId}` | **403** `capability_unavailable` | Kaydı başka bir hesaba bağlamak `mentorship` olmayan dikeyde ADMIN kararı — yoksa `/sales/accounts` o hesabı açardı; her rolde `companyId` kiracı içinde çözülmezse 404 (#2580 inceleme) |
+| `POST /api/interactions` (kendi kaydı) | ✅ 201 | `/sales/leads/[id]` üzerinden; `mentorship` olmayan dikeyde menteeye `interaction.logged` bildirimi gitmez |
 | `PATCH /api/mentorship/[id]/trial` | ✅ kendi / 403 | Sahip ∨ ADMIN, `pipeline` yeteneği |
 | `GET /api/mentorship/[id]` başkasının | 403 | |
 | `GET /api/companies/[id]` başkasının | 404 | `company` kapsamı |

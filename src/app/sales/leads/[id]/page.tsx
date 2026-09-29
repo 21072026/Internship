@@ -14,9 +14,11 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
+import { SalesLogInteraction } from '@/components/sales/SalesLogInteraction';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
-// its stage, the follow-up and trial-end editors and what happened last.
+// its stage, the follow-up and trial-end editors, what happened last and a
+// form to log the next call or meeting.
 //
 // Found only as `id AND mentorId = self AND the rep's tenant` — someone else's
 // record, another tenant's, or an id that does not exist are the same 404 (no
@@ -140,6 +142,11 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           <CardHeader>
             <CardTitle>{s.interactions}</CardTitle>
           </CardHeader>
+          {relation.status === 'ACTIVE' && (
+            <div className="mb-3">
+              <SalesLogInteraction relationId={relation.id} />
+            </div>
+          )}
           {interactions.length === 0 ? (
             <p className="text-sm text-gray-500">{s.interactionsEmpty}</p>
           ) : (

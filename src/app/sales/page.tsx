@@ -1,12 +1,13 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { Building2, Columns3, AlertTriangle } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { getAttentionItems } from '@/lib/mentorAttention';
-import { SALES_ATTENTION_REASONS } from '@/lib/salesSurface';
+import { hasSalesSurface, SALES_ATTENTION_REASONS } from '@/lib/salesSurface';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
@@ -27,6 +28,9 @@ export default async function SalesDashboard() {
   const session = await getServerSession(authOptions);
   // The layout gates this, but a session can be revoked between the two.
   if (!session?.user?.id) redirect('/auth/signin');
+  // The second door, like the detail pages: Next renders a layout and its page
+  // in parallel, so the layout's redirect is not what stops these queries.
+  if (!hasSalesSurface(session.user.role, await shellCapabilities(session.user.orgId))) notFound();
 
   const tenant = await tenantWhere(session);
   const own = withinTenant({ mentorId: session.user.id }, tenant);

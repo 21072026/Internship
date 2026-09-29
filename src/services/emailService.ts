@@ -10,6 +10,8 @@ import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
+import { capabilitiesMemo } from '@/lib/shellCapabilities';
+import { interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
@@ -2112,13 +2114,21 @@ export async function checkMentorInteractionReminders() {
   const fourteenDaysAgo = new Date();
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - days);
 
-  const activeRelations = await prisma.mentorshipRelation.findMany({
+  const allActive = await prisma.mentorshipRelation.findMany({
     where: { status: 'ACTIVE' },
     include: {
       mentor: true,
       mentee: true,
     },
   });
+  // Mentorship work only (#2580 review): a vertical without the `mentorship`
+  // module — a MARKETING sales book — gets neither this mail nor the bell, the
+  // same line the sales attention queue draws by leaving `inactive` out.
+  const capabilitiesOf = capabilitiesMemo();
+  const activeRelations: typeof allActive = [];
+  for (const relation of allActive) {
+    if (interactionReminderApplies(await capabilitiesOf(relation.orgId))) activeRelations.push(relation);
+  }
 
   // "Contact" is not "a row in InteractionLog": a mentor who is mid-thread with
   // a mentee in the app's messaging has been in touch, and nagging them to log
@@ -2269,6 +2279,7 @@ export async function checkMentorInteractionReminders() {
 export async function checkStageDeadlineReminders() {
   const now = new Date();
   const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'] as const;
+  const capabilitiesOf = capabilitiesMemo();
 
   const overdue = await prisma.mentorshipRelation.findMany({
     where: {
@@ -2295,7 +2306,10 @@ export async function checkStageDeadlineReminders() {
     // The in-app half respects the same 'deadlines' preference the e-mail half
     // does (#817) — opting out of deadline mail and still being pinged in-app
     // for the identical event is not a preference anyone chose.
-    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/mentor/mentees/${rel.id}`);
+    // A MARKETING rep's record is /sales/leads/<id> (#2580); notificationLink
+    // keeps /mentor/mentees/<id> for everyone else.
+    const stageLink = notificationLink('MENTOR', 'relation', { relationId: rel.id }, { capabilities: await capabilitiesOf(rel.orgId) });
+    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, stageLink);
     if (emailAllowed(rel.mentor, 'deadlines') && emailGroupAllowedForCategory(rel.mentor, 'stage-deadline')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
@@ -2354,6 +2368,7 @@ export async function checkNextActionReminders(now = new Date()) {
     },
     select: {
       id: true,
+      orgId: true,
       menteeId: true,
       nextActionAt: true,
       nextActionNote: true,
@@ -2376,6 +2391,7 @@ export async function checkNextActionReminders(now = new Date()) {
 
   let reminded = 0;
   let failures = 0;
+  const capabilitiesOf = capabilitiesMemo();
   for (const rel of due) {
     if (!isNextActionReminderDue(rel, now)) continue;
     const claim = await prisma.mentorshipRelation.updateMany({
@@ -2389,7 +2405,12 @@ export async function checkNextActionReminders(now = new Date()) {
     // What the bell and the mail call this record: the account for a funnel
     // record with a company, else the person — the trial sweep's fallback.
     const name = rel.company?.name ?? rel.mentee.fullName;
-    const link = notificationLink(owner.role as NotificationRole, 'relation', { relationId: rel.id, menteeId: rel.menteeId });
+    const link = notificationLink(
+      owner.role as NotificationRole,
+      'relation',
+      { relationId: rel.id, menteeId: rel.menteeId },
+      { capabilities: await capabilitiesOf(rel.orgId) },
+    );
     try {
       if (notificationCategoryAllowed(owner, 'deadlines')) {
         await notify(owner.id, 'deadline.nextActionDue', { name }, link);

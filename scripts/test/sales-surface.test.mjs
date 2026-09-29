@@ -17,6 +17,9 @@ import {
   SALES_ATTENTION_REASONS,
   SALES_HOME,
   NEUTRAL_HOME,
+  salesRecordLink,
+  salesLeadHref,
+  interactionReminderApplies,
 } from '../../src/lib/salesSurface.ts';
 import { verticalCapabilities } from '../../src/lib/verticals.ts';
 import { SALES_NAV_LINKS, visibleNavLinks } from '../../src/lib/navLinks.ts';
@@ -65,4 +68,22 @@ test('MARKETING keeps every sales link, and every one stays inside /sales', () =
     assert.ok(link.href === '/sales' || link.href.startsWith('/sales/'), link.href);
     assert.ok(link.capability && MARKETING.includes(link.capability), `${link.href} is tagged with a MARKETING capability`);
   }
+});
+
+test('a sales rep\'s record reminders deep-link to the lead page, everyone else keeps their link', () => {
+  assert.equal(salesRecordLink('MENTOR', MARKETING, 'rel_1'), '/sales/leads/rel_1');
+  assert.equal(salesLeadHref('rel_1'), '/sales/leads/rel_1');
+  assert.equal(salesRecordLink('MENTOR', MARKETING, null), SALES_HOME);
+  // INTERNSHIP mentors keep /mentor/mentees/<id> (null = caller's own link).
+  assert.equal(salesRecordLink('MENTOR', INTERNSHIP, 'rel_1'), null);
+  for (const role of ['ADMIN', 'MENTEE', 'COMPANY', 'SOURCE']) {
+    assert.equal(salesRecordLink(role, MARKETING, 'rel_1'), null, `${role} in MARKETING`);
+  }
+});
+
+test('the "no contact in N days" reminder is mentorship work — none for a MARKETING book', () => {
+  assert.equal(interactionReminderApplies(INTERNSHIP), true);
+  assert.equal(interactionReminderApplies(MARKETING), false);
+  // The same line the sales queue draws.
+  assert.ok(!SALES_ATTENTION_REASONS.includes('inactive'));
 });

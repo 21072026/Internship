@@ -7512,3 +7512,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Pages that must 404 for foreign ids go in a tree with no `loading.tsx`** (#2560's lesson):
   `/sales` has none on purpose, so `page.request.get(url, { maxRedirects: 0 })` can assert a
   real 404 for another rep's record.
+- **A page's `notFound()` "second door" does not break its layout's redirect** (#2580 review):
+  `/sales` and `/sales/accounts` now `notFound()` for a non-rep while `/sales/layout.tsx`
+  redirects the same session — the layout's `redirect()` still wins (the page's not-found
+  boundary sits inside the layout), verified by `vertical-nav-gate` (INTERNSHIP mentor on
+  `/sales` → `/mentor`). A notification's deep link is role × **vertical**: pass the recipient's
+  capabilities to `notificationLink()` (`capabilitiesMemo()` for a sweep), or a MARKETING rep's
+  reminder lands on the `/sales` dashboard instead of the record.

@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { hasSalesSurface } from '@/lib/salesSurface';
 import { getServerDictionary } from '@/i18n/server';
 import { Card } from '@/components/ui/Card';
 
@@ -20,7 +21,9 @@ export default async function SalesAccountsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/auth/signin');
   const capabilities = await shellCapabilities(session.user.orgId);
-  if (!capabilities.includes('companies')) notFound();
+  // The second door, like the detail pages: Next renders a layout and its page
+  // in parallel, so the layout's redirect is not what stops these queries.
+  if (!hasSalesSurface(session.user.role, capabilities) || !capabilities.includes('companies')) notFound();
 
   const tenant = await tenantWhere(session);
   const own = withinTenant({ mentorId: session.user.id }, tenant);

@@ -59,3 +59,36 @@ export const SALES_ATTENTION_REASONS = [
   'trial_no_end_date',
   'next_action_due',
 ] as const satisfies readonly AttentionReason[];
+
+/** The rep's own record page on the sales surface. */
+export function salesLeadHref(relationId: string): string {
+  return `${SALES_HOME}/leads/${relationId}`;
+}
+
+/**
+ * Where a notification about a record sends this recipient, when the sales
+ * surface decides it; null when it does not (the recipient is not a sales rep),
+ * so the caller keeps its own link. Without this a rep's follow-up, trial and
+ * stage-deadline reminders pointed at `/mentor/mentees/<id>`, which the mentor
+ * shell bounces to the `/sales` dashboard — losing which record it was about.
+ */
+export function salesRecordLink(
+  role: string | null | undefined,
+  capabilities: readonly VerticalCapability[],
+  relationId: string | null,
+): string | null {
+  if (!hasSalesSurface(role, capabilities)) return null;
+  return relationId ? salesLeadHref(relationId) : SALES_HOME;
+}
+
+/**
+ * Whether the daily "no contact in N days" reminder (the mail and the
+ * `stale_mentee.noContact` bell) applies to a relation in this vertical. It is
+ * mentorship work: the sales queue deliberately leaves the same rule out
+ * (`inactive` is not in SALES_ATTENTION_REASONS) because it would put most of a
+ * sales book on the list at once — so a vertical without `mentorship` gets
+ * neither the queue item nor the mail.
+ */
+export function interactionReminderApplies(capabilities: readonly VerticalCapability[]): boolean {
+  return capabilities.includes('mentorship');
+}
