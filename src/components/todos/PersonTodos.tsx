@@ -45,6 +45,7 @@ export function PersonTodos({
   const [picked, setPicked] = useState<string[]>([]);
   const [showPool, setShowPool] = useState(false);
   const [draft, setDraft] = useState('');
+  const [dueDraft, setDueDraft] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -87,12 +88,26 @@ export function PersonTodos({
   const assign = async () => {
     const title = draft.trim();
     if (!title) return;
-    if (await call('/api/todos', 'POST', { title, assigneeId: userId }, 'assign')) setDraft('');
+    // The deadline travels with the to-do (#2440); an empty field is no date.
+    if (await call('/api/todos', 'POST', { title, assigneeId: userId, dueDate: dueDraft || null }, 'assign')) {
+      setDraft('');
+      setDueDraft('');
+    }
   };
 
   const sendPicked = async () => {
     if (picked.length === 0) return;
-    if (await call('/api/todos', 'POST', { templateIds: picked, assigneeId: userId }, 'pool')) setPicked([]);
+    if (
+      await call(
+        '/api/todos',
+        'POST',
+        { templateIds: picked, assigneeId: userId, dueDate: dueDraft || null },
+        'pool'
+      )
+    ) {
+      setPicked([]);
+      setDueDraft('');
+    }
   };
 
   const toggle = (todo: Todo) => call(`/api/project-tasks/${todo.id}`, 'PATCH', { done: !todo.done }, todo.id);
@@ -138,6 +153,16 @@ export function PersonTodos({
             maxLength={TEXT_LIMITS.todoTitle}
             data-testid="assign-todo-input"
             className="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-1"
+          />
+          <input
+            type="date"
+            value={dueDraft}
+            onChange={(e) => setDueDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); assign(); } }}
+            aria-label={t.todos.dueDateLabel}
+            title={t.todos.dueDateLabel}
+            data-testid="assign-todo-due"
+            className="w-full shrink-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-40"
           />
           <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" loading={busy === 'assign'} onClick={assign} data-testid="assign-todo">
             <Plus className="mr-1 h-3.5 w-3.5" /> {t.todos.assign}
