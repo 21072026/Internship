@@ -2,7 +2,13 @@ import { prisma } from '@/lib/prisma';
 import { logger, type LogLevel } from '@/lib/logger';
 import { clientIp, type HeaderSource } from '@/lib/clientIp';
 import { getSetting } from '@/lib/settings';
-import { parseViewLogWindowMinutes, recordViewOnce, type ViewLogOutcome } from '@/lib/viewLogRule';
+import {
+  attributeView,
+  parseViewLogWindowMinutes,
+  recordViewOnce,
+  type ViewLogOutcome,
+  type ViewReader,
+} from '@/lib/viewLogRule';
 
 type Level = LogLevel; // 'debug' | 'info' | 'warning' | 'error'
 const LEVEL_DB = { debug: 'DEBUG', info: 'INFO', warning: 'WARNING', error: 'ERROR' } as const;
@@ -59,43 +65,66 @@ export async function logActivity(input: ActivityInput): Promise<void> {
   }
 }
 
-export interface ViewActivityInput extends ActivityInput {
-  actorId: string;
+export interface ViewActivityInput {
+  action: string;
+  /** The session user. Who the entry names as actor is attributeView()'s call. */
+  reader: ViewReader;
   targetType: string;
   targetId: string;
+  request?: HeaderSource | null;
 }
 
 /**
- * Record that `actorId` READ a record, at most once per window (#2433).
+ * Record that someone READ a record, at most once per window (#2433).
  *
  * The same `logActivity()` write as every other entry, behind a repeat check:
  * an identical entry (same action, actor, target, detail and origin IP) newer
- * than `viewLogWindowMinutes` suppresses this one. The rule, and why each
- * failure falls the way it does, is in src/lib/viewLogRule.ts. Never throws.
+ * than `viewLogWindowMinutes` suppresses this one. The entry is attributed to
+ * the real reader, the admin behind an impersonated session included, and
+ * carries no record name. The rule, and why each failure path falls the way
+ * it does, is in src/lib/viewLogRule.ts. Never throws.
  *
  * Call it inside the request's tenant scope, so the window is read from that
  * org's settings row before the global one.
  */
 export async function logViewActivity(input: ViewActivityInput): Promise<ViewLogOutcome> {
+  const { reader, action, targetType, targetId, request } = input;
+
+  // Only an impersonated read needs a lookup: the session carries the user's
+  // e-mail, not the admin's. Impersonation never crosses an org (it is started
+  // inside the admin's tenant scope), so the scope the caller runs in reaches
+  // the admin's row. A failed lookup still attributes the read to the admin's id.
+  let impersonatorEmail: string | null = null;
+  if (reader.impersonatorId) {
+    try {
+      const admin = await prisma.user.findUnique({ where: { id: reader.impersonatorId }, select: { email: true } });
+      impersonatorEmail = admin?.email ?? null;
+    } catch {
+      /* the id alone still names the real reader */
+    }
+  }
+  const { actorId, actorEmail, detail } = attributeView(reader, impersonatorEmail);
+  const entry: ActivityInput = { action, actorId, actorEmail, targetType, targetId, detail, request };
+
   return recordViewOnce({
     windowMinutes: async () => parseViewLogWindowMinutes(await getSetting('viewLogWindowMinutes')),
     hasRecent: async (since) => {
       const recent = await prisma.activityLog.findFirst({
         where: {
-          action: input.action,
-          actorId: input.actorId,
-          targetType: input.targetType,
-          targetId: input.targetId,
-          detail: input.detail ?? null,
+          action,
+          actorId,
+          targetType,
+          targetId,
+          detail,
           // The same value logActivity() will store, so "same origin" compares
           // like with like. A read without a request has no origin (null).
-          ip: input.request ? clientIp(input.request) : null,
+          ip: request ? clientIp(request) : null,
           createdAt: { gte: since },
         },
         select: { id: true },
       });
       return recent !== null;
     },
-    write: () => logActivity(input),
+    write: () => logActivity(entry),
   });
 }

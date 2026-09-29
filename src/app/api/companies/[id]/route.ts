@@ -8,7 +8,6 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { logViewActivity } from '@/lib/activity';
-import { viewLogDetail } from '@/lib/viewLogRule';
 
 const updateCompanySchema = z.object({
   name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
@@ -86,15 +85,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // not a read and writes nothing; a 403 already wrote its scope denial.
     // logViewActivity() never throws, and a repeat of the same read inside the
     // `viewLogWindowMinutes` window writes no second row (src/lib/viewLogRule.ts).
-    // A read made while impersonating is marked in `detail`, which also keeps it
-    // from being folded into the impersonated user's own reads.
+    // The entry names the REAL reader: behind an impersonated session that is
+    // the admin, with `as <userId>` in `detail`. It carries no company name,
+    // because the activity feed is not tenant-scoped yet.
+    //
+    // This is the read the product makes when an admin opens a company: the
+    // edit dialog on /admin/companies fills itself from this route, not from
+    // the paged list it was clicked in.
     await logViewActivity({
       action: 'company.view',
-      actorId: session.user.id,
-      actorEmail: session.user.email ?? null,
+      reader: session.user,
       targetType: 'company',
       targetId: company.id,
-      detail: viewLogDetail(company.name, session.user.impersonatorId),
       request,
     });
 

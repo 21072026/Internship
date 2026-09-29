@@ -13,6 +13,8 @@
 //      blank or corrupted value falls back to the default, never to "suppress".
 //   3. No failure reaches the page. A failed setting read, lookup or write
 //      still returns an outcome, and a failed lookup RECORDS the view.
+//   4. The row names the REAL reader: behind an impersonated session that is
+//      the admin, "as" the user, never the user who did not read anything.
 //
 //   Plus the one that silently lost rows elsewhere (#1268): `detail` is a
 //   VARCHAR(191), and an oversized value drops the whole insert.
@@ -25,9 +27,9 @@ import {
   ACTIVITY_DETAIL_MAX,
   VIEW_LOG_WINDOW_DEFAULT_MINUTES,
   VIEW_LOG_WINDOW_MAX_MINUTES,
+  attributeView,
   parseViewLogWindowMinutes,
   recordViewOnce,
-  viewLogDetail,
   viewLogWindowStart,
 } from '../../src/lib/viewLogRule.ts';
 
@@ -185,24 +187,59 @@ test('without an injected clock the rule reads the real one', async () => {
   assert.ok(Math.abs(since.getTime() - (before - 15 * MIN)) < 5_000, since.toISOString());
 });
 
-// ── detail ──────────────────────────────────────────────────────────────────
+// ── Attribution: the REAL reader ────────────────────────────────────────────
 
-test('detail is the label, plus a marker when the read was made while impersonating', () => {
-  assert.equal(viewLogDetail('Acme GmbH'), 'Acme GmbH');
-  assert.equal(viewLogDetail('Acme GmbH', null), 'Acme GmbH');
-  assert.equal(viewLogDetail('Acme GmbH', 'cadmin0000000000000000000'), 'Acme GmbH · impersonated by cadmin0000000000000000000');
-  // A different marker is a different detail, so an impersonated read is never
-  // folded into the impersonated user's own read of the same company.
-  assert.notEqual(viewLogDetail('Acme GmbH', 'cadmin'), viewLogDetail('Acme GmbH'));
+const USER = 'cuser00000000000000000000';
+const ADMIN = 'cadmin0000000000000000000';
+
+test('an ordinary read is the session user\'s, and carries no detail at all', () => {
+  assert.deepEqual(attributeView({ id: USER, email: 'mentor@demo.example.com' }), {
+    actorId: USER,
+    actorEmail: 'mentor@demo.example.com',
+    detail: null,
+  });
+  // A missing e-mail is a null column, not the string "undefined".
+  assert.deepEqual(attributeView({ id: USER }), { actorId: USER, actorEmail: null, detail: null });
+  assert.deepEqual(attributeView({ id: USER, email: null, impersonatorId: null }), {
+    actorId: USER,
+    actorEmail: null,
+    detail: null,
+  });
 });
 
-test('detail never exceeds the VARCHAR(191) column, and the marker survives a long name', () => {
-  assert.equal(ACTIVITY_DETAIL_MAX, 191);
-  const longest = 'N'.repeat(191); // TEXT_LIMITS.companyName
-  assert.equal(viewLogDetail(longest).length, 191);
-  assert.equal(viewLogDetail('N'.repeat(500)).length, 191);
+test('a read through an impersonated session is the ADMIN\'s, "as" the user', () => {
+  // The session is the user's; the eyes are the admin's. Same convention as
+  // impersonate.stop (actorId: impersonatorId, the user as the object).
+  const read = attributeView(
+    { id: USER, email: 'mentor@demo.example.com', impersonatorId: ADMIN },
+    'admin@demo.example.com'
+  );
+  assert.deepEqual(read, { actorId: ADMIN, actorEmail: 'admin@demo.example.com', detail: `as ${USER}` });
+  // The user's e-mail must not end up as the actor's: a search of the feed by
+  // the user's address would otherwise find a read they never made.
+  assert.notEqual(read.actorEmail, 'mentor@demo.example.com');
+});
 
-  const marked = viewLogDetail(longest, 'cadmin0000000000000000000');
-  assert.equal(marked.length, 191);
-  assert.ok(marked.endsWith(' · impersonated by cadmin0000000000000000000'), marked);
+test('an impersonated read whose admin e-mail could not be looked up still names the admin', () => {
+  assert.deepEqual(attributeView({ id: USER, email: 'mentor@demo.example.com', impersonatorId: ADMIN }), {
+    actorId: ADMIN,
+    actorEmail: null,
+    detail: `as ${USER}`,
+  });
+});
+
+test('an admin\'s own read and their read through an impersonated account are different repeat keys', () => {
+  // Same actor, same target: only `detail` keeps the two apart, so the one
+  // made through somebody else's session is never folded into the other.
+  const own = attributeView({ id: ADMIN, email: 'admin@demo.example.com' });
+  const asUser = attributeView({ id: USER, impersonatorId: ADMIN }, 'admin@demo.example.com');
+  assert.equal(own.actorId, asUser.actorId);
+  assert.notEqual(own.detail, asUser.detail);
+});
+
+test('detail never exceeds the VARCHAR(191) column', () => {
+  assert.equal(ACTIVITY_DETAIL_MAX, 191);
+  const odd = attributeView({ id: 'x'.repeat(500), impersonatorId: ADMIN });
+  assert.equal(odd.detail.length, ACTIVITY_DETAIL_MAX);
+  assert.ok(odd.detail.startsWith('as x'), odd.detail);
 });

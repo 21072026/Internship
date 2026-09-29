@@ -16,7 +16,7 @@
  * SAME read inside a short window is suppressed. "The same read" means the same
  * action, actor, target, origin IP and detail. A read from a new IP is a new
  * fact (it is the one an incident review asks about), and so is a read made
- * while impersonating, which the caller marks in `detail`.
+ * through an impersonated account, which `attributeView()` marks in `detail`.
  *
  * The window comes from the setting `viewLogWindowMinutes` (src/lib/settings.ts,
  * default 15). `0` switches suppression off, so every read is a row. No value can
@@ -71,21 +71,57 @@ export function viewLogWindowStart(now: Date, windowMinutes: number): Date | nul
 /**
  * `ActivityLog.detail` is a VARCHAR(191) column, and an oversized value makes
  * the insert fail (P2000), which logActivity() swallows: the read would leave
- * no row at all. A company name alone may already be 191 characters
- * (TEXT_LIMITS.companyName), so the label is what gets cut, never the marker.
+ * no row at all. What goes in it here is short by construction, but the cap is
+ * applied anyway rather than trusted.
  */
 export const ACTIVITY_DETAIL_MAX = 191;
 
+/** The session user, as far as attributing a read needs it. */
+export interface ViewReader {
+  id: string;
+  email?: string | null;
+  /** Set while an admin is impersonating `id`: the admin's user id. */
+  impersonatorId?: string | null;
+}
+
+/** The actor columns of a view entry. */
+export interface ViewAttribution {
+  actorId: string;
+  actorEmail: string | null;
+  detail: string | null;
+}
+
 /**
- * The `detail` of a view entry: a human-readable label for the record (the
- * target id alone is an opaque cuid in the admin activity feed), plus a marker
- * when the read was made while impersonating. The marker is kept whole and the
- * label is shortened to fit; the result never exceeds ACTIVITY_DETAIL_MAX.
+ * Who a read is attributed to: the REAL reader, always.
+ *
+ * While an admin impersonates a user the session is the user's, but the eyes
+ * are the admin's. So the entry names the admin as actor (the same convention
+ * as `impersonate.stop`, which logs `actorId: impersonatorId`) and `detail`
+ * names the account the read was made through: `as <userId>`. Attributing it
+ * to the user instead would bump their last-active date, put a read they never
+ * made in their own activity feed, and hide it from a search of /admin/activity
+ * by the admin's e-mail. Pageview tracking skips impersonated sessions for the
+ * same reason ("that activity isn't the user's own").
+ *
+ * `impersonatorEmail` is looked up by the caller; `null` (not found, lookup
+ * failed) still leaves the entry attributed to the right id.
+ *
+ * `detail` carries nothing else, and in particular NOT the record's name: the
+ * activity feed is not tenant-scoped yet (ActivityLog has no `orgId`, #543), so
+ * a name there would show one tenant's customer book to every other tenant's
+ * admins. `targetId` already identifies the record. A different `detail` is
+ * also a different repeat key, so an admin's own reads and the reads they make
+ * through an impersonated account are never folded into one row.
  */
-export function viewLogDetail(label: string, impersonatorId?: string | null): string {
-  const marker = impersonatorId ? ` · impersonated by ${impersonatorId}` : '';
-  const room = Math.max(0, ACTIVITY_DETAIL_MAX - marker.length);
-  return (label.slice(0, room) + marker).slice(0, ACTIVITY_DETAIL_MAX);
+export function attributeView(reader: ViewReader, impersonatorEmail: string | null = null): ViewAttribution {
+  if (reader.impersonatorId) {
+    return {
+      actorId: reader.impersonatorId,
+      actorEmail: impersonatorEmail,
+      detail: `as ${reader.id}`.slice(0, ACTIVITY_DETAIL_MAX),
+    };
+  }
+  return { actorId: reader.id, actorEmail: reader.email ?? null, detail: null };
 }
 
 export type ViewLogOutcome =
