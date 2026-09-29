@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
+import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostOrg';
 import { readInquiryAttribution } from '@/lib/inquiryAttribution';
 import { resolveDefaultLeadOwner } from '@/lib/leadOwner';
@@ -9,6 +9,7 @@ import { convertInquiryToMarketingLead } from '@/lib/inquiryLead';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { notify } from '@/lib/notify';
+import { orgWhere } from '@/lib/tenantFilter';
 import { sendCompanyInquiryEmail } from '@/services/emailService';
 
 // A company asking for a look at the product — from the public /for-companies
@@ -37,8 +38,9 @@ const schema = z.object({
   // not a consent record (GDPR Art. 7).
   consent: z.boolean(),
   // The SEPARATE product-news box (MARKETING form only), unchecked by default.
-  // Stored as the plain boolean the person left it at (#2569; the consent
-  // model it may one day feed is #2577).
+  // Stored as an unconfirmed REQUEST (#2569): a single opt-in from a public form
+  // is no permission to mail anyone (UWG §7(2) Nr. 2) until double opt-in; the
+  // consent model it may one day feed is #2577.
   marketingOptIn: z.boolean().optional(),
   locale: z.string().max(5).optional(),
   // Where they came from (#2569). Cleaned and capped by readInquiryAttribution
@@ -104,6 +106,8 @@ export async function POST(request: Request) {
   // orgId = NULL vanishes from the product" failure docs/tenant-isolation.md
   // warns about. `target.orgId` is the mapped org or the default org.
   const attribution = readInquiryAttribution({ utm: parsed.data.utm, referrer: parsed.data.referrer }, target.host);
+  // NULL where the form never asked (internship), the ticked value where it did.
+  const optInRequested = isMarketing ? parsed.data.marketingOptIn === true : null;
   const inquiry = await prisma.companyInquiry.create({
     data: {
       orgId,
@@ -119,8 +123,11 @@ export async function POST(request: Request) {
       // server, never from the body. No IP is stored.
       consentAt: new Date(),
       consentTextVersion: PRIVACY_POLICY_VERSION,
-      // NULL where the form never asked (internship), the ticked value where it did.
-      marketingOptIn: isMarketing ? parsed.data.marketingOptIn === true : null,
+      // A request, not a permission — `marketingOptInConfirmedAt` stays NULL
+      // (no double opt-in exists). The wording version is stamped separately
+      // from the privacy version; the language it was shown in is `locale`.
+      marketingOptInRequested: optInRequested,
+      marketingOptInTextVersion: optInRequested ? MARKETING_OPT_IN_TEXT_VERSION : null,
       // A Host header is not length-bounded by anything upstream of us.
       receivedHost: target.host ? target.host.slice(0, 191) : null,
       ...attribution,
@@ -135,15 +142,13 @@ export async function POST(request: Request) {
   // stays NEW in /admin/company-inquiries, labelled unowned, for an admin to
   // place. It is never dropped, and a failure here never turns a captured
   // enquiry into an error for the sender.
-  let placed = false;
   if (isMarketing && orgId) {
     try {
       const owner = await resolveDefaultLeadOwner(orgId);
       if (owner) {
         // No `request`: the public visitor's IP must not reach the activity log
         // (the privacy notice promises this form stores none).
-        const outcome = await convertInquiryToMarketingLead({ inquiryId: inquiry.id, orgId, owner, actor: null });
-        placed = outcome.kind === 'converted';
+        await convertInquiryToMarketingLead({ inquiryId: inquiry.id, orgId, owner, actor: null });
       }
     } catch (e) {
       console.error('Company inquiry lead placement failed:', e);
@@ -155,10 +160,14 @@ export async function POST(request: Request) {
   // org's — the query used to have no org filter at all, so every tenant's
   // admins were told about every other tenant's enquiries (#2569). On the
   // default org a NULL-org admin counts as the default org's, the same rule
-  // tenantWhere() applies (src/lib/tenantFilter.ts).
-  const adminOrgWhere = target.via === 'default' ? { OR: [{ orgId }, { orgId: null }] } : { orgId };
+  // tenantWhere() applies — decided by WHICH org it is (orgWhere, same file),
+  // not by how it was resolved, so an explicit mapping of a host to the default
+  // org notifies exactly the admins whose list shows the row.
+  // (No org at all only when no default org exists yet: then the row is
+  // NULL-org, and so are the admins who will see it.)
+  const adminOrgWhere = orgId ? await orgWhere(orgId) : { orgId: null };
   const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true, ...adminOrgWhere },
+    where: { AND: [{ role: 'ADMIN', isActive: true }, adminOrgWhere] },
     select: { id: true, email: true, fullName: true, preferredLanguage: true, orgId: true },
   });
   await Promise.all(
@@ -196,6 +205,11 @@ export async function POST(request: Request) {
     }
   }
 
-  // `placed` says only THAT it reached a rep, never whom.
-  return NextResponse.json({ ok: true, id: inquiry.id, placed });
+  // The SAME body as the honeypot drop above, and nothing that depends on what
+  // the tenant already holds: whether the writer placed it (it refuses when the
+  // e-mail is a staff member's or already somebody's lead, or the company name
+  // is an existing account) would let an anonymous caller probe the tenant's
+  // staff, leads and customers one POST at a time (#2569 review). The sender
+  // learns only that the request was received.
+  return NextResponse.json({ ok: true });
 }

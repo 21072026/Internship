@@ -49,6 +49,20 @@ async function main() {
       });
       if (rows.length === 0) console.log('No public hosts are mapped.');
       for (const r of rows) console.log(`${r.publicHost}\t→ ${r.slug} (${r.id}, ${r.vertical})`);
+      // The rollout gap made visible (#2569 review): a MARKETING org that claims
+      // no host means its landing's demo form is closed. Printed with the exact
+      // command, so the deploy log (infra/deploy-prod.sh runs --list, report
+      // only) tells the operator what to run instead of leaving it to memory.
+      const unmapped = await prisma.organization.findMany({
+        where: { vertical: 'MARKETING', publicHost: null },
+        select: { id: true, slug: true },
+      });
+      for (const o of unmapped) {
+        console.log(
+          `WARNING: MARKETING org ${o.slug} (${o.id}) claims no public host — its demo form is closed. ` +
+            `Map it: node prisma/set-public-host.mjs --org ${o.slug} --host <marketing host>`,
+        );
+      }
       return;
     }
 

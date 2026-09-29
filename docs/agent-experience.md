@@ -7463,3 +7463,12 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   `TRUSTED_PROXY_COUNT=1` (the default) and no proxy in front of `next start`, the rightmost
   XFF entry is whatever the test sends, so a spec that posts a 3-per-hour public form
   several times stays green without touching the limiter.
+- **A public form's success body must not echo what a writer decided** (#2569 review): the
+  default-owner placement refuses when the address is staff or an existing lead, so
+  returning `placed` turned an anonymous form into a lookup of the tenant's people. Answer
+  exactly what the honeypot answers, and assert placement in e2e from the DB.
+- **Bumping `PRIVACY_POLICY_VERSION` is safe** — nothing compares versions (it is only
+  stamped) — so a row that stamps it as its consent record should get the section that
+  describes it in the same PR, not "later".
+- **`pkill -f "next start -p 3113"` kills the calling shell too** (its own command line
+  matches). Stop a background server through the task tool, or `pkill -f '[n]ext start'`.

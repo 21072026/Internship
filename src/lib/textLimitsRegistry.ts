@@ -222,6 +222,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     // The #2569 demo-form columns.
     marketplaces: { exempt: '@db.Text, capped at 300 by the public form schema' },
     consentTextVersion: SERVER_SET,
+    marketingOptInTextVersion: SERVER_SET,
     receivedHost: { exempt: 'the request hostname, sliced to 191 by the route before it is written' },
     utmSource: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
     utmMedium: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },

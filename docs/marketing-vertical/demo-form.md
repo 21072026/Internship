@@ -31,7 +31,19 @@ unauthenticated request is filed into; nothing is read back out. Caddy overwrite
 `X-Forwarded-Host` in every environment, and even a forged one can only put the forger's
 own request into another tenant's queue.
 
-### Operator step (once per environment)
+### Operator step — REQUIRED after merge, once per environment
+
+Nothing in the deploy opens the form: until this runs, `marketing.bcsit-gmbh.de` and
+`marketing.bcsit-gmbh.dev` show *demo requests are closed right now*. Every deploy prints
+the state in its log (`infra/deploy-prod.sh` runs `set-public-host.mjs --list`, report
+only), including a `WARNING:` line with the exact command for each MARKETING org that
+claims no host — so the slug to use is the one that line names.
+
+| Environment | Host | Org |
+| --- | --- | --- |
+| Production | `marketing.bcsit-gmbh.de` | the prod MARKETING org (slug from the deploy log's `WARNING:` line) |
+| Preview | `marketing.bcsit-gmbh.dev` | the preview MARKETING org (same) |
+| Topic env (`pr<N>`) | not mapped | the form stays closed there unless a reviewer maps it by hand |
 
 ```bash
 node prisma/set-public-host.mjs --org <slug|id> --host marketing.bcsit-gmbh.de   # prod
@@ -46,9 +58,18 @@ Until this runs, the marketing landing's form is closed — by design.
 
 - The form fields; `marketplaces` instead of `openRoles` on the marketing form.
 - **Consent record:** `consentAt` and `consentTextVersion` (= `PRIVACY_POLICY_VERSION`),
-  both written by the server. The separate, **unchecked-by-default** product-news box is
-  `marketingOptIn`, a plain boolean that creates no lawful basis by itself (the consent
-  model is #2577). `NULL` means the form never asked (the internship form).
+  both written by the server. The notice at that version (`2026-09-29`) has a section on
+  these forms naming every field below, so the stamp points at a text that covers what the
+  row keeps. Bump the version whenever what this form stores changes.
+- **Product news — a REQUEST, never a send permission.** The separate,
+  **unchecked-by-default** box is stored as `marketingOptInRequested` (`NULL` = the form
+  never asked, the internship form), with `marketingOptInTextVersion`
+  (= `MARKETING_OPT_IN_TEXT_VERSION`, the wording's own version; the language is the row's
+  `locale`) and `marketingOptInConfirmedAt`, which stays `NULL` because no double opt-in
+  exists. A single opt-in on a public form can be ticked by anyone for anyone's address and
+  proves nothing under UWG §7(2) Nr. 2 — **no code, export or person may mail on
+  `marketingOptInRequested`**; only a non-NULL `marketingOptInConfirmedAt` would ever be a
+  basis (the consent model is #2577). The admin list says so on the row.
 - **Source:** `utmSource/Medium/Campaign/Term/Content` (trimmed, capped at 150) and
   `referrer` — origin + path only; the query string and fragment are dropped, and a
   referrer on our own host is not a source (`src/lib/inquiryAttribution.ts`). Stored raw;
@@ -56,7 +77,15 @@ Until this runs, the marketing landing's form is closed — by design.
 - **No IP address** — neither on the row nor in the activity log of an automatic placement.
 - `receivedHost`, the hostname the request arrived on.
 
-The notification and the e-mail go to the **target org's** active admins only.
+The notification and the e-mail go to the **target org's** active admins only — decided by
+which org it is (`orgWhere()`, `src/lib/tenantFilter.ts`), so the default org's includes
+admins with no org exactly as its list does, however the host was resolved.
+
+**The public response is `{ ok: true }` and nothing else**, identical to the honeypot's. It
+must not depend on what the tenant already holds: whether the default-owner placement
+succeeded is decided by whether the e-mail is a staff member's or somebody's lead and
+whether the company is an existing account, so echoing it would be an anonymous lookup of
+all three.
 
 ## Owner: default, or the unowned list
 

@@ -1573,48 +1573,56 @@ enum CompanyInquiryStatus {
 // stored (rather than only emailed) so a request cannot quietly go missing in
 // an inbox, and so an admin can see what is still unanswered.
 model CompanyInquiry {
-  orgId              String?
-  org                Organization?        @relation(fields: [orgId], references: [id])
-  id                 String               @id @default(cuid())
-  companyName        String
-  contactName        String
-  email              String
-  phone              String?
+  orgId                     String?
+  org                       Organization?        @relation(fields: [orgId], references: [id])
+  id                        String               @id @default(cuid())
+  companyName               String
+  contactName               String
+  email                     String
+  phone                     String?
   // Roles they are hiring for, and anything else they typed.
-  openRoles          String?              @db.Text
-  message            String?              @db.Text
+  openRoles                 String?              @db.Text
+  message                   String?              @db.Text
   // Preferred UI language ('en' | 'tr' | 'de') — the language they read the
   // page in, so a reply can be written in it.
-  locale             String?
-  status             CompanyInquiryStatus @default(NEW)
+  locale                    String?
+  status                    CompanyInquiryStatus @default(NEW)
   // When they accepted the privacy terms — set server-side on submit.
-  consentAt          DateTime?
+  consentAt                 DateTime?
   // WHICH privacy text they accepted (#2569): PRIVACY_POLICY_VERSION
   // (src/lib/privacy.ts) at the moment of submit, stamped by the server — a
   // consent record without the text version cannot say what was agreed to.
-  consentTextVersion String?
+  consentTextVersion        String?
   // The separate, UNCHECKED-by-default "send me product news" box on the
-  // marketing form (#2569). A plain boolean on purpose: it records what the
-  // person ticked and creates no lawful basis by itself (the consent model is
-  // #2577). NULL = the form that produced this row never asked (the internship
-  // /for-companies form).
-  marketingOptIn     Boolean?
+  // marketing form (#2569). A REQUEST, never a send permission: it is a single
+  // opt-in anyone could tick for anyone's address, and under UWG §7(2) Nr. 2 it
+  // proves nothing until the address owner confirms it (double opt-in). NULL =
+  // the form that produced this row never asked (the internship form).
+  marketingOptInRequested   Boolean?
+  // WHICH product-news wording they ticked (MARKETING_OPT_IN_TEXT_VERSION,
+  // src/lib/privacy.ts), stamped by the server — separate from the privacy text
+  // version above; the language it was shown in is `locale`. NULL when unticked.
+  marketingOptInTextVersion String?
+  // When the address owner CONFIRMED it (double opt-in). No confirmation mail
+  // exists yet, so this is NULL on every row — and while it is NULL, nothing
+  // may be mailed on the strength of the request (docs/marketing-vertical/demo-form.md).
+  marketingOptInConfirmedAt DateTime?
   // Marketplaces they sell on (MARKETING form), free text.
-  marketplaces       String?              @db.Text
+  marketplaces              String?              @db.Text
   // Where the request came from (#2569): the host that received it and the
   // campaign parameters / referrer the browser carried. Stored RAW; binding
   // them to a `Source` row is #2570's mapping. No IP is stored.
-  receivedHost       String?
-  utmSource          String?
-  utmMedium          String?
-  utmCampaign        String?
-  utmTerm            String?
-  utmContent         String?
-  referrer           String?              @db.Text
-  handledAt          DateTime?
-  handledById        String?
-  note               String?              @db.Text
-  createdAt          DateTime             @default(now())
+  receivedHost              String?
+  utmSource                 String?
+  utmMedium                 String?
+  utmCampaign               String?
+  utmTerm                   String?
+  utmContent                String?
+  referrer                  String?              @db.Text
+  handledAt                 DateTime?
+  handledById               String?
+  note                      String?              @db.Text
+  createdAt                 DateTime             @default(now())
   // What this enquiry BECAME (#1863). An admin converts a warm lead into a real
   // Company plus an invited COMPANY login in one action; these two columns are
   // the record of that. Their presence is also the idempotence key: the convert
@@ -1631,8 +1639,8 @@ model CompanyInquiry {
   // transaction, so the claim is taken BEFORE it: `convertedAt` set while
   // `convertedCompanyId` is still null means "being converted right now" (a
   // claim older than ten minutes is a crashed attempt and may be retaken).
-  convertedCompanyId String?
-  convertedAt        DateTime?
+  convertedCompanyId        String?
+  convertedAt               DateTime?
 
   handledBy        User?    @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
   convertedCompany Company? @relation("ConvertedFromInquiry", fields: [convertedCompanyId], references: [id], onDelete: SetNull)

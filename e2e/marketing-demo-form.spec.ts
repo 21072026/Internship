@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
-import { PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
+import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
 
 // The demo form on the MARKETING landing (#2569) and the default lead owner
 // (#2580 item 3).
@@ -25,7 +25,10 @@ import { PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
 // host-vertical-* specs use the same trick). Every test also gets its own
 // `x-forwarded-for`, because the form's rate limit (3/hour) is per client IP.
 //
-// Serial: `publicHost` is unique, and test 4 needs the host UNmapped.
+// Serial: `publicHost` is unique, and test 4 needs the host UNmapped. The host
+// is a real one, so whatever org held it before this spec (an operator's
+// set-public-host.mjs run on a reused DB) gets it back in afterAll — a test run
+// must never silently close a form somebody opened.
 
 test.describe.configure({ mode: 'serial' });
 
@@ -47,12 +50,16 @@ const intAdminEmail = uniqueEmail('demo-form-int-admin');
 let mktAdminId = '';
 let mktRepId = '';
 let intAdminId = '';
+let previousHolderId: string | null = null;
 const inquiryEmails: string[] = [];
 
 test.beforeAll(async () => {
-  // A leftover mapping from a crashed run would make this host belong to an
-  // org nobody here created.
-  await prisma.organization.updateMany({ where: { publicHost: MARKETING_HOST }, data: { publicHost: null } });
+  // Borrow the host from whoever holds it (restored in afterAll). A leftover
+  // from a crashed run of THIS spec is recognisable by its slug and is not
+  // worth restoring.
+  const holder = await prisma.organization.findUnique({ where: { publicHost: MARKETING_HOST }, select: { id: true, slug: true } });
+  if (holder && !holder.slug.startsWith('demo-form-mkt-')) previousHolderId = holder.id;
+  if (holder) await prisma.organization.update({ where: { id: holder.id }, data: { publicHost: null } });
   const org = await prisma.organization.create({
     data: { name: `Demo Form MKT ${stamp}`, slug: `demo-form-mkt-${stamp}`, vertical: 'MARKETING', publicHost: MARKETING_HOST },
   });
@@ -96,6 +103,12 @@ test.afterAll(async () => {
   await prisma.pipelineStage.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.setting.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
+  // Give the host back only once the test org (and its claim) is gone.
+  if (previousHolderId) {
+    await prisma.organization
+      .update({ where: { id: previousHolderId }, data: { publicHost: MARKETING_HOST } })
+      .catch((e) => console.error(`marketing-demo-form: could not restore publicHost ${MARKETING_HOST}:`, e));
+  }
   await prisma.$disconnect();
 });
 
@@ -157,7 +170,8 @@ test('a request on the marketing host lands in the mapped MARKETING org, unowned
   // The consent record: time AND text version, both server-side.
   expect(row.consentAt).not.toBeNull();
   expect(row.consentTextVersion).toBe(PRIVACY_POLICY_VERSION);
-  expect(row.marketingOptIn).toBe(false);
+  expect(row.marketingOptInRequested).toBe(false);
+  expect(row.marketingOptInTextVersion).toBeNull();
   expect(row.utmSource).toBe('linkedin');
   expect(row.utmMedium).toBe('social');
   expect(row.utmCampaign).toBe('autumn-2026');
@@ -243,11 +257,16 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
     marketingOptIn: true,
   });
   expect(res.ok()).toBeTruthy();
-  expect((await res.json()).placed).toBe(true);
+  // The public answer never says whether it was placed — that would tell an
+  // anonymous caller whether the address is a staff member's or a lead's.
+  expect(await res.json()).toEqual({ ok: true });
 
   const row = await prisma.companyInquiry.findFirstOrThrow({ where: { email } });
   expect(row.orgId).toBe(orgId);
-  expect(row.marketingOptIn).toBe(true);
+  // A request, stamped with its own wording version — never a confirmed opt-in.
+  expect(row.marketingOptInRequested).toBe(true);
+  expect(row.marketingOptInTextVersion).toBe(MARKETING_OPT_IN_TEXT_VERSION);
+  expect(row.marketingOptInConfirmedAt).toBeNull();
   expect(row.convertedCompanyId).not.toBeNull();
   const relation = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: row.convertedCompanyId! } });
   expect(relation.mentorId).toBe(mktRepId);
@@ -284,7 +303,9 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
   }
 });
 
-test('an unmapped marketing host is a closed form — it never writes into the internship org', async ({ page, request }) => {
+// @smoke: the fail-closed rule is the cross-tenant guard (a stranger's request
+// must never land in another company's inbox), and it is cheap.
+test('an unmapped marketing host is a closed form — it never writes into the internship org', { tag: '@smoke' }, async ({ page, request }) => {
   await prisma.organization.update({ where: { id: orgId }, data: { publicHost: null } });
   const email = newInquiryEmail('demo-form-closed');
 
@@ -304,6 +325,6 @@ test('an unmapped marketing host is a closed form — it never writes into the i
   const intRow = await prisma.companyInquiry.findFirstOrThrow({ where: { email: intEmail } });
   expect(intRow.orgId).not.toBe(orgId);
   expect(intRow.openRoles).toBe('Backend');
-  expect(intRow.marketingOptIn).toBeNull();
+  expect(intRow.marketingOptInRequested).toBeNull();
   expect(intRow.consentTextVersion).toBe(PRIVACY_POLICY_VERSION);
 });

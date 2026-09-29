@@ -32,7 +32,8 @@ interface InquiryRow {
   convertedCompany: { id: string; name: string } | null;
   // The MARKETING demo form (#2569).
   marketplaces: string | null;
-  marketingOptIn: boolean | null;
+  marketingOptInRequested: boolean | null;
+  marketingOptInConfirmedAt: string | null;
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
@@ -249,7 +250,13 @@ export default function CompanyInquiriesPage() {
                     {[r.utmSource, r.utmMedium, r.utmCampaign].filter(Boolean).join(' / ') || r.referrer}
                   </p>
                 )}
-                {r.marketingOptIn && <p className="text-gray-500 text-xs">{a.marketingOptIn}</p>}
+                {/* A single opt-in from a public form: shown as what it is — a request —
+                    so nobody reads it as permission to mail (UWG §7(2) Nr. 2). */}
+                {r.marketingOptInRequested && (
+                  <p className="text-gray-500 text-xs" data-testid={`inquiry-optin-${r.id}`}>
+                    {r.marketingOptInConfirmedAt ? a.marketingOptInConfirmed : a.marketingOptIn}
+                  </p>
+                )}
                 {r.openRoles && <p className="text-gray-700"><span className="text-gray-500">{a.openRoles}:</span> {r.openRoles}</p>}
                 {r.message && <p className="text-gray-600 whitespace-pre-wrap border-l-2 border-gray-200 pl-3">{r.message}</p>}
               </div>

@@ -703,6 +703,12 @@ run_tool node scripts/backfill-requisitions.mjs || true
 # `prisma db push --accept-data-loss` would fail on it otherwise.
 log "check for mentees with more than one active mentor (report only)"
 run_tool node prisma/check-active-mentor-duplicates.mjs || true
+# Public host → org mappings (#2569), report only: a MARKETING org with no
+# mapped host has a CLOSED demo form on its landing (fail-closed by design), and
+# the line names the exact set-public-host.mjs command to open it. Never fails
+# a deploy, never writes.
+log "public host mappings (report only)"
+run_tool node prisma/set-public-host.mjs --list || true
 # API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.

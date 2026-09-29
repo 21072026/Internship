@@ -36,6 +36,9 @@ export default async function PrivacyPage() {
     // send text to a model, and a notice that mentions only the first is a
     // notice that under-discloses the other three (#2034).
     { title: p.aiTitle, body: p.aiBody },
+    // The public enquiry / demo forms (#2569): the row stamps this notice's
+    // version as its consent record, so the notice must name what the row keeps.
+    { title: p.enquiryTitle, body: p.enquiryBody },
     { title: p.retentionTitle, body: p.retention },
     { title: p.rightsTitle, body: p.rights },
     { title: p.contactTitle, body: contactBody },
