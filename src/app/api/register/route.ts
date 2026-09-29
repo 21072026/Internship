@@ -3,6 +3,8 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
+import { emailTakenInOrgWorld, worldOfOrg } from '@/lib/userWorld';
 import { z } from 'zod';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
@@ -175,12 +177,35 @@ export async function POST(request: Request) {
       autoLink = { mentorId: invitation.mentorId, menteeId: invitation.menteeId, projectId: invitation.projectId };
     } else {
       // An open registration may still carry a referral link.
-      const referrer = await resolveReferrer(parsed.data.ref);
+      // WORLDS (#2590): an open registration lands in the DEFAULT org, so only a
+      // referrer of that org's world counts. Referral codes are globally unique;
+      // without the world a marketing user's code pasted here would stamp
+      // `referredById` with a person of the other product's tenant.
+      const referrer = await resolveReferrer(parsed.data.ref, await worldOfOrg(await defaultOrgId()));
       if (referrer?.isActive) referredById = referrer.id;
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
+    // Assign the tenant at creation time (#1272): invited users inherit the
+    // inviter's org (carried on the InvitationToken), everyone else gets the
+    // default org — the same one the deploy backfill would assign. Without
+    // this, fail-closed org scoping (#1227) 403s an invited COMPANY user's
+    // portal until the next deploy runs the backfill.
+    // (Resolved before the duplicate check below, which needs it: #2590.)
+    const orgId = invitedOrgId ?? (await defaultOrgId());
+
+    // "An account with this email already exists" means IN THE WORLD OF THE
+    // ACCOUNT BEING CREATED (#2590), i.e. the vertical of `orgId` — the
+    // invitation's organization, else the default org. One mailbox may hold an
+    // internship account AND a marketing account (two rows, two tenants); an
+    // invitation into the marketing org for an address that already has an
+    // internship account is therefore NOT a duplicate: it creates a second,
+    // independent row (its own password, its own data) in the marketing org.
+    // This is safe for the other row — nothing here reads or writes it — and
+    // sound for the invitee, because the invitation is what proves they control
+    // the mailbox. Token-less sign-up is unchanged in effect: it lands in the
+    // default org, so it is a duplicate exactly when the INTERNSHIP world already
+    // has the address. A single-world deployment gets the same 409 as before.
+    if (await emailTakenInOrgWorld(email, orgId)) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
     }
 
@@ -203,13 +228,6 @@ export async function POST(request: Request) {
     const selfRegistered = !token;
 
     const timezone = isValidTimeZone(parsed.data.timezone) ? parsed.data.timezone : null;
-
-    // Assign the tenant at creation time (#1272): invited users inherit the
-    // inviter's org (carried on the InvitationToken), everyone else gets the
-    // default org — the same one the deploy backfill would assign. Without
-    // this, fail-closed org scoping (#1227) 403s an invited COMPANY user's
-    // portal until the next deploy runs the backfill.
-    const orgId = invitedOrgId ?? (await defaultOrgId());
 
     // Enforced SSO (#1950). Registration sets a password, so it is a door: an
     // invitation into an enforced tenant would otherwise mint a credential the
@@ -369,7 +387,15 @@ export async function POST(request: Request) {
       if (!emailVerified) {
         const verifyToken = await createEmailVerificationToken(user.id);
         try {
-          await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName, locale: invitationLocale });
+          // WORLDS (#2590): an email-less link can invite into the MARKETING
+          // org, and this mail's button must open that product, not the
+          // internship one — the mail builder derives the link from the
+          // account's org. Handed over ONLY for a non-default world so an
+          // ordinary internship registration keeps the exact mail it always got
+          // (no org means the product-default brand, which a default org that
+          // carries its own brand name would otherwise change).
+          const mailOrgId = (await worldOfOrg(user.orgId)) === DEFAULT_VERTICAL ? undefined : user.orgId;
+          await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName, orgId: mailOrgId, locale: invitationLocale });
         } catch (e) {
           console.error('Verification email failed:', e);
         }

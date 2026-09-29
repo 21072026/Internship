@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 
 // Vertical write-path gate (#2352, epic #2348). Hiding a module from the nav
 // (#2351) is not access control — the route is still reachable by a direct POST.
@@ -85,6 +85,7 @@ test('a MARKETING org is refused at every gated write path with capability_unava
   test.slow();
   const { org, email } = await adminIn('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, email, 'WGatePass123', '/admin');
     for (const { path, method } of GATED) {
       // A deliberately empty body: the gate runs before validation, so a gated
@@ -169,6 +170,7 @@ test('a MARKETING mentee is refused by the capability gate, not by the handler r
   test.slow();
   const { org, email } = await menteeInMarketing();
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInForApiCalls(page, email, 'WGatePass123');
     for (const { path, method } of ROLE_CHECKED) {
       const res = await page.request.fetch(path, { method: method ?? 'POST', data: {} });
@@ -187,7 +189,7 @@ test('a MARKETING mentee is refused by the capability gate, not by the handler r
  * both halves of the #2504 case need. Returns the ids to clean up.
  */
 async function projectRoomFor(orgId: string, email: string) {
-  const admin = await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+  const admin = await prisma.user.findFirstOrThrow({ where: { email, orgId }, select: { id: true } });
   const project = await prisma.project.create({
     data: {
       orgId,
@@ -226,6 +228,7 @@ test('a MARKETING org cannot start a call in a project group room', async ({ pag
   const { org, email } = await adminIn('MARKETING');
   const room = await projectRoomFor(org.id, email);
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, email, 'WGatePass123', '/admin');
 
     const res = await page.request.post('/api/meetings/instant', {

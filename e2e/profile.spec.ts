@@ -25,7 +25,7 @@ test('mentee can save the new profile fields (city, whatsapp)', async ({ page })
     // proves the save succeeded and was surfaced to the user.
     await expect(page.getByText(/updated successfully/i).first()).toBeVisible({ timeout: 10_000 });
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     expect(user?.city).toBe('Monheim');
     expect(user?.whatsapp).toBe('+491631681948');
   } finally {

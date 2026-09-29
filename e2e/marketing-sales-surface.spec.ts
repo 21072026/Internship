@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import {
   MARKETING_MENTOR_ADMIN_ONLY,
   MARKETING_MENTOR_PAGES,
@@ -166,6 +166,13 @@ function fill(path: string): string {
   });
 }
 
+/** A probe body whose string values may name a seeded id (`':ownCompanyId'`). */
+function fillBody(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(body).map(([k, v]) => [k, typeof v === 'string' && /^:[A-Za-z]+$/.test(v) ? fill(v) : v]),
+  );
+}
+
 function statusMatches(status: number, expected: SalesExpectation): boolean {
   switch (expected) {
     case 'deny':
@@ -180,6 +187,9 @@ function statusMatches(status: number, expected: SalesExpectation): boolean {
 }
 
 async function signInRep(page: Page) {
+  // The rep's account lives in the MARKETING org, so it signs in — and stays, for
+  // every later navigation and page.request call — on the marketing host (#2590).
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, repEmail, PASSWORD, '/sales');
 }
 
@@ -311,7 +321,7 @@ test('the rep cannot re-point their record at another account', async ({ page })
   test.slow();
   await signInRep(page);
   // Same tenant, somebody else's account: re-pointing is an ADMIN decision in
-  // a vertical without mentorship — else /sales/accounts would open it.
+  // every vertical (#2613) — else /sales/accounts would open it.
   const same = await page.request.put(`/api/mentorship/${ids.ownRelationId}`, { data: { companyId: ids.colleagueCompanyId } });
   expect(same.status()).toBe(403);
   const foreign = await page.request.put(`/api/mentorship/${ids.ownRelationId}`, { data: { companyId: ids.foreignCompanyId } });
@@ -328,7 +338,7 @@ test('admin-only endpoints refuse the rep', { tag: '@smoke' }, async ({ page }) 
   for (const probe of MARKETING_MENTOR_ADMIN_ONLY) {
     const res = await page.request.fetch(fill(probe.path), {
       method: probe.method,
-      ...(probe.body ? { data: probe.body } : {}),
+      ...(probe.body ? { data: fillBody(probe.body) } : {}),
     });
     expect(statusMatches(res.status(), probe.expect), `${probe.method} ${probe.path} (${probe.why}) → ${res.status()}`).toBe(true);
   }
@@ -343,7 +353,7 @@ test("another rep's and another org's records are out of reach, by id and by pag
   for (const probe of MARKETING_MENTOR_ROWS) {
     const res = await page.request.fetch(fill(probe.path), {
       method: probe.method,
-      ...(probe.body ? { data: probe.body } : {}),
+      ...(probe.body ? { data: fillBody(probe.body) } : {}),
     });
     expect(statusMatches(res.status(), probe.expect), `${probe.method} ${probe.path} (${probe.why}) → ${res.status()}`).toBe(true);
   }

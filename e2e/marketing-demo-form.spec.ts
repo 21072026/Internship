@@ -203,6 +203,7 @@ test('a request on the marketing host lands in the mapped MARKETING org, unowned
   const mktContext = await browser.newContext();
   const mktPage = await mktContext.newPage();
   try {
+    await mktPage.context().setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST }); // MARKETING-org admin => marketing host (#2590)
     await signInAndSettle(mktPage, mktAdminEmail, PW, '/admin');
     await gotoSettled(mktPage, '/admin/company-inquiries');
     await expect(mktPage.getByRole('heading', { name: 'Demo requests' })).toBeVisible();
@@ -277,6 +278,7 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
   const context = await browser.newContext();
   const page = await context.newPage();
   try {
+    await page.context().setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST }); // MARKETING-org admin => marketing host (#2590)
     await signInAndSettle(page, mktAdminEmail, PW, '/admin');
     const manual = await page.request.post('/api/admin/marketing-accounts', {
       data: { name: `Typed Handel ${stamp}`, contactName: 'Tia Typed', contactEmail: uniqueEmail('demo-form-typed') },
@@ -317,6 +319,7 @@ test('an invitation link opens the invited tenant’s own product host', async (
   const int = await browser.newContext();
   try {
     const mktPage = await mkt.newPage();
+    await mktPage.context().setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST }); // MARKETING-org admin => marketing host (#2590)
     await signInAndSettle(mktPage, mktAdminEmail, PW, '/admin');
     const intPage = await int.newPage();
     await signInAndSettle(intPage, intAdminEmail, PW, '/admin');

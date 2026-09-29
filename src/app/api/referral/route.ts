@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { ensureReferralCode, referralUrl } from '@/lib/referral';
+import { ensureReferralCode, referralUrlForOrg } from '@/lib/referral';
 
 // GET — my shareable referral link, plus who has already signed up through it
 // (#51). Anyone signed in has one: mentees invite their circle, mentors and
@@ -22,6 +22,12 @@ export async function GET() {
       take: 50,
       select: { id: true, fullName: true, role: true, isActive: true, createdAt: true },
     });
-    return NextResponse.json({ code, url: referralUrl(code), referred, count: referred.length });
+    // WORLDS (#2590): the shareable link opens the sign-up of the product THIS
+    // user's account lives in (their organization's world), so what they paste
+    // into a message is the address of their own product — a marketing user's
+    // link points at the marketing host, everyone else's is byte-for-byte the
+    // internship link it always was.
+    const url = await referralUrlForOrg(code, session.user.orgId);
+    return NextResponse.json({ code, url, referred, count: referred.length });
   });
 }

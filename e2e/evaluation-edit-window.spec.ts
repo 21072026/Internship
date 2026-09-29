@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // #1893 — the correction window on an evaluation, and reopening an interview
@@ -165,7 +165,7 @@ test('correcting an evaluation un-approves and un-publishes its testimonial exce
 
 test('a reopened panel still hides the other scorecards, and a scored interviewer cannot be dropped', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const aEmail = uniqueEmail('reopen-int-a');
   const bEmail = uniqueEmail('reopen-int-b');
   const cEmail = uniqueEmail('reopen-cand');

@@ -40,10 +40,27 @@ export async function getLocale(): Promise<Locale> {
   return defaultLocale;
 }
 
-// The signed-in user's tenant vertical, or INTERNSHIP for a signed-out visitor
-// (and any failure). One indexed lookup, and only when a session cookie is
-// present — a public view resolves to the default with no query, so the overlay
-// layer costs the live single-tenant product nothing (#1197).
+// The signed-in user's tenant vertical, or the HOST's product for a signed-out
+// visitor (and any failure). One indexed lookup, and only when a session cookie
+// is present — a public view resolves from the host with no query, so the
+// overlay layer costs the live single-tenant product nothing (#1197).
+//
+// WORLDS (#2590) — why the two branches below can never disagree. The rule is
+// "the URL you signed in on decides the product": one person can hold an account
+// in each world, and the host says which. The session callback in
+// src/lib/auth.ts enforces that on EVERY request — a session whose organization's
+// vertical differs from the host it is presented on is returned as null. So by
+// the time `getServerSession()` below yields a user, that user's org vertical IS
+// the host's vertical (the guard is recomputed from the org's CURRENT vertical on
+// every request, so an organization moved to the other product stops matching at
+// once; its only blind spot is a request with no host to read, where it fails
+// open). A mismatched session falls through to the `!session?.user?.id` branch
+// and the copy follows the host, exactly like a signed-out visitor's. So the
+// lookup still reads the org's vertical — the org, not the host, is the source
+// of truth for a signed-in person, and it keeps the overlay right where no host
+// header exists (a cron render, a script) — and the host never has to be
+// re-asked here.
+//
 // Wrapped in React's per-request cache() (#2492): the root layout asks for the
 // vertical from generateMetadata, generateViewport and its body, and PublicShell
 // and the footer ask again — one session decode + one Prisma lookup per request,

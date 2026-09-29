@@ -24,6 +24,7 @@ import {
 } from '@/lib/activeMentorship';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { stripNextActionFor } from '@/lib/nextActionRule';
+import { refuseForeignCompany } from '@/lib/relationCompany';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -204,6 +205,12 @@ export async function POST(request: Request) {
     }
 
     const { mentorId, menteeId, companyId, projectId, startDate } = parsed.data;
+
+    // The company must be the admin's own tenant's (#2613): unchecked, another
+    // tenant's id was attached and its name came back in the response, and an
+    // unknown one was a foreign-key 500. Both now answer the same 404.
+    const foreignCompany = await refuseForeignCompany(session, companyId);
+    if (foreignCompany) return foreignCompany;
 
     const [mentor, mentee] = await Promise.all([
       prisma.user.findUnique({ where: { id: mentorId } }),

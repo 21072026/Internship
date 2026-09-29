@@ -37,6 +37,12 @@ export async function POST(request: Request) {
   const existing = await readRememberToken();
   if (existing) await revokeTrustedDeviceByToken(existing);
 
+  // WORLDS (#2590): enrolled for exactly `session.user.id` — the account that just
+  // signed in on THIS host. A session only exists on its own world's host (the
+  // session callback nulls it anywhere else), and the cookie set below is
+  // host-only, so a device is born on, and stays with, the one product its
+  // account lives in; a person who holds an account in each world remembers each
+  // browser separately, per host, per account. The refresh route re-checks it.
   const { token, expiresAt } = await enrolTrustedDevice(session.user.id, request);
   const res = NextResponse.json({ ok: true, expiresAt: expiresAt.toISOString() });
   setRememberCookies(res, token, expiresAt);

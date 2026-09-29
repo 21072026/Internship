@@ -30,6 +30,14 @@ const MAX_ITEMS = 50;
  * as `appBase()` in lib/ssoSaml.ts, never a hardcoded domain). A host this
  * deployment does not serve also falls back to the configured origin, so the
  * value can never be attacker-chosen.
+ *
+ * WORLDS (#2590). The feed is PUBLIC and ANONYMOUS — there is no recipient or
+ * organization to resolve a world from — so the only honest signal is the host
+ * the reader is already on, which `requestOrigin` validates against the served
+ * hosts. A marketing-host subscriber therefore gets marketing-host links with no
+ * change here, and the no-argument form (a caller with no request: a build step,
+ * a test) is the configured, INTERNSHIP origin by design. Nothing in this file
+ * looks at a user, so there is nothing per-recipient to add.
  */
 export function publicOrigin(get?: (name: string) => string | null | undefined): string {
   return get ? requestOrigin(get) : configuredOrigin();

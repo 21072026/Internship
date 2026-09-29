@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
+import { findAccountsForMailedLink } from '@/lib/passwordReset';
+import { worldForHeaders } from '@/lib/hostWorld';
 import { sendVerificationEmail } from '@/services/emailService';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { withTenantScope } from '@/lib/orgContext';
@@ -46,11 +48,24 @@ export async function POST(request: Request) {
   if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 });
   // Narrow for the same reason as the forgot route: a corrupt `Json` column must
   // not be able to break the way back in (#1150).
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, email: true, fullName: true, orgId: true, emailVerified: true, preferredLanguage: true },
+  //
+  // WHICH ACCOUNT (#2590) — the same rule as /api/auth/forgot, and it is the same
+  // helper on purpose: this public path has no session, so the HOST the sign-in
+  // page was served from decides which product's account is meant, and an
+  // address with no account there falls back to its single account in the other
+  // world (the mail then links to that account's own product, via its `orgId`).
+  // The response is `{ ok: true }` in every case, so none of this is observable.
+  const world = worldForHeaders((name) => request.headers.get(name));
+  const targets = await findAccountsForMailedLink(email, world, {
+    id: true,
+    email: true,
+    fullName: true,
+    orgId: true,
+    emailVerified: true,
+    preferredLanguage: true,
   });
-  if (user && !user.emailVerified) {
+  for (const user of targets) {
+    if (user.emailVerified) continue;
     const token = await createEmailVerificationToken(user.id);
     try {
       await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId, locale: user.preferredLanguage });

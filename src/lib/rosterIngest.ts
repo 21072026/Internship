@@ -368,6 +368,11 @@ export function diffRoster(
   rows: { row: number; key: string; value: RosterFeedRow }[],
   current: RosterTargetRow[],
 ): RosterDiff {
+  // `current` is ONE organization's mentees (`loadRosterTarget` filters on
+  // `feed.orgId`), so an e-mail is unique inside it: the address-keyed map below
+  // can never hold two people, and a person's account in the OTHER world (same
+  // address, different tenant — #2590) is not in it at all. That is what lets the
+  // "match an existing account by e-mail" adoption below stay exactly as it was.
   const byKey = new Map<string, RosterTargetRow>();
   const byEmail = new Map<string, RosterTargetRow>();
   for (const target of current) {

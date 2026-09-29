@@ -53,7 +53,7 @@ async function mailJobsFor(userId: string) {
 }
 
 async function cleanup(email: string) {
-  const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  const user = await prisma.user.findFirst({ where: { email }, select: { id: true } });
   if (user) {
     // Neither the ledger nor the queue has an FK to User (both are ledgers on
     // purpose), so cleanupByEmail cannot reach them.

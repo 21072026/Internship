@@ -125,7 +125,7 @@ test('the notes window falls back to a popup where Document PiP is missing', asy
       })
       .toContain('Popup fallback works');
   } finally {
-    const user = await prisma.user.findUnique({ where: { email: menteeEmail } });
+    const user = await prisma.user.findFirst({ where: { email: menteeEmail } });
     if (user) await prisma.personalNote.deleteMany({ where: { userId: user.id } });
     await cleanupByEmail(menteeEmail);
   }
@@ -164,7 +164,7 @@ test('where Document PiP exists it is used, and no "not on top" warning is shown
     // Nothing to apologise for when the window really is on top.
     await expect(win.getByTestId('floating-notes-popup-warning')).toHaveCount(0);
   } finally {
-    const user = await prisma.user.findUnique({ where: { email: menteeEmail } });
+    const user = await prisma.user.findFirst({ where: { email: menteeEmail } });
     if (user) await prisma.personalNote.deleteMany({ where: { userId: user.id } });
     await cleanupByEmail(menteeEmail);
   }

@@ -44,6 +44,14 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Cannot unlock another admin' }, { status: 400 });
     }
 
+    // The lockout counter is keyed by ADDRESS (src/lib/accountLockout.ts), not by
+    // account, so with one person holding an account in each world (#2590) the
+    // two accounts share one brute-force counter: five wrong codes on the
+    // marketing host also brake the internship sign-in. That is deliberate — the
+    // thing being throttled is guessing at a mailbox's credentials — and it means
+    // this unlock, scoped to the target's own tenant above, clears the address's
+    // counter for both. The user id that leaves this route is always the
+    // tenant-checked one; the address is only read off that same row.
     const cleared = await clearLockoutForUser(user.id, user.email);
 
     await prisma.auditLog.create({

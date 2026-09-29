@@ -19,7 +19,9 @@ test('JIT-provisions a new user into the correct tenant with default MENTEE role
     expect(created).toBe(true);
     expect(user.orgId).toBe(org.id);
     expect(user.role).toBe('MENTEE');
-    const row = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    // The row provisioned INTO this org — `User.email` is no longer unique
+    // (#2590), and "which account" is a question the tenant answers here.
+    const row = await prisma.user.findFirst({ where: { email: email.toLowerCase(), orgId: org.id } });
     expect(row?.emailVerified).not.toBeNull();
 
     // Idempotent: a second login returns the same user, does not duplicate.

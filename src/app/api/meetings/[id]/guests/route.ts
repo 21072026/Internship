@@ -96,7 +96,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const memberEmails = [meeting.relation?.mentor.email, meeting.relation?.mentee.email].filter(
       (e): e is string => Boolean(e)
     );
-    const { guests, rejectedAsMembers } = await normalizeGuests(parsed.data.guests, memberEmails);
+    const { guests, rejectedAsMembers } = await normalizeGuests(
+      parsed.data.guests,
+      memberEmails,
+      // The caller's org (this meeting is inside their tenant — authorize()
+      // above 404s otherwise): "has an account" is asked in its world (#2590).
+      session.user.orgId,
+    );
 
     // The cap is per meeting, not per request — otherwise ten requests of two
     // guests each would walk straight past it.

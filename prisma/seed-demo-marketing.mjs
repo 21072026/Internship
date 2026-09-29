@@ -308,15 +308,24 @@ export async function seedMarketingDemo({ prisma, passwordHash, domain, log = co
 
   const upsertUser = async ({ local, fullName, role, password = passwordHash, extra = {} }) => {
     const email = `${local}@${domain}`;
-    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, orgId: true } });
-    if (existing) {
-      // A demo row that predates this tenant — or that the org backfill in
-      // seed-demo.mjs claimed for the default org — is moved here once.
-      if (existing.orgId !== org.id) {
-        await prisma.user.update({ where: { id: existing.id }, data: { orgId: org.id } });
-      }
-      return existing;
-    }
+    // Found INSIDE this tenant, never by address alone (#2590). `User.email` is
+    // no longer unique — one person may hold an account in each product, and the
+    // internship half of this seeder lives in the same @demo.example.com
+    // namespace — so an address match can be the OTHER world's row, and that
+    // row belongs to another product's tenant.
+    //
+    // This used to MOVE such a row here (`update orgId`): a demo row that
+    // predated this tenant, or that the default-org backfill in seed-demo.mjs
+    // had claimed, was adopted once. Under worlds that is exactly the bug the
+    // model exists to prevent — it rips a person out of the internship product
+    // (and out of its lists, which filter on orgId) to make the demo tidy. So
+    // the row is looked up by (email, this org) and, when absent, CREATED here;
+    // any same-address row in another world is left alone.
+    const existing = await prisma.user.findFirst({
+      where: { email, orgId: org.id },
+      select: { id: true, orgId: true },
+    });
+    if (existing) return existing;
     return prisma.user.create({
       data: {
         email,

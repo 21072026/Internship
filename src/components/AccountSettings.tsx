@@ -712,6 +712,12 @@ export function AccountSettings() {
     return data;
   };
 
+  // "Email already in use" (409, verbatim from PUT /api/account) means in USE IN
+  // THIS PRODUCT (#2590, docs/worlds.md): one person can hold an account under
+  // the same address in the other product, and that is neither a conflict nor
+  // something this form may hint at. So the copy stays exactly as it was; what
+  // changed is the server-side question behind it, and the fact that this
+  // change only ever moves THIS account's address, never the twin's.
   const submitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingEmail(true);

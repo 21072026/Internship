@@ -9,6 +9,7 @@ import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { findPossibleDuplicates, type DuplicateSignal } from '@/lib/duplicateDetection';
+import { emailTakenInWorld, worldOfOrg } from '@/lib/userWorld';
 
 const schema = z.object({ csv: z.string().min(1).max(200_000), dryRun: z.boolean().optional() });
 
@@ -61,6 +62,9 @@ export async function POST(request: Request) {
     possibleDuplicates?: { id: string; fullName: string; matchedOn: DuplicateSignal[] }[];
   }[] = [];
   const orgId = resolveOrgId(session);
+  // The importing admin's world, resolved once: the duplicate check below runs
+  // per CSV row, and the organization's product does not change mid-import.
+  const world = await worldOfOrg(orgId);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -70,7 +74,10 @@ export async function POST(request: Request) {
       rows.push({ row: i + 1, email: email || '', status: 'error', reason: 'invalid email' });
       continue;
     }
-    const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } });
+    // "Already exists" is decided IN THE IMPORTING ADMIN'S WORLD (#2590): a row
+    // whose address only holds an account in the other product is a new person
+    // here and is created, not skipped as a duplicate.
+    const exists = await emailTakenInWorld(email.toLowerCase(), world);
     if (exists) {
       skipped.push(email);
       rows.push({ row: i + 1, email, status: 'skip', reason: 'already exists' });
