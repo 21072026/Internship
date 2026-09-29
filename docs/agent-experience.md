@@ -7430,3 +7430,15 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   `page.request` needs.
 - **The worktree guard refuses long `python3 - <<EOF` heredocs** ("too complex to verify").
   Write the script into the scratchpad with the Write tool and run `python3 <file>` instead.
+
+## 2026-09-29 — Server page under `/admin` cannot answer 404 (#2560)
+
+- **`notFound()` in a server page below `src/app/admin/loading.tsx` answers HTTP 200.** The
+  loading boundary flushes the shell before the page's lookup runs, so Next.js can only swap the
+  streamed segment for the not-found UI (plus a `noindex` meta) — the status line is already
+  sent. Assert the not-found screen and the absence of the row's data, and the API's 404; a
+  `status() === 404` check on such a page is red by construction.
+- **A click on a card in `/admin/companies` right after typing into its search box can be
+  lost**: the grid unmounts while the debounced fetch reloads, and the click lands on the
+  outgoing element (no navigation, no error). Click before searching, or wait for the list to
+  settle.

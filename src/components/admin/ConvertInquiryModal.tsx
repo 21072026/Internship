@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useModalFocus } from '@/components/ui/useModalFocus';
@@ -142,12 +143,12 @@ export function ConvertInquiryModal({
               {success}
             </p>
             <div className="flex justify-end gap-2">
-              <a
+              <Link
                 href="/admin/companies"
                 className="inline-flex items-center text-sm text-blue-600 hover:underline px-3 py-2"
               >
                 {c.openCompany}
-              </a>
+              </Link>
               <Button type="button" onClick={onClose} data-testid="convert-inquiry-done">
                 {c.done}
               </Button>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -157,7 +158,7 @@ export default function CompanyInquiriesPage() {
                   >
                     <Building2 className="h-4 w-4" />
                     {a.convert.convertedTo.replace('{company}', r.convertedCompany.name)}
-                    <a href="/admin/companies" className="text-blue-600 hover:underline">{a.convert.openCompany}</a>
+                    <Link href={`/admin/companies/${r.convertedCompany.id}`} className="text-blue-600 hover:underline">{a.convert.openCompany}</Link>
                   </p>
                 )}
                 {r.openRoles && <p className="text-gray-700"><span className="text-gray-500">{a.openRoles}:</span> {r.openRoles}</p>}

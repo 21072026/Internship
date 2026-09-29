@@ -25,6 +25,10 @@ const updateCompanySchema = z.object({
   size: z.string().max(TEXT_LIMITS.companySize).optional(),
   address: z.string().max(TEXT_LIMITS.companyAddress).optional(),
   quota: z.number().int().min(0).max(10000).nullable().optional(),
+  // The id this account carries in the product the tenant sells (#2446), typed
+  // in by an ADMIN on /admin/companies/[id] (#2560). `null` or a blank string
+  // clears it. 191 = the column's VARCHAR width.
+  externalId: z.string().trim().max(191).nullable().optional(),
   needs: z
     .array(
       z.object({
@@ -139,7 +143,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       );
     }
 
-    const { needs, contactEmail, ...companyData } = parsed.data;
+    const { needs, contactEmail, externalId: rawExternalId, ...companyData } = parsed.data;
+    // Blank means "no external id", never an empty-string id that every other
+    // blank would then collide with.
+    const externalId = rawExternalId === undefined ? undefined : rawExternalId || null;
 
     const inTenant = await prisma.company.findFirst({
       where: withinTenant({ id }, await tenantWhere(session)),
@@ -147,6 +154,32 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     });
     if (!inTenant) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+    }
+
+    // One external id, one account — within THIS tenant (#2560). There is no
+    // unique index to lean on (see the `externalId` comment in
+    // prisma/schema.prisma for why), so the question is asked here, and the
+    // answer names the account that already holds it: an admin who typed a
+    // merchant id twice needs to know WHICH record to fix, not just "taken".
+    // Another tenant's row is invisible to this lookup on purpose — the same
+    // merchant may be an account of two tenants. Check-then-write, not a
+    // constraint: two admins saving the same id in the same instant can both
+    // pass, which the usage feed then reports as ambiguous rather than guessing.
+    if (externalId) {
+      const holder = await prisma.company.findFirst({
+        where: withinTenant({ externalId, NOT: { id } }, await tenantWhere(session)),
+        select: { id: true, name: true },
+      });
+      if (holder) {
+        return NextResponse.json(
+          {
+            error: 'This external id is already used by another company.',
+            code: 'external_id_taken',
+            conflict: holder,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const company = await prisma.$transaction(async (tx) => {
@@ -158,7 +191,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         where: { id },
         data: {
           ...companyData,
-          contactEmail: contactEmail || null,
+          // Only when the body names it: the edit form always sends the key
+          // ('' clears it), but a partial PUT — the external-id editor on the
+          // detail page sends nothing else — must not wipe the address.
+          ...(contactEmail !== undefined && { contactEmail: contactEmail || null }),
+          ...(externalId !== undefined && { externalId }),
           ...(needs !== undefined && {
             needs: { create: needs.map(({ id: _id, ...n }) => n) },
           }),

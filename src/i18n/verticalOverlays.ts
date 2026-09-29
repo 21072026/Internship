@@ -117,6 +117,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // that means the same thing in both products, so it is left alone — an
       // overlay entry that changes nothing is noise the next reader has to
       // re-derive.
+      // The account detail page (#2560): the funnel records are deals owned
+      // by a rep, and a CompanyNeed is what the account needs.
+      companyDetail: {
+        sections: { funnel: 'Deals', needs: 'Open needs' },
+        funnel: {
+          person: 'Lead',
+          owner: 'Rep',
+          empty: 'No deals on this account yet.',
+          continues: 'Continues an earlier deal owned by {name}',
+        },
+        needsEmpty: 'No needs recorded.',
+      },
       companiesPage: {
         subtitle: 'Manage the accounts you sell to and what each one needs',
         addLoginHint: 'Create a read-only login for a company to follow its linked leads.',
@@ -341,6 +353,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionEmpty: 'Henüz kaynak yok — kaynak bazlı dönüşümü görmek için müşteri adaylarına kaynak ata.',
         sourceUnsourced: '{n} müşteri adayının kaynağı yok ve yukarıda gösterilmiyor.',
       },
+      companyDetail: {
+        sections: { funnel: 'Fırsatlar', needs: 'Açık ihtiyaçlar' },
+        funnel: {
+          person: 'Müşteri adayı',
+          owner: 'Temsilci',
+          empty: 'Bu hesapta henüz fırsat yok.',
+          continues: '{name} temsilcisindeki önceki fırsatın devamı',
+        },
+        needsEmpty: 'Kayıtlı ihtiyaç yok.',
+      },
       companiesPage: {
         subtitle: 'Sattığın müşteri firmalarını ve ihtiyaçlarını yönet',
         addLoginHint: 'Bir şirketin kendi müşteri adaylarını izlemesi için salt-okunur giriş oluştur.',
@@ -495,6 +517,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Konversion nach Quelle',
         sourceConversionEmpty: 'Noch keine Quellen — weise Leads eine Quelle zu, um die Konversion pro Quelle zu sehen.',
         sourceUnsourced: '{n} Lead(s) ohne Quelle werden oben nicht angezeigt.',
+      },
+      companyDetail: {
+        sections: { funnel: 'Deals', needs: 'Offener Bedarf' },
+        funnel: {
+          person: 'Lead',
+          owner: 'Vertriebsmitarbeiter',
+          empty: 'Für diesen Account gibt es noch keine Deals.',
+          continues: 'Setzt einen früheren Deal von {name} fort',
+        },
+        needsEmpty: 'Kein Bedarf erfasst.',
       },
       companiesPage: {
         subtitle: 'Kunden-Accounts und ihren Bedarf verwalten',
