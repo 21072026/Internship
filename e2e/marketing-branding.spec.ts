@@ -95,8 +95,8 @@ test('an INTERNSHIP session presented on the marketing host is no session there 
     expect((await apiSession(request))?.user.email).toBe(email);
     expect(await apiSession(request, MARKETING_HOST), 'a session is not valid on the other world\'s host').toBeNull();
 
-    const html = await (await request.get('/auth/signin', { headers: MARKETING })).text();
-    expect(html).toContain('SaleVali');
+    const manifest = await (await request.get('/manifest.webmanifest', { headers: MARKETING })).json();
+    expect(manifest.name).toBe('SaleVali');
   } finally {
     await cleanupByEmail(email);
   }

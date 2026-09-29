@@ -403,7 +403,7 @@ async function removeSeededRows({ orgIds, emails }: SeedScratch): Promise<void> 
  * sign-in — the previous account's header must not leak onto the next one.
  * Passing `{}` clears the header (context-level headers are replaced, not merged).
  */
-export async function useWorld(page: Page, vertical: TenantVertical): Promise<void> {
+export async function putOnWorld(page: Page, vertical: TenantVertical): Promise<void> {
   await page.context().setExtraHTTPHeaders(vertical === 'MARKETING' ? asHost(MARKETING_HOST) : {});
 }
 
@@ -414,10 +414,10 @@ export async function useWorld(page: Page, vertical: TenantVertical): Promise<vo
  * hops between tenants inside one test, and that helper carries the guards for
  * signing in as a *different* user than the one currently signed in (see the
  * doc comment in `e2e/helpers/auth.ts`). The context is moved onto the actor's
- * own world host first ({@link useWorld}) and STAYS there, so every following
+ * own world host first ({@link putOnWorld}) and STAYS there, so every following
  * `page.goto` / `page.request` call of the spec is that person on their site.
  */
 export async function signInAsTenantActor(page: Page, actor: TenantActor): Promise<void> {
-  await useWorld(page, actor.vertical);
+  await putOnWorld(page, actor.vertical);
   await signInAsFreshUser(page, actor.email, actor.password, actor.landing);
 }
