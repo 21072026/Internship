@@ -95,6 +95,7 @@ test('another org\'s admin cannot read org A\'s documents, CVs, avatars or attac
     `/api/documents/${ids.doc}`,
     `/api/documents/${ids.template}`,
     `/api/cv/${orgA.mentee.id}`,
+    `/api/cv/${orgA.mentee.id}/suggest`,
     `/api/avatar/${orgA.mentee.id}`,
     `/api/messages/attachments/${ids.relAttachment}`,
     `/api/messages/attachments/${ids.dmAttachment}`,
@@ -141,6 +142,10 @@ test('another org\'s admin cannot change org A\'s files or document requirements
     multipart: { file: { name: 'x.png', mimeType: 'image/png', buffer: PNG }, targetUserId: orgA.mentor.id },
   });
   expect(avatarUpload.status()).toBe(404);
+  const cvUpload = await rq.post('/api/cv', {
+    multipart: { file: { name: 'x.pdf', mimeType: 'application/pdf', buffer: PDF }, targetUserId: orgA.mentor.id },
+  });
+  expect(cvUpload.status()).toBe(404);
 
   // The refusals happened before any write: every row is exactly as seeded.
   const requirement = await prisma.documentRequirement.findUnique({ where: { id: ids.requirement } });
@@ -150,6 +155,7 @@ test('another org\'s admin cannot change org A\'s files or document requirements
   expect(await prisma.document.count({ where: { id: { in: [ids.docDel, ids.template] } } })).toBe(2);
   expect(await prisma.document.count({ where: { ownerId: orgA.mentor.id } })).toBe(0);
   expect(await prisma.cvFile.count({ where: { userId: orgA.mentee.id } })).toBe(1);
+  expect(await prisma.cvFile.count({ where: { userId: orgA.mentor.id } })).toBe(0);
   expect(await prisma.avatarFile.count({ where: { userId: { in: [orgA.mentee.id, orgA.mentor.id] } } })).toBe(1);
 });
 
