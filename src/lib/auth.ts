@@ -14,6 +14,7 @@ import { IMPERSONATION_SESSION_MAX_MS } from '@/lib/impersonationHistory';
 import { AUTH_SSO_REQUIRED } from '@/lib/authErrors';
 import { isPasswordLoginBlocked } from '@/lib/ssoEnforcement';
 import { resolveRedirectTarget } from '@/lib/servedHosts';
+import { spendGrant } from '@/lib/grantSpend';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -395,13 +396,9 @@ export const authOptions: NextAuthOptions = {
         if (!grant || grant.used || grant.expiresAt < new Date()) {
           throw new Error('Invalid or expired grant');
         }
-        // Spent by one conditional UPDATE, never check-then-write (#2548): two
-        // concurrent redemptions of one grant must not both mint a session.
-        const spent = await prisma.impersonationGrant.updateMany({
-          where: { id: grant.id, used: false, expiresAt: { gt: new Date() } },
-          data: { used: true },
-        });
-        if (spent.count !== 1) throw new Error('Invalid or expired grant');
+        // Spent by one conditional UPDATE, never check-then-write (#2548).
+        const spent = await spendGrant((where) => prisma.impersonationGrant.updateMany({ where, data: { used: true } }), grant.id);
+        if (!spent) throw new Error('Invalid or expired grant');
 
         const user = await prisma.user.findUnique({
           where: { id: grant.targetId },
@@ -444,15 +441,10 @@ export const authOptions: NextAuthOptions = {
         if (!grant || grant.used || grant.expiresAt < new Date()) {
           throw new Error('Invalid or expired SSO grant');
         }
-        // One conditional UPDATE is the spend (#2548). The read above checked
-        // `used` in JavaScript and then wrote, so two redemptions racing on one
-        // grant (two tabs, a double-fired effect on /auth/sso/complete) could
-        // both pass the check and both mint a session from a single-use grant.
-        const spent = await prisma.ssoLoginGrant.updateMany({
-          where: { id: grant.id, used: false, expiresAt: { gt: new Date() } },
-          data: { used: true },
-        });
-        if (spent.count !== 1) throw new Error('Invalid or expired SSO grant');
+        // One conditional UPDATE is the spend (#2548), not the read above —
+        // see src/lib/grantSpend.ts.
+        const spent = await spendGrant((where) => prisma.ssoLoginGrant.updateMany({ where, data: { used: true } }), grant.id);
+        if (!spent) throw new Error('Invalid or expired SSO grant');
 
         const user = await prisma.user.findUnique({
           where: { id: grant.userId },
@@ -499,11 +491,8 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Invalid or expired grant');
         }
         // Spent by one conditional UPDATE (#2548), like the SSO grant above.
-        const spent = await prisma.sessionRefreshGrant.updateMany({
-          where: { id: grant.id, used: false, expiresAt: { gt: new Date() } },
-          data: { used: true },
-        });
-        if (spent.count !== 1) throw new Error('Invalid or expired grant');
+        const spent = await spendGrant((where) => prisma.sessionRefreshGrant.updateMany({ where, data: { used: true } }), grant.id);
+        if (!spent) throw new Error('Invalid or expired grant');
 
         const user = await prisma.user.findUnique({
           where: { id: grant.userId },
