@@ -26,9 +26,13 @@ import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 export async function RoleShell({
   children,
   forcedRole,
+  mobileChrome = true,
 }: {
   children: React.ReactNode;
   forcedRole?: 'ADMIN' | 'MENTOR' | 'MENTEE';
+  // Passed to ResponsiveShell: `false` keeps the desktop sidebar but gives a
+  // phone screen entirely to the page (#2463) — see the prop there.
+  mobileChrome?: boolean;
 }) {
   const session = await getServerSession(authOptions);
 
@@ -66,6 +70,7 @@ export async function RoleShell({
     <>
       <CommandPalette role={isAdmin ? 'ADMIN' : isMentor ? 'MENTOR' : 'MENTEE'} capabilities={capabilities} />
       <ResponsiveShell
+        mobileChrome={mobileChrome}
         brand={<BrandWordmark oneLine />}
         headerExtra={isAdmin || isMentor ? <GlobalSearch /> : undefined}
         sidebar={
