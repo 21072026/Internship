@@ -9,7 +9,7 @@ import { emitStageChange } from '@/lib/stageChangeEffects';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import { refuseForeignCompany } from '@/lib/relationCompany';
+import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib/relationTargets';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
@@ -205,23 +205,25 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
       const stageChanging = !!pipelineStatus && isStageTransition(relation.pipelineStatus, pipelineStatus);
 
-      // Re-pointing the relation at a company (#2580 review, #2613) is an ADMIN
-      // decision in every vertical: a rep's /sales/accounts and a mentor's view
-      // of the placement company are built from their relations' companies, so
-      // an owner who could re-point would open any account in the tenant. No
-      // non-admin screen sends `companyId`; echoing the current value stays a
-      // no-op. The role check runs first, so an owner learns nothing about
-      // which ids exist. The admin's target must be in their own tenant — the
-      // org middleware scopes only the top-level `where`, so an unchecked id
-      // attached another tenant's company and read its name back.
-      if (rest.companyId !== undefined && rest.companyId !== relation.companyId) {
+      // Re-pointing the relation at a company, project or cohort (#2613, #2618)
+      // is an ADMIN decision in every vertical: each grants the owner something
+      // (an account in /sales/accounts, a seat on a project's team — see
+      // src/lib/relationTargets.ts). No non-admin screen sends these; echoing
+      // the current value stays a no-op. The role check runs first, so an owner
+      // learns nothing about which ids exist. The admin's target must be in
+      // their own tenant — the org middleware scopes only the top-level
+      // `where`, so an unchecked id attached another tenant's row.
+      const retargeted = RELATION_TARGETS.filter(
+        (target) => rest[target] !== undefined && rest[target] !== relation[target]
+      );
+      if (retargeted.length > 0) {
         if (session.user.role !== 'ADMIN') {
-          return NextResponse.json(
-            { error: 'Only an admin can change the company', code: 'company_change_admin_only' },
-            { status: 403 }
-          );
+          return NextResponse.json(TARGET_ADMIN_ONLY[retargeted[0]], { status: 403 });
         }
-        const refused = await refuseForeignCompany(session, rest.companyId);
+        const refused = await refuseForeignTargets(
+          session,
+          Object.fromEntries(retargeted.map((target) => [target, rest[target]]))
+        );
         if (refused) return refused;
       }
 
