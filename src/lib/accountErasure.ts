@@ -1,6 +1,13 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import {
+  companyContactErasureData,
+  erasedAddress,
+  erasureScoped,
+  inquiryErasureData,
+} from '@/lib/companyContactErasure';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
 // - hardDeleteUser: same cascade cleanup as the existing self-service account
@@ -34,6 +41,42 @@ async function forgetEmailLog(userId: string): Promise<void> {
   await prisma.newsletterSend.deleteMany({ where: { OR: [{ email: user.email }, { userId }] } });
 }
 
+// ── The person on a company record (#2434) ───────────────────────────────────
+//
+// "Erase the person, keep the company": the enquiry the person arrived through
+// (`CompanyInquiry`) and the account whose primary contact they are
+// (`Company.contact*`, #2407). The rule — which columns, which tenant's rows,
+// and why — lives in src/lib/companyContactErasure.ts, where it is unit-tested;
+// this is the Prisma-aware half.
+//
+// Returns OPS, not a promise, so each caller runs them inside its own
+// $transaction next to the rest of its scrub: an erasure either rewrites the
+// company side together with everything else or not at all.
+//
+// Same hard ordering as forgetEmailLog() above, and for the same reason — both
+// tables are matched on the ADDRESS, so it must be read before the user row is
+// rewritten (anonymise) or deleted (hard delete), or there is nothing left to
+// match on. The org is read from the same row: it is the ERASED PERSON'S tenant
+// that decides which rows are theirs, never an unfiltered match on the address,
+// which would also rewrite another tenant's lead that happens to carry it.
+async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, orgId: true } });
+  if (!user?.email) return [];
+  const fallbackOrgId = await defaultOrgId();
+  return [
+    prisma.companyInquiry.updateMany({
+      where: erasureScoped({ email: user.email }, user.orgId, fallbackOrgId),
+      data: inquiryErasureData(userId),
+    }),
+    // The company itself stays, with its name, needs, offers, requisitions,
+    // interests and relations; only the named person on it goes.
+    prisma.company.updateMany({
+      where: erasureScoped({ contactEmail: user.email }, user.orgId, fallbackOrgId),
+      data: companyContactErasureData(),
+    }),
+  ];
+}
+
 // ── Free text: what each surface gets, and why (#2052) ───────────────────────
 //
 // Rewriting the `User` row is not erasure. Everything the person ever typed —
@@ -51,14 +94,17 @@ async function forgetEmailLog(userId: string): Promise<void> {
 //      SupportAttachment, SupportTicket.subject (copied verbatim from the first
 //      80 characters of the requester's own first message — scrubbing the body
 //      and leaving the subject would erase nothing), MentorshipRequest.message,
-//      and the person's own PersonalNote rows (private to them, nobody else's
-//      view depends on them, so those are deleted outright).
+//      CompanyInquiry.message (via companyContactOps, #2434), and the person's
+//      own PersonalNote rows (private to them, nobody else's view depends on
+//      them, so those are deleted outright).
 //
 // 2. Content written ABOUT them is SCRUBBED: the free text goes, the row and
 //    its dates/types/stage stay. Those columns are the organisation's
 //    operational history and carry no PII once the prose is gone.
-//      InteractionLog.notes + subject, RelationNote.body, and any PersonalNote
-//      taken in a meeting that belongs to them.
+//      InteractionLog.notes + subject, RelationNote.body, any PersonalNote
+//      taken in a meeting that belongs to them, and — matched on their address,
+//      inside their own tenant only — CompanyInquiry.contactName/email/phone/
+//      note and Company.contactName/contactEmail/contactPhone (#2434).
 //
 // Scope of "about them": relation-scoped free text is scrubbed on relations
 // where the erased person is the MENTEE — the relation whose subject they are.
@@ -83,6 +129,13 @@ async function forgetEmailLog(userId: string): Promise<void> {
 //     StatusChange.reasonNote, Notification.text, ActivityLog/AuditLog detail).
 //     That script already lists every one of them; #2106 brings this function
 //     up to the same inventory. Anything added to the schema belongs in both.
+//     One of those is company-side: the `signup.companyInquiry` notification
+//     every admin receives carries the contact's name in `Notification.params`
+//     and no address, so nothing here can tell it from a namesake's.
+//   - a company contact who never had an ACCOUNT: both erasure paths start from
+//     a `User` row, so an enquiry whose sender never signed up is unreachable
+//     from here. #2559 extends companyContactOps() for that case (and adds a
+//     retention period for enquiries) rather than writing a second path.
 //
 // Emptying rather than nulling is forced by the schema: `Message.body`,
 // `SupportMessage.body`, `PersonalNote.body`, `RelationNote.body` and
@@ -135,13 +188,15 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
 
 export async function hardDeleteUser(userId: string): Promise<void> {
   await forgetEmailLog(userId);
+  // Built while the row — and with it the address and the org — still exists.
+  const companyContact = await companyContactOps(userId);
   // BEFORE the relations go: deleting a relation cascades to its meetings, and
   // `PersonalNote.meetingId` is SetNull — so a note taken in this person's
   // meeting would survive with its text intact and its only link to them
   // nulled, unreachable by any later query (#2052). One $transaction so a
   // partial scrub cannot happen; the deletes below keep their existing failure
   // mode (an FK that neither cascades nor is detached).
-  await prisma.$transaction(scrubFreeTextOps(userId, new Date()));
+  await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact]);
   await prisma.mentorshipRelation.deleteMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] } });
   await prisma.statusChange.deleteMany({ where: { changedById: userId } });
   // Optional references without a DB-level cascade (FK restrict) would abort
@@ -157,8 +212,11 @@ export async function hardDeleteUser(userId: string): Promise<void> {
 
 export async function anonymizeUser(userId: string): Promise<void> {
   // Before the address is rewritten to erased-*@erased.local below, or the log
-  // keeps the real one forever.
+  // keeps the real one forever. The company-side ops are matched on that same
+  // address, so they are built here too — and run inside the transaction that
+  // rewrites it, so the two cannot come apart (#2434).
   await forgetEmailLog(userId);
+  const companyContact = await companyContactOps(userId);
   await prisma.$transaction([
     // Remove uploaded file bytes; anonymize doesn't need the CV/photo to remain.
     prisma.cvFile.deleteMany({ where: { userId } }),
@@ -169,6 +227,9 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // while the person's messages, their support thread and the notes written
     // about them sat untouched next to it.
     ...scrubFreeTextOps(userId, new Date()),
+    // The enquiry they sent and the company they are the contact of: the
+    // person goes, the company and its history stay.
+    ...companyContact,
     // Revoke consents — nothing left to process on their behalf.
     prisma.userConsent.updateMany({ where: { userId }, data: { revokedAt: new Date() } }),
     // And any outstanding password link. A hard delete takes these through the
@@ -181,7 +242,7 @@ export async function anonymizeUser(userId: string): Promise<void> {
       where: { id: userId },
       data: {
         fullName: 'Erased candidate',
-        email: `erased-${userId}@erased.local`,
+        email: erasedAddress(userId),
         phone: null,
         whatsapp: null,
         city: null,

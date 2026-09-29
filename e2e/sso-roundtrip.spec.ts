@@ -319,6 +319,52 @@ test('SAML: a consumed SsoLoginGrant cannot be replayed into a second session', 
   }
 });
 
+test('SAML: two concurrent redemptions of one grant mint exactly one session (#2548)', async ({ browser, request }) => {
+  const email = uniqueEmail('sso-race').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-rc');
+  // Two browser contexts, so each redemption carries its own CSRF cookie and
+  // its own session jar — two tabs, or a leaked URL raced against its owner.
+  const a = await browser.newContext();
+  const b = await browser.newContext();
+  try {
+    const SAMLResponse = await mintAssertion(request, {
+      samlRequest: await captureAuthnRequest(request, slug),
+      mode: 'ok',
+      email,
+      name: 'Sso Race',
+    });
+    const acs = await request.post(`/api/auth/sso/${slug}/acs`, { form: { SAMLResponse }, maxRedirects: 0 });
+    expect(acs.status()).toBe(303);
+    const grant = new URL(acs.headers()['location']).searchParams.get('token')!;
+
+    const [csrfA, csrfB] = await Promise.all(
+      [a, b].map(async (ctx) => ((await (await ctx.request.get('/api/auth/csrf')).json()) as { csrfToken: string }).csrfToken),
+    );
+    // The provider used to read `used` and then write it, so both of these
+    // passed the check and both got a session from a single-use grant.
+    await Promise.all(
+      [[a, csrfA], [b, csrfB]].map(([ctx, csrfToken]) =>
+        (ctx as typeof a).request.post('/api/auth/callback/sso', {
+          form: { csrfToken: csrfToken as string, grant, json: 'true' },
+          maxRedirects: 0,
+        }),
+      ),
+    );
+    const sessions = await Promise.all([a, b].map((ctx) => sessionEmail(ctx.request)));
+    expect(sessions.filter((e) => e === email), `sessions: ${JSON.stringify(sessions)}`).toHaveLength(1);
+    expect(sessions.filter((e) => e === null)).toHaveLength(1);
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    const grants = await prisma.ssoLoginGrant.findMany({ where: { userId: user!.id } });
+    expect(grants).toHaveLength(1);
+    expect(grants[0].used).toBe(true);
+  } finally {
+    await a.close();
+    await b.close();
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
 // --- OIDC -------------------------------------------------------------------
 
 const OIDC_IMPLEMENTED = SSO_IMPLEMENTED_PROVIDERS.includes('oidc');

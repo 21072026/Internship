@@ -16,6 +16,7 @@ export function ResponsiveShell({
   children,
   headerExtra,
   brand,
+  mobileChrome = true,
 }: {
   sidebar: React.ReactNode;
   children: React.ReactNode;
@@ -23,32 +24,43 @@ export function ResponsiveShell({
   // White-label wordmark for the mobile top bar (#546); falls back to the
   // product name when not provided.
   brand?: React.ReactNode;
+  // `false` hands a phone screen over to the page entirely (#2463): no top bar,
+  // no drawer, no padding and no `min-h-screen` below `lg` — only the desktop
+  // sidebar survives. For a route that is its own full-height frame with its own
+  // way out (MessagesShell, #1006/#1009): that frame is sized to the viewport, so
+  // every pixel of shell around it is document overflow — the 56px bar plus the
+  // 2 x 16px padding were exactly the 88px the chat spec measured.
+  mobileChrome?: boolean;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 lg:flex">
+    // `min-h-screen` is 100vh, which on a phone is taller than the 100dvh a
+    // full-height frame sizes itself to, so a chromeless page only gets it at `lg`.
+    <div className={`${mobileChrome ? 'min-h-screen' : 'lg:min-h-screen'} bg-gray-50 dark:bg-gray-950 lg:flex`}>
       {/* Mobile top bar */}
-      <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-2">
-        {/* Keep enough room for the one-line wordmark and three 44px actions;
-            the secondary environment badge returns at the sm breakpoint. */}
-        <div className="flex items-center min-w-0">
-          {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100 truncate">InternshipCRM</span>}
-          <BetaBadge className="ml-2 hidden flex-shrink-0 sm:inline-flex" />
+      {mobileChrome && (
+        <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-2">
+          {/* Keep enough room for the one-line wordmark and three 44px actions;
+              the secondary environment badge returns at the sm breakpoint. */}
+          <div className="flex items-center min-w-0">
+            {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100 truncate">InternshipCRM</span>}
+            <BetaBadge className="ml-2 hidden flex-shrink-0 sm:inline-flex" />
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Only visible while a meeting is actually running (#51 follow-up). */}
+            <JoinMeetingPill />
+            <MessagesButton />
+            <NotificationBell />
+            {/* No negative margin: `-mr-2` pushed the icon 8px past the bar's px-4 and
+                made the page 2px wider than a 320px phone (#936). */}
+            <button onClick={() => setOpen(true)} aria-label={t.a11y.openMenu} className="inline-flex min-h-11 min-w-11 items-center justify-center text-gray-600 hover:text-gray-900">
+              <Menu className="h-6 w-6" />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Only visible while a meeting is actually running (#51 follow-up). */}
-          <JoinMeetingPill />
-          <MessagesButton />
-          <NotificationBell />
-          {/* No negative margin: `-mr-2` pushed the icon 8px past the bar's px-4 and
-              made the page 2px wider than a 320px phone (#936). */}
-          <button onClick={() => setOpen(true)} aria-label={t.a11y.openMenu} className="inline-flex min-h-11 min-w-11 items-center justify-center text-gray-600 hover:text-gray-900">
-            <Menu className="h-6 w-6" />
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Overlay (mobile only) */}
       {open && (
@@ -60,7 +72,7 @@ export function ResponsiveShell({
         data-testid="app-drawer"
         className={`fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        }${mobileChrome ? '' : ' max-lg:hidden'}`}
       >
         <button
           onClick={() => setOpen(false)}
@@ -92,10 +104,18 @@ export function ResponsiveShell({
           <MessagesButton />
           <NotificationBell />
         </div>
-        <div className="p-4 lg:p-8 lg:pt-2">
+        <div className={mobileChrome ? 'p-4 lg:p-8 lg:pt-2' : 'lg:p-8 lg:pt-2'}>
           {/* The impersonation banner is rendered app-wide in Providers — it has to
               show on the shell-less screens too (/messages, /account, ...). */}
-          <EmailVerificationBanner />
+          {mobileChrome ? (
+            <EmailVerificationBanner />
+          ) : (
+            // In normal flow above a viewport-sized frame it would push the frame's
+            // bottom edge off screen by its own height; on a phone the page owns it.
+            <div className="hidden lg:block">
+              <EmailVerificationBanner />
+            </div>
+          )}
           {children}
         </div>
       </main>

@@ -81,6 +81,11 @@ export default function AdminSettingsPage() {
   // the common one — clearing the box is how anybody retypes a number). Without
   // this the whole PUT 400s and every other change on the form is discarded.
   const [quotaError, setQuotaError] = useState<string | null>(null);
+  // The form starts on code defaults, so it is locked until the stored values
+  // have arrived (#2342): a save or an edit made before `load()` answered was
+  // either overwritten by the late load (the typed value silently lost — the
+  // e2e-full failure) or posted the defaults over every stored setting.
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [savingSettings, setSavingSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -162,34 +167,43 @@ export default function AdminSettingsPage() {
   };
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/admin/settings');
-    if (res.ok) {
-      const { settings } = await res.json();
-      setReminderDays(settings.reminderDays ?? '14');
-      setRetentionMonths(settings.retentionMonths ?? '12');
-      setNotificationRetentionDays(settings.notificationRetentionDays ?? '180');
-      setSupportEmail(settings.supportEmail ?? '');
-      setWeeklyDigest(settings.weeklyDigest !== 'false');
-      setRequire2fa(settings.require2fa ?? 'off');
-      setSelfRegistration(settings.selfRegistration ?? 'auto');
-      setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
-      setPremiumAnalytics(settings.premiumAnalytics === 'true');
-      setAiMonthlyQuota(settings.aiMonthlyQuota ?? '200');
-      setLoadedQuota(settings.aiMonthlyQuota ?? '200');
-      const wip = settings.boardWipLimit ?? String(DEFAULT_BOARD_WIP_LIMIT);
-      setBoardWipLimit(wip);
-      setLoadedWipLimit(wip);
-      setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
-      setBlindReview(settings.blindReview === 'true');
-      const broadcast = settings.broadcastMonthlyRecipients ?? '';
-      setBroadcastQuota(broadcast);
-      setLoadedBroadcastQuota(broadcast);
-      const trialDays = settings.trialLengthDays ?? String(DEFAULT_TRIAL_LENGTH_DAYS);
-      setTrialLengthDays(trialDays);
-      setLoadedTrialLengthDays(trialDays);
-      setDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
-      setLoadedDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
+    setLoadState('loading');
+    const res = await fetch('/api/admin/settings').catch(() => null);
+    if (!res?.ok) {
+      setLoadState('error');
+      return;
     }
+    const body = await res.json().catch(() => null);
+    const settings = body?.settings;
+    if (!settings) {
+      setLoadState('error');
+      return;
+    }
+    setReminderDays(settings.reminderDays ?? '14');
+    setRetentionMonths(settings.retentionMonths ?? '12');
+    setNotificationRetentionDays(settings.notificationRetentionDays ?? '180');
+    setSupportEmail(settings.supportEmail ?? '');
+    setWeeklyDigest(settings.weeklyDigest !== 'false');
+    setRequire2fa(settings.require2fa ?? 'off');
+    setSelfRegistration(settings.selfRegistration ?? 'auto');
+    setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
+    setPremiumAnalytics(settings.premiumAnalytics === 'true');
+    setAiMonthlyQuota(settings.aiMonthlyQuota ?? '200');
+    setLoadedQuota(settings.aiMonthlyQuota ?? '200');
+    const wip = settings.boardWipLimit ?? String(DEFAULT_BOARD_WIP_LIMIT);
+    setBoardWipLimit(wip);
+    setLoadedWipLimit(wip);
+    setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
+    setBlindReview(settings.blindReview === 'true');
+    const broadcast = settings.broadcastMonthlyRecipients ?? '';
+    setBroadcastQuota(broadcast);
+    setLoadedBroadcastQuota(broadcast);
+    const trialDays = settings.trialLengthDays ?? String(DEFAULT_TRIAL_LENGTH_DAYS);
+    setTrialLengthDays(trialDays);
+    setLoadedTrialLengthDays(trialDays);
+    setDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
+    setLoadedDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
+    setLoadState('ready');
   }, []);
   // The people a lead may belong to: this org's active admins and reps — the
   // same set the API accepts (src/lib/leadOwner.ts). /api/users is
@@ -299,7 +313,16 @@ export default function AdminSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle>{t.settings.system}</CardTitle></CardHeader>
-          <form onSubmit={saveSettings} className="space-y-4">
+          {loadState === 'error' && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" data-testid="settings-load-error">
+              {t.settings.loadFailed}{' '}
+              <button type="button" onClick={() => { load(); }} className="underline font-medium">{t.settings.retryLoad}</button>
+            </div>
+          )}
+          <form onSubmit={saveSettings} className="space-y-4" data-state={loadState} data-testid="settings-form">
+            {/* A disabled fieldset disables every control inside it, the submit
+                button included, until the stored values are in (#2342). */}
+            <fieldset disabled={loadState !== 'ready'} className="space-y-4 min-w-0">
             <Input label={t.settings.reminderDays} type="number" min={1} max={365} value={reminderDays} onChange={(e) => setReminderDays(e.target.value)} hint={t.settings.reminderDaysHint} />
             <Input label={t.settings.retentionMonths} type="number" min={1} max={120} value={retentionMonths} onChange={(e) => setRetentionMonths(e.target.value)} hint={t.settings.retentionMonthsHint} />
             {/* Immediately below retentionMonths on purpose: the two are easy to
@@ -413,6 +436,7 @@ export default function AdminSettingsPage() {
               </div>
             )}
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
+            </fieldset>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">
             <p className="text-sm font-medium text-gray-700 mb-1">{t.settings.backup}</p>

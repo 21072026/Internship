@@ -56,7 +56,13 @@ test('mobile: a thread fills the viewport, only the bubble list scrolls', async 
     await expect(composer).toBeVisible({ timeout: 15_000 });
 
     // 1. The page itself does not scroll (1px of slack for sub-pixel rounding).
+    //    #2463: RoleShell's mobile top bar (56px) + padding (2 x 16px) around the
+    //    frame made this exactly 88 — the frame is the whole screen on a phone.
     expect(await documentOverflow(page)).toBeLessThanOrEqual(1);
+    // ...and that is because the role shell's phone chrome is gone, not squeezed:
+    // no top bar, no drawer. The chat header is the way out (see the next test).
+    await expect(page.getByRole('button', { name: 'Open menu' })).toHaveCount(0);
+    await expect(page.getByTestId('app-drawer')).toBeHidden();
 
     // 2. The bubble list is the scroller, and it settles on the newest message
     //    (the scroll is animated, hence the poll).
@@ -192,6 +198,8 @@ test('desktop keeps the page heading and the plain document flow', async ({ page
     await page.goto(`/messages/${rel.id}`);
 
     await expect(page.getByRole('heading', { level: 1, name: 'Messages' })).toBeVisible({ timeout: 15_000 });
+    // The role sidebar (#2358) stays on desktop — only the phone chrome is dropped (#2463).
+    await expect(page.getByTestId('app-drawer')).toBeVisible();
     // The mobile-only header title is not in the DOM at all at this width.
     await expect(page.getByTestId('messages-header-title')).toHaveCount(0);
     await expect(page.getByTestId('messages-home')).toHaveCount(0);
