@@ -75,6 +75,10 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'scan cap / truncated-result reporting (#1820)' },
   ],
   [
+    'src/lib/newsletterQuotaHold.ts',
+    { floor: 95, measured: 100.0, why: "one tenant's held newsletter must not starve another tenant's tick (#2335)" },
+  ],
+  [
     'src/lib/jobs/lease.ts',
     {
       floor: 90,

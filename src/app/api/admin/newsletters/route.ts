@@ -17,7 +17,7 @@ import {
   normalizeNewsletterContent,
   writtenNewsletterLocales,
 } from '@/lib/newsletter';
-import { dispatchNewsletter } from '@/lib/newsletterDispatch';
+import { dispatchNewsletter, newsletterQuotaHold } from '@/lib/newsletterDispatch';
 import { broadcastQuotaError } from '@/lib/broadcastQuota';
 
 /**
@@ -116,6 +116,8 @@ export async function GET(request: Request) {
         scheduledAt: true,
         sentAt: true,
         createdById: true,
+        // Read for the quota-hold check below only; not part of the response.
+        orgId: true,
         recipientCount: true,
         sentCount: true,
         failedCount: true,
@@ -132,11 +134,30 @@ export async function GET(request: Request) {
   const authors = await prisma.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, fullName: true } });
   const authorName = new Map(authors.map((a) => [a.id, a.fullName]));
 
+  // A due issue its tenant's broadcast band is holding (#2335). Without this the
+  // row just reads "Scheduled" with a time in the past — the cron refuses it
+  // every fifteen minutes and nobody can see why. Only due SCHEDULED rows are
+  // asked (newsletterQuotaHold returns null for everything else without a
+  // query), so a page of sent history costs nothing extra.
+  //
+  // Only for the viewer's OWN tenant. This listing is not tenant-scoped yet
+  // (the middleware stays dormant until MT_ENFORCE_ISOLATION), and the figures
+  // are another organization's broadcast usage: an admin is told why their own
+  // issue is waiting, never how far along somebody else's month is.
+  const now = new Date();
+  const viewerOrgId = resolveOrgId(session);
+  const holds = await Promise.all(
+    issues.map((issue) =>
+      issue.orgId !== null && issue.orgId === viewerOrgId ? newsletterQuotaHold(issue, now) : Promise.resolve(null),
+    ),
+  );
+
   return NextResponse.json({
-    newsletters: issues.map(({ image, content, ...issue }) => {
+    newsletters: issues.map(({ image, content, orgId: _orgId, ...issue }, index) => {
       const variants = normalizeNewsletterContent(content);
       return {
         ...issue,
+        quotaHold: holds[index],
         // Normalised rather than raw: the edit form binds one tab per language
         // and should never be handed an unexpected key.
         content: variants,

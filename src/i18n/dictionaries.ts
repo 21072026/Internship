@@ -3549,6 +3549,7 @@ const en = {
     blocked: 'Nothing was sent. This broadcast needs {requested} recipients, but only {remaining} of your {limit} for this month are left ({used} already used). The meter resets on {date}.',
     keptDraft: 'The issue is waiting as a draft — nothing will go out on its own. Send it again once the meter allows.',
     stillScheduled: 'The issue is still scheduled for the date you picked, and will be sent then if the meter allows.',
+    onHold: 'On hold: the broadcast quota does not allow it yet. This issue needs {requested} recipients, and {remaining} of this month\'s {limit} are left ({used} used). It stays scheduled and goes out by itself as soon as the meter allows — the meter resets on {date}.',
   },
   announcements: {
     title: 'Announcements',
@@ -8752,6 +8753,7 @@ const tr: Dict = {
     blocked: 'Hiçbir gönderim yapılmadı. Bu toplu gönderim {requested} alıcı gerektiriyor; bu ay için ayrılan {limit} alıcının yalnızca {remaining} tanesi kaldı ({used} tanesi kullanıldı). Sayaç {date} tarihinde sıfırlanıyor.',
     keptDraft: 'Sayı taslak olarak bekliyor — kendiliğinden hiçbir şey gönderilmeyecek. Sayaç izin verdiğinde yeniden gönder.',
     stillScheduled: 'Sayı seçtiğin tarih için planlı kalmaya devam ediyor; o gün sayaç izin verirse gönderilecek.',
+    onHold: 'Beklemede: yayın kotası henüz izin vermiyor. Bu sayı {requested} alıcı gerektiriyor; bu ayın {limit} alıcısından {remaining} tanesi kaldı ({used} tanesi kullanıldı). Planlı kalıyor ve sayaç izin verdiği anda kendiliğinden gönderilecek — sayaç {date} tarihinde sıfırlanıyor.',
   },
   announcements: {
     title: 'Duyurular',
@@ -13933,6 +13935,7 @@ const de: Dict = {
     blocked: 'Es wurde nichts gesendet. Diese Rundmail benötigt {requested} Empfänger, von Ihren {limit} für diesen Monat sind aber nur noch {remaining} frei ({used} bereits verbraucht). Der Zähler wird am {date} zurückgesetzt.',
     keptDraft: 'Die Ausgabe wartet als Entwurf — von allein wird nichts versendet. Senden Sie sie erneut, sobald der Zähler es erlaubt.',
     stillScheduled: 'Die Ausgabe bleibt für das von Ihnen gewählte Datum geplant und wird dann gesendet, sofern der Zähler es erlaubt.',
+    onHold: 'Angehalten: Das Versandkontingent lässt es noch nicht zu. Diese Ausgabe benötigt {requested} Empfänger, von den {limit} dieses Monats sind noch {remaining} frei ({used} verbraucht). Sie bleibt geplant und wird automatisch gesendet, sobald der Zähler es erlaubt — er wird am {date} zurückgesetzt.',
   },
   announcements: {
     title: 'Ankündigungen',

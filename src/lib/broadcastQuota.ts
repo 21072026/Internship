@@ -35,8 +35,8 @@
 //                  that actually left) of rows sent by one of the org's admins.
 //
 // The two attribution axes differ because the available rows do: a newsletter
-// has a per-recipient row and fans out across tenants (#1667), so the recipient
-// is the honest anchor; an announcement has only a counter, and it is always
+// has a per-recipient row, so the recipient is the honest anchor (it fanned out
+// across tenants until #2357 scoped each issue to its own org, #1667); an announcement has only a counter, and it is always
 // created by a signed-in ADMIN of the sending tenant, so the sender is. Neither
 // model carries an `orgId` today (EmailLog does not either — that is #1556),
 // and inventing one for a quota is not worth a schema change plus a backfill.
