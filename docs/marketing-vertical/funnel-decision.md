@@ -44,13 +44,24 @@ cevaplar.
 | Hesap × gün kullanım tablosu var (`transactions`), henüz okuyan yok | `prisma/schema.prisma:1407` (`CompanyUsage`), [`salevali-usage-feed.md`](salevali-usage-feed.md) |
 
 SaleVali tarafı (kardeş repo, `salevali-server/src/services/auth-service/user.service.ts`):
-`hasTrialPeriodElapsed(user, graceDays)` (~521) iki eşik tanımlar — `graceDays=0` **serbest
-dönem sonu** (trial 30 g; login'de "premium'a geç?" sorusu) ve `graceDays=30` **karar
-penceresi sonu** (trial 60 g); `checkAndPassivateExpiredLicense` (~547) onay
-(`license.is_upgrade_confirm`) yoksa hesabı bu ikinci eşikte `passive` yapar. Fesih
-`license.cancellation` alt-dokümanında (`LicenseCancelled`: `cancelledBy`, `cancelledAt`,
-`description` — `src/models/users/license/license-cancelled.model.ts`); fesih ihbar süresi
-30 gün ([`salevali-domain.md`](salevali-domain.md) § Fesih). SaleVali'de **teklif yoktur**:
+`hasTrialPeriodElapsed(user, graceDays)` (:510-531) iki deneme tipi için iki eşik tanımlar —
+`graceDays=0` **serbest dönem sonu** (`trial` 30 g, `affiliate_trial` **60 g**; login'de
+"premium'a geç?" sorusu) ve `graceDays=30` **karar penceresi sonu** (`trial` 60 g,
+`affiliate_trial` **90 g**); `checkAndPassivateExpiredLicense` (~547) onay
+(`license.is_upgrade_confirm`) yoksa hesabı bu ikinci eşikte `passive` yapar. Karar penceresi
+her iki tipte de +30 gündür; serbest dönemin uzunluğu tipe göre değişir. Onay anı
+`license.upgrade_confirm_date`'te (`src/models/users/license/license.model.ts:37`) — cutover'da
+`customer_since` için kaynak budur.
+
+**Fesih bildirimi** `user.status = 'cancellation_request'` olarak tutulur; tarihi `user.account_log`
+içindeki **en son** `type: 'cancellation'` kaydının `created_at`'idir (`addAccountLog`,
+`user.service.ts:380-400`; `getDaysSinceLastCancellation`, `:644-657`).
+`checkAndUpdateCancellationStatus` (`:662-697`) bu tarihten 30 gün sonra (`TOTAL_DAYS = 30`,
+`:673`) hesabı `status: 'cancelled'` yapar; 60 gün sonra hesap silinir. ⚠️
+`license.cancellation` (`LicenseCancelled`: `cancelledBy`/`cancelledAt`, `license.model.ts:27`)
+**ölü bir alandır** — model dosyaları dışında hiçbir kod onu yazmıyor; ona dayanan bir cutover
+veya besleme hiçbir fesih bulmaz ve ihbar süresindeki her müşteriyi düz aktif diye aktarır.
+Ayrıntı: [`salevali-domain.md`](salevali-domain.md) § Fesih. SaleVali'de **teklif yoktur**:
 kazanma anı `is_upgrade_confirm` onayıdır.
 
 ## Asıl soru (3): DEAL_WON sonrası müşteri durumu nerede?
@@ -115,6 +126,17 @@ modeli ([`salevali-domain.md`](salevali-domain.md) § Yaşam döngüsü).
   müşteri" anlamına gelir ve tanım gereği doğrudur; ama bugün `DEAL_LOST` kayıtlar da
   `ACTIVE` kalıyor (hiçbir yazma yolu `status`'u değiştirmiyor), dolayısıyla dokunulan bir
   kayıp da sayılır. Bkz. açık soru 5.
+- **Eksi — kazanılmış müşterinin sahibini değiştirmek rutinleşir ve bugün "ikinci kazanım"
+  üretir.** Müşteri ömrü boyunca `DEAL_WON`'da kaldığı için hesap sahibi değişikliği sık bir
+  işlem olur. Geçmişi olan bir ilişkide `POST /api/mentorship/[id]/transfer`, `CARRIED_OVER_FIELDS`'ı
+  (`src/lib/relationHistory.ts:60-68`: `pipelineStatus`, `trialEndsAt`, …) kopyalayan ve
+  **yeni `startDate`** taşıyan yeni bir ilişki açar. Funnel route'u status filtresi uygulamaz
+  (`route.ts:132-137`) ve triangle kazanılmış aşamada başlayan yolculuğu `startDate` ayında
+  kazanılmış sayar (`funnelKpi.ts:382-383`): müşteri transfer ayında **ikinci kez kazanılmış**
+  görünür, sonraki churn yalnız halef ilişkide kayda geçer. Ayrıca `contractEndsAt`
+  `CARRIED_OVER_FIELDS`'a eklenmezse ihbar süresindeki bir transfer sözleşme bitişini
+  **sessizce** düşürür. Uygulama task'ları 2 ve 9 bunu kapatır; triangle'ın zinciri nasıl
+  birleştireceği açık soru 6.
 
 "Salt olay kaydı" (tarih kolonu olmadan, ihbarı yalnız `InteractionLog`/`ActivityLog`'a
 yazmak) değerlendirildi ve **reddedildi**: dikkat sebebi ve bitiş hatırlatması bir tarihe
@@ -133,8 +155,19 @@ SaleVali'de teklif/pazarlık adımı yok; kazanma `is_upgrade_confirm`'dir. Bug�
 görünebilir.
 
 **Öneri:** yeni MARKETING org'larının preset'inden **kaldır**; mevcut org'larda backfill
-**yok** (kiracı kendi siler — `PipelineStage` satırları kiracınındır, #747). Maliyet:
-`e2e/vertical-stage-preset.spec.ts:38-40` ve `docs/marketing-import.md:80` güncellenir;
+**yok** (kiracı kendi siler — `PipelineStage` satırları kiracınındır, #747). Maliyet —
+aynı PR'da güncellenmesi gerekenler:
+- `e2e/vertical-stage-preset.spec.ts:38-40` (preset listesi) ve `docs/marketing-import.md:80`;
+- `prisma/seed-demo-marketing.mjs:89-100` — `MARKETING_DEMO_STAGES` preset'in düz ESM
+  aynasıdır ve `scripts/test/marketing-demo-tenant.test.mjs:52` onu preset'le `deepEqual`
+  karşılaştırır; ayrıca bu aşamalardaki demo kayıtları (`:164-170`, `droppedFrom` ile `:178-179`)
+  ve aşama başına etkileşim metinleri (`:245-249`) yeniden dağıtılır;
+- `scripts/fixtures/marketing-accounts-sample.csv:4` — `DEAL_PROPOSAL` satırı yeni bir org'a
+  aktarılamaz hâle gelir;
+- `docs/marketing-vertical/pipeline-record.md:38-39` preset diyagramı;
+- `src/lib/programTemplates.ts:587` ve `src/lib/mentorAttention.ts:135` yorumları ("teklife
+  ya da kayba dönüşür").
+
 `scripts/test/funnel-cohorts.test.mjs` bu anahtarları yalnız saf fonksiyon fikstürü olarak
 kullanır, preset'e bağlı değildir. Uyarı: preset **tüm** MARKETING org'ları içindir — başka
 bir (teklif veren) MARKETING kiracısı beklenirse kaldırmak yerine SaleVali org'unda silmek
@@ -142,22 +175,26 @@ daha dürüst olur (açık soru 1).
 
 ### 2. `TRIAL_EXPIRED` = 30 günlük karar penceresi mi? `trialEndsAt` neyin sonu?
 
-SaleVali'nin iki eşiği var: serbest dönem sonu (30 g) ve karar penceresi sonu (+30 g,
-pasifleştirme).
+SaleVali'nin iki eşiği var: serbest dönem sonu (`trial` 30 g, `affiliate_trial` 60 g) ve
+karar penceresi sonu (her iki tipte +30 g, pasifleştirme).
 
 **Öneri:**
 - `trialEndsAt` = **serbest kullanımın sonu** (SaleVali `graceDays=0`). `DEFAULT_TRIAL_LENGTH_DAYS = 30`
-  (`trialReminderRule.ts:105`) ve 7/3/0 hatırlatmaları (`:81`) zaten bunu sayıyor; "premium'a
+  (`trialReminderRule.ts:105`) ve 7/3/0 hatırlatmaları (`:81`) zaten bunu sayıyor — 30 gün
+  yalnız düz `trial` için doğru bir varsayılandır; `affiliate_trial` (60 g) varsayılana
+  güvenmez, importer'ın gerçek `trial_ends_at` kolonu (task 7) her iki tipi de kapsar; "premium'a
   geç?" sorusunun göründüğü an budur, satış temasının en değerli olduğu an da budur.
 - `TRIAL_EXPIRED` = **karar penceresi** olarak etiketlenir/açıklanır; pencerenin sonu ayrı
-  bir kolon değil, `trialEndsAt + 30 gün` olarak türetilir (tek sabit, `trialReminderRule.ts`'te).
+  bir kolon değil, `trialEndsAt + 30 gün` olarak türetilir (tek sabit, `trialReminderRule.ts`'te;
+  +30 her iki deneme tipinde aynıdır).
 - SLA: 3 gün "kimse dokunmadıysa gecikmiş" anlamında bir **iç** saat olarak savunulabilir,
   ama 30 günlük pencereyle yan yana "3 günde karar ver" gibi okunur. **7 gün** öner
   (sona erişten sonraki ilk bir hafta içinde insan teması); pencerenin kapanmasına yakın
   (ör. `trialEndsAt + 23 g`) ayrı bir "karar penceresi kapanıyor" hatırlatması uygulama
-  task'ı olur. Not: otomatik süre dolumu `StatusChange` yazmıyor (#2527,
-  `mentorAttention.ts:144-150`) — aşama saati düzelene kadar SLA'nın başlangıcı da oradan
-  etkilenir.
+  task'ı olur. Otomatik süre dolumu artık aynı transaction'da `changedById: null` ile bir
+  `StatusChange` yazıyor (#2527, `src/lib/jobs/trialReminders.ts:414-428`, satır `:426-427`),
+  dolayısıyla aşama saati ve SLA başlangıcı doğru. (`mentorAttention.ts:144-150`'deki "sweep
+  `StatusChange` yazmıyor" yorumu bayattır; o dosyaya dokunan ilk PR düzeltir.)
 
 ### 3. DEAL_WON sonrası durum
 
@@ -204,11 +241,11 @@ yazılır.
 
 | SaleVali'deki hâl | Aşama | Ek alan |
 | --- | --- | --- |
-| Ücretli, aktif | `DEAL_WON` | `startDate` = **müşteri olduğu tarih** (onay tarihi) |
-| Ücretli, fesih bildirmiş (ihbar süresinde) | `DEAL_WON` | `contractEndsAt` = `cancelledAt + 30 g` |
-| Trial, serbest dönemde | `TRIAL_ACTIVE` | `trialEndsAt` = SaleVali'deki **gerçek** serbest dönem sonu |
+| Ücretli, aktif | `DEAL_WON` | `startDate` = **müşteri olduğu tarih** (`license.upgrade_confirm_date`) |
+| Ücretli, fesih bildirmiş (`status = cancellation_request`) | `DEAL_WON` | `contractEndsAt` = en son `account_log[type=cancellation].created_at` + 30 g (`TOTAL_DAYS`, `user.service.ts:673`) — **`license.cancellation` değil** (ölü alan) |
+| Trial (`trial` veya `affiliate_trial`), serbest dönemde | `TRIAL_ACTIVE` | `trialEndsAt` = SaleVali'deki **gerçek** serbest dönem sonu (`license.updated_at` + 30 / 60 g) |
 | Trial, karar penceresinde | `TRIAL_EXPIRED` | `trialEndsAt` = aynı |
-| Pasif / feshetmiş | **aktarılmaz** ilk turda (win-back listesi ayrı karar) | — |
+| Pasif / feshetmiş (`status = cancelled`) | **aktarılmaz** ilk turda (win-back listesi ayrı karar) | — |
 
 **Kritik:** triangle içe aktarılan kazanılmış bir kaydı `startDate` ayında kazanılmış sayar
 (`funnelKpi.ts:382-383`, `route.ts:136`). `startDate` varsayılanla (`now()`,
@@ -233,10 +270,15 @@ yüzden de basittir.
 ## Onaylanırsa açılacak uygulama task'ları (taslak)
 
 1. Preset: `DEAL_PROPOSAL`/`DEAL_NEGOTIATION` yeni org'lardan kaldırılır; `TRIAL_EXPIRED`
-   SLA'sı 3 → 7; e2e preset spec'i ve `marketing-import.md` güncellenir.
+   SLA'sı 3 → 7; e2e preset spec'i, `marketing-import.md`, demo seed aynası
+   (`MARKETING_DEMO_STAGES` + demo kayıtları, parite testi `marketing-demo-tenant.test.mjs`),
+   örnek CSV fikstürü, `pipeline-record.md` diyagramı ve `programTemplates.ts`/`mentorAttention.ts`
+   yorumları aynı PR'da güncellenir (bkz. soru 1).
 2. `MentorshipRelation.contractEndsAt` (nullable) + `cancellation_pending` dikkat sebebi +
    sözleşme bitiş günü hatırlatması; MENTEE'ye dönen okuma yollarında gizleme
-   (`stripNextActionFor` deseni).
+   (`stripNextActionFor` deseni); `contractEndsAt` `CARRIED_OVER_FIELDS`'a
+   (`relationHistory.ts:60-68`) ve `scripts/test/mentor-transfer.test.mjs` aynasına eklenir —
+   yoksa ihbar süresindeki bir transfer bitiş tarihini düşürür.
 3. `CUSTOMER_CANCELLED` drop-off kodu (EN/TR/DE etiket, `check:i18n`).
 4. `lifecycleState = ENDED_CHURNED` + geri kazanım akışı (eski ilişkiyi kapat, yeni ilişkiyi
    `previousRelationId` ile aç — `activeMentorship.ts` üzerinden) + `companyDetail.ts` zincir
@@ -246,8 +288,13 @@ yüzden de basittir.
 7. Importer: `customer_since` → `startDate`, `trial_ends_at` → `trialEndsAt` (çalışma anı
    yerine), `contract_ends_at` → `contractEndsAt`
    (#2555 bu dosyanın 7. maddesine referans verir).
-8. SaleVali karşı işi (#2565): fesih/onay olaylarının (`is_upgrade_confirm`,
-   `license.cancellation`) beslemeye çıkması — 2 ve 4'ün otomatik tetiği.
+8. SaleVali karşı işi (#2565): fesih/onay olaylarının beslemeye çıkması — onay
+   `is_upgrade_confirm` + `upgrade_confirm_date`; fesih `status` geçişleri
+   (`cancellation_request`, `cancelled`) + `account_log[type=cancellation].created_at`.
+   `license.cancellation` **kullanılmaz** (hiçbir kod yazmıyor). 2 ve 4'ün otomatik tetiği.
+9. Triangle/kohortlar sahip değişikliğini kazanım saymaz: `ENDED_REASSIGNED` +
+   `previousRelationId` ile zincirlenen ilişkiler tek yolculuk olarak birleştirilir (ya da halef
+   atlanır), churn zincirin ilk kazanımına bağlanır (bkz. Seçenek C eksileri, açık soru 6).
 
 ## Maintainer'a açık sorular
 
@@ -255,9 +302,17 @@ yüzden de basittir.
    "kaldır" / "yalnız SaleVali org'unda sil" ayrımı buna bağlı.)
 2. `TRIAL_EXPIRED` SLA'sı 7 gün mü, yoksa 3 gün kalsın mı?
 3. İhbar süresi dolduğunda `DEAL_WON → DEAL_LOST` **otomatik** mi olsun (trial sweep'i
-   gibi, #2417), yoksa yalnız dikkat sebebi + insan kararı mı?
+   gibi, #2417), yoksa yalnız dikkat sebebi + insan kararı mı? Otomatik seçilirse yol artık
+   var: sweep `statusChangeData` üzerinden sistem aktörüyle (`changedById: null`) bir
+   `StatusChange` yazmalı — ve off-path hedef olduğu için `reasonCode: CUSTOMER_CANCELLED` ile —
+   tıpkı `expireTrials`'ın yaptığı gibi (`trialReminders.ts:414-428`). Triangle'ın otomatik
+   churn'ü görmesini sağlayan tam olarak bu satırdır.
 4. Pasif/feshetmiş eski SaleVali hesapları cutover'da aktarılsın mı (win-back listesi
    olarak `DEAL_LOST` + `reasonCode`), yoksa hiç mi?
 5. `DEAL_LOST`'a düşen kayıtların `status`'u `COMPLETED` yapılsın mı? Bugün `ACTIVE`
    kalıyorlar; dikkat kuyruğunda `inactive` olarak görünebilir ve dokunulursa metering'de
    sayılırlar. (Genel bir MARKETING davranışı; bu karardan bağımsız bir task olabilir.)
+6. Kazanılmış müşterinin sahip değişikliği (transfer) funnel analitiğinde nasıl okunsun:
+   `previousRelationId`/`ENDED_REASSIGNED` zinciri tek yolculuk olarak mı birleşsin, yoksa
+   halef ilişki kohortlardan mı atlansın (task 9)? Bugün ikisi de yok ve transfer ayında ikinci
+   bir kazanım görünür.
