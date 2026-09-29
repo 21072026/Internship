@@ -138,6 +138,19 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   { href: '/newsletters', icon: MailOpen, key: 'newsletters' },
 ];
 
+/**
+ * The sales surface (#2580): a MENTOR of a vertical without `mentorship` works
+ * on /sales — see src/lib/salesSurface.ts for who gets it and why. Every link is
+ * tagged with the module it shows, so a vertical that lacked one would lose the
+ * link; MARKETING carries both. Not a `NavRole`: the palette's "Go to" group
+ * belongs to the three role shells, and this shell mounts no palette.
+ */
+export const SALES_NAV_LINKS: NavLink[] = [
+  { href: '/sales', icon: LayoutDashboard, key: 'dashboard', exact: true, capability: 'pipeline' },
+  { href: '/sales/board', icon: Columns3, key: 'board', capability: 'pipeline' },
+  { href: '/sales/accounts', icon: Building2, key: 'myCompanies', capability: 'companies' },
+];
+
 /** Roles that get a sidebar (and therefore a "Go to" group in the palette). */
 export type NavRole = 'ADMIN' | 'MENTOR' | 'MENTEE';
 

@@ -8,6 +8,8 @@ import { logActivity } from '@/lib/activity';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
@@ -199,6 +201,30 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: 'Next action note is too long', code: parsedNextNote.error }, { status: 400 });
       }
       const stageChanging = !!pipelineStatus && isStageTransition(relation.pipelineStatus, pipelineStatus);
+
+      // Re-pointing the relation at a company (#2580 review). `companyId` is a
+      // free string in the schema, and the org middleware only scopes the
+      // top-level `where` — so without this a caller could attach ANY company id,
+      // another tenant's included, and read its name back from the response.
+      if (rest.companyId !== undefined && rest.companyId !== relation.companyId) {
+        // Where the mentorship module is absent (a MARKETING sales rep is a
+        // MENTOR), the account a lead belongs to is an ADMIN decision: the
+        // rep's /sales/accounts is built from their relations' companies, so
+        // re-pointing would let them open any account in the tenant.
+        if (session.user.role !== 'ADMIN') {
+          const denied = await requireCapability(session.user.orgId, 'mentorship');
+          if (denied) return denied;
+        }
+        if (rest.companyId !== null) {
+          const company = await prisma.company.findFirst({
+            where: withinTenant({ id: rest.companyId }, await tenantWhere(session)),
+            select: { id: true },
+          });
+          if (!company) {
+            return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+          }
+        }
+      }
 
       // Validate the drop-off reason BEFORE writing anything — a rejected
       // reason must never leave the relation moved with no audit trail behind it.

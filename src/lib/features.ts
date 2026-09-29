@@ -132,6 +132,10 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
     // #2563 — core CRM (a person-written follow-up date on any record), so untagged.
     { key: 'followUps', category: 'tracking', icon: CalendarClock, color: 'amber', title: C.followUps.t, desc: C.followUps.d },
+    // #2580 — each owner's own workspace (a mentor's /mentor, a MARKETING
+    // rep's /sales). True in every vertical, so untagged; the rep's wording is a
+    // MARKETING overlay sentence, not a second card.
+    { key: 'ownWorkspace', category: 'tracking', icon: Users, color: 'green', title: C.ownWorkspace.t, desc: C.ownWorkspace.d },
     // #2560 — the account detail page; every vertical with companies has it.
     { key: 'accountDetail', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.accountDetail.t, desc: C.accountDetail.d },
     // #2569 — the public enquiry / demo form, filed by host into the right org.
