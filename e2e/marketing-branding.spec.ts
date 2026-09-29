@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInViaApi, apiSession, MARKETING_HOST } from './helpers/auth';
 
 // SaleVali branding on the marketing host (#2492): the accent, the mark, the
 // favicon/home-screen icons, the browser tint and the manifest all follow the
@@ -76,6 +77,28 @@ test('signed in to a marketing org, /messages keeps the SaleVali tint and accent
   } finally {
     await cleanupByEmail(email);
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+// The old "the signed-in user's org beats the host" rule is gone (#2590): the
+// URL decides the product, and a session only exists on its own world's host.
+// An INTERNSHIP account signed in on the default host is therefore NOT a session
+// on the marketing host — that host is still the marketing product's anonymous
+// chrome — while on its own host it keeps the internship branding.
+test('an INTERNSHIP session presented on the marketing host is no session there — the host decides the chrome', async ({ request }) => {
+  const email = uniqueEmail('sv-world');
+  const pw = 'WorldPass123';
+  await seedUser(email, pw, 'ADMIN', 'World Admin');
+  try {
+    const login = await signInViaApi(request, email, pw);
+    expect(login.ok, `sign-in on the default host: ${login.error}`).toBe(true);
+    expect((await apiSession(request))?.user.email).toBe(email);
+    expect(await apiSession(request, MARKETING_HOST), 'a session is not valid on the other world\'s host').toBeNull();
+
+    const html = await (await request.get('/auth/signin', { headers: MARKETING })).text();
+    expect(html).toContain('SaleVali');
+  } finally {
+    await cleanupByEmail(email);
   }
 });
 
