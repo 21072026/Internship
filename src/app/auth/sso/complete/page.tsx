@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { absoluteHere } from '@/lib/safeRedirect';
@@ -11,8 +11,17 @@ import { absoluteHere } from '@/lib/safeRedirect';
 function Complete() {
   const params = useSearchParams();
   const [failed, setFailed] = useState(false);
+  // The grant is single-use, so this page redeems it exactly once (#2548). The
+  // effect can run twice for one visit — React StrictMode re-runs it in dev, and
+  // a new `useSearchParams()` identity re-runs it anywhere — and a second
+  // `signIn('sso')` is not harmless: the loser's redirect: true navigates to the
+  // error page and aborts the winner's in-flight callback before its session
+  // cookie lands, leaving a spent grant and no session.
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     const token = params.get('token');
     if (!token) {
       setFailed(true);
