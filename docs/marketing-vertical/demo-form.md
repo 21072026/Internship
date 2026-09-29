@@ -73,7 +73,11 @@ Until this runs, the marketing landing's form is closed — by design.
 - **Source:** `utmSource/Medium/Campaign/Term/Content` (trimmed, capped at 150) and
   `referrer` — origin + path only; the query string and fragment are dropped, and a
   referrer on our own host is not a source (`src/lib/inquiryAttribution.ts`). Stored raw;
-  binding them to a `Source` row is #2570.
+  when the enquiry becomes a lead, its lead person is bound to the org's `Source`
+  named by `leadSourceName()` (#2570, `src/lib/leadSourceName.ts`):
+  `utm:<source>/<medium>/<campaign>`, created in the org when missing. No
+  `utm_source` = unknown = no Source (the attribution report's `unsourced` bucket).
+  The referrer is not mapped yet.
 - **No IP address** — neither on the row nor in the activity log of an automatic placement.
 - `receivedHost`, the hostname the request arrived on.
 

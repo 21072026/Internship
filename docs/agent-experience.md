@@ -7675,3 +7675,18 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   account it claimed.** A new account goes into the in-file index with its external id; an
   EXISTING account that the row fills an id into does not, so a later row naming it under a
   different id looked like a plain duplicate. Keep the claimed id next to the claim.
+
+## 2026-09-29 — Lead source attribution (#2570)
+
+- **A global `@unique` → `@@unique([orgId, name])` is appliable on a populated table**:
+  `db push` warns ("A unique constraint covering the columns … will be added") and applies
+  it under `--accept-data-loss`, rows intact — verified with NULL-org and stamped rows. It
+  cannot find duplicates, because the old index already forbade them; `check:schema-push`
+  still prints its generic warning, so say why in the PR.
+- **A nullable `orgId` in a composite unique is not a backstop for the default org.**
+  MySQL does not compare NULLs in a unique index, so "X"(NULL) and "X"(default) coexist —
+  and the deploy backfill (NULL → default) then fails on the index. The create path must
+  read `orgWhere(orgId)` (which includes NULL rows for the default org) before inserting.
+- **An out-of-repo Playwright config that imports the repo's `playwright.config.ts`
+  receives `{ default }`**, not the config: `--project=chromium` then says "Available
+  projects:" (empty). `import m from '…/playwright.config.ts'; const base = m.default ?? m;`.

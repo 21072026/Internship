@@ -690,19 +690,32 @@ model ContributorTermsAcceptance {
   @@index([termsKey, version])
 }
 
-// A referral source — the education/agency a mentee came from. Admin-managed
-// so reporting can group mentees by where they were sourced.
+// A referral source — the education/agency a mentee came from, or (#2421/#2570)
+// the channel a marketing lead came in through: `affiliate:<code>`,
+// `utm:<source>/<medium>/<campaign>`, `channel:<acquisition_source>` — the
+// naming rule is src/lib/leadSourceName.ts. Admin-managed so reporting can
+// group people by where they were sourced.
+//
+// The name is unique PER ORG (#2570), not globally: two tenants may both have a
+// "Google Ads". It was a global `@unique`, which made a second tenant's create
+// a 409 about a row it cannot see. The tenant is never encoded into the name
+// (an "<orgId>:Google" prefix was rejected — a second scoping mechanism living
+// in the data). A NULL orgId is a legacy row of the default org
+// (src/lib/tenantFilter.ts); MySQL does not compare NULLs in a unique index, so
+// the create paths read the tenant (NULL rows included) before they insert —
+// src/lib/leadSource.ts `findOrCreateSource()`.
 model Source {
   orgId        String?
   org          Organization? @relation(fields: [orgId], references: [id])
   id           String        @id @default(cuid())
-  name         String        @unique
+  name         String
   contactName  String?
   contactEmail String?
   createdAt    DateTime      @default(now())
 
   users User[]
 
+  @@unique([orgId, name])
   @@index([name])
 }
 

@@ -7,6 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { attributedLeadWhere, sourceAttributionRows } from '@/lib/leadAttribution';
 import { getLocale } from '@/i18n/server';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // GET — lead attribution: per referral source, how many people came in and what
 // share of them reached the tenant's finished stage (Faz 2, #539; generalised to
@@ -55,14 +56,19 @@ export async function GET() {
   return await withTenantScope(session, async () => {
     const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
     const outcome = await outcomeStageKeys(orgId, locale);
+    // The caller's tenant, by hand (#2570) — the middleware is dormant, and
+    // both halves of this report are tenant data: another tenant's sources and
+    // (worse) its count of unsourced leads were returned here until now.
+    const tenant = await tenantWhere(session);
 
     const sources = await prisma.source.findMany({
+      where: withinTenant({}, tenant),
       orderBy: { name: 'asc' },
       select: {
         id: true,
         name: true,
         users: {
-          where: attributedLeadWhere(),
+          where: withinTenant(attributedLeadWhere(), tenant),
           select: { menteeRelations: { select: { pipelineStatus: true } } },
         },
       },
@@ -80,7 +86,13 @@ export async function GET() {
     // People with no source at all, so the report accounts for everyone — the
     // untracked share is itself the answer to "how much of this do we know?",
     // and it is the reason no separate "no campaign" bucket is needed.
-    const unsourced = await prisma.user.count({ where: { ...attributedLeadWhere(), sourceId: null } });
+    //
+    // A lead whose channel is not known is counted HERE and nowhere else: the
+    // attribution writers (src/lib/leadSource.ts) leave `sourceId` NULL for an
+    // unknown channel rather than creating an "unknown" Source (#2570).
+    const unsourced = await prisma.user.count({
+      where: withinTenant({ ...attributedLeadWhere(), sourceId: null }, tenant),
+    });
 
     return NextResponse.json({
       sources: rows,

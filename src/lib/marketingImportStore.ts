@@ -41,6 +41,9 @@ import { trialLengthDaysFor } from './trialWindow';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
 import { normalizeEmailKey } from './duplicateDetection';
 import { findUsersByEmail, worldOfOrg } from './userWorld';
+import { defaultOrgId } from './defaultOrg';
+import { findOrCreateSource } from './leadSource';
+import { typedSourceName } from './leadSourceName';
 import {
   AlreadyMentoredError,
   findActiveMentorship,
@@ -205,6 +208,46 @@ interface WriterContext {
   offPathStages: ReadonlySet<string>;
   /** The org's `trialLengthDays`, resolved once per run (#2551). */
   trialLengthDays: number;
+  /** Which `Source` a lead this run creates is attributed to (#2570). */
+  leadSource: LeadSourceBinding;
+}
+
+/**
+ * How a lead's `Source` is decided (#2570).
+ *
+ * `typed` — the file's (or the manual form's) `source` column IS the source a
+ * person named: "Messe Berlin", "Partner X". It keeps its free-text copy on
+ * `User.referralSource` as before, and is now also bound to the tenant's
+ * `Source` row of that name (created when there is none), so the attribution
+ * report counts it. A blank column leaves the lead unsourced.
+ *
+ * `fixed` — the caller already decided, from machine inputs, through
+ * `leadSourceName()` (the demo form's UTM parameters, #2569; an ingest,
+ * #2450). `name: null` is "unknown": no Source, the explicit `unsourced` bucket.
+ * The free-text `referralSource` is still whatever the caller put in `source`.
+ */
+export type LeadSourceBinding = { kind: 'typed' } | { kind: 'fixed'; name: string | null };
+
+/**
+ * The `sourceId` a planned row's lead gets, or null. Resolved OUTSIDE the
+ * row's transaction (a lost race on the `(orgId, name)` index is a P2002 that
+ * findOrCreateSource() answers by re-reading); a row that then fails leaves at
+ * worst an unused Source row, never a lead without its tenant's source. Only
+ * the database writer calls this — a dry run creates no Source.
+ *
+ * Attribution is FIRST TOUCH: for a lead that already exists it is only
+ * written when the lead has no referrer of either kind yet (see placeOnFunnel).
+ */
+async function leadSourceIdFor(row: MarketingPlannedRow, context: WriterContext): Promise<string | null> {
+  const funnel = row.value.funnel;
+  if (!funnel || !funnel.pending) return null;
+  const name =
+    context.leadSource.kind === 'fixed'
+      ? context.leadSource.name
+      : typedSourceName(funnel.leadChanges.referralSource);
+  if (!name) return null;
+  const orgId = context.orgId ?? (await defaultOrgId());
+  return (await findOrCreateSource(orgId, name)).id;
 }
 
 /**
@@ -244,6 +287,7 @@ async function placeOnFunnel(
   row: MarketingPlannedRow,
   companyId: string,
   context: WriterContext,
+  sourceId: string | null,
 ): Promise<void> {
   const funnel = row.value.funnel;
   if (!funnel || !funnel.pending) return;
@@ -283,12 +327,20 @@ async function placeOnFunnel(
         country: funnel.leadChanges.country ?? null,
         preferredLanguage: funnel.leadChanges.preferredLanguage ?? null,
         referralSource: funnel.leadChanges.referralSource ?? null,
+        sourceId,
       },
       select: { id: true },
     });
     leadId = created.id;
-  } else if (funnel.leadChanged.length > 0) {
-    await tx.user.update({ where: { id: leadId }, data: { ...funnel.leadChanges, companyId } });
+  } else {
+    if (funnel.leadChanged.length > 0) {
+      await tx.user.update({ where: { id: leadId }, data: { ...funnel.leadChanges, companyId } });
+    }
+    // First touch (#2570): an existing lead keeps the referrer it has — a
+    // Source or a referring person (the merged referrer, src/lib/referrer.ts).
+    if (sourceId) {
+      await tx.user.updateMany({ where: { id: leadId, sourceId: null, referredById: null }, data: { sourceId } });
+    }
   }
 
   // ONE mentee, at most one ACTIVE mentor (#419) — asked through the shared
@@ -355,23 +407,25 @@ async function placeOnFunnel(
 function databaseWriter(context: WriterContext): MarketingAccountWriter {
   return {
     async createAccount(row) {
+      const sourceId = await leadSourceIdFor(row, context);
       return prisma.$transaction(async (tx) => {
         const company = await tx.company.create({
           data: accountCreateData(row, context.orgId),
           select: { id: true },
         });
-        await placeOnFunnel(tx, row, company.id, context);
+        await placeOnFunnel(tx, row, company.id, context, sourceId);
         return company.id;
       });
     },
     async updateAccount(row) {
       const targetId = row.value.account.targetId;
       if (!targetId) throw new Error('an UPDATE row reached the writer without a target id');
+      const sourceId = await leadSourceIdFor(row, context);
       return prisma.$transaction(async (tx) => {
         if (row.value.account.changed.length > 0) {
           await tx.company.update({ where: { id: targetId }, data: row.value.account.changes });
         }
-        await placeOnFunnel(tx, row, targetId, context);
+        await placeOnFunnel(tx, row, targetId, context, sourceId);
         return targetId;
       });
     },
@@ -517,6 +571,8 @@ interface MarketingRunCore {
   mode: WriterMode;
   authoritative?: boolean;
   chunkSize?: number;
+  /** Defaults to `typed` — the file's own `source` column. */
+  leadSource?: LeadSourceBinding;
 }
 
 /**
@@ -535,7 +591,12 @@ async function runMarketingRows(core: MarketingRunCore) {
 
     const validate = makeMarketingValidator({ stageKeys });
     const trialLengthDays = await trialLengthDaysFor(orgId);
-    const database = databaseWriter({ orgId, offPathStages, trialLengthDays });
+    const database = databaseWriter({
+      orgId,
+      offPathStages,
+      trialLengthDays,
+      leadSource: core.leadSource ?? { kind: 'typed' },
+    });
     // Create-only: a CREATE is written through the import's own writer; an
     // UPDATE is what an existing account WOULD receive, so it is reported and
     // not written — "this account already exists" is the answer, not a merge.
@@ -634,6 +695,12 @@ export async function createMarketingAccount(input: {
    * owner's funnel (actor = null: nobody signed in did it). Defaults to the owner.
    */
   actor?: { id: string; email: string | null } | null;
+  /**
+   * The lead's `Source` when the caller decided it from machine inputs
+   * (`leadSourceName()`; null = unknown). Omitted: the typed `source` field
+   * is the source (#2570, see LeadSourceBinding).
+   */
+  leadSourceName?: string | null;
 }): Promise<ManualAccountOutcome> {
   const { owner, fields } = input;
   const stages = await runWithOrg(owner.orgId, () => resolvePipelineStages(owner.orgId));
@@ -669,6 +736,7 @@ export async function createMarketingAccount(input: {
     owner,
     parse: () => manualAccountTable({ ...fields, stage }),
     mode: 'createOnly',
+    leadSource: input.leadSourceName === undefined ? { kind: 'typed' } : { kind: 'fixed', name: input.leadSourceName },
   });
   const row = report.rows[0];
   if (!row) return { kind: 'invalid', reason: 'empty row' };

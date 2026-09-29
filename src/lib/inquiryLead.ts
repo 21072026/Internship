@@ -31,6 +31,7 @@ import {
   type ManualAccountOutcome,
   type MarketingImportOwner,
 } from '@/lib/marketingImportStore';
+import { leadSourceName } from '@/lib/leadSourceName';
 
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -65,6 +66,8 @@ export async function convertInquiryToMarketingLead(input: {
         email: true,
         phone: true,
         utmSource: true,
+        utmMedium: true,
+        utmCampaign: true,
         convertedCompanyId: true,
         convertedCompany: { select: { name: true } },
       },
@@ -122,10 +125,22 @@ export async function convertInquiryToMarketingLead(input: {
           contactEmail: inquiry.email,
           ...(inquiry.phone ? { contactPhone: inquiry.phone } : {}),
           // The campaign, when the visitor arrived with one; otherwise the form
-          // itself. Free text on the lead (`referralSource`) — binding it to a
-          // `Source` row is #2570's mapping, not this writer's.
+          // itself. Free text on the lead (`referralSource`), unchanged.
           source: inquiry.utmSource ?? WEB_FORM_SOURCE,
         },
+        // The `Source` row is decided by the ONE attribution rule (#2570,
+        // src/lib/leadSourceName.ts) — `utm:<source>/<medium>/<campaign>`, or
+        // unknown (no Source, the report's `unsourced` bucket) when the visitor
+        // carried no utm_source. "Website demo form" says HOW they reached us,
+        // not which channel sent them, so it is not a Source.
+        leadSourceName: (() => {
+          const r = leadSourceName({
+            utmSource: inquiry.utmSource,
+            utmMedium: inquiry.utmMedium,
+            utmCampaign: inquiry.utmCampaign,
+          });
+          return r.kind === 'unknown' ? null : r.name;
+        })(),
         request: input.request,
         origin: 'inquiry',
         actor: input.actor,

@@ -101,6 +101,7 @@ test.afterAll(async () => {
   await prisma.company.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.activityLog.deleteMany({ where: { targetId: { in: companyIds } } }).catch(() => {});
   await prisma.pipelineStage.deleteMany({ where: { orgId } }).catch(() => {});
+  await prisma.source.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.setting.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
   // Give the host back only once the test org (and its claim) is gone.
@@ -221,7 +222,9 @@ test('a request on the marketing host lands in the mapped MARKETING org, unowned
     expect(company.contactEmail).toBe(email);
     const relation = await prisma.mentorshipRelation.findFirstOrThrow({
       where: { companyId: company.id },
-      include: { mentee: { select: { email: true, role: true, referralSource: true } } },
+      include: {
+        mentee: { select: { email: true, role: true, referralSource: true, source: { select: { name: true, orgId: true } } } },
+      },
     });
     // The admin who pressed the button owns it (no default owner is set), at
     // the org's first stage, with a stand-in lead — never a login on their mailbox.
@@ -230,6 +233,9 @@ test('a request on the marketing host lands in the mapped MARKETING org, unowned
     expect(relation.mentee.role).toBe('MENTEE');
     expect(relation.mentee.email).not.toBe(email);
     expect(relation.mentee.referralSource).toBe('linkedin');
+    // …and it is ATTRIBUTED (#2570): bound to this org's Source by the one
+    // mapping rule, utm:<source>/<medium>/<campaign>.
+    expect(relation.mentee.source).toEqual({ name: 'utm:linkedin/social/autumn-2026', orgId });
     // No COMPANY login and no invitation: marketing sells to the company.
     expect(await prisma.invitationToken.count({ where: { email } })).toBe(0);
 
@@ -269,9 +275,15 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
   expect(row.marketingOptInTextVersion).toBe(MARKETING_OPT_IN_TEXT_VERSION);
   expect(row.marketingOptInConfirmedAt).toBeNull();
   expect(row.convertedCompanyId).not.toBeNull();
-  const relation = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: row.convertedCompanyId! } });
+  const relation = await prisma.mentorshipRelation.findFirstOrThrow({
+    where: { companyId: row.convertedCompanyId! },
+    include: { mentee: { select: { sourceId: true } } },
+  });
   expect(relation.mentorId).toBe(mktRepId);
   expect(relation.pipelineStatus).toBe(firstStage);
+  // No utm_source ⇒ unknown channel ⇒ NO Source row: the lead is counted in the
+  // report's explicit `unsourced` bucket instead (#2570).
+  expect(relation.mentee.sourceId).toBeNull();
 
   // The hand-typed lead (#2562) with no owner in the body goes to the same rep;
   // the admin typing it stays the actor.
@@ -281,13 +293,25 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
     await page.context().setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST }); // MARKETING-org admin => marketing host (#2590)
     await signInAndSettle(page, mktAdminEmail, PW, '/admin');
     const manual = await page.request.post('/api/admin/marketing-accounts', {
-      data: { name: `Typed Handel ${stamp}`, contactName: 'Tia Typed', contactEmail: uniqueEmail('demo-form-typed') },
+      data: {
+        name: `Typed Handel ${stamp}`,
+        contactName: 'Tia Typed',
+        contactEmail: uniqueEmail('demo-form-typed'),
+        source: `Messe ${stamp}`,
+      },
     });
     expect(manual.status()).toBe(201);
     const body = await manual.json();
     expect(body.ownerId).toBe(mktRepId);
-    const typed = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: body.companyId } });
+    const typed = await prisma.mentorshipRelation.findFirstOrThrow({
+      where: { companyId: body.companyId },
+      include: { mentee: { select: { referralSource: true, source: { select: { name: true, orgId: true } } } } },
+    });
     expect(typed.mentorId).toBe(mktRepId);
+    // A typed source is the Source a person named (#2570): kept as written,
+    // bound to (and created in) THIS org.
+    expect(typed.mentee.referralSource).toBe(`Messe ${stamp}`);
+    expect(typed.mentee.source).toEqual({ name: `Messe ${stamp}`, orgId });
 
     // An owner from another tenant is refused, both in the body and as the setting.
     const foreign = await page.request.post('/api/admin/marketing-accounts', {
