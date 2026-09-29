@@ -7486,3 +7486,12 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **The worktree isolation guard refuses shell commands containing `GITHUB_OUTPUT`** (and some
   `node -e 'import(…)'` one-liners) as "names git". Put the command in a scratchpad `.sh` file
   and run `bash <file>`.
+- **Two failure classes need two alert states, not one issue with two titles.** The first cut of
+  the content alert reused `uptime-alert`; review caught that an open content incident then masks a
+  later outage (and vice versa). Each class now has its own label, status output and transition.
+- **A config check must not take its expected value from the config it checks.** The deploy-time
+  marketing check first asked for the first `MARKETING_HOSTS` entry — which by construction gets
+  the marketing page — so it could only ever say OK. The caller now names the host
+  (`MARKETING_PROBE_HOST`).
+- **`pkill -f "next start -p 3114"` kills your own shell** (the pattern is in its command line).
+  Find the pid from `ss -ltnp | grep :3114` instead.

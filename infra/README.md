@@ -147,12 +147,22 @@ curl -sI https://marketing.ersah.in/ | head -2                             # 308
 The first line is **no longer only a hand check** (#2579). `uptime.yml` reads
 `/` and `/imprint` on both marketing hosts every run with
 `scripts/marketing-content-probe.mjs` — the `<title>` must name `SaleVali` and
-must not say `Internship CRM` — and a finding goes through the same
-`uptime-alert` issue + mail as an outage (subject *"Marketing host yanlış ürünü
-gösteriyor"*). The same check runs inside `deploy-prod.sh` right after the swap,
-against the new container asked as the marketing host, but there it only
+must not say `Internship CRM`. A finding opens its **own** incident: a separate
+`uptime-content-alert` issue + mail (subject *"Marketing host yanlış ürünü
+gösteriyor"*), never the outage's `uptime-alert` one. The two must not share a
+state — a content problem can stay open for days waiting on an env-file edit,
+and an outage of interncrm.com during those days would otherwise find
+"already alerting" and stay silent (the gap #2169 closed). A content finding on
+a host whose `/api/health` is already down is left to the outage alert, so one
+dead marketing host still opens one incident. The same title check runs inside
+`deploy-prod.sh` right after the swap, on every replica, but there it only
 **warns** (`::warning::` in the deploy job): the fix is an env-file edit, not a
-rollback. Run the probe by hand with
+rollback. The host it asks for is named by the caller (`MARKETING_PROBE_HOST`
+in `deploy-prod.yml` / `deploy-preview.yml`), **not** read from
+`MARKETING_HOSTS` — whatever that variable names gets the marketing page by
+construction, so a check that took its host from there could never catch it
+being wrong; it also warns when the expected host is missing from the
+effective `MARKETING_HOSTS` set. Run the probe by hand with
 `node scripts/marketing-content-probe.mjs https://marketing.bcsit-gmbh.de/ https://marketing.bcsit-gmbh.dev/imprint`
 — silent and exit 0 when right, one `<url> -> <reason>` line per wrong page and
 exit 1 otherwise.
@@ -188,11 +198,20 @@ on the story, #2578. Nothing below has been run by the change that wrote it.
      an idempotent deploy backfill instead (plain `.mjs`, an ESM mirror of the
      marketing funnel with a parity test, and an explicit `orgId` on every
      create — a deploy step has no session to bind one).
-   - Then prove the job sees it: signed in as an ADMIN of that org, open
-     `GET /api/cron?job=trial-reminders&orgId=<id>`; the JSON's
-     `trialReminders.orgs` must be `1`. (The 05:20 UTC cron logs a line only on
-     a tick that did something, so a quiet day shows nothing in the container
-     log — the manual run is the evidence.)
+   - Then prove the job sees the org. **This is a write, not a read:**
+     `GET /api/cron?job=trial-reminders&orgId=<id>` runs the real job for that
+     org — it mails every trial reminder that is due and expires overdue trials
+     to `TRIAL_EXPIRED`, exactly like the 05:20 UTC tick. Run it before real
+     prospects are in the org, or right after the 05:20 run so nothing is due.
+     Copy the URL exactly: a mistyped `job=` value does not fail, it falls
+     through to the full cron mail batch. Signed in as an ADMIN of that org,
+     the JSON's `trialReminders.orgs` must be `1` — which proves **only** the
+     vertical gate (the org is counted in scope because its vertical is
+     `MARKETING`), not that the trial stages exist; stage presence is proven
+     by the stage-editor check in step 1. `trialReminders.expired` /
+     `considered` are the fields that show the stages actually in use. (The
+     05:20 cron logs a line only on a tick that did something, so a quiet day
+     shows nothing in the container log.)
 3. **Host → org mapping** — *blocked on #2569*, which defines it; nothing in
    `main` maps a host to an org today (`src/lib/hostVertical.ts` maps a host to a
    *vertical* only). Once it lands: confirm prod's marketing host maps to the
@@ -200,9 +219,10 @@ on the story, #2578. Nothing below has been run by the change that wrote it.
    form stays closed — that is the safe failure, but it is still a failure to
    report.
 4. **The content probe is green.** In Actions → *Uptime*, the latest run's
-   *Probe* step ends with `all targets 200, marketing titles correct` and no
-   open issue carries the `uptime-alert` label. If it is red for content, the
-   first suspect is `MARKETING_HOSTS` in the environment's env file (above).
+   *Probe* step ends with `reach up` and `content up`, and no open issue
+   carries the `uptime-alert` or `uptime-content-alert` label. If it is red
+   for content, the first suspect is `MARKETING_HOSTS` in the environment's
+   env file (above).
 5. **The retired name still redirects:**
    `curl -sI https://marketing.ersah.in/ | head -2` shows `308` and
    `location: https://marketing.bcsit-gmbh.de/`. Repeat for
