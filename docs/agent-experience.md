@@ -7666,3 +7666,12 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **A `.gitignore` rule is testable without touching the tree**: `git check-ignore --no-index -q
   <path>` answers for paths that do not exist (exit 0 ignored, 1 not), which is what
   `scripts/test/gitignore-exports.test.mjs` uses to pin that real exports can never be added.
+- **A per-run lease holder, not a per-process one** (#2552 review). `holdsLease()` RENEWS when
+  the holder string matches, so using `replicaId()` alone as the holder for a user-triggered
+  one-shot (an import apply) lets two tabs on the same replica both "hold" it. Append a
+  `randomUUID()` so each run is its own contender; lease names are `VarChar(64)`, holders
+  `VarChar(190)`.
+- **In-file duplicate detection must remember what a claiming row brought, not only which
+  account it claimed.** A new account goes into the in-file index with its external id; an
+  EXISTING account that the row fills an id into does not, so a later row naming it under a
+  different id looked like a plain duplicate. Keep the claimed id next to the claim.

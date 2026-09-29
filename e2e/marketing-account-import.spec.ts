@@ -200,3 +200,63 @@ test('INTERNSHIP never sees the mode and gets 403 vertical_mismatch; a MARKETING
     await prisma.organization.delete({ where: { id: internship.id } }).catch(() => {});
   }
 });
+
+test('review fixes: the org default lead owner, one apply at a time, and an oversized body is 413', async ({ page }) => {
+  test.setTimeout(120_000);
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const org = await marketingOrg(`r-${stamp}`);
+  const adminEmail = uniqueEmail('mkt-import-rv-admin');
+  const repEmail = uniqueEmail('mkt-import-rv-rep');
+  const admin = await seedUser(adminEmail, PW, 'ADMIN', 'Review Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: org.id } });
+  const rep = await seedUser(repEmail, PW, 'MENTOR', 'Default Rep');
+  await prisma.user.update({ where: { id: rep.id }, data: { orgId: org.id } });
+  // #2562's setting: the org's default lead owner is the rep.
+  await prisma.setting.create({ data: { orgId: org.id, key: 'defaultLeadOwnerId', value: rep.id } });
+  const lease = `marketing-import:${org.id}`;
+  const text = readFileSync(FIXTURE, 'utf8');
+
+  try {
+    await signInAndSettle(page, adminEmail, PW, '/admin');
+
+    // No ownerId: the org default, not the signed-in admin — and the answer says so.
+    const preview = await page.request.post(ROUTE, { data: { text } });
+    expect(preview.status()).toBe(200);
+    expect((await preview.json()).owner.id).toBe(rep.id);
+
+    // Another apply holds the org's lease: an apply is refused, a preview is not.
+    await prisma.jobLease.create({
+      data: {
+        name: lease,
+        holder: 'e2e-other-run',
+        acquiredAt: new Date(),
+        renewedAt: new Date(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        generation: 1,
+      },
+    });
+    const blocked = await page.request.post(ROUTE, { data: { text, apply: true } });
+    expect(blocked.status()).toBe(409);
+    expect((await blocked.json()).code).toBe('import_running');
+    expect((await page.request.post(ROUTE, { data: { text } })).status()).toBe(200);
+    expect(await prisma.company.count({ where: { orgId: org.id } })).toBe(0);
+
+    // Once it expired, the apply runs, lands on the default owner, and hands the lease back.
+    await prisma.jobLease.update({ where: { name: lease }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    const applied = await page.request.post(ROUTE, { data: { text, apply: true } });
+    expect(applied.status()).toBe(200);
+    const relations = await prisma.mentorshipRelation.findMany({ where: { orgId: org.id }, select: { mentorId: true } });
+    expect(relations).toHaveLength(5);
+    for (const r of relations) expect(r.mentorId).toBe(rep.id);
+    const row = await prisma.jobLease.findUnique({ where: { name: lease } });
+    expect(row!.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+
+    // Past the character limit: 413, not a 400 and not a run.
+    const huge = await page.request.post(ROUTE, { data: { text: 'x'.repeat(2_000_001) } });
+    expect(huge.status()).toBe(413);
+    expect((await huge.json()).code).toBe('file_too_large');
+  } finally {
+    await prisma.jobLease.deleteMany({ where: { name: lease } }).catch(() => {});
+    await cleanupOrg(org.id, [adminEmail, repEmail]);
+  }
+});

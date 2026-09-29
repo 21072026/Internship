@@ -29,7 +29,9 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
+import { randomUUID } from 'node:crypto';
 import { runWithOrg } from './orgContext';
+import { acquireLease, releaseLease, replicaId } from './jobs/lease';
 import { logActivity } from './activity';
 import { runImport, parseDelimited, type ImportReport, type ParsedTable } from './importPreview';
 import { resolvePipelineStages } from './pipelineStages';
@@ -415,14 +417,56 @@ export interface MarketingImportRunResult {
 }
 
 /**
+ * How long one apply may hold its organization's import lease. Far above a
+ * worst-case run (MARKETING_IMPORT_MAX_ROWS rows, one short transaction each);
+ * a run that somehow outlives it loses only the exclusivity, and a crashed one
+ * frees the lease by expiry — the JobLease rule, never a `finally` alone.
+ */
+export const MARKETING_IMPORT_LEASE_TTL_MS = 30 * 60 * 1000;
+
+/** One lease per organization: two orgs import in parallel, one org one at a time. */
+export function marketingImportLeaseName(orgId: string | null): string {
+  return `marketing-import:${orgId ?? 'default'}`;
+}
+
+/**
  * One import run. Dry run by default; `apply: true` is the same call with a
  * writer that writes — there is no `if (dryRun)` branch anywhere in the
  * planning path, which is the property the shared engine exists to guarantee.
+ *
+ * An apply holds the organization's import lease (#2552 review) for the whole
+ * run: two applies at once would each plan against a snapshot taken before
+ * the other wrote, and `externalId` / name+country carry no unique index, so a
+ * VAT-less account would be created twice and one external id could land on
+ * two accounts. A second apply while one runs is refused (`import_running`).
+ * The holder is unique per RUN, not per process — two tabs on one replica are
+ * two contenders. A preview writes nothing and takes no lease.
  */
 export async function runMarketingAccountImport(
   options: MarketingImportOptions,
 ): Promise<MarketingImportRunResult> {
   const owner = options.owner ?? (await resolveImportOwner(options.ownerEmail));
+  if (options.apply !== true) return runMarketingAccountImportLocked(options, owner);
+  const lease = marketingImportLeaseName(owner.orgId);
+  const holder = `${replicaId().slice(0, 150)}:${randomUUID()}`;
+  if (!(await acquireLease(lease, holder, MARKETING_IMPORT_LEASE_TTL_MS))) {
+    throw new MarketingImportError(
+      'import_running',
+      'Another marketing account import is being applied in this organization; wait for it to finish',
+    );
+  }
+  try {
+    return await runMarketingAccountImportLocked(options, owner);
+  } finally {
+    // An optimisation only: expiry is what frees a lease a crashed run held.
+    await releaseLease(lease, holder);
+  }
+}
+
+async function runMarketingAccountImportLocked(
+  options: MarketingImportOptions,
+  owner: MarketingImportOwner,
+): Promise<MarketingImportRunResult> {
   const orgId = owner.orgId;
   const apply = options.apply === true;
   const { maxRows } = options;

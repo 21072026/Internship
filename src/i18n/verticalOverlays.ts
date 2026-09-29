@@ -126,6 +126,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
+      // The /admin/settings import card (#2552 review): the second mode is the
+      // legacy people importer, which MARKETING shows next to the account import.
+      // It creates MENTEE rows — a MARKETING org's leads — so it says people.
+      settings: {
+        bulkImport: 'Bulk import people',
+        importModeMentees: 'People (leads)',
+      },
       publicNav: {
         homeLink: 'SaleVali — go to the home page',
         tagline: 'Leads, accounts and deals in one pipeline — from first contact to close.',
@@ -501,6 +508,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkOwnerLabel: 'Temsilci',
         bulkAssignOwner: 'Temsilci ata',
       },
+      // The /admin/settings import card (#2552 review): the second mode is the
+      // legacy people importer, which MARKETING shows next to the account import.
+      // It creates MENTEE rows — a MARKETING org's leads — so it says people.
+      settings: {
+        bulkImport: 'Toplu kişi içe aktar',
+        importModeMentees: 'Kişiler (lead)',
+      },
       publicNav: {
         homeLink: 'SaleVali — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
@@ -773,6 +787,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mineFilter: 'Meine Kunden',
         bulkOwnerLabel: 'Vertriebsmitarbeiter',
         bulkAssignOwner: 'Vertriebsmitarbeiter zuweisen',
+      },
+      // The /admin/settings import card (#2552 review): the second mode is the
+      // legacy people importer, which MARKETING shows next to the account import.
+      // It creates MENTEE rows — a MARKETING org's leads — so it says people.
+      settings: {
+        bulkImport: 'Personen im Stapel importieren',
+        importModeMentees: 'Personen (Leads)',
       },
       publicNav: {
         homeLink: 'SaleVali — zur Startseite',

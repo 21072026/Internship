@@ -9,7 +9,7 @@ import { verticalFor } from '@/lib/verticalContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logger } from '@/lib/logger';
-import { findLeadOwner } from '@/lib/leadOwner';
+import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
 import { MARKETING_IMPORT_MAX_ROWS, marketingImportMetrics } from '@/lib/marketingImport';
 import { MarketingImportError, runMarketingAccountImport } from '@/lib/marketingImportStore';
 
@@ -47,19 +47,35 @@ import { MarketingImportError, runMarketingAccountImport } from '@/lib/marketing
 // WHOSE ORGANIZATION
 //   The session's, and nothing else: there is no org in the body, exactly as
 //   there is no tenant column in the file (docs/marketing-import.md). The
-//   default owner of the rows is the acting admin, or an owner the admin picks
-//   (`ownerId`, an active ADMIN/MENTOR of the same org — else 400).
+//   default owner of the rows is an owner the admin picks (`ownerId`, an active
+//   ADMIN/MENTOR of the same org — else 400); without one, the org's default
+//   lead owner (`defaultLeadOwnerId`, #2562 — the same fallback the manual lead
+//   form and the demo-request conversion use); without that, the acting admin.
+//   The preview and the apply resolve it the same way, and the answer names it.
 //
 // BOUNDS
 //   The text is capped by TEXT_LIMITS.marketingImportFile and the row count by
 //   MARKETING_IMPORT_MAX_ROWS, both refused before anything is planned; the run
-//   is rate-limited per admin. The activity log gets counts only (no PII) —
-//   written by runMarketingAccountImport on apply, the same row the CLI writes.
+//   is rate-limited per admin. The body is read through a byte-bounded reader,
+//   so an oversized request is refused while it streams, never buffered whole
+//   first. The activity log gets counts only (no PII) — written by
+//   runMarketingAccountImport on apply, the same row the CLI writes.
+//
+// ONE APPLY AT A TIME PER ORGANIZATION
+//   Two applies of one file (two admins, two tabs) would each plan against a
+//   snapshot taken before the other wrote, and neither `externalId` nor
+//   name+country has a unique index. runMarketingAccountImport takes a
+//   per-org JobLease for an apply and refuses a second one (409
+//   `import_running`); a preview writes nothing and takes none.
 
 const RATE_LIMIT = { limit: 30, windowMs: 10 * 60 * 1000 };
 
+// JSON can spend up to six bytes on one character (`\u0001`), so this bounds the
+// body without ever refusing a file that is within the character limit.
+const MAX_BODY_BYTES = TEXT_LIMITS.marketingImportFile * 6 + 1024;
+
 const bodySchema = z.object({
-  text: z.string().min(1),
+  text: z.string().min(1).max(TEXT_LIMITS.marketingImportFile),
   apply: z.boolean().optional(),
   authoritative: z.boolean().optional(),
   delimiter: z.enum([',', ';', '\t', '|']).optional(),
@@ -74,6 +90,38 @@ interface ReportRow {
   name: string | null;
   reason?: string;
   changed?: string[];
+}
+
+function fileTooLarge() {
+  return NextResponse.json(
+    { code: 'file_too_large', maxChars: TEXT_LIMITS.marketingImportFile, error: 'The file is too large for one run' },
+    { status: 413 },
+  );
+}
+
+/** The body as text, or null once it passes `maxBytes` — the rest is never read. */
+async function readBoundedText(request: Request, maxBytes: number): Promise<string | null> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    all.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(all);
 }
 
 export async function POST(request: Request) {
@@ -101,23 +149,24 @@ async function handlePost(request: Request) {
   const limited = enforceRateLimit(request, 'marketing-import', { ...RATE_LIMIT, subject: session.user.id });
   if (limited) return limited;
 
+  const declared = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return fileTooLarge();
+  const bodyText = await readBoundedText(request, MAX_BODY_BYTES);
+  if (bodyText === null) return fileTooLarge();
   let raw: unknown;
   try {
-    raw = await request.json();
+    raw = JSON.parse(bodyText);
   } catch {
     return NextResponse.json({ code: 'invalid', error: 'Invalid JSON' }, { status: 400 });
   }
+  // Checked before the schema so an over-long text answers 413, not a generic 400.
+  const rawText = (raw as { text?: unknown } | null)?.text;
+  if (typeof rawText === 'string' && rawText.length > TEXT_LIMITS.marketingImportFile) return fileTooLarge();
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json({ code: 'invalid', error: 'Validation failed' }, { status: 400 });
   }
   const { text, apply, authoritative, delimiter, ownerId } = parsed.data;
-  if (text.length > TEXT_LIMITS.marketingImportFile) {
-    return NextResponse.json(
-      { code: 'file_too_large', maxChars: TEXT_LIMITS.marketingImportFile, error: 'The file is too large for one run' },
-      { status: 413 },
-    );
-  }
 
   const picked = ownerId ? await findLeadOwner(orgId, ownerId) : null;
   if (ownerId && !picked) {
@@ -126,7 +175,8 @@ async function handlePost(request: Request) {
       { status: 400 },
     );
   }
-  const owner = picked ?? { id: session.user.id, email: session.user.email ?? '', orgId, role: session.user.role };
+  const owner = picked ??
+    (await resolveDefaultLeadOwner(orgId)) ?? { id: session.user.id, email: session.user.email ?? '', orgId, role: session.user.role };
 
   return withTenantScope(session, async () => {
     try {
@@ -162,7 +212,7 @@ async function handlePost(request: Request) {
       });
     } catch (error) {
       if (error instanceof MarketingImportError) {
-        const status = error.code === 'too_many_rows' ? 413 : 400;
+        const status = error.code === 'too_many_rows' ? 413 : error.code === 'import_running' ? 409 : 400;
         return NextResponse.json(
           { code: error.code, error: error.message, ...(error.code === 'too_many_rows' ? { maxRows: MARKETING_IMPORT_MAX_ROWS } : {}) },
           { status },

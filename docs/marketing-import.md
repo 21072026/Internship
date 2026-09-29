@@ -301,9 +301,12 @@ same row outcomes, same activity-log row:
   `403 vertical_mismatch` (a code of its own: INTERNSHIP carries every capability, so the
   capability gate — `capability_unavailable` — could never be the one to refuse it) and a
   `MENTOR` `403`.
-- **What it takes:** the file (picked, or pasted), the **default owner** — the signed-in
-  admin, or another active admin/rep of the organisation (the CLI's `--owner`; same rule:
-  pick one and keep it for every re-run) — and **Overwrite values the file disagrees with**
+- **What it takes:** the file (picked, or pasted), the **default owner** — an active
+  admin/rep of the organisation picked in the list (the CLI's `--owner`; same rule: pick one
+  and keep it for every re-run), or, left on *Organization default (else me)*, the
+  organisation's **default lead owner** from the same settings page (#2562 — the fallback the
+  manual lead form and the demo-request conversion use), else the signed-in admin. The report
+  names the owner the run used; the preview and the apply resolve it the same way — and **Overwrite values the file disagrees with**
   (the CLI's `--authoritative`, off by default). The organisation is always the admin's own;
   there is nothing to choose.
 - **Preview (dry run)** is `--apply` left off; **Apply** is the same request with it on, and
@@ -320,7 +323,15 @@ same row outcomes, same activity-log row:
   reminded about). These are the numbers the cutover posts; nothing in them can carry a name.
 - **Bounds:** at most `TEXT_LIMITS.marketingImportFile` characters (2 000 000) and
   `MARKETING_IMPORT_MAX_ROWS` (5 000) data rows per run — split a larger table into files and
-  run them one after another (each is idempotent); 30 runs per admin per 10 minutes.
+  run them one after another (each is idempotent); 30 runs per admin per 10 minutes. The
+  request body is read through a byte-bounded reader, so an oversized upload is refused
+  (`413 file_too_large`) while it streams rather than after it was buffered.
+- **One apply at a time per organisation.** An apply takes the `JobLease`
+  `marketing-import:<orgId>` (`src/lib/jobs/lease.ts`, TTL 30 minutes, freed on completion
+  and by expiry after a crash) for its whole run; a second apply meanwhile — another admin,
+  another tab, the CLI — is refused with `409 import_running`. Without it two applies of one
+  file would each plan against a snapshot from before the other wrote and create every
+  account without a VAT id twice. A preview writes nothing and takes no lease.
 - **What the panel does not have:** the CLI's `--report` JSON and `--delimiter` (the
   delimiter is sniffed; the API takes `delimiter` if a caller needs it). The report stays in
   the browser tab — nothing about the rows is stored server-side; the activity log gets

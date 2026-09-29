@@ -42,6 +42,8 @@ interface Report {
     trialEnd: Record<'file' | 'kept' | 'default' | 'missing', number>;
   };
   rows: ReportRow[];
+  /** Who owns the rows that name no owner_email — resolved by the server, the same way for the preview and the apply. */
+  owner?: { id: string; email: string };
 }
 
 // -700 on white (≥ 4.5:1), -400 in dark mode — the same pairing the mentee
@@ -248,6 +250,14 @@ export function MarketingAccountImport({
               </li>
             ))}
           </ul>
+          {report.owner && (
+            <p className="text-xs text-gray-600 dark:text-gray-400" data-testid="marketing-import-owner-used" data-owner-id={report.owner.id}>
+              {m.ownerUsed.replace(
+                '{name}',
+                owners.find((o) => o.id === report.owner?.id)?.fullName ?? report.owner.email,
+              )}
+            </p>
+          )}
           {report.metrics && (
             <p className="text-xs text-gray-600 dark:text-gray-400" data-testid="marketing-import-metrics">
               {m.metrics
