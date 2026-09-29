@@ -43,7 +43,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
-      nav: { candidates: 'Leads', companyInquiries: 'Demo requests' },
+      nav: { candidates: 'Leads', companyInquiries: 'Demo requests', myCompanies: 'My accounts' },
       // The demo form on the marketing landing and the list its requests land
       // in (#2569). The form is the internship enquiry form re-used; these are
       // the strings that would otherwise talk about hiring and invitations.
@@ -215,6 +215,35 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // namespace (admin/company/source, "Open profile", "Message") is neutral
       // and left alone.
       personCard: { roleMentor: 'Rep', roleMentee: 'Lead' },
+      // The sales rep's surface at /sales (#2580). It exists only in a vertical
+      // without mentorship, and the board it renders is the mentor board, so
+      // the few mentor.* strings that board reads are dressed here too — they
+      // are never shown by a mentor shell in this vertical, which has none.
+      panel: { sales: 'Sales' },
+      sales: {
+        dashboard: { title: 'Your sales pipeline', subtitle: 'Your own leads and accounts, and what needs you today.' },
+        stats: { open: 'Open leads', accounts: 'Accounts' },
+        records: {
+          title: 'My leads',
+          empty: 'No leads are assigned to you yet. An admin — or the default lead owner setting — assigns them to you.',
+          person: 'Lead',
+          company: 'Account',
+        },
+        accounts: {
+          title: 'My accounts',
+          subtitle: 'The accounts behind your own leads.',
+          empty: 'None of your leads is linked to an account yet.',
+          name: 'Account',
+          records: 'Your leads',
+          back: 'My accounts',
+        },
+        lead: { back: 'My leads', company: 'Account' },
+      },
+      mentor: {
+        boardSubtitle: 'Your leads by stage — drag a card, or use its stage menu, to move it',
+        menteeBoardSearchPlaceholder: 'Find a lead...',
+        noMatchingMentees: 'No leads match this filter',
+      },
       // The day-one empty states of the same two screens (both rendered by the
       // pages #2426/#2427 name, so the acceptance "no mentorship word on
       // /admin/companies or the board" is not met without them): a fresh tenant
@@ -222,6 +251,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       emptyStates: {
         board: {
           adminBody: 'Every deal shows up here as a card, in the stage it has reached. Add the first leads and their cards appear as soon as a rep owns them.',
+          // The rep's own board on /sales (#2580).
+          mentorBody: 'Your leads appear here as cards once they are assigned to you.',
         },
         companies: {
           adminBody: 'Companies are the accounts you sell to: once one exists you can attach what it needs, its contact people and the deals open against it.',
@@ -322,7 +353,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     tr: {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
-      nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri' },
+      nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
       forCompanies: {
         submit: 'Demo isteyin',
         successBody: 'Talebiniz satış ekibimize ulaştı. Demo için bir zaman bulmak üzere iki iş günü içinde dönüyoruz.',
@@ -420,9 +451,35 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         groups: { pre: 'Müşteri Adayları', internship: 'Fırsatlar', custom: 'Satış hunisi' },
       },
       personCard: { roleMentor: 'Temsilci', roleMentee: 'Müşteri adayı' },
+      panel: { sales: 'Satış' },
+      sales: {
+        dashboard: { title: 'Satış pipeline\'ın', subtitle: 'Kendi müşteri adayların ve hesapların, bugün seni bekleyenler.' },
+        stats: { open: 'Açık müşteri adayları', accounts: 'Hesaplar' },
+        records: {
+          title: 'Müşteri adaylarım',
+          empty: 'Henüz sana atanmış bir müşteri adayı yok. Bir yönetici — ya da varsayılan sahip ayarı — atar.',
+          person: 'Müşteri adayı',
+          company: 'Hesap',
+        },
+        accounts: {
+          title: 'Hesaplarım',
+          subtitle: 'Kendi müşteri adaylarının bağlı olduğu hesaplar.',
+          empty: 'Müşteri adaylarından hiçbiri henüz bir hesaba bağlı değil.',
+          name: 'Hesap',
+          records: 'Senin müşteri adayların',
+          back: 'Hesaplarım',
+        },
+        lead: { back: 'Müşteri adaylarım', company: 'Hesap' },
+      },
+      mentor: {
+        boardSubtitle: 'Müşteri adayların aşamaya göre — taşımak için kartı sürükle ya da aşama menüsünü kullan',
+        menteeBoardSearchPlaceholder: 'Müşteri adayı bul...',
+        noMatchingMentees: 'Bu filtreye uyan müşteri adayı yok',
+      },
       emptyStates: {
         board: {
           adminBody: 'Her fırsat burada, ulaştığı aşamada bir kart olarak görünür. İlk müşteri adaylarını ekle; bir temsilci sahiplendiği anda kartları burada belirir.',
+          mentorBody: 'Sana atanan müşteri adayları burada kart olarak görünür.',
         },
         companies: {
           adminBody: 'Şirketler sattığın müşteri hesaplarıdır: bir şirket eklediğinde ona ihtiyaçlarını, iletişim kişilerini ve açık fırsatlarını bağlayabilirsin.',
@@ -499,7 +556,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
-      nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen' },
+      nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
       forCompanies: {
         submit: 'Demo anfragen',
         successBody: 'Ihre Anfrage hat unser Vertriebsteam erreicht. Wir melden uns innerhalb von zwei Werktagen, um einen Termin für die Demo zu finden.',
@@ -593,9 +650,35 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
       },
       personCard: { roleMentor: 'Vertriebsmitarbeiter', roleMentee: 'Lead' },
+      panel: { sales: 'Vertrieb' },
+      sales: {
+        dashboard: { title: 'Deine Vertriebs-Pipeline', subtitle: 'Deine eigenen Leads und Accounts und was heute ansteht.' },
+        stats: { open: 'Offene Leads', accounts: 'Accounts' },
+        records: {
+          title: 'Meine Leads',
+          empty: 'Dir ist noch kein Lead zugewiesen. Ein Admin — oder die Einstellung für den Standard-Owner — weist sie dir zu.',
+          person: 'Lead',
+          company: 'Account',
+        },
+        accounts: {
+          title: 'Meine Accounts',
+          subtitle: 'Die Accounts hinter deinen eigenen Leads.',
+          empty: 'Noch keiner deiner Leads ist mit einem Account verknüpft.',
+          name: 'Account',
+          records: 'Deine Leads',
+          back: 'Meine Accounts',
+        },
+        lead: { back: 'Meine Leads', company: 'Account' },
+      },
+      mentor: {
+        boardSubtitle: 'Deine Leads nach Phase — ziehe eine Karte oder nutze ihr Phasenmenü, um sie zu verschieben',
+        menteeBoardSearchPlaceholder: 'Lead suchen...',
+        noMatchingMentees: 'Keine Leads passen zu diesem Filter',
+      },
       emptyStates: {
         board: {
           adminBody: 'Jeder Deal erscheint hier als Karte, in der Phase, die er erreicht hat. Lege die ersten Leads an — sobald ein Vertriebsmitarbeiter sie übernimmt, taucht ihre Karte auf.',
+          mentorBody: 'Deine Leads erscheinen hier als Karten, sobald sie dir zugewiesen sind.',
         },
         companies: {
           adminBody: 'Unternehmen sind die Accounts, an die du verkaufst: sobald eines existiert, kannst du ihm seinen Bedarf, Ansprechpersonen und die offenen Deals zuordnen.',

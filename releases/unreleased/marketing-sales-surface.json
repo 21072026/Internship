@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **A MARKETING sales rep gets a working surface at `/sales`** (#2580, role decision (b) of 2026-09-29). Sales reps are invited as `MENTOR` — the `Role` enum is unchanged — and in a vertical without the `mentorship` module the mentor shell now sends a MENTOR to `/sales` instead of parking them on `/account` (`mentorlessShellTarget()`, `src/lib/salesSurface.ts`; `e2e/vertical-nav-gate.spec.ts` updated on purpose). The surface is opened by the `pipeline` capability, never by granting `mentorship` to MARKETING, and exists only where the mentor shell does not, so INTERNSHIP is unchanged (an INTERNSHIP mentor on `/sales` goes back to `/mentor`). It holds the rep's own attention queue (`getAttentionItems()` with a new optional `{ reasons, relationWhere }` — the sales reasons `overdue`, `trial_expired`, `trial_no_end_date`, `next_action_due`, tenant-filtered; the one-argument mentor call is byte-identical), their records, the stage board (the mentor board moved to `components/board/MentorBoard.tsx` with a `detailBase` prop), their accounts, the #2560 account page read with an owner scope (`src/lib/companyDetail.ts` + `CompanyDetailView`, shared with `/admin/companies/[id]`, whose queries are unchanged; no admin editors, ADMIN-only columns still redacted) and a lead page with the #2563 follow-up and #2553 trial-end editors. Every read is `mentorId = self` AND the rep's tenant; a colleague's or another org's record is a real HTTP 404 (no `loading.tsx` under `/sales`). `POST /api/invite` from a non-ADMIN now needs the `mentorship` capability, so a MARKETING rep cannot invite; settings, users, deletes, imports and organization routes stay ADMIN-only. MARKETING wording through the vertical overlay (EN/TR/DE). New matrix rows in `e2e/fixtures/authz-matrix.ts` (`MARKETING_MENTOR_*`), exercised by `e2e/marketing-sales-surface.spec.ts`; documented in `docs/role-access-matrix.md` and `docs/security-audit-playbook.md`.",
+  "notes": {
+    "en": [
+      "Sales reps of a marketing organisation now have their own workspace: sign in and you see your attention list (expired trials, trials without an end date, overdue follow-ups), your leads, your board and your accounts — only your own. Admin settings, user management, invitations, imports and deletions stay with admins."
+    ],
+    "tr": [
+      "Pazarlama organizasyonlarının satış temsilcileri artık kendi çalışma alanına sahip: giriş yaptığınızda ilgi bekleyen listenizi (süresi dolan denemeler, bitiş tarihi olmayan denemeler, geciken takipler), müşteri adaylarınızı, panonuzu ve hesaplarınızı görürsünüz — yalnızca kendinizinkileri. Yönetim ayarları, kullanıcı yönetimi, davetler, içe aktarmalar ve silmeler yöneticilerde kalır."
+    ],
+    "de": [
+      "Vertriebsmitarbeiter einer Marketing-Organisation haben jetzt einen eigenen Arbeitsbereich: Nach der Anmeldung sehen Sie Ihre Aufmerksamkeitsliste (abgelaufene Testphasen, Testphasen ohne Enddatum, überfällige Follow-ups), Ihre Leads, Ihr Board und Ihre Accounts — nur Ihre eigenen. Admin-Einstellungen, Benutzerverwaltung, Einladungen, Importe und Löschungen bleiben bei den Admins."
+    ]
+  }
+}

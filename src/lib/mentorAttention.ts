@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
@@ -34,13 +35,28 @@ export interface AttentionQueue {
 // agree on what "stale" means, and the same definition of *contact* as both
 // (lib/lastContact.ts): in-app messaging counts, so a mentor mid-conversation
 // with a mentee is never told they have not been in touch.
-export async function getAttentionItems(mentorId: string): Promise<AttentionQueue> {
+//
+// `options` exists for the MARKETING sales surface (#2580) and changes nothing
+// when omitted — the mentor dashboard calls this with one argument and gets the
+// exact query and list it always got:
+//   - `reasons` keeps only those reasons (a record left with none drops out),
+//     because most reasons here are mentorship work a sales record never has;
+//   - `relationWhere` is ANDed onto the owner filter, so a caller can add the
+//     tenant filter (tenantWhere/withinTenant) this function does not know about.
+export async function getAttentionItems(
+  mentorId: string,
+  options: {
+    reasons?: readonly AttentionReason[];
+    relationWhere?: Prisma.MentorshipRelationWhereInput;
+  } = {},
+): Promise<AttentionQueue> {
   const reminderDays = parseInt(await getSetting('reminderDays'), 10) || 14;
   const now = Date.now();
   const staleCutoff = new Date(now - reminderDays * 24 * 60 * 60 * 1000);
+  const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, status: 'ACTIVE' };
 
   const relations = await prisma.mentorshipRelation.findMany({
-    where: { mentorId, status: 'ACTIVE' },
+    where: options.relationWhere ? { AND: [ownerWhere, options.relationWhere] } : ownerWhere,
     select: {
       id: true,
       orgId: true,
@@ -153,12 +169,13 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
       }
     }
 
-    if (reasons.length > 0) {
+    const kept = options.reasons ? reasons.filter((reason) => options.reasons!.includes(reason)) : reasons;
+    if (kept.length > 0) {
       items.push({
         relationId: r.id,
         menteeId: r.mentee.id,
         menteeName: r.mentee.fullName,
-        reasons,
+        reasons: kept,
         daysSinceLastInteraction: daysSince,
       });
     }

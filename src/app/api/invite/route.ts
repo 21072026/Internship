@@ -63,6 +63,15 @@ export async function POST(request: Request) {
     if (!session || !allowed) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // A MENTOR or MENTEE invitation is the mentorship module's self-serve path
+    // (a mentor inviting their own mentee, a mentee a peer). A vertical without
+    // `mentorship` — a MARKETING sales rep is a MENTOR (#2580) — invites nobody:
+    // bringing people into the tenant stays an ADMIN act there. INTERNSHIP
+    // carries the module, so this is a no-op for it.
+    if (session.user.role !== 'ADMIN') {
+      const denied = await requireCapability(session.user.orgId, 'mentorship');
+      if (denied) return denied;
+    }
 
     return await withTenantScope(session, async () => {
       const body = await request.json();

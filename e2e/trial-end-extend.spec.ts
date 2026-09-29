@@ -63,9 +63,10 @@ async function signedIn(browser: Browser, email: string, landing: string): Promi
     await signInAndSettle(page, email, PASSWORD, landing);
     return page;
   }
-  // MENTOR/MENTEE accounts of a MARKETING tenant have no mentorship shell
-  // (#2351) and land on /account, which has no account-menu button to settle
-  // on — only the session cookie matters to the API calls below.
+  // A MARKETING tenant has no mentorship shell (#2351): its MENTEE lands on
+  // /account, which has no account-menu button to settle on, and its MENTOR —
+  // a sales rep — on the sales surface /sales (#2580). Only the session cookie
+  // matters to the API calls below, so the URL is all this waits for.
   await page.goto('/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', email);
   await page.fill('input[type="password"]', PASSWORD);
@@ -200,7 +201,7 @@ test('extending a trial reopens it, keeps the claims, and the job sends only the
 
   // The OWNER extends it again, to seven days out. The 7-day mark was mailed in
   // the old window, so the job must stay silent about it.
-  const owner = await signedIn(browser, ownerEmail, '/account');
+  const owner = await signedIn(browser, ownerEmail, '/sales');
   const in7 = utcDay(7);
   const byOwner = await patchTrial(owner, relationId, in7.iso);
   expect(byOwner.status()).toBe(200);
@@ -222,7 +223,7 @@ test('extending a trial reopens it, keeps the claims, and the job sends only the
 test('only the owner and a tenant admin may set it', async ({ browser, playwright }) => {
   const target = utcDay(20).iso;
 
-  const other = await signedIn(browser, otherOwnerEmail, '/account');
+  const other = await signedIn(browser, otherOwnerEmail, '/sales');
   expect((await patchTrial(other, relationId, target)).status()).toBe(403);
 
   const lead = await signedIn(browser, leadEmail, '/account');

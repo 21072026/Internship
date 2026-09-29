@@ -7495,3 +7495,20 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   (`MARKETING_PROBE_HOST`).
 - **`pkill -f "next start -p 3114"` kills your own shell** (the pattern is in its command line).
   Find the pid from `ss -ltnp | grep :3114` instead.
+
+## 2026-09-29 — MARKETING sales surface (#2580)
+
+- **A MARKETING MENTOR now lands on `/sales`, not `/account`.** Specs that sign a MARKETING
+  MENTOR in and wait for `/account` (trial-end-extend did) need `/sales`; the sales shell has
+  the account menu, so `signInAndSettle(page, email, pw, '/sales')` works for it. The MENTEE
+  and COMPANY of a MARKETING org still land on `/account`.
+- **A Playwright config outside the repo cannot import `@playwright/test`** (Node resolves it
+  from the config's own directory, the scratchpad). Export a plain object spread from the
+  repo's config instead of calling `defineConfig`, and give `testDir`, `globalSetup` and
+  `use.storageState` ABSOLUTE paths — relative ones resolve against the scratchpad.
+- **`e2e/invite-lifecycle.spec.ts` needs the seeded `admin@example.com`.** A fresh worktree
+  database has none, so that spec times out on the sign-in redirect; run `npx prisma db seed`
+  with the `SEED_ADMIN_*` env first. Environment, not a regression.
+- **Pages that must 404 for foreign ids go in a tree with no `loading.tsx`** (#2560's lesson):
+  `/sales` has none on purpose, so `page.request.get(url, { maxRedirects: 0 })` can assert a
+  real 404 for another rep's record.
