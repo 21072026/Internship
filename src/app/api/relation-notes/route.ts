@@ -4,18 +4,30 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 const bodySchema = z.object({
   relationId: z.string().min(1),
   body: z.string().min(1).max(5000),
 });
 
-// A note is visible/writable only to the mentor of that relation, or an admin.
-async function canAccessRelation(userId: string, role: string, relationId: string) {
-  if (role === 'ADMIN') return true;
-  if (role !== 'MENTOR') return false;
-  const rel = await prisma.mentorshipRelation.findFirst({ where: { id: relationId, mentorId: userId }, select: { id: true } });
-  return !!rel;
+// A note is visible/writable only to the mentor of that relation, or an admin
+// of the relation's own tenant. RelationNote has no orgId — its tenant is its
+// relation's — so the relation is loaded for an ADMIN too (it used to be
+// skipped, which let any tenant's admin read and write these notes, #2542).
+async function canAccessRelation(
+  userId: string,
+  role: string,
+  relationId: string,
+  callerOrgId: string | null
+) {
+  if (role !== 'ADMIN' && role !== 'MENTOR') return false;
+  const rel = await prisma.mentorshipRelation.findFirst({
+    where: { id: relationId, ...(role === 'MENTOR' ? { mentorId: userId } : {}) },
+    select: { orgId: true },
+  });
+  return !!rel && await inCallerTenant(rel.orgId, callerOrgId);
 }
 
 // GET ?relationId=... — mentor-private notes on a mentorship relation
@@ -26,7 +38,7 @@ export async function GET(request: Request) {
   return await withTenantScope(session, async () => {
     const relationId = new URL(request.url).searchParams.get('relationId');
     if (!relationId) return NextResponse.json({ error: 'relationId is required' }, { status: 400 });
-    if (!(await canAccessRelation(session.user.id, session.user.role, relationId))) {
+    if (!(await canAccessRelation(session.user.id, session.user.role, relationId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -48,7 +60,7 @@ export async function POST(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     const { relationId, body } = parsed.data;
 
-    if (!(await canAccessRelation(session.user.id, session.user.role, relationId))) {
+    if (!(await canAccessRelation(session.user.id, session.user.role, relationId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

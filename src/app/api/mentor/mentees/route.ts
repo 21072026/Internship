@@ -14,8 +14,8 @@ import { resolveStartStage } from '@/lib/pipelineStages';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
-import { emailTakenInOrgWorld, worldOfOrg } from '@/lib/userWorld';
-import { originForWorld } from '@/lib/hostWorld';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import {
   findActiveMentorship,
   ALREADY_MENTORED_ERROR,
@@ -191,10 +191,7 @@ export async function POST(request: Request) {
       let setPasswordUrl: string | null = null;
       if (hasRealEmail) {
         const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
-        // The link opens the product the mentee's account lives in (#2590):
-        // the creating mentor's world. For the internship world this is the
-        // NEXT_PUBLIC_APP_URL origin it always was.
-        const appUrl = originForWorld(await worldOfOrg(orgId));
+        const appUrl = await appOriginForOrg(session.user.orgId); // the mentor's tenant is the mentee's (#2495)
         setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
         try {
           // #1720: the mentee account was created moments ago and has no

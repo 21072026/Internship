@@ -44,11 +44,20 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
 // value read here is the proxy's, not the client's. Even so, keep the contract:
 // the host-resolved vertical is COSMETIC — copy, landing sections, chrome — and
 // must not decide anything with cross-user weight (tenant scoping, roles, data
-// access). The ONE permitted authz-adjacent use is /api/register refusing a
-// token-less sign-up on a MARKETING host (#2501): its failure mode under a
-// forged header is refusing the forger's own request, nothing else. Anything
-// beyond that must key off a signal the request cannot influence (the session's
-// org, the invitation row), never this header.
+// access). There are exactly TWO permitted authz-adjacent uses, each chosen
+// because its worst case under a forged header harms only the forger:
+//   1. /api/register refusing a token-less sign-up on a MARKETING host (#2501):
+//      a forged header refuses the forger's own request, nothing else.
+//   2. The public enquiry / demo form choosing WHICH tenant's inbox a brand-new
+//      unauthenticated request is filed into (#2569, src/lib/publicHostOrg.ts):
+//      the host is looked up in an explicit `Organization.publicHost` mapping
+//      (exact match, no heuristic), and an unmapped marketing host is a closed
+//      form. A forged header can at worst put the forger's OWN request into
+//      another tenant's queue — a stranger's demo request, i.e. spam, under the
+//      same rate limit — and nothing is ever READ back out: the response names
+//      no org and carries no data.
+// Anything beyond that must key off a signal the request cannot influence (the
+// session's org, the invitation row), never this header.
 export async function hostVertical(): Promise<VerticalKey> {
   try {
     const h = await headers();

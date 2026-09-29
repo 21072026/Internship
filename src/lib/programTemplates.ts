@@ -1,6 +1,6 @@
 import { defaultPipelineStages, type ResolvedStage } from './pipeline';
 import type { Locale } from '@/i18n/config';
-import { TRIAL_ACTIVE_STAGE_KEY } from './trialReminderRule';
+import { TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY } from './trialReminderRule';
 
 /**
  * The curated programme template catalogue (#1641) — ready-made programme
@@ -529,10 +529,10 @@ const CAREER_TRANSITION: ProgramTemplate = {
  * Keys, not labels: a tenant is free to rename "Trial running" to whatever it
  * calls the thing, and the sweep must keep working afterwards.
  */
-// Declared in the dependency-free rule module so trialWindowFor() (#2551) can
-// compare against it without an import; re-exported here beside its preset.
-export { TRIAL_ACTIVE_STAGE_KEY };
-export const TRIAL_EXPIRED_STAGE_KEY = 'TRIAL_EXPIRED';
+// Declared in the dependency-free rule module so trialWindowFor() (#2551) and
+// planTrialEndChange() (#2553) can compare against them without an import;
+// re-exported here beside their preset.
+export { TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY };
 
 /**
  * A sales/marketing funnel: a lead from first sight to won or lost (#2353). This

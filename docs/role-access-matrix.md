@@ -168,6 +168,7 @@ desenle yazılmıştır:
 | Uç / modül | Desen | Not |
 |---|---|---|
 | `GET /api/companies`, `GET /api/companies/[id]` | `scopeForRole(user, 'company')` | Bu matris |
+| `GET /api/companies/[id]/export` | yalnız `ADMIN` (taklit edilmemiş) + `scopeForRole(user, 'company')` + elle `withinTenant(…, tenantWhere(session))` | Firmanın tüm kaydı tek JSON dosyası ([#2435](https://github.com/21072026/Internship/issues/2435)); aşağıda § Tek dosya |
 | `GET /api/requisitions` (yükteki firma seçici) | `scopeForRole(user, 'company')` | Route girişte `ADMIN`/`COMPANY` dışını 403'lüyor; elle yazılmış `role === 'COMPANY'` filtresi kapsam builder'ıyla değiştirildi |
 | `POST /api/requisitions`, `/api/company/interests`, `/api/company/*` | girişte rol allowlist'i + `companyId = session.user.companyId` | Firma id'si oturumdan gelir, gövdeden değil |
 | `/api/search` firma dalı | `role === 'ADMIN'` ternary'si | Diğer roller `[]` |
@@ -237,6 +238,91 @@ Kural bağımlılıksız [`src/lib/viewLogRule.ts`](../src/lib/viewLogRule.ts)'t
 `logViewActivity()` ([`src/lib/activity.ts`](../src/lib/activity.ts)). Başka bir
 kaydın okunmasını loglamak isteyen aynı fonksiyonu çağırır — ikinci bir log
 yolu açmaz.
+
+### Tek dosya — firma dışa aktarımı (`company.export`)
+
+[#2435](https://github.com/21072026/Internship/issues/2435). "Bende ne var?"
+diye soran bir müşteriye ya da devredilen bir hesaba, o firmaya ait her şey
+tek JSON dosyasında verilir: `GET /api/companies/[id]/export`, `/admin/companies`
+kartındaki indirme düğmesi. Şekli `/api/account/export` (GDPR öz-hizmet)
+örnek alır: tek GET, `Content-Disposition: attachment`, `Cache-Control:
+no-store`, tek denetim satırı. **Yeni tablo yok.**
+
+- **Kim:** yalnız `ADMIN`, taklit edilmemiş oturumla. Firmayı *okuyabilen*
+  MENTOR ve COMPANY bile **403** + `authz.scope_denied` alır (hedef = route
+  deseni, id değil). Neden rol başına daraltılmış bir dosya değil: her bölümün
+  her kolonunu her okuma ucuna karşı yeniden kanıtlamak gerekirdi — ilk taslak
+  COMPANY okuyucusuna, `GET /api/offers`'ın ona göstermediği DRAFT teklifleri
+  ve `compensationNote`'u veriyordu.
+- **Hangi firma:** detay okumasıyla aynı sınır, dosya okumadan geniş olamaz —
+  `scopeForRole(user, 'company')` **ve** bayraktan bağımsız
+  `withinTenant(…, tenantWhere(session))` (#2542, `src/lib/tenantFilter.ts` —
+  detay okumasının çağırdığı aynı kural; `assertSameOrg` `MT_ENFORCE_ISOLATION`
+  kapalıyken no-op olduğu için bugün tek başına koruma sağlamaz). Başka org'un firması, olmayan bir id ile aynı **404**'ü alır.
+- **İçerik:** `company`, `needs`, `requisitions`, `offers` (bu firmayı adlandıran
+  ya da firmasız olup bu firmanın bir ilişkisinde duran; **başka** firmayı
+  adlandıran teklif o firmanındır), `interests`, `inquiries` (bu firmaya
+  dönüştürülen `CompanyInquiry`), `relations` (`relation` kapsamından; kişiler
+  yalnız `id`/`fullName`/`email`), `interactions` (`InteractionLog`),
+  `statusChanges`. Bilinçli olarak dışarıda: `placements`, `usage`, firma
+  kullanıcı hesapları (her birinin kendi `/api/account/export`'u var) ve
+  diğer ilişkiler — eklemek bu listenin kararıdır, bir `include`'un yan etkisi
+  değil.
+- **Denetim:** sunulan her dosya `logActivity()` ile bir `company.export`
+  satırı yazar; tekrar bastırması **yok** (ikinci indirme ikinci kopyadır).
+  `detail`'de firma adı yok (`company.view` ile aynı gerekçe). 404 yazmaz.
+
+Sabitleyen: `e2e/company-export.spec.ts` ve `e2e/fixtures/authz-matrix.ts`.
+
+## MARKETING satış temsilcisi / The MARKETING sales rep (`/sales`)
+
+Karar: [#2580](https://github.com/21072026/Internship/issues/2580), seçenek (b),
+maintainer onayı 2026-09-29. Satış temsilcisi **`MENTOR`** olarak davet edilir;
+`Role` enum'u değişmez. `mentorship` yeteneği olmayan bir dikeyde (MARKETING) bir
+MENTOR artık `/account`'a değil, **`/sales`** satış yüzeyine düşer. Kural tek
+yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
+(`hasSalesSurface(role, capabilities)` = `MENTOR` ∧ `pipeline` ∧ ¬`mentorship`).
+
+- **Yetenek**: yüzeyi `pipeline` açar (her dikeyde var), `mentorship` değil —
+  MARKETING'e `mentorship` verilmez; o, mentor kabuğunu, menti portalını ve #2352
+  kapılı her yazmayı açardı. Yüzey yalnızca mentor kabuğunun **olmadığı** yerde
+  vardır: INTERNSHIP'teki bir mentor `/sales`'e gelirse `/mentor`'a döner, mentor
+  kabuğunun `/sales` yönlendirmesi INTERNSHIP'te hiç çalışmaz.
+- **Kim değil**: MARKETING'de `MENTEE` lead'in muhatabıdır (kayıt, operatör
+  değil) ve `COMPANY` müşteridir — ikisi de `/account`'ta kalır. `ADMIN` kendi
+  admin kabuğunu kullanır.
+- **Satırlar**: her okuma `mentorId = self` **ve** temsilcinin tenant'ı
+  (`tenantWhere`/`withinTenant`, #2542). Server component'ler API filtresinden
+  geçmediği için ikisi de sayfada elle yazılı. Başka bir temsilcinin ya da başka
+  bir org'un kaydı/hesabı **gerçek HTTP 404** (`/sales` altında `loading.tsx`
+  yok). Hesap sayfası #2560'ın okuyucusunu (`src/lib/companyDetail.ts`)
+  `ownerId` ile çağırır: hesap yalnızca temsilcinin bir ilişkisi ona bağlıysa
+  bulunur; huni ve etkileşim listesi yalnızca kendi kayıtlarıdır. ADMIN-only
+  kolonlar (`vatId`, `contactName`, `contactPhone`) `companyVisibility.ts`
+  tarafından yine çıkarılır.
+
+| Yüzey / uç | MARKETING `MENTOR` | Not |
+|---|---|---|
+| `/sales` (pano + dikkat kuyruğu) | ✅ kendi | Kuyruk: `overdue`, `trial_expired`, `trial_no_end_date`, `next_action_due` (`SALES_ATTENTION_REASONS`); mentorluk nedenleri yok |
+| `/sales/board`, `GET /api/mentorship` | ✅ kendi | `relation` kapsamı (`mentorId ∨ menteeId = self`); temsilci hiçbir kaydın menteesi değil |
+| `/sales/accounts`, `/sales/accounts/[id]` | ✅ kendi / 404 | Sayaç yalnızca kendi kayıtları |
+| `/sales/leads/[id]` | ✅ kendi / 404 | Takip (#2563) ve deneme bitişi (#2553) editörleri |
+| `PUT /api/mentorship/[id]` (aşama, takip) | ✅ kendi / 403 | Sahip ∨ ADMIN |
+| `PUT /api/mentorship/[id]` `{companyId}` | **403** `capability_unavailable` | Kaydı başka bir hesaba bağlamak `mentorship` olmayan dikeyde ADMIN kararı — yoksa `/sales/accounts` o hesabı açardı; her rolde `companyId` kiracı içinde çözülmezse 404 (#2580 inceleme) |
+| `POST /api/interactions` (kendi kaydı) | ✅ 201 | `/sales/leads/[id]` üzerinden; `mentorship` olmayan dikeyde menteeye `interaction.logged` bildirimi gitmez |
+| `PATCH /api/mentorship/[id]/trial` | ✅ kendi / 403 | Sahip ∨ ADMIN, `pipeline` yeteneği |
+| `GET /api/mentorship/[id]` başkasının | 403 | |
+| `GET /api/companies/[id]` başkasının | 404 | `company` kapsamı |
+| `POST /api/invite` | **403** `capability_unavailable` | ADMIN dışı davet artık `mentorship` yeteneği ister (#2580) |
+| `/api/admin/*` (ayarlar, org, davetler, import, analitik, aktivite, kullanıcı işlemleri) | 401/403 | ADMIN-only kalır |
+| `GET/PATCH /api/users/[id]` | 401 | ADMIN-only |
+| `POST/PUT/DELETE /api/companies…` | 401 | ADMIN-only |
+| `POST /api/mentorship`, `…/transfer` | 401/403 | Atama ve devir ADMIN'de |
+
+Çalıştırılabilir hali: `e2e/fixtures/authz-matrix.ts` →
+`MARKETING_MENTOR_ADMIN_ONLY`, `MARKETING_MENTOR_ROWS`, `MARKETING_MENTOR_PAGES`;
+koşan spec `e2e/marketing-sales-surface.spec.ts`. Bir satır eklerken ikisini
+birlikte güncelleyin.
 
 ## Bu matrisin dışında kalanlar / Out of scope for this matrix
 

@@ -389,6 +389,24 @@ own org there would narrow every query to the wrong tenant and break the feature
 `requireAdminOrg()` is what refuses a plain ADMIN a foreign `id`, and every query
 names `orgId: id` itself.
 
+The **document-requirement** routes have the same shape and are unwrapped for
+the same reason (#2542): `/api/admin/document-requirements` (GET/POST, org from
+the query or body), `/api/admin/document-requirements/[id]` (PATCH/DELETE) and
+`/api/admin/documents/missing`. Their gate is `mayManageOrgRequirements()`
+(`src/lib/documentRequirementAccess.ts`): the caller's own org (an org-less caller is
+the default org's, by `tenantWhere()`'s rule) or a super admin passes; anyone else gets **404**
+before any lookup or write, and `[id]` checks the **stored** row's org, not the
+org the caller sent.
+
+The **file routes** — documents, CVs, avatars, message and support attachments —
+read models with no `orgId` at all, so the middleware can never scope them. Each
+resolves the row's parent (owner, template uploader, relation, conversation
+participants, ticket requester; `src/lib/ownerOrg.ts` for users) and answers 404
+when `inCallerTenant()` (`src/lib/tenantFilter.ts`, the one-row form of
+`tenantWhere()`) says it is another org's — a NULL org on either side is the
+default org's, never a wildcard. That holds with the flag on
+or off.
+
 ### API-key requests have no session — so they bind their org themselves (#1546)
 
 `withTenantScope(session, …)` resolves the org from the session. A request to

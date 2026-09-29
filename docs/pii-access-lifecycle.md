@@ -183,6 +183,39 @@ konuşması.
   silindikten sonra not metniyle birlikte hayatta kalır ve özneye giden tek
   bağı kopmuş olur — hiçbir sorgunun bir daha bulamayacağı bir PII.
 
+### Firma kaydındaki kişi: kişiyi sil, firmayı koru (#2434)
+
+Bir firmanın ticari geçmişi (ihtiyaçları, teklifleri, iş talepleri, ilişkileri,
+geldiği başvuru) kurumundur; o kayıtlardaki **adı geçen insan** değildir.
+`CompanyInquiry.contactName/email/phone/note` ve `Company.contactName/contactEmail/contactPhone`
+(#2407) bir kişinin kimliği ve doğrudan hattı — ve iki silme yolu da bunlara hiç
+uğramıyordu: "Erased candidate" diyen bir hesabın yanında aynı kişinin adı,
+e-postası ve telefonu başvuruda duruyordu. Artık her iki yol da bu satırları
+temizliyor; kural [`src/lib/companyContactErasure.ts`](../src/lib/companyContactErasure.ts)'te
+(birim testli), Prisma tarafı `accountErasure.ts` → `companyContactOps()`.
+
+- **Eşleşme adresle:** iki tablonun da `User`'a foreign key'i yok. Adres, kullanıcı
+  satırı yeniden yazılmadan/silinmeden **önce** okunur ve yazmalar temizliğin
+  geri kalanıyla **aynı `$transaction`** içinde koşar.
+- **Mezar taşı / temizlik ayrımı aynı:** kişinin yazdığı `message` mezar taşı
+  (null); kimliğini taşıyan `contactName`/`email`/`phone` ve hakkında yazılan
+  `note` temizlenir. Zorunlu kolonlar `User` satırının mezar taşını alır
+  (`Erased contact`, `erased-<id>@erased.local`). Firma adı, açık roller, durum,
+  dönüşüm bağlantısı ve tarihler hesabındır, kalır; `Company` satırı hiç silinmez.
+- **Yalnızca kişinin kendi kiracısı:** adres kiracı sınırı değildir — iki kiracı
+  aynı firmayı tutabilir ve her kiracı ayrı veri sorumlusudur. `MT_ENFORCE_ISOLATION`
+  kapalıyken (#2542) middleware filtre eklemez, bu yüzden her iki `updateMany`
+  silinen kişinin **kendi satırındaki** org'a (`orgScoped()`) daraltılır; org'u
+  olmayan kişi varsayılan org'undur. Varsayılan org için henüz backfill
+  damgalanmamış (`orgId` NULL) satırlar da dahildir, çünkü deploy backfill'i
+  (`prisma/backfill-organization.mjs`) onları varsayılan org'a atar — başka hiçbir
+  org için NULL satıra dokunulmaz. Kanıt: [`e2e/erasure-company-contact.spec.ts`](../e2e/erasure-company-contact.spec.ts)
+  (aynı adresi taşıyan iki kiracı, damgasız bir satır ve aynı kiracıda başka bir kişi).
+- **Kalan boşluklar:** yöneticilere giden `signup.companyInquiry` bildirimi
+  kişinin adını adres olmadan taşır (#2106); hesabı hiç olmamış bir muhatap ve
+  başvuruların saklama süresi #2559 (bu fonksiyonu genişletir, ikinci bir silme
+  yolu yazmaz).
+
 ### Şema değişikliği yok
 
 Null'lamak yerine boşaltmak (`''`) bir tercih değil, **şemanın zorunluluğu**:

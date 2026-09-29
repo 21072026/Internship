@@ -18,6 +18,7 @@ import { headers as requestHeaders } from 'next/headers';
 import { worldForHeaderBag, worldForHeaders, type World } from '@/lib/hostWorld';
 import { findUsersByEmail, findUsersInWorld, worldOfOrg } from '@/lib/userWorld';
 import { toVerticalKey } from '@/lib/verticals';
+import { spendGrant } from '@/lib/grantSpend';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -463,7 +464,9 @@ export const authOptions: NextAuthOptions = {
         if (!grant || grant.used || grant.expiresAt < new Date()) {
           throw new Error('Invalid or expired grant');
         }
-        await prisma.impersonationGrant.update({ where: { id: grant.id }, data: { used: true } });
+        // Spent by one conditional UPDATE, never check-then-write (#2548).
+        const spent = await spendGrant((where) => prisma.impersonationGrant.updateMany({ where, data: { used: true } }), grant.id);
+        if (!spent) throw new Error('Invalid or expired grant');
 
         const user = await prisma.user.findUnique({
           where: { id: grant.targetId },
@@ -507,7 +510,10 @@ export const authOptions: NextAuthOptions = {
         if (!grant || grant.used || grant.expiresAt < new Date()) {
           throw new Error('Invalid or expired SSO grant');
         }
-        await prisma.ssoLoginGrant.update({ where: { id: grant.id }, data: { used: true } });
+        // One conditional UPDATE is the spend (#2548), not the read above —
+        // see src/lib/grantSpend.ts.
+        const spent = await spendGrant((where) => prisma.ssoLoginGrant.updateMany({ where, data: { used: true } }), grant.id);
+        if (!spent) throw new Error('Invalid or expired SSO grant');
 
         const user = await prisma.user.findUnique({
           where: { id: grant.userId },
@@ -554,7 +560,9 @@ export const authOptions: NextAuthOptions = {
         if (!grant || grant.used || grant.expiresAt < new Date()) {
           throw new Error('Invalid or expired grant');
         }
-        await prisma.sessionRefreshGrant.update({ where: { id: grant.id }, data: { used: true } });
+        // Spent by one conditional UPDATE (#2548), like the SSO grant above.
+        const spent = await spendGrant((where) => prisma.sessionRefreshGrant.updateMany({ where, data: { used: true } }), grant.id);
+        if (!spent) throw new Error('Invalid or expired grant');
 
         const user = await prisma.user.findUnique({
           where: { id: grant.userId },

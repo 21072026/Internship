@@ -149,3 +149,41 @@ export function resolveRedirectTarget(url: string, baseUrl: string): string {
   if (!servedHosts().has(target.hostname.toLowerCase())) return baseUrl;
   return `${target.protocol}//${target.hostname}${target.pathname}${target.search}${target.hash}`;
 }
+
+// ── Links that cannot follow a request: e-mail (#2495) ──────────────────────
+//
+// `requestOrigin()` above answers "which host is the browser on". An e-mail has
+// no browser yet: the invitation, the password reset and the verification mail
+// are read later, somewhere else, and their link decides which PRODUCT the
+// recipient lands in. Every one of them used to read NEXT_PUBLIC_APP_URL — the
+// internship host — so a SaleVali admin's invitation said
+// https://interncrm.com/auth/register?token=… and dropped the new sales rep
+// into the other product.
+//
+// The recipient's tenant says where they belong, through the one explicit
+// host mapping the schema has: `Organization.publicHost` (#2569, exact match,
+// set by an operator, never inferred from a vertical). This is the pure half:
+// given that column, the link origin is that host ONLY IF this deployment
+// serves it (so a prod hostname copied into a topic env's database cannot send
+// a topic-env mail to production), and otherwise exactly what it always was.
+// Protocol follows the configured origin's (https everywhere but local dev); a
+// port is re-attached only when the host is the configured one — same rules as
+// requestOrigin().
+//
+// The DB half (the lookup by orgId) is src/lib/orgLinkOrigin.ts.
+const LEGACY_LINK_ORIGIN = () => process.env.NEXT_PUBLIC_APP_URL || LOCAL_ORIGIN;
+
+export function appLinkOrigin(publicHost: string | null | undefined): string {
+  const legacy = LEGACY_LINK_ORIGIN();
+  const host = hostnameOf(publicHost);
+  if (!host || !servedHosts().has(host)) return legacy;
+  let cfg: URL;
+  try {
+    cfg = new URL(legacy);
+  } catch {
+    return legacy;
+  }
+  if (cfg.hostname.toLowerCase() === host) return legacy;
+  const proto = cfg.protocol === 'http:' ? 'http' : 'https';
+  return `${proto}://${host}`;
+}

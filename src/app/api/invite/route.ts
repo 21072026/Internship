@@ -4,8 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
 import { resolveOrgId } from '@/lib/orgScope';
-import { originForWorld } from '@/lib/hostWorld';
-import { emailTakenInOrgWorld, worldOfOrg } from '@/lib/userWorld';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { withTenantScope } from '@/lib/orgContext';
 import { isProjectOwner } from '@/lib/projectAccess';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -14,6 +13,7 @@ import { locales } from '@/i18n/config';
 import { z } from 'zod';
 import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
 import { requireCapability } from '@/lib/capabilityGate';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 // Email invitations (#51).
 //
@@ -64,6 +64,15 @@ export async function POST(request: Request) {
     const allowed = session ? ALLOWED_ROLES[session.user.role] : undefined;
     if (!session || !allowed) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // A MENTOR or MENTEE invitation is the mentorship module's self-serve path
+    // (a mentor inviting their own mentee, a mentee a peer). A vertical without
+    // `mentorship` — a MARKETING sales rep is a MENTOR (#2580) — invites nobody:
+    // bringing people into the tenant stays an ADMIN act there. INTERNSHIP
+    // carries the module, so this is a no-op for it.
+    if (session.user.role !== 'ADMIN') {
+      const denied = await requireCapability(session.user.orgId, 'mentorship');
+      if (denied) return denied;
     }
 
     return await withTenantScope(session, async () => {
@@ -278,11 +287,7 @@ export async function GET() {
       // resending it is meaningless, so losing the tab would strand the token
       // forever. Hand its URL back — but only to the person who minted it, and
       // only while it is still usable. Every other row keeps its token private.
-      // The link opens the product the invitation is FOR (#2590): links are
-      // handed back only for the caller's own invitations, which were minted in
-      // the caller's organization, so that organization's world is the origin.
-      // INTERNSHIP: the NEXT_PUBLIC_APP_URL origin, as before.
-      const appUrl = originForWorld(await worldOfOrg(resolveOrgId(session)));
+      const appUrl = await appOriginForOrg(resolveOrgId(session)); // the tenant's own host (#2495)
       const now = new Date();
       const withLinks = invitations.map(({ token, invitedById, ...i }) => ({
         ...i,

@@ -274,7 +274,10 @@ jobs:
           #   production uses, so the two environments now agree (#2166).
           # FORWARD_ONLY is deliberately unset — preview must stay able to deploy
           #   arbitrary/older refs on demand.
+          # MARKETING_PROBE_HOST: the host this env must serve as marketing (#2579);
+          #   named here, not read from the env file the check is validating.
           CONTAINER=internship-crm-preview \
+          MARKETING_PROBE_HOST=marketing.bcsit-gmbh.dev \
           PORT=3201 \
           NETWORK=host \
           ENV_FILE="$ENV_FILE" \

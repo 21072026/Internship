@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
@@ -5,9 +6,10 @@ import { getSetting } from '@/lib/settings';
 import { addUtcWeeks, firstFullUtcWeek, utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
+import { isTrialMissingEndDate } from '@/lib/trialReminderRule';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'next_action_due';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due';
 
 export interface AttentionItem {
   relationId: string;
@@ -33,13 +35,28 @@ export interface AttentionQueue {
 // agree on what "stale" means, and the same definition of *contact* as both
 // (lib/lastContact.ts): in-app messaging counts, so a mentor mid-conversation
 // with a mentee is never told they have not been in touch.
-export async function getAttentionItems(mentorId: string): Promise<AttentionQueue> {
+//
+// `options` exists for the MARKETING sales surface (#2580) and changes nothing
+// when omitted — the mentor dashboard calls this with one argument and gets the
+// exact query and list it always got:
+//   - `reasons` keeps only those reasons (a record left with none drops out),
+//     because most reasons here are mentorship work a sales record never has;
+//   - `relationWhere` is ANDed onto the owner filter, so a caller can add the
+//     tenant filter (tenantWhere/withinTenant) this function does not know about.
+export async function getAttentionItems(
+  mentorId: string,
+  options: {
+    reasons?: readonly AttentionReason[];
+    relationWhere?: Prisma.MentorshipRelationWhereInput;
+  } = {},
+): Promise<AttentionQueue> {
   const reminderDays = parseInt(await getSetting('reminderDays'), 10) || 14;
   const now = Date.now();
   const staleCutoff = new Date(now - reminderDays * 24 * 60 * 60 * 1000);
+  const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, status: 'ACTIVE' };
 
   const relations = await prisma.mentorshipRelation.findMany({
-    where: { mentorId, status: 'ACTIVE' },
+    where: options.relationWhere ? { AND: [ownerWhere, options.relationWhere] } : ownerWhere,
     select: {
       id: true,
       orgId: true,
@@ -47,6 +64,7 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
       startDate: true,
       stageDeadline: true,
       nextActionAt: true,
+      trialEndsAt: true,
       mentee: { select: { id: true, fullName: true } },
       questions: { where: { answer: null }, select: { id: true } },
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
@@ -131,6 +149,10 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
     // whole trial rather than the age of the decision. #2527 fixes that at the
     // source; nothing here should paper over it with a second calculation.
     if (r.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY) reasons.push('trial_expired');
+    // A running trial with no end date (#2553) is invisible to the reminder
+    // ladder and the expiry sweep alike — nothing would ever happen to it. It
+    // sits here until the owner enters the date, and leaves on that write.
+    if (isTrialMissingEndDate(r)) reasons.push('trial_no_end_date');
     // The follow-up date the owner wrote on the record has passed (#2563).
     // The day ITSELF is the reminder's (checkNextActionReminders); the record
     // lands here from the next day on, and leaves the moment the date is moved
@@ -147,12 +169,13 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
       }
     }
 
-    if (reasons.length > 0) {
+    const kept = options.reasons ? reasons.filter((reason) => options.reasons!.includes(reason)) : reasons;
+    if (kept.length > 0) {
       items.push({
         relationId: r.id,
         menteeId: r.mentee.id,
         menteeName: r.mentee.fullName,
-        reasons,
+        reasons: kept,
         daysSinceLastInteraction: daysSince,
       });
     }

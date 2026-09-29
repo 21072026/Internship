@@ -9,8 +9,8 @@ import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { isErasedAccount, isPendingActivation, isUnusableEmail } from '@/lib/menteeAccount';
-import { emailTakenInOrgWorld, worldOfOrg } from '@/lib/userWorld';
-import { originForWorld } from '@/lib/hostWorld';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 const schema = z.object({ email: z.string().email() });
 
@@ -99,9 +99,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
 
       const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
-      // The link opens the product this mentee's account lives in (#2590);
-      // for the internship world that is the NEXT_PUBLIC_APP_URL origin.
-      const appUrl = originForWorld(await worldOfOrg(mentee.orgId));
+      const appUrl = await appOriginForOrg(session.user.orgId); // the mentor's tenant is the mentee's (#2495)
       const setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
       let emailSent = true;
       try {

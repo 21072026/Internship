@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **A flag-independent tenant boundary for one row: `inCallerTenant()`** (#2542). `assertSameOrg` is a no-op while `MT_ENFORCE_ISOLATION` is off, which was right with one tenant; with INTERNSHIP and MARKETING now sharing one database it left fetch-by-id reads of child rows (interaction logs, documents, goals…) open across tenants, and the #2542 audit reproduced 56 such reads and writes. `inCallerTenant()` in `src/lib/tenantFilter.ts` is the one-row form of `tenantWhere()` (#2588), with the same rule for an unknown side: a NULL-org row and an org-less session are the default org's, never a wildcard. The pure core, `sameTenant()` in `src/lib/orgScope.ts`, is unit-tested in `scripts/test/org-boundary.test.mjs`, including that the answer does not change with the flag. Callers answer a mismatch with 404."
+}

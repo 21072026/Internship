@@ -241,3 +241,111 @@ test('one page holds what a mentor asked for and what the person wrote themselve
     await cleanupByEmail(mentorEmail);
   }
 });
+
+/**
+ * Due dates on a to-do (#2440).
+ *
+ * Three rules, all of them things somebody gets wrong the first time:
+ *  - a to-do with no date sorts LAST, not first — the dated ones are the ones
+ *    somebody has to act on
+ *  - "late" is a calendar day: a to-do due TODAY is not late, one due yesterday
+ *    is. The tone is never the only thing that says so — the chip carries the
+ *    word too
+ *  - ?scope=team follows the list's own authorisation rule (ADMIN always,
+ *    MENTOR for their own mentees) and its own privacy rule (a line somebody
+ *    wrote for themselves is not on anyone else's screen)
+ */
+test('a due date orders the list, today is not late, and the team list keeps the reach rule', async ({ page }) => {
+  test.slow();
+  const mentorEmail = uniqueEmail('due-mentor');
+  const menteeEmail = uniqueEmail('due-mentee');
+  const mentor = await seedUser(mentorEmail, password, 'MENTOR', 'Due Mentor');
+  const mentee = await seedUser(menteeEmail, password, 'MENTEE', 'Due Mentee');
+  await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
+
+  // The local calendar day, as an <input type="date"> writes it — which is what
+  // the browser and the server both call "today".
+  const dayString = (offset: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const stamp = Date.now();
+  const late = `Send the report ${stamp}`;
+  const today = `Call the company ${stamp}`;
+  const undated = `Read something one day ${stamp}`;
+  const given = `Prepare the interview ${stamp}`;
+
+  try {
+    await signInAndSettle(page, menteeEmail, password, '/portal');
+
+    // A mentee has no team, and asking for one is refused rather than answered
+    // with their own list.
+    expect((await page.request.get('/api/todos?scope=team')).status()).toBe(403);
+
+    // Written out of order on purpose: the undated one first, the late one last.
+    for (const body of [
+      { title: undated },
+      { title: today, dueDate: dayString(0) },
+      { title: late, dueDate: dayString(-1) },
+    ]) {
+      expect((await page.request.post('/api/todos', { data: body })).status()).toBe(201);
+    }
+
+    // The API sorts them: earliest date first, no date LAST.
+    const listed = (await (await page.request.get('/api/todos')).json()).todos as {
+      id: string;
+      title: string;
+      dueDate: string | null;
+    }[];
+    expect(listed.map((x) => x.title)).toEqual([late, today, undated]);
+    const byTitle = new Map(listed.map((x) => [x.title, x.id]));
+
+    // On the page: yesterday is late, today is not, and the undated one carries
+    // no date chip at all.
+    await gotoSettled(page, '/todos');
+    const lateChip = page.getByTestId(`todo-due-${byTitle.get(late)}`);
+    await expect(lateChip).toHaveAttribute('data-due-tone', 'overdue');
+    // Never colour alone: the chip says the word as well as wearing the tone.
+    await expect(lateChip).toContainText('Overdue');
+    const todayChip = page.getByTestId(`todo-due-${byTitle.get(today)}`);
+    await expect(todayChip).toHaveAttribute('data-due-tone', 'today');
+    await expect(todayChip).toContainText('Due today');
+    await expect(page.getByTestId(`todo-due-${byTitle.get(undated)}`)).toHaveCount(0);
+    // And the counter tile counts exactly the one that is late.
+    await expect(page.getByTestId('todo-overdue-count')).toHaveAttribute('data-overdue-count', '1');
+    // The list itself is in the order the API returned.
+    await expect(page.getByTestId('todo-list').locator('li').first()).toContainText(late);
+
+    // The mentor hands over a dated to-do, and reads the team list.
+    await signInAsFreshUser(page, mentorEmail, password, '/mentor');
+    expect(
+      (
+        await page.request.post('/api/todos', {
+          data: { title: given, assigneeId: mentee.id, dueDate: dayString(-2) },
+        })
+      ).status()
+    ).toBe(201);
+
+    const team = (await (await page.request.get('/api/todos?scope=team')).json()).todos as {
+      title: string;
+      assignee: { fullName: string } | null;
+    }[];
+    expect(team.map((x) => x.title)).toContain(given);
+    // A line the mentee wrote for themselves stays theirs, team view or not.
+    expect(team.map((x) => x.title)).not.toContain(undated);
+    expect(team.find((x) => x.title === given)?.assignee?.fullName).toBe('Due Mentee');
+
+    // The same list on the page, on the to-dos page the mentor already has.
+    await gotoSettled(page, '/todos');
+    await page.getByTestId('todos-view-team').click();
+    await expect(page.getByTestId('team-todo-list')).toContainText(given);
+    await expect(page.getByTestId('team-todo-list')).toContainText('Due Mentee');
+  } finally {
+    await prisma.projectTask.deleteMany({ where: { assigneeId: { in: [mentor.id, mentee.id] } } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});

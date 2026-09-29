@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
+import { resolveOrgId } from '@/lib/orgScope';
+import { userInCallerOrg } from '@/lib/ownerOrg';
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const ALLOWED = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -20,6 +22,11 @@ export async function POST(request: Request) {
 
   if (targetUserId !== session.user.id && session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  // An admin sets avatars in their own org only (#2542): AvatarFile carries no
+  // orgId, so the target user's org is the boundary; a foreign one reads as 404.
+  if (targetUserId !== session.user.id && !(await userInCallerOrg(targetUserId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 });

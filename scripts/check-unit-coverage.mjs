@@ -115,6 +115,18 @@ const FLOORS = new Map([
     { floor: 85, measured: 89.86, why: 'an old no-op StatusChange must not restart "days in stage" (#2264)' },
   ],
   [
+    'src/lib/taskDue.ts',
+    { floor: 95, measured: 100.0, why: 'a to-do due TODAY is not late, and a date names a calendar day (#2440)' },
+  ],
+  [
+    'src/lib/todoVisibility.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a to-do somebody wrote for themselves must not reach a team list or a digest mail (#2440)',
+    },
+  ],
+  [
     // Not floored because somebody wrote tests for it: `stageClock.ts` imports
     // it for the terminal/off-path stage set, so the stage-clock test exercises
     // it transitively. The floor records the protection that exists, which is
@@ -249,6 +261,14 @@ const FLOORS = new Map([
       floor: 95,
       measured: 100.0,
       why: 'the company access log is de-noised, never silenced: no setting value turns it off, a failed lookup records the read, and an impersonated read is attributed to the admin behind it (#2433)',
+    },
+  ],
+  [
+    'src/lib/companyContactErasure.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'erase the person, keep the company: an address-matched scrub never reaches another tenant\'s row, an org-less subject is never "every org", and no account column is touched (#2434)',
     },
   ],
   [

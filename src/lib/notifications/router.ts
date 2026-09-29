@@ -50,6 +50,7 @@ import { notify as notifyInApp, type NotificationParams } from '@/lib/notify';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowed, isEssentialGroup } from '@/lib/emailGroups';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
+import { capabilitiesMemo } from '@/lib/shellCapabilities';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import {
   eventDef,
@@ -474,11 +475,14 @@ export async function notifyEvent<K extends NotificationEventKey>(
       if (typeof v === 'string') linkIds[k] = v;
     }
 
+    // The recipient's vertical shapes the deep link (a MARKETING rep's record
+    // is /sales/leads/<id>, #2580); one lookup per org for the whole fan-out.
+    const capabilitiesOf = capabilitiesMemo();
     for (const rec of normalized) {
       const user = hydrated.get(rec.id) ?? rec;
       const orgId = user.orgId ?? rec.orgId ?? opts?.orgId ?? null;
       const locale = asLocale(user.preferredLanguage);
-      const link = notificationLink(asRole(user.role), def.link, linkIds);
+      const link = notificationLink(asRole(user.role), def.link, linkIds, { capabilities: await capabilitiesOf(orgId) });
 
       for (const channel of channels) {
         const row: LedgerRow = {

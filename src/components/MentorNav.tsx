@@ -3,12 +3,23 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useT } from '@/i18n/client';
-import { MENTOR_NAV_LINKS, visibleNavLinks } from '@/lib/navLinks';
+import { MENTOR_NAV_LINKS, SALES_NAV_LINKS, visibleNavLinks } from '@/lib/navLinks';
 import type { VerticalCapability } from '@/lib/verticals';
 import { useMemo } from 'react';
 
-export function MentorNav({ capabilities }: { capabilities?: readonly VerticalCapability[] }) {
-  const LINKS = useMemo(() => (capabilities ? visibleNavLinks(MENTOR_NAV_LINKS, capabilities) : MENTOR_NAV_LINKS), [capabilities]);
+// `set="sales"` renders the sales surface's links (#2580) with the same markup;
+// the default is the mentor shell's list, unchanged.
+export function MentorNav({
+  capabilities,
+  set = 'mentor',
+}: {
+  capabilities?: readonly VerticalCapability[];
+  set?: 'mentor' | 'sales';
+}) {
+  const LINKS = useMemo(() => {
+    const all = set === 'sales' ? SALES_NAV_LINKS : MENTOR_NAV_LINKS;
+    return capabilities ? visibleNavLinks(all, capabilities) : all;
+  }, [capabilities, set]);
   const t = useT();
   const pathname = usePathname();
   const nav = t.nav as Record<string, string>;

@@ -15,13 +15,28 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   // Amber, not red: an expired trial is a decision waiting to be made, not
   // something already broken.
   trial_expired: 'warning',
+  // Red: a running trial with no end date is one nothing will ever remind
+  // anybody about (#2553) — the data is broken, not merely waiting.
+  trial_no_end_date: 'danger',
   // Red like `overdue`: a date the owner promised themselves has gone by.
   next_action_due: 'danger',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
 // attention queue). Hides itself when nothing needs attention.
-export function MentorAttentionQueue({ items, dormantCount = 0, t }: { items: AttentionItem[]; dormantCount?: number; t: Dictionary }) {
+// `hrefBase` is where an item opens: the mentor's mentee page by default, the
+// sales surface's lead page there (#2580).
+export function MentorAttentionQueue({
+  items,
+  dormantCount = 0,
+  t,
+  hrefBase = '/mentor/mentees',
+}: {
+  items: AttentionItem[];
+  dormantCount?: number;
+  t: Dictionary;
+  hrefBase?: string;
+}) {
   if (items.length === 0) return null;
   const labels = t.mentor.attention;
   const reasonLabel: Record<AttentionReason, string> = {
@@ -32,6 +47,7 @@ export function MentorAttentionQueue({ items, dormantCount = 0, t }: { items: At
     no_open_goal: labels.noOpenGoal,
     missing_weekly_reports: t.weeklyReports.missingAttention,
     trial_expired: labels.trialExpired,
+    trial_no_end_date: labels.trialNoEndDate,
     next_action_due: labels.nextActionDue,
   };
 
@@ -47,7 +63,7 @@ export function MentorAttentionQueue({ items, dormantCount = 0, t }: { items: At
         {items.map((item) => (
           <Link
             key={item.relationId}
-            href={`/mentor/mentees/${item.relationId}`}
+            href={`${hrefBase}/${item.relationId}`}
             className="flex flex-wrap items-center justify-between gap-2 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 -mx-2 px-2 rounded-lg transition-colors"
           >
             <div className="min-w-0">

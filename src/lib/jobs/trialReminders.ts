@@ -8,7 +8,9 @@ import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPre
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { stageDeadlineUpdate } from '@/lib/stageSla';
+import { statusChangeData } from '@/lib/stageChange';
 import { verticalFor } from '@/lib/verticalContext';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import type { VerticalKey } from '@/lib/verticals';
 import { TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 import { findDueTrialReminders, type DueTrialReminderRow } from '@/lib/trialReminders';
@@ -267,11 +269,16 @@ async function dispatchReminder(row: DueTrialReminderRow): Promise<DispatchResul
   let delivered = 0;
   let attempted = 0;
   let failures = 0;
+  // The recipients share the relation's org, so one lookup shapes every link
+  // (a MARKETING rep's record is /sales/leads/<id>, #2580).
+  const capabilities = await shellCapabilities(orgId);
   for (const user of recipients) {
-    const link = notificationLink(user.role as NotificationRole, 'relation', {
-      relationId: relation.id,
-      menteeId: relation.menteeId,
-    });
+    const link = notificationLink(
+      user.role as NotificationRole,
+      'relation',
+      { relationId: relation.id, menteeId: relation.menteeId },
+      { capabilities },
+    );
     // The bell and the mail are gated SEPARATELY, on the same 'deadlines'
     // category: `notificationCategoryAllowed` is the in-app switch,
     // `emailAllowed` the e-mail one, and `emailGroupAllowedForCategory` the
@@ -346,37 +353,17 @@ async function dispatchReminder(row: DueTrialReminderRow): Promise<DispatchResul
  * tick that says "ends today" would also file it as expired. The last day is the
  * customer's; the record flips on the next day's tick.
  *
- * AUDIT: `AuditLog` with `actorId: 'system'`, NOT `StatusChange`.
- * `StatusChange.changedById` is a REQUIRED FK to `User`, so writing one here
- * means inventing a system user row — an account with an address, a role from
- * the frozen enum and a password hash, which then appears in every admin user
- * list, can be assigned work, and is counted by `countAdminSeats()` on somebody's
- * invoice. `AuditLog.actorId` is a plain String with no FK, which is exactly why
- * `expireOffers()` uses it for the same kind of unattended transition. The
- * consequence is stated rather than hidden: an automatic expiry does NOT appear
- * in the relation's own stage history, it appears in the audit log.
- *
- * AND THAT HAS A SECOND CONSEQUENCE, which is bigger than the missing history
- * row and is written down here so nobody rediscovers it from a bug report.
- * `StatusChange` is the ONLY thing the stage clock reads: `stageEnteredAt()`
- * (src/lib/stageClock.ts) takes the newest real move and falls back to
- * `startDate`, `GET /api/mentorship` derives `daysInStage` from the same row,
- * and `computeStageAging()` counts a completed stage visit from a PAIR of them.
- * A record auto-moved here therefore reports the age of the whole TRIAL — not
- * the age of the decision — as its time in TRIAL_EXPIRED on the mentor board,
- * the admin board and the candidate detail, and its TRIAL_ACTIVE visit is never
- * closed for the aging report. That matters because #2418's attention-queue row
- * sits next to exactly that number.
- *
- * Fixing it properly means an actor that is not a `User`, i.e. making
- * `StatusChange.changedById` nullable the way `ActivityLog.actorId` already is,
- * plus the two pages that render `changedBy.fullName`. That is a change to a
- * shared audit model and belongs in its own reviewed diff (#2527) rather than
- * riding in on a cron job — and #2417 enumerated exactly two options, of which
- * this is one. Attributing the move to a real human instead (the owner, an org
- * admin) was rejected outright: it would print a name next to something that
- * person did not do, and `accountErasure.ts` would delete the pipeline's
- * history along with that account.
+ * HISTORY: a `StatusChange` with `changedById: null` — the system — written in
+ * the SAME transaction as the claim (#2527). `StatusChange` is the only thing
+ * the stage clock reads (`stageEnteredAt()`, `daysInStage` on
+ * `GET /api/mentorship`, and `computeStageAging()`, which closes a visit from a
+ * PAIR of rows), so without it an auto-moved record reported the age of the
+ * whole trial as its time in TRIAL_EXPIRED and its TRIAL_ACTIVE visit was never
+ * closed. NULL rather than a person: naming the owner or an org admin would
+ * print a name next to something they did not do (and `accountErasure.ts` would
+ * delete the pipeline's history along with that account); a system `User` row
+ * would be a real account in admin lists, work assignment and seat counts. The
+ * `AuditLog` row with `actorId: 'system'` stays, as the operator's record.
  *
  * DROP-OFF REASONS DO NOT APPLY, by construction. `validateDropoffReason()`
  * (src/lib/stageChange.ts) only demands a `reasonCode` for a move into an
@@ -425,12 +412,22 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
   // the round trips without giving anything up.
   const moved: string[] = [];
   for (const relation of due) {
-    const claim = await prisma.mentorshipRelation.updateMany({
-      where: { id: relation.id, pipelineStatus: activeKey },
-      data: { pipelineStatus: expiredKey, ...(deadline ?? {}) },
+    const claimed = await prisma.$transaction(async (tx) => {
+      const claim = await tx.mentorshipRelation.updateMany({
+        // `trialEndsAt` is re-checked too: a hand extension (#2553) that commits
+        // between the findMany above and this write moved the end into the
+        // future, and must not be expired on the strength of the old date.
+        where: { id: relation.id, pipelineStatus: activeKey, trialEndsAt: { lt: startOfToday } },
+        data: { pipelineStatus: expiredKey, ...(deadline ?? {}) },
+      });
+      if (claim.count === 0) return false;
+      // The move and its history row land together or not at all (#2527).
+      // Built by the gate every StatusChange write goes through (#934).
+      const row = statusChangeData({ relationId: relation.id, fromStatus: activeKey, toStatus: expiredKey, changedById: null });
+      if (row) await tx.statusChange.create({ data: { ...row, createdAt: now } });
+      return true;
     });
-    if (claim.count === 0) continue;
-    moved.push(relation.id);
+    if (claimed) moved.push(relation.id);
   }
   if (moved.length === 0) return 0;
 

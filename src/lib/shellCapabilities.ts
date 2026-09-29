@@ -24,3 +24,21 @@ export async function shellCapabilities(
   return verticalCapabilities(vertical);
 }
 
+
+/**
+ * A per-run memo of `shellCapabilities`, for a sweep that resolves the vertical
+ * of many rows' orgs (crons, the notification router): one lookup per org, not
+ * one per row. Create one per run — the cache is not invalidated.
+ */
+export function capabilitiesMemo(): (orgId: string | null | undefined) => Promise<VerticalCapability[]> {
+  const cache = new Map<string, Promise<VerticalCapability[]>>();
+  return (orgId) => {
+    const key = orgId ?? '';
+    let hit = cache.get(key);
+    if (!hit) {
+      hit = shellCapabilities(orgId);
+      cache.set(key, hit);
+    }
+    return hit;
+  };
+}

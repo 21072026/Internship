@@ -5,14 +5,19 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { notifyIfAllowed } from '@/lib/notify';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
-async function relationIfAllowed(userId: string, role: string, relationId: string) {
+async function relationIfAllowed(userId: string, role: string, relationId: string, callerOrgId: string | null) {
   const rel = await prisma.mentorshipRelation.findUnique({ where: { id: relationId } });
-  if (!rel) return null;
+  // The scoped lookup above narrows nothing while MT_ENFORCE_ISOLATION is off,
+  // and ADMIN is allowed below: another tenant's relation answers like a
+  // missing one (#2542).
+  if (!rel || !(await inCallerTenant(rel.orgId, callerOrgId))) return null;
   const allowed = role === 'ADMIN' || rel.mentorId === userId || rel.menteeId === userId;
   return allowed ? rel : null;
 }
@@ -24,7 +29,7 @@ export async function GET(request: Request) {
   return await withTenantScope(session, async () => {
   const relationId = new URL(request.url).searchParams.get('relationId') || '';
 
-  const rel = await relationIfAllowed(session.user.id, session.user.role, relationId);
+  const rel = await relationIfAllowed(session.user.id, session.user.role, relationId, resolveOrgId(session));
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const goals = await prisma.goal.findMany({ where: { relationId }, orderBy: { createdAt: 'asc' } });
@@ -50,7 +55,7 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-  const rel = await relationIfAllowed(session.user.id, session.user.role, parsed.data.relationId);
+  const rel = await relationIfAllowed(session.user.id, session.user.role, parsed.data.relationId, resolveOrgId(session));
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   // A finished mentorship takes no new ones (#1408) — the portal hides the form

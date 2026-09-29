@@ -40,6 +40,7 @@ import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { StageClockChip } from '@/components/StageClockChip';
 import { daysInStage } from '@/lib/stageClock';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
+import { TrialEndPanel } from '@/components/TrialEndPanel';
 
 interface InteractionLog {
   id: string;
@@ -66,6 +67,9 @@ interface RelationDetail {
   // The owner's follow-up (#2563) — only ever present for the owner and ADMIN.
   nextActionAt?: string | null;
   nextActionNote?: string | null;
+  // The trial window of a funnel record (#2551/#2553); null outside a trial.
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
@@ -97,7 +101,7 @@ interface RelationDetail {
     fromStatus: string;
     toStatus: string;
     createdAt: string;
-    changedBy: { fullName: string };
+    changedBy: { fullName: string } | null;
   }[];
 }
 
@@ -319,6 +323,18 @@ export default function MenteeDetailPage() {
         />
       </div>
 
+      {/* The trial end (#2553) — nothing renders outside a trial. */}
+      <div className="mb-6 empty:hidden">
+        <TrialEndPanel
+          relationId={relation.id}
+          pipelineStatus={relation.pipelineStatus}
+          trialStartedAt={relation.trialStartedAt}
+          trialEndsAt={relation.trialEndsAt}
+          canEdit={relation.status === 'ACTIVE'}
+          onSaved={fetchRelation}
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Who this mentee is and how they got here: reference material the
             mentor reads while working the panels beside it. It stays first in
@@ -458,7 +474,7 @@ export default function MenteeDetailPage() {
                       <span className="font-medium text-gray-900">{label(sc.toStatus)}</span>
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {sc.changedBy.fullName} · {formatDateTime(sc.createdAt, locale)}
+                      {sc.changedBy?.fullName ?? t.common.systemActor} · {formatDateTime(sc.createdAt, locale)}
                     </p>
                   </li>
                 ))}

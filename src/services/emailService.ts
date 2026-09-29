@@ -10,6 +10,8 @@ import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
+import { capabilitiesMemo } from '@/lib/shellCapabilities';
+import { interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
@@ -22,6 +24,9 @@ import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
+import { overdueBefore } from '@/lib/taskDue';
+import { visibleToViewer } from '@/lib/todoVisibility';
+import { formatDate } from '@/lib/relativeTime';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
@@ -49,9 +54,8 @@ import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/l
 // lives in. The pure host/world rule and the org → world read are the two
 // foundation modules; this file only ever asks them, it keeps no second copy.
 import { originForWorld, type World } from '@/lib/hostWorld';
-import { worldOfOrg } from '@/lib/userWorld';
-import { verticalsFor } from '@/lib/verticalContext';
 import { DEFAULT_VERTICAL, toVerticalKey } from '@/lib/verticals';
+import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -1294,7 +1298,9 @@ function appUrlForWorld(world: World): string {
  */
 export async function appUrlFor(orgId?: string | null): Promise<string> {
   if (!orgId) return appUrl();
-  return appUrlForWorld(await worldOfOrg(orgId));
+  // One rule for every link into a tenant's product: its explicit public host
+  // (#2495), else its world's origin (#2590) — src/lib/orgLinkOrigin.ts.
+  return appOriginForOrg(orgId);
 }
 
 // The origin for the account behind a user id — for the senders whose callers
@@ -1329,19 +1335,19 @@ async function appUrlForRecipient(orgId?: string | null, userId?: string | null)
  * up correctly in the next run, exactly like the newsletter's brand cache.
  */
 function createOriginBook() {
-  const worlds = new Map<string, World>();
+  const origins = new Map<string, string>();
   const prefetch = async (orgIds: Iterable<string | null | undefined>): Promise<void> => {
-    const missing = [...new Set([...orgIds].filter((id): id is string => !!id && !worlds.has(id)))];
+    const missing = [...new Set([...orgIds].filter((id): id is string => !!id && !origins.has(id)))];
     if (missing.length === 0) return;
-    const found = await verticalsFor(missing);
-    // An organization that is not there (deleted, stale id) reads as the default
-    // world — verticalFor's own rule for the single-org form of the same question.
-    for (const id of missing) worlds.set(id, found.get(id) ?? DEFAULT_VERTICAL);
+    const found = await appOriginsForOrgs(missing);
+    // An organization that is not there (deleted, stale id) gets the default
+    // origin — the single-org form's own fallback.
+    for (const id of missing) origins.set(id, found.get(id) ?? appUrl());
   };
   const urlFor = async (orgId: string | null | undefined): Promise<string> => {
     if (!orgId) return appUrl();
     await prefetch([orgId]);
-    return appUrlForWorld(worlds.get(orgId) ?? DEFAULT_VERTICAL);
+    return origins.get(orgId) ?? appUrl();
   };
   return { prefetch, urlFor };
 }
@@ -2234,6 +2240,7 @@ export async function sendCompanyInquiryEmail({
   fromEmail,
   phone,
   openRoles,
+  marketplaces,
   message,
   locale,
   orgId,
@@ -2246,6 +2253,8 @@ export async function sendCompanyInquiryEmail({
   fromEmail: string;
   phone?: string | null;
   openRoles?: string | null;
+  // The MARKETING demo form's "marketplaces you sell on" (#2569).
+  marketplaces?: string | null;
   message?: string | null;
   locale?: string | null;
   orgId?: string | null;
@@ -2268,6 +2277,7 @@ export async function sendCompanyInquiryEmail({
         <p><strong>${esc(companyName)}</strong> — ${esc(contactName)} (${esc(fromEmail)})</p>
         ${phone ? `<p>${esc(M.phone)}: ${esc(phone)}</p>` : ''}
         ${openRoles ? `<p>${esc(M.openRoles)}: ${esc(openRoles)}</p>` : ''}
+        ${marketplaces ? `<p>${esc(M.marketplaces)}: ${esc(marketplaces)}</p>` : ''}
         ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>` : ''}
         <p style="color:#6b7280;font-size:14px;">${esc(M.replyHint)}</p>
       </div>
@@ -2335,13 +2345,21 @@ export async function checkMentorInteractionReminders() {
   const fourteenDaysAgo = new Date();
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - days);
 
-  const activeRelations = await prisma.mentorshipRelation.findMany({
+  const allActive = await prisma.mentorshipRelation.findMany({
     where: { status: 'ACTIVE' },
     include: {
       mentor: true,
       mentee: true,
     },
   });
+  // Mentorship work only (#2580 review): a vertical without the `mentorship`
+  // module — a MARKETING sales book — gets neither this mail nor the bell, the
+  // same line the sales attention queue draws by leaving `inactive` out.
+  const capabilitiesOf = capabilitiesMemo();
+  const activeRelations: typeof allActive = [];
+  for (const relation of allActive) {
+    if (interactionReminderApplies(await capabilitiesOf(relation.orgId))) activeRelations.push(relation);
+  }
 
   // "Contact" is not "a row in InteractionLog": a mentor who is mid-thread with
   // a mentee in the app's messaging has been in touch, and nagging them to log
@@ -2500,6 +2518,7 @@ export async function checkMentorInteractionReminders() {
 export async function checkStageDeadlineReminders() {
   const now = new Date();
   const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'] as const;
+  const capabilitiesOf = capabilitiesMemo();
 
   const overdue = await prisma.mentorshipRelation.findMany({
     where: {
@@ -2526,7 +2545,10 @@ export async function checkStageDeadlineReminders() {
     // The in-app half respects the same 'deadlines' preference the e-mail half
     // does (#817) — opting out of deadline mail and still being pinged in-app
     // for the identical event is not a preference anyone chose.
-    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/mentor/mentees/${rel.id}`);
+    // A MARKETING rep's record is /sales/leads/<id> (#2580); notificationLink
+    // keeps /mentor/mentees/<id> for everyone else.
+    const stageLink = notificationLink('MENTOR', 'relation', { relationId: rel.id }, { capabilities: await capabilitiesOf(rel.orgId) });
+    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, stageLink);
     if (emailAllowed(rel.mentor, 'deadlines') && emailGroupAllowedForCategory(rel.mentor, 'stage-deadline')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
@@ -2585,6 +2607,7 @@ export async function checkNextActionReminders(now = new Date()) {
     },
     select: {
       id: true,
+      orgId: true,
       menteeId: true,
       nextActionAt: true,
       nextActionNote: true,
@@ -2615,6 +2638,7 @@ export async function checkNextActionReminders(now = new Date()) {
 
   let reminded = 0;
   let failures = 0;
+  const capabilitiesOf = capabilitiesMemo();
   for (const rel of due) {
     if (!isNextActionReminderDue(rel, now)) continue;
     const claim = await prisma.mentorshipRelation.updateMany({
@@ -2628,7 +2652,12 @@ export async function checkNextActionReminders(now = new Date()) {
     // What the bell and the mail call this record: the account for a funnel
     // record with a company, else the person — the trial sweep's fallback.
     const name = rel.company?.name ?? rel.mentee.fullName;
-    const link = notificationLink(owner.role as NotificationRole, 'relation', { relationId: rel.id, menteeId: rel.menteeId });
+    const link = notificationLink(
+      owner.role as NotificationRole,
+      'relation',
+      { relationId: rel.id, menteeId: rel.menteeId },
+      { capabilities: await capabilitiesOf(rel.orgId) },
+    );
     try {
       if (notificationCategoryAllowed(owner, 'deadlines')) {
         await notify(owner.id, 'deadline.nextActionDue', { name }, link);
@@ -3480,6 +3509,70 @@ function activityDigestTable(items: MenteeActivity[], locale?: string | null): s
   </table>`;
 }
 
+// The overdue to-dos that ride ALONG with the daily digest (#2440).
+//
+// It is a block in a mail that is already going out — no new send, no new
+// recipient, nothing mailed *because* a to-do is late. What counts as late is
+// src/lib/taskDue.ts's answer and not a `lt: new Date()` written here: a to-do
+// due TODAY is not late, and `overdueBefore()` is that rule as a query bound.
+//
+// The caller passes the reach: a mentor's own mentees by id, an admin's
+// organisation by orgId — ProjectTask carries no orgId of its own and this runs
+// in a cron with no tenant context, so the scope has to be said out loud. Reach
+// is not permission, though: within it the same privacy rule applies that
+// /api/todos applies to a page, and it is the one in src/lib/todoVisibility.ts.
+const OVERDUE_DIGEST_LIMIT = 10;
+// How far down the late-to-do list the block looks before it prints the first
+// ten. The privacy filter below runs in JS — it compares two columns of the same
+// row — so the query has to bring back more than it prints, or ten private lines
+// at the top would hide the eleventh, readable one. It also makes "and N more"
+// an actual count instead of the "and 1 more" that `take: LIMIT + 1` could say.
+const OVERDUE_DIGEST_SCAN = 100;
+
+async function overdueTodoBlock(
+  reach: Prisma.ProjectTaskWhereInput,
+  locale: Locale,
+  recipientId: string
+): Promise<string> {
+  const rows = await prisma.projectTask.findMany({
+    where: { ...reach, done: false, archivedAt: null, dueDate: { lt: overdueBefore() } },
+    orderBy: { dueDate: 'asc' },
+    take: OVERDUE_DIGEST_SCAN,
+    select: {
+      id: true,
+      title: true,
+      dueDate: true,
+      // The three columns the privacy rule reads (src/lib/todoVisibility.ts).
+      projectId: true,
+      createdById: true,
+      assigneeId: true,
+      assignee: { select: { fullName: true } },
+    },
+  });
+  // A line somebody wrote for themselves on their own list is theirs: /api/todos
+  // hides it from their mentor and from an admin alike, and a mail may not carry
+  // what no page will show. Same predicate as the team list, one copy (#2440).
+  const visible = visibleToViewer(rows, recipientId);
+  if (visible.length === 0) return '';
+  const A = getDictionary(locale).notifications.activityDigestEmail;
+  const items = visible
+    .slice(0, OVERDUE_DIGEST_LIMIT)
+    .map((row) => {
+      const line = A.overdueLine
+        .replace('{name}', row.assignee?.fullName ?? '')
+        .replace('{title}', row.title)
+        // The stored value names a UTC day (src/lib/taskDue.ts § rule 2).
+        .replace('{date}', row.dueDate ? formatDate(row.dueDate, locale, { timeZone: 'UTC' }) : '');
+      return `<li style="margin:2px 0;">${esc(line)}</li>`;
+    })
+    .join('');
+  const rest = visible.length > OVERDUE_DIGEST_LIMIT
+    ? `<p style="color:#6b7280;font-size:12px;">${esc(A.overdueMore.replace('{n}', String(visible.length - OVERDUE_DIGEST_LIMIT)))}</p>`
+    : '';
+  return `<h3 style="margin:20px 0 6px;color:#b91c1c;font-size:15px;">${esc(A.overdueHeading)}</h3>
+    <ul style="margin:0;padding-left:18px;font-size:13px;color:#374151;">${items}</ul>${rest}`;
+}
+
 // Daily mentee-activity digest. Each mentor gets a summary of THEIR mentees'
 // activity in the last 24h; each admin gets a system-wide summary. Respects the
 // 'digest' email preference. Recipients with no mentees / no data are skipped.
@@ -3505,6 +3598,12 @@ export async function sendDailyActivityDigests() {
     if (items.length === 0) continue;
     const mLocale = resolveLocale(m.preferredLanguage);
     const A = getDictionary(mLocale).notifications.activityDigestEmail;
+    // Their own mentees, the same people the table above is about.
+    const overdue = await overdueTodoBlock(
+      { assigneeId: { in: items.map((i) => i.menteeId) } },
+      mLocale,
+      m.id
+    );
     try {
       const base = await origins.urlFor(m.orgId);
       await sendEmail({
@@ -3517,6 +3616,7 @@ export async function sendDailyActivityDigests() {
           <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
           <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
           ${activityDigestTable(items, mLocale)}
+          ${overdue}
           <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
         </div>`,
@@ -3538,6 +3638,11 @@ export async function sendDailyActivityDigests() {
       if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
       const aLocale = resolveLocale(a.preferredLanguage);
       const A = getDictionary(aLocale).notifications.activityDigestEmail;
+      // Their own organisation. An admin with no org reads nobody's to-dos here
+      // rather than everybody's: this job binds no tenant context.
+      const overdue = a.orgId
+        ? await overdueTodoBlock({ assignee: { is: { orgId: a.orgId } } }, aLocale, a.id)
+        : '';
       try {
         const base = await origins.urlFor(a.orgId);
         await sendEmail({
@@ -3550,6 +3655,7 @@ export async function sendDailyActivityDigests() {
             <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
             <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
             ${activityDigestTable(adminItems, aLocale)}
+            ${overdue}
             <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           </div>`,
         });

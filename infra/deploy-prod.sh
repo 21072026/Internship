@@ -703,6 +703,12 @@ run_tool node scripts/backfill-requisitions.mjs || true
 # `prisma db push --accept-data-loss` would fail on it otherwise.
 log "check for mentees with more than one active mentor (report only)"
 run_tool node prisma/check-active-mentor-duplicates.mjs || true
+# Public host → org mappings (#2569), report only: a MARKETING org with no
+# mapped host has a CLOSED demo form on its landing (fail-closed by design), and
+# the line names the exact set-public-host.mjs command to open it. Never fails
+# a deploy, never writes.
+log "public host mappings (report only)"
+run_tool node prisma/set-public-host.mjs --list || true
 # API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.
@@ -933,6 +939,70 @@ while [ "$REPLICA_INDEX" -le "$REPLICAS" ]; do
   REPLICA_INDEX=$((REPLICA_INDEX + 1))
 done
 log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped} on ${REPLICAS} replica(s)"
+
+# ── Marketing host content check (#2579) — WARN ONLY, never fails the deploy ──
+# /api/health is the same JSON on every host this container serves, so it cannot
+# notice the marketing domain showing the internship product (an empty
+# MARKETING_HOSTS did exactly that until #2428). Ask each new replica for its
+# landing AS the marketing host and read the <title>: it must name SaleVali and
+# must not say "Internship CRM" — the same rule as
+# scripts/marketing-content-probe.mjs, which the external uptime job
+# (.github/workflows/uptime.yml) enforces with an alert. This copy is deliberately
+# plain curl + sed (the box need not have Node) and only WARNS: the containers
+# are already swapped and healthy, and the fix is an env-file edit, not a
+# rollback.
+#
+# The host asked for comes from OUTSIDE the env file, never from MARKETING_HOSTS:
+# whatever host MARKETING_HOSTS names is by construction the one that gets the
+# marketing page, so a check that read its host from there would pass for every
+# misconfiguration (a preview env file that lost `marketing.bcsit-gmbh.dev`
+# falls back to the .de default and would read "OK"). The caller says which host
+# this environment must serve — MARKETING_PROBE_HOST, set in deploy-prod.yml /
+# deploy-preview.yml — else it is derived from the container name; an unknown
+# container skips the check. The host must also be in the effective set
+# (MARKETING_HOSTS, or the app default when that is empty — src/lib/servedHosts.ts).
+# MARKETING_PROBE=0 skips it.
+MARKETING_DEFAULT_HOST=marketing.bcsit-gmbh.de
+marketing_expected_host() {
+  if [ -n "${MARKETING_PROBE_HOST:-}" ]; then printf '%s' "$MARKETING_PROBE_HOST"; return; fi
+  case "$CONTAINER" in
+    internship-crm) printf '%s' marketing.bcsit-gmbh.de ;;
+    internship-crm-preview) printf '%s' marketing.bcsit-gmbh.dev ;;
+  esac
+}
+marketing_content_check() {
+  local host effective i port page title
+  host="$(marketing_expected_host | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  if [ -z "$host" ]; then
+    log "Marketing host check skipped — no MARKETING_PROBE_HOST and container $CONTAINER has no known marketing host"
+    return 0
+  fi
+  effective="$(printf '%s' "${MARKETING_HOSTS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  [ -n "$effective" ] || effective="$MARKETING_DEFAULT_HOST"
+  case ",${effective}," in
+    *",${host},"*) ;;
+    *) warn "marketing host $host is NOT in MARKETING_HOSTS (effective: $effective) — this container will serve it the internship landing; check $ENV_FILE" ;;
+  esac
+  i=1
+  while [ "$i" -le "$REPLICAS" ]; do
+    port="$(replica_port "$i")"
+    page="$(curl -sS --max-time 15 -H "Host: $host" "http://127.0.0.1:$port/" 2>/dev/null || true)"
+    # The FIRST <title> is the document's (an inline <svg> later on may carry its own).
+    title="$(printf '%s' "$page" | tr '\n' ' ' | grep -o '<title[^>]*>[^<]*</title>' | head -n1 | sed 's/<[^>]*>//g' || true)"
+    if [ -z "$title" ]; then
+      warn "marketing host $host: no <title> in the landing served on :$port — check it by hand (infra/README.md § The marketing hosts)"
+    elif printf '%s' "$title" | grep -q 'Internship CRM'; then
+      warn "marketing host $host on :$port serves the INTERNSHIP landing (title: $title) — check MARKETING_HOSTS in $ENV_FILE"
+    elif ! printf '%s' "$title" | grep -q 'SaleVali'; then
+      warn "marketing host $host on :$port: title '$title' does not name SaleVali"
+    else
+      log "Marketing host $host on :$port OK — title: $title"
+    fi
+    i=$((i + 1))
+  done
+  return 0
+}
+if [ "${MARKETING_PROBE:-1}" != 0 ]; then marketing_content_check || true; fi
 
 # Record the commit now live in this container so the next deploy can enforce
 # forward-only progress (see the guard above).

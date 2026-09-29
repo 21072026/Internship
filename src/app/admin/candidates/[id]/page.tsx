@@ -37,9 +37,10 @@ import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
+import { TrialEndPanel } from '@/components/TrialEndPanel';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
-interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
+interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } | null }
 interface Relation {
   id: string;
   status: string;
@@ -52,6 +53,9 @@ interface Relation {
   // The owner's follow-up (#2563), independent of the stage deadline above.
   nextActionAt?: string | null;
   nextActionNote?: string | null;
+  // The trial window of a funnel record (#2551/#2553); null outside a trial.
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
   mentor: { id: string; fullName: string; email: string };
   company: { id: string; name: string; industry?: string } | null;
   project: { id: string; name: string } | null;
@@ -474,6 +478,17 @@ export default function AdminMenteeDetailPage() {
                 onSaved={load}
               />
 
+              {/* The trial end (#2553): shown for a record in a trial stage or
+                  one that carries a trial date; renders nothing otherwise. */}
+              <TrialEndPanel
+                relationId={rel.id}
+                pipelineStatus={rel.pipelineStatus}
+                trialStartedAt={rel.trialStartedAt}
+                trialEndsAt={rel.trialEndsAt}
+                canEdit={rel.status === 'ACTIVE'}
+                onSaved={load}
+              />
+
               {(() => {
                 const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.lastContactAt ?? rel.interactions[0]?.date }, t.nextActions);
                 const color = na.level === 'urgent' ? 'text-red-700 bg-red-50 border-red-200' : na.level === 'warn' ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-green-700 bg-green-50 border-green-200';
@@ -496,7 +511,7 @@ export default function AdminMenteeDetailPage() {
                           <span className="text-gray-400">{label(sc.fromStatus)}</span>
                           {' → '}
                           <span className="font-medium">{label(sc.toStatus)}</span>
-                          <span className="text-xs text-gray-400"> · {sc.changedBy.fullName} · {formatDate(sc.createdAt, locale)}</span>
+                          <span className="text-xs text-gray-400"> · {sc.changedBy?.fullName ?? t.common.systemActor} · {formatDate(sc.createdAt, locale)}</span>
                         </span>
                         <button
                           onClick={() => deleteHistory(sc.id)}

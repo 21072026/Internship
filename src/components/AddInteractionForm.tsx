@@ -7,9 +7,10 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { useT } from '@/i18n/client';
 import { INTERACTION_TYPES, type InteractionType } from '@/lib/interactionTypes';
 
-// Compact "log an interaction" form for admins on the candidate detail screen —
-// parity with what a mentor can do (#707). Posts to /api/interactions (which
-// already authorizes ADMIN) and calls onAdded() to refresh the list.
+// Compact "log an interaction" form — admins on the candidate detail screen
+// (parity with what a mentor can do, #707) and a sales rep on their lead page
+// (#2580). Posts to /api/interactions (ADMIN or the relation's owner) and calls
+// onAdded() to refresh the list.
 export function AddInteractionForm({ relationId, onAdded }: { relationId: string; onAdded: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);

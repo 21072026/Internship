@@ -28,9 +28,8 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { defaultOrgId } from '@/lib/defaultOrg';
-import { originForWorld, type World } from '@/lib/hostWorld';
-import { worldOfOrg } from '@/lib/userWorld';
 import { sendInvitationEmail } from '@/services/emailService';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 export const INVITATION_TTL_DAYS = 7;
 
@@ -82,21 +81,9 @@ export interface CreatedInvitation {
   mailError: unknown;
 }
 
-/**
- * The link an invitee opens to register.
- *
- * WORLDS (#2590): the link must open the product the invitation is FOR. An
- * invitation into a MARKETING organization that pointed at the internship
- * origin would send the invitee through the internship host's register page and
- * — the moment they signed in — bounce them off it with "wrong door", because
- * the account they just created lives in the marketing world. So the origin is
- * the world's (`originForWorld`), which for INTERNSHIP is the very
- * NEXT_PUBLIC_APP_URL origin this function always used (that variable is set in
- * every deployed environment), so no existing link changes. `world` defaults to
- * INTERNSHIP so a caller with no organization to ask keeps the historical link.
- */
-export function invitationRegisterUrl(token: string, world: World = 'INTERNSHIP'): string {
-  return `${originForWorld(world)}/auth/register?token=${token}`;
+/** The register link, on the invited tenant's own product host (#2495). */
+export async function invitationRegisterUrl(token: string, orgId: string | null | undefined): Promise<string> {
+  return `${await appOriginForOrg(orgId)}/auth/register?token=${token}`;
 }
 
 /**
@@ -227,10 +214,7 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Cr
   return {
     invitationId: persisted.invitationId,
     token: persisted.token,
-    // The link opens the product the invitation's ORGANIZATION belongs to
-    // (#2590) — the same world the mail's button must point at (the mail
-    // builder derives it from the `orgId` handed to it above).
-    registerUrl: invitationRegisterUrl(persisted.token, await worldOfOrg(input.orgId)),
+    registerUrl: await invitationRegisterUrl(persisted.token, input.orgId),
     emailSent,
     mailError,
   };

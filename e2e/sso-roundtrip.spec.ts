@@ -319,6 +319,50 @@ test('SAML: a consumed SsoLoginGrant cannot be replayed into a second session', 
   }
 });
 
+test('SAML: concurrent redemptions of one grant mint exactly one session (#2548)', async ({ browser, request }) => {
+  const email = uniqueEmail('sso-race').toLowerCase();
+  const { org, slug } = await seedSsoOrg('sso-rc');
+  // Separate browser contexts, so each redemption carries its own CSRF cookie
+  // and its own session jar — several tabs, or a leaked URL raced against its
+  // owner. What this proves is the outcome: one grant, one session, however
+  // many redemptions arrive together. It cannot reliably force the old
+  // check-then-write interleaving over HTTP (the window is a few milliseconds,
+  // and a local run passed against the unfixed provider), so the conditional
+  // spend itself is pinned where it can be forced: scripts/test/grant-spend.test.mjs.
+  const RACERS = 8;
+  const contexts = await Promise.all(Array.from({ length: RACERS }, () => browser.newContext()));
+  try {
+    const SAMLResponse = await mintAssertion(request, {
+      samlRequest: await captureAuthnRequest(request, slug),
+      mode: 'ok',
+      email,
+      name: 'Sso Race',
+    });
+    const acs = await request.post(`/api/auth/sso/${slug}/acs`, { form: { SAMLResponse }, maxRedirects: 0 });
+    expect(acs.status()).toBe(303);
+    const grant = new URL(acs.headers()['location']).searchParams.get('token')!;
+
+    const csrf = await Promise.all(
+      contexts.map(async (ctx) => ((await (await ctx.request.get('/api/auth/csrf')).json()) as { csrfToken: string }).csrfToken),
+    );
+    await Promise.all(
+      contexts.map((ctx, i) =>
+        ctx.request.post('/api/auth/callback/sso', { form: { csrfToken: csrf[i], grant, json: 'true' }, maxRedirects: 0 }),
+      ),
+    );
+    const sessions = await Promise.all(contexts.map((ctx) => sessionEmail(ctx.request)));
+    expect(sessions.filter((e) => e === email), `sessions: ${JSON.stringify(sessions)}`).toHaveLength(1);
+
+    const user = await prisma.user.findFirst({ where: { email } });
+    const grants = await prisma.ssoLoginGrant.findMany({ where: { userId: user!.id } });
+    expect(grants).toHaveLength(1);
+    expect(grants[0].used).toBe(true);
+  } finally {
+    await Promise.all(contexts.map((ctx) => ctx.close()));
+    await dropSsoOrg(org.id, [email]);
+  }
+});
+
 // --- OIDC -------------------------------------------------------------------
 
 const OIDC_IMPLEMENTED = SSO_IMPLEMENTED_PROVIDERS.includes('oidc');

@@ -105,7 +105,17 @@ export function CommandPalette({ role, capabilities }: { role: NavRole; capabili
       }
     };
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    // "The shortcuts are live" marker (#2480). The listener exists only after
+    // hydration, so a key pressed before it lands is simply lost — which is how
+    // e2e-full kept pressing Ctrl+K once and then waiting 15s for a palette that
+    // could never open. Set in the same effect that attaches the listener and
+    // removed in its cleanup, so it cannot claim readiness the listener lacks.
+    const root = document.documentElement;
+    root.dataset.shortcuts = 'ready';
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      delete root.dataset.shortcuts;
+    };
   }, [openPalette]);
 
   // Debounced people/company lookup, same 250 ms as the header search.

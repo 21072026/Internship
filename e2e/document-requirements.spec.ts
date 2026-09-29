@@ -150,7 +150,8 @@ test('missing state is derived from requirement links and preserves both version
 
     const linkedId = linked2Body.document.id;
     await signIn(page, foreignEmail); await page.waitForURL((url) => url.pathname.startsWith('/portal'));
-    expect((await page.request.get(`/api/documents/${linkedId}`)).status()).toBe(403);
+    // Another org's document is 404, not 403 — a 403 would confirm the id (#2542).
+    expect((await page.request.get(`/api/documents/${linkedId}`)).status()).toBe(404);
     expect((await page.request.get(`/api/admin/document-requirements?orgId=${org.id}`)).status()).toBe(401);
 
     await page.goto('/portal');

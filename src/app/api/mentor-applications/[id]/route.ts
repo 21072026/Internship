@@ -16,8 +16,8 @@ import {
   sendMentorApplicationRejectedEmail,
 } from '@/services/emailService';
 import { capSkills } from '@/lib/skills';
-import { originForWorld } from '@/lib/hostWorld';
 import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 // Admin decide endpoint for #904 mentor applications (#933): take into review,
 // approve (creates or upgrades the MENTOR account), or reject. Mirrors the
@@ -284,10 +284,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       await notify(user.id, 'mentor_application.approved', {}, '/mentor');
     } else {
-      // The register link opens the application's own product (#2590) — the
-      // world the account will be created in. INTERNSHIP: the
-      // NEXT_PUBLIC_APP_URL origin, as before.
-      const appUrl = originForWorld(applicationWorld);
+      const appUrl = await appOriginForOrg(application.orgId); // #2495
       void sendMentorApplicationApprovedEmail({
         to: application.email,
         fullName: application.fullName,

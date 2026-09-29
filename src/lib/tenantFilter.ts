@@ -35,7 +35,7 @@
 // SERVER-ONLY: `defaultOrgId()` touches Prisma (cached after the first call).
 
 import type { Session } from 'next-auth';
-import { resolveOrgId } from '@/lib/orgScope';
+import { resolveOrgId, sameTenant } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 
 export type TenantWhere = { orgId: string } | { OR: [{ orgId: string }, { orgId: null }] } | Record<string, never>;
@@ -47,8 +47,18 @@ export type TenantWhere = { orgId: string } | { OR: [{ orgId: string }, { orgId:
 export async function tenantWhere(session: Session | null | undefined): Promise<TenantWhere> {
   if (!session?.user) return {};
   const defaultId = await defaultOrgId();
-  const orgId = resolveOrgId(session) ?? defaultId;
-  if (orgId === defaultId) return { OR: [{ orgId }, { orgId: null }] };
+  return orgWhere(resolveOrgId(session) ?? defaultId);
+}
+
+/**
+ * A KNOWN org as a `where` fragment, by the same rule as `tenantWhere()`: the
+ * default org also matches `orgId IS NULL`, every other org only itself. For
+ * sessionless paths that have already decided the org (the public enquiry
+ * form, #2569) — decided by WHICH org it is, never by how it was found, so an
+ * explicit host mapping to the default org reads exactly like the fallback.
+ */
+export async function orgWhere(orgId: string): Promise<Exclude<TenantWhere, Record<string, never>>> {
+  if (orgId === (await defaultOrgId())) return { OR: [{ orgId }, { orgId: null }] };
   return { orgId };
 }
 
@@ -61,4 +71,17 @@ export function withinTenant<W extends object>(where: W, tenant: TenantWhere): W
   if (Object.keys(tenant).length === 0) return where;
   if (Object.keys(where).length === 0) return { ...tenant } as unknown as W;
   return { AND: [where, tenant] } as unknown as W;
+}
+
+/**
+ * Is a row of `rowOrgId` inside the caller's tenant? The one-row form of
+ * `tenantWhere()`, for a child row reached through its parent (a relation's
+ * notes, a user's files) where the org cannot be a `where` term. NULL on either
+ * side is the default org's, never a wildcard. Callers answer false with 404.
+ */
+export async function inCallerTenant(
+  rowOrgId: string | null | undefined,
+  callerOrgId: string | null | undefined,
+): Promise<boolean> {
+  return sameTenant(rowOrgId, callerOrgId, await defaultOrgId());
 }

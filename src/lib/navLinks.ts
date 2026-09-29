@@ -50,10 +50,13 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
-  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'placements' },
+  // The enquiry inbox is shared since #2569: on an internship tenant it holds the
+  // /for-companies enquiries, on a MARKETING tenant the landing's demo requests
+  // (and is the "unowned leads" list, #2580) — both are the `companies` module.
+  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'companies' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
-  // templates, programme cohorts, mentor/mentee success stories and the
-  // partner-company enquiry inbox are internship modules (#2499). A MARKETING
+  // templates, programme cohorts and mentor/mentee success stories are
+  // internship modules (#2499). A MARKETING
   // tenant carries none of these capabilities, so the links drop out of its
   // sidebar — and the projects write APIs are gated on the same capability.
   { href: '/admin/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },
@@ -133,6 +136,19 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   // from the e-mail footer: the issues stay useful long after the mail is
   // gone, and someone who unsubscribed can still read them here.
   { href: '/newsletters', icon: MailOpen, key: 'newsletters' },
+];
+
+/**
+ * The sales surface (#2580): a MENTOR of a vertical without `mentorship` works
+ * on /sales — see src/lib/salesSurface.ts for who gets it and why. Every link is
+ * tagged with the module it shows, so a vertical that lacked one would lose the
+ * link; MARKETING carries both. Not a `NavRole`: the palette's "Go to" group
+ * belongs to the three role shells, and this shell mounts no palette.
+ */
+export const SALES_NAV_LINKS: NavLink[] = [
+  { href: '/sales', icon: LayoutDashboard, key: 'dashboard', exact: true, capability: 'pipeline' },
+  { href: '/sales/board', icon: Columns3, key: 'board', capability: 'pipeline' },
+  { href: '/sales/accounts', icon: Building2, key: 'myCompanies', capability: 'companies' },
 ];
 
 /** Roles that get a sidebar (and therefore a "Go to" group in the palette). */
