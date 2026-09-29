@@ -64,3 +64,35 @@ export function assertSameOrg(rowOrgId: string | null | undefined, expectedOrgId
     throw new Error('Cross-tenant access denied');
   }
 }
+
+// ── The org boundary that holds while the middleware is still dormant (#2542) ─
+//
+// `assertSameOrg` above is a no-op unless MT_ENFORCE_ISOLATION is on, which was
+// right while there was ONE tenant. There are now two products in one database
+// (INTERNSHIP and MARKETING, epic #2348), and the flag is not yet safe to flip
+// (docs/tenant-isolation.md — the #2542 audit found 56 cross-tenant reads and
+// writes, most of them on models the middleware cannot scope at all because
+// they carry no orgId and are reached through a parent).
+//
+// So a fetch-by-id of such a child row resolves its PARENT's org and asks this.
+// It is deliberately NOT gated on the flag: an admin of org B reading org A's
+// interaction notes is wrong today, not only after the flip.
+//
+// It is the one-row form of `tenantWhere()` (src/lib/tenantFilter.ts), and it
+// reads "unknown" by the same rule: a row whose org is still NULL, and a
+// signed-in session without an org, both belong to the DEFAULT org — the rule
+// `prisma/backfill-organization.mjs` applies on every deploy. Reading an
+// org-less side as "anything goes" would fail OPEN: a 12h JWT minted before the
+// backfill stamped its user would reach every tenant's rows. The default org's
+// single-tenant state is unchanged by construction: all of it is one tenant.
+//
+// Pure (the default org's id is passed in) so it is unit-testable; route code
+// calls `inCallerTenant()` in tenantFilter.ts, which supplies it. Callers answer
+// a mismatch with 404, never 403: a 403 would confirm the id exists.
+export function sameTenant(
+  rowOrgId: string | null | undefined,
+  callerOrgId: string | null | undefined,
+  defaultOrgId: string,
+): boolean {
+  return (rowOrgId || defaultOrgId) === (callerOrgId || defaultOrgId);
+}

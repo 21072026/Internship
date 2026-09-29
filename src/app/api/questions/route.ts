@@ -7,16 +7,25 @@ import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
+import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 // GET ?relationId= — questions for a thread (participants/admin).
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const relationId = new URL(request.url).searchParams.get('relationId') || '';
-  const rel = await getThreadIfAllowed(session.user, relationId);
-  if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const questions = await prisma.mentorQuestion.findMany({ where: { relationId }, orderBy: { createdAt: 'desc' } });
-  return NextResponse.json({ questions });
+  return await withTenantScope(session, async () => {
+    const relationId = new URL(request.url).searchParams.get('relationId') || '';
+    // getThreadIfAllowed lets any ADMIN through; another tenant's relation
+    // answers exactly like a missing one (#2542).
+    const rel = await getThreadIfAllowed(session.user, relationId);
+    if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    const questions = await prisma.mentorQuestion.findMany({ where: { relationId }, orderBy: { createdAt: 'desc' } });
+    return NextResponse.json({ questions });
+  });
 }
 
 const schema = z.object({ relationId: z.string().min(1), question: z.string().min(1).max(2000) });
@@ -30,8 +39,11 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
+  return await withTenantScope(session, async () => {
   const rel = await getThreadIfAllowed(session.user, parsed.data.relationId);
-  if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   // A finished mentorship takes no new ones (#1408) — the portal hides the form
   // on an archive, and this keeps a hand-rolled request from doing more.
@@ -49,4 +61,5 @@ export async function POST(request: Request) {
     await notify(recipient, askerName ? 'question.asked' : 'question.askedGeneric', askerName ? { from: askerName } : {}, link);
   }
   return NextResponse.json({ question: q }, { status: 201 });
+  });
 }

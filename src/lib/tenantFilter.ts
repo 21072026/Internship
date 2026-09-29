@@ -35,7 +35,7 @@
 // SERVER-ONLY: `defaultOrgId()` touches Prisma (cached after the first call).
 
 import type { Session } from 'next-auth';
-import { resolveOrgId } from '@/lib/orgScope';
+import { resolveOrgId, sameTenant } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 
 export type TenantWhere = { orgId: string } | { OR: [{ orgId: string }, { orgId: null }] } | Record<string, never>;
@@ -71,4 +71,17 @@ export function withinTenant<W extends object>(where: W, tenant: TenantWhere): W
   if (Object.keys(tenant).length === 0) return where;
   if (Object.keys(where).length === 0) return { ...tenant } as unknown as W;
   return { AND: [where, tenant] } as unknown as W;
+}
+
+/**
+ * Is a row of `rowOrgId` inside the caller's tenant? The one-row form of
+ * `tenantWhere()`, for a child row reached through its parent (a relation's
+ * notes, a user's files) where the org cannot be a `where` term. NULL on either
+ * side is the default org's, never a wildcard. Callers answer false with 404.
+ */
+export async function inCallerTenant(
+  rowOrgId: string | null | undefined,
+  callerOrgId: string | null | undefined,
+): Promise<boolean> {
+  return sameTenant(rowOrgId, callerOrgId, await defaultOrgId());
 }

@@ -4,6 +4,8 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { EVALUATION_TYPES, isWithinEditWindow } from '@/lib/evaluation';
 import { allowedCriterionKeys, criteriaByTemplate, resolveTemplateId } from '@/lib/evaluationTemplates';
@@ -54,7 +56,10 @@ export async function GET(request: Request) {
   const relationId = searchParams.get('relationId') || '';
 
   const rel = await prisma.mentorshipRelation.findUnique({ where: { id: relationId } });
-  if (!rel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // Another tenant's relation answers like a missing one, flag on or off (#2542).
+  if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const allowed = session.user.role === 'ADMIN' || rel.mentorId === session.user.id || rel.menteeId === session.user.id;
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -110,7 +115,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
 
   const rel = await prisma.mentorshipRelation.findUnique({ where: { id: parsed.data.relationId } });
-  if (!rel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // Another tenant's relation answers like a missing one, flag on or off (#2542).
+  if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const isParticipant = rel.mentorId === session.user.id || rel.menteeId === session.user.id;
   if (session.user.role !== 'ADMIN' && !isParticipant) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

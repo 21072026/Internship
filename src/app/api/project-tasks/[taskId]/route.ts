@@ -8,6 +8,9 @@ import { notify } from '@/lib/notify';
 import { goalLinkFor } from '@/lib/projectGoalLink';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { requireCapability } from '@/lib/capabilityGate';
+import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 // One to-do: tick it off, put it away, reword it, hand it over.
 //
@@ -18,12 +21,28 @@ import { requireCapability } from '@/lib/capabilityGate';
 //                                template, so it cannot be reworded here, and the
 //                                person it was given to cannot delete it either.
 //                                They tick it off and archive it (#1113).
+//
+// ProjectTask has no orgId: its tenant is its project's, or — for a personal
+// to-do — its person's (the assignee, else the author). Neither the top-level
+// lookup nor the nested includes are scoped by the middleware, so the tenant is
+// checked here, and another tenant's to-do comes back 'missing' — the 404 a
+// missing id gets, never a 403 that would confirm it exists (#2542).
 async function taskFor(
   user: { id: string; role: string; companyId?: string | null },
-  taskId: string
+  taskId: string,
+  callerOrgId: string | null
 ) {
-  const task = await prisma.projectTask.findUnique({ where: { id: taskId }, include: { project: true } });
-  if (!task) return null;
+  const task = await prisma.projectTask.findUnique({
+    where: { id: taskId },
+    include: {
+      project: true,
+      assignee: { select: { orgId: true } },
+      author: { select: { orgId: true } },
+    },
+  });
+  if (!task) return 'missing' as const;
+  const rowOrgId = task.project ? task.project.orgId : (task.assignee?.orgId ?? task.author?.orgId ?? null);
+  if (!(await inCallerTenant(rowOrgId, callerOrgId))) return 'missing' as const;
   // A personal to-do has no project to derive access from: it belongs to the
   // person it is on, and to whoever wrote it (their mentor) — plus an admin.
   if (!task.projectId || !task.project) {
@@ -56,7 +75,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { taskId } = await params;
 
-  const task = await taskFor(session.user, taskId);
+  return await withTenantScope(session, async () => {
+  const task = await taskFor(session.user, taskId, resolveOrgId(session));
+  if (task === 'missing') return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!task) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   // A project-bound task is a projects-module write (#2502); a personal to-do
   // (projectId null) is not, so the gate is conditional.
@@ -144,6 +165,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
     await notify(assigneeId, 'project.goalAssigned', { title: updated.title }, await goalLinkFor(assigneeId, task.projectId));
   }
   return NextResponse.json({ task: updated });
+  });
 }
 
 // DELETE — remove a task. Unchanged for the people who always had this button
@@ -157,7 +179,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { taskId } = await params;
 
-  const task = await taskFor(session.user, taskId);
+  return await withTenantScope(session, async () => {
+  const task = await taskFor(session.user, taskId, resolveOrgId(session));
+  if (task === 'missing') return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!task) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   // A project-bound task is a projects-module write (#2502); a personal to-do
   // (projectId null) is not, so the gate is conditional.
@@ -188,4 +212,5 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   await prisma.projectTask.delete({ where: { id: taskId } }).catch(() => null);
   return NextResponse.json({ ok: true });
+  });
 }

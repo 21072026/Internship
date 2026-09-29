@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { INTERACTION_TYPES } from '@/lib/interactionTypes';
@@ -15,13 +17,25 @@ const updateInteractionSchema = z.object({
   type: z.enum(INTERACTION_TYPES).optional(),
 });
 
-async function getInteractionAndVerifyAccess(id: string, userId: string, role: string) {
+async function getInteractionAndVerifyAccess(
+  id: string,
+  userId: string,
+  role: string,
+  callerOrgId: string | null
+) {
   const interaction = await prisma.interactionLog.findUnique({
     where: { id },
     include: { relation: true },
   });
 
   if (!interaction) return { interaction: null, authorized: false };
+  // InteractionLog has no orgId: its tenant is its relation's, and neither the
+  // top-level lookup nor the nested include is scoped by the middleware. A log
+  // on another tenant's relation reads as not found — 404, never 403, so the id
+  // is not confirmed to exist (#2542). Checked before any write below.
+  if (!(await inCallerTenant(interaction.relation.orgId, callerOrgId))) {
+    return { interaction: null, authorized: false };
+  }
 
   const authorized =
     role === 'ADMIN' || interaction.relation.mentorId === userId;
@@ -41,7 +55,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { interaction, authorized } = await getInteractionAndVerifyAccess(
       id,
       session.user.id,
-      session.user.role
+      session.user.role,
+      resolveOrgId(session)
     );
 
     if (!interaction) {
@@ -71,7 +86,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const { interaction, authorized } = await getInteractionAndVerifyAccess(
       id,
       session.user.id,
-      session.user.role
+      session.user.role,
+      resolveOrgId(session)
     );
 
     if (!interaction) {
@@ -119,7 +135,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const { interaction, authorized } = await getInteractionAndVerifyAccess(
       id,
       session.user.id,
-      session.user.role
+      session.user.role,
+      resolveOrgId(session)
     );
 
     if (!interaction) {
