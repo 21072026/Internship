@@ -51,6 +51,8 @@ sürece tek bir PR sessizce farklı davranamaz.
 - `salevali-domain.md` — SaleVali'nin ticari modeli (fiyatlandırma, kanallar)
 - `salevali-usage-feed.md` — kullanım beslemesinin veri sözleşmesi (#2445),
   devralınan değil: bu repo'nun kararlarıyla yazıldı
+- `salevali-provider-contract.md` — SaleVali'den istenenler (#2565): `externalId`
+  anahtarı, kullanım ve lisans olayı uçları, alan eşlemesi, SaleVali karşı işleri
 - `old-server-teardown.md` — eski Marketing kutusunun sökümü
 
 ## Neden olduğu gibi saklandı
