@@ -9,6 +9,7 @@ import { verticalFor } from '@/lib/verticalContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logger } from '@/lib/logger';
 import { createMarketingAccount } from '@/lib/marketingImportStore';
+import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
 
 // One lead / account typed in by hand (#2562) — the phone call, the trade-fair
 // badge, the LinkedIn message.
@@ -27,6 +28,14 @@ import { createMarketingAccount } from '@/lib/marketingImportStore';
 // "lead" is an applicant with a university, and that product already has its
 // own intake paths. The capability gates are asked anyway so a future vertical
 // without the funnel is refused by the same rule every other writer uses.
+//
+// WHOSE LEAD (#2580 item 3). The funnel record's owner is `ownerId` when the
+// body names one (an active ADMIN/MENTOR of the caller's org, else 400), else
+// the org's default lead owner (`defaultLeadOwnerId`), else the admin typing it
+// in. The last fallback is the one place "no default owner" does not mean
+// "unowned": a funnel record cannot exist without an owner, and — unlike a web
+// request, which waits in the unowned list — a hand-typed lead has a person in
+// front of it who is, at that moment, working it.
 
 // Generous caps: the import validator enforces the real per-column limits
 // (src/lib/textLimits.ts through FIELD_LIMITS) and reports the field by name.
@@ -43,6 +52,7 @@ const bodySchema = z.object({
   contactPhone: z.string().trim().max(TEXT_LIMITS.companyContactPhone).optional(),
   source: z.string().trim().max(TEXT_LIMITS.profileShortText).optional(),
   stage: z.string().trim().max(TEXT_LIMITS.profileShortText).optional(),
+  ownerId: z.string().trim().min(1).max(64).optional(),
 });
 
 export async function POST(request: Request) {
@@ -79,22 +89,30 @@ async function handlePost(request: Request) {
     );
   }
 
+  const { ownerId, ...fields } = parsed.data;
+  let owner = ownerId ? await findLeadOwner(orgId, ownerId) : null;
+  if (ownerId && !owner) {
+    return NextResponse.json(
+      { code: 'invalid_owner', error: 'Owner is not an active admin or rep of this organization' },
+      { status: 400 },
+    );
+  }
+  owner ??= await resolveDefaultLeadOwner(orgId);
+  owner ??= { id: session.user.id, email: session.user.email ?? '', orgId, role: session.user.role };
+
   return withTenantScope(session, async () => {
     try {
       const outcome = await createMarketingAccount({
-        owner: {
-          id: session.user.id,
-          email: session.user.email ?? '',
-          orgId,
-          role: session.user.role,
-        },
-        fields: parsed.data,
+        owner,
+        fields,
         request,
+        // The typist is the actor even when the lead goes to somebody else.
+        actor: { id: session.user.id, email: session.user.email ?? null },
       });
       switch (outcome.kind) {
         case 'created':
           return NextResponse.json(
-            { status: 'created', companyId: outcome.companyId, leadId: outcome.leadId, stage: outcome.stage },
+            { status: 'created', companyId: outcome.companyId, leadId: outcome.leadId, stage: outcome.stage, ownerId: owner.id },
             { status: 201 },
           );
         case 'exists':

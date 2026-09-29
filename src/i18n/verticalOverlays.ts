@@ -43,7 +43,20 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
-      nav: { candidates: 'Leads' },
+      nav: { candidates: 'Leads', companyInquiries: 'Demo requests' },
+      // The demo form on the marketing landing and the list its requests land
+      // in (#2569). The form is the internship enquiry form re-used; these are
+      // the strings that would otherwise talk about hiring and invitations.
+      forCompanies: {
+        submit: 'Request a demo',
+        successBody: 'Your request reached our sales team. We answer within two working days to find a time for the demo.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo requests',
+        subtitle: 'Requests from the demo form on your website. A request with a default lead owner is already on the pipeline; the rest wait here, unowned, until an admin adds them.',
+        emptyTitle: 'No requests waiting',
+        emptyBody: 'Demo requests from your website land here, and every admin is notified by email as they arrive.',
+      },
       candidates: {
         title: 'Leads',
         subtitle: 'Browse and search leads',
@@ -117,6 +130,20 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // that means the same thing in both products, so it is left alone — an
       // overlay entry that changes nothing is noise the next reader has to
       // re-derive.
+      // The account detail page (#2560): the funnel records are deals owned
+      // by a rep, and a CompanyNeed is what the account needs.
+      companyDetail: {
+        sections: { funnel: 'Deals', needs: 'Open needs' },
+        funnel: {
+          person: 'Lead',
+          owner: 'Rep',
+          empty: 'No deals on this account yet.',
+          continues: 'Continues an earlier deal owned by {name}',
+        },
+        needsEmpty: 'No needs recorded.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'The id this account carries in the product you sell. It is how usage data finds this account, so it must be unique within your organization.' },
+      },
       companiesPage: {
         subtitle: 'Manage the accounts you sell to and what each one needs',
         addLoginHint: 'Create a read-only login for a company to follow its linked leads.',
@@ -295,7 +322,17 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     tr: {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
-      nav: { candidates: 'Müşteri Adayları' },
+      nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri' },
+      forCompanies: {
+        submit: 'Demo isteyin',
+        successBody: 'Talebiniz satış ekibimize ulaştı. Demo için bir zaman bulmak üzere iki iş günü içinde dönüyoruz.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo talepleri',
+        subtitle: 'Web sitenizdeki demo formundan gelen talepler. Varsayılan aday sahibi varsa talep zaten hatta; yoksa bir yönetici ekleyene kadar burada sahipsiz bekler.',
+        emptyTitle: 'Bekleyen talep yok',
+        emptyBody: 'Web sitenizden gelen demo talepleri buraya düşer ve geldikçe tüm yöneticilere e-postayla bildirilir.',
+      },
       candidates: {
         title: 'Müşteri Adayları',
         subtitle: 'Müşteri adaylarını görüntüle ve ara',
@@ -340,6 +377,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Kaynağa göre dönüşüm',
         sourceConversionEmpty: 'Henüz kaynak yok — kaynak bazlı dönüşümü görmek için müşteri adaylarına kaynak ata.',
         sourceUnsourced: '{n} müşteri adayının kaynağı yok ve yukarıda gösterilmiyor.',
+      },
+      companyDetail: {
+        sections: { funnel: 'Fırsatlar', needs: 'Açık ihtiyaçlar' },
+        funnel: {
+          person: 'Müşteri adayı',
+          owner: 'Temsilci',
+          empty: 'Bu hesapta henüz fırsat yok.',
+          continues: '{name} temsilcisindeki önceki fırsatın devamı',
+        },
+        needsEmpty: 'Kayıtlı ihtiyaç yok.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'Bu hesabın sattığınız üründeki kimliği. Kullanım verisi hesabı bununla bulur; bu yüzden kuruluşunuz içinde benzersiz olmalı.' },
       },
       companiesPage: {
         subtitle: 'Sattığın müşteri firmalarını ve ihtiyaçlarını yönet',
@@ -450,7 +499,17 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
-      nav: { candidates: 'Leads' },
+      nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen' },
+      forCompanies: {
+        submit: 'Demo anfragen',
+        successBody: 'Ihre Anfrage hat unser Vertriebsteam erreicht. Wir melden uns innerhalb von zwei Werktagen, um einen Termin für die Demo zu finden.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo-Anfragen',
+        subtitle: 'Anfragen aus dem Demo-Formular Ihrer Website. Mit Standard-Zuständigkeit ist eine Anfrage schon in der Pipeline; die übrigen warten hier ohne Zuständige, bis ein Admin sie übernimmt.',
+        emptyTitle: 'Keine Anfragen offen',
+        emptyBody: 'Demo-Anfragen von Ihrer Website landen hier, und alle Admins werden bei Eingang per E-Mail benachrichtigt.',
+      },
       candidates: {
         title: 'Leads',
         subtitle: 'Leads durchsuchen',
@@ -495,6 +554,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Konversion nach Quelle',
         sourceConversionEmpty: 'Noch keine Quellen — weise Leads eine Quelle zu, um die Konversion pro Quelle zu sehen.',
         sourceUnsourced: '{n} Lead(s) ohne Quelle werden oben nicht angezeigt.',
+      },
+      companyDetail: {
+        sections: { funnel: 'Deals', needs: 'Offener Bedarf' },
+        funnel: {
+          person: 'Lead',
+          owner: 'Vertriebsmitarbeiter',
+          empty: 'Für diesen Account gibt es noch keine Deals.',
+          continues: 'Setzt einen früheren Deal von {name} fort',
+        },
+        needsEmpty: 'Kein Bedarf erfasst.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'Die ID dieses Accounts in dem Produkt, das Sie verkaufen. Nutzungsdaten finden den Account darüber, daher muss sie in Ihrer Organisation eindeutig sein.' },
       },
       companiesPage: {
         subtitle: 'Kunden-Accounts und ihren Bedarf verwalten',

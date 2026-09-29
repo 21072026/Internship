@@ -2,6 +2,7 @@
 import { useT } from "@/i18n/client";
 
 import { useCallback, useRef, useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -548,7 +549,17 @@ export default function CompaniesPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle>{company.name}</CardTitle>
+                    {/* The account detail page (#2560). The name is the link: the
+                        icon buttons beside it keep their own jobs. */}
+                    <CardTitle>
+                      <Link
+                        href={`/admin/companies/${company.id}`}
+                        data-testid={`company-detail-link-${company.id}`}
+                        className="hover:text-blue-700 hover:underline"
+                      >
+                        {company.name}
+                      </Link>
+                    </CardTitle>
                     {company.industry && (
                       <CardDescription>{company.industry}</CardDescription>
                     )}

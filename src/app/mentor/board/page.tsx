@@ -18,6 +18,7 @@ import { StageClockChip } from '@/components/StageClockChip';
 import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { foldSearchText, matchesMenteeQuery } from '@/lib/menteeFilter';
 import { FollowUpChip } from '@/components/FollowUpPanel';
+import { TrialEndChip } from '@/components/TrialEndPanel';
 
 interface Mentee {
   id: string;
@@ -41,6 +42,8 @@ interface Relation {
   stageClockPaused?: boolean;
   // The owner's follow-up date (#2563), shipped to the owner and ADMIN only.
   nextActionAt?: string | null;
+  // The trial end (#2553): a chip on a trial-stage card, or the "date missing" badge.
+  trialEndsAt?: string | null;
   mentee: Mentee;
   _count: { interactions: number };
 }
@@ -198,6 +201,7 @@ export default function MentorBoardPage() {
         {r._count.interactions} {t.mentor.interactions}
       </div>
       {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
+      <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
       <CardStageSelect
         stages={stages}
         value={r.pipelineStatus}

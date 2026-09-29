@@ -130,6 +130,15 @@ model Organization {
   // ISO-3166 alpha-2 ("DE", "TR"). Decides VAT treatment, so it is stored,
   // never inferred from an IP or a locale.
   billingCountry   String?
+  // The public hostname whose sessionless forms write into THIS tenant (#2569):
+  // the marketing landing's demo form on marketing.bcsit-gmbh.de lands in the
+  // org whose `publicHost` is exactly that name. An explicit mapping, never a
+  // heuristic ("the first MARKETING org"): a marketing host no org claims is a
+  // CLOSED form, not the internship tenant's inbox. Lowercase hostname, no port,
+  // no wildcard — the same exact-match rule as src/lib/servedHosts.ts. Unique, so
+  // one host can never name two tenants. Resolution + trust reasoning:
+  // src/lib/publicHostOrg.ts. Nullable, so `db push` is additive (#2298).
+  publicHost       String?  @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -1557,31 +1566,63 @@ enum CompanyInquiryStatus {
 }
 
 // A company asking to be shown the product, submitted from the public
-// /for-companies page. Companies have no self-service sign-up — a COMPANY user
+// /for-companies page (internship) or the demo form on the MARKETING landing
+// (#2569) — which tenant receives it is decided by the host, see
+// src/lib/publicHostOrg.ts. Companies have no self-service sign-up — a COMPANY user
 // is only born from an InvitationToken — so this is the bridge: the enquiry is
 // stored (rather than only emailed) so a request cannot quietly go missing in
 // an inbox, and so an admin can see what is still unanswered.
 model CompanyInquiry {
-  orgId              String?
-  org                Organization?        @relation(fields: [orgId], references: [id])
-  id                 String               @id @default(cuid())
-  companyName        String
-  contactName        String
-  email              String
-  phone              String?
+  orgId                     String?
+  org                       Organization?        @relation(fields: [orgId], references: [id])
+  id                        String               @id @default(cuid())
+  companyName               String
+  contactName               String
+  email                     String
+  phone                     String?
   // Roles they are hiring for, and anything else they typed.
-  openRoles          String?              @db.Text
-  message            String?              @db.Text
+  openRoles                 String?              @db.Text
+  message                   String?              @db.Text
   // Preferred UI language ('en' | 'tr' | 'de') — the language they read the
   // page in, so a reply can be written in it.
-  locale             String?
-  status             CompanyInquiryStatus @default(NEW)
+  locale                    String?
+  status                    CompanyInquiryStatus @default(NEW)
   // When they accepted the privacy terms — set server-side on submit.
-  consentAt          DateTime?
-  handledAt          DateTime?
-  handledById        String?
-  note               String?              @db.Text
-  createdAt          DateTime             @default(now())
+  consentAt                 DateTime?
+  // WHICH privacy text they accepted (#2569): PRIVACY_POLICY_VERSION
+  // (src/lib/privacy.ts) at the moment of submit, stamped by the server — a
+  // consent record without the text version cannot say what was agreed to.
+  consentTextVersion        String?
+  // The separate, UNCHECKED-by-default "send me product news" box on the
+  // marketing form (#2569). A REQUEST, never a send permission: it is a single
+  // opt-in anyone could tick for anyone's address, and under UWG §7(2) Nr. 2 it
+  // proves nothing until the address owner confirms it (double opt-in). NULL =
+  // the form that produced this row never asked (the internship form).
+  marketingOptInRequested   Boolean?
+  // WHICH product-news wording they ticked (MARKETING_OPT_IN_TEXT_VERSION,
+  // src/lib/privacy.ts), stamped by the server — separate from the privacy text
+  // version above; the language it was shown in is `locale`. NULL when unticked.
+  marketingOptInTextVersion String?
+  // When the address owner CONFIRMED it (double opt-in). No confirmation mail
+  // exists yet, so this is NULL on every row — and while it is NULL, nothing
+  // may be mailed on the strength of the request (docs/marketing-vertical/demo-form.md).
+  marketingOptInConfirmedAt DateTime?
+  // Marketplaces they sell on (MARKETING form), free text.
+  marketplaces              String?              @db.Text
+  // Where the request came from (#2569): the host that received it and the
+  // campaign parameters / referrer the browser carried. Stored RAW; binding
+  // them to a `Source` row is #2570's mapping. No IP is stored.
+  receivedHost              String?
+  utmSource                 String?
+  utmMedium                 String?
+  utmCampaign               String?
+  utmTerm                   String?
+  utmContent                String?
+  referrer                  String?              @db.Text
+  handledAt                 DateTime?
+  handledById               String?
+  note                      String?              @db.Text
+  createdAt                 DateTime             @default(now())
   // What this enquiry BECAME (#1863). An admin converts a warm lead into a real
   // Company plus an invited COMPANY login in one action; these two columns are
   // the record of that. Their presence is also the idempotence key: the convert
@@ -1592,8 +1633,14 @@ model CompanyInquiry {
   //
   // The enquiry itself is never deleted — it is the record of where the
   // relationship came from — so this is a link, not a replacement.
-  convertedCompanyId String?
-  convertedAt        DateTime?
+  //
+  // In a MARKETING org the conversion is a funnel record instead (#2569,
+  // src/lib/inquiryLead.ts), written by the marketing import in its own
+  // transaction, so the claim is taken BEFORE it: `convertedAt` set while
+  // `convertedCompanyId` is still null means "being converted right now" (a
+  // claim older than ten minutes is a crashed attempt and may be retaken).
+  convertedCompanyId        String?
+  convertedAt               DateTime?
 
   handledBy        User?    @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
   convertedCompany Company? @relation("ConvertedFromInquiry", fields: [convertedCompanyId], references: [id], onDelete: SetNull)

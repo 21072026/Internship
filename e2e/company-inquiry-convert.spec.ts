@@ -73,6 +73,11 @@ test('an admin converts an enquiry into a company plus an invited login', async 
     expect(company!.contactEmail).toBe(contactEmail);
     expect(company!.industry).toBe('Software');
     if (admin.orgId) expect(company!.orgId).toBe(admin.orgId);
+    // The success link opens the account it created, not the list (#2560).
+    await expect(page.getByTestId('convert-inquiry-open-company')).toHaveAttribute(
+      'href',
+      `/admin/companies/${company!.id}`,
+    );
 
     // The login is an INVITATION, not an account: no User row yet, and the
     // invitee will register themselves and choose their own password.

@@ -257,7 +257,10 @@ jobs:
           # FORWARD_ONLY=1 makes prod refuse to regress to an older commit
           #   (FORCE=1 for a deliberate rollback).
           # Secrets come from the server-side env file, never from the repo/workflow.
+          # MARKETING_PROBE_HOST: the host this env must serve as marketing (#2579);
+          #   named here, not read from the env file the check is validating.
           FORWARD_ONLY=1 \
+          MARKETING_PROBE_HOST=marketing.bcsit-gmbh.de \
           ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" \
           ./infra/deploy-prod.sh --no-pull --pull-image
 

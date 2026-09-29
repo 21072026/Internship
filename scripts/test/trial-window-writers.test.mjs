@@ -51,6 +51,8 @@ const EXEMPT = {
     'Reminder sweeps write only their own *SentAt claim stamps; `pipelineStatus` appears as a where filter and in a mail payload, never in a relation data block.',
   'src/lib/jobs/trialReminders.ts':
     'expireTrials() moves elapsed records OUT of TRIAL_ACTIVE into TRIAL_EXPIRED; the window it reads is the one that must stay. Its `pipelineStatus` key in the where is a filter.',
+  'src/app/api/mentorship/[id]/trial/route.ts':
+    'The hand-set trial end (#2553): it writes the date the person typed, and its only stage write returns a TRIAL_EXPIRED record to TRIAL_ACTIVE in the same data block as that date — the window is explicit, so there is nothing for trialWindowFor() to stamp. Its other `pipelineStatus` key is the conditional where.',
   'src/lib/dormantFirstContact.ts':
     'Writes only the dormancy stamps (dormantSince, nudge counters); `pipelineStatus` is read to find first-stage records, never written.',
 };

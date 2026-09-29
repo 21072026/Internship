@@ -47,8 +47,18 @@ export type TenantWhere = { orgId: string } | { OR: [{ orgId: string }, { orgId:
 export async function tenantWhere(session: Session | null | undefined): Promise<TenantWhere> {
   if (!session?.user) return {};
   const defaultId = await defaultOrgId();
-  const orgId = resolveOrgId(session) ?? defaultId;
-  if (orgId === defaultId) return { OR: [{ orgId }, { orgId: null }] };
+  return orgWhere(resolveOrgId(session) ?? defaultId);
+}
+
+/**
+ * A KNOWN org as a `where` fragment, by the same rule as `tenantWhere()`: the
+ * default org also matches `orgId IS NULL`, every other org only itself. For
+ * sessionless paths that have already decided the org (the public enquiry
+ * form, #2569) — decided by WHICH org it is, never by how it was found, so an
+ * explicit host mapping to the default org reads exactly like the fallback.
+ */
+export async function orgWhere(orgId: string): Promise<Exclude<TenantWhere, Record<string, never>>> {
+  if (orgId === (await defaultOrgId())) return { OR: [{ orgId }, { orgId: null }] };
   return { orgId };
 }
 

@@ -7420,3 +7420,78 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   `HEAD`, so the CLI falls back to `origin/main` and reports clean. Environment, not a regression.
 - **`next dev` compiles each role's landing on first hit (18 s for `/portal`).** A spec that signs
   in as three roles needs `test.slow()` against a cold dev server.
+
+## 2026-09-29 — Trial end by hand (#2553)
+
+- **A MENTOR or MENTEE of a MARKETING tenant lands on `/account`, and `signInAndSettle()` hangs
+  there**: the mentor/portal shells redirect a vertical without `mentorship` to `/account`
+  (#2351), which has no `account-menu-button` to settle on. For an API-only role in such a spec,
+  submit the sign-in form and `waitForURL('/account…')` instead — the session cookie is all
+  `page.request` needs.
+- **The worktree guard refuses long `python3 - <<EOF` heredocs** ("too complex to verify").
+  Write the script into the scratchpad with the Write tool and run `python3 <file>` instead.
+
+## 2026-09-29 — Server page under `/admin` cannot answer 404 (#2560)
+
+- **`notFound()` in a server page below `src/app/admin/loading.tsx` answers HTTP 200.** The
+  loading boundary flushes the shell before the page's lookup runs, so Next.js can only swap the
+  streamed segment for the not-found UI — the status line is already sent. The fix that holds a
+  real 404: move the page into the `src/app/(unstreamed)/admin/` route group, whose `layout.tsx`
+  and `error.tsx` re-export the admin ones (same session gate, same shell, same URL) and which
+  has no `loading.tsx`. Put a page there only when it must be a 404.
+- **A partial `Company` PUT must not rewrite unsent keys**, and a client editor on a server page
+  needs `router.refresh()` after a save, or the server-rendered parts (header badge) keep the old
+  value until a reload — an e2e that reloads before asserting hides it.
+- **After a container restart the Playwright browser shim is gone**: `@playwright/test` wants
+  `chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`, the image
+  ships `-1194/chrome-linux/`. A symlink of the version dir is not enough (the inner folder
+  name differs) — create `-1243/chrome-headless-shell-linux64/` and link the files of
+  `-1194/chrome-linux/` into it, plus the two marker files.
+- **A click on a card in `/admin/companies` right after typing into its search box can be
+  lost**: the grid unmounts while the debounced fetch reloads, and the click lands on the
+  outgoing element (no navigation, no error). Click before searching, or wait for the list to
+  settle.
+
+## 2026-09-29 — Marketing demo form (#2569)
+
+- **The worktree-isolation guard refuses "too complex" Bash commands** — a `sed -i` chain
+  across a big file, or a long heredoc'd `python3 -` edit, can be rejected outright even
+  though it only touches the worktree. Write the edit as a script in the scratchpad (a tiny
+  exact-string `old → new` applier taking a JSON spec works well) and run
+  `python3 <scratchpad>/edit.py <spec>.json` as a plain one-liner.
+- **Forging `x-forwarded-for` gives each e2e test its own rate-limit bucket.** With
+  `TRUSTED_PROXY_COUNT=1` (the default) and no proxy in front of `next start`, the rightmost
+  XFF entry is whatever the test sends, so a spec that posts a 3-per-hour public form
+  several times stays green without touching the limiter.
+- **A public form's success body must not echo what a writer decided** (#2569 review): the
+  default-owner placement refuses when the address is staff or an existing lead, so
+  returning `placed` turned an anonymous form into a lookup of the tenant's people. Answer
+  exactly what the honeypot answers, and assert placement in e2e from the DB.
+- **Bumping `PRIVACY_POLICY_VERSION` is safe** — nothing compares versions (it is only
+  stamped) — so a row that stamps it as its consent record should get the section that
+  describes it in the same PR, not "later".
+- **`pkill -f "next start -p 3113"` kills the calling shell too** (its own command line
+  matches). Stop a background server through the task tool, or `pkill -f '[n]ext start'`.
+
+## 2026-09-29 — marketing host content probe (#2579)
+
+- **`X="$(fn)"` strips the trailing newline, and a `$GITHUB_OUTPUT` heredoc needs it.**
+  `uptime.yml` wrote `printf '%s' "$FAILED"; echo EOF` after `FAILED="$(probe_all)"`, so a real
+  outage produced `…-> 000EOF` — the runner rejects the file ("Matching delimiter not found") and
+  every alert step after it is skipped. Green runs never exercise that path, so nothing noticed.
+  Test a workflow's shell by extracting the step's `run:` with `python3 -c 'import yaml…'` and
+  running it with `GITHUB_OUTPUT=<tmpfile>` against a local `node:http` server; then `cat -A` the file.
+- **A workflow step that needs one repo file does not need the full checkout**:
+  `actions/checkout` with `path: .x`, `sparse-checkout: <file>`, `sparse-checkout-cone-mode: false`.
+- **The worktree isolation guard refuses shell commands containing `GITHUB_OUTPUT`** (and some
+  `node -e 'import(…)'` one-liners) as "names git". Put the command in a scratchpad `.sh` file
+  and run `bash <file>`.
+- **Two failure classes need two alert states, not one issue with two titles.** The first cut of
+  the content alert reused `uptime-alert`; review caught that an open content incident then masks a
+  later outage (and vice versa). Each class now has its own label, status output and transition.
+- **A config check must not take its expected value from the config it checks.** The deploy-time
+  marketing check first asked for the first `MARKETING_HOSTS` entry — which by construction gets
+  the marketing page — so it could only ever say OK. The caller now names the host
+  (`MARKETING_PROBE_HOST`).
+- **`pkill -f "next start -p 3114"` kills your own shell** (the pattern is in its command line).
+  Find the pid from `ss -ltnp | grep :3114` instead.

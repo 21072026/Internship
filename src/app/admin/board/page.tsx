@@ -19,6 +19,7 @@ import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { isStageOverdue } from '@/lib/stageClock';
 import { FollowUpChip } from '@/components/FollowUpPanel';
+import { TrialEndChip } from '@/components/TrialEndPanel';
 import {
   DEFAULT_BOARD_WIP_LIMIT,
   isOverWipLimit,
@@ -37,6 +38,8 @@ interface Relation {
   stageClockPaused?: boolean;
   // The owner's follow-up date (#2563), shipped to the owner and ADMIN only.
   nextActionAt?: string | null;
+  // The trial end (#2553): a chip on a trial-stage card, or the "date missing" badge.
+  trialEndsAt?: string | null;
   mentee: { id: string; fullName: string; university?: string };
   mentor: { id: string; fullName: string };
   _count: { interactions: number };
@@ -267,6 +270,7 @@ export default function AdminBoardPage() {
           </span>
         </div>
         {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
+        <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
         {/* Keyboard/touch-accessible alternative to drag-and-drop. */}
         <CardStageSelect
           stages={stages}
