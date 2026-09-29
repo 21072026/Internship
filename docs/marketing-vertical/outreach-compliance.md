@@ -66,7 +66,7 @@ kanal `EMAIL` / `PHONE` / `POST`, dayanak `DOI_CONFIRMED` / `EXISTING_CUSTOMER_7
 | **Telefon** (`PHONE`) | B2B: en azından **mutmaßliche Einwilligung** — kanıtlanabilir, somut bir bağ | `DOI_CONFIRMED` (telefon için açıkça verilmiş rıza), `INQUIRY_REPLY` (muhatap geri aranmayı istedi) | Liste/rehber numarasıyla kampanya, "sektör genelde faydalanır" gerekçesi, otomatik arama | § 7 Abs. 2 Nr. 1 UWG; BVerwG 29.01.2025 – 6 C 3.23 |
 | **Posta / Briefwerbung** (`POST`) | UWG rıza istemez; DSGVO Art. 6 Abs. 1 lit. f + Art. 14 bilgisi + Art. 21 itiraz | `NONE` **yeterlidir**, bastırma listesinde değilse | Itiraz etmiş adrese göndermek, "Keine Werbung" levhalı posta kutusu, Art. 14 notu olmadan | § 7 Abs. 1 UWG; Art. 6(1)(f), 14, 21 DSGVO |
 | **Yüz yüze / fuar / etkinlik** | Serbest; orada alınan rıza **yazıya geçirilir** | Sonradan e-posta için: `DOI_CONFIRMED` (kartvizit ≠ rıza, DOI maili yine gerekir) | Kartvizitle bültene eklemek | Art. 7(1) DSGVO |
-| **Muhatabın kendi iletişim formu** | Kanalı karşı taraf açmış; serbest, ama formun amacına uygun | — (giden temas, CRM izni üretmez) | "Keine Werbung"/"nur Bewerbungen" diyen formlar | `copy-bank.md` §9.0 |
+| **Muhatabın web iletişim formu** | **E-postayla aynı rejim** ("elektronische Post"): formdan gönderilen reklam mesajı için `EMAIL` dayanağı gerekir. Tek dar istisna: formun **açıkça ve herkese açık olarak** tam bu tür teklifleri davet etmesi (ör. "Kooperationsanfragen / Anbieter bitte hier") — bu durumda davetin somut bağlantısı ve tarihi, telefon kuralındaki gibi kayda geçirilir | `EMAIL` ile aynı (`DOI_CONFIRMED`, `EXISTING_CUSTOMER_7_3`, `INQUIRY_REPLY`); istisna yalnız belgelenmiş davetle | Soğuk teklif; bir mağazanın **müşteri hizmetleri** formu hiçbir zaman yetmez; "Keine Werbung"/"nur Bewerbungen" diyen formlar | § 7 Abs. 2 Nr. 2 UWG (en dar yorum, açık soru 12); `copy-bank.md` §9.0 bu satırı daha geniş yazıyor — çelişki, §0 gereği ayrı issue |
 
 ### 2.1 E-posta — en sık hata
 
@@ -156,8 +156,8 @@ Deneme süresince SaleVali'nin gönderdiği onboarding mailleri → açık soru 
    (tartışmalı) içeriği kısa ve reklamsız tutulur.
 3. Onay tıklaması → `DOI_CONFIRMED`. Tıklanmayan talep **hiçbir şey** değildir; hatırlatma maili
    gönderilmez.
-4. Hız sınırı: alıcı başına en fazla **1 onay maili / gün** (#2577 § 3, `demo-form.md` § Rate
-   limit) + formun mevcut `company-inquiry` kovası (saatte IP başına 3,
+4. Hız sınırı: alıcı başına en fazla **1 onay maili / gün** (#2577 § 3; ilk kez #2569 § 9,
+   `demo-form.md` § Rate limit) + formun mevcut `company-inquiry` kovası (saatte IP başına 3,
    `src/app/api/company-inquiry/route.ts:60`). Aksi halde form, üçüncü kişilere onay maili
    bombardımanı aracına dönüşür.
 
@@ -192,18 +192,18 @@ ifadeler "für den bestimmten Fall" şartını boşa çıkarır → yasak.
 `CompanyInquiry.marketingOptInRequested` (`prisma/schema.prisma:1616`) bir **talep**tir, izin
 değildir: herkes herkesin adresi için tikleyebilir. `marketingOptInConfirmedAt` dolmadıkça hiçbir
 kod, dışa aktarım veya kişi bu değere dayanarak mail gönderemez (`demo-form.md`; şema yorumu
-`prisma/schema.prisma:1611-1624`; sunucu yazımı `src/app/api/company-inquiry/route.ts:110-130`).
+`prisma/schema.prisma:1611-1624`; sunucu yazımı `src/app/api/company-inquiry/route.ts:110-136`).
 #2577 geldiğinde bu satır `ContactPermission(channel=EMAIL, basis=NONE)` + bekleyen DOI talebi
 olarak taşınır; `DOI_CONFIRMED` yalnız onay tıklamasıyla oluşur.
 
 ## 4. SaleVali'nin newsletter bayrağı neden rıza değildir
 
 SaleVali kaydında (ayrı repo `BCS-IT-Gmbh/salevali-client`, `salevali-server`; 2026-09-29'daki
-yerel checkout'ta doğrulandı):
+yerel checkout'ta doğrulandı: `salevali-client` @ `a41534f`, `salevali-server` @ `62d0d86`):
 
-- **Form:** `salevali-client/src/app/pages/auth/Registration.jsx:45` — Formik
-  `initialValues` içinde `newsletter: true`. Kutu **önceden işaretli** gelir. (Issue metni :46
-  diyor; satır bugün :45.) Aynı nesnede `acceptTerms: true` da önceden işaretli (:44) — ayrı bir
+- **Form:** `salevali-client/src/app/pages/auth/Registration.jsx:46` — Formik
+  `initialValues` içinde `newsletter: true`. Kutu **önceden işaretli** gelir. Aynı nesnede
+  `acceptTerms: true` da önceden işaretli (:45) — ayrı bir
   sorun, bu dokümanın kapsamı dışında ama not edildi.
 - **Google ile kayıt:** `salevali-server/src/controllers/users/user.controller.ts:1741` —
   gövdede `newsletter` yoksa varsayılan `true`; değer `performGoogleRegister` (:1781 → :1942)
@@ -255,9 +255,9 @@ Her giden **reklam** iletisinde (e-posta, DM, mektup):
 | --- | --- | --- |
 | Gönderenin kimliği gizlenmez; gerçek şirket adı | § 7 Abs. 2 Nr. 3 UWG (a.F. Nr. 4) — rıza olsa bile ihlal | "BCS-IT GmbH · SaleVali", kişi adıyla |
 | İtiraz için **geçerli bir adres** (masrafsız, temel tarife dışı ücret yok) | § 7 Abs. 2 Nr. 3, Abs. 3 Nr. 4 UWG | Okunan bir Reply-To; `noreply@` tek başına **yetmez** (`copy-bank.md` §9.0) |
-| Ticari iletişimin tanınabilirliği, göndericinin açıkça belirlenmesi | § 6 Abs. 1 DDG (eski § 6 TMG) | Konu satırı reklam niteliğini gizlemez |
+| Ticari iletişimin tanınabilirliği, göndericinin açıkça belirlenmesi | § 6 Abs. 1 und 2 DDG (eski § 6 TMG) | Konu satırı reklam niteliğini gizlemez |
 | Impressum | § 5 DDG — kolay fark edilir, doğrudan ulaşılabilir, sürekli erişilebilir; ticari sosyal medya profilleri dahil | Her mailin altbilgisinde Impressum **bağlantısı**; LinkedIn şirket sayfasında Impressum bağlantısı |
-| Her mailde opt-out bağlantısı + tek tıkla abonelikten çıkış | Art. 7 Abs. 3, Art. 21 Abs. 3 DSGVO; § 7 Abs. 3 Nr. 4 UWG | `List-Unsubscribe` + `List-Unsubscribe-Post` (RFC 8058), bu repoda `src/services/emailService.ts:389-390` |
+| Her mailde opt-out bağlantısı + tek tıkla abonelikten çıkış | Art. 7 Abs. 3, Art. 21 Abs. 2-4 DSGVO; § 7 Abs. 3 Nr. 4 UWG | `List-Unsubscribe` + `List-Unsubscribe-Post` (RFC 8058), bu repoda `src/services/emailService.ts:389-390` |
 | Posta: Art. 14 bilgi notu | Art. 14 DSGVO | Mektup arkası, `copy-bank.md` §9.2 şablonu BCS-IT'ye uyarlanır |
 
 **Impressum'da kim yazar?** InternCRM'in `/imprint` sayfası (`src/app/imprint/page.tsx`) kimliği
@@ -296,13 +296,17 @@ yeniden verilmez, yalnız adres sahibinin yeni bir DOI tıklaması kaydı açar.
 
 ## 8. CRM'in uyguladığı ve uygulamadığı
 
-| Kural | CRM uygular mı? | Nasıl / neden değil |
+> **Durum:** #2577 henüz birleşmedi; `origin/main`'de `ContactPermission` modeli, DOI maili ve
+> uyarı yok. Aşağıdaki "Hedef" hücreleri #2577 sonrası içindir — **bugün her satırın değeri
+> "Hayır"dır** ve satış ekibinin tek kontrolü bu dokümandır.
+
+| Kural | CRM uygular mı? (#2577 sonrası hedef) | Nasıl / neden değil |
 | --- | --- | --- |
-| Makine yolları yalnız `NONE` yazar | **Evet** (#2577) | Birim testi |
-| DOI tıklaması → `DOI_CONFIRMED`; opt-out geri alır | **Evet** (#2577) | e2e |
-| Alıcı başına günde 1 onay maili | **Evet** (#2577) | e2e |
-| `EXISTING_CUSTOMER_7_3` yalnız ücretli müşteride, elle, gerekçeyle | **Kısmen** — elle ve gerekçe zorunlu; "ücretli mi" kontrolü aşamaya (`CUSTOMER_ACTIVE_700`) bakabilir ama koşul 1'i (adres satış sırasında mı alındı) **doğrulayamaz** | İnsan kararı |
-| İzni olmayan hesapta e-posta aksiyonu uyarı gösterir | **Evet — uyarı, engel değil** (#2577 § 4) | CRM, bir insanın elle attığı maili durduramaz (dış posta istemcisi) |
+| Makine yolları yalnız `NONE` yazar | **Hedef** (#2577, henüz yok) | Birim testi |
+| DOI tıklaması → `DOI_CONFIRMED`; opt-out geri alır | **Hedef** (#2577, henüz yok) | e2e |
+| Alıcı başına günde 1 onay maili | **Hedef** (#2577, henüz yok) | e2e |
+| `EXISTING_CUSTOMER_7_3` yalnız ücretli müşteride, elle, gerekçeyle | **Hedef: kısmen** (#2577, henüz yok) — elle ve gerekçe zorunlu; "ücretli mi" kontrolü aşamaya (`CUSTOMER_ACTIVE_700`) bakabilir ama koşul 1'i (adres satış sırasında mı alındı) **doğrulayamaz** | İnsan kararı |
+| İzni olmayan hesapta e-posta aksiyonu uyarı gösterir | **Hedef: uyarı, engel değil** (#2577 § 4, henüz yok) | CRM, bir insanın elle attığı maili durduramaz (dış posta istemcisi) |
 | LinkedIn/XING DM yasağı | **Hayır** | CRM DM göndermez; kural satış ekibinin disiplinidir |
 | Telefon araması için somut bağ | **Hayır** — yalnız `PHONE` izin satırını ve gerekçesini gösterir | Aramanın kendisi CRM dışında |
 | Posta: Art. 14 notu, "Keine Werbung" levhası | **Hayır** | Süreç |
@@ -366,5 +370,9 @@ Bu repoda:
    değişikliği, ayrı issue) mi, yoksa SaleVali'nin kendi Impressum URL'sine bağlantı mı?
 10. **Saklama süreleri:** izin kanıtı ve kampanya kayıtları için süre (öneri: izin bitiminden
     sonra 3 yıl, § 195 BGB Regelverjährung paraleli) avukatla belirlenmeli.
-11. **`acceptTerms: true`** (`Registration.jsx:44`) — önceden işaretli AGB/gizlilik kutusu;
+11. **`acceptTerms: true`** (`Registration.jsx:45`) — önceden işaretli AGB/gizlilik kutusu;
     #2565'e eklenmeli mi?
+12. **Başkasının web iletişim formu üzerinden reklam** (§2): doküman bunu elektronische Post
+    sayıyor ve yalnız açık, herkese açık bir teklif davetini (belgelenmiş bağlantıyla) istisna
+    tutuyor. Bu dar yorum teyit edilmeli. `copy-bank.md` §9.0 aynı satırı "serbest" diye yazıyor
+    (dayanak "—"); §0 gereği bunun için ayrı bir issue açılmalı ve copy-bank oradan düzeltilmeli.
