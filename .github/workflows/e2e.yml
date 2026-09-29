@@ -17,6 +17,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'releases/unreleased/**'
+      - '**.md'
+      - '.HANDOFF-*'
 
 # Cancel superseded runs on the same ref so the gate stays fast.
 concurrency:
