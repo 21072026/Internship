@@ -632,3 +632,223 @@ test('an owner_email nobody in the organization has keeps the account and warns'
   assert.equal(store.accounts.length, 1);
   assert.equal(store.relations.length, 0);
 });
+
+// ── The funnel record's data blocks and the trial window (#2551) ─────────────
+//
+// The import never calls emitStageChange() (stand-in leads must not be
+// notified), so the data block it writes is the ONLY place a record created in
+// TRIAL_ACTIVE can get its trial dates. The store spreads these builders
+// verbatim into its create/update.
+
+const { funnelRelationCreateData, funnelRelationUpdateData } = await import('../../src/lib/marketingImport.ts');
+const TRIAL_NOW = new Date('2026-05-04T09:00:00.000Z');
+const TRIAL_DAY = 24 * 60 * 60 * 1000;
+
+test('a record the import creates in TRIAL_ACTIVE gets a trial window', () => {
+  const data = funnelRelationCreateData({ ownerId: OWNER.id, toStage: 'TRIAL_ACTIVE' }, 'lead-1', {
+    orgId: ORG,
+    companyId: 'co-1',
+    now: TRIAL_NOW,
+    trialLengthDays: 30,
+  });
+  assert.equal(data.pipelineStatus, 'TRIAL_ACTIVE');
+  assert.equal(data.mentorId, OWNER.id);
+  assert.equal(data.menteeId, 'lead-1');
+  assert.equal(data.companyId, 'co-1');
+  assert.equal(data.orgId, ORG);
+  assert.equal(data.trialStartedAt.toISOString(), TRIAL_NOW.toISOString());
+  assert.equal(data.trialEndsAt.getTime() - TRIAL_NOW.getTime(), 30 * TRIAL_DAY);
+});
+
+test('a record the import creates at any other stage carries no trial dates', () => {
+  const data = funnelRelationCreateData({ ownerId: OWNER.id, toStage: 'LEAD_QUALIFIED' }, 'lead-1', {
+    orgId: ORG,
+    companyId: 'co-1',
+    now: TRIAL_NOW,
+    trialLengthDays: 30,
+  });
+  assert.equal('trialStartedAt' in data, false);
+  assert.equal('trialEndsAt' in data, false);
+});
+
+test('an import that MOVES an existing record into TRIAL_ACTIVE stamps it; the org length is used', () => {
+  const data = funnelRelationUpdateData(
+    { toStage: 'TRIAL_ACTIVE' },
+    { pipelineStatus: 'LEAD_QUALIFIED', trialStartedAt: null, trialEndsAt: null },
+    { companyId: 'co-1', now: TRIAL_NOW, trialLengthDays: 14 },
+  );
+  assert.equal(data.pipelineStatus, 'TRIAL_ACTIVE');
+  assert.equal(data.companyId, 'co-1');
+  assert.equal(data.trialEndsAt.getTime() - TRIAL_NOW.getTime(), 14 * TRIAL_DAY);
+});
+
+test('an import never overwrites a window, and re-applying the same stage is not an entry', () => {
+  const existing = { trialStartedAt: new Date('2026-04-01T00:00:00Z'), trialEndsAt: new Date('2026-05-01T00:00:00Z') };
+  // Back into TRIAL_ACTIVE from TRIAL_EXPIRED: the first window stands.
+  const back = funnelRelationUpdateData(
+    { toStage: 'TRIAL_ACTIVE' },
+    { pipelineStatus: 'TRIAL_EXPIRED', ...existing },
+    { companyId: 'co-1', now: TRIAL_NOW, trialLengthDays: 30 },
+  );
+  assert.equal('trialEndsAt' in back, false);
+  // A re-run of the same file against a legacy TRIAL_ACTIVE record with no
+  // window: the file did not move it, so today is not its trial start.
+  const rerun = funnelRelationUpdateData(
+    { toStage: 'TRIAL_ACTIVE' },
+    { pipelineStatus: 'TRIAL_ACTIVE', trialStartedAt: null, trialEndsAt: null },
+    { companyId: 'co-1', now: TRIAL_NOW, trialLengthDays: 30 },
+  );
+  assert.equal('trialEndsAt' in rerun, false);
+});
+
+// ── One lead typed in by hand (#2562) ────────────────────────────────────────
+//
+// The "new lead / account" form is a file of ONE row run through this very
+// engine in create-only mode: the row is built by `manualAccountTable`, planned
+// by `diffMarketingAccounts`, and written by `createOnlyWriter` — which creates
+// through the real writer and never updates. These pin the answers the route
+// turns into responses: created, "already exists", "contact is already a lead".
+
+const { manualAccountTable, createOnlyPlan, createOnlyWriter, CONTACT_IN_FUNNEL } = await import(
+  '../../src/lib/marketingImport.ts'
+);
+
+async function runManual(fields, store) {
+  const writer = createOnlyWriter(memoryWriter(store));
+  return runImport({
+    parse: () => manualAccountTable(fields),
+    validate: makeMarketingValidator({ stageKeys: STAGES }),
+    resolve: async (rows) =>
+      diffMarketingAccounts(rows, snapshotOf(store), {
+        defaultOwnerId: OWNER.id,
+        defaultOwnerEmail: OWNER.email,
+        ownerIdByEmail: new Map(),
+        orgKey: ORG,
+        authoritative: false,
+      }),
+    apply: (chunk) => applyPlannedAccounts(createOnlyPlan(chunk), writer),
+  });
+}
+
+const blankAccount = { vatId: null, country: null, industry: null, contactName: null, contactEmail: null, contactPhone: null };
+
+test('manual: the form row goes through the import validator (VAT normalized, bad country refused)', () => {
+  const table = manualAccountTable({ name: ' Acme ', vatId: 'de 123.456.789', stage: 'LEAD_NEW', contactEmail: 'Ada@Acme.example' });
+  assert.deepEqual(table.header, ['name', 'vat_id', 'stage', 'contact_email']);
+  const validate = makeMarketingValidator({ stageKeys: STAGES });
+  const ok = validate(table.rows[0], table.header);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.value.name, 'Acme');
+  assert.equal(ok.value.vatId, 'DE123456789');
+  assert.equal(ok.value.contactEmail, 'ada@acme.example');
+  const bad = manualAccountTable({ name: 'Acme', country: 'Germany' });
+  assert.equal(validate(bad.rows[0], bad.header).ok, false);
+});
+
+test('manual: a new account creates the account, a stand-in lead and one funnel record', async () => {
+  const store = memoryStore();
+  const report = await runManual(
+    { name: 'Acme GmbH', country: 'DE', stage: 'LEAD_NEW', contactName: 'Ada', contactEmail: 'ada@acme.example' },
+    store,
+  );
+  assert.equal(report.rows[0].status, 'CREATE');
+  assert.equal(store.accounts.length, 1);
+  assert.equal(store.accounts[0].contactEmail, 'ada@acme.example');
+  assert.equal(store.leads[0].email, standIn('ada@acme.example'));
+  assert.equal(store.relations.length, 1);
+  assert.equal(store.relations[0].pipelineStatus, 'LEAD_NEW');
+  assert.equal(store.relations[0].mentorId, OWNER.id);
+});
+
+test('manual: the same VAT a second time writes nothing and names the existing account', async () => {
+  const store = memoryStore({ accounts: [{ ...blankAccount, id: 'co-acme', name: 'Acme GmbH', vatId: 'DE123456789', country: 'DE' }] });
+  const report = await runManual(
+    { name: 'ACME Handels GmbH', vatId: 'DE 123 456 789', stage: 'LEAD_NEW', contactEmail: 'bob@acme.example' },
+    store,
+  );
+  // An UPDATE in the import; in create-only it is the "already exists" answer.
+  assert.equal(report.rows[0].status, 'UPDATE');
+  assert.equal(report.rows[0].targetId, 'co-acme');
+  assert.equal(store.accounts.length, 1);
+  assert.equal(store.accounts[0].name, 'Acme GmbH', 'the existing account was not renamed');
+  assert.equal(store.leads.length, 0);
+  assert.equal(store.relations.length, 0);
+});
+
+test('manual: name + country matches when there is no VAT', async () => {
+  const store = memoryStore({ accounts: [{ ...blankAccount, id: 'co-n', name: 'Nordlicht Handel', country: 'DE' }] });
+  const report = await runManual({ name: 'nordlicht handel', country: 'de', stage: 'LEAD_NEW', contactEmail: 'x@n.example' }, store);
+  assert.ok(['UPDATE', 'UNCHANGED'].includes(report.rows[0].status));
+  assert.equal(report.rows[0].targetId, 'co-n');
+  assert.equal(store.accounts.length, 1);
+});
+
+test('manual: a contact already on the funnel is not re-pointed at a new account', async () => {
+  const store = memoryStore({
+    accounts: [{ ...blankAccount, id: 'co-old', name: 'Old Co', country: 'DE' }],
+    leads: [{ id: 'lead-1', email: standIn('ada@acme.example'), fullName: 'Ada', phone: null, city: null, country: null, preferredLanguage: null, referralSource: null, companyId: 'co-old' }],
+    relations: [{ id: 'rel-1', mentorId: OWNER.id, menteeId: 'lead-1', companyId: 'co-old', pipelineStatus: 'LEAD_CONTACTED', status: 'ACTIVE' }],
+  });
+  const report = await runManual({ name: 'Brand New AG', country: 'AT', stage: 'LEAD_NEW', contactEmail: 'ada@acme.example' }, store);
+  assert.equal(report.rows[0].status, 'SKIP');
+  assert.equal(report.rows[0].reason, CONTACT_IN_FUNNEL);
+  assert.equal(store.accounts.length, 1);
+  assert.equal(store.relations[0].companyId, 'co-old');
+  assert.equal(store.relations[0].pipelineStatus, 'LEAD_CONTACTED');
+});
+
+// ── Staff is never a lead (#2562 review) ─────────────────────────────────────
+//
+// The lead lookup matches a contact address against the org's Users. Before the
+// fix it matched EVERY role, so an admin typing their own address as the
+// contact was "the lead": their profile was filled in, their companyId moved to
+// the new account and a relation with mentorId === menteeId was created. The
+// store now selects MENTEE only and the diff drops any other role it is handed;
+// the form additionally refuses such an address up front (CONTACT_IS_USER).
+
+const { isLeadRole, CONTACT_IS_USER } = await import('../../src/lib/marketingImport.ts');
+
+const ownerAsUser = {
+  id: OWNER.id,
+  email: OWNER.email,
+  fullName: 'Owner',
+  phone: null,
+  city: null,
+  country: null,
+  preferredLanguage: null,
+  referralSource: null,
+  companyId: null,
+  role: 'ADMIN',
+};
+
+test('only a MENTEE may stand in as a lead', () => {
+  assert.equal(isLeadRole('MENTEE'), true);
+  assert.equal(isLeadRole(undefined), true, 'a snapshot without the field still reads');
+  for (const role of ['ADMIN', 'MENTOR', 'COMPANY', null]) assert.equal(isLeadRole(role), false, String(role));
+  assert.equal(CONTACT_IS_USER, 'contact_is_user');
+});
+
+test('manual: the owner typing their own address as the contact never becomes the lead', async () => {
+  const store = memoryStore({ leads: [ownerAsUser] });
+  const report = await runManual(
+    { name: 'Self Typed GmbH', country: 'DE', stage: 'LEAD_NEW', contactName: 'Me', contactEmail: OWNER.email },
+    store,
+  );
+  assert.equal(report.rows[0].status, 'CREATE');
+  assert.equal(report.rows[0].value.funnel.leadId, null, 'the staff user was not matched as the lead');
+  const owner = store.leads.find((l) => l.id === OWNER.id);
+  assert.deepEqual(owner, ownerAsUser, 'the staff user was not touched');
+  assert.equal(store.relations.length, 1);
+  assert.notEqual(store.relations[0].menteeId, OWNER.id, 'no relation with mentorId === menteeId');
+  assert.equal(store.leads.find((l) => l.id === store.relations[0].menteeId).email, standIn(OWNER.email));
+});
+
+test('import: a staff address in the file gets a stand-in lead, never the staff user', async () => {
+  const colleague = { ...ownerAsUser, id: 'mentor-2', email: 'colleague@example.com', role: 'MENTOR' };
+  const store = memoryStore({ leads: [colleague] });
+  const text = `${HEADER}\nColleague Co,,DE,,,,,,LEAD_NEW,,,,,,Col,colleague@example.com,+49 30 1`;
+  const report = await runFile(text, store, { apply: true });
+  assert.equal(report.rows[0].status, 'CREATE');
+  assert.deepEqual(store.leads.find((l) => l.id === 'mentor-2'), colleague);
+  assert.notEqual(store.relations[0].menteeId, 'mentor-2');
+});

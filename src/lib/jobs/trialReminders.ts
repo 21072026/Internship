@@ -9,6 +9,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { stageDeadlineUpdate } from '@/lib/stageSla';
 import { verticalFor } from '@/lib/verticalContext';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import type { VerticalKey } from '@/lib/verticals';
 import { TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 import { findDueTrialReminders, type DueTrialReminderRow } from '@/lib/trialReminders';
@@ -267,11 +268,16 @@ async function dispatchReminder(row: DueTrialReminderRow): Promise<DispatchResul
   let delivered = 0;
   let attempted = 0;
   let failures = 0;
+  // The recipients share the relation's org, so one lookup shapes every link
+  // (a MARKETING rep's record is /sales/leads/<id>, #2580).
+  const capabilities = await shellCapabilities(orgId);
   for (const user of recipients) {
-    const link = notificationLink(user.role as NotificationRole, 'relation', {
-      relationId: relation.id,
-      menteeId: relation.menteeId,
-    });
+    const link = notificationLink(
+      user.role as NotificationRole,
+      'relation',
+      { relationId: relation.id, menteeId: relation.menteeId },
+      { capabilities },
+    );
     // The bell and the mail are gated SEPARATELY, on the same 'deadlines'
     // category: `notificationCategoryAllowed` is the in-app switch,
     // `emailAllowed` the e-mail one, and `emailGroupAllowedForCategory` the
@@ -426,7 +432,10 @@ export async function expireTrials(orgId: string, now: Date): Promise<number> {
   const moved: string[] = [];
   for (const relation of due) {
     const claim = await prisma.mentorshipRelation.updateMany({
-      where: { id: relation.id, pipelineStatus: activeKey },
+      // `trialEndsAt` is re-checked too: a hand extension (#2553) that commits
+      // between the findMany above and this write moved the end into the
+      // future, and must not be expired on the strength of the old date.
+      where: { id: relation.id, pipelineStatus: activeKey, trialEndsAt: { lt: startOfToday } },
       data: { pipelineStatus: expiredKey, ...(deadline ?? {}) },
     });
     if (claim.count === 0) continue;

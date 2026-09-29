@@ -1,17 +1,26 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Send, Check } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
+import { utmFromSearch } from '@/lib/inquiryAttribution';
 
 // Demo/contact form for companies (#1104). Anti-spam is server-side (honeypot +
 // minimum render-to-submit time + rate limit); here we only capture the honeypot
 // and the render time. No external captcha — the CSP blocks third-party scripts.
-export function CompanyInquiryForm() {
+//
+// Two variants of ONE form (#2569). `internship` is the /for-companies enquiry
+// (open roles). `marketing` is the demo form on the MARKETING landing: no open
+// roles, "marketplaces you sell on" instead, a SEPARATE product-news box that
+// starts unchecked, and the campaign parameters + referrer the visitor arrived
+// with. Which tenant receives it is decided by the server from the host, never
+// by anything this component sends.
+export function CompanyInquiryForm({ variant = 'internship' }: { variant?: 'internship' | 'marketing' } = {}) {
+  const isMarketing = variant === 'marketing';
   const t = useT();
   const locale = useLocale();
   const c = t.forCompanies;
@@ -21,6 +30,16 @@ export function CompanyInquiryForm() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [openRoles, setOpenRoles] = useState('');
+  const [marketplaces, setMarketplaces] = useState('');
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  // Read once, after mount: the landing URL's utm_* parameters and the page the
+  // visitor came from. The server keeps only what it can defend storing
+  // (src/lib/inquiryAttribution.ts drops the referrer's query string).
+  const attribution = useRef<{ utm: Record<string, string>; referrer: string }>({ utm: {}, referrer: '' });
+  useEffect(() => {
+    if (!isMarketing) return;
+    attribution.current = { utm: utmFromSearch(window.location.search), referrer: document.referrer || '' };
+  }, [isMarketing]);
   const [message, setMessage] = useState('');
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState(''); // honeypot
@@ -44,7 +63,14 @@ export function CompanyInquiryForm() {
           contactName,
           email,
           phone: phone || undefined,
-          openRoles: openRoles || undefined,
+          ...(isMarketing
+            ? {
+                marketplaces: marketplaces || undefined,
+                marketingOptIn,
+                utm: attribution.current.utm,
+                referrer: attribution.current.referrer || undefined,
+              }
+            : { openRoles: openRoles || undefined }),
           message: message || undefined,
           consent,
           locale,
@@ -58,7 +84,9 @@ export function CompanyInquiryForm() {
       }
       // Never fail silently (#679): 429 gets its own wording, everything else
       // says plainly that it was our side.
-      setError(res.status === 429 ? c.errorRate : c.errorGeneric);
+      // 503 = no tenant takes requests on this host (#2569): say so, and do not
+      // invite a retry that cannot succeed.
+      setError(res.status === 429 ? c.errorRate : res.status === 503 ? c.errorUnavailable : c.errorGeneric);
       setStatus('idle');
     } catch {
       setError(c.errorGeneric);
@@ -82,7 +110,7 @@ export function CompanyInquiryForm() {
   }
 
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 space-y-4">
+    <form onSubmit={submit} data-testid="company-inquiry-form" className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 space-y-4">
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
       )}
@@ -92,7 +120,18 @@ export function CompanyInquiryForm() {
         <Input label={c.fieldEmail} type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <Input label={c.fieldPhone} value={phone} onChange={(e) => setPhone(e.target.value)} />
       </div>
-      <Input label={c.fieldRoles} value={openRoles} onChange={(e) => setOpenRoles(e.target.value)} />
+      {isMarketing ? (
+        <Input
+          label={c.fieldMarketplaces}
+          hint={c.fieldMarketplacesHint}
+          maxLength={300}
+          value={marketplaces}
+          onChange={(e) => setMarketplaces(e.target.value)}
+          data-testid="inquiry-marketplaces"
+        />
+      ) : (
+        <Input label={c.fieldRoles} value={openRoles} onChange={(e) => setOpenRoles(e.target.value)} />
+      )}
       <div>
         <label htmlFor="inquiry-message" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
           {c.fieldMessage}
@@ -120,12 +159,27 @@ export function CompanyInquiryForm() {
       />
 
       <label className="flex items-start gap-2 text-xs text-gray-600">
-        <input type="checkbox" className="mt-0.5" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+        <input type="checkbox" className="mt-0.5" checked={consent} onChange={(e) => setConsent(e.target.checked)} data-testid="inquiry-consent" />
         <span>
           {c.consent}{' '}
           <Link href="/privacy" className="text-blue-600 hover:underline">{c.consentLink}</Link>
         </span>
       </label>
+
+      {/* Product news: a separate box, never pre-ticked, never required — the
+          form submits the same whether or not it is ticked. */}
+      {isMarketing && (
+        <label className="flex items-start gap-2 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={marketingOptIn}
+            onChange={(e) => setMarketingOptIn(e.target.checked)}
+            data-testid="inquiry-marketing-optin"
+          />
+          <span>{c.marketingOptIn}</span>
+        </label>
+      )}
 
       <Button type="submit" size="lg" className="w-full" loading={status === 'sending'}>
         <Send className="h-4 w-4" /> {status === 'sending' ? c.sending : c.submit}

@@ -11,6 +11,7 @@ import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import {
@@ -127,6 +128,9 @@ export async function POST(request: Request) {
       // a mentee added here must land in a column the mentor can actually see.
       // Read, so it stays outside the transaction.
       const pipelineStatus = await resolveStartStage(orgId);
+      // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
+      // the create (#2551); for every other start stage this is `{}`, no query.
+      const trialWindow = await stageTrialWindow({ orgId, toStage: pipelineStatus, enteredAt: new Date() });
 
       // Account + mentorship in ONE transaction: a failure between the two used
       // to leave a mentee account with no relation, invisible to the mentor who
@@ -164,6 +168,7 @@ export async function POST(request: Request) {
               menteeId: created.id,
               orgId,
               pipelineStatus,
+              ...trialWindow,
             },
           });
           return created;

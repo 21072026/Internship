@@ -6,9 +6,13 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { emitStageChange } from '@/lib/stageChangeEffects';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
+import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
 import {
   findActiveMentorship,
   hasOtherActiveMentorship,
@@ -31,6 +35,11 @@ const updateRelationSchema = z.object({
   // central whitelist (src/lib/dropoffReasons.ts), never z.enum.
   reasonCode: z.string().max(40).optional(),
   reasonNote: z.string().max(2000).optional(),
+  // The owner's next step (#2563). Loose here on purpose — the shape rules
+  // (date-only, a real calendar day, note width) live in lib/nextActionRule.ts
+  // and are applied below, so this route and any later writer share them.
+  nextActionAt: z.string().nullable().optional(),
+  nextActionNote: z.string().nullable().optional(),
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -126,7 +135,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
       return NextResponse.json({
         relation: {
-          ...relation,
+          // The next-action note is the owner's prose about the mentee (#2563):
+          // the mentee reads this same route, so the three columns ship only to
+          // the owner and ADMIN.
+          ...stripNextActionFor(session.user, relation),
           statusChanges: relation.statusChanges.filter((change) =>
             isStageTransition(change.fromStatus, change.toStatus)
           ),
@@ -177,8 +189,42 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         );
       }
 
-      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, ...rest } = parsed.data;
+      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, ...rest } = parsed.data;
+
+      // Parsed before anything is written, like the drop-off reason below.
+      const parsedNextAt = nextActionAt !== undefined ? parseNextActionDate(nextActionAt) : null;
+      if (parsedNextAt && !parsedNextAt.ok) {
+        return NextResponse.json({ error: 'Invalid next action date', code: parsedNextAt.error }, { status: 400 });
+      }
+      const parsedNextNote = nextActionNote !== undefined ? parseNextActionNote(nextActionNote) : null;
+      if (parsedNextNote && !parsedNextNote.ok) {
+        return NextResponse.json({ error: 'Next action note is too long', code: parsedNextNote.error }, { status: 400 });
+      }
       const stageChanging = !!pipelineStatus && isStageTransition(relation.pipelineStatus, pipelineStatus);
+
+      // Re-pointing the relation at a company (#2580 review). `companyId` is a
+      // free string in the schema, and the org middleware only scopes the
+      // top-level `where` — so without this a caller could attach ANY company id,
+      // another tenant's included, and read its name back from the response.
+      if (rest.companyId !== undefined && rest.companyId !== relation.companyId) {
+        // Where the mentorship module is absent (a MARKETING sales rep is a
+        // MENTOR), the account a lead belongs to is an ADMIN decision: the
+        // rep's /sales/accounts is built from their relations' companies, so
+        // re-pointing would let them open any account in the tenant.
+        if (session.user.role !== 'ADMIN') {
+          const denied = await requireCapability(session.user.orgId, 'mentorship');
+          if (denied) return denied;
+        }
+        if (rest.companyId !== null) {
+          const company = await prisma.company.findFirst({
+            where: withinTenant({ id: rest.companyId }, await tenantWhere(session)),
+            select: { id: true },
+          });
+          if (!company) {
+            return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+          }
+        }
+      }
 
       // Validate the drop-off reason BEFORE writing anything — a rejected
       // reason must never leave the relation moved with no audit trail behind it.
@@ -207,7 +253,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = {
         ...rest,
-        ...(stageChanging ? { pipelineStatus } : {}),
+        ...(stageChanging
+          ? {
+              pipelineStatus,
+              // A move into TRIAL_ACTIVE stamps the trial window in the same
+              // write (#2551); a record that already has one keeps it.
+              ...(await stageTrialWindow({
+                orgId: relation.orgId,
+                toStage: pipelineStatus,
+                enteredAt: new Date(),
+                existing: relation,
+              })),
+            }
+          : {}),
       };
       // Stamp/clear the end of the relation — it anchors the post-mentorship
       // CV/document access window (#854).
@@ -219,6 +277,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         // A fresh deadline (or cleared) re-arms the overdue reminder.
         data.deadlineReminderSentAt = null;
       }
+      // Independent of the stage SLA (#2563): a stage change in this same
+      // request neither reads nor clears these, and moving the date re-arms
+      // its one reminder (nextActionPatch).
+      Object.assign(
+        data,
+        nextActionPatch(relation, {
+          nextActionAt: parsedNextAt?.ok ? parsedNextAt.value : undefined,
+          nextActionNote: parsedNextNote?.ok ? parsedNextNote.value : undefined,
+        })
+      );
 
       // A stage-only request that selects the current value is a successful
       // no-op. Avoid issuing an empty UPDATE while keeping existing clients'

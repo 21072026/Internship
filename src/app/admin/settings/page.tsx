@@ -9,6 +9,8 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
+import { useVertical } from '@/lib/verticalClient';
+import { DEFAULT_TRIAL_LENGTH_DAYS, MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 
 // The delivery log answers "did our mail actually go out, and when?", and a
 // newsletter or announcement send writes one EmailLog row per recipient — 50
@@ -63,6 +65,18 @@ export default function AdminSettingsPage() {
   const [broadcastQuota, setBroadcastQuota] = useState('');
   const [loadedBroadcastQuota, setLoadedBroadcastQuota] = useState('');
   const [broadcastQuotaError, setBroadcastQuotaError] = useState<string | null>(null);
+  // Trial length (#2551) — only meaningful where the funnel has a trial stage,
+  // i.e. the MARKETING vertical; shown there only. Same load/post dance as the
+  // quotas above: an untouched inherited value is never posted.
+  const hasTrialStage = useVertical() === 'MARKETING';
+  const [trialLengthDays, setTrialLengthDays] = useState(String(DEFAULT_TRIAL_LENGTH_DAYS));
+  const [loadedTrialLengthDays, setLoadedTrialLengthDays] = useState(String(DEFAULT_TRIAL_LENGTH_DAYS));
+  const [trialLengthError, setTrialLengthError] = useState<string | null>(null);
+  // Default owner of a new lead (#2580, #2569) — MARKETING only, like the trial
+  // length above. `''` = nobody: web requests wait in the unowned list.
+  const [defaultLeadOwnerId, setDefaultLeadOwnerId] = useState('');
+  const [loadedDefaultLeadOwnerId, setLoadedDefaultLeadOwnerId] = useState('');
+  const [leadOwners, setLeadOwners] = useState<{ id: string; fullName: string; role: string }[]>([]);
   // Set when the box holds something the API's `\d{1,6}` would reject (empty is
   // the common one — clearing the box is how anybody retypes a number). Without
   // this the whole PUT 400s and every other change on the form is discarded.
@@ -170,13 +184,32 @@ export default function AdminSettingsPage() {
       const broadcast = settings.broadcastMonthlyRecipients ?? '';
       setBroadcastQuota(broadcast);
       setLoadedBroadcastQuota(broadcast);
+      const trialDays = settings.trialLengthDays ?? String(DEFAULT_TRIAL_LENGTH_DAYS);
+      setTrialLengthDays(trialDays);
+      setLoadedTrialLengthDays(trialDays);
+      setDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
+      setLoadedDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
     }
   }, []);
+  // The people a lead may belong to: this org's active admins and reps — the
+  // same set the API accepts (src/lib/leadOwner.ts). /api/users is
+  // tenant-scoped, so another org's staff never reach the list.
+  useEffect(() => {
+    if (!hasTrialStage) return;
+    const fetchRole = (role: string) =>
+      fetch(`/api/users?view=picker&status=active&role=${role}`)
+        .then((r) => (r.ok ? r.json() : { users: [] }))
+        .then((d) => (d.users ?? []) as { id: string; fullName: string; role: string }[])
+        .catch(() => []);
+    Promise.all([fetchRole('ADMIN'), fetchRole('MENTOR')]).then(([admins, mentors]) =>
+      setLeadOwners([...admins, ...mentors].sort((a, b) => a.fullName.localeCompare(b.fullName))),
+    );
+  }, [hasTrialStage]);
   useEffect(() => { load(); }, [load]);
 
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null); setBroadcastQuotaError(null);
+    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null); setBroadcastQuotaError(null); setTrialLengthError(null);
     // The API validates the quota with /^\d{1,6}$/ and rejects the WHOLE
     // payload on a miss, so an unusable number is caught here and reported on
     // the field instead — the rest of the form still saves.
@@ -203,16 +236,23 @@ export default function AdminSettingsPage() {
       setBroadcastQuotaError(t.settings.broadcastQuotaInvalid);
       return;
     }
+    const trialDays = trialLengthDays.trim();
+    const trialChanged = hasTrialStage && trialDays !== loadedTrialLengthDays;
+    if (trialChanged && !(/^\d{1,3}$/.test(trialDays) && Number(trialDays) >= 1 && Number(trialDays) <= MAX_TRIAL_LENGTH_DAYS)) {
+      setTrialLengthError(t.settings.trialLengthDaysInvalid);
+      return;
+    }
+    const ownerChanged = hasTrialStage && defaultLeadOwnerId !== loadedDefaultLeadOwnerId;
     setSavingSettings(true);
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
       // change on the form was dropped.
-      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); }
+      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); }
       else setSaveError(t.settings.saveFailed);
     } catch {
       setSaveError(t.settings.saveFailed);
@@ -345,6 +385,33 @@ export default function AdminSettingsPage() {
                 same way, and the two must not be indistinguishable for a field
                 whose empty state has its own meaning. */}
             <Input label={t.settings.broadcastQuota} type="text" inputMode="numeric" value={broadcastQuota} onChange={(e) => { setBroadcastQuota(e.target.value); setBroadcastQuotaError(null); }} hint={t.settings.broadcastQuotaHint} error={broadcastQuotaError ?? undefined} data-testid="broadcast-monthly-recipients" />
+            {hasTrialStage && (
+              <Input label={t.settings.trialLengthDays} type="number" min={1} max={MAX_TRIAL_LENGTH_DAYS} step={1} value={trialLengthDays} onChange={(e) => { setTrialLengthDays(e.target.value); setTrialLengthError(null); }} hint={t.settings.trialLengthDaysHint} error={trialLengthError ?? undefined} data-testid="trial-length-days" />
+            )}
+            {hasTrialStage && (
+              <div>
+                <label htmlFor="default-lead-owner" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.defaultLeadOwner}</label>
+                <select
+                  id="default-lead-owner"
+                  value={defaultLeadOwnerId}
+                  onChange={(e) => setDefaultLeadOwnerId(e.target.value)}
+                  className="block w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3 py-2 text-sm"
+                  data-testid="default-lead-owner-select"
+                >
+                  <option value="">{t.settings.defaultLeadOwnerNone}</option>
+                  {/* A saved owner who is no longer in the list (left, deactivated)
+                      is still shown as selected-but-unknown rather than silently
+                      replaced; the server already reads it as "nobody". */}
+                  {defaultLeadOwnerId && !leadOwners.some((o) => o.id === defaultLeadOwnerId) && (
+                    <option value={defaultLeadOwnerId}>—</option>
+                  )}
+                  {leadOwners.map((o) => (
+                    <option key={o.id} value={o.id}>{o.fullName}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">{t.settings.defaultLeadOwnerHint}</p>
+              </div>
+            )}
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">

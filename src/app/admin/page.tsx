@@ -5,6 +5,7 @@ import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Users, Building2, BookOpen, Bell, AlertTriangle } from 'lucide-react';
@@ -18,16 +19,22 @@ import { clipSkillLabel } from '@/lib/skills';
 // reads do not pass through an API route's `withTenantScope` — without binding
 // the tenant context here, the central middleware sees no org and the dashboard
 // counts every tenant's mentees, mentors and mentorships (a cross-org leak once
-// MT_ENFORCE_ISOLATION is on). A no-op while the flag is off.
+// MT_ENFORCE_ISOLATION is on). A no-op while the flag is off — which is why
+// every query below ALSO carries the tenant filter by hand (#2542): this is the
+// first screen every admin opens, and with the flag off it listed the newest
+// mentees of every tenant (name, e-mail, university, skills) to a MARKETING
+// admin. `tenantWhere` is the same rule the scoped API routes use.
 async function getStats(session: Session | null) {
+  const tenant = await tenantWhere(session);
   return withTenantScope(session, async () => {
   const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount] =
     await Promise.all([
-      prisma.user.count({ where: { role: 'MENTEE' } }),
-      prisma.user.count({ where: { role: 'MENTOR' } }),
-      prisma.company.count(),
-      prisma.mentorshipRelation.count({ where: { status: 'ACTIVE' } }),
+      prisma.user.count({ where: withinTenant({ role: 'MENTEE' as const }, tenant) }),
+      prisma.user.count({ where: withinTenant({ role: 'MENTOR' as const }, tenant) }),
+      prisma.company.count({ where: withinTenant({}, tenant) }),
+      prisma.mentorshipRelation.count({ where: withinTenant({ status: 'ACTIVE' as const }, tenant) }),
       prisma.mentorshipRelation.findMany({
+        where: withinTenant({}, tenant),
         take: 5,
         orderBy: { startDate: 'desc' },
         include: {
@@ -37,7 +44,7 @@ async function getStats(session: Session | null) {
         },
       }),
       prisma.user.findMany({
-        where: { role: 'MENTEE' },
+        where: withinTenant({ role: 'MENTEE' as const }, tenant),
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -52,13 +59,14 @@ async function getStats(session: Session | null) {
       }),
       prisma.mentorshipRelation.groupBy({
         by: ['pipelineStatus'],
+        where: withinTenant({}, tenant),
         _count: { _all: true },
       }),
       // Stage service levels (#817): the overdue count existed only inside the
       // analytics page, which is one click too far for the number that means
       // "somebody is waiting and nobody noticed".
       prisma.mentorshipRelation.count({
-        where: { status: 'ACTIVE', stageDeadline: { lt: new Date() } },
+        where: withinTenant({ status: 'ACTIVE' as const, stageDeadline: { lt: new Date() } }, tenant),
       }),
     ]);
 

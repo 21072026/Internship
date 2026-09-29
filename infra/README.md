@@ -144,6 +144,90 @@ curl -s https://marketing.bcsit-gmbh.dev/api/health | jq '{status,sha}'    # sam
 curl -sI https://marketing.ersah.in/ | head -2                             # 308 → marketing.bcsit-gmbh.de
 ```
 
+The first line is **no longer only a hand check** (#2579). `uptime.yml` reads
+`/` and `/imprint` on both marketing hosts every run with
+`scripts/marketing-content-probe.mjs` — the `<title>` must name `SaleVali` and
+must not say `Internship CRM`. A finding opens its **own** incident: a separate
+`uptime-content-alert` issue + mail (subject *"Marketing host yanlış ürünü
+gösteriyor"*), never the outage's `uptime-alert` one. The two must not share a
+state — a content problem can stay open for days waiting on an env-file edit,
+and an outage of interncrm.com during those days would otherwise find
+"already alerting" and stay silent (the gap #2169 closed). A content finding on
+a host whose `/api/health` is already down is left to the outage alert, so one
+dead marketing host still opens one incident. The same title check runs inside
+`deploy-prod.sh` right after the swap, on every replica, but there it only
+**warns** (`::warning::` in the deploy job): the fix is an env-file edit, not a
+rollback. The host it asks for is named by the caller (`MARKETING_PROBE_HOST`
+in `deploy-prod.yml` / `deploy-preview.yml`), **not** read from
+`MARKETING_HOSTS` — whatever that variable names gets the marketing page by
+construction, so a check that took its host from there could never catch it
+being wrong; it also warns when the expected host is missing from the
+effective `MARKETING_HOSTS` set. Run the probe by hand with
+`node scripts/marketing-content-probe.mjs https://marketing.bcsit-gmbh.de/ https://marketing.bcsit-gmbh.dev/imprint`
+— silent and exit 0 when right, one `<url> -> <reason>` line per wrong page and
+exit 1 otherwise.
+
+#### Go-live checklist for the MARKETING org (#2579 — operator, needs prod access)
+
+The code half of #2579 is the probe above; the rest can only be done on the live
+system, by someone signed in there. Each step is **read-only unless it says
+otherwise**, goes through the app (never an outside connection to the prod
+database — `docs/DATA_ACCESS_POLICY.md`), and its result is posted as a comment
+on the story, #2578. Nothing below has been run by the change that wrote it.
+
+1. **Is there a MARKETING org, and is it complete?** As a super admin, open
+   `/admin/organizations`. Note how many rows show vertical `MARKETING`, and for
+   each: name, `brandName`, plan and the owner account(s) (a role, not a
+   person's details — the comment goes on a public issue). Then open
+   `/admin/organizations/<id>/pipeline` for each and check the stage list holds
+   **both** `TRIAL_ACTIVE` ("Trial running") and `TRIAL_EXPIRED`.
+   Why it matters: `expireTrials()` (`src/lib/jobs/trialReminders.ts`) returns 0
+   for an org that lacks either one — silently, by design — so a MARKETING org
+   without them never expires a trial.
+2. **Fix what step 1 found** (writes):
+   - *No MARKETING org:* create it from `/admin/organizations` with vertical
+     `MARKETING`. The marketing preset, trial stages included, is seeded by the
+     create call itself (`provisionStagePreset()`,
+     `src/lib/pipelineStages.ts`; stages in `src/lib/programTemplates.ts`) — do
+     not add them by hand afterwards.
+   - *An org exists but a trial stage is missing:* add it in that org's stage
+     editor (`/admin/organizations/<id>/pipeline`) with the exact key
+     (`TRIAL_ACTIVE` / `TRIAL_EXPIRED`, non-terminal, **not** off-path) and put
+     the count of stages added in the #2578 comment.
+   - *More than one org is affected:* stop editing by hand and open a task for
+     an idempotent deploy backfill instead (plain `.mjs`, an ESM mirror of the
+     marketing funnel with a parity test, and an explicit `orgId` on every
+     create — a deploy step has no session to bind one).
+   - Then prove the job sees the org. **This is a write, not a read:**
+     `GET /api/cron?job=trial-reminders&orgId=<id>` runs the real job for that
+     org — it mails every trial reminder that is due and expires overdue trials
+     to `TRIAL_EXPIRED`, exactly like the 05:20 UTC tick. Run it before real
+     prospects are in the org, or right after the 05:20 run so nothing is due.
+     Copy the URL exactly: a mistyped `job=` value does not fail, it falls
+     through to the full cron mail batch. Signed in as an ADMIN of that org,
+     the JSON's `trialReminders.orgs` must be `1` — which proves **only** the
+     vertical gate (the org is counted in scope because its vertical is
+     `MARKETING`), not that the trial stages exist; stage presence is proven
+     by the stage-editor check in step 1. `trialReminders.expired` /
+     `considered` are the fields that show the stages actually in use. (The
+     05:20 cron logs a line only on a tick that did something, so a quiet day
+     shows nothing in the container log.)
+3. **Host → org mapping** — *blocked on #2569*, which defines it; nothing in
+   `main` maps a host to an org today (`src/lib/hostVertical.ts` maps a host to a
+   *vertical* only). Once it lands: confirm prod's marketing host maps to the
+   org from step 1 and preview's to its preview twin. With no mapping the public
+   form stays closed — that is the safe failure, but it is still a failure to
+   report.
+4. **The content probe is green.** In Actions → *Uptime*, the latest run's
+   *Probe* step ends with `reach up` and `content up`, and no open issue
+   carries the `uptime-alert` or `uptime-content-alert` label. If it is red
+   for content, the first suspect is `MARKETING_HOSTS` in the environment's
+   env file (above).
+5. **The retired name still redirects:**
+   `curl -sI https://marketing.ersah.in/ | head -2` shows `308` and
+   `location: https://marketing.bcsit-gmbh.de/`. Repeat for
+   `preview-marketing.ersah.in` → `marketing.bcsit-gmbh.dev`.
+
 ### Proxy hops and `TRUSTED_PROXY_COUNT` (#858)
 
 Every vhost sets `X-Forwarded-For $proxy_add_x_forwarded_for`, which **appends**

@@ -202,3 +202,122 @@ export const MATRIX: MatrixEntry[] = [
     ownership: () => true,
   },
 ];
+
+/**
+ * Cross-TENANT rows (#2542). Everything above is one organization, so `all`
+ * there means "the whole tenant" and says nothing about a second one. Since
+ * the MARKETING vertical became a real tenant on the same database, "which
+ * org" is a question every read has to answer — with MT_ENFORCE_ISOLATION off,
+ * which is every deployment today. The spec seeds a foreign MARKETING org
+ * (a mentee, an admin and a company) and probes each path below as every role:
+ *
+ * - `list`   — whatever the status, the body must not carry a foreign id (a
+ *              200 that leaks is the whole failure mode, see the ⚠️ above).
+ * - `detail` — never 200. A role allowed on the route gets 404, the same answer
+ *              as an id that does not exist; the others keep their 401/403.
+ *
+ * Adding a tenant-held list or detail route an ADMIN can reach? Add it here.
+ */
+export const FOREIGN_USER_ID_PARAM = ':foreignUserId';
+export const FOREIGN_COMPANY_ID_PARAM = ':foreignCompanyId';
+
+export interface CrossTenantEntry {
+  path: string;
+  kind: 'list' | 'detail';
+}
+
+export const CROSS_TENANT: CrossTenantEntry[] = [
+  { path: '/api/users', kind: 'list' },
+  { path: '/api/users?role=MENTEE', kind: 'list' },
+  { path: '/api/users?view=directory', kind: 'list' },
+  { path: '/api/users?page=1&perPage=100', kind: 'list' },
+  { path: '/api/candidates?all=1', kind: 'list' },
+  { path: '/api/companies?all=1', kind: 'list' },
+  { path: '/api/companies?all=1&sort=movement', kind: 'list' },
+  { path: `/api/users/${FOREIGN_USER_ID_PARAM}`, kind: 'detail' },
+  { path: `/api/users/${FOREIGN_USER_ID_PARAM}/activity`, kind: 'detail' },
+  { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}`, kind: 'detail' },
+  { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}/delete-impact`, kind: 'detail' },
+];
+
+/**
+ * The MARKETING sales rep (#2580): a MENTOR of a MARKETING org, on the sales
+ * surface. Everything above is an INTERNSHIP-shaped tenant; this block is the
+ * same statement for the rep, consumed by `e2e/marketing-sales-surface.spec.ts`
+ * and mirrored in `docs/role-access-matrix.md` § "MARKETING satış temsilcisi".
+ *
+ * Placeholders the spec substitutes from what it seeded:
+ * - `:ownRelationId` / `:ownCompanyId` / `:ownLeadId` — the rep's own record,
+ *   the account behind it and the lead (MENTEE) on it;
+ * - `:colleagueRelationId` / `:colleagueCompanyId` — a record and an account of
+ *   ANOTHER rep of the same org;
+ * - `:foreignRelationId` / `:foreignCompanyId` — a record and an account of a
+ *   second MARKETING org.
+ *
+ * Expectations:
+ * - `deny`      — 401/403 (the 401-for-a-wrong-role answer of older admin
+ *                 routes is kept; what matters is that no admin work happens);
+ * - `notFound`  — 404, the answer for an id that does not exist;
+ * - `forbidden` — 403 exactly;
+ * - `ok`        — 200.
+ */
+export type SalesExpectation = 'deny' | 'notFound' | 'forbidden' | 'ok';
+
+export interface SalesProbe {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  body?: Record<string, unknown>;
+  expect: SalesExpectation;
+  why: string;
+}
+
+/** Admin-only work: settings, users, invites, deletes, imports, organization. */
+export const MARKETING_MENTOR_ADMIN_ONLY: SalesProbe[] = [
+  { method: 'GET', path: '/api/admin/settings', expect: 'deny', why: 'tenant settings' },
+  { method: 'PUT', path: '/api/admin/settings', body: {}, expect: 'deny', why: 'tenant settings' },
+  { method: 'GET', path: '/api/admin/organizations', expect: 'deny', why: 'organization settings' },
+  { method: 'PATCH', path: '/api/admin/organizations', body: {}, expect: 'deny', why: 'organization settings' },
+  { method: 'GET', path: '/api/admin/invitations', expect: 'deny', why: 'invitation management' },
+  { method: 'POST', path: '/api/admin/invite/bulk', body: {}, expect: 'deny', why: 'bulk invite' },
+  // The mentor self-invite path is a mentorship-module write; MARKETING has
+  // none, so the capability gate answers before the role list (#2580).
+  { method: 'POST', path: '/api/invite', body: { role: 'MENTEE', email: '' }, expect: 'forbidden', why: 'invite (capability)' },
+  { method: 'POST', path: '/api/admin/import', body: {}, expect: 'deny', why: 'import' },
+  { method: 'POST', path: '/api/admin/marketing-accounts', body: {}, expect: 'deny', why: 'account import' },
+  { method: 'GET', path: '/api/admin/company-inquiries', expect: 'deny', why: 'demo request queue' },
+  { method: 'GET', path: '/api/admin/activity', expect: 'deny', why: 'activity log' },
+  { method: 'GET', path: '/api/admin/analytics', expect: 'deny', why: 'tenant analytics' },
+  { method: 'GET', path: '/api/users/:ownLeadId', expect: 'deny', why: 'user management (read)' },
+  { method: 'PATCH', path: '/api/users/:ownLeadId', body: {}, expect: 'deny', why: 'user management (write)' },
+  { method: 'POST', path: '/api/admin/users/:ownLeadId/reset-password', body: {}, expect: 'deny', why: 'user management' },
+  { method: 'POST', path: '/api/admin/users/:ownLeadId/erase', body: {}, expect: 'deny', why: 'erasure' },
+  { method: 'POST', path: '/api/companies', body: { name: 'x' }, expect: 'deny', why: 'create account' },
+  { method: 'PUT', path: '/api/companies/:ownCompanyId', body: {}, expect: 'deny', why: 'edit account' },
+  { method: 'DELETE', path: '/api/companies/:ownCompanyId', expect: 'deny', why: 'delete account' },
+  { method: 'POST', path: '/api/mentorship', body: {}, expect: 'deny', why: 'assign a record' },
+  { method: 'POST', path: '/api/mentorship/:ownRelationId/transfer', body: {}, expect: 'deny', why: 'reassign a record' },
+];
+
+/** The rep's own rows versus a colleague's and another org's. */
+export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
+  { method: 'GET', path: '/api/mentorship/:ownRelationId', expect: 'ok', why: 'own record' },
+  { method: 'GET', path: '/api/mentorship/:colleagueRelationId', expect: 'forbidden', why: "a colleague's record" },
+  { method: 'GET', path: '/api/mentorship/:foreignRelationId', expect: 'forbidden', why: "another org's record" },
+  { method: 'PUT', path: '/api/mentorship/:colleagueRelationId', body: { nextActionNote: 'x' }, expect: 'forbidden', why: "a colleague's record" },
+  { method: 'GET', path: '/api/companies/:ownCompanyId', expect: 'ok', why: 'own account' },
+  { method: 'GET', path: '/api/companies/:colleagueCompanyId', expect: 'notFound', why: "a colleague's account" },
+  { method: 'GET', path: '/api/companies/:foreignCompanyId', expect: 'notFound', why: "another org's account" },
+];
+
+/** The sales surface pages: own record 200, anything else a real 404. */
+export const MARKETING_MENTOR_PAGES: Array<{ path: string; expect: 200 | 404; why: string }> = [
+  { path: '/sales', expect: 200, why: 'dashboard' },
+  { path: '/sales/board', expect: 200, why: 'board' },
+  { path: '/sales/accounts', expect: 200, why: 'own accounts' },
+  { path: '/sales/accounts/:ownCompanyId', expect: 200, why: 'own account' },
+  { path: '/sales/leads/:ownRelationId', expect: 200, why: 'own record' },
+  { path: '/sales/accounts/:colleagueCompanyId', expect: 404, why: "a colleague's account" },
+  { path: '/sales/leads/:colleagueRelationId', expect: 404, why: "a colleague's record" },
+  { path: '/sales/accounts/:foreignCompanyId', expect: 404, why: "another org's account" },
+  { path: '/sales/leads/:foreignRelationId', expect: 404, why: "another org's record" },
+];

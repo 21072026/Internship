@@ -180,6 +180,18 @@ else's work ([`mentor-transfer.md`](mentor-transfer.md), #419).
 - The **funnel record** — a `MentorshipRelation` (owner, lead, account, stage), created
   through `src/lib/activeMentorship.ts` so "one mentee, at most one active mentor" (#419)
   holds.
+- The **trial window** (#2551) — when a row lands in `TRIAL_ACTIVE` (a create at that
+  stage, or an update that *moves* a record into it), `funnelRelationCreateData` /
+  `funnelRelationUpdateData` stamp `trialStartedAt` = the run time and `trialEndsAt` =
+  run time + the organisation's `trialLengthDays` (default 30), through the same rule
+  every other write into the stage uses (`trialWindowFor`, `src/lib/trialReminderRule.ts`).
+  A re-run that does not move a record stamps nothing, and an existing window is never
+  overwritten.
+
+  > **Warning:** the dates count from the **import day**, not from when the customer's
+  > trial actually began. A file of customers whose trials are already running gives
+  > every one of them a fresh `trialLengthDays` window. If that matters, correct the
+  > dates in the app after the run.
 - **Stage history** — a `StatusChange` on the relation when an existing record *moves*
   (`src/lib/stageChange.ts`, which refuses a no-op row by construction). A relation
   **created** at a stage gets no `StatusChange`: `stageEnteredAt()` already answers from
@@ -458,6 +470,31 @@ back `UNCHANGED`.
   mail attachment). The dump from "Take a backup first" stays where it is and expires on its
   own schedule — [`disaster-recovery.md`](disaster-recovery.md) says how long, and it is
   not to be copied anywhere either.
+
+## One lead typed in by hand (#2562)
+
+The **"New lead / account"** dialog on `/admin/companies` (MARKETING orgs, ADMIN only) is
+this importer with a file of one row — not a second lead writer.
+`POST /api/admin/marketing-accounts` builds the row with `manualAccountTable()` under the
+canonical headers, so the same validator, match key and diff decide it, and runs it through
+`runImport` in **create-only** mode (`createMarketingAccount()` in
+`src/lib/marketingImportStore.ts`, sharing `runMarketingRows()` with the CLI run):
+
+| Plan | Written? | Answer |
+|---|---|---|
+| `CREATE` | yes — `Company` + stand-in lead + funnel record, via the import's database writer | `201`, with `companyId` and `leadId` |
+| `UPDATE` / `UNCHANGED` (the match key found an account) | **no** (`createOnlyWriter` never updates) | `409 account_exists` + `companyId` — the dialog opens that account |
+| `CREATE` whose contact already has an ACTIVE funnel record | no (`createOnlyPlan` turns it into a `SKIP`) | `409 contact_in_funnel` + `leadId` — the import would re-point that record at the new account; a form should not |
+| the contact address is a staff user (ADMIN/MENTOR/COMPANY) of the org — typically the admin's own | no (checked before planning) | `409 contact_is_user` — staff is never a lead; the file import instead creates a separate stand-in lead, because the lead lookup matches `MENTEE` users only |
+| the contact is another owner's lead (#419) | no (the writer's guard, transaction rolled back) | `409 already_mentored` |
+| `SKIP` for an ambiguous name | no | `409 account_ambiguous` |
+
+Differences from a file row, all deliberate: the contact e-mail is **required** (without it
+the import places no funnel record, and a hand-typed lead that is not on the board is not
+what the form promises); the owner is the acting admin; the stage defaults to the org's
+first on-path stage and an off-path stage is refused (it would need a drop-off reason the
+form has no field for). No marketing-consent record is written (#2577). INTERNSHIP orgs
+never see the dialog, and the route answers them `403 vertical_unavailable`.
 
 ## Tests
 

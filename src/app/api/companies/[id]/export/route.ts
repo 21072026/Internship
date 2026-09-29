@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { withTenantScope } from '@/lib/orgContext';
-import { orgScoped, resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withRequestScope } from '@/lib/requestContext';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
@@ -46,17 +46,14 @@ import { transliterate } from '@/lib/transliterate';
  *   - ROW SCOPE: `scopeForRole(user, 'company')` (#2431). ADMIN's `{}` today,
  *     composed with `andScope`, so a later narrower ADMIN builder narrows the
  *     export too.
- *   - ORG SCOPE: `orgScoped(…, resolveOrgId(session))`, flag-independent — the
- *     #2542 pattern (`/api/admin/invitations`). With `MT_ENFORCE_ISOLATION` off,
- *     which is every deployment today, the middleware filters nothing, and this
- *     hand-written term is the only thing between an admin of one tenant and
- *     another tenant's account book. With the flag on, the middleware injects
- *     the same `resolveOrgId(session)` value, so the two cannot disagree.
- *     Another org's company is a 404, the same answer a missing id gets.
- *   A row with `orgId = NULL` is NOT exported to an admin who has an org: it
- *   cannot be shown to be theirs, and the flag-on middleware would hide it too.
- *   Such rows exist only between a flag-off create and the next deploy's
- *   `prisma/backfill-organization.mjs`.
+ *   - ORG SCOPE: `withinTenant(…, await tenantWhere(session))`, flag-independent —
+ *     the #2542 rule in src/lib/tenantFilter.ts, the same call the detail read
+ *     makes. With `MT_ENFORCE_ISOLATION` off, which is every deployment today,
+ *     the middleware filters nothing, and this hand-written term is the only
+ *     thing between an admin of one tenant and another tenant's account book.
+ *     Another org's company is a 404, the same answer a missing id gets. A
+ *     NULL-org row is the default org's (the deploy backfill's rule), and a
+ *     session without an org reads as the default org's, never as unscoped.
  *
  * ── WHAT IS IN THE FILE ─────────────────────────────────────────────────────
  * The sections #2435 lists, each reached from the company already verified:
@@ -136,11 +133,11 @@ async function handleGet(request: Request, { params }: { params: Promise<{ id: s
       await logScopeDenial(session.user, ROUTE);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    const orgId = resolveOrgId(session);
+    const tenant = await tenantWhere(session);
 
     return await withTenantScope(session, async () => {
       const company = await prisma.company.findFirst({
-        where: orgScoped(andScope<Prisma.CompanyWhereInput>(scope, { id }), orgId),
+        where: andScope<Prisma.CompanyWhereInput>(scope, withinTenant({ id }, tenant)),
       });
       if (!company) {
         return NextResponse.json({ error: 'Company not found' }, { status: 404 });

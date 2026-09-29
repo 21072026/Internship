@@ -36,6 +36,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { FollowUpPanel } from '@/components/FollowUpPanel';
+import { TrialEndPanel } from '@/components/TrialEndPanel';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
@@ -48,6 +50,12 @@ interface Relation {
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
   stageDeadline?: string | null;
+  // The owner's follow-up (#2563), independent of the stage deadline above.
+  nextActionAt?: string | null;
+  nextActionNote?: string | null;
+  // The trial window of a funnel record (#2551/#2553); null outside a trial.
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
   mentor: { id: string; fullName: string; email: string };
   company: { id: string; name: string; industry?: string } | null;
   project: { id: string; name: string } | null;
@@ -462,6 +470,24 @@ export default function AdminMenteeDetailPage() {
                   )}
                 </div>
               </div>
+
+              <FollowUpPanel
+                relationId={rel.id}
+                nextActionAt={rel.nextActionAt}
+                nextActionNote={rel.nextActionNote}
+                onSaved={load}
+              />
+
+              {/* The trial end (#2553): shown for a record in a trial stage or
+                  one that carries a trial date; renders nothing otherwise. */}
+              <TrialEndPanel
+                relationId={rel.id}
+                pipelineStatus={rel.pipelineStatus}
+                trialStartedAt={rel.trialStartedAt}
+                trialEndsAt={rel.trialEndsAt}
+                canEdit={rel.status === 'ACTIVE'}
+                onSaved={load}
+              />
 
               {(() => {
                 const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.lastContactAt ?? rel.interactions[0]?.date }, t.nextActions);

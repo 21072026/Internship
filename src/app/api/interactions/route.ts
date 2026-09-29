@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { withTenantScope } from '@/lib/orgContext';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { z } from 'zod';
@@ -131,7 +132,10 @@ export async function POST(request: Request) {
     // was completely silent. No echo: only a mentor/admin can reach this point,
     // but the guard stays cheap insurance against future role changes. The
     // notification carries no note content, just the fact.
-    if (relation.menteeId !== session.user.id) {
+    // Mentorship only: in a vertical without the module (MARKETING, #2580) the
+    // MENTEE row is the lead on a sales record, not someone with a portal to
+    // read a "your mentor logged something" bell in.
+    if (relation.menteeId !== session.user.id && (await shellCapabilities(relation.orgId)).includes('mentorship')) {
       await notifyIfAllowed(relation.menteeId, 'interactions', 'interaction.logged', {}, '/portal/journey');
     }
     return NextResponse.json({ interaction }, { status: 201 });

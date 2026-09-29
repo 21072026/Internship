@@ -83,7 +83,7 @@ export type TenantActor = {
 export type SeededTenant = {
   /** 'A' or 'B' — only for readable assertion messages. */
   label: string;
-  org: { id: string; slug: string; name: string };
+  org: { id: string; slug: string; name: string; vertical: string };
   admin: TenantActor;
   mentor: TenantActor;
   mentee: TenantActor;
@@ -175,11 +175,12 @@ async function seedTenant(
   scratch: SeedScratch,
   label: string,
   slugPrefix: string,
-  stamp: string
+  stamp: string,
+  vertical: TenantVertical
 ): Promise<SeededTenant> {
   const name = `Iso ${label}`;
   const org = await prisma.organization.create({
-    data: { name: `${name} Org ${stamp}`, slug: `${slugPrefix}-${stamp}` },
+    data: { name: `${name} Org ${stamp}`, slug: `${slugPrefix}-${stamp}`, vertical },
   });
   scratch.orgIds.push(org.id);
 
@@ -278,7 +279,7 @@ async function seedTenant(
 
   return {
     label,
-    org: { id: org.id, slug: org.slug, name: org.name },
+    org: { id: org.id, slug: org.slug, name: org.name, vertical: org.vertical },
     admin,
     mentor,
     mentee,
@@ -293,12 +294,23 @@ async function seedTenant(
   };
 }
 
+/** `Organization.vertical` keys (src/lib/verticals.ts). */
+export type TenantVertical = 'INTERNSHIP' | 'MARKETING';
+
+/**
+ * Which product each tenant is (#2542). Both default to INTERNSHIP, the shape
+ * every spec written before the second product assumed; a cross-VERTICAL test
+ * sets one of them to MARKETING, because "a MARKETING admin reads the
+ * INTERNSHIP tenant's users" is the real-world shape of the leak.
+ */
+export type SeedTwoTenantsOptions = { verticalA?: TenantVertical; verticalB?: TenantVertical };
+
 /**
  * Create the two tenants. Call from `test.beforeAll` and `await
  * tenants.cleanup()` from `test.afterAll` — including on failure, or the next
  * run inherits the rows.
  */
-export async function seedTwoTenants(): Promise<TwoTenants> {
+export async function seedTwoTenants(options: SeedTwoTenantsOptions = {}): Promise<TwoTenants> {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   // Seeding is not a transaction, and a caller that never received a handle
   // cannot tear anything down: `beforeAll` rejects, `tenants` stays undefined
@@ -309,8 +321,8 @@ export async function seedTwoTenants(): Promise<TwoTenants> {
   // the database for good, with no failure that names the leak.
   const scratch: SeedScratch = { orgIds: [], emails: [] };
   try {
-    const orgA = await seedTenant(scratch, 'A', 'iso-a', stamp);
-    const orgB = await seedTenant(scratch, 'B', 'iso-b', stamp);
+    const orgA = await seedTenant(scratch, 'A', 'iso-a', stamp, options.verticalA ?? 'INTERNSHIP');
+    const orgB = await seedTenant(scratch, 'B', 'iso-b', stamp, options.verticalB ?? 'INTERNSHIP');
     const orgIds = [orgA.org.id, orgB.org.id];
 
     return {

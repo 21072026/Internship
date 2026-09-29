@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { recordPairActivity } from '@/lib/metering';
 
 // Stage key is a free string now (#747) so tenant-defined stages are accepted.
@@ -81,10 +82,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ change: null, changed: false });
     }
 
+    // A live move into TRIAL_ACTIVE stamps the trial window with the stage
+    // (#2551). A backdated entry never reaches here with applyToRelation set.
+    const trialWindow = applyToRelation
+      ? await stageTrialWindow({ orgId: relation.orgId, toStage: toStatus, enteredAt: new Date(), existing: relation })
+      : {};
     const [change] = await prisma.$transaction([
       prisma.statusChange.create({ data: changeData }),
       ...(applyToRelation
-        ? [prisma.mentorshipRelation.update({ where: { id: relationId }, data: { pipelineStatus: toStatus } })]
+        ? [
+            prisma.mentorshipRelation.update({
+              where: { id: relationId },
+              data: { pipelineStatus: toStatus, ...trialWindow },
+            }),
+          ]
         : []),
     ]);
 

@@ -86,3 +86,39 @@ test('the predicate list and the Prisma _count select name the same collections'
   const selected = [...block[1].matchAll(/(\w+):\s*true/g)].map((m) => m[1]);
   assert.deepEqual([...selected].sort(), [...RELATION_HISTORY_COUNTS].sort());
 });
+
+// ── What a handover carries: the journey, trial window included (#2551) ──────
+
+const { CARRIED_OVER_FIELDS, carriedOverFields } = await import('../../src/lib/relationHistory.ts');
+
+test('a handover copies the trial window verbatim — the successor carries the same trialEndsAt', () => {
+  const closing = {
+    pipelineStatus: 'TRIAL_ACTIVE',
+    stageDeadline: null,
+    companyId: 'c1',
+    projectId: null,
+    cohortId: null,
+    trialStartedAt: new Date('2026-03-01T10:00:00Z'),
+    trialEndsAt: new Date('2026-03-31T10:00:00Z'),
+    // Not part of the journey — must not be copied.
+    mentorId: 'old-mentor',
+    id: 'rel-1',
+  };
+  const carried = carriedOverFields(closing);
+  assert.equal(carried.trialEndsAt, closing.trialEndsAt);
+  assert.equal(carried.trialStartedAt, closing.trialStartedAt);
+  assert.equal(carried.pipelineStatus, 'TRIAL_ACTIVE');
+  assert.equal('mentorId' in carried, false);
+  assert.equal('id' in carried, false);
+});
+
+test('every carried-over field is selected from the closing relation in mentorTransfer.ts', () => {
+  // A field copied but not selected would be copied as undefined — silently
+  // dropping, for instance, a running trial's end date on every handover.
+  const source = readFileSync(new URL('../../src/lib/mentorTransfer.ts', import.meta.url), 'utf8');
+  const select = source.slice(source.indexOf('prisma.mentorshipRelation.findUnique'), source.indexOf('mentor: {'));
+  for (const field of CARRIED_OVER_FIELDS) {
+    assert.match(select, new RegExp(`\\b${field}: true`), `${field} is carried over but not selected`);
+  }
+  assert.match(source, /\.\.\.carriedOverFields\(relation\)/);
+});

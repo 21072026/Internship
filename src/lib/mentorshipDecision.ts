@@ -11,6 +11,7 @@ import {
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import {
   findActiveMentorship,
   ALREADY_MENTORED_ERROR,
@@ -176,6 +177,9 @@ export async function decideMentorshipRequest(opts: {
     // first on-path stage. Resolved before the transaction — it is a read, and
     // a read kept outside is one less statement holding the transaction open.
     const pipelineStatus = await resolveStartStage(gate.orgId);
+    // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
+    // the create (#2551); for every other start stage this is `{}`, no query.
+    const trialWindow = await stageTrialWindow({ orgId: gate.orgId, toStage: pipelineStatus, enteredAt: new Date() });
 
     // Interactive form (was an array `$transaction`) so the ACTIVE-mentor guard
     // sits INSIDE the transaction that writes (#419) — the pre-flight above ran
@@ -195,7 +199,7 @@ export async function decideMentorshipRequest(opts: {
           throw new AlreadyMentoredError(req.menteeId, active.id);
         }
         const created = await tx.mentorshipRelation.create({
-          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus },
+          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus, ...trialWindow },
         });
         // `status: 'PENDING'` in the where is the real serializer for THIS
         // request: the UPDATE takes the row lock MySQL grants anyway, so two

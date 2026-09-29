@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere } from '@/lib/tenantFilter';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
@@ -11,6 +13,7 @@ import {
   companySortKeys,
   derivedPageWindow,
   isDerivedSort,
+  isFollowUpSort,
   parseCompanySort,
   rankByDerivedKey,
   type CompanySortRelation,
@@ -130,7 +133,21 @@ export async function GET(request: Request) {
     return await withTenantScope(session, async () => {
       // `andScope` copies the builder's object; for ADMIN with no search it is
       // `{}`, which Prisma treats exactly like no `where` at all.
-      const where = andScope(scope, searchFilter);
+      //
+      // Tenant (#2542): the role scope above says WHICH of the tenant's
+      // companies a role may read; it has never said which tenant. With
+      // MT_ENFORCE_ISOLATION off — every deployment today — the middleware
+      // injects nothing, and a MARKETING admin read the INTERNSHIP tenant's
+      // whole company book. So the tenant is one more conjunct, by hand
+      // (src/lib/tenantFilter.ts, the same `resolveOrgId(session)` the
+      // middleware reads). Every query below
+      // (count, the derived-sort head and tail, the `company: { is: where }`
+      // relation filter) is built from this one `where`.
+      const where = andScope<Prisma.CompanyWhereInput>(
+        scope,
+        (await tenantWhere(session)) as Prisma.CompanyWhereInput,
+        searchFilter,
+      );
       const include = {
         needs: true,
         _count: { select: { mentorships: mentorshipCount } },
@@ -172,38 +189,55 @@ export async function GET(request: Request) {
         // them. Unscoped, `sort=movement` would rank a MENTOR's companies by
         // when OTHER mentors last moved a stage there — the inference the count
         // comment three screens up refuses to allow.
-        const moved = await prisma.mentorshipRelation.findMany({
-          where: andScope(relationScope, {
-            company: { is: where },
-            // The query-side twin of stageClock's `isRealMove` (#2264): a
-            // relation whose only rows are no-ops has never moved.
-            statusChanges: { some: REAL_STAGE_MOVE },
-          }),
-          select: { id: true, companyId: true, startDate: true },
-        });
-        // StatusChange carries no `orgId` of its own, so it is reached through
-        // the relation ids the tenant-scoped query above returned — never
-        // through a nested relation filter, which the middleware does not see.
-        const lastMoves = moved.length
-          ? await prisma.statusChange.groupBy({
-              by: ['relationId'],
-              where: { ...REAL_STAGE_MOVE, relationId: { in: moved.map((r) => r.id) } },
-              _max: { createdAt: true },
-            })
-          : [];
-        const lastMoveOf = new Map(lastMoves.map((m) => [m.relationId, m._max.createdAt]));
-        // Each relation hands the clock its single newest real move, which
-        // `StageClockSource` accepts as is (the no-ops were filtered by the
-        // query). So "has this record ever moved" and both keys are still
-        // decided by `companySortKeys` / `lastStageMoveAt`, nowhere else.
-        const relations: CompanySortRelation[] = moved.map((r) => {
-          const at = lastMoveOf.get(r.id);
-          return {
-            companyId: r.companyId,
-            startDate: r.startDate,
-            statusChanges: at ? [{ createdAt: at }] : [],
-          };
-        });
+        let relations: CompanySortRelation[];
+        if (isFollowUpSort(sort)) {
+          // `followup` (#2563): the owners' next-action dates on the account's
+          // ACTIVE records. Same relation scope as the other derived orders,
+          // for the same reason — a MENTOR's list must not be ordered by
+          // follow-ups other mentors set. One narrow row per dated record.
+          const dated = await prisma.mentorshipRelation.findMany({
+            where: andScope(relationScope, {
+              company: { is: where },
+              status: 'ACTIVE',
+              nextActionAt: { not: null },
+            }),
+            select: { companyId: true, startDate: true, nextActionAt: true },
+          });
+          relations = dated.map((r) => ({ ...r, statusChanges: [] }));
+        } else {
+          const moved = await prisma.mentorshipRelation.findMany({
+            where: andScope(relationScope, {
+              company: { is: where },
+              // The query-side twin of stageClock's `isRealMove` (#2264): a
+              // relation whose only rows are no-ops has never moved.
+              statusChanges: { some: REAL_STAGE_MOVE },
+            }),
+            select: { id: true, companyId: true, startDate: true },
+          });
+          // StatusChange carries no `orgId` of its own, so it is reached through
+          // the relation ids the tenant-scoped query above returned — never
+          // through a nested relation filter, which the middleware does not see.
+          const lastMoves = moved.length
+            ? await prisma.statusChange.groupBy({
+                by: ['relationId'],
+                where: { ...REAL_STAGE_MOVE, relationId: { in: moved.map((r) => r.id) } },
+                _max: { createdAt: true },
+              })
+            : [];
+          const lastMoveOf = new Map(lastMoves.map((m) => [m.relationId, m._max.createdAt]));
+          // Each relation hands the clock its single newest real move, which
+          // `StageClockSource` accepts as is (the no-ops were filtered by the
+          // query). So "has this record ever moved" and both keys are still
+          // decided by `companySortKeys` / `lastStageMoveAt`, nowhere else.
+          relations = moved.map((r) => {
+            const at = lastMoveOf.get(r.id);
+            return {
+              companyId: r.companyId,
+              startDate: r.startDate,
+              statusChanges: at ? [{ createdAt: at }] : [],
+            };
+          });
+        }
         const keys = companySortKeys(relations, sort);
 
         // `where` again, so the head is the scoped + searched set by the same
@@ -284,6 +318,10 @@ export async function POST(request: Request) {
     const company = await prisma.company.create({
       data: {
         ...companyData,
+        // Stamped by hand (#2542): with the flag off the middleware fills
+        // nothing in, and a NULL-org company would be invisible to the very
+        // admin who just created it now that the list is org-scoped.
+        orgId: resolveOrgId(session),
         contactEmail: contactEmail || null,
         needs: needs
           ? {

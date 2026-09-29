@@ -20,6 +20,7 @@ import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { MentorNav } from '@/components/MentorNav';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { availableModes, canUseMentorShell } from '@/lib/dualRole';
+import { mentorlessShellTarget } from '@/lib/salesSurface';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -42,10 +43,12 @@ export default async function MentorLayout({ children }: { children: React.React
   if (!capabilities.includes('mentorship')) {
     // NOT '/': the home for a MENTOR/MENTEE role is a mentorship shell, so
     // bouncing there would loop back through this gate (roleHome('MENTOR') ===
-    // '/mentor'). '/account' is role-neutral and terminal — it renders for
-    // every authenticated role and redirects no one, so it breaks the loop
-    // whatever the role that reached a mentorship-less mentor shell.
-    redirect('/account');
+    // '/mentor'). A MENTOR of a vertical with a pipeline is a sales rep and
+    // goes to the sales surface (#2580), whose layout never sends a MENTOR of
+    // such a vertical back here. Everyone else goes to '/account', which is
+    // role-neutral and terminal — it renders for every authenticated role and
+    // redirects no one, so it breaks the loop whatever the role.
+    redirect(mentorlessShellTarget(session.user.role, capabilities));
   }
 
   const { locale, t } = await getServerDictionary();

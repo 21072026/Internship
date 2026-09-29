@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // GET — recent activity for a single user (as actor or target). Visible to the
 // user themselves, any admin, or a mentor who mentors that user. Also returns
@@ -13,7 +14,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return await withTenantScope(session, async () => {
     const { id } = await params;
 
-    let allowed = session.user.id === id || session.user.role === 'ADMIN';
+    let allowed = session.user.id === id;
+    if (!allowed && session.user.role === 'ADMIN') {
+      // "Any admin" means any admin of THIS tenant (#2542): another tenant's
+      // account is a 404, the same answer as an id that does not exist.
+      const inTenant = await prisma.user.findFirst({ where: withinTenant({ id }, await tenantWhere(session)), select: { id: true } });
+      if (!inTenant) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      allowed = true;
+    }
     if (!allowed && session.user.role === 'MENTOR') {
       const rel = await prisma.mentorshipRelation.findFirst({ where: { mentorId: session.user.id, menteeId: id }, select: { id: true } });
       allowed = !!rel;

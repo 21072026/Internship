@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { notify } from '@/lib/notify';
 import { capSkills } from '@/lib/skills';
@@ -82,6 +83,10 @@ export async function POST(request: Request) {
         fullName,
         role: 'MENTEE',
         sourceId,
+        // The source's own tenant, by hand (#2542): with the flag off nothing
+        // fills it in, and the admin's org-scoped candidate list would not
+        // show a NULL-org mentee until the next deploy's backfill.
+        orgId: resolveOrgId(session),
         university: university || null,
         department: department || null,
         // Split flexibly and capped, never refused: a source typing somebody

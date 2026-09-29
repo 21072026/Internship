@@ -2,6 +2,7 @@
 import { useT } from "@/i18n/client";
 
 import { useCallback, useRef, useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -13,7 +14,9 @@ import { COMPANY_SORT_KEYS, DEFAULT_COMPANY_SORT, type CompanySort } from '@/lib
 
 import { CompanyForm } from '@/components/forms/CompanyForm';
 import { CompanyEntitlements } from '@/components/admin/CompanyEntitlements';
-import { Building2, Plus, Pencil, Trash2, Search, Sparkles, Download } from 'lucide-react';
+import { NewMarketingLeadDialog } from '@/components/admin/NewMarketingLeadDialog';
+import { useVertical } from '@/lib/verticalClient';
+import { Building2, Plus, Pencil, Trash2, Search, Sparkles, UserPlus, Download } from 'lucide-react';
 
 interface Company {
   id: string;
@@ -29,6 +32,11 @@ const PAGE_SIZE = 24;
 
 export default function CompaniesPage() {
   const t = useT();
+  // The manual lead form is the MARKETING product's (#2562): an INTERNSHIP
+  // tenant's "lead" is an applicant, with its own intake paths. The route
+  // refuses a non-marketing org as well; this only keeps the button honest.
+  const isMarketing = useVertical() === 'MARKETING';
+  const [showNewLead, setShowNewLead] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   // The company <select> below provisions a login and must offer EVERY company,
   // not the page currently on screen — so it reads the same route with `all=1`
@@ -304,11 +312,32 @@ export default function CompaniesPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.companiesPage.title}</h1>
           <p className="text-gray-500 mt-1">{t.companiesPage.subtitle}</p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4" />
-          {t.companiesPage.addCompany}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {isMarketing && (
+            <Button data-testid="new-lead-button" onClick={() => setShowNewLead(true)}>
+              <UserPlus className="h-4 w-4" />
+              {t.companiesPage.newLead.button}
+            </Button>
+          )}
+          <Button variant={isMarketing ? 'outline' : 'primary'} onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4" />
+            {t.companiesPage.addCompany}
+          </Button>
+        </div>
       </div>
+
+      {isMarketing && showNewLead && (
+        <NewMarketingLeadDialog
+          onClose={() => setShowNewLead(false)}
+          onCreated={() => Promise.all([fetchCompanies(), refreshPickerIfLoaded()]).then(() => undefined)}
+          onOpenAccount={(companyId) => {
+            setShowNewLead(false);
+            // The edit dialog reads the full record from GET /api/companies/[id]
+            // (the access-logged read, #2433); the row only has to name it.
+            void openEdit({ id: companyId, name: '', needs: [], _count: { mentorships: 0 } });
+          }}
+        />
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -520,7 +549,17 @@ export default function CompaniesPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle>{company.name}</CardTitle>
+                    {/* The account detail page (#2560). The name is the link: the
+                        icon buttons beside it keep their own jobs. */}
+                    <CardTitle>
+                      <Link
+                        href={`/admin/companies/${company.id}`}
+                        data-testid={`company-detail-link-${company.id}`}
+                        className="hover:text-blue-700 hover:underline"
+                      >
+                        {company.name}
+                      </Link>
+                    </CardTitle>
                     {company.industry && (
                       <CardDescription>{company.industry}</CardDescription>
                     )}

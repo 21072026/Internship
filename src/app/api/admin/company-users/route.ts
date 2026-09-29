@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 const schema = z.object({
   companyId: z.string().min(1),
@@ -29,14 +31,19 @@ export async function POST(request: Request) {
   }
   const { companyId, email, fullName } = parsed.data;
 
-  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  // Same tenant only (#2542): the company must be one this admin can see —
+  // otherwise a login would be minted into another tenant's customer record.
+  const orgId = resolveOrgId(session);
+  const company = await prisma.company.findFirst({ where: withinTenant({ id: companyId }, await tenantWhere(session)) });
   if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
 
   const user = await prisma.user.create({
-    data: { email, fullName, role: 'COMPANY', companyId, password: '!company-no-login', emailVerified: false, skills: [] },
+    // `orgId` by hand: with MT_ENFORCE_ISOLATION off nothing fills it in, and
+    // the admin's own (org-scoped) user list would not show the account.
+    data: { email, fullName, role: 'COMPANY', companyId, orgId, password: '!company-no-login', emailVerified: false, skills: [] },
   });
 
   const token = await createPasswordResetToken(user.id, 'SET_INITIAL');

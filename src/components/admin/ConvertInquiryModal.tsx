@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useModalFocus } from '@/components/ui/useModalFocus';
@@ -48,6 +49,9 @@ export function ConvertInquiryModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // The account the conversion created: the success link opens it directly
+  // (#2560), the same target the enquiries list links a converted row to.
+  const [createdCompanyId, setCreatedCompanyId] = useState<string | null>(null);
   const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
 
   const fill = (template: string, values: Record<string, string>) =>
@@ -79,6 +83,7 @@ export function ConvertInquiryModal({
             ? fill(c.successNoEmail, { company: data.companyName ?? companyName, email: data.email ?? email })
             : fill(c.success, { company: data.companyName ?? companyName, email: data.email ?? email })
         );
+        setCreatedCompanyId(typeof data.companyId === 'string' ? data.companyId : null);
         onConverted();
         return;
       }
@@ -142,12 +147,13 @@ export function ConvertInquiryModal({
               {success}
             </p>
             <div className="flex justify-end gap-2">
-              <a
-                href="/admin/companies"
+              <Link
+                href={createdCompanyId ? `/admin/companies/${createdCompanyId}` : '/admin/companies'}
+                data-testid="convert-inquiry-open-company"
                 className="inline-flex items-center text-sm text-blue-600 hover:underline px-3 py-2"
               >
                 {c.openCompany}
-              </a>
+              </Link>
               <Button type="button" onClick={onClose} data-testid="convert-inquiry-done">
                 {c.done}
               </Button>
