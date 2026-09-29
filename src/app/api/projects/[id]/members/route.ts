@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
+import { projectInCallerTenant } from '@/lib/projectAccess';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { createOrGetProjectConversation, removeProjectConversationParticipant } from '@/lib/conversations';
@@ -56,6 +58,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const project = await loadContext(id);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!canManageMembers(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -76,6 +80,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const project = await loadContext(id);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!canManageMembers(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -106,7 +112,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Functional role only applies to mentee members; ignore it for owners/mentors.
     const functionalRole = role === 'MENTEE' ? parsed.data.functionalRole ?? null : null;
 
-    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, isActive: true } });
+    // Only a user of the caller's own tenant can join (#2622): by id alone, a
+    // person of another tenant could be put on this project's team.
+    const target = await prisma.user.findFirst({
+      where: withinTenant({ id: userId }, await tenantWhere(session)),
+      select: { id: true, role: true, isActive: true },
+    });
     if (!target || !target.isActive) {
       return NextResponse.json({ error: 'Member must be an active user' }, { status: 400 });
     }
@@ -157,6 +168,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const project = await loadContext(id);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!canManageMembers(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

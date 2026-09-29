@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { canManageProject, isProjectMember } from '@/lib/projectAccess';
+import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -41,6 +41,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const project = await prisma.project.findUnique({ where: { id } });
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });

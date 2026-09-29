@@ -8,7 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
-import { isProjectOwner } from '@/lib/projectAccess';
+import { isProjectOwner, projectInCallerTenant } from '@/lib/projectAccess';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { sendProjectJoinRequestEmail } from '@/services/emailService';
 
@@ -47,6 +47,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const manage = await isProjectOwner(session.user, id);
     const requests = await prisma.projectJoinRequest.findMany({
       where: { projectId: id, ...(manage ? {} : { userId: session.user.id }) },
@@ -66,6 +68,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const project = await prisma.project.findUnique({
       where: { id },
       select: { id: true, name: true, isPublic: true, status: true, orgId: true },
@@ -165,6 +169,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!(await isProjectOwner(session.user, id))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

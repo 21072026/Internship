@@ -224,7 +224,12 @@ by-id handler on a user or a company (`/api/users/[id]` and its
 `activity`/`resend-verification`, `/api/companies/[id]` and its `delete-impact`,
 `/api/admin/users/[id]/*`, the company lookup of `/api/admin/company-users`)
 looks the row up through the same filter, so another tenant's id is the same
-404 as a missing one. Three things to know before copying it:
+404 as a missing one. **Projects followed in #2622**: `GET /api/projects` ANDs the
+role scope with the tenant, every `/api/projects/[id]/**` handler asks
+`projectInCallerTenant()` first, `resolveOwner()` and the member-add lookup resolve
+people and companies in the tenant, `POST /api/projects` stamps `orgId`, and the
+`/projects/[id]` page treats a signed-in visitor from another tenant as anonymous.
+Three things to know before copying it:
 
 - **The filter goes in the query.** That is the flag-independent by-id guard —
   **not** `assertSameOrg()`, which returns early while the flag is off.
