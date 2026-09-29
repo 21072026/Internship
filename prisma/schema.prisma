@@ -2180,6 +2180,28 @@ model MentorshipRelation {
   // contractual date, and moving the record to another stage would erase it.
   trialStartedAt          DateTime?
   trialEndsAt             DateTime?
+  // The owner's own "next step" on this record (#2563): a date and a short
+  // line — "call Thursday about pricing". All three nullable and additive, so
+  // `db push` adds them over a populated table and an untouched row means what
+  // it meant before.
+  //
+  // Deliberately NOT `stageDeadline`, for the same reason the trial dates above
+  // are not: `stageDeadline` is the internal SLA that src/lib/stageSla.ts
+  // rewrites on every stage change. A follow-up date is set by a person and
+  // must survive every stage move — no stage write path touches these columns.
+  // Stored as a UTC calendar day (midnight UTC); the rule, including what
+  // "due" and "overdue" mean, is src/lib/nextActionRule.ts.
+  //
+  // Two columns, not a table: a record has ONE next step, and what was done
+  // before it is already the InteractionLog. The note is owner/ADMIN prose, so
+  // the read paths that hand relation scalars to the MENTEE strip all three
+  // (stripNextActionFor in the same module).
+  nextActionAt            DateTime?
+  nextActionNote          String?          @db.VarChar(280)
+  // Set when the due-day reminder for the CURRENT nextActionAt went out, by a
+  // conditional claim in checkNextActionReminders(); a write that moves the
+  // date clears it, so each date reminds its owner exactly once.
+  nextActionRemindedAt    DateTime?
   // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
   // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
   // different mentor and an admin approved it. Nullable and additive: an
@@ -2245,6 +2267,9 @@ model MentorshipRelation {
   // The daily trial sweep asks for one org's relations in one stage whose trial
   // ends inside the next week; this is the column that narrows it.
   @@index([trialEndsAt])
+  // The daily follow-up sweep asks for the ACTIVE relations whose next action
+  // falls on or before today (#2563).
+  @@index([nextActionAt])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.

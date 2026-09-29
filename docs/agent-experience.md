@@ -7400,3 +7400,23 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   ve `chromium_headless_shell-1243/chrome-headless-shell-linux64 → …/chromium_headless_shell-1194/chrome-linux`
   bağlarını kur, `PLAYWRIGHT_BROWSERS_PATH=<o dizin>` ile koş. Yeni düzende ikili adı
   `chrome-headless-shell`, eskisinde `headless_shell` — bunun için de bir bağ gerekiyor.
+
+## 2026-09-29 — Parallel worktrees share one `node_modules`: `prisma generate` is global (#2563)
+
+- **A symlinked `node_modules` makes `npx prisma generate` write the SHARED client.** The
+  generated client lives in `node_modules/.prisma/client`, resolved through the real path of
+  `@prisma/client` — so in a worktree whose `node_modules` is a symlink to the main checkout's,
+  generating your schema replaces every other agent's client, and their `include` queries then
+  select columns their databases do not have. If you change the schema, make `node_modules` a
+  real directory first: symlink every top-level entry of the shared one except `@prisma` and
+  `.prisma`, make `@prisma/` a directory of symlinks except `client`, which you **copy**
+  (`cp -a`, ~8 MB). `prisma generate` then writes `./node_modules/.prisma/client` locally.
+- **No write to `/opt/pw-browsers` needed for a Playwright build mismatch.** Point
+  `PLAYWRIGHT_BROWSERS_PATH` at a scratch directory holding `chromium_headless_shell-<wanted>`
+  (containing a `chrome-headless-shell-linux64` link to the installed build's `chrome-linux`),
+  `chromium-<wanted>` and `ffmpeg-*` links.
+- **`scripts/test/schema-push-safety.test.mjs` "the CLI fails on the real #2249 commit" fails in
+  a worktree whose history is grafted**: `aa257b2` is reachable but has no merge-base with
+  `HEAD`, so the CLI falls back to `origin/main` and reports clean. Environment, not a regression.
+- **`next dev` compiles each role's landing on first hit (18 s for `/portal`).** A spec that signs
+  in as three roles needs `test.slow()` against a cold dev server.

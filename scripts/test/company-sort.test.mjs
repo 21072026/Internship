@@ -243,3 +243,22 @@ test('the page window: head first, then the tail from its own start, with no row
   // Nothing has moved: the page is the tail's page, exactly as asked.
   assert.deepEqual(derivedPageWindow(0, 48, 24), { headStart: 0, headEnd: 0, tailSkip: 48, tailTake: 24 });
 });
+
+test('followup (#2563): soonest follow-up first, overdue before upcoming, undated last', () => {
+  const day = (s) => new Date(`${s}T00:00:00.000Z`);
+  const rel = (companyId, nextActionAt) => ({ companyId, startDate: day('2026-01-01'), statusChanges: [], nextActionAt });
+  assert.equal(isDerivedSort('followup'), true);
+  assert.equal(parseCompanySort('followup'), 'followup');
+  const keys = companySortKeys(
+    [rel('later', day('2026-04-01')), rel('overdue', day('2026-03-01')), rel('later', day('2026-05-01')), rel('none', null)],
+    'followup'
+  );
+  assert.equal(keys.has('none'), false);
+  // An account's key is its SOONEST dated record.
+  assert.equal(keys.get('later'), -day('2026-04-01').getTime());
+  const ranked = rankByDerivedKey(
+    [{ id: 'none', name: 'A' }, { id: 'later', name: 'B' }, { id: 'overdue', name: 'C' }],
+    keys
+  ).map((c) => c.id);
+  assert.deepEqual(ranked, ['overdue', 'later', 'none']);
+});

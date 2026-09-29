@@ -5,8 +5,9 @@ import { getSetting } from '@/lib/settings';
 import { addUtcWeeks, firstFullUtcWeek, utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
+import { isNextActionOverdue } from '@/lib/nextActionRule';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'next_action_due';
 
 export interface AttentionItem {
   relationId: string;
@@ -45,6 +46,7 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
       pipelineStatus: true,
       startDate: true,
       stageDeadline: true,
+      nextActionAt: true,
       mentee: { select: { id: true, fullName: true } },
       questions: { where: { answer: null }, select: { id: true } },
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
@@ -129,6 +131,11 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
     // whole trial rather than the age of the decision. #2527 fixes that at the
     // source; nothing here should paper over it with a second calculation.
     if (r.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY) reasons.push('trial_expired');
+    // The follow-up date the owner wrote on the record has passed (#2563).
+    // The day ITSELF is the reminder's (checkNextActionReminders); the record
+    // lands here from the next day on, and leaves the moment the date is moved
+    // or cleared. Independent of `overdue` above, which is the stage SLA.
+    if (isNextActionOverdue(r.nextActionAt, now)) reasons.push('next_action_due');
     if (r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450') {
       const currentWeek = utcWeekStart(new Date(now));
       const firstEligibleWeek = firstFullUtcWeek(r.startDate);

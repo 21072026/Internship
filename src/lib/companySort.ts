@@ -1,6 +1,6 @@
 // How the company/account list is ordered (#2436).
 //
-// Four orders, and one rule they share wherever it can apply: an account that
+// Five orders (`followup` joined in #2563), and one rule they share wherever it can apply: an account that
 // has never moved through the pipeline sorts LAST. That is the whole lesson of
 // the inherited task — MySQL puts NULLs FIRST on an ascending sort and LAST on
 // a descending one, so "no data" silently becomes "the most interesting row" in
@@ -31,7 +31,7 @@ import { daysInStage, lastStageMoveAt, type StageClockSource } from './stageCloc
  * dictionary entries (`companiesPage.sortOptions`, en/tr/de), and a map from key
  * to English here would be a second place where a user-visible string lives.
  */
-export const COMPANY_SORT_KEYS = ['name', 'created', 'movement', 'waiting'] as const;
+export const COMPANY_SORT_KEYS = ['name', 'created', 'movement', 'waiting', 'followup'] as const;
 
 export type CompanySort = (typeof COMPANY_SORT_KEYS)[number];
 
@@ -66,12 +66,23 @@ export function parseCompanySort(value: string | null | undefined): CompanySort 
  * Still server-side ordering — the client never re-sorts.
  */
 export function isDerivedSort(sort: CompanySort): boolean {
-  return sort === 'movement' || sort === 'waiting';
+  return sort === 'movement' || sort === 'waiting' || sort === 'followup';
+}
+
+/**
+ * `followup` (#2563) is keyed on the owners' next-action dates rather than on
+ * stage movement, so the route reads a different set of records for it (the
+ * ACTIVE ones that HAVE a date) — this says which.
+ */
+export function isFollowUpSort(sort: CompanySort): boolean {
+  return sort === 'followup';
 }
 
 /** A funnel record as far as the ordering is concerned. */
 export interface CompanySortRelation extends StageClockSource {
   companyId: string | null;
+  /** The owner's follow-up date (#2563); read only by the `followup` order. */
+  nextActionAt?: Date | string | null;
 }
 
 /**
@@ -98,6 +109,17 @@ export function companySortKeys(
 
   for (const relation of relations) {
     if (!relation.companyId) continue;
+    if (sort === 'followup') {
+      // Soonest follow-up first — an overdue one is sooner than any upcoming
+      // one, so the accounts somebody is late on lead the list. Negated so it
+      // fits the "bigger means earlier" convention; an account whose records
+      // carry no date has no key and sorts last, like a never-moved account.
+      if (!relation.nextActionAt) continue;
+      const value = -new Date(relation.nextActionAt).getTime();
+      const current = keys.get(relation.companyId);
+      if (current === undefined || value > current) keys.set(relation.companyId, value);
+      continue;
+    }
     // The nullable "did it ever move" answer, not `stageEnteredAt`: a record
     // that never moved has been in its first stage since it was created, and
     // #2436 wants those grouped at the end instead of competing for the top of

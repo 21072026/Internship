@@ -101,6 +101,9 @@ export const NOTIFICATION_EVENTS = [
   // Mentor nudges and deadlines — cron-driven, batchable, task_reminders mail.
   { key: 'stale_mentee.noContact', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'mentee', params: ['menteeName'] },
   { key: 'deadline.stagePassed', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['menteeName'] },
+  // The owner's own follow-up date (#2563) — same category, group and job as
+  // the stage deadline; a person-written date, not the SLA.
+  { key: 'deadline.nextActionDue', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['name'] },
   // The trial ladder (#2415, story #2392). Same category and group as the stage
   // deadline above, deliberately: both say "this record needs you before a
   // date", and somebody who muted one meant to mute both — which is why no new

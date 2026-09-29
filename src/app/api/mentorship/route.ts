@@ -23,6 +23,7 @@ import {
   alreadyMentoredBody,
 } from '@/lib/activeMentorship';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
+import { stripNextActionFor } from '@/lib/nextActionRule';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -142,14 +143,17 @@ export async function GET(request: Request) {
     // see exactly the payload they saw before.
     const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
     const withStageClock = <
-      T extends { startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
+      T extends { mentorId: string; startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
     >(
       rows: T[]
     ) =>
       rows.map(({ statusChanges, mentee, ...rest }) => {
         const { reEngageAt, ...menteeRest } = mentee;
         return {
-          ...rest,
+          // The owner's next action (#2563) rides along for the owner and ADMIN
+          // only — the board card shows it; a MENTEE/COMPANY/SOURCE reader of
+          // the same list does not get the owner's note about them.
+          ...stripNextActionFor(session.user, rest),
           mentee: menteeRest,
           daysInStage: daysInStage({ startDate: rest.startDate, statusChanges }),
           ...(seesPool ? { stageClockPaused: reEngageAt != null } : {}),

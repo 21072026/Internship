@@ -13,6 +13,7 @@ import {
   companySortKeys,
   derivedPageWindow,
   isDerivedSort,
+  isFollowUpSort,
   parseCompanySort,
   rankByDerivedKey,
   type CompanySortRelation,
@@ -188,38 +189,55 @@ export async function GET(request: Request) {
         // them. Unscoped, `sort=movement` would rank a MENTOR's companies by
         // when OTHER mentors last moved a stage there — the inference the count
         // comment three screens up refuses to allow.
-        const moved = await prisma.mentorshipRelation.findMany({
-          where: andScope(relationScope, {
-            company: { is: where },
-            // The query-side twin of stageClock's `isRealMove` (#2264): a
-            // relation whose only rows are no-ops has never moved.
-            statusChanges: { some: REAL_STAGE_MOVE },
-          }),
-          select: { id: true, companyId: true, startDate: true },
-        });
-        // StatusChange carries no `orgId` of its own, so it is reached through
-        // the relation ids the tenant-scoped query above returned — never
-        // through a nested relation filter, which the middleware does not see.
-        const lastMoves = moved.length
-          ? await prisma.statusChange.groupBy({
-              by: ['relationId'],
-              where: { ...REAL_STAGE_MOVE, relationId: { in: moved.map((r) => r.id) } },
-              _max: { createdAt: true },
-            })
-          : [];
-        const lastMoveOf = new Map(lastMoves.map((m) => [m.relationId, m._max.createdAt]));
-        // Each relation hands the clock its single newest real move, which
-        // `StageClockSource` accepts as is (the no-ops were filtered by the
-        // query). So "has this record ever moved" and both keys are still
-        // decided by `companySortKeys` / `lastStageMoveAt`, nowhere else.
-        const relations: CompanySortRelation[] = moved.map((r) => {
-          const at = lastMoveOf.get(r.id);
-          return {
-            companyId: r.companyId,
-            startDate: r.startDate,
-            statusChanges: at ? [{ createdAt: at }] : [],
-          };
-        });
+        let relations: CompanySortRelation[];
+        if (isFollowUpSort(sort)) {
+          // `followup` (#2563): the owners' next-action dates on the account's
+          // ACTIVE records. Same relation scope as the other derived orders,
+          // for the same reason — a MENTOR's list must not be ordered by
+          // follow-ups other mentors set. One narrow row per dated record.
+          const dated = await prisma.mentorshipRelation.findMany({
+            where: andScope(relationScope, {
+              company: { is: where },
+              status: 'ACTIVE',
+              nextActionAt: { not: null },
+            }),
+            select: { companyId: true, startDate: true, nextActionAt: true },
+          });
+          relations = dated.map((r) => ({ ...r, statusChanges: [] }));
+        } else {
+          const moved = await prisma.mentorshipRelation.findMany({
+            where: andScope(relationScope, {
+              company: { is: where },
+              // The query-side twin of stageClock's `isRealMove` (#2264): a
+              // relation whose only rows are no-ops has never moved.
+              statusChanges: { some: REAL_STAGE_MOVE },
+            }),
+            select: { id: true, companyId: true, startDate: true },
+          });
+          // StatusChange carries no `orgId` of its own, so it is reached through
+          // the relation ids the tenant-scoped query above returned — never
+          // through a nested relation filter, which the middleware does not see.
+          const lastMoves = moved.length
+            ? await prisma.statusChange.groupBy({
+                by: ['relationId'],
+                where: { ...REAL_STAGE_MOVE, relationId: { in: moved.map((r) => r.id) } },
+                _max: { createdAt: true },
+              })
+            : [];
+          const lastMoveOf = new Map(lastMoves.map((m) => [m.relationId, m._max.createdAt]));
+          // Each relation hands the clock its single newest real move, which
+          // `StageClockSource` accepts as is (the no-ops were filtered by the
+          // query). So "has this record ever moved" and both keys are still
+          // decided by `companySortKeys` / `lastStageMoveAt`, nowhere else.
+          relations = moved.map((r) => {
+            const at = lastMoveOf.get(r.id);
+            return {
+              companyId: r.companyId,
+              startDate: r.startDate,
+              statusChanges: at ? [{ createdAt: at }] : [],
+            };
+          });
+        }
         const keys = companySortKeys(relations, sort);
 
         // `where` again, so the head is the scoped + searched set by the same
