@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
 import { notify } from '@/lib/notify';
 import { resolveTemplateTitle, serializeTaskTemplate, taskTemplateSelect } from '@/lib/goalTemplates';
 import { defaultLocale } from '@/i18n/config';
@@ -92,10 +93,21 @@ function serialize(row: Row, viewer: { id: string; role: string }, ownerId: stri
 /** Whether `viewer` may read/write `targetId`'s list. */
 async function mayReach(
   viewer: { id: string; role: string },
-  targetId: string
+  targetId: string,
+  viewerOrgId: string | null
 ): Promise<boolean> {
   if (viewer.id === targetId) return true;
-  if (viewer.role === 'ADMIN') return true;
+  if (viewer.role === 'ADMIN') {
+    // An admin reaches the people of their own tenant, not everyone's (#2542).
+    // ProjectTask has no orgId — a personal to-do's tenant is its person's —
+    // so the target is resolved here and a person of another tenant is refused.
+    // An id that matches nobody is refused for an org-bound admin — with the
+    // flag on, the scoped lookup reads another tenant's person as nobody — and
+    // keeps today's answer for an org-less one.
+    const target = await prisma.user.findUnique({ where: { id: targetId }, select: { orgId: true } });
+    if (!target) return viewerOrgId === null;
+    return sameOrgOrUnknown(target.orgId, viewerOrgId);
+  }
   const mentorship = await prisma.mentorshipRelation.findFirst({
     where: { mentorId: viewer.id, menteeId: targetId },
     select: { id: true },
@@ -115,7 +127,7 @@ export async function GET(request: Request) {
     const ownerId = url.searchParams.get('userId') || viewerId;
     const archived = url.searchParams.get('archived') === '1';
 
-    if (!(await mayReach(session.user, ownerId))) {
+    if (!(await mayReach(session.user, ownerId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -197,7 +209,7 @@ export async function POST(request: Request) {
 
       const viewerId = session.user.id;
       const assigneeId = parsed.data.assigneeId ?? viewerId;
-      if (!(await mayReach(session.user, assigneeId))) {
+      if (!(await mayReach(session.user, assigneeId, resolveOrgId(session)))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 

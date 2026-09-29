@@ -7,10 +7,15 @@ import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation
 import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { withTenantScope } from '@/lib/orgContext';
 
-async function goalIfAllowed(userId: string, role: string, goalId: string) {
+// 'missing' covers another tenant's goal too (#2542): Goal has no orgId, the
+// nested relation include is never scoped, so the tenant is checked here, and
+// the answer is the 404 a missing id gets — a 403 would confirm the id exists.
+async function goalIfAllowed(userId: string, role: string, goalId: string, callerOrgId: string | null) {
   const goal = await prisma.goal.findUnique({ where: { id: goalId }, include: { relation: true } });
-  if (!goal) return null;
+  if (!goal || !sameOrgOrUnknown(goal.relation.orgId, callerOrgId)) return 'missing' as const;
   const rel = goal.relation;
   const allowed = role === 'ADMIN' || rel.mentorId === userId || rel.menteeId === userId;
   return allowed ? goal : null;
@@ -31,7 +36,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (capGate) return capGate;
   const { id } = await params;
 
-  const goal = await goalIfAllowed(session.user.id, session.user.role, id);
+  return await withTenantScope(session, async () => {
+  const goal = await goalIfAllowed(session.user.id, session.user.role, id, resolveOrgId(session));
+  if (goal === 'missing') return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!goal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   // Same rule as creating one (#1408): a mentee cannot move the goals of a
@@ -67,6 +74,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
   return NextResponse.json({ goal: updated });
+  });
 }
 
 // DELETE — remove a goal (participants/admin).
@@ -77,7 +85,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (capGate) return capGate;
   const { id } = await params;
 
-  const goal = await goalIfAllowed(session.user.id, session.user.role, id);
+  const goal = await goalIfAllowed(session.user.id, session.user.role, id, resolveOrgId(session));
+  if (goal === 'missing') return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!goal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   await prisma.goal.delete({ where: { id } }).catch(() => null);

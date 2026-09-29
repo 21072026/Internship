@@ -9,6 +9,8 @@ import { notify } from '@/lib/notify';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestDecisionEmail } from '@/services/emailService';
 import { resolveMeetingLink } from '@/lib/meetingRoom';
+import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
 
 const schema = z.object({ action: z.enum(['accept', 'decline']) });
 
@@ -51,8 +53,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (capGate) return capGate;
   const { id } = await params;
 
+  return await withTenantScope(session, async () => {
   const req = await prisma.meetingRequest.findUnique({ where: { id }, include: { relation: true } });
-  if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // MeetingRequest has no orgId and the nested include is never scoped: a
+  // request on another tenant's relation reads as not found, before it can be
+  // declined or turned into a meeting (#2542).
+  if (!req || !sameOrgOrUnknown(req.relation.orgId, resolveOrgId(session))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const rel = req.relation;
   const allowed = session.user.role === 'ADMIN' || rel.mentorId === session.user.id;
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -105,4 +113,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     link: `/messages/${rel.id}`,
   });
   return NextResponse.json({ ok: true, status: 'ACCEPTED', meetingId: meeting.id });
+  });
 }

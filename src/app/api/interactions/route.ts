@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { withTenantScope } from '@/lib/orgContext';
+import { orgScoped, resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
@@ -48,8 +49,15 @@ export async function GET(request: Request) {
     // scope goes in as a conjunct here too. ADMIN's empty scope is dropped by
     // `andScope`, which keeps the pointless `relation: {}` join out of the
     // query exactly as the old length check did.
+    //
+    // InteractionLog has no orgId of its own — its tenant is its relation's —
+    // so the middleware cannot scope this list, flag on or off (#2542). The
+    // caller's org is pinned onto the relation join explicitly; for an ADMIN
+    // (whose role scope is empty) that is the only thing keeping another
+    // tenant's notes out. An org-less caller gets the scope unchanged.
+    const relationWhere = orgScoped<Prisma.MentorshipRelationWhereInput>(relationScope, resolveOrgId(session));
     const where = andScope<Prisma.InteractionLogWhereInput>(
-      Object.keys(relationScope).length > 0 ? { relation: relationScope } : {},
+      Object.keys(relationWhere).length > 0 ? { relation: relationWhere } : {},
       relationId ? { relationId } : undefined
     );
 
@@ -99,7 +107,8 @@ export async function POST(request: Request) {
       where: { id: relationId },
     });
 
-    if (!relation) {
+    // Another tenant's relation answers exactly like a missing one (#2542).
+    if (!relation || !sameOrgOrUnknown(relation.orgId, resolveOrgId(session))) {
       return NextResponse.json({ error: 'Mentorship relation not found' }, { status: 404 });
     }
 
