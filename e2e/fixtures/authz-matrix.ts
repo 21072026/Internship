@@ -302,8 +302,15 @@ export const MARKETING_MENTOR_ADMIN_ONLY: SalesProbe[] = [
 export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   { method: 'GET', path: '/api/mentorship/:ownRelationId', expect: 'ok', why: 'own record' },
   { method: 'GET', path: '/api/mentorship/:colleagueRelationId', expect: 'forbidden', why: "a colleague's record" },
-  { method: 'GET', path: '/api/mentorship/:foreignRelationId', expect: 'forbidden', why: "another org's record" },
+  // Resolved inside the caller's tenant first (#2613): another org's record
+  // answers like a missing one, not with a 403 that confirms it exists.
+  { method: 'GET', path: '/api/mentorship/:foreignRelationId', expect: 'notFound', why: "another org's record" },
+  { method: 'PUT', path: '/api/mentorship/:foreignRelationId', body: { nextActionNote: 'x' }, expect: 'notFound', why: "another org's record" },
   { method: 'PUT', path: '/api/mentorship/:colleagueRelationId', body: { nextActionNote: 'x' }, expect: 'forbidden', why: "a colleague's record" },
+  // Re-pointing a record at an account is ADMIN-only in every vertical
+  // (#2613); the role check answers before the id is looked up.
+  { method: 'PUT', path: '/api/mentorship/:ownRelationId', body: { companyId: ':colleagueCompanyId' }, expect: 'forbidden', why: "re-point own record at a colleague's account" },
+  { method: 'PUT', path: '/api/mentorship/:ownRelationId', body: { companyId: ':foreignCompanyId' }, expect: 'forbidden', why: "re-point own record at another org's account" },
   { method: 'GET', path: '/api/companies/:ownCompanyId', expect: 'ok', why: 'own account' },
   { method: 'GET', path: '/api/companies/:colleagueCompanyId', expect: 'notFound', why: "a colleague's account" },
   { method: 'GET', path: '/api/companies/:foreignCompanyId', expect: 'notFound', why: "another org's account" },
