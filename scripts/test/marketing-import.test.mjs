@@ -39,6 +39,7 @@ const {
   leadStandInEmail,
   normalizeExternalIdKey,
   parseImportDate,
+  IMPORT_DATE_YEARS,
   makeMarketingValidator,
   normalizeVatKey,
   parseChannels,
@@ -170,6 +171,7 @@ async function runFile(text, store, options = {}) {
         orgKey: ORG,
         authoritative: options.authoritative === true,
         trialLengthDays: store.trialLengthDays,
+        ...(store.now ? { now: store.now } : {}),
       }),
     apply: (chunk) => applyPlannedAccounts(chunk, writer),
     dryRun: !apply,
@@ -1093,6 +1095,79 @@ test('a conflicting external_id is an ERROR on its row, in the dry run too — n
     assert.match(report.rows[4].reason, /is given to row 4 with a different vat_id/);
   }
   assert.equal(store.accounts.find((a) => a.id === 'co-b').externalId, 'SV-B', 'nothing was re-pointed');
+});
+
+test('customer_since reaches back to 1900; a trial date keeps 2000–2100, and the error names the range', () => {
+  assert.equal(parseImportDate('1998-03-01', IMPORT_DATE_YEARS.customerSince).toISOString(), '1998-03-01T00:00:00.000Z');
+  assert.equal(parseImportDate('1998-03-01T08:00:00Z', IMPORT_DATE_YEARS.customerSince).toISOString(), '1998-03-01T08:00:00.000Z');
+  assert.equal(parseImportDate('1998-03-01'), null, 'the default is the trial range');
+  assert.equal(parseImportDate('1899-12-31', IMPORT_DATE_YEARS.customerSince), null);
+  const validate = makeMarketingValidator({ stageKeys: TRIAL_STAGES });
+  const table = parseDelimited(datedFile(
+    { name: 'Old Customer GmbH', since: '1998-03-01' },
+    { name: 'Old Trial GmbH', trialStart: '1999-01-01' },
+  ));
+  const [since, trial] = table.rows.map((r) => validate(r, table.header));
+  assert.equal(since.ok, true);
+  assert.equal(since.value.customerSince.toISOString(), '1998-03-01T00:00:00.000Z');
+  assert.equal(trial.ok, false);
+  assert.match(trial.reason, /trial_started_at must be an ISO date .* between 2000-01-01 and 2100-12-31, got "1999-01-01"/);
+});
+
+test('two rows giving one EXISTING account two different external ids: the second is an ERROR, not a duplicate SKIP', async () => {
+  // The cutover case: the account is matched by VAT and carries no id yet.
+  const store = memoryStore({ accounts: [account({ vatId: 'DE811234567' })] });
+  const text = datedFile(
+    { name: 'Alpha GmbH', vat: 'DE811234567', ext: 'X1' },
+    { name: 'Alpha GmbH', vat: 'DE811234567', ext: 'Y2' },
+    // the same id again, or no id at all, is still the plain duplicate
+    { name: 'Alpha GmbH', vat: 'DE811234567', ext: 'x1' },
+    { name: 'Alpha GmbH', vat: 'DE811234567' },
+  );
+  for (const apply of [false, true]) {
+    const fresh = memoryStore({ accounts: [account({ vatId: 'DE811234567' })] });
+    const report = await runFile(text, apply ? store : fresh, { apply });
+    assert.deepEqual(report.rows.map((r) => r.status), ['UPDATE', 'ERROR', 'SKIP', 'SKIP'], `apply=${apply}`);
+    assert.match(report.rows[1].reason, /external_id "Y2" differs from the external_id row 1 gives the same account/);
+    assert.match(report.rows[2].reason, /duplicate account in file \(first seen at row 1\)/);
+  }
+  assert.equal(store.accounts[0].externalId, 'X1');
+});
+
+test('the trial pair the record ENDS UP with is checked: a gap-filled start after the kept end is an ERROR', async () => {
+  const seed = () => ({
+    now: D_NOW,
+    accounts: [account({ id: 'co-a', contactEmail: 'a@alpha.example' })],
+    leads: [{ id: 'lead-a', email: standIn('a@alpha.example'), fullName: 'A', phone: null, city: null, country: 'DE', preferredLanguage: null, referralSource: null, companyId: 'co-a', role: 'MENTEE' }],
+    relations: [{ id: 'rel-a', mentorId: OWNER.id, menteeId: 'lead-a', companyId: 'co-a', pipelineStatus: 'TRIAL_ACTIVE', status: 'ACTIVE', trialStartedAt: null, trialEndsAt: new Date('2026-05-10T00:00:00.000Z'), startDate: D_NOW }],
+  });
+  const text = datedFile({ name: 'Alpha GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'a@alpha.example', trialStart: '2026-05-20' });
+  for (const apply of [false, true]) {
+    const store = memoryStore(seed());
+    const report = await runFile(text, store, { apply, stageKeys: TRIAL_STAGES });
+    assert.equal(report.rows[0].status, 'ERROR', `apply=${apply}`);
+    assert.match(report.rows[0].reason, /trial_ends_at would be before trial_started_at \(the record keeps its trial_ends_at/);
+    assert.equal(store.relations[0].trialStartedAt, null, 'nothing written');
+  }
+  // With overwrite and a consistent pair from the file, the same row lands.
+  const store = memoryStore(seed());
+  const fixed = datedFile({ name: 'Alpha GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'a@alpha.example', trialStart: '2026-05-20', trialEnd: '2026-06-20' });
+  const forced = await runFile(fixed, store, { apply: true, authoritative: true, stageKeys: TRIAL_STAGES });
+  assert.equal(forced.rows[0].status, 'UPDATE');
+  assert.equal(store.relations[0].trialEndsAt.toISOString(), '2026-06-20T00:00:00.000Z');
+});
+
+test('a TRIAL_ACTIVE row whose trial has already ended is warned about in the preview', async () => {
+  const store = memoryStore({ now: D_NOW, trialLengthDays: 14 });
+  const text = datedFile(
+    { name: 'Past GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'p@past.example', trialEnd: '2026-05-01' },
+    { name: 'OldStart GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'o@oldstart.example', trialStart: '2026-01-01' },
+    { name: 'Future GmbH', stage: 'TRIAL_ACTIVE', contactEmail: 'f@future.example', trialEnd: '2026-05-04' },
+  );
+  const dry = await runFile(text, store, { stageKeys: TRIAL_STAGES });
+  assert.match(dry.rows[0].reason, /trial_ends_at is in the past \(2026-05-01\): the record will move to TRIAL_EXPIRED on the next sweep/);
+  assert.match(dry.rows[1].reason, /the default trial window is in the past \(2026-01-15\)/);
+  assert.equal(dry.rows[2].reason, undefined, 'a trial ending today is not in the past');
 });
 
 test('the shipped sample file runs clean, twice (#2554: external ids, dates, one default window)', async () => {

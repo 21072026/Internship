@@ -88,8 +88,23 @@ checked per field: a value past its cap is a row-level `ERROR`, never a silent t
 Anything else is a row `ERROR` naming the column: `04.05.2026` (day-first and month-first
 cannot be told apart, and a wrong guess moves a trial end by months without a single error),
 a time without a zone (it would mean the importing machine's timezone), an impossible date
-(`2026-02-30` is refused, not rolled into March), or a year outside 2000–2100.
-`trial_ends_at` before `trial_started_at` is an `ERROR` too.
+(`2026-02-30` is refused, not rolled into March), or a year out of range. The range is
+**2000–2100 for the two trial dates** (the bound a trial end typed into the app has) and
+**1900–2100 for `customer_since`** — a merchant can have been a customer since 1998. The
+error names the range: `customer_since must be an ISO date (…) between 1900-01-01 and
+2100-12-31, got "…"`.
+`trial_ends_at` before `trial_started_at` is an `ERROR` too — and the check is on the pair
+the record **ends up with**, not only on the file's pair: a file that gives only
+`trial_started_at` for a record whose stored `trial_ends_at` is earlier would, filling the
+gap, leave a trial that ends before it began, so that row is an `ERROR` (`trial_ends_at
+would be before trial_started_at (the record keeps its trial_ends_at; …)`). Give both dates,
+or run with overwrite.
+
+A row placed in `TRIAL_ACTIVE` whose trial end — from the file, the record, or the default
+window counted from `trial_started_at` — is **already in the past** imports, and the preview
+warns: `trial_ends_at is in the past (YYYY-MM-DD): the record will move to TRIAL_EXPIRED on
+the next sweep`. If that is not what the source system says, the date is wrong, not the
+stage.
 
 The dates live on the **funnel record**, so they are written only when the row places one
 (a `stage` and a `contact_email`). A row that carries dates but places no record says so in
@@ -186,6 +201,13 @@ Two rows for the same account **in one file**: the first wins, the second is rep
 `SKIP` naming the row it duplicates. The check is on the account a row **resolves to**, not
 on the identity it claims — one merchant listed twice with the VAT filled in on only one of
 the two lines holds two different claimed keys and is still one account.
+
+A duplicate line that gives the account a **different `external_id`** than the line that
+won is not a harmless duplicate, it is the file contradicting itself about who the id
+belongs to: an `ERROR` (`external_id "Y2" differs from the external_id row 1 gives the same
+account`), in the preview too. That holds whether the account is new or already in the CRM
+— including the cutover case, where every row matches an account whose id is still empty.
+The same id again (any spelling) or no id at all stays the plain `SKIP`.
 
 ## Row outcomes
 
@@ -523,7 +545,8 @@ remaining reason is one you accept.
 | `contact_email is on a reserved stand-in domain` | `@import.local` / `@erased.local` are addresses the CRM generated, not mailboxes — usually the file was exported from the CRM itself. Use the real address or blank it |
 | `<field> is longer than <n> characters` | shorten it. Nothing is truncated for you |
 | `trial_started_at` / `trial_ends_at` / `customer_since must be an ISO date …` | write `YYYY-MM-DD` (or a date-time with `Z`/`±HH:MM`). In Excel: format the column as text `JJJJ-MM-TT` / `yyyy-mm-dd` before saving |
-| `trial_ends_at is before trial_started_at` | one of the two is wrong in the source; fix it there |
+| `trial_ends_at is before trial_started_at` · `trial_ends_at would be before trial_started_at (the record keeps its …)` | one of the two is wrong in the source; fix it there. The second form means the file's date clashes with the one the record already has — give both dates, or run with overwrite |
+| `external_id "…" differs from the external_id row N gives the same account` | two lines of the file are one merchant but carry two ids — one of them is wrong |
 | `external_id "…" is carried by N accounts of this organization` | the CRM already holds duplicates under that id: merge them in the app, then dry-run again |
 | `external_id "…" and vat_id name two different accounts` · `… differs from the external id "…" of the account this row matches` | the file and the CRM disagree about who this merchant is. Check the id against the source system; never "fix" it by blanking the CRM's value |
 | `external_id "…" is already given to a different account by row N` · `… is given to row N with a different vat_id` | the file itself hands one id to two merchants — one of the two lines has the wrong id |

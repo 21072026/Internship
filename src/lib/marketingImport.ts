@@ -60,7 +60,6 @@ import { planFieldUpdates } from './externalSyncPolicy';
 import { TEXT_LIMITS } from './textLimits';
 import {
   DEFAULT_TRIAL_LENGTH_DAYS,
-  parseTrialEndDate,
   TRIAL_ACTIVE_STAGE_KEY,
   trialWindowFor,
   type ExistingTrialWindow,
@@ -274,6 +273,36 @@ export function accountMatchKey(row: { name: string; country: string; vatId: str
 }
 
 /**
+ * The years a date cell may name (#2554 review). The trial dates keep the
+ * hand-set trial end's bound (`parseTrialEndDate`: 2000–2100), because they
+ * feed the reminder ladder; `customer_since` reaches back to 1900 — a merchant
+ * can have been a customer since 1998, and refusing a well-formed ISO date as
+ * "not an ISO date" would be a lie. The row error names the range.
+ */
+export const IMPORT_DATE_YEARS = {
+  trial: { min: 2000, max: 2100 },
+  customerSince: { min: 1900, max: 2100 },
+} as const;
+
+export interface ImportDateYears {
+  min: number;
+  max: number;
+}
+
+/** `YYYY-MM-DD` as midnight UTC, a real calendar day within `years`, else null. */
+function parseIsoDay(text: string, years: ImportDateYears): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!m) return null;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (year < years.min || year > years.max) return null;
+  const value = new Date(Date.UTC(year, month - 1, day));
+  if (value.getUTCFullYear() !== year || value.getUTCMonth() !== month - 1 || value.getUTCDate() !== day) {
+    return null;
+  }
+  return value;
+}
+
+/**
  * A date cell (#2554). Two ISO 8601 shapes and nothing else:
  *
  *   • `YYYY-MM-DD` — a calendar DAY, stored as midnight UTC, the same reading
@@ -287,14 +316,15 @@ export function accountMatchKey(row: { name: string; country: string; vatId: str
  * machine's timezone. So is `04.05.2026`: day-first or month-first cannot be
  * told apart from the cell, and a wrong guess moves a trial end by months
  * without a single ERROR. Returns null for anything else — including an
- * impossible date (`2026-02-30` is refused, not rolled into March).
+ * impossible date (`2026-02-30` is refused, not rolled into March) and a year
+ * outside `years` (default: the trial range, 2000–2100).
  */
-export function parseImportDate(raw: string): Date | null {
+export function parseImportDate(raw: string, years: ImportDateYears = IMPORT_DATE_YEARS.trial): Date | null {
   const text = raw.trim();
-  const dayOnly = parseTrialEndDate(text);
+  const dayOnly = parseIsoDay(text, years);
   if (dayOnly) return dayOnly;
   const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.exec(text);
-  if (!m || !parseTrialEndDate(m[1])) return null;
+  if (!m || !parseIsoDay(m[1], years)) return null;
   const [hours, minutes, seconds] = [Number(m[2]), Number(m[3]), Number(m[4] ?? '0')];
   if (hours > 23 || minutes > 59 || seconds > 59) return null;
   const value = new Date(`${m[1]}T${m[2]}:${m[3]}:${m[4] ?? '00'}${m[5] ?? ''}${m[6]}`);
@@ -512,16 +542,18 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
       trialEndsAt: null,
       customerSince: null,
     };
-    for (const [field, header] of [
-      ['trialStartedAt', 'trial_started_at'],
-      ['trialEndsAt', 'trial_ends_at'],
-      ['customerSince', 'customer_since'],
+    for (const [field, header, years] of [
+      ['trialStartedAt', 'trial_started_at', IMPORT_DATE_YEARS.trial],
+      ['trialEndsAt', 'trial_ends_at', IMPORT_DATE_YEARS.trial],
+      ['customerSince', 'customer_since', IMPORT_DATE_YEARS.customerSince],
     ] as const) {
       const raw = read(field);
       if (!raw) continue;
-      const value = parseImportDate(raw);
+      const value = parseImportDate(raw, years);
       if (!value) {
-        return reject(`${header} must be an ISO date (YYYY-MM-DD, or a date-time with a zone), got "${raw}"`);
+        return reject(
+          `${header} must be an ISO date (YYYY-MM-DD, or a date-time with a zone) between ${years.min}-01-01 and ${years.max}-12-31, got "${raw}"`,
+        );
       }
       dates[field] = value;
     }
@@ -780,6 +812,11 @@ export interface MarketingDiffContext {
    * this is only what the warning says. Defaults to the code default.
    */
   trialLengthDays?: number;
+  /**
+   * "Today" for the dry-run warning on a trial whose end has already passed.
+   * Defaults to the wall clock; the unit tests pin it.
+   */
+  now?: Date;
 }
 
 function blankToUndefined(value: string): string | undefined {
@@ -985,6 +1022,12 @@ export function diffMarketingAccounts(
   // Existing accounts an earlier row already claimed — two rows updating one
   // account is the same duplicate, one step later.
   const claimedBy = new Map<string, number>();
+  // The external id the claiming row gave each existing account (#2554 review).
+  // The cutover case is every row matching an account whose `externalId` is
+  // still null, so the id is not in `index` yet — without this a second row
+  // naming the same account under a DIFFERENT id would read as a harmless
+  // duplicate and the first id would win in silence.
+  const claimedExternal = new Map<string, { row: number; key: string }>();
   const seenLeadKeys = new Map<string, number>();
   // External ids the file has already given to an account (#2554). One id, one
   // account: a later row handing the same id to a DIFFERENT account would leave
@@ -1073,6 +1116,16 @@ export function diffMarketingAccounts(
     if (target) {
       const claimed = claimedBy.get(target.id);
       if (claimed !== undefined) {
+        const earlierExternal = claimedExternal.get(target.id);
+        if (externalKey && earlierExternal && earlierExternal.key !== externalKey) {
+          refuse(
+            row,
+            key,
+            value,
+            `external_id "${value.externalId}" differs from the external_id row ${earlierExternal.row} gives the same account`,
+          );
+          continue;
+        }
         skip(row, key, value, `duplicate account in file (first seen at row ${claimed})`);
         continue;
       }
@@ -1087,6 +1140,7 @@ export function diffMarketingAccounts(
     }
     if (target) {
       claimedBy.set(target.id, row);
+      if (externalKey) claimedExternal.set(target.id, { row, key: externalKey });
     } else {
       indexAccount(planned, {
         row,
@@ -1149,6 +1203,10 @@ export function diffMarketingAccounts(
       warnings,
       context,
     });
+    if (funnel && 'refused' in funnel) {
+      refuse(row, key, value, funnel.refused);
+      continue;
+    }
     // The dates live on the funnel record, so a row that places none cannot
     // keep them — said out loud rather than dropped (#2554).
     if (!funnel) {
@@ -1218,7 +1276,7 @@ function planFunnel(
     warnings: string[];
     context: MarketingDiffContext;
   },
-): MarketingFunnelPlan | null {
+): MarketingFunnelPlan | { refused: string } | null {
   const { context, warnings } = deps;
   if (!value.stage) return null;
 
@@ -1330,14 +1388,30 @@ function planFunnel(
     relationChanged = Object.keys(incomingRelation);
   }
 
+  // The pair the record will END UP with, not only the file's pair (#2554
+  // review): a gap-fill that writes a start after the end the record already
+  // carries would store a trial that ends before it began. Checked on what
+  // the write would leave, so an authoritative run that replaces both is fine.
+  const endAfter = relationChanges.trialEndsAt ?? relation?.trialEndsAt ?? null;
+  const startAfter = relationChanges.trialStartedAt ?? relation?.trialStartedAt ?? null;
+  if (endAfter && startAfter && endAfter < startAfter) {
+    const fromFile = [
+      ...(relationChanges.trialStartedAt ? [] : ['trial_started_at']),
+      ...(relationChanges.trialEndsAt ? [] : ['trial_ends_at']),
+    ];
+    return {
+      refused: `trial_ends_at would be before trial_started_at${
+        fromFile.length > 0 ? ` (the record keeps its ${fromFile.join(' and ')}; fix the file or run with overwrite)` : ''
+      }`,
+    };
+  }
+
   // The trial window the WRITE will stamp when the file gives no end (#2551's
   // `trialWindowFor`, applied by funnelRelationCreateData/UpdateData). The
   // dry run says so on the row, so an operator reads "30 days from the import
   // day" before it happens rather than in the reminder mails afterwards.
   let trialEnd: MarketingFunnelPlan['trialEnd'] = null;
   if (toStage === TRIAL_ACTIVE_STAGE_KEY) {
-    const endAfter = relationChanges.trialEndsAt ?? relation?.trialEndsAt ?? null;
-    const startAfter = relationChanges.trialStartedAt ?? relation?.trialStartedAt ?? null;
     const entering = relation === null || fromStage !== toStage;
     const days = context.trialLengthDays ?? DEFAULT_TRIAL_LENGTH_DAYS;
     trialEnd = relationChanges.trialEndsAt ? 'file' : relation?.trialEndsAt ? 'kept' : entering ? 'default' : 'missing';
@@ -1347,6 +1421,20 @@ function planFunnel(
       );
     } else if (!endAfter) {
       warnings.push('the record is in TRIAL_ACTIVE with no trial end and trial_ends_at is blank: no trial reminder will be sent until one is set');
+    }
+    // A trial that has already ended imports fine and is then moved to
+    // TRIAL_EXPIRED by the next `expireTrials` sweep — said in the preview, so
+    // the operator does not read it in the funnel the next morning.
+    const today = context.now ?? new Date();
+    const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    const windowEnd =
+      endAfter ?? (entering && startAfter ? new Date(startAfter.getTime() + days * 24 * 60 * 60 * 1000) : null);
+    if (windowEnd && windowEnd.getTime() < todayUtc) {
+      warnings.push(
+        `${endAfter ? 'trial_ends_at' : 'the default trial window'} is in the past (${windowEnd
+          .toISOString()
+          .slice(0, 10)}): the record will move to TRIAL_EXPIRED on the next sweep`,
+      );
     }
   }
 
