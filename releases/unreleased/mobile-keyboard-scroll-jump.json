@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Fixed the message composer scrolling out of view on mobile Safari when the keyboard opens — src/hooks/useVisibleViewportHeight.ts now pins the document to the top for a short window after a textarea/input gains focus, cancelling Safari's own auto-scroll before it can produce a visible jump.",
+  "notes": {
+    "en": ["Fixed the message composer jumping above the visible screen on mobile Safari when the keyboard opens."],
+    "tr": ["Mobil Safari'de klavye açıldığında mesaj yazma kutusunun ekranın görünür alanının üstünde kalması sorunu giderildi."],
+    "de": ["Behoben: Das Nachrichtenfeld sprang auf mobilem Safari beim Öffnen der Tastatur aus dem sichtbaren Bereich."]
+  }
+}
