@@ -164,7 +164,35 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // table, so overriding them dresses the two consistently. `cohortHired` is
       // only a FALLBACK on the attribution table: a tenant that named its own
       // finished stage sees that name instead (#1882).
+      // A rep's own /account page (#2558): the e-mail preference groups, the
+      // notification categories and the activity-tracking consent all named
+      // mentors. The group KEYS (mentorship_lifecycle…) are storage and stay.
+      emailGroups: {
+        direct_messages: { desc: 'A real person wrote to you: an in-app message, or a colleague’s e-mail to you directly.' },
+        mentorship_lifecycle: { name: 'Lead milestones', desc: 'A lead you own changed — requests, decisions and assignments.' },
+        digests: { desc: 'Periodic roll-ups: unread messages, daily activity, the weekly rep digest.' },
+        inbound_requests: { desc: 'Someone is asking something of you: a contact form, a demo request, a join request.' },
+      },
+      account: {
+        notifCategories: { mentorship: 'Lead updates' },
+      },
+      consent: {
+        items: {
+          activityTracking: {
+            desc: 'Allow recording which pages you visit and how long you spend, so your admins can see a detailed activity report. Off by default; only in-app navigation is recorded — never keystrokes or page content.',
+          },
+        },
+      },
+      settings: {
+        reminderDaysHint: 'Remind a rep after this many days without a logged interaction',
+        weeklyDigest: 'Send the weekly rep digest',
+        outcomeAutoSendHint: 'Off by default. When off, reaching an outcome stage notifies the rep and prefills a draft they read, edit and send. When on, the templated message goes to the lead without review — a rejection cannot be recalled.',
+        require2faAdminsMentors: 'Required for admins and reps',
+        aiMonthlyQuotaHint: 'How many calls to the AI provider may be made per calendar month. Every AI feature draws on the same pool; only a call that actually succeeded is counted, and the counter resets on the 1st. Usage is metered across the whole installation rather than per organisation, so on a shared installation every organisation spends from the same month’s pool. Once it is spent the AI gate refuses further calls until next month — nothing else in the app is affected. 0 switches AI off entirely.',
+        bulkImport: 'Bulk import leads',
+      },
       analytics: {
+        subtitle: 'Funnel, rep workload and activity insights',
         cohortTotal: 'Leads',
         cohortHired: 'Won',
         sourceConversionTitle: 'Conversion by source',
@@ -503,7 +531,32 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'İlk fırsatı oluştur',
         },
       },
+      emailGroups: {
+        direct_messages: { desc: 'Sana gerçek bir insan yazdı: uygulama içi bir mesaj ya da bir çalışma arkadaşının doğrudan e-postası.' },
+        mentorship_lifecycle: { name: 'Müşteri adayı kilometre taşları', desc: 'Sorumlu olduğun bir müşteri adayında bir şey değişti — talepler, kararlar ve atamalar.' },
+        digests: { desc: 'Belirli aralıklarla gelen toplu özetler: okunmamış mesajlar, günlük hareketler, haftalık temsilci özeti.' },
+        inbound_requests: { desc: 'Biri senden bir şey istiyor: iletişim formu, demo talebi, katılma isteği.' },
+      },
+      account: {
+        notifCategories: { mentorship: 'Müşteri adayı güncellemeleri' },
+      },
+      consent: {
+        items: {
+          activityTracking: {
+            desc: 'Hangi sayfaları ziyaret ettiğinin ve ne kadar kaldığının kaydedilmesine izin ver; yöneticilerin ayrıntılı bir etkinlik raporu görebilsin. Varsayılan olarak kapalı; yalnızca uygulama içi gezinme kaydedilir — tuş vuruşları ya da sayfa içeriği asla.',
+          },
+        },
+      },
+      settings: {
+        reminderDaysHint: 'Bu kadar gün etkileşim kaydedilmezse temsilciye hatırlat',
+        weeklyDigest: 'Haftalık temsilci özetini gönder',
+        outcomeAutoSendHint: 'Varsayılan olarak kapalı. Kapalıyken sonuç aşamasına ulaşılınca temsilci bilgilendirilir ve okuyup düzenleyip göndereceği bir taslak hazırlanır. Açıkken şablon mesaj incelenmeden müşteri adayına gider — bir ret geri alınamaz.',
+        require2faAdminsMentors: 'Yöneticiler ve temsilciler için zorunlu',
+        aiMonthlyQuotaHint: 'Bir takvim ayında yapay zekâ sağlayıcısına kaç çağrı yapılabileceği. Tüm yapay zekâ özellikleri aynı havuzdan harcar; yalnızca başarılı olan çağrı sayılır ve sayaç ayın 1\'inde sıfırlanır. Kullanım kurum başına değil tüm kurulum genelinde ölçülür; paylaşılan bir kurulumda her kurum aynı ayın havuzundan harcar. Havuz bitince yapay zekâ kapısı bir sonraki aya kadar yeni çağrıları reddeder — uygulamanın geri kalanı etkilenmez. 0 yapay zekâyı tamamen kapatır.',
+        bulkImport: 'Müşteri adaylarını toplu içe aktar',
+      },
       analytics: {
+        subtitle: 'Satış hunisi, temsilci iş yükü ve etkinlik içgörüleri',
         cohortTotal: 'Müşteri adayı',
         cohortHired: 'Kazanılan',
         sourceConversionTitle: 'Kaynağa göre dönüşüm',
@@ -751,7 +804,32 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'Ersten Deal anlegen',
         },
       },
+      emailGroups: {
+        direct_messages: { desc: 'Ein echter Mensch hat dir geschrieben: eine Nachricht in der App oder die direkte E-Mail einer Kollegin oder eines Kollegen.' },
+        mentorship_lifecycle: { name: 'Lead-Meilensteine', desc: 'Bei einem deiner Leads hat sich etwas geändert — Anfragen, Entscheidungen und Zuordnungen.' },
+        digests: { desc: 'Regelmäßige Sammelmails: ungelesene Nachrichten, Tagesaktivität, die wöchentliche Vertriebsübersicht.' },
+        inbound_requests: { desc: 'Jemand möchte etwas von dir: ein Kontaktformular, eine Demo-Anfrage, eine Beitrittsanfrage.' },
+      },
+      account: {
+        notifCategories: { mentorship: 'Lead-Updates' },
+      },
+      consent: {
+        items: {
+          activityTracking: {
+            desc: 'Erlaube die Aufzeichnung, welche Seiten du besuchst und wie lange, damit deine Admins einen detaillierten Aktivitätsbericht sehen. Standardmäßig aus; aufgezeichnet wird nur die Navigation in der App — nie Tastatureingaben oder Seiteninhalte.',
+          },
+        },
+      },
+      settings: {
+        reminderDaysHint: 'Einen Vertriebsmitarbeiter nach so vielen Tagen ohne erfasste Interaktion erinnern',
+        weeklyDigest: 'Wöchentliche Zusammenfassung für Vertriebsmitarbeiter senden',
+        outcomeAutoSendHint: 'Standardmäßig aus. Aus: Beim Erreichen einer Ergebnisphase wird der Vertriebsmitarbeiter benachrichtigt und erhält einen Entwurf zum Lesen, Bearbeiten und Senden. An: Die Vorlage geht ohne Prüfung an den Lead — eine Absage lässt sich nicht zurückholen.',
+        require2faAdminsMentors: 'Pflicht für Admins und Vertriebsmitarbeiter',
+        aiMonthlyQuotaHint: 'Wie viele Aufrufe an den KI-Anbieter pro Kalendermonat erlaubt sind. Alle KI-Funktionen nutzen dasselbe Kontingent; gezählt wird nur ein erfolgreicher Aufruf, und der Zähler wird am 1. zurückgesetzt. Die Nutzung wird für die gesamte Installation gemessen, nicht pro Organisation — auf einer geteilten Installation verbraucht jede Organisation aus demselben Monatskontingent. Ist es aufgebraucht, lehnt die KI-Schranke weitere Aufrufe bis zum nächsten Monat ab; der Rest der App ist nicht betroffen. 0 schaltet KI komplett ab.',
+        bulkImport: 'Leads per Massenimport hinzufügen',
+      },
       analytics: {
+        subtitle: 'Funnel, Auslastung der Vertriebsmitarbeiter und Aktivitäts-Insights',
         cohortTotal: 'Leads',
         cohortHired: 'Gewonnen',
         sourceConversionTitle: 'Konversion nach Quelle',

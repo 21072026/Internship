@@ -11,6 +11,7 @@ import { StageSlaEditor } from '@/components/StageSlaEditor';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 import { useVertical } from '@/lib/verticalClient';
 import { DEFAULT_TRIAL_LENGTH_DAYS, MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
+import { verticalHasCapability } from '@/lib/verticals';
 
 // The delivery log answers "did our mail actually go out, and when?", and a
 // newsletter or announcement send writes one EmailLog row per recipient — 50
@@ -68,7 +69,8 @@ export default function AdminSettingsPage() {
   // Trial length (#2551) — only meaningful where the funnel has a trial stage,
   // i.e. the MARKETING vertical; shown there only. Same load/post dance as the
   // quotas above: an untouched inherited value is never posted.
-  const hasTrialStage = useVertical() === 'MARKETING';
+  const vertical = useVertical();
+  const hasTrialStage = vertical === 'MARKETING';
   const [trialLengthDays, setTrialLengthDays] = useState(String(DEFAULT_TRIAL_LENGTH_DAYS));
   const [loadedTrialLengthDays, setLoadedTrialLengthDays] = useState(String(DEFAULT_TRIAL_LENGTH_DAYS));
   const [trialLengthError, setTrialLengthError] = useState<string | null>(null);
@@ -676,8 +678,11 @@ export default function AdminSettingsPage() {
         </div>
       </Card>
 
-      {/* The org's competency framework (#822) — criteria as data, not code. */}
-      <EvaluationFrameworkEditor />
+      {/* The org's competency framework (#822) — criteria as data, not code.
+          Only where the vertical scores anyone (#2558): MARKETING carries no
+          `evaluations` capability, so its admins were offered criteria for
+          "what a mentor scores a mentee on" in a product with neither. */}
+      {verticalHasCapability(vertical, 'evaluations') && <EvaluationFrameworkEditor />}
 
       {/* Per-stage service levels (#817) — how long anyone may wait. */}
       <StageSlaEditor />

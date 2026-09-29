@@ -304,7 +304,7 @@ test('an INTERNSHIP mentor\'s empty thread keeps the mentorship welcome (#2557)'
 
 // #2558: the screens a SaleVali admin uses to bring the sales team in. Only
 // the words change (the Role enum is frozen): MENTOR is a rep, MENTEE a lead.
-for (const path of ['/admin/invite', '/admin/users']) {
+for (const path of ['/admin/invite', '/admin/users', '/admin/analytics', '/admin/settings']) {
   test(`a MARKETING admin reads ${path} with no mentorship word (#2558)`, async ({ page }) => {
     const mkt = await adminIn('MARKETING');
     const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', `term-mkt-${path.split('/').pop()}`);
@@ -312,6 +312,8 @@ for (const path of ['/admin/invite', '/admin/users']) {
       await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
       await page.goto(path);
       await expect(page.locator('#main-content h1').first()).toBeVisible({ timeout: 20_000 });
+      // Data-driven pages paint skeletons first; the negative check must read the real page.
+      await expect(page.locator('#main-content .animate-pulse')).toHaveCount(0, { timeout: 20_000 });
       // The users list is fetched after the first paint: wait for the seeded rep.
       if (path === '/admin/users') await expect(page.getByText('Robin Owner').first()).toBeVisible({ timeout: 20_000 });
       expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
@@ -320,3 +322,20 @@ for (const path of ['/admin/invite', '/admin/users']) {
     }
   });
 }
+
+// #2558: a rep's own account page. It has no role shell (no #main-content), so
+// the check reads the page body; the rep is a MENTOR, whose account page
+// carries the capacity and expertise block a mentor fills in.
+test('a MARKETING rep reads /account with no mentorship word (#2558)', async ({ page }) => {
+  const mkt = await adminIn('MARKETING');
+  const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-acct');
+  try {
+    await signInAndSettle(page, fixture.ownerEmail, 'TermPass123', '/');
+    await page.goto('/account');
+    await expect(page.getByTestId('account-menu-button').or(page.locator('h1, h2').first())).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 20_000 });
+    expect(await page.locator('body').innerText()).not.toMatch(MENTORSHIP_WORDS);
+  } finally {
+    await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
+  }
+});
