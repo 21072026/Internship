@@ -219,7 +219,7 @@ a MARKETING admin turned out to read the INTERNSHIP tenant's user list and
 company book with the flag off. `GET /api/users`, `GET /api/candidates` and
 `GET /api/companies` narrow their `where` to the caller's tenant, and every
 by-id handler on a user or a company (`/api/users/[id]` and its
-`activity`/`resend-verification`, `/api/companies/[id]`,
+`activity`/`resend-verification`, `/api/companies/[id]` and its `delete-impact`,
 `/api/admin/users/[id]/*`, the company lookup of `/api/admin/company-users`)
 looks the row up through the same filter, so another tenant's id is the same
 404 as a missing one. Three things to know before copying it:
@@ -240,6 +240,20 @@ looks the row up through the same filter, so another tenant's id is the same
   (`POST /api/companies`, `/api/admin/company-users`, `/api/admin/source-users`,
   `/api/source/mentees`) — otherwise a new MARKETING row would be NULL, i.e. the
   default org's.
+- **A signed-in session with no org is the default org's too**, never
+  unscoped: a 12h JWT minted before the backfill stamped its user still carries
+  `orgId: null`, and `{}` there would fail open across every tenant. Only a
+  missing session gives `{}`.
+- **Server components need it as well.** `/admin` (`src/app/admin/page.tsx`)
+  reads Prisma directly, so no API route's filter reaches it; its counts and
+  "recent" lists carry `withinTenant(…, tenant)` themselves.
+- **History is not fixed by code.** Rows the four create paths wrote before
+  #2542 were NULL and the backfill gave them to the default org, even when a
+  MARKETING admin created them. `node prisma/check-tenant-misattribution.mjs`
+  (read-only, exits 0) lists default-org users and companies whose creator
+  (ActivityLog) or links (company logins, mentorships) belong to another tenant;
+  run it on prod and shared preview and reassign what it finds in a reviewed
+  one-off, or record that it found nothing.
 
 `e2e/tenant-scope-users-companies.spec.ts` proves it on the default (flag-off)
 server with an INTERNSHIP and a MARKETING tenant, both directions; the

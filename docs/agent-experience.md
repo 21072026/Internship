@@ -7350,3 +7350,21 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Paralel ajanlarla `next dev` birkaç yüz testten sonra ~6 GB'a şişip makineyi
   boğuyor** (her spec'te `page.waitForURL` zaman aşımı, kodla ilgisiz). Uzun e2e koşuları
   için `npm run build && npx next start -p <port>` çok daha kararlı.
+
+### 2026-09-29 — #2542 review fixes: the shared Prisma client drifts under parallel worktrees
+
+- **A symlinked `node_modules` shares ONE generated Prisma client** (`node_modules/.prisma/client`).
+  A parallel worktree that runs `prisma generate` on a newer schema rewrites it under you: this
+  branch's `next start` then 500s with `P2022 … column MentorshipRelation.nextActionAt does not
+  exist` on routes you never touched, and `tsc` stays green. Check with
+  `grep -c <field> node_modules/.prisma/client/schema.prisma`. Do not regenerate into the shared
+  tree (it breaks the other worktree the same way); instead give the worktree a real
+  `node_modules/` of per-entry symlinks to the shared one **except** `.prisma` and `@prisma`,
+  copy `@prisma` in, and run `./node_modules/.bin/prisma generate` — Node resolves
+  `.prisma/client` from `@prisma/client`'s real path, so both must be local. Put the symlink back
+  afterwards.
+- **`pkill -f "next start -p 3101"` kills your own shell** (the pattern is in its command line;
+  exit 144). Kill by the port's pid: `ss -ltnp | grep ':3101 '`.
+- **Server components bypass API-route tenant filters.** `/admin` read Prisma directly, so the
+  #2542 route fixes did not cover the first screen every admin opens; grep `src/app/**/page.tsx`
+  for `prisma.` when scoping a model by hand.

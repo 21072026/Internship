@@ -96,6 +96,9 @@ for (const [label, pick] of DIRECTIONS) {
     const ownCompany = await page.request.get(`/api/companies/${own.company.id}`);
     expect(ownCompany.status()).toBe(200);
     expect((await ownCompany.json()).company.id).toBe(own.company.id);
+    const ownImpact = await page.request.get(`/api/companies/${own.company.id}/delete-impact`);
+    expect(ownImpact.status()).toBe(200);
+    expect((await ownImpact.json()).impact.name).toBe(own.company.name);
 
     // Foreign rows: 404 — the same answer as an id that does not exist, so
     // the route confirms nothing about the other tenant.
@@ -104,6 +107,9 @@ for (const [label, pick] of DIRECTIONS) {
       `/api/users/${other.admin.id}`,
       `/api/users/${other.mentee.id}/activity`,
       `/api/companies/${other.company.id}`,
+      // The delete dialog's preview (#2441) runs before the DELETE and would
+      // otherwise confirm the id and disclose the name and cascade counts.
+      `/api/companies/${other.company.id}/delete-impact`,
     ]) {
       const res = await page.request.get(path);
       expect(res.status(), `${path} must be a 404 for another tenant's admin`).toBe(404);
@@ -147,7 +153,60 @@ for (const [label, pick] of DIRECTIONS) {
     expect(company?.name).toBe(other.company.name);
     expect(await prisma.passwordResetToken.count({ where: { userId: other.mentee.id } })).toBe(0);
   });
+
+  test(`the /admin dashboard shows only the own tenant's people · ${label}`, async ({ page }) => {
+    const [own, other] = pick(tenants);
+    await signInAsTenantActor(page, own.admin);
+    // Server-rendered, so it bypasses every API route above (#2542 review):
+    // "Recent candidates" printed the newest mentees of every tenant.
+    const res = await page.request.get('/admin');
+    expect(res.status()).toBe(200);
+    const html = await res.text();
+    expect(html, '/admin leaked another tenant\'s mentee').not.toContain(other.mentee.email);
+    expect(html).not.toContain(`/admin/candidates/${other.mentee.id}`);
+    if (own.org.vertical === 'MARKETING') {
+      // The MARKETING tenant holds exactly the fixture's rows, so its own
+      // mentee is certainly among its five newest — the positive twin.
+      expect(html).toContain(`/admin/candidates/${own.mentee.id}`);
+    }
+  });
 }
+
+/**
+ * A signed-in admin whose JWT carries `orgId: null` — minted before the deploy
+ * backfill stamped the account — is the DEFAULT org's, by the same rule as a
+ * NULL-org row. Reading it as "unscoped" failed open: that admin saw, and could
+ * act by id on, the MARKETING tenant (#2542 review).
+ */
+test('an admin session with no org is the default org\'s, never unscoped', async ({ page }) => {
+  const adminEmail = uniqueEmail('null-org-session-admin');
+  const admin = await seedUser(adminEmail, 'NullOrg123!', 'ADMIN', 'Null Org Session Admin');
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: null } });
+  const { orgB } = tenants;
+  try {
+    await signInAsFreshUser(page, adminEmail, 'NullOrg123!', '/admin');
+    const session = await (await page.request.get('/api/auth/session')).json();
+    expect(session?.user?.orgId ?? null, 'precondition: the session carries no org').toBeNull();
+
+    expect(await ids(page, '/api/users?role=MENTEE', 'users')).not.toContain(orgB.mentee.id);
+    expect(await ids(page, '/api/candidates?all=1', 'candidates')).not.toContain(orgB.mentee.id);
+    expect(await ids(page, '/api/companies?all=1', 'companies')).not.toContain(orgB.company.id);
+    for (const path of [
+      `/api/users/${orgB.mentee.id}`,
+      `/api/companies/${orgB.company.id}`,
+      `/api/companies/${orgB.company.id}/delete-impact`,
+    ]) {
+      expect((await page.request.get(path)).status(), `${path} must be a 404`).toBe(404);
+    }
+    const reset = await page.request.post(`/api/admin/users/${orgB.mentee.id}/reset-password`);
+    expect(reset.status()).toBe(404);
+    expect(await prisma.passwordResetToken.count({ where: { userId: orgB.mentee.id } })).toBe(0);
+    // The positive twin: its own (NULL-org) account is still readable.
+    expect((await page.request.get(`/api/users/${admin.id}`)).status()).toBe(200);
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+});
 
 /**
  * A row whose `orgId` is still NULL is the DEFAULT org's — the rule the deploy

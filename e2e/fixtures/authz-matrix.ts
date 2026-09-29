@@ -223,4 +223,5 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
   { path: `/api/users/${FOREIGN_USER_ID_PARAM}`, kind: 'detail' },
   { path: `/api/users/${FOREIGN_USER_ID_PARAM}/activity`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}`, kind: 'detail' },
+  { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}/delete-impact`, kind: 'detail' },
 ];

@@ -24,8 +24,13 @@
 //   middleware on, there are no NULL rows left and this is the same filter the
 //   middleware injects.
 //
-//   A session with no org resolves to `{}` — unscoped, exactly as before —
-//   which is `orgScoped()`'s rule too.
+//   A SIGNED-IN session with no org is read by the same rule as a row with no
+//   org: it belongs to the default org. Such a session is ordinary — the JWT
+//   lives 12h and re-reads `orgId` only at sign-in or on `update()`, so a token
+//   minted before the backfill stamped its user still carries `orgId: null`.
+//   Reading it as "unscoped" (`orgScoped()`'s rule) would fail OPEN: that admin
+//   would see — and could act by id on — every other tenant's rows. Only a
+//   missing session resolves to `{}`, and every caller has already rejected one.
 //
 // SERVER-ONLY: `defaultOrgId()` touches Prisma (cached after the first call).
 
@@ -35,11 +40,15 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 
 export type TenantWhere = { orgId: string } | { OR: [{ orgId: string }, { orgId: null }] } | Record<string, never>;
 
-/** The caller's tenant as a `where` fragment; `{}` when the session has no org. */
+/**
+ * The caller's tenant as a `where` fragment. A signed-in session without an org
+ * is the default org's (never unscoped); `{}` only when there is no session.
+ */
 export async function tenantWhere(session: Session | null | undefined): Promise<TenantWhere> {
-  const orgId = resolveOrgId(session);
-  if (!orgId) return {};
-  if (orgId === (await defaultOrgId())) return { OR: [{ orgId }, { orgId: null }] };
+  if (!session?.user) return {};
+  const defaultId = await defaultOrgId();
+  const orgId = resolveOrgId(session) ?? defaultId;
+  if (orgId === defaultId) return { OR: [{ orgId }, { orgId: null }] };
   return { orgId };
 }
 
