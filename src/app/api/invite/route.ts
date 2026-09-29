@@ -12,6 +12,7 @@ import { locales } from '@/i18n/config';
 import { z } from 'zod';
 import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
 import { requireCapability } from '@/lib/capabilityGate';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 // Email invitations (#51).
 //
@@ -271,7 +272,7 @@ export async function GET() {
       // resending it is meaningless, so losing the tab would strand the token
       // forever. Hand its URL back — but only to the person who minted it, and
       // only while it is still usable. Every other row keeps its token private.
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const appUrl = await appOriginForOrg(resolveOrgId(session)); // the tenant's own host (#2495)
       const now = new Date();
       const withLinks = invitations.map(({ token, invitedById, ...i }) => ({
         ...i,

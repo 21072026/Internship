@@ -538,8 +538,12 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   `callbacks.redirect` keeps an absolute target only when its hostname is in `servedHosts()`
   (the hostnames of `NEXTAUTH_URL`/`NEXT_PUBLIC_APP_URL` + `MARKETING_HOSTS`; exact match, no
   wildcard, no new env var). Never build a browser-facing URL from `NEXTAUTH_URL` or
-  `NEXT_PUBLIC_APP_URL` again; those stay for e-mail links and IdP/OAuth-registered endpoints,
-  which cannot follow the request host by nature. The rule is unit-tested
+  `NEXT_PUBLIC_APP_URL` again; those stay for IdP/OAuth-registered endpoints, which cannot
+  follow the request host by nature. An **e-mail link** cannot follow a request either, so it
+  follows the recipient tenant (#2495): `appOriginForOrg(orgId)` (`src/lib/orgLinkOrigin.ts`)
+  returns the org's `Organization.publicHost` when this deployment serves it, else the old
+  `NEXT_PUBLIC_APP_URL` — invites, password reset and verification use it; robots/sitemap
+  follow the request host and list only the pages that host's vertical serves. The rule is unit-tested
   (`npm run test:served-hosts`) and pinned end-to-end with forged proxy headers
   (`e2e/host-coherent-redirects.spec.ts`).
 - **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { sendInvitationEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 // Admins manage every invitation; everyone else only the ones they sent — the
 // same split the GET list uses, now that mentors can invite from their own page
@@ -45,7 +46,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     expiresAt.setDate(expiresAt.getDate() + 7);
     await prisma.invitationToken.update({ where: { id }, data: { expiresAt } });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = await appOriginForOrg(invite.orgId); // the invited tenant's host (#2495)
     const registerUrl = `${appUrl}/auth/register?token=${invite.token}`;
     let emailSent = false;
     if (invite.email) {

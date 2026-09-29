@@ -305,6 +305,45 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
 
 // @smoke: the fail-closed rule is the cross-tenant guard (a stranger's request
 // must never land in another company's inbox), and it is cheap.
+// #2495: an invitation is read later, somewhere else, so its link cannot follow
+// a request — it follows the invited tenant's own host mapping. Before, every
+// register link was built from NEXT_PUBLIC_APP_URL and a SaleVali admin's
+// invitation opened the internship product. Here the mapped host is served
+// (MARKETING_HOSTS' default), so the MARKETING admin's link lands on it; the
+// internship admin's, whose org maps nothing, is exactly what it always was.
+test('an invitation link opens the invited tenant’s own product host', async ({ browser }) => {
+  const invitees: string[] = [];
+  const mkt = await browser.newContext();
+  const int = await browser.newContext();
+  try {
+    const mktPage = await mkt.newPage();
+    await signInAndSettle(mktPage, mktAdminEmail, PW, '/admin');
+    const intPage = await int.newPage();
+    await signInAndSettle(intPage, intAdminEmail, PW, '/admin');
+
+    const inviteHost = async (page: Page) => {
+      const email = uniqueEmail('mkt-link-invitee');
+      invitees.push(email);
+      const res = await page.request.post('/api/invite', { data: { email, role: 'MENTOR' } });
+      expect(res.ok(), await res.text()).toBeTruthy();
+      const { registerUrl } = (await res.json()) as { registerUrl: string };
+      const url = new URL(registerUrl);
+      expect(url.pathname).toBe('/auth/register');
+      expect(url.searchParams.get('token')).toBeTruthy();
+      return url.host;
+    };
+
+    expect(await inviteHost(mktPage)).toBe(MARKETING_HOST);
+    // The default org maps no host: the configured origin, unchanged.
+    expect(await inviteHost(intPage)).toBe(new URL(test.info().project.use.baseURL ?? 'http://localhost:3000').host);
+  } finally {
+    await prisma.invitationToken.deleteMany({ where: { email: { in: invitees } } }).catch(() => {});
+    await prisma.emailLog.deleteMany({ where: { to: { in: invitees } } }).catch(() => {});
+    await mkt.close();
+    await int.close();
+  }
+});
+
 test('an unmapped marketing host is a closed form — it never writes into the internship org', { tag: '@smoke' }, async ({ page, request }) => {
   await prisma.organization.update({ where: { id: orgId }, data: { publicHost: null } });
   const email = newInquiryEmail('demo-form-closed');
