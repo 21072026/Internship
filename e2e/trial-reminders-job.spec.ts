@@ -161,9 +161,9 @@ test('the trial-reminders job warns once, expires what has run out, and does not
     },
   });
 
-  // The org is MARKETING, so its admin signs in on the marketing host (#2590);
-  // the header stays for the cron call below (page.request shares the context).
-  await page.context().setExtraHTTPHeaders({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de' });
+  // The admin is org-less (a platform admin), i.e. an INTERNSHIP-world account:
+  // it signs in on the default host even though the tenant it triggers is a
+  // MARKETING one (#2590) — a forged marketing host here would be refused.
   await page.goto('/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', adminEmail);
   await page.fill('input[type="password"]', 'AdminPass123');
