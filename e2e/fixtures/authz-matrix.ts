@@ -311,6 +311,9 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   // (#2613); the role check answers before the id is looked up.
   { method: 'PUT', path: '/api/mentorship/:ownRelationId', body: { companyId: ':colleagueCompanyId' }, expect: 'forbidden', why: "re-point own record at a colleague's account" },
   { method: 'PUT', path: '/api/mentorship/:ownRelationId', body: { companyId: ':foreignCompanyId' }, expect: 'forbidden', why: "re-point own record at another org's account" },
+  // Same rule for the project (an ACTIVE relation's project is team membership) and cohort (#2618).
+  { method: 'PUT', path: '/api/mentorship/:ownRelationId', body: { projectId: 'any-project' }, expect: 'forbidden', why: 'attach own record to a project' },
+  { method: 'PUT', path: '/api/mentorship/:ownRelationId', body: { cohortId: 'any-cohort' }, expect: 'forbidden', why: 'move own record to a cohort' },
   { method: 'GET', path: '/api/companies/:ownCompanyId', expect: 'ok', why: 'own account' },
   { method: 'GET', path: '/api/companies/:colleagueCompanyId', expect: 'notFound', why: "a colleague's account" },
   { method: 'GET', path: '/api/companies/:foreignCompanyId', expect: 'notFound', why: "another org's account" },

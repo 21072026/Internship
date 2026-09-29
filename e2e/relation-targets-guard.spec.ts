@@ -5,7 +5,8 @@ import { prisma } from './helpers/db';
 import { signInAsFreshUser } from './helpers/auth';
 
 /**
- * Which company a mentorship relation may point at, and who may change it (#2613).
+ * Which company, project and cohort a mentorship relation may point at, and who
+ * may change them (#2613 company, #2618 project + cohort).
  *
  * `companyId` was a free string on PUT /api/mentorship/[id] and POST
  * /api/mentorship. An owner could re-point their relation at any company of the
@@ -13,6 +14,9 @@ import { signInAsFreshUser } from './helpers/auth';
  * marketing-sales-surface.spec.ts); an ADMIN could attach another tenant's
  * company and read its name back from the response, and an unknown id was a
  * foreign-key 500. The relation itself opened by id across tenants too.
+ * `projectId` and `cohortId` had the same shape, and the project one was worse:
+ * an ACTIVE relation's `projectId` IS project-team membership, so an owner who
+ * pointed their relation at a private project could open it.
  *
  * Both orgs are INTERNSHIP on purpose: the mentorship module is present, so the
  * owner's refusal here is the role rule, not a capability gate.
@@ -29,6 +33,12 @@ let users: Record<'aAdmin' | 'aMentor' | 'aMentee' | 'aMentee2' | 'bAdmin', { id
 let companyA: { id: string };
 let companyA2: { id: string };
 let companyB: { id: string };
+let projectA: { id: string };
+let projectA2: { id: string };
+let projectB: { id: string };
+let cohortA: { id: string };
+let cohortA2: { id: string };
+let cohortB: { id: string };
 let relationId: string;
 
 test.beforeAll(async () => {
@@ -54,8 +64,20 @@ test.beforeAll(async () => {
   companyA = await prisma.company.create({ data: { name: `${MARK} Own`, orgId: orgA.id } });
   companyA2 = await prisma.company.create({ data: { name: `${MARK} Other Own`, orgId: orgA.id } });
   companyB = await prisma.company.create({ data: { name: `${MARK} Foreign Secret`, orgId: orgB.id } });
+  // Private and owned by the admin: the mentor is not on its team.
+  const project = (tag: string, orgId: string, ownerUserId: string) =>
+    prisma.project.create({ data: { name: `${MARK} ${tag}`, ownerType: 'ADMIN', ownerUserId, orgId, isPublic: false } });
+  projectA = await project('Project Own', orgA.id, users.aAdmin.id);
+  projectA2 = await project('Project Private', orgA.id, users.aAdmin.id);
+  projectB = await project('Project Foreign Secret', orgB.id, users.bAdmin.id);
+  cohortA = await prisma.cohort.create({ data: { name: `${MARK} Cohort Own`, orgId: orgA.id } });
+  cohortA2 = await prisma.cohort.create({ data: { name: `${MARK} Cohort Other Own`, orgId: orgA.id } });
+  cohortB = await prisma.cohort.create({ data: { name: `${MARK} Cohort Foreign Secret`, orgId: orgB.id } });
   relationId = (await prisma.mentorshipRelation.create({
-    data: { mentorId: users.aMentor.id, menteeId: users.aMentee.id, orgId: orgA.id, companyId: companyA.id },
+    data: {
+      mentorId: users.aMentor.id, menteeId: users.aMentee.id, orgId: orgA.id,
+      companyId: companyA.id, projectId: projectA.id, cohortId: cohortA.id,
+    },
   })).id;
 });
 
@@ -66,6 +88,9 @@ test.afterAll(async () => {
   await prisma.activityLog.deleteMany({ where: { actorId: { in: ids } } });
   await prisma.user.deleteMany({ where: { id: { in: ids } } });
   await prisma.company.deleteMany({ where: { name: { startsWith: MARK } } });
+  await prisma.projectMember.deleteMany({ where: { project: { name: { startsWith: MARK } } } });
+  await prisma.project.deleteMany({ where: { name: { startsWith: MARK } } });
+  await prisma.cohort.deleteMany({ where: { name: { startsWith: MARK } } });
   await prisma.organization.deleteMany({ where: { id: { in: [orgA?.id, orgB?.id].filter(Boolean) as string[] } } });
 });
 
@@ -78,7 +103,16 @@ async function companyOfRelation() {
   return (await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relationId } })).companyId;
 }
 
-test('the owner cannot re-point their relation at another company', async ({ page }) => {
+async function targetsOfRelation() {
+  return prisma.mentorshipRelation.findUniqueOrThrow({
+    where: { id: relationId },
+    select: { companyId: true, projectId: true, cohortId: true },
+  });
+}
+
+const ORIGINAL = () => ({ companyId: companyA.id, projectId: projectA.id, cohortId: cohortA.id });
+
+test('the owner cannot re-point their relation at another company, project or cohort', async ({ page }) => {
   test.slow();
   await signInAsFreshUser(page, users.aMentor.email, PASSWORD, '/mentor');
 
@@ -88,11 +122,27 @@ test('the owner cannot re-point their relation at another company', async ({ pag
     expect(JSON.parse(r.body).code).toBe('company_change_admin_only');
     expect(r.body).not.toContain(MARK);
   }
-  // Echoing the current company is a no-op, so a client that sends the whole
+  // The project is a team seat: the mentor cannot open the admin's private
+  // project, and pointing their own relation at it must not change that.
+  expect((await call(page, 'GET', `/api/projects/${projectA2.id}`)).status).toBe(403);
+  for (const [field, targets, code] of [
+    ['projectId', [projectA2.id, projectB.id, 'no-such-project', null], 'project_change_admin_only'],
+    ['cohortId', [cohortA2.id, cohortB.id, 'no-such-cohort', null], 'cohort_change_admin_only'],
+  ] as const) {
+    for (const target of targets) {
+      const r = await call(page, 'PUT', `/api/mentorship/${relationId}`, { [field]: target });
+      expect(r.status, `${field}=${target}`).toBe(403);
+      expect(JSON.parse(r.body).code).toBe(code);
+      expect(r.body).not.toContain(MARK);
+    }
+  }
+  expect((await call(page, 'GET', `/api/projects/${projectA2.id}`)).status).toBe(403);
+
+  // Echoing the current values is a no-op, so a client that sends the whole
   // form back keeps working; the rest of the owner's edit goes through.
-  const echo = await call(page, 'PUT', `/api/mentorship/${relationId}`, { companyId: companyA.id, nextActionNote: 'call back' });
+  const echo = await call(page, 'PUT', `/api/mentorship/${relationId}`, { ...ORIGINAL(), nextActionNote: 'call back' });
   expect(echo.status).toBe(200);
-  expect(await companyOfRelation()).toBe(companyA.id);
+  expect(await targetsOfRelation()).toEqual(ORIGINAL());
 });
 
 test("an admin cannot attach another tenant's company, and learns nothing about it", { tag: '@smoke' }, async ({ page }) => {
@@ -124,6 +174,46 @@ test("an admin cannot attach another tenant's company, and learns nothing about 
   expect(cleared.status).toBe(200);
   expect(await companyOfRelation()).toBeNull();
   await prisma.mentorshipRelation.update({ where: { id: relationId }, data: { companyId: companyA.id } });
+});
+
+test("an admin cannot attach another tenant's project or cohort, and learns nothing about them", async ({ page }) => {
+  test.slow();
+  await signInAsFreshUser(page, users.aAdmin.email, PASSWORD, '/admin');
+
+  for (const [field, foreignId, code] of [
+    ['projectId', projectB.id, 'project_not_found'],
+    ['cohortId', cohortB.id, 'cohort_not_found'],
+  ] as const) {
+    const foreign = await call(page, 'PUT', `/api/mentorship/${relationId}`, { [field]: foreignId });
+    const unknown = await call(page, 'PUT', `/api/mentorship/${relationId}`, { [field]: `x${stamp}missing` });
+    expect(foreign.status, field).toBe(404);
+    expect(unknown.status, field).toBe(404);
+    expect(foreign.body).toBe(unknown.body);
+    expect(JSON.parse(foreign.body).code).toBe(code);
+    expect(foreign.body).not.toContain(MARK);
+  }
+  // A mixed request is refused whole: the valid company does not land either.
+  const mixed = await call(page, 'PUT', `/api/mentorship/${relationId}`, { companyId: companyA2.id, projectId: projectB.id });
+  expect(mixed.status).toBe(404);
+  expect(await targetsOfRelation()).toEqual(ORIGINAL());
+
+  // POST: the foreign project is refused like the foreign company.
+  for (const projectId of [projectB.id, `x${stamp}missing`]) {
+    const r = await call(page, 'POST', '/api/mentorship', { mentorId: users.aMentor.id, menteeId: users.aMentee2.id, projectId });
+    expect(r.status, projectId).toBe(404);
+    expect(JSON.parse(r.body).code).toBe('project_not_found');
+    expect(r.body).not.toContain(MARK);
+  }
+  expect(await prisma.mentorshipRelation.count({ where: { menteeId: users.aMentee2.id } })).toBe(0);
+
+  // Inside the tenant the admin flow is unchanged: re-point both, then clear.
+  const moved = await call(page, 'PUT', `/api/mentorship/${relationId}`, { projectId: projectA2.id, cohortId: cohortA2.id });
+  expect(moved.status).toBe(200);
+  expect(await targetsOfRelation()).toEqual({ companyId: companyA.id, projectId: projectA2.id, cohortId: cohortA2.id });
+  const cleared = await call(page, 'PUT', `/api/mentorship/${relationId}`, { projectId: null, cohortId: null });
+  expect(cleared.status).toBe(200);
+  expect(await targetsOfRelation()).toEqual({ companyId: companyA.id, projectId: null, cohortId: null });
+  await prisma.mentorshipRelation.update({ where: { id: relationId }, data: ORIGINAL() });
 });
 
 test("another tenant's admin cannot open or edit the relation by id", async ({ page }) => {

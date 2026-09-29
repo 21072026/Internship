@@ -354,8 +354,9 @@ ellenmedi; en kritikleri:
 | İşlem | Kural |
 |---|---|
 | `POST /api/interactions` | `ADMIN` veya ilişkinin mentoru |
-| `POST /api/mentorship` | yalnız `ADMIN`; `companyId` çağıranın kiracısında çözülmezse **404** `company_not_found` (#2613) |
-| `PUT /api/mentorship/[id]` `{companyId}` | yalnız `ADMIN`, **her dikeyde** — sahip mentor/temsilci **403** `company_change_admin_only` (hiçbir ADMIN-dışı ekran `companyId` göndermez; mevcut değeri geri göndermek no-op). Hedef çağıranın kiracısında çözülür: başka kiracının firması ile var olmayan id **aynı 404** gövdesini alır, isim dönmez, FK hatası oluşmaz (`src/lib/relationCompany.ts`, #2613) |
+| `POST /api/mentorship` | yalnız `ADMIN`; `companyId` / `projectId` çağıranın kiracısında çözülmezse **404** `company_not_found` / `project_not_found` (#2613, #2618) |
+| `PUT /api/mentorship/[id]` `{companyId}` | yalnız `ADMIN`, **her dikeyde** — sahip mentor/temsilci **403** `company_change_admin_only` (hiçbir ADMIN-dışı ekran `companyId` göndermez; mevcut değeri geri göndermek no-op). Hedef çağıranın kiracısında çözülür: başka kiracının firması ile var olmayan id **aynı 404** gövdesini alır, isim dönmez, FK hatası oluşmaz (`src/lib/relationTargets.ts`, #2613) |
+| `PUT /api/mentorship/[id]` `{projectId}` / `{cohortId}` | Aynı kural (#2618): yalnız `ADMIN`, sahip **403** `project_change_admin_only` / `cohort_change_admin_only`; hedef kiracı içinde çözülür, yabancı ve yok id aynı **404** `project_not_found` / `cohort_not_found`. `projectId` bir etiket değil: ACTIVE ilişkinin `projectId`'si mentor ve mentee için **proje ekibi üyeliğidir** (`isProjectMember`, `src/lib/projectTeam.ts`) — sahip değiştirebilseydi istediği özel projeye girerdi. Karışık bir istekte bir hedef reddedilirse hiçbiri yazılmaz |
 | `POST /api/projects` | `ADMIN` veya `MENTOR` (mentor daima sahip olur) |
 | `POST /api/source/mentees` | yalnız `SOURCE`, kendi `sourceId`'si ile |
 | `GET/POST /api/sources` | `ADMIN` veya `MENTOR` — birleşik "getiren kişi / kaynak" seçiminin listesi ve yerinde kaynak yaratma (#1296). Yönetim uçları (istatistik, silme) `ADMIN`-only `/api/admin/sources` altında kalıyor. |
