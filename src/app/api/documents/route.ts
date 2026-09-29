@@ -10,7 +10,8 @@ import type { DocumentType } from '@prisma/client';
 import { applicableRequirementsForUser } from '@/lib/documentRequirements';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId, sameTenant } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgIdsOfUsers, userInCallerOrg } from '@/lib/ownerOrg';
 
 const META_SELECT = {
@@ -51,10 +52,9 @@ export async function GET(request: Request) {
     });
     // Uploader has no @relation, so the parent's org cannot be a `where`; the
     // template set is small, so it is filtered after one batched lookup.
-    const uploaderOrgs = callerOrgId ? await orgIdsOfUsers(templates.map((d) => d.uploaderId)) : null;
-    const documents = uploaderOrgs
-      ? templates.filter((d) => sameOrgOrUnknown(uploaderOrgs.get(d.uploaderId), callerOrgId))
-      : templates;
+    const uploaderOrgs = await orgIdsOfUsers(templates.map((d) => d.uploaderId));
+    const dflt = await defaultOrgId();
+    const documents = templates.filter((d) => sameTenant(uploaderOrgs.get(d.uploaderId), callerOrgId, dflt));
     return NextResponse.json({ documents });
   }
 

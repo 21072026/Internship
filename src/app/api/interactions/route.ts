@@ -5,7 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { withTenantScope } from '@/lib/orgContext';
-import { orgScoped, resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { orgScoped, resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
     });
 
     // Another tenant's relation answers exactly like a missing one (#2542).
-    if (!relation || !sameOrgOrUnknown(relation.orgId, resolveOrgId(session))) {
+    if (!relation || !(await inCallerTenant(relation.orgId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Mentorship relation not found' }, { status: 404 });
     }
 

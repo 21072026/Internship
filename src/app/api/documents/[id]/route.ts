@@ -6,7 +6,8 @@ import { canAccessUserDocs } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activity';
 import { downloadHeaders } from '@/lib/download';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { userInCallerOrg } from '@/lib/ownerOrg';
 
 // Document carries no orgId (#2542). An owned document is its owner's org's; a
@@ -18,7 +19,7 @@ async function loadInCallerOrg(id: string, callerOrgId: string | null) {
   if (!doc) return null;
   const inOrg = doc.isTemplate || !doc.ownerId
     ? await userInCallerOrg(doc.uploaderId, callerOrgId)
-    : sameOrgOrUnknown(doc.owner?.orgId, callerOrgId);
+    : await inCallerTenant(doc.owner?.orgId, callerOrgId);
   return inOrg ? doc : null;
 }
 

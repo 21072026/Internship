@@ -8,8 +8,8 @@
 // would narrow a super admin to their own org. Every query there names its
 // `orgId` itself, and this is the authorisation in front of it:
 //
-//   * a caller in the target org (or an org-less one, or a target that is not
-//     known — `sameOrgOrUnknown`, the single-tenant state) passes as before;
+//   * a caller in the target org passes as before (`inCallerTenant`: an
+//     org-less caller is the default org's, never a wildcard);
 //   * a super admin passes for any org;
 //   * anyone else is refused, the refusal is audited, and the route answers
 //     404 exactly as it does for an org that does not exist — a 403 would tell
@@ -18,7 +18,8 @@
 // SERVER-ONLY (isSuperAdmin reads the database).
 
 import type { Session } from 'next-auth';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 
 export async function mayManageOrgRequirements(
@@ -26,7 +27,7 @@ export async function mayManageOrgRequirements(
   targetOrgId: string,
   route: string,
 ): Promise<boolean> {
-  if (sameOrgOrUnknown(targetOrgId, resolveOrgId(session))) return true;
+  if (await inCallerTenant(targetOrgId, resolveOrgId(session))) return true;
   if (await isSuperAdmin(session)) return true;
   await logCrossTenantDenial(session, route, targetOrgId);
   return false;

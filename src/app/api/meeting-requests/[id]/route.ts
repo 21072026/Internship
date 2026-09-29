@@ -10,7 +10,8 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestDecisionEmail } from '@/services/emailService';
 import { resolveMeetingLink } from '@/lib/meetingRoom';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 const schema = z.object({ action: z.enum(['accept', 'decline']) });
 
@@ -58,7 +59,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // MeetingRequest has no orgId and the nested include is never scoped: a
   // request on another tenant's relation reads as not found, before it can be
   // declined or turned into a meeting (#2542).
-  if (!req || !sameOrgOrUnknown(req.relation.orgId, resolveOrgId(session))) {
+  if (!req || !(await inCallerTenant(req.relation.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   const rel = req.relation;

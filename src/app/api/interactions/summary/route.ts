@@ -5,7 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getThreadIfAllowed } from '@/lib/messaging';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { runAiGated } from '@/lib/aiGate';
 import { aiSummarizeInteractions } from '@/lib/aiSummary';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
   // answer exactly like a missing one, before a single log is read or sent to
   // the AI provider (#2542).
   const rel = await getThreadIfAllowed(session.user, parsed.data.relationId);
-  if (!rel || !sameOrgOrUnknown(rel.orgId, resolveOrgId(session))) {
+  if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

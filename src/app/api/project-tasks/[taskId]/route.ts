@@ -9,7 +9,8 @@ import { goalLinkFor } from '@/lib/projectGoalLink';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { requireCapability } from '@/lib/capabilityGate';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 // One to-do: tick it off, put it away, reword it, hand it over.
 //
@@ -41,7 +42,7 @@ async function taskFor(
   });
   if (!task) return 'missing' as const;
   const rowOrgId = task.project ? task.project.orgId : (task.assignee?.orgId ?? task.author?.orgId ?? null);
-  if (!sameOrgOrUnknown(rowOrgId, callerOrgId)) return 'missing' as const;
+  if (!(await inCallerTenant(rowOrgId, callerOrgId))) return 'missing' as const;
   // A personal to-do has no project to derive access from: it belongs to the
   // person it is on, and to whoever wrote it (their mentor) — plus an admin.
   if (!task.projectId || !task.project) {

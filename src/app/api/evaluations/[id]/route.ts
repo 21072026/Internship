@@ -4,7 +4,8 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { requireOrg, resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { requireOrg, resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { isWithinEditWindow } from '@/lib/evaluation';
@@ -36,7 +37,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     // relation-less interview scorecard, its panel's. Another tenant's row reads
     // as not found before anything is deleted (#2542).
     const rowOrgId = evaluation?.relation?.orgId ?? evaluation?.panel?.orgId ?? null;
-    if (!evaluation || !sameOrgOrUnknown(rowOrgId, resolveOrgId(session))) {
+    if (!evaluation || !(await inCallerTenant(rowOrgId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
@@ -117,7 +118,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // tenant's admin could correct this row (#2542); another tenant's row now
     // reads as not found. requireOrg still fails closed once the flag is on.
     const callerOrgId = requireOrg(session);
-    if (!evaluation || !sameOrgOrUnknown(evaluation.relation?.orgId ?? evaluation.panel?.orgId, callerOrgId)) {
+    if (!evaluation || !(await inCallerTenant(evaluation.relation?.orgId ?? evaluation.panel?.orgId, callerOrgId))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 

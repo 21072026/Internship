@@ -76,23 +76,23 @@ export function assertSameOrg(rowOrgId: string | null | undefined, expectedOrgId
 //
 // So a fetch-by-id of such a child row resolves its PARENT's org and asks this.
 // It is deliberately NOT gated on the flag: an admin of org B reading org A's
-// interaction notes is wrong today, not only after the flip. And it is
-// deliberately permissive when either side is unknown — an org-less session or
-// a row that predates multi-tenancy — because that is exactly the single-tenant
-// state every existing row and every e2e-seeded user is in; refusing there would
-// take the live product down rather than close a leak.
+// interaction notes is wrong today, not only after the flip.
 //
-// Callers answer a mismatch with 404, never 403: a 403 would confirm to the
-// other tenant that the id exists.
+// It is the one-row form of `tenantWhere()` (src/lib/tenantFilter.ts), and it
+// reads "unknown" by the same rule: a row whose org is still NULL, and a
+// signed-in session without an org, both belong to the DEFAULT org — the rule
+// `prisma/backfill-organization.mjs` applies on every deploy. Reading an
+// org-less side as "anything goes" would fail OPEN: a 12h JWT minted before the
+// backfill stamped its user would reach every tenant's rows. The default org's
+// single-tenant state is unchanged by construction: all of it is one tenant.
 //
-// This is the same rule `orgScoped()` already applies to lists (it has never
-// been flag-gated either), stated for one row. It is not a second tenancy
-// mechanism: when the flag is on, the middleware and this agree by
-// construction, because both read the same `resolveOrgId(session)`.
-export function sameOrgOrUnknown(
+// Pure (the default org's id is passed in) so it is unit-testable; route code
+// calls `inCallerTenant()` in tenantFilter.ts, which supplies it. Callers answer
+// a mismatch with 404, never 403: a 403 would confirm the id exists.
+export function sameTenant(
   rowOrgId: string | null | undefined,
   callerOrgId: string | null | undefined,
+  defaultOrgId: string,
 ): boolean {
-  if (!rowOrgId || !callerOrgId) return true;
-  return rowOrgId === callerOrgId;
+  return (rowOrgId || defaultOrgId) === (callerOrgId || defaultOrgId);
 }

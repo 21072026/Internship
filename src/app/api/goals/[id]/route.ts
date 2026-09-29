@@ -7,7 +7,8 @@ import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation
 import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 
 // 'missing' covers another tenant's goal too (#2542): Goal has no orgId, the
@@ -15,7 +16,7 @@ import { withTenantScope } from '@/lib/orgContext';
 // the answer is the 404 a missing id gets — a 403 would confirm the id exists.
 async function goalIfAllowed(userId: string, role: string, goalId: string, callerOrgId: string | null) {
   const goal = await prisma.goal.findUnique({ where: { id: goalId }, include: { relation: true } });
-  if (!goal || !sameOrgOrUnknown(goal.relation.orgId, callerOrgId)) return 'missing' as const;
+  if (!goal || !(await inCallerTenant(goal.relation.orgId, callerOrgId))) return 'missing' as const;
   const rel = goal.relation;
   const allowed = role === 'ADMIN' || rel.mentorId === userId || rel.menteeId === userId;
   return allowed ? goal : null;

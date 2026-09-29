@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { userInCallerOrg } from '@/lib/ownerOrg';
 
 // AvatarFile carries no orgId: it is its owner's org's (#2542). A signed-in
@@ -28,7 +29,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
     include: { user: { select: { orgId: true, publicProfile: true } } },
   });
   if (!avatar) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (session && !avatar.user.publicProfile && !sameOrgOrUnknown(avatar.user.orgId, resolveOrgId(session))) {
+  if (session && !avatar.user.publicProfile && !(await inCallerTenant(avatar.user.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 

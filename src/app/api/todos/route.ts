@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { notify } from '@/lib/notify';
 import { resolveTemplateTitle, serializeTaskTemplate, taskTemplateSelect } from '@/lib/goalTemplates';
 import { defaultLocale } from '@/i18n/config';
@@ -106,7 +107,7 @@ async function mayReach(
     // keeps today's answer for an org-less one.
     const target = await prisma.user.findUnique({ where: { id: targetId }, select: { orgId: true } });
     if (!target) return viewerOrgId === null;
-    return sameOrgOrUnknown(target.orgId, viewerOrgId);
+    return await inCallerTenant(target.orgId, viewerOrgId);
   }
   const mentorship = await prisma.mentorshipRelation.findFirst({
     where: { mentorId: viewer.id, menteeId: targetId },

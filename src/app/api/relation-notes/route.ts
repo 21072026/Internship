@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 const bodySchema = z.object({
   relationId: z.string().min(1),
@@ -26,7 +27,7 @@ async function canAccessRelation(
     where: { id: relationId, ...(role === 'MENTOR' ? { mentorId: userId } : {}) },
     select: { orgId: true },
   });
-  return !!rel && sameOrgOrUnknown(rel.orgId, callerOrgId);
+  return !!rel && await inCallerTenant(rel.orgId, callerOrgId);
 }
 
 // GET ?relationId=... — mentor-private notes on a mentorship relation

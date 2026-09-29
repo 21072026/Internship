@@ -15,9 +15,9 @@ import { seedTwoTenants, signInAsTenantActor, type TwoTenants } from './helpers/
  * the caller's. This spec pins both halves: the other org is refused, the
  * owning org — and a super admin, for the requirement config — still gets in.
  *
- * Every user the rest of the suite seeds is org-less, and that path is
- * unchanged by construction (`sameOrgOrUnknown` passes when either side is
- * unknown); the existing documents/avatar/cv/attachment specs cover it.
+ * Every user the rest of the suite seeds is org-less, i.e. the default org's
+ * (`inCallerTenant`, src/lib/tenantFilter.ts), so that path is one tenant and
+ * unchanged; the existing documents/avatar/cv/attachment specs cover it.
  */
 
 const PDF = Buffer.from('%PDF-1.4\n% cross-tenant\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');

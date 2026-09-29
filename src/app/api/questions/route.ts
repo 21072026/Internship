@@ -8,7 +8,8 @@ import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 // GET ?relationId= — questions for a thread (participants/admin).
 export async function GET(request: Request) {
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     // getThreadIfAllowed lets any ADMIN through; another tenant's relation
     // answers exactly like a missing one (#2542).
     const rel = await getThreadIfAllowed(session.user, relationId);
-    if (!rel || !sameOrgOrUnknown(rel.orgId, resolveOrgId(session))) {
+    if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const questions = await prisma.mentorQuestion.findMany({ where: { relationId }, orderBy: { createdAt: 'desc' } });
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
 
   return await withTenantScope(session, async () => {
   const rel = await getThreadIfAllowed(session.user, parsed.data.relationId);
-  if (!rel || !sameOrgOrUnknown(rel.orgId, resolveOrgId(session))) {
+  if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

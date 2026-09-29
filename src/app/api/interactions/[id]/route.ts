@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { INTERACTION_TYPES } from '@/lib/interactionTypes';
@@ -32,7 +33,7 @@ async function getInteractionAndVerifyAccess(
   // top-level lookup nor the nested include is scoped by the middleware. A log
   // on another tenant's relation reads as not found — 404, never 403, so the id
   // is not confirmed to exist (#2542). Checked before any write below.
-  if (!sameOrgOrUnknown(interaction.relation.orgId, callerOrgId)) {
+  if (!(await inCallerTenant(interaction.relation.orgId, callerOrgId))) {
     return { interaction: null, authorized: false };
   }
 

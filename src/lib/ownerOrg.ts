@@ -2,8 +2,8 @@
 //
 // Document, CvFile and AvatarFile carry no orgId: their tenant is their owner's
 // (or, for an owner-less template, its uploader's). Their routes therefore
-// resolve that user's orgId and ask `sameOrgOrUnknown` (src/lib/orgScope.ts),
-// the one-row form of the rule `orgScoped()` applies to lists.
+// resolve that user's orgId and ask `inCallerTenant` (src/lib/tenantFilter.ts),
+// the one-row form of `tenantWhere()`.
 //
 // The lookup runs OUTSIDE the tenant auto-filter on purpose. Under
 // MT_ENFORCE_ISOLATION the middleware would hide a foreign user, and "not found"
@@ -18,7 +18,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { runUnscoped } from '@/lib/tenantAmbient';
-import { sameOrgOrUnknown } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 /** Each user's orgId (null when org-less); ids that match no user are absent. */
 export async function orgIdsOfUsers(userIds: string[]): Promise<Map<string, string | null>> {
@@ -32,12 +32,11 @@ export async function orgIdsOfUsers(userIds: string[]): Promise<Map<string, stri
 
 /**
  * May a caller of `callerOrgId` reach rows owned by `userId`? True for the
- * same org, and — like `sameOrgOrUnknown` — whenever either side is unknown
- * (an org-less caller, an org-less or missing user), so the single-tenant state
- * is untouched. Callers answer false with 404, never 403.
+ * same tenant, by `inCallerTenant`'s rule: an org-less caller, and an org-less
+ * or missing user, are the default org's — never a wildcard. Callers answer
+ * false with 404, never 403.
  */
 export async function userInCallerOrg(userId: string, callerOrgId: string | null | undefined): Promise<boolean> {
-  if (!callerOrgId) return true;
   const orgs = await orgIdsOfUsers([userId]);
-  return sameOrgOrUnknown(orgs.get(userId), callerOrgId);
+  return inCallerTenant(orgs.get(userId), callerOrgId);
 }

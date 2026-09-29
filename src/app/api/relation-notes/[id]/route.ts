@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 const patchSchema = z.object({ body: z.string().min(1).max(5000) });
 
@@ -20,7 +21,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
   // RelationNote has no orgId; its tenant is its relation's. Another tenant's
   // note reads as not found, before any write (#2542).
-  if (!note || !sameOrgOrUnknown(note.relation.orgId, resolveOrgId(session))) {
+  if (!note || !(await inCallerTenant(note.relation.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   if (note.authorId !== session.user.id && session.user.role !== 'ADMIN') {
@@ -50,7 +51,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   });
   // RelationNote has no orgId; its tenant is its relation's. Another tenant's
   // note reads as not found, before any write (#2542).
-  if (!note || !sameOrgOrUnknown(note.relation.orgId, resolveOrgId(session))) {
+  if (!note || !(await inCallerTenant(note.relation.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   if (note.authorId !== session.user.id && session.user.role !== 'ADMIN') {

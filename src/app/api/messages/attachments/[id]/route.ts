@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { canAccessMessage } from '@/lib/conversations';
 import { downloadHeaders } from '@/lib/download';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId, sameTenant } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 
 // GET — serve a message attachment's bytes. Only the participants of the
 // message's thread or conversation (or an admin) may download it, same rule as
@@ -36,13 +37,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   // Another org's attachment is 404, never 403 — a 403 would confirm the id.
   // This closes the ADMIN bypass in canAccessMessage across tenants; a real
-  // participant is always in the thread's org. Unknown on either side passes.
+  // participant is always in the thread's org. An org-less side is the default org's (src/lib/tenantFilter.ts).
   const callerOrgId = resolveOrgId(session);
+  const dflt = await defaultOrgId();
   const { relation, conversation } = attachment.message;
   const inOrg = relation
-    ? sameOrgOrUnknown(relation.orgId, callerOrgId)
+    ? sameTenant(relation.orgId, callerOrgId, dflt)
     : !conversation || conversation.participants.length === 0 ||
-      conversation.participants.some((p) => sameOrgOrUnknown(p.user.orgId, callerOrgId));
+      conversation.participants.some((p) => sameTenant(p.user.orgId, callerOrgId, dflt));
   if (!inOrg) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (!(await canAccessMessage(session.user, attachment.message))) {

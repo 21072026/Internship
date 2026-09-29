@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -17,7 +18,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!attachment) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   // Another org's attachment is 404 — before the role check, so a 403 cannot
   // confirm the id. The requester is in their own ticket's org; unknown passes.
-  if (!sameOrgOrUnknown(attachment.message.ticket.requester.orgId, resolveOrgId(session))) {
+  if (!(await inCallerTenant(attachment.message.ticket.requester.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   if (session.user.role !== 'ADMIN' && attachment.message.ticket.requesterId !== session.user.id) {

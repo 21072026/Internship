@@ -4,7 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 import { stageTrialWindow } from '@/lib/trialWindow';
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     const { relationId, fromStatus, toStatus, createdAt, reasonCode, reasonNote } = parsed.data;
     const relation = await prisma.mentorshipRelation.findUnique({ where: { id: relationId } });
     // Another tenant's relation answers like a missing one, flag on or off (#2542).
-    if (!relation || !sameOrgOrUnknown(relation.orgId, resolveOrgId(session))) {
+    if (!relation || !(await inCallerTenant(relation.orgId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
     }
 

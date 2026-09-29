@@ -5,7 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { notifyIfAllowed } from '@/lib/notify';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
@@ -16,7 +17,7 @@ async function relationIfAllowed(userId: string, role: string, relationId: strin
   // The scoped lookup above narrows nothing while MT_ENFORCE_ISOLATION is off,
   // and ADMIN is allowed below: another tenant's relation answers like a
   // missing one (#2542).
-  if (!rel || !sameOrgOrUnknown(rel.orgId, callerOrgId)) return null;
+  if (!rel || !(await inCallerTenant(rel.orgId, callerOrgId))) return null;
   const allowed = role === 'ADMIN' || rel.mentorId === userId || rel.menteeId === userId;
   return allowed ? rel : null;
 }
