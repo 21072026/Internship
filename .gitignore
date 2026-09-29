@@ -161,16 +161,16 @@ e2e/.state/
 # download, docs/marketing-import.md) names real people with their e-mail
 # addresses and phone numbers, so it never goes in the repo (#2409). The
 # importers read `,` `;` `\t` or `|` files, and the export is made from a
-# workbook, so the workbook formats are covered too. Upper case as well: git
-# matches case-sensitively and a Windows export is often `EXPORT.CSV`.
-*.csv
-*.CSV
-*.tsv
-*.TSV
-*.xlsx
-*.xls
-*.ods
-# The one exception: SYNTHETIC fixtures the tests and the docs use.
+# workbook, so the workbook formats are covered too. Every extension in any
+# letter case (`EXPORT.CSV`, `Kunden.Xlsx`): git matches case-sensitively on a
+# case-sensitive filesystem, hence the bracket classes.
+*.[cC][sS][vV]
+*.[tT][sS][vV]
+*.[xX][lL][sS]
+*.[xX][lL][sS][xX]
+*.[oO][dD][sS]
+# The one exception: SYNTHETIC fixtures the tests and the docs use — files
+# directly in scripts/fixtures/, lower-case .csv/.tsv only (not a subdirectory).
 !scripts/fixtures/*.csv
 !scripts/fixtures/*.tsv
 

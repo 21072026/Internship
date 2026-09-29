@@ -15,8 +15,9 @@ differently on every run.
 - **What a row becomes** is [`marketing-vertical/pipeline-record.md`](marketing-vertical/pipeline-record.md):
   account = `Company`, funnel record = `MentorshipRelation`, lead person = a `MENTEE` `User`.
 - **A sample file with all four edge cases**: `scripts/fixtures/marketing-accounts-sample.csv`.
-  `scripts/fixtures/` is the one directory `.gitignore` lets a `*.csv` through — a synthetic
-  fixture goes there, a real export goes nowhere near the checkout.
+  A lower-case `.csv` or `.tsv` directly in `scripts/fixtures/` is the one exception
+  `.gitignore` lets through — a synthetic fixture goes there, a real export goes nowhere
+  near the checkout.
 - **How to run it against real data** — backup, owner, dry run, reading the report, fixing
   rows, apply: [Running it](#running-it).
 
@@ -250,8 +251,8 @@ under `--apply`").
   [`pii-access-lifecycle.md`](pii-access-lifecycle.md).
   Two things make "outside the checkout" matter: `npm run` executes from the checkout root,
   so a *relative* `--file` or `--report` path resolves **inside** the repository; and
-  `.gitignore` keeps `*.csv` (and `*.tsv`, `*.xlsx`, `*.xls`, `*.ods`) away from `git add`,
-  but not a JSON report.
+  `.gitignore` keeps `.csv`, `.tsv`, `.xlsx`, `.xls` and `.ods` files, in any letter case,
+  away from `git add`, but not a JSON report.
 
 ### 1. Export the spreadsheet
 
@@ -259,7 +260,8 @@ under `--apply`").
   above, in any order and any case. Blank rows are ignored.
 - Save it as **CSV UTF-8** ("CSV UTF-8 (durch Trennzeichen getrennt)" in a German Excel).
   The delimiter is sniffed, so `;` is fine — the *encoding* is not: Excel's plain "CSV"
-  usually writes the Windows code page, the CLI reads UTF-8 only, and `Grüße Süßwaren GmbH`
+  writes the machine's Windows code page (Windows-1252 on a German or Western machine,
+  Windows-1254 on a Turkish one), the CLI reads UTF-8 only, and `Grüße Süßwaren GmbH`
   arrives as `Gr��e S��waren GmbH`. The broken encoding on its own produces **no
   `ERROR`**: the file validates, the broken names are stored, and a later, correctly
   encoded run creates a twin of every such account that has no `vat_id` (the name no longer
@@ -268,9 +270,19 @@ under `--apply`").
 
   ```bash
   iconv -f UTF-8 -t UTF-8 ~/import/accounts.csv > /dev/null && echo "UTF-8: ok"
-  # not UTF-8? convert it rather than re-exporting by hand:
-  iconv -f WINDOWS-1252 -t UTF-8 ~/import/accounts.csv > ~/import/accounts.utf8.csv
   ```
+
+- **Not UTF-8? Export it again as CSV UTF-8** from the workbook. Do not convert the file
+  you have, for two reasons:
+  - A conversion needs the code page the file was saved in, and a wrong guess does not
+    fail. A Turkish (Windows-1254) file converted as Windows-1252 comes out as
+    `Ýstanbul Tekstil A.Þ.` and `Yýldýz Aðaç Sanayi`: valid UTF-8 with no `�`, so it
+    passes the check above, the CLI stores it without an `ERROR`, and the names no longer
+    match anything (`normalizeNameKey` reads `ystanbul tekstil a` instead of
+    `istanbul tekstil a s`).
+  - A code page loses what it cannot hold before any conversion runs. Windows-1252 has no
+    `İ`, `ı`, `ş` or `ğ`, and Excel writes `?` in their place. For a list that mixes German
+    and Turkish merchants, the workbook is the only copy that still has every name.
 
 ### 2. Choose `--owner`
 
@@ -351,10 +363,10 @@ exits `1` because of row 4.
 - **Check the header block first.** `Organization` and `Pipeline stages` are the two lines
   that say whether this is the right tenant. If the stages read `APPLICATION_100,
   APPROVAL_PENDING_220, …`, the owner belongs to an *internship* organisation: every row
-  with a stage comes back `ERROR — stage "LEAD_QUALIFIED" is not one of this
-  organization's pipeline stages (APPLICATION_100, …)`. That is the wrong `--owner`, not a
-  wrong file — it is exactly what the sample file produces when it is run as the internship
-  demo admin.
+  with a stage comes back `ERROR`, each naming its own stage — e.g. `stage
+  "LEAD_QUALIFIED" is not one of this organization's pipeline stages (APPLICATION_100, …)`.
+  That is the wrong `--owner`, not a wrong file — it is exactly what the sample file
+  produces when it is run as the internship demo admin.
 - **The counts** mean what [Row outcomes](#row-outcomes) says.
 - **Rows needing attention** lists every `ERROR` and `SKIP`, and every row that lands but
   carries a reason — at most `--rows` of them (default 20); the rest are in the `--report`
@@ -365,7 +377,12 @@ exits `1` because of row 4.
 - **Sample of what would be written** shows the first five `CREATE`/`UPDATE` rows and the
   fields each would write: account fields (`vatId`, `contactPhone`, …), `lead` (a new lead
   person) or `lead.<field>`, `funnelRecord` (a new funnel record) and `pipelineStatus` (a
-  stage move). Look at the names here: a `�` means the encoding is wrong (step 1).
+  stage move). It is a sample, not the file: to look for a broken encoding, search the whole
+  report — `grep -c '�' ~/import/dry-run.json` must print `0` (step 1), and
+  `grep -nE 'Ý|Þ|Ð|ý|þ|ð' ~/import/dry-run.json` must find nothing (the letters a Turkish
+  file read as Windows-1252 turns into; spelled as alternatives because a `[…]` class of
+  them matches `ü` and `ß` too under a non-UTF-8 locale). A `?` Excel wrote for a letter
+  its code page lacks looks like any other `?`, so read a few of the Turkish names as well.
 - **The exit code:** `0` — no row errored; `1` — at least one `ERROR` row, in a dry run
   too, so a wrapper script can stop on it; `2` — the run was refused before it read a row
   (a missing `--file`/`--owner`, `owner_not_found`, `owner_role`). A Node stack trace
@@ -383,14 +400,14 @@ remaining reason is one you accept.
 | `name is required` | the row has no account name: fill it in, or delete the row |
 | `country must be an ISO-3166-1 alpha-2 code, got "Deutschland"` | two letters: `DE`, `AT`, `TR`, `CH` |
 | `vat_id is too short to be an identity` | usually a placeholder (`-`, `n/a`): correct it or blank the cell |
-| `locale must be one of de/en/tr` | one of those three, or blank |
+| `locale must be one of en/tr/de, got "…"` | one of those three, or blank |
 | `stage "…" is not one of this organization's pipeline stages (…)` | use a **key** from the list in the message, never the label on the board. If *every* staged row says this, see step 4: the owner is in the wrong organisation |
 | `monthly_transactions must be a whole number` · `mrr is not a number` · `mrr must not be negative` | fix the number; a currency sign and `.`/`,` grouping are fine |
 | `contact_email is not an address` · `owner_email is not an address` | a typo, or two addresses in one cell — keep one |
 | `contact_email is on a reserved stand-in domain` | `@import.local` / `@erased.local` are addresses the CRM generated, not mailboxes — usually the file was exported from the CRM itself. Use the real address or blank it |
 | `<field> is longer than <n> characters` | shorten it. Nothing is truncated for you |
 | `duplicate account in file (first seen at row N)` · `(matches N earlier rows by name; …)` | `SKIP`: one merchant, two lines. The first line won; move what the other one knows into it and delete it |
-| `ambiguous: N existing accounts are named "…" — add a country or vat_id column` | `SKIP`: the CRM holds several accounts of that name in different countries. Fill `country` or `vat_id` on that row |
+| `ambiguous: N existing accounts are named "…" — add a country or vat_id column` | `SKIP`: the CRM holds several accounts of that name. If they carry different countries, fill `country` or `vat_id` on that row. If they carry **no** country and no VAT id — the state every account is in before its first import — the file cannot tell them apart, whatever the row says: fix it in the app (set their country/VAT id, or merge the duplicates), then dry-run again |
 
 Reasons on a row that **still lands** — nothing is lost, but something was not done:
 
@@ -408,7 +425,7 @@ only when you write:
 | The reason says | What to do |
 | --- | --- |
 | `… already has an active owner in this organization — transfer the record instead of importing it (already_mentored)` | the lead's funnel record belongs to somebody else (or to a different `--owner` from an earlier run). Put that person in the row's `owner_email`, or move the record with the transfer in the app ([`mentor-transfer.md`](mentor-transfer.md)) and re-run. Never change the owner in the database by hand |
-| any other message — usually a database error with its Prisma code (`P2002: …`) | a constraint the plan could not see, most often because somebody changed the same account in the app between the dry run and the apply. Dry-run again to see the current plan, fix what it names, re-run `--apply` |
+| any other message — usually a database error with its Prisma code (`P2002: …`) | a constraint the plan could not see. `--apply` plans afresh from the database when it starts, so a change made in the app *before* it is already in its plan; this is somebody changing the same account *while* the apply runs. Dry-run again to see the current plan, fix what it names, re-run `--apply` |
 
 ### 6. Apply
 
@@ -429,10 +446,13 @@ back `UNCHANGED`.
 ### 7. Check, then clean up
 
 - **Dry-run the same file once more.** Every row that landed must now read `UNCHANGED`
-  (`SKIP` and `ERROR` rows stay what they were). Anything else — above all a `CREATE` —
-  means the file and the database disagree about who an account is: an encoding problem,
-  or a `name`, `country` or `vat_id` that changed between runs. Stop and find out before
-  applying again.
+  (`SKIP` rows and the rows that failed validation stay what they were). A row the apply
+  refused — the "Only under `--apply`" table in step 5 — wrote nothing at all, because each
+  row is one transaction, so it comes back as the `CREATE` or `UPDATE` it was planned as:
+  match those against the `ERROR` rows in `apply.json` first. Any *other* `CREATE` or
+  `UPDATE` means the file and the database disagree about who an account is: an encoding
+  problem, or a `name`, `country` or `vat_id` that changed between runs. Stop and find out
+  before applying again.
 - **Spot-check** a few of the created accounts and their stage in the app.
 - **Delete** the export, the `--report` files and every copy of them (downloads folder, a
   mail attachment). The dump from "Take a backup first" stays where it is and expires on its
