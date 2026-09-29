@@ -44,6 +44,45 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   MARKETING: {
     en: {
       nav: { candidates: 'Leads', companyInquiries: 'Demo requests', myCompanies: 'My accounts' },
+      // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
+      // mentor yet / Mentor" on the screen a rep uses most.
+      // The role-convert button on the lead detail and the users list (#2557):
+      // the role enum is unchanged, only the words — MENTOR is a rep, MENTEE a lead.
+      usersAdmin: {
+        makeMentor: 'Make rep',
+        makeMentee: 'Make lead',
+        convertToMentorConfirm: '{name} will be signed out of every device and becomes a rep at their next sign-in. Their existing records are kept.',
+        convertToMenteeConfirm: '{name} will be signed out of every device and becomes a lead at their next sign-in. Their existing records are kept.',
+      },
+      candidateDetail: {
+        mentorship: 'Owner',
+        notAssigned: 'No rep owns this lead yet',
+        mentor: 'Rep',
+      },
+      // The suggested first messages in an empty thread (#2557). The rep's set
+      // (welcome/introCall/goals) and the lead's set (hello/intro/question) keep
+      // their `{name}` placeholder; the words are a sales conversation about a
+      // SaleVali demo and trial, not an internship.
+      messages: {
+        openers: {
+          welcome: {
+            label: '👋 Welcome',
+            text: 'Hi {name}, thanks for your interest in SaleVali! I am your contact from here on — write to me in this chat whenever something comes up.',
+          },
+          introCall: {
+            label: 'Book a demo',
+            text: 'Hi {name}, shall we do a short demo? Which days and times work for you this week?',
+          },
+          goals: {
+            label: 'Ask about needs',
+            text: 'Hi {name}, before the demo I would like to hear which marketplaces you sell on and what you want to get out of the trial.',
+          },
+          intro: {
+            label: 'Introduce our shop',
+            text: 'Hi {name}, let me introduce our shop briefly: ',
+          },
+        },
+      },
       // The demo form on the marketing landing and the list its requests land
       // in (#2569). The form is the internship enquiry form re-used; these are
       // the strings that would otherwise talk about hiring and invitations.
@@ -357,6 +396,37 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
       nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
+      usersAdmin: {
+        makeMentor: 'Temsilci yap',
+        makeMentee: 'Müşteri adayı yap',
+        convertToMentorConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde temsilci olur. Mevcut kayıtları korunur.',
+        convertToMenteeConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde müşteri adayı olur. Mevcut kayıtları korunur.',
+      },
+      candidateDetail: {
+        mentorship: 'Sorumlu',
+        notAssigned: 'Bu müşteri adayı henüz bir temsilciye atanmadı',
+        mentor: 'Temsilci',
+      },
+      messages: {
+        openers: {
+          welcome: {
+            label: '👋 Hoş geldiniz',
+            text: 'Merhaba {name}, SaleVali\'ye gösterdiğiniz ilgi için teşekkürler! Bundan sonra muhatabınız benim — aklınıza takılan her şeyi bu sohbetten yazabilirsiniz.',
+          },
+          introCall: {
+            label: 'Demo ayarla',
+            text: 'Merhaba {name}, kısa bir demo yapalım mı? Bu hafta hangi gün ve saatler size uygun?',
+          },
+          goals: {
+            label: 'İhtiyaçları sor',
+            text: 'Merhaba {name}, demodan önce hangi pazaryerlerinde satış yaptığınızı ve denemeden ne beklediğinizi öğrenmek isterim.',
+          },
+          intro: {
+            label: 'Mağazamızı tanıtayım',
+            text: 'Merhaba {name}, mağazamızı kısaca tanıtmak isterim: ',
+          },
+        },
+      },
       forCompanies: {
         submit: 'Demo isteyin',
         successBody: 'Talebiniz satış ekibimize ulaştı. Demo için bir zaman bulmak üzere iki iş günü içinde dönüyoruz.',
@@ -561,6 +631,37 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     },
     de: {
       nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
+      usersAdmin: {
+        makeMentor: 'Zum Vertriebsmitarbeiter machen',
+        makeMentee: 'Zum Lead machen',
+        convertToMentorConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung Vertriebsmitarbeiter. Bestehende Datensätze bleiben erhalten.',
+        convertToMenteeConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung ein Lead. Bestehende Datensätze bleiben erhalten.',
+      },
+      candidateDetail: {
+        mentorship: 'Zuständig',
+        notAssigned: 'Diesem Lead ist noch kein Vertriebsmitarbeiter zugeordnet',
+        mentor: 'Vertriebsmitarbeiter',
+      },
+      messages: {
+        openers: {
+          welcome: {
+            label: '👋 Willkommen',
+            text: 'Hallo {name}, danke für Ihr Interesse an SaleVali! Ich bin ab jetzt Ihr Ansprechpartner — schreiben Sie mir in diesem Chat, wann immer etwas ist.',
+          },
+          introCall: {
+            label: 'Demo vereinbaren',
+            text: 'Hallo {name}, sollen wir eine kurze Demo machen? Welche Tage und Zeiten passen Ihnen diese Woche?',
+          },
+          goals: {
+            label: 'Nach dem Bedarf fragen',
+            text: 'Hallo {name}, vor der Demo würde ich gern hören, auf welchen Marktplätzen Sie verkaufen und was Sie sich von der Testphase erwarten.',
+          },
+          intro: {
+            label: 'Unseren Shop vorstellen',
+            text: 'Hallo {name}, ich stelle unseren Shop kurz vor: ',
+          },
+        },
+      },
       forCompanies: {
         submit: 'Demo anfragen',
         successBody: 'Ihre Anfrage hat unser Vertriebsteam erreicht. Wir melden uns innerhalb von zwei Werktagen, um einen Termin für die Demo zu finden.',
