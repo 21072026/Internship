@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession, type Session } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { mayManageOrgRequirements } from '@/lib/documentRequirementAccess';
+
+// Deliberately not wrapped in withTenantScope: the org is an explicit
+// parameter a super admin may point at any tenant. The authorisation is
+// mayManageOrgRequirements() (#2542), and every query names `orgId` itself.
 
 const labelsSchema = z.object({
   en: z.string().trim().min(1).max(200),
@@ -29,7 +34,10 @@ async function adminSession() {
   return session?.user.role === 'ADMIN' ? session : null;
 }
 
-async function validOrgStage(orgId: string, stage?: string | null) {
+async function validOrgStage(session: Session, route: string, orgId: string, stage?: string | null) {
+  // Refused before the lookup, with the same answer as a missing org, so it
+  // cannot confirm that a foreign org id exists.
+  if (!(await mayManageOrgRequirements(session, orgId, route))) return { error: 'Organization not found', status: 404 } as const;
   const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { id: true } });
   if (!org) return { error: 'Organization not found', status: 404 } as const;
   if (stage) {
@@ -40,10 +48,11 @@ async function validOrgStage(orgId: string, stage?: string | null) {
 }
 
 export async function GET(request: Request) {
-  if (!(await adminSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await adminSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const orgId = new URL(request.url).searchParams.get('orgId');
   if (!orgId) return NextResponse.json({ error: 'orgId is required' }, { status: 400 });
-  const gate = await validOrgStage(orgId);
+  const gate = await validOrgStage(session, 'GET /api/admin/document-requirements', orgId);
   if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
   const requirements = await prisma.documentRequirement.findMany({
     where: { orgId },
@@ -57,7 +66,7 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
-  const gate = await validOrgStage(parsed.data.orgId, parsed.data.appliesToStage);
+  const gate = await validOrgStage(session, 'POST /api/admin/document-requirements', parsed.data.orgId, parsed.data.appliesToStage);
   if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
   try {
     const requirement = await prisma.documentRequirement.create({
