@@ -188,3 +188,40 @@ export const MATRIX: MatrixEntry[] = [
     ownership: (row, user) => companyBelongsTo(row as { id?: string }, user),
   },
 ];
+
+/**
+ * Cross-TENANT rows (#2542). Everything above is one organization, so `all`
+ * there means "the whole tenant" and says nothing about a second one. Since
+ * the MARKETING vertical became a real tenant on the same database, "which
+ * org" is a question every read has to answer — with MT_ENFORCE_ISOLATION off,
+ * which is every deployment today. The spec seeds a foreign MARKETING org
+ * (a mentee, an admin and a company) and probes each path below as every role:
+ *
+ * - `list`   — whatever the status, the body must not carry a foreign id (a
+ *              200 that leaks is the whole failure mode, see the ⚠️ above).
+ * - `detail` — never 200. A role allowed on the route gets 404, the same answer
+ *              as an id that does not exist; the others keep their 401/403.
+ *
+ * Adding a tenant-held list or detail route an ADMIN can reach? Add it here.
+ */
+export const FOREIGN_USER_ID_PARAM = ':foreignUserId';
+export const FOREIGN_COMPANY_ID_PARAM = ':foreignCompanyId';
+
+export interface CrossTenantEntry {
+  path: string;
+  kind: 'list' | 'detail';
+}
+
+export const CROSS_TENANT: CrossTenantEntry[] = [
+  { path: '/api/users', kind: 'list' },
+  { path: '/api/users?role=MENTEE', kind: 'list' },
+  { path: '/api/users?view=directory', kind: 'list' },
+  { path: '/api/users?page=1&perPage=100', kind: 'list' },
+  { path: '/api/candidates?all=1', kind: 'list' },
+  { path: '/api/companies?all=1', kind: 'list' },
+  { path: '/api/companies?all=1&sort=movement', kind: 'list' },
+  { path: `/api/users/${FOREIGN_USER_ID_PARAM}`, kind: 'detail' },
+  { path: `/api/users/${FOREIGN_USER_ID_PARAM}/activity`, kind: 'detail' },
+  { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}`, kind: 'detail' },
+  { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}/delete-impact`, kind: 'detail' },
+];

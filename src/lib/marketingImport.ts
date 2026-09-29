@@ -45,6 +45,7 @@ import {
   headerIndex,
   importErrorMessage,
   type ParsedRow,
+  type ParsedTable,
   type PlannedRow,
   type ResolveResult,
   type RowResult,
@@ -54,6 +55,7 @@ import { normalizeEmailKey, normalizeNameKey, normalizePhoneKey } from './duplic
 import { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 import { planFieldUpdates } from './externalSyncPolicy';
 import { TEXT_LIMITS } from './textLimits';
+import { trialWindowFor, type ExistingTrialWindow, type TrialWindowData } from './trialReminderRule';
 
 // ── The column contract ──────────────────────────────────────────────────────
 // One declaration, read by the validator, printed by the CLI and written out
@@ -435,6 +437,44 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
   };
 }
 
+// ── One row typed in by hand (#2562) ─────────────────────────────────────────
+
+/** What the "new lead / account" form sends — field names of the column contract. */
+export type ManualAccountFields = Partial<
+  Pick<
+    MarketingAccountRow,
+    | 'name'
+    | 'country'
+    | 'vatId'
+    | 'contactName'
+    | 'contactEmail'
+    | 'contactPhone'
+    | 'source'
+    | 'stage'
+    | 'city'
+    | 'industry'
+  >
+>;
+
+/**
+ * ONE row of the import contract built from the form's fields, as a parsed
+ * table under the canonical headers — so a hand-typed lead goes through the
+ * very validator a file does (VAT/country normalization, the per-column length
+ * limits, the org's own stage keys) instead of a second, drifting copy of those
+ * rules. A field the form did not send is not a column at all.
+ */
+export function manualAccountTable(fields: ManualAccountFields): ParsedTable {
+  const header: string[] = [];
+  const values: string[] = [];
+  for (const spec of MARKETING_IMPORT_COLUMNS) {
+    const value = (fields as Record<string, unknown>)[spec.field];
+    if (typeof value !== 'string') continue;
+    header.push(spec.header);
+    values.push(value.trim());
+  }
+  return { header, rows: [{ row: 1, values }], delimiter: ',' };
+}
+
 // ── The target snapshot ──────────────────────────────────────────────────────
 
 export interface MarketingAccountTarget {
@@ -458,6 +498,20 @@ export interface MarketingLeadTarget {
   preferredLanguage: string | null;
   referralSource: string | null;
   companyId: string | null;
+  /**
+   * The person's role. Only a MENTEE is a lead: an ADMIN, MENTOR or COMPANY
+   * user whose address is typed in as a contact is staff, and treating them as
+   * the lead would fill in their profile, move their `companyId` and put them
+   * on the board as somebody's mentee (#2562 review). Optional only so that a
+   * snapshot built before the field existed still reads; the store always
+   * selects it.
+   */
+  role?: string | null;
+}
+
+/** Whether a User found by a contact address may stand in as that contact's lead. */
+export function isLeadRole(role: string | null | undefined): boolean {
+  return role === undefined || role === 'MENTEE';
 }
 
 export interface MarketingRelationTarget {
@@ -675,6 +729,9 @@ export function diffMarketingAccounts(
 
   const leadByEmail = new Map<string, MarketingLeadTarget>();
   for (const lead of snapshot.leads) {
+    // Staff is never a lead — see `MarketingLeadTarget.role`. Such a contact
+    // gets a fresh stand-in lead record, exactly like an unknown address.
+    if (!isLeadRole(lead.role)) continue;
     const key = leadIndexKey(lead.email);
     if (key && !leadByEmail.has(key)) leadByEmail.set(key, lead);
   }
@@ -943,6 +1000,79 @@ function planFunnel(
 
 // ── apply ────────────────────────────────────────────────────────────────────
 
+// ── The funnel record's data blocks ──────────────────────────────────────────
+// Built here, not in the store, so the one decision in them that is easy to get
+// wrong — the trial window (#2551) — is unit-tested with the rest of the
+// importer. The store spreads these into its `create`/`update` verbatim.
+
+/** What a funnel write needs besides the plan: ids the store knows, and its clock. */
+export interface FunnelWriteContext {
+  orgId: string | null;
+  companyId: string;
+  /** The row's clock — when the record enters `toStage`. */
+  now: Date;
+  /** The org's resolved `trialLengthDays` setting. */
+  trialLengthDays: number;
+}
+
+/**
+ * The `create` data of a funnel record placed at `funnel.toStage`. A record
+ * created straight into TRIAL_ACTIVE gets its trial window here: the import
+ * never calls `emitStageChange()` (stand-in leads must not be notified), so no
+ * later hook would ever stamp it.
+ */
+export function funnelRelationCreateData(
+  funnel: Pick<MarketingFunnelPlan, 'ownerId' | 'toStage'>,
+  leadId: string,
+  context: FunnelWriteContext,
+): {
+  orgId: string | null;
+  mentorId: string;
+  menteeId: string;
+  companyId: string;
+  pipelineStatus: string;
+} & TrialWindowData {
+  return {
+    orgId: context.orgId,
+    mentorId: funnel.ownerId,
+    menteeId: leadId,
+    companyId: context.companyId,
+    pipelineStatus: funnel.toStage,
+    ...trialWindowFor({
+      toStage: funnel.toStage,
+      enteredAt: context.now,
+      existing: null,
+      lengthDays: context.trialLengthDays,
+    }),
+  };
+}
+
+/**
+ * The `update` data of an existing funnel record. The window is stamped only
+ * on a real move into TRIAL_ACTIVE — re-applying the stage a record already
+ * sits at is not an entry, and would date a trial from the day of the re-run —
+ * and never over a window the record already has.
+ */
+export function funnelRelationUpdateData(
+  funnel: Pick<MarketingFunnelPlan, 'toStage'>,
+  current: ({ pipelineStatus: string } & ExistingTrialWindow) | null,
+  context: Omit<FunnelWriteContext, 'orgId'>,
+): { pipelineStatus: string; companyId: string } & TrialWindowData {
+  const moving = !current || current.pipelineStatus !== funnel.toStage;
+  return {
+    pipelineStatus: funnel.toStage,
+    companyId: context.companyId,
+    ...(moving
+      ? trialWindowFor({
+          toStage: funnel.toStage,
+          enteredAt: context.now,
+          existing: current,
+          lengthDays: context.trialLengthDays,
+        })
+      : {}),
+  };
+}
+
 /**
  * The write side of one chunk. The store implements it inside a transaction;
  * `previewWriter` implements it as nothing at all, which is the entire
@@ -964,6 +1094,50 @@ export const previewWriter: MarketingAccountWriter = {
     return row.targetId ?? null;
   },
 };
+
+// ── Create-only: the hand-typed lead (#2562) ────────────────────────────────
+
+/**
+ * Why a create-only row was not written although it planned a CREATE: its
+ * contact already carries an ACTIVE funnel record. The import re-points that
+ * record at the new account (a spreadsheet row saying "this contact now
+ * belongs to that merchant"); a person typing one lead into a form almost
+ * certainly means a second, different account, and silently moving somebody's
+ * funnel card there is the wrong default. The form sends them to the lead.
+ */
+export const CONTACT_IN_FUNNEL = 'contact_in_funnel';
+
+/**
+ * Why a hand-typed lead was refused before planning: its contact address is a
+ * staff user (ADMIN, MENTOR, COMPANY) of the same organization — almost always
+ * the admin's own address or a colleague's typed into the wrong field. The
+ * import in the same situation creates a separate stand-in lead (staff is
+ * never matched as a lead); a form asks the person instead.
+ */
+export const CONTACT_IS_USER = 'contact_is_user';
+
+/**
+ * The create-only plan: identical to the import's, except that a CREATE whose
+ * contact is already on the funnel becomes a SKIP (see above). UPDATE and
+ * UNCHANGED rows pass through unchanged — they are the "already exists" answer
+ * and `createOnlyWriter` does not write them.
+ */
+export function createOnlyPlan(rows: MarketingPlannedRow[]): MarketingPlannedRow[] {
+  return rows.map((row) =>
+    row.status === 'CREATE' && row.value.funnel?.relationId
+      ? { ...row, status: 'SKIP' as const, reason: CONTACT_IN_FUNNEL }
+      : row,
+  );
+}
+
+/**
+ * A writer that CREATES through `writer` and never updates: an UPDATE is what
+ * the matched, existing account WOULD receive, so it is reported (with the
+ * account's id) and not written — the dry-run half of the same writer port.
+ */
+export function createOnlyWriter(writer: MarketingAccountWriter): MarketingAccountWriter {
+  return { createAccount: (row) => writer.createAccount(row), updateAccount: previewWriter.updateAccount };
+}
 
 /**
  * What an operator reads when a row is refused.

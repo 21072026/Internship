@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { anonymizeUser, hardDeleteUser } from '@/lib/accountErasure';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 const bodySchema = z.object({
   mode: z.enum(['anonymize', 'delete']),
@@ -51,7 +52,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Your password is incorrect' }, { status: 400 });
   }
 
-  const target = await prisma.user.findUnique({ where: { id }, select: { role: true, fullName: true } });
+  // Same tenant only (#2542): another tenant's account is a 404, flag or no flag.
+  const target = await prisma.user.findFirst({ where: withinTenant({ id }, await tenantWhere(session)), select: { role: true, fullName: true } });
   if (!target) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }

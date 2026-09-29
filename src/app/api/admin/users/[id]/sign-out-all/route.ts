@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
@@ -43,8 +44,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const user = await prisma.user.findUnique({
-      where: { id },
+    // Same tenant only (#2542): another tenant's account is a 404, flag or no flag.
+    const user = await prisma.user.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
       select: { id: true, email: true, fullName: true, role: true },
     });
     if (!user) {

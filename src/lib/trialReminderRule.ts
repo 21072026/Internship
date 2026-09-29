@@ -54,6 +54,20 @@
 // no Prisma types) so a plain `node --experimental-strip-types` test can import
 // it — scripts/test/trial-reminder-rule.test.mjs. The queries that feed it live
 // in lib/trialReminders.ts, which re-exports everything here.
+//
+// ── WHERE A TRIAL WINDOW COMES FROM (#2551) ─────────────────────────────────
+//
+// The ladder above only ever sees records that HAVE a `trialEndsAt`, so the
+// other half of the rule is the one that writes it: `trialWindowFor()` below.
+// Every path that writes `pipelineStatus` spreads its answer into the same
+// `data` block that moves the stage — the board, the backdatable status-change
+// endpoint, the bulk advance, the marketing import (create and update) — and
+// the mentor transfer copies the window it already has. The stamp is NOT made
+// in `emitStageChange()`: that runs after the write, returns early on
+// from === to, and the import deliberately never calls it (stand-in leads must
+// not be notified), so a stamp there would miss exactly the imported trials.
+// scripts/test/trial-window-writers.test.mjs is the ratchet that holds every
+// stage writer to this.
 
 /**
  * Days-remaining marks at which the owner is written to, highest first.
@@ -65,6 +79,100 @@
  * record belongs in the attention queue (#2418), not in the mailbox.
  */
 export const TRIAL_REMINDER_THRESHOLDS = [7, 3, 0] as const;
+
+/**
+ * The key of the MARKETING preset's "trial running" stage. Named here, in the
+ * dependency-free rule, so `trialWindowFor()` can compare against it without an
+ * import; lib/programTemplates.ts re-exports it next to the preset that ships
+ * it, so there is still exactly one spelling in the tree.
+ */
+export const TRIAL_ACTIVE_STAGE_KEY = 'TRIAL_ACTIVE';
+
+/**
+ * The code default of the `trialLengthDays` org setting (src/lib/settings.ts):
+ * the free-use period of a trial. 30 days, which is what the product being
+ * sold actually grants (the SaleVali trial; its separate decision window after
+ * the free period is #2572, not this number).
+ */
+export const DEFAULT_TRIAL_LENGTH_DAYS = 30;
+
+/** Upper bound for `trialLengthDays`: a year is already not a trial. */
+export const MAX_TRIAL_LENGTH_DAYS = 365;
+
+/**
+ * The `trialLengthDays` setting string as a number of days.
+ *
+ * Anything that is not a whole number in 1..MAX falls back to the default
+ * rather than to 0: a trial of zero days would be stamped as already over and
+ * swept into TRIAL_EXPIRED on the next tick, so a blank or corrupted setting row
+ * must not be able to expire every new trial.
+ */
+export function parseTrialLengthDays(raw: string | null | undefined): number {
+  const value = (raw ?? '').trim();
+  if (!/^\d{1,4}$/.test(value)) return DEFAULT_TRIAL_LENGTH_DAYS;
+  const days = Number(value);
+  return days >= 1 && days <= MAX_TRIAL_LENGTH_DAYS ? days : DEFAULT_TRIAL_LENGTH_DAYS;
+}
+
+/** The trial dates a record already carries, if any. */
+export interface ExistingTrialWindow {
+  trialStartedAt?: Date | null;
+  trialEndsAt?: Date | null;
+}
+
+export interface TrialWindowInput {
+  /** The stage the write moves the record INTO (or creates it at). */
+  toStage: string | null | undefined;
+  /** When the record enters that stage — the write's own clock. */
+  enteredAt: Date;
+  /** What the record already carries; null/undefined for a record being created. */
+  existing?: ExistingTrialWindow | null;
+  /** The resolved `trialLengthDays` setting. Invalid values fall back to the default. */
+  lengthDays: number;
+}
+
+/** Only the fields that must be written; `{}` means "write nothing". */
+export interface TrialWindowData {
+  trialStartedAt?: Date;
+  trialEndsAt?: Date;
+}
+
+function isDate(value: Date | null | undefined): value is Date {
+  return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+/**
+ * The trial dates a stage write must add to its `data` block (#2551).
+ *
+ * Returns something only when the target stage is TRIAL_ACTIVE and the record
+ * has no trial end yet, and it NEVER returns a field the record already has:
+ *
+ *   * a record that re-enters TRIAL_ACTIVE (moved out by mistake and back, or
+ *     back from TRIAL_EXPIRED) keeps its FIRST window — the trial end is agreed
+ *     with the customer, and a board drag must not be able to extend it;
+ *   * a record with a start but no end (set by hand) gets only the end,
+ *     counted from its own start — the date somebody already wrote wins;
+ *   * a record with an end but no start is left alone: inventing a start would
+ *     claim a date nobody recorded.
+ *
+ * Pure: no clock (`enteredAt` is the caller's), no database, no setting read.
+ * The result is meant to be spread — `{ pipelineStatus, ...trialWindowFor(…) }`.
+ */
+export function trialWindowFor({ toStage, enteredAt, existing, lengthDays }: TrialWindowInput): TrialWindowData {
+  if (toStage !== TRIAL_ACTIVE_STAGE_KEY) return {};
+  if (isDate(existing?.trialEndsAt)) return {};
+  const days =
+    Number.isInteger(lengthDays) && lengthDays >= 1 && lengthDays <= MAX_TRIAL_LENGTH_DAYS
+      ? lengthDays
+      : DEFAULT_TRIAL_LENGTH_DAYS;
+  const start = existing?.trialStartedAt;
+  if (isDate(start)) return { trialEndsAt: new Date(start.getTime() + days * MS_PER_DAY) };
+  if (!isDate(enteredAt)) return {};
+  return {
+    trialStartedAt: new Date(enteredAt.getTime()),
+    trialEndsAt: new Date(enteredAt.getTime() + days * MS_PER_DAY),
+  };
+}
 
 /** One funnel record, as much of it as the rule needs. */
 export interface TrialReminderCandidate {

@@ -17,6 +17,7 @@ import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { StageClockChip } from '@/components/StageClockChip';
 import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { foldSearchText, matchesMenteeQuery } from '@/lib/menteeFilter';
+import { FollowUpChip } from '@/components/FollowUpPanel';
 
 interface Mentee {
   id: string;
@@ -38,6 +39,8 @@ interface Relation {
   // The mentee is in the re-engagement pool (#834): an agreed "we'll write in
   // September", so the clock shows but never turns red.
   stageClockPaused?: boolean;
+  // The owner's follow-up date (#2563), shipped to the owner and ADMIN only.
+  nextActionAt?: string | null;
   mentee: Mentee;
   _count: { interactions: number };
 }
@@ -194,6 +197,7 @@ export default function MentorBoardPage() {
         <GraduationCap className="h-3 w-3" />
         {r._count.interactions} {t.mentor.interactions}
       </div>
+      {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
       <CardStageSelect
         stages={stages}
         value={r.pipelineStatus}

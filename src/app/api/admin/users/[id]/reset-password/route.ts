@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { isPasswordLoginBlocked, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
@@ -26,7 +27,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return await withTenantScope(session, async () => {
   const { id } = await params;
-  const user = await prisma.user.findUnique({ where: { id } });
+  // Same tenant only (#2542): another tenant's account is a 404, flag or no flag.
+  const user = await prisma.user.findFirst({ where: withinTenant({ id }, await tenantWhere(session)) });
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }

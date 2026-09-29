@@ -7332,3 +7332,91 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   kova mantığı aynı, yalnızca adı farklı — aktivite günlüğünde `forgot · 127.0.0.1` görürsün.
 - **`--env-file` ile `.env` yüklemek**: worktree izolasyonu `. <(sed …)` kalıbını reddediyor.
   `node --env-file=<dosya> node_modules/@playwright/test/cli.js test …` aynı işi görüyor.
+
+## 2026-09-29 — #2542: kiracılar arası sızıntı, bayrak kapalıyken
+
+- **`assertSameOrg()` bayrak kapalıyken hiçbir şey yapmaz.** İlk satırı
+  `if (!isIsolationEnforced() …) return;` — yani "bayraktan bağımsız by-id koruma" için
+  kullanılamaz. Doğru kalıp sorgunun kendisine filtre koymak:
+  `findFirst({ where: orgScoped({ id }, resolveOrgId(session)) })` → yoksa 404.
+- **Bir listeyi org'a göre filtrelediğinde yaratma yollarını da yürü.** Bayrak kapalıyken
+  middleware `orgId` doldurmaz; `POST /api/companies` gibi elle damgalamayan bir yol
+  NULL-org satır yazar ve o satır, onu yaratan adminin artık org-kapsamlı listesinden
+  bir sonraki deploy'un backfill'ine kadar kaybolur.
+- **Worktree'de Playwright süreci yanlış veritabanına bağlanır.** `node_modules` ana repoya
+  symlink; üretilmiş Prisma client `.env`'i şemanın yanından (ana repo) okur, Next ise
+  worktree'nin `.env`'ini. Belirti: seed "başarılı", giriş 401. Çözüm: Playwright'ı
+  `DATABASE_URL=… npx playwright test …` ile çalıştır.
+- **Paralel ajanlarla `next dev` birkaç yüz testten sonra ~6 GB'a şişip makineyi
+  boğuyor** (her spec'te `page.waitForURL` zaman aşımı, kodla ilgisiz). Uzun e2e koşuları
+  için `npm run build && npx next start -p <port>` çok daha kararlı.
+
+### 2026-09-29 — #2542 review fixes: the shared Prisma client drifts under parallel worktrees
+
+- **A symlinked `node_modules` shares ONE generated Prisma client** (`node_modules/.prisma/client`).
+  A parallel worktree that runs `prisma generate` on a newer schema rewrites it under you: this
+  branch's `next start` then 500s with `P2022 … column MentorshipRelation.nextActionAt does not
+  exist` on routes you never touched, and `tsc` stays green. Check with
+  `grep -c <field> node_modules/.prisma/client/schema.prisma`. Do not regenerate into the shared
+  tree (it breaks the other worktree the same way); instead give the worktree a real
+  `node_modules/` of per-entry symlinks to the shared one **except** `.prisma` and `@prisma`,
+  copy `@prisma` in, and run `./node_modules/.bin/prisma generate` — Node resolves
+  `.prisma/client` from `@prisma/client`'s real path, so both must be local. Put the symlink back
+  afterwards.
+- **`pkill -f "next start -p 3101"` kills your own shell** (the pattern is in its command line;
+  exit 144). Kill by the port's pid: `ss -ltnp | grep ':3101 '`.
+- **Server components bypass API-route tenant filters.** `/admin` read Prisma directly, so the
+  #2542 route fixes did not cover the first screen every admin opens; grep `src/app/**/page.tsx`
+  for `prisma.` when scoping a model by hand.
+
+## 2026-09-29 — trial penceresi damgası (#2551)
+
+- **Scratchpad paralel ajanlar arasında paylaşılıyor olabilir.** Başka bir worktree ajanı aynı
+  `scratchpad/dev.log` yoluna yazıyordu; kendi `next dev`'imin günlüğünde başka bir veritabanının
+  (`internship_wt_2542`) sorgularını görünce yanlış DB'ye bağlandığımı sandım. Günlük dosyasına
+  issue/port numarası koy (`dev-2551-3102.log`) ve DB'yi `/proc/<pid>/cwd` ile değil sorgunun
+  kendisiyle doğrula.
+- **İzolasyon kapalıyken `/admin/settings` GLOBAL satıra yazar.** Bir e2e'de ayarı formdan
+  değiştirmek (`trialLengthDays=14`) aynı sunucudaki her tenant'ı etkiler; testi `serial` yap ve
+  `finally`'de `orgId: null` satırını sil, yoksa sonraki test varsayılanı (30) göremez.
+- **Playwright chromium sürüm uyuşmazlığı için `/opt`'a dokunmadan**: repo köküne geçici bir
+  `playwright.<ad>.config.ts` (`...base`, `use.launchOptions.executablePath` =
+  `/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell`) yazıp `--config`
+  ile vermek yetiyor; commit etme.
+- **Dev sunucusunda 2 worker ile ilk derleme 20 sn'lik `waitForURL` bütçelerini aşıyor** —
+  alakasız spec'ler topluca kırmızıya döner. Yerelde `--workers=1` koş.
+
+## 2026-09-29 — Paylaşılan `node_modules` ile paralel worktree'ler (#2562)
+
+- **Paylaşılan Prisma client'ı başka bir ajanın şemasından üretilmiş olabilir.** e2e'de
+  `P2022: The column … does not exist` gördüm: client, kardeş bir worktree'nin eklediği
+  `MentorshipRelation.nextActionAt`'ı bekliyordu, benim şemamda yoktu. `prisma generate`
+  çalıştırmak ONLARIN client'ını bozar; doğrusu kendi veritabanını client'a uydurmak:
+  `npx prisma db push --skip-generate --schema <kopya>` — kopya
+  `node_modules/.prisma/client/schema.prisma`'dan alınır (yalnızca eklemeliyse güvenli;
+  önce `diff` ile bak).
+- **Playwright 1.63, `chromium_headless_shell-1243` bekliyor; `/opt/pw-browsers`'ta 1194 var.**
+  Sistem dizinine dokunmadan: scratchpad'de bir dizin aç, `chromium-1243 → …/chromium-1194`
+  ve `chromium_headless_shell-1243/chrome-headless-shell-linux64 → …/chromium_headless_shell-1194/chrome-linux`
+  bağlarını kur, `PLAYWRIGHT_BROWSERS_PATH=<o dizin>` ile koş. Yeni düzende ikili adı
+  `chrome-headless-shell`, eskisinde `headless_shell` — bunun için de bir bağ gerekiyor.
+
+## 2026-09-29 — Parallel worktrees share one `node_modules`: `prisma generate` is global (#2563)
+
+- **A symlinked `node_modules` makes `npx prisma generate` write the SHARED client.** The
+  generated client lives in `node_modules/.prisma/client`, resolved through the real path of
+  `@prisma/client` — so in a worktree whose `node_modules` is a symlink to the main checkout's,
+  generating your schema replaces every other agent's client, and their `include` queries then
+  select columns their databases do not have. If you change the schema, make `node_modules` a
+  real directory first: symlink every top-level entry of the shared one except `@prisma` and
+  `.prisma`, make `@prisma/` a directory of symlinks except `client`, which you **copy**
+  (`cp -a`, ~8 MB). `prisma generate` then writes `./node_modules/.prisma/client` locally.
+- **No write to `/opt/pw-browsers` needed for a Playwright build mismatch.** Point
+  `PLAYWRIGHT_BROWSERS_PATH` at a scratch directory holding `chromium_headless_shell-<wanted>`
+  (containing a `chrome-headless-shell-linux64` link to the installed build's `chrome-linux`),
+  `chromium-<wanted>` and `ffmpeg-*` links.
+- **`scripts/test/schema-push-safety.test.mjs` "the CLI fails on the real #2249 commit" fails in
+  a worktree whose history is grafted**: `aa257b2` is reachable but has no merge-base with
+  `HEAD`, so the CLI falls back to `origin/main` and reports clean. Environment, not a regression.
+- **`next dev` compiles each role's landing on first hit (18 s for `/portal`).** A spec that signs
+  in as three roles needs `test.slow()` against a cold dev server.

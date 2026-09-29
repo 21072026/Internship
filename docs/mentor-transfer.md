@@ -82,9 +82,23 @@ question from the other side: a note mentor A wrote to themselves is not B's to
 read.
 
 What the new relation **does** carry forward is the mentee's own journey:
-`pipelineStatus`, `stageDeadline`, `companyId`, `projectId`, `cohortId`.
-Resetting a hired-track candidate to the first stage because their mentor
-changed is a second falsehood, and the one the whole pipeline board would show.
+`pipelineStatus`, `stageDeadline`, `companyId`, `projectId`, `cohortId`, and —
+for a MARKETING funnel record — the trial window `trialStartedAt` /
+`trialEndsAt` (#2551). Resetting a hired-track candidate to the first stage
+because their mentor changed is a second falsehood, and the one the whole
+pipeline board would show.
+
+The trial window is **copied, never re-derived**. A handover of an account in
+`TRIAL_ACTIVE` is not a new entry into that stage, so `trialWindowFor()`
+(`src/lib/trialReminderRule.ts`) is deliberately not called here: stamping would
+either hand the customer a fresh 30 days or, if the old relation somehow had no
+window, date the trial from the day of the handover. The successor carries the
+same `trialEndsAt`, so the reminder ladder and the expiry sweep keep counting
+from the date the customer was given. The list of copied fields is one constant,
+`CARRIED_OVER_FIELDS` in `src/lib/relationHistory.ts`; the unit test
+(`scripts/test/mentor-transfer.test.mjs`) checks every one of them is also in the
+transfer's Prisma `select` — a field copied but not selected would be copied as
+`undefined`, i.e. silently dropped.
 
 `previousRelationId` is the seam that makes the predecessor **readable** rather
 than merely still existing somewhere. What still reads only the live relation:

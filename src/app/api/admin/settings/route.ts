@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getSettings, setSetting, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
+import { MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 
 // GET — current settings for the caller's tenant, resolved org row → global row
 // → code default (see src/lib/settings.ts).
@@ -68,6 +69,15 @@ const schema = z.object({
   // accepting it from a tenant admin cannot raise anybody's ceiling. Seven
   // digits is far past any list this product will mail.
   broadcastMonthlyRecipients: z.string().regex(/^\d{1,7}$/).or(z.literal('')).optional(),
+  // Trial length for the MARKETING funnel (#2551). 1..MAX_TRIAL_LENGTH_DAYS
+  // (the one bound the form and the rule share): a zero-day trial
+  // would be stamped as already over and swept into TRIAL_EXPIRED overnight,
+  // so 0 is refused here (and would fall back to 30 in the rule regardless).
+  trialLengthDays: z
+    .string()
+    .regex(/^\d{1,3}$/)
+    .refine((v) => Number(v) >= 1 && Number(v) <= MAX_TRIAL_LENGTH_DAYS)
+    .optional(),
 });
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.

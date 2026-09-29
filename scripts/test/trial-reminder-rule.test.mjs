@@ -189,3 +189,78 @@ test('utcDayNumber reads the UTC day, not the host local one', () => {
 test('an empty batch is an empty answer, not a throw', () => {
   assert.deepEqual(selectDueTrialReminders([], { now: NOW }), []);
 });
+
+// ── Where the window comes from: trialWindowFor() (#2551) ───────────────────
+//
+// The ladder above only sees records that HAVE a trialEndsAt. These pin the
+// other half — the stamp every stage writer spreads into its data block — and
+// the property the acceptance criteria name: a card moved to TRIAL_ACTIVE ends
+// its trial 30 days later, gets its seven-day reminder on the right day, and a
+// second entry keeps the first window.
+
+const {
+  DEFAULT_TRIAL_LENGTH_DAYS,
+  MAX_TRIAL_LENGTH_DAYS,
+  TRIAL_ACTIVE_STAGE_KEY,
+  parseTrialLengthDays,
+  trialWindowFor,
+} = await import('../../src/lib/trialReminderRule.ts');
+
+const ENTERED = new Date('2026-03-01T14:15:00.000Z');
+const DAY = 24 * 60 * 60 * 1000;
+
+test('entering TRIAL_ACTIVE with no window stamps start = entry, end = entry + length', () => {
+  const w = trialWindowFor({ toStage: TRIAL_ACTIVE_STAGE_KEY, enteredAt: ENTERED, existing: null, lengthDays: 30 });
+  assert.equal(w.trialStartedAt.toISOString(), ENTERED.toISOString());
+  assert.equal(w.trialEndsAt.getTime() - ENTERED.getTime(), 30 * DAY);
+  // The value is a copy — mutating the caller's clock cannot move the stamp.
+  assert.notEqual(w.trialStartedAt, ENTERED);
+});
+
+test('the stamped window feeds the ladder: the seven-day reminder is due 23 days after entry', () => {
+  const w = trialWindowFor({ toStage: TRIAL_ACTIVE_STAGE_KEY, enteredAt: ENTERED, existing: null, lengthDays: 30 });
+  const tick = new Date(ENTERED.getTime() + 23 * DAY);
+  const due = selectDueTrialReminders([{ id: 'r1', trialEndsAt: w.trialEndsAt, sentThresholds: [] }], { now: tick });
+  assert.deepEqual(due, [{ relationId: 'r1', threshold: 7, daysRemaining: 7 }]);
+});
+
+test('any other stage writes nothing', () => {
+  for (const toStage of ['LEAD_NEW', 'TRIAL_EXPIRED', 'DEAL_WON', 'APPLICATION_100', '', null, undefined]) {
+    assert.deepEqual(trialWindowFor({ toStage, enteredAt: ENTERED, existing: null, lengthDays: 30 }), {});
+  }
+});
+
+test('re-entering TRIAL_ACTIVE keeps the first window — never overwritten', () => {
+  const first = trialWindowFor({ toStage: TRIAL_ACTIVE_STAGE_KEY, enteredAt: ENTERED, existing: null, lengthDays: 30 });
+  const later = new Date(ENTERED.getTime() + 40 * DAY);
+  assert.deepEqual(trialWindowFor({ toStage: TRIAL_ACTIVE_STAGE_KEY, enteredAt: later, existing: first, lengthDays: 30 }), {});
+  // Even a longer configured length does not extend a window already stamped.
+  assert.deepEqual(trialWindowFor({ toStage: TRIAL_ACTIVE_STAGE_KEY, enteredAt: later, existing: first, lengthDays: 90 }), {});
+});
+
+test('an end without a start is left alone; a start without an end gets only the end', () => {
+  const endOnly = { trialStartedAt: null, trialEndsAt: new Date('2026-04-01T00:00:00Z') };
+  assert.deepEqual(trialWindowFor({ toStage: TRIAL_ACTIVE_STAGE_KEY, enteredAt: ENTERED, existing: endOnly, lengthDays: 30 }), {});
+
+  const startOnly = { trialStartedAt: new Date('2026-02-20T00:00:00Z'), trialEndsAt: null };
+  const w = trialWindowFor({ toStage: TRIAL_ACTIVE_STAGE_KEY, enteredAt: ENTERED, existing: startOnly, lengthDays: 30 });
+  assert.deepEqual(Object.keys(w), ['trialEndsAt']);
+  assert.equal(w.trialEndsAt.toISOString(), '2026-03-22T00:00:00.000Z');
+});
+
+test('an invalid length falls back to the default instead of stamping an over-on-arrival trial', () => {
+  for (const lengthDays of [0, -5, 1.5, NaN, MAX_TRIAL_LENGTH_DAYS + 1]) {
+    const w = trialWindowFor({ toStage: TRIAL_ACTIVE_STAGE_KEY, enteredAt: ENTERED, existing: null, lengthDays });
+    assert.equal(w.trialEndsAt.getTime() - ENTERED.getTime(), DEFAULT_TRIAL_LENGTH_DAYS * DAY, String(lengthDays));
+  }
+});
+
+test('the trialLengthDays setting parses whole days in 1..365, anything else is 30', () => {
+  assert.equal(DEFAULT_TRIAL_LENGTH_DAYS, 30);
+  assert.equal(parseTrialLengthDays('30'), 30);
+  assert.equal(parseTrialLengthDays(' 14 '), 14);
+  assert.equal(parseTrialLengthDays('365'), 365);
+  for (const raw of ['', '0', '366', '-3', '12.5', 'abc', null, undefined]) {
+    assert.equal(parseTrialLengthDays(raw), 30, String(raw));
+  }
+});

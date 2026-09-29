@@ -18,6 +18,7 @@ import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { isStageOverdue } from '@/lib/stageClock';
+import { FollowUpChip } from '@/components/FollowUpPanel';
 import {
   DEFAULT_BOARD_WIP_LIMIT,
   isOverWipLimit,
@@ -34,6 +35,8 @@ interface Relation {
   // re-engagement pool, so this card can never read as a breach — the same
   // exclusion the admin aging report applies to its own overdue list.
   stageClockPaused?: boolean;
+  // The owner's follow-up date (#2563), shipped to the owner and ADMIN only.
+  nextActionAt?: string | null;
   mentee: { id: string; fullName: string; university?: string };
   mentor: { id: string; fullName: string };
   _count: { interactions: number };
@@ -263,6 +266,7 @@ export default function AdminBoardPage() {
             {r._count.interactions}
           </span>
         </div>
+        {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
         {/* Keyboard/touch-accessible alternative to drag-and-drop. */}
         <CardStageSelect
           stages={stages}

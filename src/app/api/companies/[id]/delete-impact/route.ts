@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // What deleting this company would cost (#2441).
 //
@@ -52,8 +53,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
 
     return await withTenantScope(session, async () => {
-      const company = await prisma.company.findUnique({
-        where: { id },
+      // Tenant-filtered by hand like the DELETE it precedes (#2542): a company
+      // of another tenant is the same 404 as one that does not exist.
+      const company = await prisma.company.findFirst({
+        where: withinTenant({ id }, await tenantWhere(session)),
         select: {
           id: true,
           name: true,

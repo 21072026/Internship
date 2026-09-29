@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
 import { notify, notifyIfAllowed } from '@/lib/notify';
+import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
@@ -27,6 +28,7 @@ import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { buildMeetingIcs } from '@/lib/ics';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary } from '@/i18n/dictionaries';
+import { isNextActionReminderDue, nextActionDueBefore } from '@/lib/nextActionRule';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { bulkMissingRequirements } from '@/lib/documentRequirements';
 import { utcWeekStart } from '@/lib/week';
@@ -2311,7 +2313,123 @@ export async function checkStageDeadlineReminders() {
     await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { deadlineReminderSentAt: now } });
   }
 
-  return { reminded: overdue.length };
+  // The owner's own follow-up dates (#2563) ride on this same job: the issue
+  // asked for no second timer and no new notification category, and "a record
+  // needs you on a date" is exactly what the 'deadlines' / 'stage-deadline'
+  // pair already means (the trial ladder made the same call, #2412).
+  const nextActions = await checkNextActionReminders(now);
+
+  return { reminded: overdue.length, nextActions };
+}
+
+// Remind each owner once on the day of the next action they wrote on a record
+// (#2563). The rule — calendar day in UTC, on-or-before today, caught up after
+// a missed tick, re-armed only by moving the date — is lib/nextActionRule.ts.
+//
+// CLAIM FIRST, THEN SEND. The guard is a conditional `updateMany` on the exact
+// date that was read (`nextActionAt` unchanged AND `nextActionRemindedAt`
+// still null), the shape `checkStageDeadlineReminders` above lacks and the
+// trial sweep's claim rows have: two overlapping ticks cannot both win, and an
+// owner who moved the date between the read and the claim gets the NEW date's
+// reminder on its own day rather than a stale one now. A failed mail after a
+// won claim is not retried — the same trade the other sweeps make; the bell
+// row is written first and the record reaches the attention queue the next
+// day regardless, so the follow-up is not lost in silence.
+//
+// A failed BELL write is different: nothing reached the owner at all, so the
+// claim is released (conditionally, on the exact stamp this tick wrote) and
+// the next tick tries again, mail included. Every record runs in its own
+// try/catch — one bad row must not skip the rest of the tick, nor reject the
+// all-jobs `/api/cron` batch this sweep rides inside.
+export async function checkNextActionReminders(now = new Date()) {
+  const due = await prisma.mentorshipRelation.findMany({
+    where: {
+      status: 'ACTIVE',
+      nextActionAt: { lt: nextActionDueBefore(now) },
+      nextActionRemindedAt: null,
+    },
+    select: {
+      id: true,
+      menteeId: true,
+      nextActionAt: true,
+      nextActionNote: true,
+      nextActionRemindedAt: true,
+      company: { select: { name: true } },
+      mentee: { select: { fullName: true } },
+      mentor: {
+        select: {
+          id: true,
+          role: true,
+          email: true,
+          fullName: true,
+          emailNotifications: true,
+          notificationPrefs: true,
+          preferredLanguage: true,
+        },
+      },
+    },
+  });
+
+  let reminded = 0;
+  let failures = 0;
+  for (const rel of due) {
+    if (!isNextActionReminderDue(rel, now)) continue;
+    const claim = await prisma.mentorshipRelation.updateMany({
+      where: { id: rel.id, nextActionAt: rel.nextActionAt, nextActionRemindedAt: null },
+      data: { nextActionRemindedAt: now },
+    });
+    // Another tick won, or the owner changed the date in between. Quiet: one
+    // of the contenders is supposed to lose.
+    if (claim.count === 0) continue;
+    const owner = rel.mentor;
+    // What the bell and the mail call this record: the account for a funnel
+    // record with a company, else the person — the trial sweep's fallback.
+    const name = rel.company?.name ?? rel.mentee.fullName;
+    const link = notificationLink(owner.role as NotificationRole, 'relation', { relationId: rel.id, menteeId: rel.menteeId });
+    try {
+      if (notificationCategoryAllowed(owner, 'deadlines')) {
+        await notify(owner.id, 'deadline.nextActionDue', { name }, link);
+      }
+    } catch (error) {
+      failures += 1;
+      logger.error('Next action reminder bell failed', { relationId: rel.id, userId: owner.id, error: String(error) });
+      // Give the reminder back so the next tick retries it. Conditional on our
+      // own stamp: an owner who moved the date meanwhile already re-armed it.
+      await prisma.mentorshipRelation
+        .updateMany({
+          where: { id: rel.id, nextActionAt: rel.nextActionAt, nextActionRemindedAt: now },
+          data: { nextActionRemindedAt: null },
+        })
+        .catch((releaseError) => {
+          logger.error('Next action reminder claim release failed', { relationId: rel.id, error: String(releaseError) });
+        });
+      continue;
+    }
+    reminded += 1;
+
+    if (emailAllowed(owner, 'deadlines') && emailGroupAllowedForCategory(owner, 'stage-deadline')) {
+      try {
+        const locale = isLocale(owner.preferredLanguage ?? undefined) ? (owner.preferredLanguage as Locale) : defaultLocale;
+        const text = getDictionary(locale).notifications.nextActionEmail;
+        const noteHtml = rel.nextActionNote
+          ? `<p><strong>${esc(text.noteLabel)}</strong> ${esc(rel.nextActionNote)}</p>`
+          : '';
+        await sendEmail({
+          category: 'stage-deadline',
+          userId: owner.id,
+          locale: owner.preferredLanguage,
+          to: owner.email,
+          subject: text.subject.replace('{name}', name),
+          html: `<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}<p><a href="${appUrl()}${link}">${esc(text.cta)}</a></p>`,
+        });
+      } catch (error) {
+        failures += 1;
+        logger.error('Next action reminder email failed', { relationId: rel.id, userId: owner.id, error: String(error) });
+      }
+    }
+  }
+
+  return { checked: due.length, reminded, failures };
 }
 
 // Friday reminder for the current UTC week. The unique relation/week claim is
