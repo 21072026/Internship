@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { floodIp, freshIp } from './helpers/rateLimit';
 
+// True when the suite talks to the app directly (its own webServer, or a dev
+// server on this machine named by BASE_URL) rather than through a real proxy.
+const noProxyInFront =
+  !process.env.BASE_URL || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(process.env.BASE_URL);
+
 // EVERY FLOOD IN THIS FILE SPENDS ITS OWN SYNTHETIC IP (#2159).
 //
 // `enforceRateLimit` keys on `bucket:ip` and the counter store is per PROCESS,
@@ -59,8 +64,10 @@ test('a rotating X-Forwarded-For does not buy a fresh rate-limit bucket', { tag:
     statuses.push(res.status());
   }
   // Limit 5: whatever the caller wrote, everything after the fifth request is
-  // throttled. Before #858 all 12 returned 200. (A retry of this test lands on
-  // an already-spent bucket and sees 429 throughout, which this also accepts.)
+  // throttled. Before #858 all 12 returned 200. (A retry runs in a fresh worker,
+  // whose `floodIp` may hand out a bucket the failed attempt already spent or
+  // one it never touched; either way nothing after the fifth request passes, so
+  // this assertion holds for both.)
   expect(statuses.slice(5)).toEqual(Array(7).fill(429));
 
   // Control: the key really is the appended entry. Another peer behind the same
@@ -68,6 +75,18 @@ test('a rotating X-Forwarded-For does not buy a fresh rate-limit bucket', { tag:
   // the endpoint failing, and not every caller sharing one counter, which is
   // what a webServer at TRUSTED_PROXY_COUNT=0 would do (and it would silently
   // void every floodIp/freshIp isolation in the suite with it).
+  //
+  // Only where nothing sits in front of the app. Against a deployed env a real
+  // proxy appends the runner's own address to the right of every header these
+  // helpers write, so the control lands in the bucket the flood just spent and
+  // would read 429 for a reason that says nothing about the app.
+  if (!noProxyInFront) {
+    test.info().annotations.push({
+      type: 'skipped-control',
+      description: 'peer-isolation control needs the e2e helpers\' isolation, which a real proxy in front makes inert',
+    });
+    return;
+  }
   const otherPeer = await request.post('/api/auth/forgot', {
     data: { email: 'spoof-control@example.com' },
     headers: freshIp('forgot-password-spoof-control'),
