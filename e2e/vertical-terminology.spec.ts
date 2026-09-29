@@ -259,6 +259,7 @@ test('a MARKETING admin reads the lead detail with no mentorship word (#2557)', 
   const mkt = await adminIn('MARKETING');
   const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-ld');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
     await page.goto(`/admin/candidates/${fixture.personId}`);
     await expect(page.getByText('Owner', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
@@ -275,6 +276,7 @@ test('a MARKETING rep\'s empty thread suggests a sales opener, not a mentorship 
     // Any landing: the rep's home is /sales by way of /mentor's redirect, and
     // this test is about the thread, so it waits for the shell rather than
     // the second hop (which a cold `next dev` compiles past the 20s budget).
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, fixture.ownerEmail, 'TermPass123', '/');
     await page.goto(`/messages/${fixture.relationId}`);
     const suggestions = page.getByTestId('message-suggestions');
@@ -304,3 +306,23 @@ test('an INTERNSHIP mentor\'s empty thread keeps the mentorship welcome (#2557)'
     await teardown(intn.org.id, [intn.email, ...fixture.emails], fixture.companyId);
   }
 });
+
+// #2558: the screens a SaleVali admin uses to bring the sales team in. Only
+// the words change (the Role enum is frozen): MENTOR is a rep, MENTEE a lead.
+for (const path of ['/admin/invite', '/admin/users']) {
+  test(`a MARKETING admin reads ${path} with no mentorship word (#2558)`, async ({ page }) => {
+    const mkt = await adminIn('MARKETING');
+    const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', `term-mkt-${path.split('/').pop()}`);
+    try {
+      await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+      await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
+      await page.goto(path);
+      await expect(page.locator('#main-content h1').first()).toBeVisible({ timeout: 20_000 });
+      // The users list is fetched after the first paint: wait for the seeded rep.
+      if (path === '/admin/users') await expect(page.getByText('Robin Owner').first()).toBeVisible({ timeout: 20_000 });
+      expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+    } finally {
+      await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
+    }
+  });
+}

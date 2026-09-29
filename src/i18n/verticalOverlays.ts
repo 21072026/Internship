@@ -48,7 +48,22 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // mentor yet / Mentor" on the screen a rep uses most.
       // The role-convert button on the lead detail and the users list (#2557):
       // the role enum is unchanged, only the words — MENTOR is a rep, MENTEE a lead.
+      // Bringing the sales team in (#2558): the invite screen, the users list's
+      // role labels and filter chips, and the invitation mail itself.
+      invite: {
+        subtitle: 'Invite sales reps and leads to join',
+        connectMentor: 'Assign to this rep (optional)',
+        connectMentee: 'Give this lead to the new rep (optional)',
+        connectHint: 'Chosen here, the lead is assigned the moment they register — no follow-up step.',
+      },
+      notifications: {
+        invitationEmail: {
+          roles: { MENTOR: 'a sales rep', MENTEE: 'a lead' },
+        },
+      },
       usersAdmin: {
+        mentor: 'Rep',
+        mentee: 'Lead',
         makeMentor: 'Make rep',
         makeMentee: 'Make lead',
         convertToMentorConfirm: '{name} will be signed out of every device and becomes a rep at their next sign-in. Their existing records are kept.',
@@ -396,7 +411,20 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
       nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
+      invite: {
+        subtitle: 'Satış temsilcilerini ve müşteri adaylarını davet et',
+        connectMentor: 'Bu temsilciye ata (isteğe bağlı)',
+        connectMentee: 'Bu müşteri adayını yeni temsilciye ver (isteğe bağlı)',
+        connectHint: 'Burada seçilirse müşteri adayı, kayıt olduğu anda atanır — ayrıca bir adım gerekmez.',
+      },
+      notifications: {
+        invitationEmail: {
+          roles: { MENTOR: 'satış temsilcisi', MENTEE: 'müşteri adayı' },
+        },
+      },
       usersAdmin: {
+        mentor: 'Temsilci',
+        mentee: 'Müşteri adayı',
         makeMentor: 'Temsilci yap',
         makeMentee: 'Müşteri adayı yap',
         convertToMentorConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde temsilci olur. Mevcut kayıtları korunur.',
@@ -631,7 +659,20 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
     },
     de: {
       nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
+      invite: {
+        subtitle: 'Vertriebsmitarbeiter und Leads einladen',
+        connectMentor: 'Diesem Vertriebsmitarbeiter zuordnen (optional)',
+        connectMentee: 'Diesen Lead dem neuen Vertriebsmitarbeiter geben (optional)',
+        connectHint: 'Hier gewählt, wird der Lead bei der Registrierung sofort zugeordnet — kein weiterer Schritt.',
+      },
+      notifications: {
+        invitationEmail: {
+          roles: { MENTOR: 'Vertriebsmitarbeiter', MENTEE: 'Lead' },
+        },
+      },
       usersAdmin: {
+        mentor: 'Vertriebsmitarbeiter',
+        mentee: 'Lead',
         makeMentor: 'Zum Vertriebsmitarbeiter machen',
         makeMentee: 'Zum Lead machen',
         convertToMentorConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung Vertriebsmitarbeiter. Bestehende Datensätze bleiben erhalten.',

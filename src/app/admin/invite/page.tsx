@@ -38,14 +38,16 @@ const inviteSchema = z.object({
 
 type InviteData = z.infer<typeof inviteSchema>;
 
-const roleOptions = [
-  { value: 'MENTEE', label: 'Mentee' },
-  { value: 'MENTOR', label: 'Mentor' },
-  { value: 'ADMIN', label: 'Admin' },
-];
 
 export default function InvitePage() {
   const t = useT();
+  // From the dictionary, not literals (#2558): the same labels the users list
+  // shows, so a vertical overlay can name MENTOR a rep and MENTEE a lead.
+  const roleOptions = [
+    { value: 'MENTEE', label: t.usersAdmin.mentee },
+    { value: 'MENTOR', label: t.usersAdmin.mentor },
+    { value: 'ADMIN', label: t.usersAdmin.admin },
+  ];
   const locale = useLocale();
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
