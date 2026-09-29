@@ -141,11 +141,15 @@ function memoryWriter(store) {
         startDate: data.startDate ?? now,
         // The estimated value (#2422) — `writeImportedValue` in the Prisma writer.
         valueMinor: funnel.valueMinor,
+        valueCurrency: funnel.valueMinor !== null ? 'EUR' : null,
       });
       return;
     }
     Object.assign(active, funnelRelationUpdateData(funnel, active, { companyId, now, trialLengthDays }));
-    if (funnel.valueMinor !== null) active.valueMinor = funnel.valueMinor;
+    if (funnel.valueMinor !== null) {
+      active.valueMinor = funnel.valueMinor;
+      active.valueCurrency = 'EUR'; // the file's mrr is always EUR
+    }
   };
   return {
     async createAccount(row) {
@@ -483,6 +487,36 @@ test('the mrr column lands as the record\'s estimated value, gap-fill unless aut
   const authoritative = await runFile(FIXTURE_TEXT, store, { apply: true, authoritative: true });
   assert.equal(relation.valueMinor, 125000);
   assert.ok(authoritative.rows.find((r) => r.value.input.name === 'Nordlicht Handel GmbH').changed.includes('value'));
+});
+
+test('the mrr comparison is amount AND currency: a CHF estimate is a disagreement (#2422)', async () => {
+  const store = memoryStore();
+  await runFile(FIXTURE_TEXT, store, { apply: true });
+  const lead = store.leads.find((l) => l.email === standIn('lena@nordlicht.example'));
+  const relation = store.relations.find((r) => r.menteeId === lead.id);
+  // Same amount as the file's "1.250,00", different currency.
+  relation.valueCurrency = 'CHF';
+  const gapFill = await runFile(FIXTURE_TEXT, store, { apply: true });
+  const row = gapFill.rows.find((r) => r.value.input.name === 'Nordlicht Handel GmbH');
+  assert.match(row.reason, /left alone: estimated value/, 'withheld, not "no change"');
+  assert.equal(relation.valueCurrency, 'CHF');
+
+  await runFile(FIXTURE_TEXT, store, { apply: true, authoritative: true });
+  assert.equal(relation.valueCurrency, 'EUR', 'the authoritative source says EUR');
+  assert.equal(relation.valueMinor, 125000);
+});
+
+test('an mrr above the deal-value bound refuses the row with a reason (#2422)', async () => {
+  const store = memoryStore();
+  // 21 474 836,48 € — past the MySQL INT the value lives in; and 10 000 000,01 €,
+  // past the bound the editor enforces. Both must be a named refusal.
+  for (const mrr of ['"21.474.836,48"', '"10.000.000,01"']) {
+    const text = [HEADER, `Big GmbH,,DE,Kiel,,,Retail,de,DEAL_WON,Messe,1,${mrr},,,Bo,bo@big.example,`].join('\n');
+    const report = await runFile(text, store, { apply: true });
+    assert.equal(report.counts.ERROR, 1, mrr);
+    assert.match(report.rows[0].reason, /mrr is too large/);
+  }
+  assert.equal(store.relations.length, 0);
 });
 
 test('a row with a stage but no contact keeps its account and warns about the stage', async () => {

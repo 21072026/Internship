@@ -59,6 +59,7 @@ import { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 import { planFieldUpdates } from './externalSyncPolicy';
 import { typedSourceName } from './leadSourceName';
 import { parseMinorUnits } from './money';
+import { DEAL_VALUE_MAX_MINOR } from './dealValue';
 import { TEXT_LIMITS } from './textLimits';
 import {
   DEFAULT_TRIAL_LENGTH_DAYS,
@@ -509,6 +510,10 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
     const mrrMinor = rawMrr ? parseMinorUnits(rawMrr) : null;
     if (mrrMinor !== null && !Number.isSafeInteger(mrrMinor)) return reject(`mrr is not a number: "${rawMrr}"`);
     if (mrrMinor !== null && mrrMinor < 0) return reject(`mrr must not be negative: "${rawMrr}"`);
+    // The editor's bound, and the column's (a MySQL INT): a cent figure pasted
+    // into the euro column refuses THIS row with a reason, instead of throwing
+    // inside its transaction as a generic write failure.
+    if (mrrMinor !== null && mrrMinor > DEAL_VALUE_MAX_MINOR) return reject(`mrr is too large: "${rawMrr}"`);
 
     const rawContactEmail = read('contactEmail');
     const contactEmail = rawContactEmail.toLowerCase();
@@ -685,6 +690,8 @@ export interface MarketingRelationTarget {
    * #2422), null/absent for "no estimate" — what the `mrr` column gap-fills.
    */
   valueMinor?: number | null;
+  /** That estimate's ISO 4217 code; the file's `mrr` is always EUR. */
+  valueCurrency?: string | null;
 }
 
 export interface MarketingTargetSnapshot {
@@ -1388,12 +1395,17 @@ function planFunnel(
   // The estimated value (#2422): the file's `mrr` onto the record, through the
   // one do-not-clobber policy every external writer shares. A record being
   // created has nothing to clobber.
+  // The comparison is amount AND currency: the file's `mrr` is EUR, so a
+  // record estimated at 49,90 CHF is a disagreement (withheld without
+  // `--authoritative`, rewritten as EUR with it), not "no change".
+  const valueKey = (minor: number | null | undefined, currency: string | null | undefined) =>
+    minor == null ? null : `${minor} ${currency ?? 'EUR'}`;
   const valuePlan = planFieldUpdates(
-    { valueMinor: relation?.valueMinor ?? null },
-    { valueMinor: value.mrrMinor ?? undefined },
+    { value: valueKey(relation?.valueMinor, relation?.valueCurrency) },
+    { value: valueKey(value.mrrMinor, 'EUR') ?? undefined },
     { authoritative: context.authoritative },
   );
-  const valueMinor = valuePlan.changes.valueMinor ?? null;
+  const valueMinor = valuePlan.changes.value != null ? value.mrrMinor : null;
   if (valuePlan.withheld.length > 0) warnings.push('left alone: estimated value (mrr)');
 
   const toStage = value.stage;

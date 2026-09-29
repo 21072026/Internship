@@ -47,7 +47,8 @@
 // two relations that is a second win in the transfer month and a predecessor
 // that is "still active" forever; the value would be counted twice for every
 // month after the handover. So the chain is folded into one journey first —
-// the root's start, every link's moves — and valued by its newest link.
+// the root's start, every link's moves — and valued by its newest link (the tip),
+// even when the tip's estimate was cleared.
 // (#2556 adds the shared `relationChains`/`mergeChainJourney` helpers to
 // funnelKpi.ts for the funnel route; once both are on main, `foldChains` here
 // should delegate to them. The semantics are the same by design.)
@@ -84,7 +85,7 @@ export function isDealValueCurrency(value: unknown): value is DealValueCurrency 
 export const DEAL_VALUE_SOURCES = ['MANUAL', 'IMPORT'] as const;
 export type DealValueSource = (typeof DEAL_VALUE_SOURCES)[number];
 
-export type DealValueInputError = 'invalid_amount' | 'negative' | 'too_large' | 'invalid_currency';
+export type DealValueInputError = 'invalid_amount' | 'ambiguous_amount' | 'negative' | 'too_large' | 'invalid_currency';
 
 /**
  * Validate a value an API caller sent: an integer in minor units (a float is
@@ -111,6 +112,13 @@ export function validateDealValue(
 export function parseDealValueInput(
   raw: string,
 ): { ok: true; valueMinor: number | null } | { ok: false; error: DealValueInputError } {
+  // A spreadsheet's "1.234" is a thousands group, and the importer keeps
+  // reading it that way. A person typing into this field may just as well have
+  // meant 1,234 with a slipped extra digit ("49,999") — a thousandfold error
+  // saved behind a toast. With ONE separator followed by exactly three digits
+  // the text is ambiguous, so the editor asks instead of guessing; "1234",
+  // "1.234,00" and "49,99" all remain unambiguous.
+  if (/^[^.,]*\d[.,]\d{3}\D*$/.test(raw.trim())) return { ok: false, error: 'ambiguous_amount' };
   const parsed = parseMinorUnits(raw);
   if (parsed === null) return { ok: true, valueMinor: null };
   if (Number.isNaN(parsed)) return { ok: false, error: 'invalid_amount' };
@@ -150,9 +158,10 @@ export interface ValueJourney extends Journey {
 /**
  * Fold every transfer chain into ONE journey: the root's start, the moves of
  * every link in time order (stable, so two moves in one millisecond keep their
- * recorded order), and the value of the NEWEST link that carries one — a
- * transfer copies the estimate, and a later edit on the successor is the
- * current one.
+ * recorded order), and the value of the chain's TIP — its newest link — even
+ * when the tip carries none: a transfer copies the estimate, a later edit on
+ * the successor is the current one, and a cleared estimate stays cleared (the
+ * predecessor's old copy is history, not a fallback).
  *
  * The root is the link whose predecessor is absent (null, or not loaded — a
  * missing link degrades to "the chain begins here" rather than dropping a
@@ -185,12 +194,19 @@ export function foldChains(journeys: ValueJourney[]): ValueJourney[] {
   const merge = (chain: ValueJourney[]): ValueJourney => {
     if (chain.length === 1) return chain[0];
     const [root] = chain;
-    const valued = [...chain].reverse().find((l) => l.valueMinor != null);
+    // The TIP values the chain — the newest link, even when its value is null.
+    // A transfer COPIES the estimate and leaves the predecessor's row in
+    // place, so "the newest link that still has a value" would resurrect the
+    // closed predecessor's copy the moment the owner clears the live record's
+    // estimate. Newest = latest start; on a tie, the later link in walk order
+    // (a linear chain's walk order is already oldest → newest).
+    let tip = chain[0];
+    for (const link of chain) if (link.startedAt >= tip.startedAt) tip = link;
     return {
       ...root,
       changes: chain.flatMap((l) => l.changes).sort((a, b) => a.at - b.at),
-      valueMinor: valued?.valueMinor ?? null,
-      currency: valued ? valued.currency : root.currency,
+      valueMinor: tip.valueMinor,
+      currency: tip.valueMinor != null ? tip.currency : null,
     };
   };
 

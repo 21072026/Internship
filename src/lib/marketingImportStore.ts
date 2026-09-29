@@ -197,7 +197,7 @@ async function loadSnapshot(
           trialEndsAt: true,
           startDate: true,
           // The estimate the `mrr` column may gap-fill (#2422).
-          value: { select: { valueMinor: true } },
+          value: { select: { valueMinor: true, currency: true } },
         },
       })
     : [];
@@ -205,7 +205,11 @@ async function loadSnapshot(
   return {
     accounts,
     leads,
-    relations: relations.map(({ value, ...r }) => ({ ...r, valueMinor: value?.valueMinor ?? null })),
+    relations: relations.map(({ value, ...r }) => ({
+      ...r,
+      valueMinor: value?.valueMinor ?? null,
+      valueCurrency: value?.currency ?? null,
+    })),
   };
 }
 

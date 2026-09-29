@@ -65,7 +65,7 @@ export function DealValueCard({ query }: { query: string }) {
       </p>
     );
   } else if (data.months.every((m) => m.activeAtEnd.count === 0 && m.won.count === 0 && m.lost.count === 0)) {
-    body = <p className="text-sm text-gray-500" data-testid="deal-value-card-empty">{c.empty}</p>;
+    body = <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="deal-value-card-empty">{c.empty}</p>;
   } else {
     const currency = data.currency;
     body = (

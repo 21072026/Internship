@@ -110,7 +110,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (parsed.data.valueMinor === null) {
           if (before) await prisma.relationValue.deleteMany({ where: { relationId: relation.id } });
         } else {
-          const checked = validateDealValue(parsed.data.valueMinor, parsed.data.currency);
+          // A body without a currency keeps the stored one: `{valueMinor: 5000}`
+          // on a CHF estimate is a new amount, not a silent switch to EUR.
+          const checked = validateDealValue(parsed.data.valueMinor, parsed.data.currency ?? before?.currency);
           if (!checked.ok) {
             return NextResponse.json({ error: 'Invalid estimated value', code: checked.error }, { status: 400 });
           }

@@ -189,6 +189,41 @@ test('a transfer chain is one journey: one win, one book entry, the newest estim
   }
 });
 
+test('a chain is valued by its tip: clearing the successor\'s estimate is not undone by the predecessor\'s copy', () => {
+  // A transfer COPIES the estimate and leaves the predecessor's row in place.
+  // The owner then clears the live record's estimate.
+  const root = journey('r1', [['DEAL_WON', '2026-01-10T00:00:00Z']], { valueMinor: 4990 });
+  const successor = journey('r2', [], {
+    previousRelationId: 'r1',
+    startStatus: 'DEAL_WON',
+    startedAt: at('2026-02-15T00:00:00Z'),
+    valueMinor: null,
+    currency: null,
+  });
+  const result = valueByMonth(ORDER, [root, successor], MONTHS, OPTS);
+  for (const m of MONTHS) {
+    assert.deepEqual(month(result, m).activeAtEnd, { count: 1, valueMinor: 0, unvalued: 1 }, m);
+  }
+  // A fork (two successors of one link — no writer does it, but the fold must
+  // still pick ONE tip): the latest start wins, whatever the input order.
+  const forkA = journey('f1', [], { previousRelationId: 'r1', startedAt: at('2026-03-01T00:00:00Z'), valueMinor: 111 });
+  const forkB = journey('f2', [], { previousRelationId: 'r1', startedAt: at('2026-02-01T00:00:00Z'), valueMinor: 222 });
+  assert.equal(foldChains([forkA, root, forkB])[0].valueMinor, 111);
+  assert.equal(foldChains([forkB, root, forkA])[0].valueMinor, 111);
+});
+
+test('amounts use each record\'s CURRENT estimate: re-estimating restates past months (counts do not move)', () => {
+  // Deliberate (see the dealValue.ts header, rule 2, and the card hint): the
+  // estimate is not historised, so the same moves with a new estimate give the
+  // same counts and new amounts for months already shown.
+  const moves = [['DEAL_WON', '2026-01-10T00:00:00Z']];
+  const before = valueByMonth(ORDER, [journey('a', moves, { valueMinor: 4990 })], MONTHS, OPTS);
+  const after = valueByMonth(ORDER, [journey('a', moves, { valueMinor: 9990 })], MONTHS, OPTS);
+  assert.equal(month(before, '2026-01').won.count, month(after, '2026-01').won.count);
+  assert.equal(month(before, '2026-01').won.valueMinor, 4990);
+  assert.equal(month(after, '2026-01').won.valueMinor, 9990);
+});
+
 test('a loss on the successor churns the chain once, in the month it happened', () => {
   const root = journey('r1', [['DEAL_WON', '2026-01-10T00:00:00Z']]);
   const successor = journey('r2', [['DEAL_LOST', '2026-03-02T00:00:00Z']], {
@@ -252,6 +287,16 @@ test('input text: the importer\'s parser, and back again', () => {
   assert.deepEqual(parseDealValueInput('  '), { ok: true, valueMinor: null });
   assert.deepEqual(parseDealValueInput('n/a'), { ok: false, error: 'invalid_amount' });
   assert.deepEqual(parseDealValueInput('-5'), { ok: false, error: 'negative' });
+  // One separator + exactly three digits is ambiguous for a person typing
+  // (a thousands group, or a slipped cent digit?) — the editor asks.
+  assert.deepEqual(parseDealValueInput('49,999'), { ok: false, error: 'ambiguous_amount' });
+  assert.deepEqual(parseDealValueInput('49.905'), { ok: false, error: 'ambiguous_amount' });
+  assert.deepEqual(parseDealValueInput('1.234'), { ok: false, error: 'ambiguous_amount' });
+  assert.deepEqual(parseDealValueInput('1234'), { ok: true, valueMinor: 123400 });
+  assert.deepEqual(parseDealValueInput('1.234,00'), { ok: true, valueMinor: 123400 });
+  assert.deepEqual(parseDealValueInput('49,99'), { ok: true, valueMinor: 4999 });
+  // The importer's reading is unchanged — this is the editor's rule only.
+  assert.equal(parseMinorUnits('1.234'), 123400);
   assert.equal(parseMinorUnits('49,90'), 4990); // the same function the import reads `mrr` with
   assert.equal(dealValueInputText(4990), '49.90');
   assert.equal(dealValueInputText(5), '0.05');

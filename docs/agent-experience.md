@@ -7775,3 +7775,5 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   SaleVali". It touches nothing a trial-end change does; fix the spec's host, not your code.
 - **A feature card that is true only WITHOUT a module** had no tag to express it; `features.ts`
   now has `withoutCapability` and one `isFeatureShown()` filter shared by `/` and `/features`.
+
+- (#2422 review follow-up) A transfer that COPIES a per-relation row leaves the predecessor's copy behind; anything that folds a `previousRelationId` chain must read the TIP link, never "the newest link that still has a value", or a cleared field silently comes back. Also: an e2e that seeds another won relation into a shared serial spec shifts every month total the earlier tests assert — re-read the whole spec's expectations after adding a seed. Importing `src/lib/marketingImportStore` straight into a Playwright spec works (the `@/` alias resolves) and is a cheaper DB-level importer test than spawning the CLI.
