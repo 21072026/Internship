@@ -63,6 +63,11 @@ export const TEXT_LIMITS = {
    * non-EU tax id without letting a pasted paragraph reach the match key.
    */
   companyVatId: 64,
+  /**
+   * Company.externalId — VARCHAR(191): the account's id in the tenant's own
+   * product (#2446), written by the marketing import (#2554).
+   */
+  companyExternalId: 191,
   /** Company.country — VARCHAR(2): an ISO-3166-1 alpha-2 code, nothing else. */
   companyCountry: 2,
   /** CompanyNeed.position — VARCHAR(191) */

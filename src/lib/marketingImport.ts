@@ -29,8 +29,11 @@
 //   written and the row carries a warning — losing the account because nobody
 //   typed a contact would be the worse failure.
 //
-// THE MATCH KEY (#2405)
-//   VAT id first — the strongest identity a merchant has across systems — then
+// THE MATCH KEY (#2405, #2554)
+//   The external id first — the merchant's id in the product the tenant sells,
+//   which can confirm the other keys but never be overruled by them (a
+//   disagreement is an ERROR on the row, see `matchAccount`). Then the VAT id —
+//   the strongest identity a merchant has across systems — then
 //   normalized name + country. `normalizeNameKey()` is the repo's existing one
 //   (`src/lib/duplicateDetection.ts`): it transliterates İ/ı/ş/ğ/ü/ö/ç and
 //   strips accents BEFORE lowercasing, which a plain `toLowerCase()` cannot do
@@ -55,7 +58,14 @@ import { normalizeEmailKey, normalizeNameKey, normalizePhoneKey } from './duplic
 import { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 import { planFieldUpdates } from './externalSyncPolicy';
 import { TEXT_LIMITS } from './textLimits';
-import { trialWindowFor, type ExistingTrialWindow, type TrialWindowData } from './trialReminderRule';
+import {
+  DEFAULT_TRIAL_LENGTH_DAYS,
+  parseTrialEndDate,
+  TRIAL_ACTIVE_STAGE_KEY,
+  trialWindowFor,
+  type ExistingTrialWindow,
+  type TrialWindowData,
+} from './trialReminderRule';
 
 // ── The column contract ──────────────────────────────────────────────────────
 // One declaration, read by the validator, printed by the CLI and written out
@@ -97,6 +107,43 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
   { field: 'contactName', header: 'contact_name', required: false, aliases: ['ansprechpartner'], target: 'Company.contactName + User.fullName' },
   { field: 'contactEmail', header: 'contact_email', required: false, aliases: ['email', 'e-mail'], target: 'Company.contactEmail + User.email' },
   { field: 'contactPhone', header: 'contact_phone', required: false, aliases: ['telefon', 'phone'], target: 'Company.contactPhone + User.phone' },
+  // #2554. The account's id in the product the tenant sells — for SaleVali the
+  // merchant's `User._id` (the key #2565 proposes; `user_number` is a display
+  // number and is deliberately NOT an alias). It is the key the usage feed
+  // matches on (docs/marketing-vertical/salevali-usage-feed.md), and the first
+  // half of the match key below.
+  {
+    field: 'externalId',
+    header: 'external_id',
+    required: false,
+    aliases: ['external id', 'externalid', 'salevali_id', 'salevali id', 'externe_id', 'externe id', 'harici_id', 'harici id'],
+    target: 'Company.externalId',
+  },
+  // #2554. The funnel record's dates, so an imported trial is reminded about and
+  // expires like any other, and the cohort reports read when the customer
+  // arrived rather than the day of the import. ISO dates only (see
+  // parseImportDate). A file date always wins over the automatic trial stamp.
+  {
+    field: 'trialStartedAt',
+    header: 'trial_started_at',
+    required: false,
+    aliases: ['trial_start', 'trial start', 'testbeginn', 'test_beginn', 'deneme_baslangic', 'deneme başlangıç'],
+    target: 'MentorshipRelation.trialStartedAt',
+  },
+  {
+    field: 'trialEndsAt',
+    header: 'trial_ends_at',
+    required: false,
+    aliases: ['trial_end', 'trial end', 'testende', 'test_ende', 'deneme_bitis', 'deneme bitiş'],
+    target: 'MentorshipRelation.trialEndsAt',
+  },
+  {
+    field: 'customerSince',
+    header: 'customer_since',
+    required: false,
+    aliases: ['customer since', 'kunde_seit', 'kunde seit', 'musteri_tarihi', 'müşteri tarihi'],
+    target: 'MentorshipRelation.startDate',
+  },
 ];
 
 /**
@@ -133,6 +180,7 @@ export const FIELD_LIMITS: Readonly<Record<string, number>> = {
   // Written onto the lead `User`, so the profile's own caps apply.
   city: TEXT_LIMITS.profileShortText,
   source: TEXT_LIMITS.profileShortText,
+  externalId: TEXT_LIMITS.companyExternalId,
 };
 
 // ── The typed row ────────────────────────────────────────────────────────────
@@ -161,6 +209,12 @@ export interface MarketingAccountRow {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  /** The account's id in the tenant's product, as written (trimmed), or ''. */
+  externalId: string;
+  /** Funnel-record dates (#2554); null when the cell is blank. */
+  trialStartedAt: Date | null;
+  trialEndsAt: Date | null;
+  customerSince: Date | null;
 }
 
 export const IMPORT_LOCALES: readonly string[] = ['en', 'tr', 'de'];
@@ -193,10 +247,50 @@ export function accountNameKey(name: string, country: string): string {
   return `${normalizeNameKey(name)} ${normalizeCountry(country)}`;
 }
 
-/** The identity a row claims: its VAT key, else its name+country key. */
-export function accountMatchKey(row: { name: string; country: string; vatId: string }): string {
+/**
+ * The external-id match key (#2554): trimmed and lower-cased. Lower-cased
+ * because the column is compared by MySQL's case-insensitive collation when the
+ * usage feed looks it up — two spellings the database calls equal must not be
+ * two accounts here. The value is stored as the file wrote it.
+ */
+export function normalizeExternalIdKey(raw: string | null | undefined): string {
+  return (raw ?? '').trim().toLowerCase();
+}
+
+/** The identity a row claims: its external id, else its VAT key, else its name+country key. */
+export function accountMatchKey(row: { name: string; country: string; vatId: string; externalId?: string }): string {
+  const external = normalizeExternalIdKey(row.externalId);
+  if (external) return `ext:${external}`;
   const vat = normalizeVatKey(row.vatId);
   return vat ? `vat:${vat}` : `name:${accountNameKey(row.name, row.country)}`;
+}
+
+/**
+ * A date cell (#2554). Two ISO 8601 shapes and nothing else:
+ *
+ *   • `YYYY-MM-DD` — a calendar DAY, stored as midnight UTC, the same reading
+ *     the hand-set trial end uses (`parseTrialEndDate`), so an imported
+ *     `trial_ends_at` and a typed one fall on the same UTC day the reminder
+ *     ladder compares by;
+ *   • `YYYY-MM-DDTHH:MM[:SS[.sss]]` WITH a zone (`Z` or `±HH:MM`) — what a
+ *     system export writes.
+ *
+ * A time without a zone is refused: its meaning would be the importing
+ * machine's timezone. So is `04.05.2026`: day-first or month-first cannot be
+ * told apart from the cell, and a wrong guess moves a trial end by months
+ * without a single ERROR. Returns null for anything else — including an
+ * impossible date (`2026-02-30` is refused, not rolled into March).
+ */
+export function parseImportDate(raw: string): Date | null {
+  const text = raw.trim();
+  const dayOnly = parseTrialEndDate(text);
+  if (dayOnly) return dayOnly;
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.exec(text);
+  if (!m || !parseTrialEndDate(m[1])) return null;
+  const [hours, minutes, seconds] = [Number(m[2]), Number(m[3]), Number(m[4] ?? '0')];
+  if (hours > 23 || minutes > 59 || seconds > 59) return null;
+  const value = new Date(`${m[1]}T${m[2]}:${m[3]}:${m[4] ?? '00'}${m[5] ?? ''}${m[6]}`);
+  return Number.isNaN(value.getTime()) ? null : value;
 }
 
 // ── The lead person's address (#2407) ────────────────────────────────────────
@@ -405,6 +499,28 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
     const ownerEmail = rawOwner.toLowerCase();
     if (ownerEmail && !looksLikeEmail(ownerEmail)) return reject(`owner_email is not an address: "${rawOwner}"`);
 
+    const dates: Record<'trialStartedAt' | 'trialEndsAt' | 'customerSince', Date | null> = {
+      trialStartedAt: null,
+      trialEndsAt: null,
+      customerSince: null,
+    };
+    for (const [field, header] of [
+      ['trialStartedAt', 'trial_started_at'],
+      ['trialEndsAt', 'trial_ends_at'],
+      ['customerSince', 'customer_since'],
+    ] as const) {
+      const raw = read(field);
+      if (!raw) continue;
+      const value = parseImportDate(raw);
+      if (!value) {
+        return reject(`${header} must be an ISO date (YYYY-MM-DD, or a date-time with a zone), got "${raw}"`);
+      }
+      dates[field] = value;
+    }
+    if (dates.trialStartedAt && dates.trialEndsAt && dates.trialEndsAt < dates.trialStartedAt) {
+      return reject('trial_ends_at is before trial_started_at');
+    }
+
     const row: MarketingAccountRow = {
       name,
       legalName: read('legalName'),
@@ -423,6 +539,8 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
       contactName: read('contactName'),
       contactEmail,
       contactPhone: read('contactPhone'),
+      externalId: read('externalId'),
+      ...dates,
     };
 
     // Length is checked last and over every stored string at once: truncating
@@ -486,6 +604,8 @@ export interface MarketingAccountTarget {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  /** Optional only so a snapshot built before #2554 still reads; the store selects it. */
+  externalId?: string | null;
 }
 
 export interface MarketingLeadTarget {
@@ -522,6 +642,10 @@ export interface MarketingRelationTarget {
   pipelineStatus: string;
   /** Only ACTIVE relations are the funnel record; a COMPLETED one is history. */
   status: string;
+  /** The record's dates (#2554). Optional so an older snapshot still reads. */
+  trialStartedAt?: Date | null;
+  trialEndsAt?: Date | null;
+  startDate?: Date | null;
 }
 
 export interface MarketingTargetSnapshot {
@@ -541,6 +665,15 @@ export interface MarketingAccountWrite {
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
+  externalId?: string;
+}
+
+/** The funnel record's dates a row writes (#2554). */
+export interface MarketingRelationWrite {
+  trialStartedAt?: Date;
+  trialEndsAt?: Date;
+  /** `customer_since`. */
+  startDate?: Date;
 }
 
 export interface MarketingLeadWrite {
@@ -573,6 +706,15 @@ export interface MarketingFunnelPlan {
   /** The relation's stage today; null when the relation is being created. */
   fromStage: string | null;
   toStage: string;
+  /**
+   * The dates the file gives the funnel record (#2554). For a record being
+   * created, every date the row carries; for an existing one, what
+   * `planFieldUpdates` lets through — gaps only, unless authoritative.
+   */
+  relationChanges: MarketingRelationWrite;
+  relationChanged: string[];
+  /** Dates the file disagreed with and was not allowed to overwrite. */
+  relationWithheld: string[];
   /** True when anything above has to be written. */
   pending: boolean;
 }
@@ -589,6 +731,14 @@ export interface MarketingPlanValue {
   funnel: MarketingFunnelPlan | null;
   /** Non-fatal notes on a row that still lands. */
   warnings: string[];
+  /**
+   * Set when the DIFF refuses the row (#2554: a conflicting external id). The
+   * engine's plan vocabulary has no ERROR — a row that failed validation never
+   * reaches a plan — so such a row is planned as a SKIP carrying this reason,
+   * and `applyPlannedAccounts` reports it as the ERROR it is, in a dry run and
+   * an apply alike. Never written.
+   */
+  refused?: string;
 }
 
 export type MarketingPlannedRow = PlannedRow<MarketingPlanValue>;
@@ -608,6 +758,12 @@ export interface MarketingDiffContext {
    * `planFieldUpdates`, shared with SSO sync and the roster feed.
    */
   authoritative: boolean;
+  /**
+   * The org's `trialLengthDays` (#2551), for the dry-run warning on a
+   * TRIAL_ACTIVE row without `trial_ends_at`. The write resolves it again;
+   * this is only what the warning says. Defaults to the code default.
+   */
+  trialLengthDays?: number;
 }
 
 function blankToUndefined(value: string): string | undefined {
@@ -662,9 +818,16 @@ interface AccountLike {
   name: string;
   vatId: string | null;
   country: string | null;
+  externalId?: string | null;
 }
 
 interface AccountIndex<T extends AccountLike> {
+  /**
+   * Every account under its external id. A LIST, because `Company.externalId`
+   * is deliberately not unique (see its schema comment): two accounts of one
+   * org carrying the same id is a state this importer reports, never resolves.
+   */
+  byExternal: Map<string, T[]>;
   byVat: Map<string, T>;
   byNameCountry: Map<string, T>;
   /** Every account under its name alone — the loose half of the key. */
@@ -672,10 +835,16 @@ interface AccountIndex<T extends AccountLike> {
 }
 
 function emptyAccountIndex<T extends AccountLike>(): AccountIndex<T> {
-  return { byVat: new Map(), byNameCountry: new Map(), byName: new Map() };
+  return { byExternal: new Map(), byVat: new Map(), byNameCountry: new Map(), byName: new Map() };
 }
 
 function indexAccount<T extends AccountLike>(index: AccountIndex<T>, account: T): void {
+  const external = normalizeExternalIdKey(account.externalId);
+  if (external) {
+    const list = index.byExternal.get(external);
+    if (list) list.push(account);
+    else index.byExternal.set(external, [account]);
+  }
   const vat = normalizeVatKey(account.vatId);
   if (vat && !index.byVat.has(vat)) index.byVat.set(vat, account);
   const nameCountry = accountNameKey(account.name, account.country ?? '');
@@ -686,10 +855,65 @@ function indexAccount<T extends AccountLike>(index: AccountIndex<T>, account: T)
   else index.byName.set(nameOnly, [account]);
 }
 
-type AccountMatch<T> = { kind: 'none' } | { kind: 'one'; target: T } | { kind: 'ambiguous'; count: number };
+type AccountMatch<T> =
+  | { kind: 'none' }
+  | { kind: 'one'; target: T }
+  | { kind: 'ambiguous'; count: number }
+  /** The row's external id contradicts what the other keys found (#2554). */
+  | { kind: 'conflict'; reason: string };
 
-/** VAT id first, then name+country, then the loose name half described above. */
+/**
+ * External id first, then VAT id, then name+country (#2554, #2405).
+ *
+ * The external id is the product's own identity for the merchant, so it can
+ * only CONFIRM what the weaker keys say — never be overruled by them, and never
+ * be guessed around. Every disagreement is a `conflict` the caller reports as
+ * an ERROR on the row:
+ *
+ *   • two accounts of the org already carry the id;
+ *   • the id names account A while the VAT id names account B;
+ *   • the weaker keys find an account that carries a DIFFERENT external id.
+ *
+ * An id nobody carries yet falls through to the weaker keys, and the account
+ * they find (with no external id of its own) has it filled in as a gap.
+ */
 function matchAccount<T extends AccountLike>(
+  index: AccountIndex<T>,
+  value: { name: string; country: string; vatId: string; externalId?: string },
+): AccountMatch<T> {
+  const external = normalizeExternalIdKey(value.externalId);
+  const byExternal = external ? (index.byExternal.get(external) ?? []) : [];
+  if (byExternal.length > 1) {
+    return {
+      kind: 'conflict',
+      reason: `external_id "${value.externalId}" is carried by ${byExternal.length} accounts of this organization — merge them in the app first`,
+    };
+  }
+  if (byExternal.length === 1) {
+    const target = byExternal[0];
+    const vat = normalizeVatKey(value.vatId);
+    const byVat = vat ? index.byVat.get(vat) : undefined;
+    if (byVat && byVat !== target) {
+      return { kind: 'conflict', reason: `external_id "${value.externalId}" and vat_id name two different accounts` };
+    }
+    return { kind: 'one', target };
+  }
+
+  const found = matchWithoutExternal(index, value);
+  if (found.kind === 'one' && external) {
+    const theirs = normalizeExternalIdKey(found.target.externalId);
+    if (theirs && theirs !== external) {
+      return {
+        kind: 'conflict',
+        reason: `external_id "${value.externalId}" differs from the external id "${found.target.externalId}" of the account this row matches`,
+      };
+    }
+  }
+  return found;
+}
+
+/** VAT id, then name+country, then the loose name half described above. */
+function matchWithoutExternal<T extends AccountLike>(
   index: AccountIndex<T>,
   value: { name: string; country: string; vatId: string },
 ): AccountMatch<T> {
@@ -746,6 +970,10 @@ export function diffMarketingAccounts(
   // account is the same duplicate, one step later.
   const claimedBy = new Map<string, number>();
   const seenLeadKeys = new Map<string, number>();
+  // External ids the file has already given to an account (#2554). One id, one
+  // account: a later row handing the same id to a DIFFERENT account would leave
+  // two accounts the usage feed cannot tell apart.
+  const seenExternal = new Map<string, number>();
 
   const skip = (row: number, key: string, value: MarketingAccountRow, reason: string) => {
     plan.push({
@@ -756,8 +984,26 @@ export function diffMarketingAccounts(
       value: { input: value, account: { targetId: null, changes: {}, changed: [], withheld: [] }, funnel: null, warnings: [] },
     });
   };
+  // A refusal the diff makes (see `MarketingPlanValue.refused`): planned as a
+  // SKIP carrying the reason, reported as an ERROR by `applyPlannedAccounts`.
+  const refuse = (row: number, key: string, value: MarketingAccountRow, reason: string) => {
+    plan.push({
+      row,
+      key,
+      status: 'SKIP',
+      reason,
+      value: {
+        input: value,
+        account: { targetId: null, changes: {}, changed: [], withheld: [] },
+        funnel: null,
+        warnings: [],
+        refused: reason,
+      },
+    });
+  };
 
   for (const { row, key, value } of rows) {
+    const externalKey = normalizeExternalIdKey(value.externalId);
     // Two rows for the same account in one file: the first wins and the second
     // is reported. Without this the second row races the `@@unique([orgId,
     // vatId])` index and takes its whole chunk down with it. The check is on
@@ -765,7 +1011,26 @@ export function diffMarketingAccounts(
     // listing a merchant twice — the VAT filled in on one line only — holds two
     // different claimed keys and is still one account.
     const inFile = matchAccount(planned, value);
+    if (inFile.kind === 'conflict') {
+      refuse(row, key, value, `${inFile.reason} (conflicts with an earlier row of this file)`);
+      continue;
+    }
     if (inFile.kind === 'one') {
+      // One external id on two lines that name two different VAT ids is not
+      // "the same merchant twice" — the file contradicts itself about who the id
+      // belongs to, and which line is right is not ours to pick.
+      const earlierVat = normalizeVatKey(inFile.target.vatId);
+      const thisVat = normalizeVatKey(value.vatId);
+      if (
+        externalKey &&
+        normalizeExternalIdKey(inFile.target.externalId) === externalKey &&
+        earlierVat &&
+        thisVat &&
+        earlierVat !== thisVat
+      ) {
+        refuse(row, key, value, `external_id "${value.externalId}" is given to row ${inFile.target.row} with a different vat_id`);
+        continue;
+      }
       skip(row, key, value, `duplicate account in file (first seen at row ${inFile.target.row})`);
       continue;
     }
@@ -775,6 +1040,10 @@ export function diffMarketingAccounts(
     }
 
     const found = matchAccount(index, value);
+    if (found.kind === 'conflict') {
+      refuse(row, key, value, found.reason);
+      continue;
+    }
     if (found.kind === 'ambiguous') {
       skip(
         row,
@@ -791,9 +1060,25 @@ export function diffMarketingAccounts(
         skip(row, key, value, `duplicate account in file (first seen at row ${claimed})`);
         continue;
       }
+    }
+    if (externalKey) {
+      const earlier = seenExternal.get(externalKey);
+      if (earlier !== undefined) {
+        refuse(row, key, value, `external_id "${value.externalId}" is already given to a different account by row ${earlier}`);
+        continue;
+      }
+      seenExternal.set(externalKey, row);
+    }
+    if (target) {
       claimedBy.set(target.id, row);
     } else {
-      indexAccount(planned, { row, name: value.name, vatId: value.vatId || null, country: value.country || null });
+      indexAccount(planned, {
+        row,
+        name: value.name,
+        vatId: value.vatId || null,
+        country: value.country || null,
+        externalId: value.externalId || null,
+      });
     }
 
     const incoming: MarketingAccountWrite = {
@@ -804,6 +1089,12 @@ export function diffMarketingAccounts(
       contactName: blankToUndefined(value.contactName),
       contactEmail: blankToUndefined(value.contactEmail),
       contactPhone: blankToUndefined(value.contactPhone),
+      // An id the account already carries under another spelling of the same
+      // key is not a change (matchAccount refused every real disagreement).
+      externalId:
+        target && normalizeExternalIdKey(target.externalId) === externalKey
+          ? undefined
+          : blankToUndefined(value.externalId),
     };
 
     const warnings: string[] = [];
@@ -819,6 +1110,7 @@ export function diffMarketingAccounts(
         contactName: target.contactName ?? '',
         contactEmail: target.contactEmail ?? '',
         contactPhone: target.contactPhone ?? '',
+        externalId: target.externalId ?? '',
       };
       const planned = planFieldUpdates(
         current,
@@ -841,6 +1133,20 @@ export function diffMarketingAccounts(
       warnings,
       context,
     });
+    // The dates live on the funnel record, so a row that places none cannot
+    // keep them — said out loud rather than dropped (#2554).
+    if (!funnel) {
+      const dated = (
+        [
+          ['trial_started_at', value.trialStartedAt],
+          ['trial_ends_at', value.trialEndsAt],
+          ['customer_since', value.customerSince],
+        ] as const
+      )
+        .filter(([, date]) => date !== null)
+        .map(([header]) => header);
+      if (dated.length > 0) warnings.push(`${dated.join(', ')} not stored: the row places no funnel record`);
+    }
 
     const status = target
       ? accountChanged.length > 0 || funnel?.pending
@@ -848,8 +1154,9 @@ export function diffMarketingAccounts(
         : 'UNCHANGED'
       : 'CREATE';
 
+    const leftAlone = [...withheld, ...(funnel?.relationWithheld ?? []).map((f) => `funnelRecord.${f}`)];
     const reason = [
-      ...(withheld.length > 0 ? [`left alone: ${withheld.join(', ')}`] : []),
+      ...(leftAlone.length > 0 ? [`left alone: ${leftAlone.join(', ')}`] : []),
       ...warnings,
     ].join('; ');
 
@@ -877,7 +1184,10 @@ function funnelChangedFields(funnel: MarketingFunnelPlan): string[] {
   if (!funnel.leadId) fields.push('lead');
   else fields.push(...funnel.leadChanged.map((f) => `lead.${f}`));
   if (!funnel.relationId) fields.push('funnelRecord');
-  else if (funnel.fromStage !== funnel.toStage) fields.push('pipelineStatus');
+  else {
+    if (funnel.fromStage !== funnel.toStage) fields.push('pipelineStatus');
+    fields.push(...funnel.relationChanged.map((f) => `funnelRecord.${f}`));
+  }
   return fields;
 }
 
@@ -973,10 +1283,60 @@ function planFunnel(
   const relationCompanyDiffers =
     relation !== null && target !== undefined && relation.companyId !== target.id;
 
+  // The record's dates (#2554), under the one overwrite policy: a new record
+  // takes every date the row carries; an existing one only fills gaps unless
+  // the run is authoritative. `startDate` is never blank on a stored record
+  // (it defaults to the insert), so `customer_since` corrects an existing
+  // record only under `--authoritative` — and says so in the reason otherwise.
+  const incomingRelation: MarketingRelationWrite = {
+    ...(value.trialStartedAt ? { trialStartedAt: value.trialStartedAt } : {}),
+    ...(value.trialEndsAt ? { trialEndsAt: value.trialEndsAt } : {}),
+    ...(value.customerSince ? { startDate: value.customerSince } : {}),
+  };
+  let relationChanges: MarketingRelationWrite;
+  let relationChanged: string[];
+  let relationWithheld: string[] = [];
+  if (relation) {
+    const planned = planFieldUpdates(
+      {
+        trialStartedAt: relation.trialStartedAt ?? null,
+        trialEndsAt: relation.trialEndsAt ?? null,
+        startDate: relation.startDate ?? null,
+      },
+      incomingRelation,
+      { authoritative: context.authoritative },
+    );
+    relationChanges = planned.changes as MarketingRelationWrite;
+    relationChanged = planned.changed;
+    relationWithheld = planned.withheld;
+  } else {
+    relationChanges = incomingRelation;
+    relationChanged = Object.keys(incomingRelation);
+  }
+
+  // The trial window the WRITE will stamp when the file gives no end (#2551's
+  // `trialWindowFor`, applied by funnelRelationCreateData/UpdateData). The
+  // dry run says so on the row, so an operator reads "30 days from the import
+  // day" before it happens rather than in the reminder mails afterwards.
+  if (toStage === TRIAL_ACTIVE_STAGE_KEY) {
+    const endAfter = relationChanges.trialEndsAt ?? relation?.trialEndsAt ?? null;
+    const startAfter = relationChanges.trialStartedAt ?? relation?.trialStartedAt ?? null;
+    const entering = relation === null || fromStage !== toStage;
+    const days = context.trialLengthDays ?? DEFAULT_TRIAL_LENGTH_DAYS;
+    if (!endAfter && entering) {
+      warnings.push(
+        `trial_ends_at is blank: the default trial window applies (${days} days from ${startAfter ? 'trial_started_at' : 'the import day'})`,
+      );
+    } else if (!endAfter) {
+      warnings.push('the record is in TRIAL_ACTIVE with no trial end and trial_ends_at is blank: no trial reminder will be sent until one is set');
+    }
+  }
+
   const pending =
     !lead ||
     leadChanged.length > 0 ||
     relation === null ||
+    relationChanged.length > 0 ||
     fromStage !== toStage ||
     relationCompanyDiffers ||
     // A relation owned by someone else is a refusal, not a no-op: it must reach
@@ -994,6 +1354,9 @@ function planFunnel(
     relationId: relation?.id ?? null,
     fromStage,
     toStage,
+    relationChanges,
+    relationChanged,
+    relationWithheld,
     pending,
   };
 }
@@ -1020,9 +1383,16 @@ export interface FunnelWriteContext {
  * created straight into TRIAL_ACTIVE gets its trial window here: the import
  * never calls `emitStageChange()` (stand-in leads must not be notified), so no
  * later hook would ever stamp it.
+ *
+ * The file's own dates (#2554) come first and the automatic stamp only fills
+ * what they leave open — `trialWindowFor` is asked with the file's dates as the
+ * record's "existing" window, so an explicit `trial_ends_at` is never replaced
+ * and an explicit `trial_started_at` alone gets its end counted from itself.
+ * `customer_since` becomes `startDate`; without it the column's own default
+ * (the insert) stands.
  */
 export function funnelRelationCreateData(
-  funnel: Pick<MarketingFunnelPlan, 'ownerId' | 'toStage'>,
+  funnel: Pick<MarketingFunnelPlan, 'ownerId' | 'toStage'> & Partial<Pick<MarketingFunnelPlan, 'relationChanges'>>,
   leadId: string,
   context: FunnelWriteContext,
 ): {
@@ -1031,17 +1401,20 @@ export function funnelRelationCreateData(
   menteeId: string;
   companyId: string;
   pipelineStatus: string;
-} & TrialWindowData {
+} & TrialWindowData &
+  MarketingRelationWrite {
+  const explicit = funnel.relationChanges ?? {};
   return {
     orgId: context.orgId,
     mentorId: funnel.ownerId,
     menteeId: leadId,
     companyId: context.companyId,
     pipelineStatus: funnel.toStage,
+    ...explicit,
     ...trialWindowFor({
       toStage: funnel.toStage,
       enteredAt: context.now,
-      existing: null,
+      existing: { trialStartedAt: explicit.trialStartedAt ?? null, trialEndsAt: explicit.trialEndsAt ?? null },
       lengthDays: context.trialLengthDays,
     }),
   };
@@ -1052,21 +1425,32 @@ export function funnelRelationCreateData(
  * on a real move into TRIAL_ACTIVE — re-applying the stage a record already
  * sits at is not an entry, and would date a trial from the day of the re-run —
  * and never over a window the record already has.
+ *
+ * The file's dates (#2554) are written whether or not the stage moves — they
+ * were planned against the record by `planFieldUpdates` (gaps only unless
+ * authoritative) — and the automatic stamp sees them as part of the window, so
+ * it can only fill what neither the record nor the file has.
  */
 export function funnelRelationUpdateData(
-  funnel: Pick<MarketingFunnelPlan, 'toStage'>,
+  funnel: Pick<MarketingFunnelPlan, 'toStage'> & Partial<Pick<MarketingFunnelPlan, 'relationChanges'>>,
   current: ({ pipelineStatus: string } & ExistingTrialWindow) | null,
   context: Omit<FunnelWriteContext, 'orgId'>,
-): { pipelineStatus: string; companyId: string } & TrialWindowData {
+): { pipelineStatus: string; companyId: string } & TrialWindowData & MarketingRelationWrite {
+  const explicit = funnel.relationChanges ?? {};
   const moving = !current || current.pipelineStatus !== funnel.toStage;
+  const window: ExistingTrialWindow = {
+    trialStartedAt: explicit.trialStartedAt ?? current?.trialStartedAt ?? null,
+    trialEndsAt: explicit.trialEndsAt ?? current?.trialEndsAt ?? null,
+  };
   return {
     pipelineStatus: funnel.toStage,
     companyId: context.companyId,
+    ...explicit,
     ...(moving
       ? trialWindowFor({
           toStage: funnel.toStage,
           enteredAt: context.now,
-          existing: current,
+          existing: window,
           lengthDays: context.trialLengthDays,
         })
       : {}),
@@ -1171,6 +1555,10 @@ export async function applyPlannedAccounts(
 ): Promise<RowResult<MarketingPlanValue>[]> {
   const results: RowResult<MarketingPlanValue>[] = [];
   for (const row of rows) {
+    if (row.value.refused) {
+      results.push({ row: row.row, key: row.key, status: 'ERROR', reason: row.value.refused, value: row.value });
+      continue;
+    }
     if (row.status === 'UNCHANGED' || row.status === 'SKIP') {
       results.push({
         row: row.row,

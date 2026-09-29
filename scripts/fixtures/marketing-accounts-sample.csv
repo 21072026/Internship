@@ -1,5 +1,7 @@
-name,legal_name,country,city,vat_id,website,industry,locale,stage,source,monthly_transactions,mrr,owner_email,channels,contact_name,contact_email,contact_phone
-Nordlicht Handel GmbH,Nordlicht Handel GmbH,DE,Hamburg,DE811234567,https://nordlicht.example,Retail,de,LEAD_QUALIFIED,Messe,420,"1.250,00",,Amazon;eBay;OTTO,Lena Sommer,lena.sommer@nordlicht.example,+49 40 1234567
-İstanbul Tekstil A.Ş.,İstanbul Tekstil Sanayi ve Ticaret A.Ş.,TR,İstanbul,,https://ist-tekstil.example,Textile,tr,LEAD_CONTACTED,Referans,90,"0,00",,Shopify,Ayşe Yıldız,ayse.yildiz@ist-tekstil.example,+90 555 123 45 67
-Depot Nord Logistik GmbH,,DE,Kiel,DE999888777,https://depot-nord.example,Logistics,de,DEAL_PROPOSAL,Empfehlung,1200,"0,00",,WooCommerce,,,
-Grüße Süßwaren GmbH,Grüße Süßwaren GmbH,AT,Wien,ATU12345678,https://gruesse.example,Food,de,DEAL_WON,Webformular,750,"3.400,00",,Shopify;Amazon,Jonas Bauer,jonas.bauer@gruesse.example,+43 1 2345678
+name,legal_name,country,city,vat_id,website,industry,locale,stage,source,monthly_transactions,mrr,owner_email,channels,contact_name,contact_email,contact_phone,external_id,trial_started_at,trial_ends_at,customer_since
+Nordlicht Handel GmbH,Nordlicht Handel GmbH,DE,Hamburg,DE811234567,https://nordlicht.example,Retail,de,LEAD_QUALIFIED,Messe,420,"1.250,00",,Amazon;eBay;OTTO,Lena Sommer,lena.sommer@nordlicht.example,+49 40 1234567,5f0000000000000000000001,,,
+İstanbul Tekstil A.Ş.,İstanbul Tekstil Sanayi ve Ticaret A.Ş.,TR,İstanbul,,https://ist-tekstil.example,Textile,tr,LEAD_CONTACTED,Referans,90,"0,00",,Shopify,Ayşe Yıldız,ayse.yildiz@ist-tekstil.example,+90 555 123 45 67,5f0000000000000000000002,,,
+Depot Nord Logistik GmbH,,DE,Kiel,DE999888777,https://depot-nord.example,Logistics,de,DEAL_PROPOSAL,Empfehlung,1200,"0,00",,WooCommerce,,,,,,,
+Grüße Süßwaren GmbH,Grüße Süßwaren GmbH,AT,Wien,ATU12345678,https://gruesse.example,Food,de,DEAL_WON,Webformular,750,"3.400,00",,Shopify;Amazon,Jonas Bauer,jonas.bauer@gruesse.example,+43 1 2345678,5f0000000000000000000004,2025-01-10,2025-02-09,2025-02-10
+Kaya Elektronik Ltd. Şti.,,TR,İzmir,,https://kaya-elektronik.example,Electronics,tr,TRIAL_ACTIVE,Webformular,60,,,Trendyol,Mert Kaya,mert.kaya@kaya-elektronik.example,+90 232 555 01 02,5f0000000000000000000005,2026-09-15,2026-10-15,2026-09-15
+Weber Werkzeuge KG,,DE,Stuttgart,DE277001122,https://weber-werkzeuge.example,Tools,de,TRIAL_ACTIVE,Messe,,,,eBay,Sara Weber,sara.weber@weber-werkzeuge.example,,5f0000000000000000000006,,,

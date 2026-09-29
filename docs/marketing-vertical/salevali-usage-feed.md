@@ -94,8 +94,11 @@ Anahtar `Company.externalId` — SaleVali'deki hesabın kendi kimliği.
   kuralı vardır.
 
 > **Hesap içe aktarımının anahtarıyla karıştırmayın.** Tablodaki hesapları
-> eşleştiren şey `vat_id`, yoksa normalize ad + ülke
-> ([`docs/marketing-import.md`](../marketing-import.md) § *Matching*, #2405).
+> eşleştiren şey önce `external_id`, sonra `vat_id`, yoksa normalize ad + ülke
+> ([`docs/marketing-import.md`](../marketing-import.md) § *Matching*, #2405/#2554).
+> İçe aktarım `external_id` sütunuyla `Company.externalId`'yi **doldurur** — bu
+> beslemenin eşleşeceği hesapları ilk günden hazırlayan yol budur (aynı anahtar:
+> SaleVali `User._id`, #2565'in önerisi).
 > Bu besleme o eşleştirmeyi yapmaz: yalnızca `externalId` üzerinden **zaten var
 > olan** bir hesabı bulur. Boş bir `externalId`'yi doldurmak (bir boşluğu
 > kapatmak) beslemenin `Company` üzerinde yaptığı tek yazmadır; başka hiçbir

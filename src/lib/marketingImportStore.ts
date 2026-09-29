@@ -138,6 +138,7 @@ const ACCOUNT_SELECT = {
   contactName: true,
   contactEmail: true,
   contactPhone: true,
+  externalId: true,
 } as const;
 
 async function loadSnapshot(
@@ -176,7 +177,18 @@ async function loadSnapshot(
   const relations = leads.length
     ? await prisma.mentorshipRelation.findMany({
         where: { menteeId: { in: leads.map((l) => l.id) } },
-        select: { id: true, mentorId: true, menteeId: true, companyId: true, pipelineStatus: true, status: true },
+        select: {
+          id: true,
+          mentorId: true,
+          menteeId: true,
+          companyId: true,
+          pipelineStatus: true,
+          status: true,
+          // The dates the file may fill in (#2554) — planned against these.
+          trialStartedAt: true,
+          trialEndsAt: true,
+          startDate: true,
+        },
       })
     : [];
 
@@ -217,6 +229,7 @@ function accountCreateData(row: MarketingPlannedRow, orgId: string | null) {
     contactName: changes.contactName ?? null,
     contactEmail: changes.contactEmail ?? null,
     contactPhone: changes.contactPhone ?? null,
+    externalId: changes.externalId ?? null,
   };
 }
 
@@ -450,7 +463,8 @@ async function runMarketingRows(core: MarketingRunCore) {
     const offPathStages = new Set(stages.filter((s) => s.isOffPath).map((s) => s.key));
 
     const validate = makeMarketingValidator({ stageKeys });
-    const database = databaseWriter({ orgId, offPathStages, trialLengthDays: await trialLengthDaysFor(orgId) });
+    const trialLengthDays = await trialLengthDaysFor(orgId);
+    const database = databaseWriter({ orgId, offPathStages, trialLengthDays });
     // Create-only: a CREATE is written through the import's own writer; an
     // UPDATE is what an existing account WOULD receive, so it is reported and
     // not written — "this account already exists" is the answer, not a merge.
@@ -491,6 +505,7 @@ async function runMarketingRows(core: MarketingRunCore) {
           ownerIdByEmail: new Map(owners.map((o) => [o.email.toLowerCase(), o.id])),
           orgKey: orgId ?? '',
           authoritative: core.authoritative === true,
+          trialLengthDays,
         });
       },
       apply: (chunk) =>
@@ -623,6 +638,10 @@ export async function createMarketingAccount(input: {
       return { kind: 'ambiguous', reason: row.reason ?? '' };
     default:
       if (row.reason?.includes('already_mentored')) return { kind: 'already_mentored' };
+      // A refusal the diff made (an external-id conflict, #2554) is about the
+      // input, not a failed write. The form sends no external id today, so this
+      // is defensive — but it must not read as a 500.
+      if (row.value?.refused) return { kind: 'invalid', reason: row.value.refused };
       // A row the VALIDATOR refused carries no plan value; one that reached the
       // writer and failed there does. The first is the caller's input and is
       // worth echoing; the second is ours (a unique index, a dropped
