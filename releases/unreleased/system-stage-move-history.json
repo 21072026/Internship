@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **An automatic stage move now writes stage history, with the system as its actor** (#2527). `StatusChange.changedById` was a required FK to `User`, so `expireTrials()` could only leave an `AuditLog` row. `StatusChange` is the only input to the stage clock (`stageEnteredAt()`, `daysInStage` on `GET /api/mentorship`, `computeStageAging()`), so a record the sweep moved to `TRIAL_EXPIRED` showed the whole trial's age as its time in the new stage, and its `TRIAL_ACTIVE` visit was never closed in the aging report. The column is now nullable (option (a) of the issue; `ActivityLog.actorId` is the precedent). The FK keeps `onDelete: Restrict`, so erasure's explicit delete stays the only path. `expireTrials()` writes the row through `statusChangeData()` in the same transaction as its conditional claim. A null actor renders as \"System\"/\"Sistem\" (`common.systemActor`) on the candidate and mentee detail pages. The option of a system `User` row was rejected: it would be a real account in admin lists, work assignment and seat counts. Naming a real person was also rejected: it would put their name next to something they did not do.",
+  "notes": {
+    "en": ["When a trial ends on its own, the record's stage history now shows the move, made by \"System\", and its time in the new stage starts from that day."],
+    "tr": ["Bir deneme süresi kendiliğinden bittiğinde kaydın aşama geçmişi artık bu hareketi \"Sistem\" tarafından yapılmış olarak gösteriyor; yeni aşamadaki süre de o günden başlıyor."],
+    "de": ["Endet eine Testphase von selbst, zeigt der Phasenverlauf des Datensatzes den Wechsel jetzt mit „System“ als Urheber, und die Zeit in der neuen Phase zählt ab diesem Tag."]
+  }
+}

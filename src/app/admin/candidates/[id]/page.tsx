@@ -40,7 +40,7 @@ import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
-interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
+interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } | null }
 interface Relation {
   id: string;
   status: string;
@@ -511,7 +511,7 @@ export default function AdminMenteeDetailPage() {
                           <span className="text-gray-400">{label(sc.fromStatus)}</span>
                           {' → '}
                           <span className="font-medium">{label(sc.toStatus)}</span>
-                          <span className="text-xs text-gray-400"> · {sc.changedBy.fullName} · {formatDate(sc.createdAt, locale)}</span>
+                          <span className="text-xs text-gray-400"> · {sc.changedBy?.fullName ?? t.common.systemActor} · {formatDate(sc.createdAt, locale)}</span>
                         </span>
                         <button
                           onClick={() => deleteHistory(sc.id)}

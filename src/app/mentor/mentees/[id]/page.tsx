@@ -101,7 +101,7 @@ interface RelationDetail {
     fromStatus: string;
     toStatus: string;
     createdAt: string;
-    changedBy: { fullName: string };
+    changedBy: { fullName: string } | null;
   }[];
 }
 
@@ -474,7 +474,7 @@ export default function MenteeDetailPage() {
                       <span className="font-medium text-gray-900">{label(sc.toStatus)}</span>
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {sc.changedBy.fullName} · {formatDateTime(sc.createdAt, locale)}
+                      {sc.changedBy?.fullName ?? t.common.systemActor} · {formatDateTime(sc.createdAt, locale)}
                     </p>
                   </li>
                 ))}

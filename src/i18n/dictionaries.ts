@@ -393,6 +393,8 @@ const en = {
   },
   offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.' },
   common: {
+    // A stage move made by an unattended job, not a person (#2527).
+    systemActor: 'System',
     loading: 'Loading...',
     notFound: 'Not found',
     none: '—',
@@ -5912,6 +5914,8 @@ const tr: Dict = {
   },
   offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.' },
   common: {
+    // A stage move made by an unattended job, not a person (#2527).
+    systemActor: 'Sistem',
     loading: 'Yükleniyor...',
     notFound: 'Bulunamadı',
     none: '—',
@@ -11294,6 +11298,8 @@ const de: Dict = {
   },
   offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.' },
   common: {
+    // A stage move made by an unattended job, not a person (#2527).
+    systemActor: 'System',
     loading: 'Wird geladen...',
     notFound: 'Nicht gefunden',
     none: '—',
