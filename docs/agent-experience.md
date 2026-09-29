@@ -7317,3 +7317,18 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   etme; aksi halde CI alakasız görünen bir sebeple kırmızıya döner.
 - **`npx prisma generate` refleks olsun.** Rebase sonrası iki kez tsc, şema değişmiş olduğu için
   benim değişikliğimle ilgisiz hatalar verdi.
+
+## 2026-09-28 — e2e sunucusu artık `TRUSTED_PROXY_COUNT=1` ile koşuyor (#2470)
+
+- **Eski "`TRUSTED_PROXY_COUNT=0` ile başlat" tavsiyesi artık zararlı.** Yukarıdaki kayıtlar
+  `rate-limit.spec` için elle başlatılan sunucuya `0` vermeyi öneriyor. #2470'ten sonra `0`'da
+  `clientIp()` ne `X-Forwarded-For`'u ne `X-Real-IP`'yi okuyor: her istek tek bir `unknown`
+  kovasına düşer ve `floodIp()`/`freshIp()` yalıtımı sessizce hiçbir şey yapmaz. Elle
+  başlattığın sunucuyu **varsayılanla** (`1`) başlat; `rate-limit.spec`'in spoof testindeki
+  kontrol isteği, sunucu `0`'dayken 429 alıp kırmızıya döner — bu kasıtlı.
+- **Next, eksik `X-Forwarded-For`'u kendisi doldurur** (`base-server.js`,
+  `req.headers['x-forwarded-for'] ??= socket.remoteAddress`). Yani `1`'de başlıksız bir e2e
+  isteğinin anahtarı `unknown` değil `127.0.0.1`; `X-Real-IP` yedeğine hiç inilmez. Paylaşılan
+  kova mantığı aynı, yalnızca adı farklı — aktivite günlüğünde `forgot · 127.0.0.1` görürsün.
+- **`--env-file` ile `.env` yüklemek**: worktree izolasyonu `. <(sed …)` kalıbını reddediyor.
+  `node --env-file=<dosya> node_modules/@playwright/test/cli.js test …` aynı işi görüyor.

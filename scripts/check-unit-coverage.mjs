@@ -192,6 +192,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/clientIp.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the rate-limit key: a proxy header is read only behind TRUSTED_PROXY_COUNT, or a client picks its own bucket per request (#858, #2470)',
+    },
+  ],
+  [
     'src/lib/requestId.ts',
     {
       floor: 95,
