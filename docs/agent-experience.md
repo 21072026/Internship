@@ -7559,3 +7559,16 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   `servedHosts()` contains it, so a prod hostname in a topic env's database never sends mail
   to prod (#2495). A spec that needs the real marketing host mapped must live in the serial
   spec that already owns it (`marketing-demo-form.spec.ts`), because `publicHost` is unique.
+
+## 2026-09-29 — relation company guard (#2613)
+
+- **`npm run lint` fails in a nested worktree** (`.claude/worktrees/*`): ESLint also loads the main
+  checkout's `../../../.eslintrc.json` and reports a `@next/next` plugin conflict. Lint the changed
+  files with `npx eslint --no-eslintrc -c .eslintrc.json <files>` locally; CI's full lint is unaffected.
+- **Grep a route's own lookup, not just the field you came for.** The companyId fix turned up that
+  `GET/PUT /api/mentorship/[id]` fetched the relation with a bare `findUnique({ id })` — another
+  tenant's ADMIN could open it. `findFirst({ where: withinTenant({ id }, await tenantWhere(session)) })`
+  is the drop-in; matrix probes that expected 403 for a foreign row then move to 404.
+- `marketing-sales-surface.spec.ts`'s stage-deadline test signs in as the seed admin
+  (`admin@example.com`); a local e2e DB without `prisma db seed` fails it and skips the rest of the
+  serial file — run the rest with `--grep`.

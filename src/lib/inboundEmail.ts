@@ -59,6 +59,19 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   if (!rel) return { ok: false, status: 404, reason: 'Thread not found' };
 
   // Who wrote this? Preferred: the From address is one of the two participants.
+  //
+  // WORLDS (#2590). One person can hold an account in each product under the
+  // SAME address, so "the account this address belongs to" is ambiguous — and
+  // nothing below asks it. The reply is anchored by the signed TOKEN first: it
+  // names one relationship (`relationId`) and the one participant it was sent to
+  // (`recipientUserId`), and both are user/relation IDS. The sender is then
+  // matched against only that relationship's two participants — who are, by the
+  // tenant model, both in the relationship's own organization and therefore in
+  // one world. A person's account in the other product is not on this
+  // relationship and cannot be picked; there is no `user.findFirst({ where: {
+  // email } })` on this path to pick the wrong row, and none may be added — the
+  // address alone must never decide which account (or which product) a reply
+  // belongs to. The fallback further down is likewise by token, not by address.
   const from = emailOf(input.from);
   let senderId = from === rel.mentor.email.toLowerCase() ? rel.mentor.id
     : from === rel.mentee.email.toLowerCase() ? rel.mentee.id

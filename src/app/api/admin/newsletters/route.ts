@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
@@ -98,9 +99,19 @@ export async function GET(request: Request) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const pageSize = 20;
 
+  // The caller's own tenant, by hand (#2542, #2590). This history — and the
+  // by-id actions built on it (edit, cancel, delete, SEND) — used to span every
+  // tenant: with a second product on the same database, an admin of one saw the
+  // other's issues and could arm one that mails the OTHER product's members. The
+  // middleware scopes nothing while MT_ENFORCE_ISOLATION is off (and these
+  // handlers bind no tenant scope), so the filter is explicit. A no-op for a
+  // single-tenant deployment: every issue there is the default org's, and the
+  // default org also matches a legacy `orgId IS NULL` row.
+  const tenant = await tenantWhere(session);
   const [total, issues] = await Promise.all([
-    prisma.newsletter.count(),
+    prisma.newsletter.count({ where: withinTenant({}, tenant) }),
     prisma.newsletter.findMany({
+      where: withinTenant({}, tenant),
       // Newest activity first, whichever kind it was: a draft touched today
       // belongs above an issue sent last month.
       orderBy: [{ createdAt: 'desc' }],

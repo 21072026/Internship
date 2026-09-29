@@ -149,7 +149,7 @@ test.afterAll(async () => {
     await prisma.pipelineStage.deleteMany({ where: { orgId } }).catch(() => {});
   }
   for (const email of emails) {
-    const user = await prisma.user.findUnique({ where: { email } }).catch(() => null);
+    const user = await prisma.user.findFirst({ where: { email } }).catch(() => null);
     if (user) await prisma.notification.deleteMany({ where: { userId: user.id } }).catch(() => {});
     await cleanupByEmail(email);
   }
@@ -179,7 +179,7 @@ test('extending a trial reopens it, keeps the claims, and the job sends only the
   expect(reopened.trialEndsAt?.toISOString().slice(0, 10)).toBe(in3.iso);
 
   // A human stage move, recorded as one.
-  const adminUser = await prisma.user.findUniqueOrThrow({ where: { email: adminEmail } });
+  const adminUser = await prisma.user.findFirstOrThrow({ where: { email: adminEmail } });
   const moves = await prisma.statusChange.findMany({ where: { relationId } });
   expect(moves.map((m) => [m.fromStatus, m.toStatus, m.changedById])).toEqual([
     [TRIAL_EXPIRED_STAGE_KEY, TRIAL_ACTIVE_STAGE_KEY, adminUser.id],
@@ -211,7 +211,7 @@ test('extending a trial reopens it, keeps the claims, and the job sends only the
   expect(second.ok()).toBeTruthy();
   expect((await second.json()).trialReminders).toMatchObject({ considered: 0, sent: 0 });
   expect(await prisma.trialReminder.count({ where: { relationId } })).toBe(3);
-  const ownerUser = await prisma.user.findUniqueOrThrow({ where: { email: ownerEmail } });
+  const ownerUser = await prisma.user.findFirstOrThrow({ where: { email: ownerEmail } });
   expect(await prisma.notification.count({ where: { userId: ownerUser.id, type: 'trial.endingSoon' } })).toBe(1);
 
   // The same day again is a no-op, not a second audit row.

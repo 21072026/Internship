@@ -144,6 +144,19 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
+  // WORLDS (#2590): nothing to add here, and that is deliberate. Which product a
+  // session may be used in is decided by the `session` callback in src/lib/auth.ts
+  // (a session presented on the other world's host is null), and it needs the
+  // database — the org's CURRENT vertical — which the edge runtime does not have.
+  // What this file reads from the JWT is a claim about the token's own account
+  // (`emailVerified`), and every claim in a JWT belongs to exactly one user row,
+  // so two accounts of one person can never blur into each other here. A token
+  // presented on the wrong host passes this gate only to reach a handler whose
+  // own `getServerSession()` returns null (401 / redirect to sign-in): this gate
+  // narrows, it never grants. The remember-me cookies are host-only (no Domain),
+  // so `wantsResume` above cannot carry a device from one world's host to the
+  // other's either; /api/auth/remember/refresh re-checks the account's world.
+
   // Only block when we positively know the email is unverified. Anonymous
   // requests (token === null) are left to each route's own auth check, and
   // older sessions without the field (undefined) are treated as verified.

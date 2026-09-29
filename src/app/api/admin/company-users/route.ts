@@ -9,6 +9,7 @@ import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 
 const schema = z.object({
   companyId: z.string().min(1),
@@ -37,8 +38,14 @@ export async function POST(request: Request) {
   const company = await prisma.company.findFirst({ where: withinTenant({ id: companyId }, await tenantWhere(session)) });
   if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+  // "Already exists" means IN THE ADMIN'S WORLD (#2590): the same mailbox may
+  // hold an account in the other product (a marketing user is a different
+  // person-record from an internship company login), and refusing this
+  // provisioning because of it would lock the person out of the world they were
+  // just invited into. The check follows the CALLER's org, never the address.
+  if (await emailTakenInOrgWorld(email, orgId)) {
+    return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+  }
 
   const user = await prisma.user.create({
     // `orgId` by hand: with MT_ENFORCE_ISOLATION off nothing fills it in, and

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
-import { prisma, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
 import { freshIp } from './helpers/rateLimit';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
@@ -45,7 +45,7 @@ test('invitation board filters, bulk re-invites and revokes', async ({ page }) =
   const joinedEmail = `${prefix}-joined@e2e.local`;
   const otherEmail = uniqueEmail('board-other');
 
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
 
   // Expired and never opened → re-invitable.

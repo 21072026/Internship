@@ -13,6 +13,15 @@ import {
 // route file — App Router only treats route.ts/page.tsx specially, so a shared
 // module can live next to them, which is where the three callers can actually
 // find it.
+//
+// ONE TOKEN, ONE ROW (#2590). Everything here is keyed by the user id the signed
+// token names, and must stay that way. One person can now hold two accounts under
+// one address — an internship account and a marketing account — and each is its
+// own subscription with its own switches: stopping the marketing digest must not
+// silence the internship one, and vice versa. So no function in this file (or in
+// the routes that call it) may look a user up by e-mail address, and none may
+// widen "this token" to "every account of this person"; the host the link was
+// opened on is irrelevant to which row is changed.
 
 export interface GroupState {
   id: EmailGroupId;

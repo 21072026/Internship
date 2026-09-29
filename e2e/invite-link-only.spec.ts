@@ -60,7 +60,7 @@ test('a mentor mints an email-less invite link; whoever registers with it become
     });
     expect(registered.status()).toBe(201);
 
-    const invitee = await prisma.user.findUnique({ where: { email: inviteeEmail } });
+    const invitee = await prisma.user.findFirst({ where: { email: inviteeEmail } });
     expect(invitee?.role).toBe('MENTEE');
     expect(invitee?.isActive).toBe(true);
     // The address was typed in, not proven by receiving the invitation, so it

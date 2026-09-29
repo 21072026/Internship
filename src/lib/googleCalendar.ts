@@ -10,12 +10,26 @@
 //
 // No secrets are hard-coded; everything reads from env.
 //
+// WORLDS (#2590). The OAuth redirect URI is an IdP-REGISTERED endpoint: Google
+// only sends the browser back to an address the operator listed in the Cloud
+// console, so it cannot follow the request host the way an e-mail link can. The
+// default therefore stays the one configured origin. What a person signed in on
+// the marketing host needs is for the round-trip to land back on THEIR host —
+// the session cookie of a host is not sent to another one, so a callback on the
+// internship host would find no session and bounce them to a sign-in page for a
+// product they are not in. `googleRedirectUri` / `googleConsentUrl` therefore
+// take an optional trailing `world`; see there for what it changes and, just as
+// important, what it never overrides.
+//
 // Google's own endpoints are read from env with the real URLs as defaults. That
 // is not indirection for its own sake: it is what makes the token exchange
 // TESTABLE. Without it the code path that swaps an authorization code for a
 // refresh token can only be exercised against live Google, which is why this
 // slice sat unfinished — the e2e now points these at a local stub and drives
 // connect → callback → push → disconnect end to end.
+
+import { originForWorld, type World } from '@/lib/hostWorld';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 
 // OAuth scopes: manage the user's own calendar events (create Meet links, push
 // meetings). Requested only when the user explicitly connects — the app never
@@ -30,8 +44,28 @@ export function googleClientId(): string | null {
   return process.env.GOOGLE_CLIENT_ID || null;
 }
 
-export function googleRedirectUri(): string | null {
+/**
+ * Where Google sends the browser back to after consent.
+ *
+ * `world` (#2590), optional and trailing. Omitted or INTERNSHIP: exactly the
+ * value this function always returned, byte for byte. MARKETING: the marketing
+ * host's callback, so the round-trip returns to the host whose session started
+ * it — but ONLY when the operator has not pinned a single URI in
+ * GOOGLE_OAUTH_REDIRECT_URI. That variable is an explicit decision ("this is the
+ * one address registered with Google"), and second-guessing it would send users
+ * to an address Google then rejects with redirect_uri_mismatch. A deployment
+ * that wants the marketing round-trip registers
+ * `<marketing origin>/api/integrations/google/callback` in the Cloud console and
+ * leaves the pin unset; until then nothing changes for anybody.
+ *
+ * The consent request and the later code exchange must present the SAME
+ * redirect_uri, so whoever passes `world` to one must pass it to the other.
+ */
+export function googleRedirectUri(world?: World): string | null {
   if (process.env.GOOGLE_OAUTH_REDIRECT_URI) return process.env.GOOGLE_OAUTH_REDIRECT_URI;
+  if (world && world !== DEFAULT_VERTICAL) {
+    return `${originForWorld(world)}/api/integrations/google/callback`;
+  }
   const base = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL;
   return base ? `${base.replace(/\/$/, '')}/api/integrations/google/callback` : null;
 }
@@ -45,9 +79,9 @@ export function isGoogleCalendarConfigured(): boolean {
 // Build the Google OAuth consent URL (pure — no network). `state` is an opaque
 // CSRF/anti-replay token the caller persists and re-checks on callback. Returns
 // null when the integration isn't configured.
-export function googleConsentUrl(state: string): string | null {
+export function googleConsentUrl(state: string, world?: World): string | null {
   const clientId = googleClientId();
-  const redirectUri = googleRedirectUri();
+  const redirectUri = googleRedirectUri(world);
   if (!clientId || !redirectUri) return null;
   const params = new URLSearchParams({
     client_id: clientId,

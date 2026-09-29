@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { sendMeetingGuestInviteEmail } from '@/services/emailService';
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
+import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 
 // External meeting guests (#1446) — inviting someone who has no account here.
 //
@@ -47,11 +48,26 @@ export const guestsField = z.array(guestSchema).max(MAX_GUESTS_PER_MEETING).opti
  * not that a token gets minted against their address; otherwise anyone able to
  * schedule a meeting could mint a credential addressed at a colleague. The
  * caller decides what to do with `rejectedAsMembers` — the UI says why.
+ *
+ * "Has an account" is asked IN THE MEETING'S WORLD (#2590). One person can hold
+ * an internship account and a marketing account under the same address; those
+ * are two different people as far as this meeting is concerned. Someone who is
+ * only a member of the OTHER product cannot reach this meeting as a participant
+ * — they are not in its tenant, and the product they sign into on the host they
+ * use would not show it — so treating their other-world account as "already
+ * reachable" would silently drop the very invitation the organizer asked for.
+ * The guest link (a bearer token in a mail) is exactly how an outsider gets in.
  */
 export async function normalizeGuests(
   guests: GuestInput[] | undefined,
   /** Addresses already invited through the meeting's context, lowercased. */
-  memberEmails: string[] = []
+  memberEmails: string[],
+  /**
+   * The organization the meeting belongs to — the organizer's own. Its world is
+   * what "has an account here" means; required (not defaulted) so a new caller
+   * has to say which world it is asking about.
+   */
+  orgId: string | null | undefined
 ): Promise<{ guests: { email: string; name: string | null }[]; rejectedAsMembers: string[] }> {
   if (!guests || guests.length === 0) return { guests: [], rejectedAsMembers: [] };
 
@@ -81,9 +97,17 @@ export async function normalizeGuests(
   // a different tenant genuinely cannot reach this meeting through the app, so a
   // guest invitation is the only way to invite them, and it is the one the
   // organizer asked for.
+  //
+  // The tenant filter is dormant while that flag is off (it is, in production),
+  // so the WORLD is also named in the query itself (#2590): without it, a
+  // person's account in the other product — same address, different tenant —
+  // would be found and the guest wrongly refused as a "member". Scoping by world
+  // rather than by exact org keeps the pre-worlds behaviour for a single-product
+  // deployment byte-for-byte (every account is in the one world).
   if (seen.size > 0) {
+    const world = await worldOfOrg(orgId);
     const users = await prisma.user.findMany({
-      where: { email: { in: [...seen.keys()] } },
+      where: { email: { in: [...seen.keys()] }, ...worldUserWhere(world) },
       select: { email: true },
     });
     for (const u of users) {

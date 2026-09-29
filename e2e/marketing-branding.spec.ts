@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'node:crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInViaApi, apiSession, MARKETING_HOST } from './helpers/auth';
 
 // SaleVali branding on the marketing host (#2492): the accent, the mark, the
 // favicon/home-screen icons, the browser tint and the manifest all follow the
@@ -51,8 +52,9 @@ test('the marketing host wears SaleVali: magenta accent, the V mark, its own ico
 
 // /messages carries its own viewport export (viewportFit: cover), which
 // replaces the root one — so its tint has to follow the vertical by itself.
-// Session-first: the signed-in user's org is MARKETING, so this holds on any
-// host; the marketing host header only keeps the test honest about the chrome.
+// A MARKETING-org account signs in on the marketing host only (#2590: the URL
+// decides the product), so the header is set before sign-in and kept for the
+// /messages navigation — that host is both the login's world and the chrome's.
 test('signed in to a marketing org, /messages keeps the SaleVali tint and accent', async ({ page }) => {
   const org = await prisma.organization.create({
     data: { slug: `sv-tint-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`, name: 'SaleVali Tint Org', vertical: 'MARKETING' },
@@ -75,6 +77,28 @@ test('signed in to a marketing org, /messages keeps the SaleVali tint and accent
   } finally {
     await cleanupByEmail(email);
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+// The old "the signed-in user's org beats the host" rule is gone (#2590): the
+// URL decides the product, and a session only exists on its own world's host.
+// An INTERNSHIP account signed in on the default host is therefore NOT a session
+// on the marketing host — that host is still the marketing product's anonymous
+// chrome — while on its own host it keeps the internship branding.
+test('an INTERNSHIP session presented on the marketing host is no session there — the host decides the chrome', async ({ request }) => {
+  const email = uniqueEmail('sv-world');
+  const pw = 'WorldPass123';
+  await seedUser(email, pw, 'ADMIN', 'World Admin');
+  try {
+    const login = await signInViaApi(request, email, pw);
+    expect(login.ok, `sign-in on the default host: ${login.error}`).toBe(true);
+    expect((await apiSession(request))?.user.email).toBe(email);
+    expect(await apiSession(request, MARKETING_HOST), 'a session is not valid on the other world\'s host').toBeNull();
+
+    const manifest = await (await request.get('/manifest.webmanifest', { headers: MARKETING })).json();
+    expect(manifest.name).toBe('SaleVali');
+  } finally {
+    await cleanupByEmail(email);
   }
 });
 

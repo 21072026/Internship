@@ -1,6 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+// Pure catalogue module (no Prisma, no server imports) — safe to load from every spec.
+import { DEFAULT_VERTICAL, VERTICAL_KEYS, toVerticalKey, type VerticalKey } from '@/lib/verticals';
 
 /**
  * Direct DB access for E2E setup/teardown. Lets tests seed invitation tokens and
@@ -46,12 +48,33 @@ export async function seedInvite(email: string, role: 'ADMIN' | 'MENTOR' | 'MENT
   return token;
 }
 
+/**
+ * Seed one account.
+ *
+ * The optional fifth argument (#2590) is the `orgId` to put the account into at
+ * creation — the way a spec seeds "this person's marketing-world account" (an
+ * org whose `vertical` is MARKETING) next to an internship one with the SAME
+ * address. Omitted, the row is org-less exactly as before (the default org, i.e.
+ * the INTERNSHIP world), so every existing caller is unchanged. It may be given
+ * bare (`seedUser(e, p, r, n, org.id)`) or as `{ orgId }`; `null` is an explicit
+ * "no org", the same as leaving it out.
+ *
+ * Note what this does NOT enforce: `User.email` is no longer globally unique, the
+ * database only refuses a second row for the same (email, orgId), and MySQL
+ * treats every NULL orgId as distinct — so two org-less seeds of one address
+ * both succeed. The app's own rule (one account per address per WORLD,
+ * `emailTakenInWorld`) lives in the create paths, not here; a spec that seeds
+ * the same address twice into ONE world is building a fixture the app would
+ * never produce, so it should not.
+ */
 export async function seedUser(
   email: string,
   password: string,
   role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE',
-  fullName: string
+  fullName: string,
+  org?: string | null | { orgId?: string | null }
 ) {
+  const orgId = typeof org === 'object' && org !== null ? org.orgId : org;
   const hash = await bcrypt.hash(password, 10);
   return prisma.user.create({
     data: {
@@ -60,6 +83,7 @@ export async function seedUser(
       role,
       fullName,
       skills: [],
+      ...(orgId ? { orgId } : {}),
       // Every other spec seeding a MENTOR expects to land straight on the
       // dashboard, not the first-run onboarding wizard (#911) — only specs
       // testing that wizard itself want a "fresh" mentor, and they clear
@@ -69,10 +93,53 @@ export async function seedUser(
   });
 }
 
+/**
+ * The users of one WORLD, as a Prisma `where` fragment (#2590) — the plain
+ * mirror of `worldUserWhere()` in src/lib/userWorld.ts, which a spec helper does
+ * not import because that module pulls the app's own PrismaClient (and its
+ * tenant middleware) into every worker. Keep the two in step: a non-default
+ * vertical is exactly its organizations' users; the DEFAULT vertical is
+ * everything that is not one of the others, org-less rows included.
+ */
+export function worldUserWhere(world: VerticalKey): Prisma.UserWhereInput {
+  const w = toVerticalKey(world);
+  if (w !== DEFAULT_VERTICAL) return { org: { is: { vertical: w } } };
+  const others = VERTICAL_KEYS.filter((k) => k !== DEFAULT_VERTICAL);
+  return others.length ? { NOT: { org: { is: { vertical: { in: others } } } } } : {};
+}
+
+/**
+ * The account this address holds in this world, or null.
+ *
+ * For addresses that are NOT unique to one test — the seeded admin
+ * (`admin@example.com`), or any fixture that deliberately gives one person an
+ * account in each product. A bare `findFirst({ where: { email } })` would pick
+ * between the two worlds arbitrarily, so a lookup that means "the person as the
+ * INTERNSHIP site knows them" says so. `select` is required, like the app's own
+ * `findUserInWorld`, so a spec never hydrates a whole row by accident.
+ */
+export async function userInWorld<S extends Prisma.UserSelect>(
+  email: string,
+  world: VerticalKey,
+  select: S
+): Promise<Prisma.UserGetPayload<{ select: S }> | null> {
+  return prisma.user.findFirst({
+    where: { email: email.trim().toLowerCase(), ...worldUserWhere(world) },
+    select,
+    orderBy: { createdAt: 'asc' },
+  }) as Promise<Prisma.UserGetPayload<{ select: S }> | null>;
+}
+
 export async function cleanupByEmail(email: string) {
   // Remove dependent mentorship relations first, then the user + any tokens.
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (user) {
+  //
+  // EVERY account carrying the address, not "the" account: since worlds (#2590)
+  // one address may hold a row per product, and a spec that seeded a person into
+  // both worlds must be able to tear both down with the one call it already
+  // makes. An address is otherwise unique to its test, so for every other caller
+  // this is still exactly one row.
+  const users = await prisma.user.findMany({ where: { email }, select: { id: true } });
+  for (const user of users) {
     await prisma.mentorshipRelation.deleteMany({
       where: { OR: [{ mentorId: user.id }, { menteeId: user.id }] },
     });

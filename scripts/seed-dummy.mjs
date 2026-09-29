@@ -94,7 +94,11 @@ async function main() {
   const mentors = [];
   for (const m of [['Aysun Korkmaz', 'aysun.korkmaz'], ['Daniel Krause', 'daniel.krause'], ['Hakan Yıldız', 'hakan.yildiz']]) {
     const email = `${m[1]}@example.com`;
-    const mentor = (await prisma.user.findUnique({ where: { email } })) ??
+    // Dummy data is INTERNSHIP-world data (#2590): `email` is no longer unique
+    // (one person may hold an account per product), so the lookup says which
+    // world — a marketing-org account under the same address is not this mentor.
+    // Plain-ESM mirror of `worldUserWhere('INTERNSHIP')`, src/lib/userWorld.ts.
+    const mentor = (await prisma.user.findFirst({ where: { email, NOT: { org: { is: { vertical: { in: ['MARKETING'] } } } } } })) ??
       (await prisma.user.create({ data: { email, password: pw, role: 'MENTOR', fullName: m[0], skills: [] } }));
     mentors.push(mentor);
   }

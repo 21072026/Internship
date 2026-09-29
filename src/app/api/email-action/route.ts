@@ -43,6 +43,12 @@ async function handlePost(request: Request) {
 
   // The token names a user, but it was minted long ago — confirm the account
   // still exists and is usable before acting for them.
+  //
+  // ONE TOKEN, ONE ROW (#2590): the id in the token is the account the mail was
+  // addressed to, in whichever product it lives (one person can hold an
+  // internship account and a marketing account under one address). This route
+  // acts on exactly that row and looks nobody up by e-mail, and the host the
+  // link was opened on has no say in which account that is.
   const user = await prisma.user.findUnique({
     where: { id: action.userId },
     select: { id: true, isActive: true },

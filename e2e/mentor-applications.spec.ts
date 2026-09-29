@@ -43,7 +43,7 @@ test('public application is accepted, creates no User, sets consentAt, and notif
     expect(application!.expertise).toEqual(['React', 'Node.js']);
 
     // No account is created — approval (a later task) is what does that.
-    expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
+    expect(await prisma.user.findFirst({ where: { email } })).toBeNull();
 
     // Notification types are event keys since #1251 (`mentor_application.new`).
     await expect

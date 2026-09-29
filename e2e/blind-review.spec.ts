@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // #819 (the half that needs no demographic data) — blind interview review.
@@ -27,7 +27,7 @@ async function setBlindReview(page: import('@playwright/test').Page, on: boolean
 
 test('a candidate stays anonymous — in the response, not just the UI — until the interviewer scores', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   const interviewerEmail = uniqueEmail('blind-interviewer');
   const candidateEmail = uniqueEmail('blind-candidate');
@@ -100,7 +100,7 @@ test('a candidate stays anonymous — in the response, not just the UI — until
 
 test('with the setting off nothing is hidden, and an admin running the panel is never blinded', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   const interviewerEmail = uniqueEmail('unblind-interviewer');
   const candidateEmail = uniqueEmail('unblind-candidate');

@@ -176,7 +176,10 @@ export async function POST(request: Request) {
       // has-an-account lookup, but passing it explicitly makes the *reason*
       // reported back to the UI the right one.
       ...(session.user.email ? [session.user.email] : []),
-    ]);
+    ],
+    // The organizer's org: "has an account" is asked in ITS world (#2590), so
+    // the same address held in the other product does not veto a guest invite.
+    session.user.orgId);
 
     // The shared identity of this one schedule (#1980). Every row written below
     // carries it, so a later "cancel this meeting" can ask whether it means this

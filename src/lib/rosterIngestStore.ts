@@ -24,6 +24,9 @@ import { randomBytes } from 'node:crypto';
 import type { $Enums, Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { runWithOrg } from './orgContext';
+import { runUnscoped } from './tenantAmbient';
+import { findUsersInWorld, worldOfOrg } from './userWorld';
+import type { VerticalKey } from './verticals';
 import { countRows, type RowStatus } from './importPreview';
 import {
   applyPlannedRows,
@@ -118,6 +121,39 @@ export async function loadRosterTarget(feed: RosterFeedConfig): Promise<RosterTa
 }
 
 /**
+ * Does ANOTHER organization of this feed's product already hold `email`?
+ *
+ * ONE PERSON, TWO WORLDS (#2590): an address may be an account in the
+ * internship product and another in the marketing product, but only one per
+ * product. Before worlds the global unique on `User.email` turned every clash
+ * into a P2002 for this writer; now the database only refuses two rows in the
+ * SAME organization (`@@unique([email, orgId])`, and that renders in the run
+ * log exactly as it always did). A holder in a second organization of the same
+ * product is the case only this check can see — and a roster feed must not be
+ * the door through which two accounts of one address end up in one world.
+ *
+ * What it deliberately does NOT do is treat the person's account in the OTHER
+ * product as a clash: that is the whole feature. `findUsersInWorld` is asked
+ * about the feed's own world, so a marketing-only holder of the address is
+ * invisible here and the row is created as usual.
+ *
+ * Read outside the tenant filter (`runUnscoped`): the run is bound to the
+ * feed's org with `runWithOrg`, and under MT_ENFORCE_ISOLATION that would hide
+ * exactly the other-tenant holder this looks for. `select` is id + org only, so
+ * nothing about the other account leaves this function but a yes/no.
+ */
+async function heldByOtherOrgInWorld(
+  email: string,
+  world: VerticalKey,
+  orgId: string,
+  exceptUserId?: string,
+): Promise<boolean> {
+  if (!email) return false;
+  const holders = await runUnscoped(() => findUsersInWorld(email, world, { id: true, orgId: true }));
+  return holders.some((h) => h.orgId !== orgId && h.id !== exceptUserId);
+}
+
+/**
  * The real writer, bound to one chunk's transaction.
  *
  * A created account gets a random bcrypt-hashed password, exactly like the
@@ -125,10 +161,17 @@ export async function loadRosterTarget(feed: RosterFeedConfig): Promise<RosterTa
  * invitation flow, and no importable file ever sets a usable credential.
  */
 function prismaRowWriter(feed: RosterFeedConfig, tx: TxClient): RosterRowWriter {
+  // The feed's world, read once per chunk on first use — every row of a chunk
+  // asks the same question about the same organization.
+  let feedWorld: Promise<VerticalKey> | null = null;
+  const world = () => (feedWorld ??= worldOfOrg(feed.orgId));
   return {
     async create(row) {
       const { changes, feed: fed } = row.value;
       const email = (changes.email ?? fed.email ?? '').toLowerCase();
+      if (await heldByOtherOrgInWorld(email, await world(), feed.orgId)) {
+        throw new Error('an account with this e-mail address already exists');
+      }
       const password = await bcrypt.hash(randomBytes(18).toString('hex'), 10);
       const created = await tx.user.create({
         data: {
@@ -151,6 +194,14 @@ function prismaRowWriter(feed: RosterFeedConfig, tx: TxClient): RosterRowWriter 
     async update(row) {
       if (!row.targetId) throw new Error('An UPDATE row reached the writer with no target id');
       const { changes } = row.value;
+      // An e-mail change is the other way to end up with a second account of
+      // one address in one product (#2590) — same rule as a create.
+      if (
+        changes.email !== undefined &&
+        (await heldByOtherOrgInWorld(changes.email.toLowerCase(), await world(), feed.orgId, row.targetId))
+      ) {
+        throw new Error('an account with this e-mail address already exists');
+      }
       // `orgId` in the where is belt and braces on top of the middleware: this
       // is a background run, and a cross-tenant write here would be the worst
       // bug in the product.

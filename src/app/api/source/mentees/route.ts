@@ -11,6 +11,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { notify } from '@/lib/notify';
 import { capSkills } from '@/lib/skills';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 
 // The source a SOURCE user represents (their own sourceId).
 async function ownSourceId(userId: string): Promise<string | null> {
@@ -73,8 +74,12 @@ export async function POST(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     const { fullName, email, university, department, skills } = parsed.data;
 
-    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } });
-    if (existing) return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+    // "Already exists" means IN THE SOURCE USER'S WORLD (#2590): the same
+    // mailbox may hold an account in the other product, which is a different
+    // person-record and no reason to refuse this submission.
+    if (await emailTakenInOrgWorld(email.toLowerCase(), resolveOrgId(session))) {
+      return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+    }
 
     const password = await bcrypt.hash(randomBytes(18).toString('hex'), 10);
     const mentee = await prisma.user.create({

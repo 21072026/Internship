@@ -77,7 +77,7 @@ test('admin can permanently delete a candidate; the erase endpoint refuses self-
     await expect.poll(async () => prisma.user.findUnique({ where: { id: mentee.id } })).toBeNull();
 
     // Guard: an admin cannot erase their own account through the admin path.
-    const admin = await prisma.user.findUnique({ where: { email: adminEmail } });
+    const admin = await prisma.user.findFirst({ where: { email: adminEmail } });
     const guardRes = await page.request.post(`/api/admin/users/${admin!.id}/erase`, {
       data: { mode: 'delete', confirmName: admin!.fullName, adminPassword: 'AdminPass123' },
     });

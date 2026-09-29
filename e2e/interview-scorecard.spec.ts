@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // #824 — interview scorecards, blind scoring, panel calibration.
@@ -18,7 +18,7 @@ test.afterAll(async () => {
 });
 
 async function seedPanelCast(prefix: string) {
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   const aEmail = uniqueEmail(`${prefix}-int-a`);
   const bEmail = uniqueEmail(`${prefix}-int-b`);

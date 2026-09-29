@@ -186,8 +186,22 @@ function demoPdf(lines) {
   return Buffer.from(body, 'latin1');
 }
 
+// The users of the INTERNSHIP world (#2590), as a Prisma `where` fragment.
+// Everything this half of the seeder creates is the internship product's demo
+// set, and it is created org-less: the org backfill further down
+// (`assignDefaultOrg`) later stamps the default org onto every NULL-orgId row,
+// so on a re-seed these rows carry the default org's id — hence "not a
+// marketing organization's user" rather than an `orgId` equality that would
+// miss one state or the other. `User.email` is no longer unique (the marketing
+// tenant seeded below lives in the same @demo.example.com namespace), so the
+// lookup must say which world it means; it must never adopt — let alone later
+// move — a row that belongs to the marketing tenant. Plain-ESM mirror of
+// `worldUserWhere('INTERNSHIP')`, src/lib/userWorld.ts; keep the list of
+// non-default verticals in step with src/lib/verticals.ts.
+const INTERNSHIP_WORLD = { NOT: { org: { is: { vertical: { in: ['MARKETING'] } } } } };
+
 async function upsertUser({ email, fullName, role, extra = {} }) {
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findFirst({ where: { email, ...INTERNSHIP_WORLD }, orderBy: { createdAt: 'asc' } });
   if (existing) return existing;
   const hash = await bcrypt.hash(PASSWORD, 10);
   const user = await prisma.user.create({

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { announcementImageUrl } from '@/lib/announcementImage';
 import { resolveAnnouncementText, isAnnouncementFallback } from '@/lib/announcementText';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // GET — paginated announcement history for the signed-in user. Admin
 // broadcasts (POST /api/admin/announcements) always target every active user
@@ -37,7 +38,15 @@ export async function GET(request: Request) {
   // A session pointing at a user row that no longer exists gets an empty feed
   // rather than the entire history.
   if (!me) return NextResponse.json({ announcements: [], total: 0, page, pageSize });
-  const where = { createdAt: { gte: me.createdAt } };
+  // Only the reader's OWN tenant's broadcasts (#2542, #2590). The archive used to
+  // be every announcement ever sent by anyone, so a reader of the marketing
+  // product saw the internship product's broadcasts on their dashboard card (and
+  // the reverse) — and one person with an account in each world saw both feeds
+  // in each. The recipients of a broadcast are scoped the same way on the
+  // sending side (POST /api/admin/announcements); this is the reading side of the
+  // same wall, and the middleware scopes nothing while MT_ENFORCE_ISOLATION is
+  // off. A no-op for a single-tenant deployment.
+  const where = withinTenant({ createdAt: { gte: me.createdAt } }, await tenantWhere(session));
 
   const [total, announcements] = await Promise.all([
     prisma.announcement.count({ where }),
