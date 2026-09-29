@@ -11,6 +11,24 @@ async function signIn(page: Page, email: string, password: string, landing: stri
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
+  await shortcutsReady(page);
+}
+
+/**
+ * Wait until the palette's global keydown listener is attached (#2480).
+ *
+ * `waitForURL` resolves on the landing page's `load` event, and on a busy shard
+ * React is often still hydrating then. The shortcuts are a `document` listener
+ * added in a `useEffect`, so a key pressed in that window reaches nobody and is
+ * gone: the test pressed Ctrl+K / ? exactly once and then waited the full 15s
+ * expect timeout for a dialog that could never open (16.1-16.2s in 2 of 3
+ * scheduled runs). `CommandPalette` sets `<html data-shortcuts="ready">` in the
+ * same effect that registers the listener, so this waits for the real signal.
+ * It also stops the "Ctrl+K in an input does nothing" assertion from passing
+ * just because nothing was listening yet.
+ */
+async function shortcutsReady(page: Page) {
+  await expect(page.locator('html')).toHaveAttribute('data-shortcuts', 'ready', { timeout: 20_000 });
 }
 
 // ⌘K / Ctrl+K command palette (#2079). The runner is Linux, so Control is the
