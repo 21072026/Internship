@@ -36,7 +36,7 @@ test('a recovery code signs the user in exactly once', async ({ page }) => {
     const codes: string[] = enabled.recoveryCodes;
 
     // Hashed at rest: not one stored value contains a code, in any spelling.
-    const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const user = await prisma.user.findFirst({ where: { email }, select: { id: true } });
     const stored = await prisma.twoFactorRecoveryCode.findMany({
       where: { userId: user!.id },
       select: { codeHash: true, usedAt: true },

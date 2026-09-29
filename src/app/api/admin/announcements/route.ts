@@ -11,6 +11,7 @@ import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { checkBroadcastQuota, broadcastQuotaError } from '@/lib/broadcastQuota';
 import { withRequestScope } from '@/lib/requestContext';
 import { defaultLocale, isLocale } from '@/i18n/config';
@@ -120,9 +121,15 @@ async function handleGet(request: Request) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const pageSize = 20;
 
+  // The sending history of the caller's own tenant, by hand (#2542, #2590):
+  // recipient counts and bodies of another product's broadcasts are that
+  // tenant's business, and the middleware scopes nothing while
+  // MT_ENFORCE_ISOLATION is off.
+  const tenant = await tenantWhere(session);
   const [total, announcements] = await Promise.all([
-    prisma.announcement.count(),
+    prisma.announcement.count({ where: withinTenant({}, tenant) }),
     prisma.announcement.findMany({
+      where: withinTenant({}, tenant),
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -187,8 +194,17 @@ async function handlePost(request: Request) {
     imageData = Buffer.from(await image.arrayBuffer());
   }
 
+  // The audience is the SENDING TENANT's people, by hand (#2542, #2590). This
+  // used to be every active user of the database — harmless with one product,
+  // and with two it is a broadcast that crosses the wall: a marketing admin's
+  // announcement in every internship user's bell and inbox, and — because one
+  // person can hold an account in each world under the same address — twice in
+  // the inbox of anyone who has both. The middleware does not scope while
+  // MT_ENFORCE_ISOLATION is off, so the filter is explicit; it is also the same
+  // set the quota below is measured against, so the number checked and the
+  // number mailed cannot disagree. A no-op for a single-tenant deployment.
   const users = await prisma.user.findMany({
-    where: { isActive: true },
+    where: withinTenant({ isActive: true }, await tenantWhere(session)),
     select: { id: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
 

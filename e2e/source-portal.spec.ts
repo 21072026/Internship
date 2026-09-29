@@ -32,7 +32,7 @@ test('a source user can log in and submit mentees that show up for the admin', a
     expect(mine.assigned).toBe(false);
 
     // The mentee exists as a MENTEE tagged with this source (visible to admin filters).
-    const mentee = await prisma.user.findUnique({ where: { email: menteeEmail.toLowerCase() } });
+    const mentee = await prisma.user.findFirst({ where: { email: menteeEmail.toLowerCase() } });
     expect(mentee?.role).toBe('MENTEE');
     expect(mentee?.sourceId).toBe(source.id);
 

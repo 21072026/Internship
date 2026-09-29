@@ -24,7 +24,7 @@ test('self-registration opens the account once the email is verified', { tag: '@
     await page.waitForURL((u) => u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
     // Created as a MENTEE, inactive and unverified — the address is unproven.
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     expect(user?.role).toBe('MENTEE');
     expect(user?.isActive).toBe(false);
     expect(user?.emailVerified).toBe(false);
@@ -45,7 +45,7 @@ test('self-registration opens the account once the email is verified', { tag: '@
     const res = await page.request.post('/api/auth/verify-email', { data: { token: token!.token } });
     expect(res.ok()).toBeTruthy();
 
-    const verified = await prisma.user.findUnique({ where: { email } });
+    const verified = await prisma.user.findFirst({ where: { email } });
     expect(verified?.emailVerified).toBe(true);
     expect(verified?.isActive).toBe(true);
 
@@ -78,7 +78,7 @@ test('manual mode parks a self-registration for an admin', async ({ page }) => {
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     expect(user?.isActive).toBe(false);
     expect(user?.pendingApproval).toBe(true);
 
@@ -90,7 +90,7 @@ test('manual mode parks a self-registration for an admin', async ({ page }) => {
     expect(res.ok()).toBeTruthy();
 
     // Verified, but still waiting on a human — the email click cannot override it.
-    const after = await prisma.user.findUnique({ where: { email } });
+    const after = await prisma.user.findFirst({ where: { email } });
     expect(after?.emailVerified).toBe(true);
     expect(after?.isActive).toBe(false);
   } finally {

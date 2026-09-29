@@ -55,7 +55,7 @@ test('admin can bulk-deactivate and bulk-reactivate selected candidates', async 
     expect(afterReactivate?.isActive).toBe(true);
 
     // Safety: the endpoint never touches a non-MENTEE account even if targeted.
-    const adminUser = await prisma.user.findUnique({ where: { email: adminEmail } });
+    const adminUser = await prisma.user.findFirst({ where: { email: adminEmail } });
     const guardRes = await page.request.post('/api/admin/candidates/bulk', {
       data: { candidateIds: [adminUser!.id], action: 'deactivate' },
     });

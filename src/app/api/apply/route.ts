@@ -13,6 +13,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
 import { capSkills } from '@/lib/skills';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
 // "not right now" (acceptingMentees=false), or when a set mentorCapacity is
@@ -84,8 +85,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
+  // "Already exists" is asked in the world of the account being CREATED (#2590):
+  // the applicant becomes a MENTEE in the org of the mentor whose link this is
+  // (`mentor.orgId`, the very value the create below stamps — the default org,
+  // i.e. the INTERNSHIP world, for every mentor of the internship product). So an
+  // address that holds only a marketing account is not a duplicate here: it gets
+  // its own, independent internship account. Asking `findUnique({ email })` as
+  // before would refuse that person for an account that lives in a different
+  // product. The 409 keeps its wording; it says nothing about the other world.
+  if (await emailTakenInOrgWorld(email, mentor.orgId)) {
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
   }
 

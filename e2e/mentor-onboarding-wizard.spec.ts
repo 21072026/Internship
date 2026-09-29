@@ -52,7 +52,7 @@ test('a fresh mentor is redirected to the onboarding wizard exactly once', async
     await page.waitForURL((u) => u.pathname === '/mentor', { timeout: 20_000 });
 
     // Saved: bio, skills, interests and capacity persisted.
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     expect(user?.bio).toBe('I mentor frontend engineers.');
     expect(user?.skills).toEqual(['React', 'TypeScript']);
     expect(user?.interests).toBe('Frontend, mentoring');
@@ -85,7 +85,7 @@ test('skipping the wizard returns to the dashboard and never redirects again', a
     await page.getByTestId('mentor-onboarding-skip').click();
     await page.waitForURL((u) => u.pathname === '/mentor', { timeout: 20_000 });
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     expect(user?.mentorOnboardingSeenAt).not.toBeNull();
     expect(user?.bio).toBeNull();
 

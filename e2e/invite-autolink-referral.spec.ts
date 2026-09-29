@@ -54,7 +54,7 @@ test('an invitation carrying a mentor connects the two on registration', { tag: 
     });
     expect(res.status()).toBe(201);
 
-    const invitee = await prisma.user.findUnique({ where: { email: inviteeEmail } });
+    const invitee = await prisma.user.findFirst({ where: { email: inviteeEmail } });
     expect(invitee).toBeTruthy();
     // The admin who sent the invitation is the recorded source.
     expect(invitee!.referredById).toBe(admin.id);
@@ -95,7 +95,7 @@ test('a mentee referral link credits the mentee who shared it', async ({ request
     });
     expect(res.status()).toBe(201);
 
-    const newcomer = await prisma.user.findUnique({ where: { email: newcomerEmail } });
+    const newcomer = await prisma.user.findFirst({ where: { email: newcomerEmail } });
     expect(newcomer?.referredById).toBe(referrer.id);
     // Open registration still lands pending approval — the referral changes the
     // recorded source, not the approval rules.

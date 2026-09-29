@@ -38,6 +38,7 @@ import { statusChangeData } from './stageChange';
 import { trialLengthDaysFor } from './trialWindow';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
 import { normalizeEmailKey } from './duplicateDetection';
+import { findUsersByEmail, worldOfOrg } from './userWorld';
 import {
   AlreadyMentoredError,
   findActiveMentorship,
@@ -85,13 +86,38 @@ export class MarketingImportError extends Error {
 /**
  * Resolve `--owner`. The run's organization is this user's organization — the
  * file never names one.
+ *
+ * ONE PERSON, TWO WORLDS (#2590). `User.email` is no longer unique: the same
+ * mailbox can be an ADMIN in the internship product AND in the marketing
+ * product, two rows in two organizations, and this CLI has no host or session
+ * to say which one is meant. The lookup therefore has to look across worlds
+ * (`findUsersByEmail` — its one legitimate use: the address is only the handle
+ * for *choosing an organization*) and then decide, never guess:
+ *   - one account holds the address: it is the owner, exactly as before (and
+ *     the `owner_role` check below still names its role);
+ *   - several do: this is the MARKETING account importer, so the owner is the
+ *     one that lives in a marketing organization — and only when that is
+ *     unambiguous. Anything else is `owner_ambiguous`, because importing a
+ *     spreadsheet into the wrong product's tenant is not a mistake to make
+ *     quietly.
  */
 export async function resolveImportOwner(email: string): Promise<MarketingImportOwner> {
-  const owner = await prisma.user.findUnique({
-    where: { email: email.trim().toLowerCase() },
-    select: { id: true, email: true, orgId: true, role: true },
-  });
-  if (!owner) throw new MarketingImportError('owner_not_found', `Owner not found: ${email}`);
+  const accounts = await findUsersByEmail(email, { id: true, email: true, orgId: true, role: true });
+  if (accounts.length === 0) throw new MarketingImportError('owner_not_found', `Owner not found: ${email}`);
+
+  let owner = accounts[0];
+  if (accounts.length > 1) {
+    const worlds = await Promise.all(accounts.map((a) => worldOfOrg(a.orgId)));
+    const marketing = accounts.filter((_, i) => worlds[i] === 'MARKETING');
+    if (marketing.length !== 1) {
+      throw new MarketingImportError(
+        'owner_ambiguous',
+        `${accounts.length} accounts use ${email} and ${marketing.length} of them are in a marketing organization — ` +
+          'use an owner address that identifies exactly one organization',
+      );
+    }
+    owner = marketing[0];
+  }
   if (owner.role !== 'ADMIN' && owner.role !== 'MENTOR') {
     throw new MarketingImportError(
       'owner_role',
@@ -123,6 +149,9 @@ async function loadSnapshot(
   // would silently miss exactly the İ/ı/ü/ß rows #2405 is about.
   const accounts = await prisma.company.findMany({ where: { orgId }, select: ACCOUNT_SELECT });
 
+  // Every person lookup below carries `orgId` (#2590): the same address can be a
+  // different person-record in the other world, and that one is neither a lead
+  // to update nor a staff user to collide with.
   const leads = emailKeys.length
     ? await prisma.user.findMany({
         // MENTEE only: a staff user whose address is typed in as a contact is
@@ -216,6 +245,15 @@ async function placeOnFunnel(
     // on `Company.contactEmail`, which is where #2407 asks for it.
     // Role MENTEE because the Role enum is frozen (#2348) and MENTEE is the
     // side of a relation a lead occupies.
+    //
+    // No `emailTakenInOrgWorld()` call before this create (#2590), on purpose:
+    // the stand-in address is hashed together with the organization's id
+    // (`leadStandInEmail(key, orgKey)`) on the `import.local` domain, so the
+    // only account that can already hold it is THIS org's own earlier run — and
+    // that one was loaded into the snapshot by `loadSnapshot` (`funnel.leadId`
+    // is set, so this branch is not reached). The merchant's real mailbox,
+    // which could collide with an account in either world, is never used as a
+    // login address here.
     const created = await tx.user.create({
       data: {
         orgId: context.orgId,
@@ -511,6 +549,12 @@ export async function createMarketingAccount(input: {
   // A staff address typed in as the contact — the admin's own, a colleague's —
   // is refused before anything is planned (CONTACT_IS_USER). The import would
   // create a separate stand-in lead for it; a form asks the person instead.
+  //
+  // "Staff" means staff OF THIS ORGANIZATION, and the `orgId` in the filter is
+  // what keeps it that way (#2590): the same mailbox can also be an account in
+  // the internship world — a different person-record in another tenant — and
+  // typing the admin's own address as a lead's contact is only a collision when
+  // the account is in THIS org. An other-world account is not `contact_is_user`.
   const contactKey = normalizeEmailKey(fields.contactEmail ?? '');
   if (contactKey) {
     const staff = await runWithOrg(owner.orgId, () =>
@@ -537,8 +581,11 @@ export async function createMarketingAccount(input: {
       if (!companyId) return { kind: 'invalid', reason: 'the account was not written' };
       let leadId = funnel?.leadId ?? null;
       if (!leadId && funnel) {
+        // The lead this run just created, found by its stand-in address INSIDE
+        // the owner's org (#2590): the address is no longer globally unique, so
+        // a bare lookup by it could return another world's row.
         const lead = await runWithOrg(owner.orgId, () =>
-          prisma.user.findUnique({ where: { email: funnel.leadEmail }, select: { id: true } }),
+          prisma.user.findFirst({ where: { orgId: owner.orgId, email: funnel.leadEmail }, select: { id: true } }),
         );
         leadId = lead?.id ?? null;
       }

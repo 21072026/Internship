@@ -16,6 +16,8 @@ import {
   sendMentorApplicationRejectedEmail,
 } from '@/services/emailService';
 import { capSkills } from '@/lib/skills';
+import { originForWorld } from '@/lib/hostWorld';
+import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 
 // Admin decide endpoint for #904 mentor applications (#933): take into review,
 // approve (creates or upgrades the MENTOR account), or reject. Mirrors the
@@ -163,6 +165,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // action === 'approve' — the status flip and the account-side write must
     // succeed or fail together: an application is only ever left APPROVED if
     // the account operation actually worked.
+    //
+    // WORLDS (#2590): the account this approval creates or promotes lives in the
+    // APPLICATION'S world — the vertical of `application.orgId`, where a public
+    // application (filed with no org) reads as the default org, i.e. INTERNSHIP —
+    // and never in "whatever world an account with this address happens to be in"
+    // or in the approving admin's own. One mailbox may hold an internship account
+    // and a marketing account, so a bare by-address lookup could promote the
+    // wrong person-row (a marketing ADMIN account would even trip the role
+    // conflict below and block an applicant who has no internship account at
+    // all). Resolved once, outside the transaction: it is a read of the
+    // organization, not of anything this transaction writes.
+    const applicationWorld = await worldOfOrg(application.orgId);
     const result = await prisma.$transaction(async (tx) => {
       const updated = await tx.mentorApplication.updateMany({
         where: { id, status: { in: [...DECIDABLE] } },
@@ -170,8 +184,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       });
       if (updated.count === 0) return { outcome: 'already_decided' as const };
 
-      const existingUser = await tx.user.findUnique({
-        where: { email: application.email },
+      // Read through `tx` (not userWorld's helper, which uses the global client)
+      // so the lookup stays inside the transaction that flips the status.
+      const existingUser = await tx.user.findFirst({
+        where: { email: application.email, ...worldUserWhere(applicationWorld) },
+        orderBy: { createdAt: 'asc' },
         select: {
           id: true,
           role: true,
@@ -218,7 +235,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const token = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       const invitation = await tx.invitationToken.create({
-        data: { token, email: application.email, role: 'MENTOR', expiresAt, invitedById: session.user.id },
+        data: {
+          token,
+          email: application.email,
+          role: 'MENTOR',
+          expiresAt,
+          invitedById: session.user.id,
+          // The invitation carries the application's org so registration creates
+          // the mentor in THAT org's world (#2590) instead of depending on
+          // whichever tenant context the approving admin happens to be bound to.
+          // `?? undefined` keeps an org-less application exactly as before:
+          // nothing written, so registration resolves it to the default org.
+          orgId: application.orgId ?? undefined,
+        },
       });
       return { outcome: 'invited' as const, invitation };
     }).catch((e) => {
@@ -255,7 +284,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       await notify(user.id, 'mentor_application.approved', {}, '/mentor');
     } else {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      // The register link opens the application's own product (#2590) — the
+      // world the account will be created in. INTERNSHIP: the
+      // NEXT_PUBLIC_APP_URL origin, as before.
+      const appUrl = originForWorld(applicationWorld);
       void sendMentorApplicationApprovedEmail({
         to: application.email,
         fullName: application.fullName,

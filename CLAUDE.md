@@ -95,7 +95,8 @@ flowchart LR
 - `MENTEE` → `/portal` (own profile, assigned mentor/company)
 
 ### Data model (Prisma) — key models
-- **User** (`role`: ADMIN | MENTOR | MENTEE) — profile fields, `skills` (JSON)
+- **User** (`role`: ADMIN | MENTOR | MENTEE) — profile fields, `skills` (JSON); `email` is unique
+  per *world*, not globally (one row per product a person is in — `docs/worlds.md`)
 - **MentorshipRelation** (mentor ↔ mentee, optional company) — `status` (ACTIVE|COMPLETED)
   and `pipelineStatus` (granular stage, see below)
 - **InteractionLog** (Meeting | Feedback | Email) per relation
@@ -154,9 +155,11 @@ workaround, #636, and it compiled on every PR push).
 | Preview | `internship-crm-preview` (+ `-2`) | 3201 (+3211) | https://preview.interncrm.com | `preview-<sha>` | push to `main` (+6h drift check, manual) |
 | Topic (per PR) | `internship-crm-pr<N>` | 3400–3499 | `https://pr<N>.interncrm.com` | `topic-pr<N>` | every push to the PR |
 
-Production and Preview each **additionally serve the MARKETING vertical's landing on a
+Production and Preview each **additionally serve the MARKETING vertical on a
 second hostname from the same container** — `marketing.bcsit-gmbh.de` (:3200) and
-`marketing.bcsit-gmbh.dev` (:3201), #2540. They are hand-written Caddy site files with
+`marketing.bcsit-gmbh.dev` (:3201), #2540. That host is not only a landing: it is the
+door of the marketing *product* — the URL a person signs in on decides which of their
+accounts they get (`docs/worlds.md`, #2590). They are hand-written Caddy site files with
 automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The retired
 `*.ersah.in` marketing names redirect there, and that apex now serves **mail only**.
 
@@ -542,6 +545,24 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   which cannot follow the request host by nature. The rule is unit-tested
   (`npm run test:served-hosts`) and pinned end-to-end with forged proxy headers
   (`e2e/host-coherent-redirects.spec.ts`).
+- **Bir kişi, iki dünya** ([`docs/worlds.md`](docs/worlds.md), #2590): oturum açılan **URL** ürünü
+  seçer — `MARKETING_HOSTS`'taki host ⇒ MARKETING, diğer her host ⇒ INTERNSHIP
+  (`src/lib/hostWorld.ts`) — ve aynı e-posta her dünyada ayrı bir `User` **satırı**
+  olabilir (`User.email` artık `@unique` değil, DB'de `@@unique([email, orgId])`; üyelik
+  değil satır, çünkü `orgId` tenant filtrelerinin anahtarı). Dört kural yük taşıyor:
+  (1) e-postadan hesap arama **yalnızca** `src/lib/userWorld.ts` üzerinden
+  (`findUserInWorld` / `emailTakenInOrgWorld`, her arama hangi dünyada olduğunu söyler) —
+  çıplak `findFirst({ where: { email } })` bir kişiyi sessizce yanlış ürüne alır ve
+  `scripts/check-user-email-lookups.mjs` CI'da kırar; her `user.create`'ten önce
+  `emailTakenInWorld` sorulur, çünkü DB yalnızca aynı org'daki kopyayı yakalar;
+  (2) "bu e-posta zaten kayıtlı" hep *bu dünyada* demektir — öbür dünyadaki hesap davet
+  ve kayıt yolunu kapatmaz; (3) bir postadaki bağlantı alıcının **kendi** ürününü açar:
+  origin `originForWorld(...)` / `appUrlFor(orgId)`'den gelir, `NEXTAUTH_URL`'den değil;
+  (4) bir akış yalnızca üretildiği satıra etki eder (token'lar `userId` anahtarlı), ama
+  **yanlış-parola sayacı adrese göredir ve iki dünya arasında paylaşılır** — bilinçli. Doğru
+  parola + yanlış dünya `WRONG_WORLD_<VERTICAL>` verir ve giriş sayfası öbür kapıya
+  bağlantı gösterir; oturum yalnızca kendi dünyasının host'unda geçerlidir (`session`
+  callback'i yanlış host'ta `null` döner).
 - **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
   inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted
   verbatim), forwards it to the handler and echoes it on **every** response, error responses

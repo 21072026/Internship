@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 
 // #817 — per-stage service levels.
@@ -32,7 +32,7 @@ async function seedPair(prefix: string, orgId: string | null) {
 
 test('every stage-moving endpoint applies the org’s service level', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   const a = await seedPair('sla-a', orgId);
   const b = await seedPair('sla-b', orgId);
@@ -104,7 +104,7 @@ test('every stage-moving endpoint applies the org’s service level', async ({ p
 
 test('an organisation that configures no service level keeps its deadlines untouched', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   if (orgId) await prisma.stageSla.deleteMany({ where: { orgId } });
   const pair = await seedPair('sla-none', orgId);
@@ -130,7 +130,7 @@ test('an organisation that configures no service level keeps its deadlines untou
 
 test('an admin sets a service level from settings and it comes back', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   try {
     await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
@@ -178,7 +178,7 @@ test('an admin sets a service level from settings and it comes back', async ({ p
 
 test('the overdue reminder fires once per deadline, however often the job runs', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   const pair = await seedPair('sla-cron', orgId);
   // Already past its deadline, and never reminded about.

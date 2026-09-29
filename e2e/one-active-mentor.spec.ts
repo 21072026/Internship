@@ -79,7 +79,7 @@ test(
       });
       expect(res.status()).toBe(201);
 
-      const invitee = await prisma.user.findUnique({ where: { email: inviteeEmail } });
+      const invitee = await prisma.user.findFirst({ where: { email: inviteeEmail } });
       expect(invitee).toBeTruthy();
 
       const active = await prisma.mentorshipRelation.findMany({

@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { runUnscoped } from '@/lib/tenantAmbient';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
 // - hardDeleteUser: same cascade cleanup as the existing self-service account
@@ -27,9 +28,30 @@ import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 // address would sit in the newsletter history of an account whose whole point
 // is that it no longer identifies anybody. Deleted by both address and id so
 // neither an already-detached row nor a renamed one is missed.
+//
+// ONE PERSON, TWO WORLDS (#2590). The same address can be an account in the
+// internship product AND in the marketing product — two `User` rows, two
+// tenants. Both of those tables are keyed by ADDRESS, so "delete every row for
+// this address" would erase the OTHER world's account's delivery log and
+// newsletter history when only one world's account was erased. Erasure acts on
+// exactly the one user row (every other table here is keyed by userId): the
+// address-keyed sweep runs only when no other account still holds the address,
+// and `NewsletterSend` rows that belong to this user by id are always removed.
+// The other account is looked up outside the tenant filter — it lives in a
+// different organization, which is the whole point. When the address survives
+// on the other account, the delivery-log rows for it stay: they are the other
+// account's own history, and there is no column that says which world sent
+// one. Once that account is erased too, its own sweep finds no holder and
+// clears them.
 async function forgetEmailLog(userId: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
   if (!user?.email) return;
+  const addressStillHeld =
+    (await runUnscoped(() => prisma.user.count({ where: { email: user.email, id: { not: userId } } }))) > 0;
+  if (addressStillHeld) {
+    await prisma.newsletterSend.deleteMany({ where: { userId } });
+    return;
+  }
   await prisma.emailLog.deleteMany({ where: { to: user.email } });
   await prisma.newsletterSend.deleteMany({ where: { OR: [{ email: user.email }, { userId }] } });
 }

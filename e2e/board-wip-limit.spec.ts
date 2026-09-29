@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 
 // Configurable board WIP limits (#1439).
@@ -58,7 +58,7 @@ async function cleanupSeed(seeded: { emails: string[]; relationIds: string[] }) 
 
 test('a per-stage limit is what the board applies, and 0 silences one column', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   const token = `WipZeta${Date.now()}`;
   const a = await seedColumn(token, STAGE_A, 2, orgId);
@@ -133,7 +133,7 @@ test('a per-stage limit is what the board applies, and 0 silences one column', a
 
 test('with nothing configured the board keeps the limit it shipped with', async ({ page }) => {
   test.slow();
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   // No stage rows, no setting written: an installation that configures nothing
   // must see exactly the board it saw before this became configurable.

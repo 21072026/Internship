@@ -66,6 +66,13 @@ export async function POST(request: Request) {
   // only screen that shows it — the "row left at orgId = NULL vanishes from the
   // product" failure docs/tenant-isolation.md warns about. When host-based
   // tenancy lands, this is the line that resolves the real tenant.
+  //
+  // WORLDS (#2590): the default org is the INTERNSHIP world, so this public form
+  // files an internship enquiry no matter which host it was posted on. Nothing on
+  // this route looks an account up by address, so there is no per-world lookup to
+  // make here — the org stamp below is the whole rule. (Converting the enquiry
+  // into a company login, lib/companyProvisioning.ts, asks its duplicate
+  // questions in the world of the organization it provisions into.)
   const inquiry = await prisma.companyInquiry.create({
     data: {
       orgId: await defaultOrgId(),

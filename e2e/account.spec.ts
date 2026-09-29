@@ -31,7 +31,7 @@ test('admin can change their password from the account page', async ({ page }) =
     await done;
     await page.waitForTimeout(500);
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     expect(await bcrypt.compare(newPw, user!.password)).toBe(true);
   } finally {
     await cleanupByEmail(email);

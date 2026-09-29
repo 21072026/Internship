@@ -27,6 +27,9 @@ import crypto from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { originForWorld, type World } from '@/lib/hostWorld';
+import { worldOfOrg } from '@/lib/userWorld';
 import { sendInvitationEmail } from '@/services/emailService';
 
 export const INVITATION_TTL_DAYS = 7;
@@ -79,9 +82,48 @@ export interface CreatedInvitation {
   mailError: unknown;
 }
 
-export function invitationRegisterUrl(token: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  return `${appUrl}/auth/register?token=${token}`;
+/**
+ * The link an invitee opens to register.
+ *
+ * WORLDS (#2590): the link must open the product the invitation is FOR. An
+ * invitation into a MARKETING organization that pointed at the internship
+ * origin would send the invitee through the internship host's register page and
+ * — the moment they signed in — bounce them off it with "wrong door", because
+ * the account they just created lives in the marketing world. So the origin is
+ * the world's (`originForWorld`), which for INTERNSHIP is the very
+ * NEXT_PUBLIC_APP_URL origin this function always used (that variable is set in
+ * every deployed environment), so no existing link changes. `world` defaults to
+ * INTERNSHIP so a caller with no organization to ask keeps the historical link.
+ */
+export function invitationRegisterUrl(token: string, world: World = 'INTERNSHIP'): string {
+  return `${originForWorld(world)}/auth/register?token=${token}`;
+}
+
+/**
+ * `where` fragment for "the invitations of THIS organization" — the key every
+ * same-address invitation lookup uses since a mailbox can be invited into both
+ * worlds at once (#2590).
+ *
+ * Before worlds an address was one person's, so "is there a pending invitation
+ * for this email" was a global question. It no longer is: an open invitation
+ * into the marketing organization must not block (or be mistaken for) the
+ * internship one for the same mailbox — they end in two independent accounts.
+ * The unit that IS still exclusive is (address, organization), which is what
+ * this filters on.
+ *
+ * A NULL `orgId` is the default organization (rows minted before the deploy
+ * backfill stamped them, or by an inviter who had no org yet — registration
+ * resolves it the same way), so for the default org both spellings match, and
+ * a null `orgId` argument means the default org. Nothing else matches NULL.
+ * Behaviour-neutral on a single-organization deployment: every row there is the
+ * default org's, so this selects exactly the rows the old unscoped filter did.
+ */
+export async function invitationOrgWhere(
+  orgId: string | null | undefined,
+): Promise<Prisma.InvitationTokenWhereInput> {
+  const fallback = await defaultOrgId();
+  const effective = orgId ?? fallback;
+  return effective === fallback ? { OR: [{ orgId: fallback }, { orgId: null }] } : { orgId: effective };
 }
 
 /** The persisted half of an invitation — no mail attempted yet. */
@@ -185,7 +227,10 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Cr
   return {
     invitationId: persisted.invitationId,
     token: persisted.token,
-    registerUrl: invitationRegisterUrl(persisted.token),
+    // The link opens the product the invitation's ORGANIZATION belongs to
+    // (#2590) — the same world the mail's button must point at (the mail
+    // builder derives it from the `orgId` handed to it above).
+    registerUrl: invitationRegisterUrl(persisted.token, await worldOfOrg(input.orgId)),
     emailSent,
     mailError,
   };

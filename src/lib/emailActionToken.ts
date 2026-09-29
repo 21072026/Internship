@@ -112,6 +112,13 @@ export function verifyEmailActionToken(token: string): EmailAction | 'expired' |
   return null;
 }
 
+// The DEFAULT origin (the internship product). The builders below take an
+// optional trailing `origin` (#2590): the recipient of a "mark as read" or a
+// reaction link may hold an internship account and a marketing account under one
+// address, and the link must open the product THEIR account lives in. The sender
+// — which knows the recipient's organization — resolves it and hands it over;
+// this module stays free of any database read. Omitted, the URL is
+// byte-for-byte what it always was.
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 }
@@ -123,13 +130,13 @@ function appUrl(): string {
  * state would fire a reaction nobody clicked. The page performs the action from
  * the browser instead, and scanners do not run scripts.
  */
-export function emailActionUrl(action: EmailAction): string {
-  return `${appUrl()}/m/${encodeURIComponent(makeEmailActionToken(action))}`;
+export function emailActionUrl(action: EmailAction, origin: string = appUrl()): string {
+  return `${origin}/m/${encodeURIComponent(makeEmailActionToken(action))}`;
 }
 
 /** "Mark this conversation as read" link for a notification or digest email. */
-export function markReadUrl(relationId: string, userId: string): string {
-  return emailActionUrl({ kind: 'read', relationId, userId });
+export function markReadUrl(relationId: string, userId: string, origin?: string): string {
+  return emailActionUrl({ kind: 'read', relationId, userId }, origin);
 }
 
 /**
@@ -137,9 +144,9 @@ export function markReadUrl(relationId: string, userId: string): string {
  * same five emoji the in-app composer offers, so reacting from the inbox and
  * reacting in the app produce the same thing.
  */
-export function reactionLinksHtml(messageId: string, userId: string): string {
+export function reactionLinksHtml(messageId: string, userId: string, origin?: string): string {
   const links = EMAIL_REACTION_EMOJIS.map((emoji, emojiIndex) => {
-    const url = emailActionUrl({ kind: 'react', messageId, userId, emojiIndex });
+    const url = emailActionUrl({ kind: 'react', messageId, userId, emojiIndex }, origin);
     return `<a href="${url}" style="text-decoration:none;font-size:20px;padding:4px 6px;" title="${emoji}">${emoji}</a>`;
   }).join('');
   return `<div style="margin:8px 0;">${links}</div>`;

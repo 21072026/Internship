@@ -45,6 +45,13 @@ import {
   type EmailPrefUser,
 } from '@/lib/emailGroups';
 import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/lib/unsubscribeToken';
+// WORLDS (#2590): a link in a mail must open the product the RECIPIENT'S account
+// lives in. The pure host/world rule and the org → world read are the two
+// foundation modules; this file only ever asks them, it keeps no second copy.
+import { originForWorld, type World } from '@/lib/hostWorld';
+import { worldOfOrg } from '@/lib/userWorld';
+import { verticalsFor } from '@/lib/verticalContext';
+import { DEFAULT_VERTICAL, toVerticalKey } from '@/lib/verticals';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -309,12 +316,17 @@ const UNSUB_FOOTER_MARKER = 'data-unsub-footer="1"';
 //     `white-space:pre-wrap` div, and this footer is injected *inside* that
 //     wrapper — newlines in the markup would render as blank lines there. The
 //     footer's own `white-space:normal` defuses the inherited pre-wrap.
-function unsubscribeFooterHtml(userId: string, group: EmailGroupId, locale?: string | null): string {
+//
+// `origin` (#2590): the host these two links open on — the product the RECIPIENT'S
+// account lives in, resolved by sendEmail. Optional and trailing so the unit
+// specs (and any caller that only holds a user id) keep the internship origin
+// they always got.
+function unsubscribeFooterHtml(userId: string, group: EmailGroupId, locale?: string | null, origin?: string): string {
   const dict = getDictionary(resolveLocale(locale));
   const U = dict.unsubscribe;
   const name = dict.emailGroups[group].name;
-  const unsub = unsubscribeUrl(userId, group);
-  const prefs = emailPreferencesUrl(userId);
+  const unsub = unsubscribeUrl(userId, group, origin);
+  const prefs = emailPreferencesUrl(userId, origin);
   const line = esc(U.footerLine.replace('{group}', name));
   const off = esc(U.footerUnsubscribe.replace('{group}', name));
   const all = esc(U.footerManage);
@@ -336,6 +348,13 @@ function withUnsubscribeFooter(html: string, footer: string): string {
 
 // RFC 2919 wants a globally unique id in a namespace we own. The app host is
 // stable, ASCII and always present; a group id is already a dot-atom.
+//
+// Deliberately NOT world-aware (#2590): List-Id is an IDENTIFIER, not a link. It
+// names the mailing list in a namespace this deployment owns, and mail clients
+// group and de-duplicate on it — so it has to be the same string for every
+// recipient of a group, whichever product their account lives in. Only the
+// List-Unsubscribe URL below (something a person's client opens) follows the
+// recipient's world.
 function listIdHost(): string {
   try {
     return new URL(appUrl()).host;
@@ -344,8 +363,9 @@ function listIdHost(): string {
   }
 }
 
-function unsubscribeHeaders(userId: string, group: EmailGroupId): Record<string, string> {
-  const one = oneClickUnsubscribeUrl(userId, group);
+function unsubscribeHeaders(userId: string, group: EmailGroupId, origin?: string): Record<string, string> {
+  // `origin` (#2590) — see unsubscribeFooterHtml: the recipient's own product.
+  const one = oneClickUnsubscribeUrl(userId, group, origin);
   // The mailto: form is advertised ONLY when a mailbox is configured, because
   // src/services/inboundMailBridge.ts + routeInboundEmail understand
   // `reply+<token>@` and nothing else — they would black-hole an unsubscribe
@@ -443,6 +463,7 @@ export async function sendEmail({
   locale,
   prefs,
   headers,
+  orgId,
 }: {
   to: string;
   subject: string;
@@ -511,6 +532,20 @@ export async function sendEmail({
   // said it owns the opt-out, and two of them is worse than either. See the merge
   // in the body below.
   headers?: Record<string, string>;
+  // The recipient's ORGANIZATION (`User.orgId`), when the caller already holds it
+  // (#2590). It decides only one thing here: which product's host the footer's
+  // unsubscribe / preference links and the List-Unsubscribe URL point at — the
+  // recipient's own (an INTERNSHIP account: the origin they always had;
+  // a MARKETING account: the marketing host).
+  //
+  // Three states, and the difference matters: a string or an explicit `null`
+  // (the default org ⇒ INTERNSHIP) is an answer and costs nothing; `undefined`
+  // means "not told", and for a gated send this function then asks the database
+  // — folded into the preference read it makes anyway when it can, so the common
+  // path pays no extra round trip. A broadcast that hands over `prefs` (and so
+  // skips that read) should hand over `orgId` too; without it each recipient
+  // costs one small extra read.
+  orgId?: string | null;
 }) {
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
@@ -524,6 +559,8 @@ export async function sendEmail({
 
   const groupId = group ?? groupForCategory(category);
   const gated = unsubscribable(groupId, userId);
+  // The recipient's world, when the preference read below happened to learn it.
+  let storedWorld: World | undefined;
 
   // ── CENTRAL ENFORCEMENT ───────────────────────────────────────────────────
   //
@@ -541,11 +578,21 @@ export async function sendEmail({
   if (gated) {
     // `prefs` when the caller already holds this recipient's row, a read
     // otherwise. Same decision either way — see the parameter's note above.
-    const u =
-      prefs ??
-      (await prisma.user
-        .findUnique({ where: { id: userId! }, select: { emailNotifications: true, notificationPrefs: true } })
-        .catch(() => null));
+    //
+    // The read also brings back the recipient's organization vertical (#2590),
+    // so the footer below can point at the recipient's own product without a
+    // second query. A nested select on the same primary-key lookup, not a join
+    // anybody would notice.
+    const stored = prefs
+      ? null
+      : await prisma.user
+          .findUnique({
+            where: { id: userId! },
+            select: { emailNotifications: true, notificationPrefs: true, org: { select: { vertical: true } } },
+          })
+          .catch(() => null);
+    const u = prefs ?? stored;
+    if (orgId === undefined && stored) storedWorld = toVerticalKey(stored.org?.vertical);
     // Fail OPEN on a missing row or a DB error, exactly like notifyIfAllowed: a
     // preference lookup that breaks must not silently swallow the mail.
     if (u && !emailGroupAllowed(u, groupId!)) {
@@ -601,8 +648,21 @@ export async function sendEmail({
   let body = html;
   let computed: Record<string, string> | undefined;
   if (gated && !callerOwnsOptOut) {
-    body = withUnsubscribeFooter(html, unsubscribeFooterHtml(userId!, groupId!, locale));
-    computed = unsubscribeHeaders(userId!, groupId!);
+    // WORLDS (#2590): the opt-out links open the recipient's OWN product. The
+    // pages behind them are token-only and host-agnostic (the token names the
+    // user row, the host can neither widen nor redirect it), so this is about
+    // arriving in the right product — its brand, its language, its next click —
+    // not about access. It is also why a failure here degrades instead of
+    // throwing: losing a whole mail because the origin of its FOOTER could not
+    // be resolved is the wrong trade; the default origin's page still works.
+    const origin =
+      orgId !== undefined
+        ? await appUrlFor(orgId).catch(() => appUrl())
+        : storedWorld !== undefined
+          ? appUrlForWorld(storedWorld)
+          : await appUrlForUser(userId).catch(() => appUrl());
+    body = withUnsubscribeFooter(html, unsubscribeFooterHtml(userId!, groupId!, locale, origin));
+    computed = unsubscribeHeaders(userId!, groupId!, origin);
   }
   // Caller last: an explicit header beats one we derived. Note the group check
   // above still ran either way — owning the *presentation* of an opt-out is not
@@ -698,8 +758,11 @@ export async function sendInvitationEmail({
   /** The inviter's choice, stored on InvitationToken.locale. */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const registerUrl = `${appUrl}/auth/register?token=${token}`;
+  // WORLDS (#2590): the invitation opens the product of the organization that is
+  // inviting — the invited person may already hold an account in the OTHER
+  // product under this very address, and accepting here creates the second,
+  // independent one. INTERNSHIP (or no org): the origin it always had.
+  const registerUrl = `${await appUrlFor(orgId)}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
   const I = getDictionary(resolved).notifications.invitationEmail;
@@ -774,8 +837,11 @@ export async function sendPasswordResetEmail({
   /** The account's User.preferredLanguage (or, for SET_INITIAL, its creator's). */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const resetUrl = `${appUrl}/auth/reset?token=${token}`;
+  // WORLDS (#2590): the reset page must open in the product the ACCOUNT lives in
+  // (`orgId` is that account's org; every caller passes the row's own). A reset
+  // link into the other product would ask the right person to reset a password
+  // on a site where that account does not exist. No org ⇒ the default product.
+  const resetUrl = `${await appUrlFor(orgId)}/auth/reset?token=${token}`;
   const isInitial = purpose === 'SET_INITIAL';
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
@@ -837,8 +903,8 @@ export async function sendVerificationEmail({
   /** The account's User.preferredLanguage. */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const verifyUrl = `${appUrl}/auth/verify?token=${token}`;
+  // WORLDS (#2590): same rule as the reset link — the account's own product.
+  const verifyUrl = `${await appUrlFor(orgId)}/auth/verify?token=${token}`;
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
   const V = getDictionary(resolved).notifications.verificationEmail;
@@ -890,6 +956,7 @@ export async function sendMeetingInviteEmail({
   icsUid,
   sequence,
   locale,
+  orgId,
 }: {
   to: string;
   fullName?: string | null;
@@ -923,10 +990,19 @@ export async function sendMeetingInviteEmail({
   // alongside `timezone`, which the mail already reads per recipient for exactly
   // the same reason. Unset → the deployment default, as before.
   locale?: string | null;
+  // The invitee's organization (`User.orgId`), for the origin of the RSVP buttons
+  // and the time-zone link (#2590). Trailing and optional so existing callers
+  // keep compiling: when it is omitted the account behind `userId` is asked, and
+  // with neither (an address-only caller) the mail gets the default product.
+  orgId?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
-  const no = `${appUrl}/rsvp/${rsvpToken}?r=no`;
+  // WORLDS (#2590): an RSVP button must open the product the invitee's account
+  // lives in. The token in the URL is the credential, but the page it opens is
+  // that product's, and a marketing invitee sent to the internship host lands in
+  // a product they have no account in.
+  const base = await appUrlForRecipient(orgId, userId);
+  const yes = `${base}/rsvp/${rsvpToken}?r=yes`;
+  const no = `${base}/rsvp/${rsvpToken}?r=no`;
   const resolved = resolveLocale(locale);
   const M = getDictionary(resolved).notifications.meetingInviteEmail;
   // A meeting with no set time is just a shared link — skip the "when" line and
@@ -974,7 +1050,7 @@ export async function sendMeetingInviteEmail({
         <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">${esc(M.rsvpYes)}</a>
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.rsvpNo)}</a>
         ` : ''}
-        ${when ? timeZoneNote(timeZone, resolved) : ''}
+        ${when ? timeZoneNote(timeZone, resolved, base) : ''}
       </div>
     `,
   });
@@ -1003,6 +1079,7 @@ export async function sendMeetingGuestInviteEmail({
   icsUid,
   sequence,
   locale,
+  orgId,
 }: {
   to: string;
   name?: string | null;
@@ -1023,8 +1100,13 @@ export async function sendMeetingGuestInviteEmail({
   // there is no preference of their own to read; the only person who knows
   // anything about them is whoever typed their address into the scheduler.
   locale?: string | null;
+  // The ORGANIZER's organization (#2590). A guest has no account and so no world
+  // of their own; the person who invited them does, and the RSVP page they are
+  // sent to is that person's product. Trailing and optional: omitted, the guest
+  // gets the default (internship) origin, which is what every guest mail was.
+  orgId?: string | null;
 }) {
-  const url = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const url = await appUrlFor(orgId);
   const yes = `${url}/rsvp/${rsvpToken}?r=yes`;
   const no = `${url}/rsvp/${rsvpToken}?r=no`;
   const resolved = resolveLocale(locale);
@@ -1153,8 +1235,115 @@ function ctaBlock(brand: { accent: string }, url: string, label: string): string
   return `<a href="${url}" style="display:inline-block;background-color:${brand.accent};color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">${label}</a>`;
 }
 
+// ── Which product does this mail's link open? (#2590) ───────────────────────
+//
+// One person can hold two accounts under one address — an internship account and
+// a marketing account — and the host they sign in on decides which product they
+// are in. A link in a mail is a promise about the same thing: the recipient
+// clicks it and must land in the product THEIR account lives in. A marketing
+// user who receives a password-reset, invitation, RSVP or "open your dashboard"
+// link that points at the internship host lands on a sign-in page for a product
+// they have no account in there (or, worse, on the wrong person's tenant).
+//
+// So a recipient-facing origin is never read off the environment at the call
+// site again. It comes from one of the resolvers below, in this order of
+// preference:
+//
+//   appUrlFor(orgId)          one recipient whose organization the builder knows
+//                             (every builder that already takes `orgId` for its
+//                             brand header). The world is the org's vertical.
+//   appUrlForRecipient(...)   the same, falling back to the account behind a
+//                             `userId` when the caller did not pass the org — so
+//                             the many existing call sites that only hand over
+//                             `userId` are correct without being touched.
+//   createOriginBook()        the digest / reminder crons that loop over
+//                             recipients of MANY organizations. It resolves the
+//                             origin PER RECIPIENT from that recipient's own
+//                             `orgId`, one query per DISTINCT org per run — never
+//                             one origin per batch, which would stamp whoever
+//                             came first onto everybody else's mail.
+//   appUrl()                  the anonymous / identity-less default (no recipient
+//                             account exists yet or at all: an applicant, a
+//                             guest, an operator alert). INTERNSHIP, by design.
+//
+// BYTE-IDENTICAL FOR INTERNSHIP. For the INTERNSHIP world every resolver returns
+// exactly what `appUrl()` returned before this change — not `originForWorld()`'s
+// normalised form (which also strips a trailing slash and uses the configured
+// origin as its fallback) — so a single-world deployment's mail does not change
+// by a byte. Only a non-default world takes the new origin.
+//
+// A LOOKUP THAT FAILS FAILS LOUD. These resolvers do not swallow a database
+// error and fall back to the internship origin: for the links a person cannot do
+// without (reset, verification, invitation) a wrong-world link is worse than a
+// mail that reports itself failed, and every caller already handles a throw from
+// its builder. The one deliberate exception is sendEmail's footer (see there).
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
+/** A world's origin. INTERNSHIP is the legacy `appUrl()` verbatim (see above). */
+function appUrlForWorld(world: World): string {
+  return world === DEFAULT_VERTICAL ? appUrl() : originForWorld(world);
+}
+
+/**
+ * The origin for a mail addressed to a member of this organization. A missing
+ * org (`null`/`undefined`) is the default org, i.e. the internship product.
+ * Exported so a sender that lives outside this file (a route building its own
+ * digest, the notification worker) resolves the origin the same way.
+ */
+export async function appUrlFor(orgId?: string | null): Promise<string> {
+  if (!orgId) return appUrl();
+  return appUrlForWorld(await worldOfOrg(orgId));
+}
+
+// The origin for the account behind a user id — for the senders whose callers
+// hand over a `userId` and never told us the organization. One primary-key read.
+async function appUrlForUser(userId: string | null | undefined): Promise<string> {
+  if (!userId) return appUrl();
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
+  return appUrlFor(row?.orgId);
+}
+
+/**
+ * The origin for one recipient, from whatever the builder was given.
+ *
+ * `orgId` wins whenever it is an ANSWER — a string, or an explicit `null` (which
+ * is the default org, i.e. INTERNSHIP). Only `undefined` ("the caller did not
+ * say") sends us to the account behind `userId`; with neither, the mail is
+ * identity-less and gets the default origin.
+ */
+async function appUrlForRecipient(orgId?: string | null, userId?: string | null): Promise<string> {
+  if (orgId !== undefined) return appUrlFor(orgId);
+  return appUrlForUser(userId);
+}
+
+/**
+ * Per-recipient origins for a batch (a cron pass over many people).
+ *
+ * `urlFor(orgId)` is async and fills lazily, one query per distinct org per book;
+ * `prefetch(orgIds)` warms many at once with a single query, which is what a
+ * loop over hundreds of recipients should do first (`verticalsFor` is the
+ * batched form of the same read). A book is created per RUN and never kept at
+ * module scope: an organization whose product an admin just changed must show
+ * up correctly in the next run, exactly like the newsletter's brand cache.
+ */
+function createOriginBook() {
+  const worlds = new Map<string, World>();
+  const prefetch = async (orgIds: Iterable<string | null | undefined>): Promise<void> => {
+    const missing = [...new Set([...orgIds].filter((id): id is string => !!id && !worlds.has(id)))];
+    if (missing.length === 0) return;
+    const found = await verticalsFor(missing);
+    // An organization that is not there (deleted, stale id) reads as the default
+    // world — verticalFor's own rule for the single-org form of the same question.
+    for (const id of missing) worlds.set(id, found.get(id) ?? DEFAULT_VERTICAL);
+  };
+  const urlFor = async (orgId: string | null | undefined): Promise<string> => {
+    if (!orgId) return appUrl();
+    await prefetch([orgId]);
+    return appUrlForWorld(worlds.get(orgId) ?? DEFAULT_VERTICAL);
+  };
+  return { prefetch, urlFor };
 }
 
 // --- Which clock is this email on? (#1210) ----------------------------------
@@ -1171,12 +1360,17 @@ function appUrl(): string {
 // that carry it are translated now, so the rule points the other way: pass the
 // same `locale` the body was rendered with. Omitting it still yields English,
 // which is correct for the templates that have not been translated yet.
-function timeZoneNote(timeZone?: string | null, locale?: string | null): string {
+//
+// `origin` (#2590): the account page it links to is the RECIPIENT'S product's,
+// so the builder that already resolved the recipient's origin hands it over.
+// Optional and trailing: the sync callers/specs that pass nothing keep the
+// internship origin.
+function timeZoneNote(timeZone?: string | null, locale?: string | null, origin?: string): string {
   const zone = resolveTimeZone(timeZone);
   const T = getDictionary(resolveLocale(locale)).notifications.emailTimes;
   return `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
     ${esc(T.zoneNote.replace('{zone}', zone))}
-    <a href="${appUrl()}/account#timezone" style="color:#9ca3af;text-decoration:underline;">${esc(T.zoneNoteLink)}</a>.
+    <a href="${origin ?? appUrl()}/account#timezone" style="color:#9ca3af;text-decoration:underline;">${esc(T.zoneNoteLink)}</a>.
   </p>`;
 }
 
@@ -1254,6 +1448,8 @@ export async function sendMentorshipDecisionEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   const heading = approved ? 'Your mentorship request was approved' : 'Update on your mentorship request';
   const body = approved
     ? `<p>Good news — your mentorship request has been approved${mentorName ? ` and <strong>${esc(mentorName)}</strong> is now your mentor` : ''}. Open your portal to say hi and get started.</p>`
@@ -1270,7 +1466,7 @@ export async function sendMentorshipDecisionEmail({
         ${brandHeader(brand, heading)}
         ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
         ${body}
-        ${ctaBlock(brand, `${appUrl()}/portal`, 'Open your portal')}
+        ${ctaBlock(brand, `${base}/portal`, 'Open your portal')}
       </div>
     `,
   });
@@ -1290,6 +1486,8 @@ export async function sendMenteeAssignedEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   await sendEmail({
     to,
     userId,
@@ -1302,7 +1500,7 @@ export async function sendMenteeAssignedEmail({
         ${mentorName ? `<p>Hi ${esc(mentorName)},</p>` : ''}
         <p><strong>${esc(menteeName)}</strong> has been assigned to you as a mentee. Reach out to
         them to get the mentorship started, and log your first interaction when you do.</p>
-        ${ctaBlock(brand, `${appUrl()}/mentor`, 'Open your dashboard')}
+        ${ctaBlock(brand, `${base}/mentor`, 'Open your dashboard')}
       </div>
     `,
   });
@@ -1324,6 +1522,8 @@ export async function sendMentorAssignedEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   await sendEmail({
     to,
     userId,
@@ -1336,7 +1536,7 @@ export async function sendMentorAssignedEmail({
         ${menteeName ? `<p>Hi ${esc(menteeName)},</p>` : ''}
         <p><strong>${esc(mentorName)}</strong> is now your mentor. Open your portal to say hi
         and get the mentorship started.</p>
-        ${ctaBlock(brand, `${appUrl()}/portal`, 'Open your portal')}
+        ${ctaBlock(brand, `${base}/portal`, 'Open your portal')}
       </div>
     `,
   });
@@ -1360,6 +1560,8 @@ export async function sendMentorshipRequestEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   await sendEmail({
     to,
     userId,
@@ -1372,7 +1574,7 @@ export async function sendMentorshipRequestEmail({
         ${adminName ? `<p>Hi ${esc(adminName)},</p>` : ''}
         <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
         ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
-        ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, 'Review the request')}
+        ${ctaBlock(brand, `${base}/admin/mentorship`, 'Review the request')}
       </div>
     `,
   });
@@ -1404,6 +1606,8 @@ export async function sendRematchRequestedEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
   const R = getDictionary(resolved).notifications.rematchRequestedEmail;
   await sendEmail({
@@ -1419,7 +1623,7 @@ export async function sendRematchRequestedEmail({
         ${adminName ? `<p>${esc(R.greeting.replace('{name}', adminName))}</p>` : ''}
         <p>${esc(R.body.replace('{name}', menteeName))}</p>
         <p style="color:#6b7280;font-size:14px;">${esc(R.privacy)}</p>
-        ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, esc(R.cta))}
+        ${ctaBlock(brand, `${base}/admin/mentorship`, esc(R.cta))}
       </div>
     `,
   });
@@ -1442,6 +1646,8 @@ export async function sendRematchMentorNoticeEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
   const R = getDictionary(resolved).notifications.rematchMentorEmail;
   await sendEmail({
@@ -1457,7 +1663,7 @@ export async function sendRematchMentorNoticeEmail({
         ${mentorName ? `<p>${esc(R.greeting.replace('{name}', mentorName))}</p>` : ''}
         <p>${esc(R.body.replace('{name}', menteeName))}</p>
         <p>${esc(R.thanks)}</p>
-        ${ctaBlock(brand, `${appUrl()}/mentor`, esc(R.cta))}
+        ${ctaBlock(brand, `${base}/mentor`, esc(R.cta))}
       </div>
     `,
   });
@@ -1571,6 +1777,11 @@ export async function sendMentorApplicationApprovedEmail({
   const brand = await emailBrand(orgId);
   const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
   const isNewAccount = !!registerUrl;
+  // WORLDS (#2590): a supplied `registerUrl` was built by the caller from the
+  // applicant's org and is used as given. The "sign in" fallback (an existing
+  // account promoted in place) is the promoted account's own product — its org,
+  // or the account behind `userId` when the caller did not pass the org.
+  const signInUrl = registerUrl ? null : `${await appUrlForRecipient(orgId, userId)}/auth/signin`;
   await sendEmail({
     to,
     userId,
@@ -1583,7 +1794,7 @@ export async function sendMentorApplicationApprovedEmail({
         ${brandHeader(brand, M.approved.heading)}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(isNewAccount ? M.approved.bodyNewAccount : M.approved.bodyExistingAccount)}</p>
-        ${ctaBlock(brand, registerUrl || `${appUrl()}/auth/signin`, isNewAccount ? M.approved.ctaRegister : M.approved.ctaSignIn)}
+        ${ctaBlock(brand, registerUrl || signInUrl!, isNewAccount ? M.approved.ctaRegister : M.approved.ctaSignIn)}
       </div>
     `,
   });
@@ -1652,6 +1863,8 @@ export async function sendOfferSentEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   const loc = resolveLocale(locale);
   const M = getDictionary(loc).offerEmail;
   const start = formatOfferDate(startDate, loc);
@@ -1670,7 +1883,7 @@ export async function sendOfferSentEmail({
         <p>${esc(M.sent.body.replace('{position}', position).replace('{company}', companyName ? ` (${companyName})` : ''))}</p>
         ${start ? `<p><strong>${esc(M.startDate)}:</strong> ${esc(start)}</p>` : ''}
         ${expires ? `<p><strong>${esc(M.decideBy)}:</strong> ${esc(expires)}</p>` : ''}
-        ${ctaBlock(brand, `${appUrl()}/portal`, M.sent.cta)}
+        ${ctaBlock(brand, `${base}/portal`, M.sent.cta)}
       </div>
     `,
   });
@@ -1720,6 +1933,8 @@ export async function sendTrialReminderEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   const loc = resolveLocale(locale);
   const M = getDictionary(loc).trials;
   const subject = threshold >= 7 ? M.subject7 : threshold >= 3 ? M.subject3 : M.subject0;
@@ -1737,7 +1952,7 @@ export async function sendTrialReminderEmail({
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(M.body.replace('{company}', companyName).replace('{date}', endsOn))}</p>
         <p style="color:#666;font-size:13px;">${esc(M.hint)}</p>
-        ${ctaBlock(brand, `${appUrl()}${link}`, esc(M.cta))}
+        ${ctaBlock(brand, `${base}${link}`, esc(M.cta))}
       </div>
     `,
   });
@@ -1763,6 +1978,8 @@ export async function sendOfferDecisionEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   const M = getDictionary(resolveLocale(locale)).offerEmail;
   const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
   await sendEmail({
@@ -1777,7 +1994,7 @@ export async function sendOfferDecisionEmail({
         ${brandHeader(brand, copy.heading)}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(copy.body.replace('{mentee}', menteeName).replace('{position}', position))}</p>
-        ${ctaBlock(brand, `${appUrl()}/admin/candidates`, M.cta)}
+        ${ctaBlock(brand, `${base}/admin/candidates`, M.cta)}
       </div>
     `,
   });
@@ -1800,6 +2017,8 @@ export async function sendRoleChangeEmail({
   orgId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in. No userId here, so `orgId` is the whole answer (none ⇒ the default product).
+  const base = await appUrlFor(orgId);
   const M = getDictionary(resolveLocale(locale)).roleChangeEmail;
   const mentor = newRole === 'MENTOR';
   await sendEmail({
@@ -1812,7 +2031,7 @@ export async function sendRoleChangeEmail({
         ${brandHeader(brand, mentor ? M.headingMentor : M.headingMentee)}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(mentor ? M.bodyMentor : M.bodyMentee)}</p>
-        ${ctaBlock(brand, `${appUrl()}/auth/signin`, M.cta)}
+        ${ctaBlock(brand, `${base}/auth/signin`, M.cta)}
       </div>
     `,
   });
@@ -1839,6 +2058,8 @@ export async function sendTwoFactorResetEmail({
   orgId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in. No userId here, so `orgId` is the whole answer (none ⇒ the default product).
+  const base = await appUrlFor(orgId);
   const resolved = resolveLocale(locale);
   const M = getDictionary(resolved).twoFactorResetEmail;
   return await sendEmail({
@@ -1853,7 +2074,7 @@ export async function sendTwoFactorResetEmail({
         ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
         <p>${esc(M.body.replace('{admin}', adminName))}</p>
         <p>${esc(M.reenrol)}</p>
-        ${ctaBlock(brand, `${appUrl()}/account`, M.cta)}
+        ${ctaBlock(brand, `${base}/account`, M.cta)}
         <p style="color: #6b7280; font-size: 14px;">${esc(M.notYou)}</p>
       </div>
     `,
@@ -1888,6 +2109,8 @@ export async function sendMeetingRequestEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   const when = proposedAt ? formatInTimeZone(proposedAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
   await sendEmail({
     to,
@@ -1902,8 +2125,8 @@ export async function sendMeetingRequestEmail({
         <p><strong>${esc(requesterName)}</strong> requested a meeting: <strong>${esc(topic)}</strong>.</p>
         ${when ? `<p><strong>Proposed time:</strong> ${when}</p>` : ''}
         ${when && proposedAt ? organizerTimeLine(proposedAt, requesterTimeZone, timeZone, requesterName) : ''}
-        ${ctaBlock(brand, `${appUrl()}${link}`, 'Accept or decline')}
-        ${when ? timeZoneNote(timeZone) : ''}
+        ${ctaBlock(brand, `${base}${link}`, 'Accept or decline')}
+        ${when ? timeZoneNote(timeZone, undefined, base) : ''}
       </div>
     `,
   });
@@ -1933,6 +2156,8 @@ export async function sendMeetingRequestDecisionEmail({
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
   await sendEmail({
     to,
@@ -1949,8 +2174,8 @@ export async function sendMeetingRequestDecisionEmail({
              ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
              ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}`
           : `<p>Your meeting request <strong>${esc(topic)}</strong> could not be accepted. You can propose another time.</p>`}
-        ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the conversation')}
-        ${when ? timeZoneNote(timeZone) : ''}
+        ${ctaBlock(brand, `${base}${link}`, 'Open the conversation')}
+        ${when ? timeZoneNote(timeZone, undefined, base) : ''}
       </div>
     `,
   });
@@ -2085,6 +2310,8 @@ export async function sendProjectJoinRequestEmail({
   // `legacy` in src/lib/emailGroups.ts).
   if (!to || !emailGroupAllowedForCategory(recipient, 'project-join-request')) return;
   const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
   await sendEmail({
     to,
     userId,
@@ -2097,7 +2324,7 @@ export async function sendProjectJoinRequestEmail({
         ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
         <p><strong>${esc(requesterName)}</strong> asked to join <strong>${esc(projectName)}</strong>.</p>
         ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>` : ''}
-        ${ctaBlock(brand, `${appUrl()}/projects/${projectId}`, 'Review the request')}
+        ${ctaBlock(brand, `${base}/projects/${projectId}`, 'Review the request')}
       </div>
     `,
   });
@@ -2185,10 +2412,18 @@ export async function checkMentorInteractionReminders() {
     byMentor.set(relation.mentorId, list);
   }
 
+  // WORLDS (#2590): this job sweeps EVERY tenant with no session, and its
+  // recipients are mentors of different products. The dashboard link is resolved
+  // per MENTOR from that mentor's own organization (one batched read up front,
+  // before anything is stamped) — never once for the run.
+  const origins = createOriginBook();
+  await origins.prefetch([...byMentor.values()].map((relations) => relations[0].mentor.orgId));
+
   let emailed = 0;
   for (const relations of byMentor.values()) {
     const mentor = relations[0].mentor;
     if (!mentor.email || !emailAllowed(mentor, 'deadlines') || !emailGroupAllowedForCategory(mentor, 'interaction-reminder')) continue;
+    const base = await origins.urlFor(mentor.orgId);
 
     const rows = relations
       .map((relation) => {
@@ -2218,7 +2453,7 @@ export async function checkMentorInteractionReminders() {
             <p>These mentees have had no logged interaction for a while:</p>
             <ul style="padding-left:18px;">${rows}</ul>
             <p>Please log your recent interactions to keep the mentorship record up to date.</p>
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/mentor" style="
+            <a href="${base}/mentor" style="
               display: inline-block;
               background-color: #2563eb;
               color: white;
@@ -2360,6 +2595,7 @@ export async function checkNextActionReminders(now = new Date()) {
         select: {
           id: true,
           role: true,
+          orgId: true,
           email: true,
           fullName: true,
           emailNotifications: true,
@@ -2369,6 +2605,13 @@ export async function checkNextActionReminders(now = new Date()) {
       },
     },
   });
+
+  // WORLDS (#2590): the owner's own organization decides which product the
+  // reminder's link opens. Read for the whole batch BEFORE the first claim below,
+  // so a failure here costs nothing (no record has been marked reminded yet) and
+  // the next tick simply tries again.
+  const origins = createOriginBook();
+  await origins.prefetch(due.map((rel) => rel.mentor.orgId));
 
   let reminded = 0;
   let failures = 0;
@@ -2414,13 +2657,14 @@ export async function checkNextActionReminders(now = new Date()) {
         const noteHtml = rel.nextActionNote
           ? `<p><strong>${esc(text.noteLabel)}</strong> ${esc(rel.nextActionNote)}</p>`
           : '';
+        const base = await origins.urlFor(owner.orgId);
         await sendEmail({
           category: 'stage-deadline',
           userId: owner.id,
           locale: owner.preferredLanguage,
           to: owner.email,
           subject: text.subject.replace('{name}', name),
-          html: `<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}<p><a href="${appUrl()}${link}">${esc(text.cta)}</a></p>`,
+          html: `<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}<p><a href="${base}${link}">${esc(text.cta)}</a></p>`,
         });
       } catch (error) {
         failures += 1;
@@ -2444,7 +2688,7 @@ export async function sendWeeklyReportReminders(now = new Date()) {
     },
     select: {
       id: true, orgId: true,
-      mentee: { select: { id: true, fullName: true, email: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } },
+      mentee: { select: { id: true, orgId: true, fullName: true, email: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } },
     },
   });
   if (relations.length === 0) return { checked: 0, reminded: 0, emailed: 0 };
@@ -2483,6 +2727,11 @@ export async function sendWeeklyReportReminders(now = new Date()) {
   );
 
   const toRemind = candidates.filter((relation) => !alreadyReminded.has(relation.mentee.id));
+  // WORLDS (#2590): each mentee's portal link is resolved from THAT mentee's own
+  // organization (a Friday run reminds people of every tenant). Read before the
+  // claims below, so a failed read leaves nobody claimed-but-unmailed.
+  const origins = createOriginBook();
+  await origins.prefetch(toRemind.map((relation) => relation.mentee.orgId));
   const claims = toRemind.map((relation) => ({ id: randomUUID(), relationId: relation.id, recipientId: relation.mentee.id, weekStart }));
   if (claims.length > 0) await prisma.weeklyReportReminder.createMany({ data: claims, skipDuplicates: true });
   const claimedIds = new Set((await prisma.weeklyReportReminder.findMany({ where: { id: { in: claims.map((claim) => claim.id) } }, select: { relationId: true } })).map((claim) => claim.relationId));
@@ -2500,10 +2749,11 @@ export async function sendWeeklyReportReminders(now = new Date()) {
     reminded++;
     if (emailAllowed(relation.mentee, 'weeklyReports') && emailGroupAllowedForCategory(relation.mentee, 'weekly-report')) {
       const brand = await emailBrand(relation.orgId);
+      const base = await origins.urlFor(relation.mentee.orgId);
       await sendEmail({
         to: relation.mentee.email, fromName: brand.name, category: 'weekly-report', subject: copy.reminderSubject,
         userId: relation.mentee.id, locale: relation.mentee.preferredLanguage,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.reminderHeading)}<p>${copy.reminderGreeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${copy.reminderBody.replace('{date}', formattedWeek)}</p>${ctaBlock(brand, `${appUrl()}/portal`, copy.reminderCta)}</div>`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.reminderHeading)}<p>${copy.reminderGreeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${copy.reminderBody.replace('{date}', formattedWeek)}</p>${ctaBlock(brand, `${base}/portal`, copy.reminderCta)}</div>`,
       }).then(() => { emailed++; }).catch((error) => logger.error('Weekly report reminder email failed', { relationId: relation.id, error: String(error) }));
     }
   }
@@ -2565,7 +2815,7 @@ export async function sendDormantCheckIns(now = new Date()) {
       dormantNudgeCount: true,
       dormantNudgeSentAt: true,
       mentee: {
-        select: { id: true, fullName: true, email: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
+        select: { id: true, orgId: true, fullName: true, email: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
       },
     },
     // Longest-dormant first, so a capped run always drains the oldest backlog
@@ -2575,6 +2825,13 @@ export async function sendDormantCheckIns(now = new Date()) {
 
   let sent = 0;
   let checked = 0;
+
+  // WORLDS (#2590): the check-in's button opens the product the MENTEE's account
+  // lives in. Resolved from each mentee's own organization, read for the whole
+  // batch before the first nudge is claimed (a claim spends one of the person's
+  // two-ever budget, so nothing may fail between claiming and having the link).
+  const origins = createOriginBook();
+  await origins.prefetch(relations.map((relation) => relation.mentee.orgId));
 
   // THE CAP IS A PROMISE TO A PERSON, AND IT IS COUNTED PER PERSON (#2287).
   //
@@ -2661,6 +2918,7 @@ export async function sendDormantCheckIns(now = new Date()) {
     // "Final" is the person's last nudge, not the relation's.
     const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
     const brand = await emailBrand(relation.orgId);
+    const base = await origins.urlFor(relation.mentee.orgId);
     await sendEmail({
       to: relation.mentee.email,
       fromName: brand.name,
@@ -2668,7 +2926,7 @@ export async function sendDormantCheckIns(now = new Date()) {
       userId: relation.mentee.id,
       locale: relation.mentee.preferredLanguage,
       subject: copy.subject,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${appUrl()}/portal`, copy.cta)}</div>`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${base}/portal`, copy.cta)}</div>`,
     })
       .then(() => { sent += 1; })
       .catch((error) => logger.error('Dormant check-in email failed', { relationId: relation.id, error: String(error) }));
@@ -2744,7 +3002,15 @@ export async function sendMeetingReminders() {
     },
   });
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // WORLDS (#2590): the reminder's button and time-zone link open the product
+  // each PARTICIPANT's account lives in. The two sides of a relation are
+  // normally the same organization, but the origin is resolved per participant
+  // from their own `orgId` (one batched read for the whole tick, before any
+  // meeting is claimed) rather than assumed from the first one.
+  const origins = createOriginBook();
+  await origins.prefetch(
+    meetings.flatMap((m) => [m.relation?.mentee?.orgId, m.relation?.mentor?.orgId]),
+  );
   let reminded = 0;
   let notified = 0;
   let emailed = 0;
@@ -2791,6 +3057,7 @@ export async function sendMeetingReminders() {
       if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-reminder')) continue;
       try {
         const brand = await emailBrand(user.orgId);
+        const base = await origins.urlFor(user.orgId);
         const R = getDictionary(uLocale).notifications.meetingReminderEmail;
         const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
         await sendEmail({
@@ -2812,8 +3079,8 @@ export async function sendMeetingReminders() {
               uLocale
             )}
             ${m.meetLink ? `<p><strong>${esc(R.link)}</strong> <a href="${m.meetLink}">${esc(m.meetLink)}</a></p>` : ''}
-            ${ctaBlock(brand, `${appUrl}${link}`, esc(R.cta))}
-            ${timeZoneNote(user.timezone, uLocale)}
+            ${ctaBlock(brand, `${base}${link}`, esc(R.cta))}
+            ${timeZoneNote(user.timezone, uLocale, base)}
           </div>`,
         });
         emailed++;
@@ -2956,6 +3223,10 @@ export async function sendProjectMeetingSeriesReminders() {
   let reminded = 0;
   let notified = 0;
   let emailed = 0;
+  // WORLDS (#2590): a project team can span organizations' products only in
+  // principle, but the link is still resolved per TEAM MEMBER from their own
+  // `orgId` — one book for the whole tick, one query per distinct org.
+  const origins = createOriginBook();
 
   for (const series of seriesList) {
     if (!series.projectId) continue;
@@ -2973,6 +3244,7 @@ export async function sendProjectMeetingSeriesReminders() {
       where: { id: { in: team.map((m) => m.id) }, isActive: true },
       select: {
         id: true,
+        orgId: true,
         email: true,
         fullName: true,
         role: true,
@@ -2985,6 +3257,9 @@ export async function sendProjectMeetingSeriesReminders() {
       },
     });
     if (recipients.length === 0) continue;
+    // Before the occurrence is claimed below, so a failed read leaves the
+    // occurrence unclaimed and the next quarter-hour tick reminds the team.
+    await origins.prefetch(recipients.map((r) => r.orgId));
 
     for (const when of occurrences) {
       const lead = leadFor((when.getTime() - now.getTime()) / 60000);
@@ -3018,6 +3293,7 @@ export async function sendProjectMeetingSeriesReminders() {
         if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-series-reminder')) continue;
         try {
           const brand = await emailBrand(series.project?.orgId ?? null);
+          const base = await origins.urlFor(user.orgId);
           const S = getDictionary(uLocale).notifications.meetingSeriesReminderEmail;
           // Two sentences, because the project name is only appended when there
           // is one — and in Turkish and German that is not a suffix you can bolt
@@ -3049,8 +3325,8 @@ export async function sendProjectMeetingSeriesReminders() {
                 uLocale
               )}
               ${series.fixedLink ? `<p><strong>${esc(S.link)}</strong> <a href="${series.fixedLink}">${esc(series.fixedLink)}</a></p>` : ''}
-              ${ctaBlock(brand, `${appUrl()}${link}`, esc(S.cta))}
-              ${timeZoneNote(user.timezone, uLocale)}
+              ${ctaBlock(brand, `${base}${link}`, esc(S.cta))}
+              ${timeZoneNote(user.timezone, uLocale, base)}
             </div>`,
           });
           emailed++;
@@ -3076,6 +3352,7 @@ export async function sendWeeklyMentorDigests() {
     where: { role: 'MENTOR', isActive: true },
     select: {
       id: true,
+      orgId: true,
       email: true,
       fullName: true,
       emailNotifications: true,
@@ -3101,6 +3378,12 @@ export async function sendWeeklyMentorDigests() {
     mentors.flatMap((m) => m.mentorRelations.map((r) => ({ id: r.id, menteeId: r.menteeId }))),
   );
 
+  // WORLDS (#2590): one digest per mentor across EVERY tenant, so the dashboard
+  // button is resolved per mentor from that mentor's own organization — a
+  // marketing-world mentor's digest must not send them to the internship host.
+  const origins = createOriginBook();
+  await origins.prefetch(mentors.map((m) => m.orgId));
+
   let sent = 0;
   for (const m of mentors) {
     if (m.mentorRelations.length === 0) continue;
@@ -3123,6 +3406,7 @@ export async function sendWeeklyMentorDigests() {
       return `<li>${esc(before)}<strong>${n}</strong>${esc(after)}</li>`;
     };
     try {
+      const base = await origins.urlFor(m.orgId);
       await sendEmail({
         category: 'mentor-digest',
         userId: m.id,
@@ -3137,7 +3421,7 @@ export async function sendWeeklyMentorDigests() {
             ${countLine(D.upcoming, upcoming)}
             ${countLine(D.newApplications, newApplications)}
           </ul>
-          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/mentor" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
+          <a href="${base}/mentor" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
         </div>`,
       });
       sent++;
@@ -3202,15 +3486,19 @@ function activityDigestTable(items: MenteeActivity[], locale?: string | null): s
 export async function sendDailyActivityDigests() {
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   let sent = 0;
 
   const mentors = await prisma.user.findMany({
     where: { role: 'MENTOR', isActive: true },
     // #1720: `preferredLanguage` was missing here too — every recipient of this
     // digest is a registered user, so their own preference is the whole answer.
-    select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
+    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
+  // WORLDS (#2590): both digests below go to people of EVERY tenant, so the
+  // button is resolved per recipient from that recipient's own organization —
+  // never one origin for the batch.
+  const origins = createOriginBook();
+  await origins.prefetch(mentors.map((m) => m.orgId));
   for (const m of mentors) {
     if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'activity-digest')) continue;
     const items = await getMentorMenteeActivity(m.id, since);
@@ -3218,6 +3506,7 @@ export async function sendDailyActivityDigests() {
     const mLocale = resolveLocale(m.preferredLanguage);
     const A = getDictionary(mLocale).notifications.activityDigestEmail;
     try {
+      const base = await origins.urlFor(m.orgId);
       await sendEmail({
         category: 'activity-digest',
         userId: m.id,
@@ -3228,7 +3517,7 @@ export async function sendDailyActivityDigests() {
           <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
           <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
           ${activityDigestTable(items, mLocale)}
-          <p style="margin-top:16px;"><a href="${appUrl}/mentor/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+          <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
         </div>`,
       });
@@ -3240,15 +3529,17 @@ export async function sendDailyActivityDigests() {
 
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
-    select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
+    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
   const adminItems = await getSystemMenteeActivity(since);
   if (adminItems.length > 0) {
+    await origins.prefetch(admins.map((a) => a.orgId));
     for (const a of admins) {
       if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
       const aLocale = resolveLocale(a.preferredLanguage);
       const A = getDictionary(aLocale).notifications.activityDigestEmail;
       try {
+        const base = await origins.urlFor(a.orgId);
         await sendEmail({
           category: 'activity-digest',
           userId: a.id,
@@ -3259,7 +3550,7 @@ export async function sendDailyActivityDigests() {
             <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
             <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
             ${activityDigestTable(adminItems, aLocale)}
-            <p style="margin-top:16px;"><a href="${appUrl}/admin/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+            <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           </div>`,
         });
         sent++;
@@ -3281,7 +3572,6 @@ export async function checkRetentionReminders() {
   const months = await getRetentionMonths();
   const dueCutoff = new Date();
   dueCutoff.setMonth(dueCutoff.getMonth() - months);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   const users = await prisma.user.findMany({
     where: {
@@ -3289,8 +3579,16 @@ export async function checkRetentionReminders() {
       consentAt: { not: null, lt: dueCutoff },
       retentionReminderSentAt: null,
     },
-    select: { id: true, fullName: true, email: true },
+    select: { id: true, orgId: true, fullName: true, email: true },
   });
+
+  // WORLDS (#2590): the renewal link opens the product the CANDIDATE's account
+  // lives in — a legal notice that lands on a site where the person has no
+  // account cannot be acted on, and this job sweeps every tenant. Resolved from
+  // each candidate's own organization, read for the batch BEFORE the first
+  // `retentionReminderSentAt` stamp so a failed read stamps nobody.
+  const origins = createOriginBook();
+  await origins.prefetch(users.map((u) => u.orgId));
 
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
@@ -3299,7 +3597,7 @@ export async function checkRetentionReminders() {
 
   let reminded = 0;
   for (const u of users) {
-    const renewUrl = `${appUrl}/consent/renew?token=${makeConsentRenewToken(u.id)}`;
+    const renewUrl = `${await origins.urlFor(u.orgId)}/consent/renew?token=${makeConsentRenewToken(u.id)}`;
     // Legal/retention notice — always sent (not gated by marketing opt-out).
     try {
       await sendEmail({
@@ -3348,12 +3646,29 @@ export async function checkRetentionReminders() {
  * promise of the one-click link is that withdrawing actually stops the mail.
  */
 export async function checkReEngagementReminders() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const people = await dueForReminder();
+
+  // WORLDS (#2590): the one-click "leave the pool" link opens the product the
+  // PERSON's account lives in. `dueForReminder()` selects no organization, so it
+  // is read here for the whole batch in one query (not one per person), and the
+  // origin is resolved per person from it — before the first `reEngageNotifiedAt`
+  // stamp, so a failed read stamps nobody.
+  const orgOf = new Map<string, string | null>(
+    people.length
+      ? (
+          await prisma.user.findMany({
+            where: { id: { in: people.map((p) => p.id) } },
+            select: { id: true, orgId: true },
+          })
+        ).map((u) => [u.id, u.orgId])
+      : [],
+  );
+  const origins = createOriginBook();
+  await origins.prefetch(orgOf.values());
 
   let reminded = 0;
   for (const p of people) {
-    const leaveUrl = `${appUrl}/re-engage?token=${makeLeaveToken(p.id)}`;
+    const leaveUrl = `${await origins.urlFor(orgOf.get(p.id))}/re-engage?token=${makeLeaveToken(p.id)}`;
     try {
       await sendEmail({
         to: p.email,
@@ -3441,7 +3756,7 @@ export async function checkCompanyNeedMatches() {
       },
       users: {
         where: { role: 'COMPANY', isActive: true },
-        select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+        select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
       },
     },
   });
@@ -3461,7 +3776,12 @@ export async function checkCompanyNeedMatches() {
   });
   if (pool.length === 0) return { companies: companies.length, alerts: 0 };
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // WORLDS (#2590): the "view profile" link opens the product the COMPANY USER's
+  // account lives in, resolved per user from their own organization. Read for
+  // every company user up front, before the first dedupe row is inserted (an
+  // inserted row is a candidate this company will never be alerted about again).
+  const origins = createOriginBook();
+  await origins.prefetch(companies.flatMap((company) => company.users.map((u) => u.orgId)));
   let alerts = 0;
 
   for (const company of companies) {
@@ -3502,6 +3822,7 @@ export async function checkCompanyNeedMatches() {
         // group's key and dropping alerts the surfaces showed as ON. It now
         // lives in opportunities.legacy.
         if (emailGroupAllowedForCategory(u, 'company-need-alert')) {
+          const base = await origins.urlFor(u.orgId);
           await sendEmail({
             category: 'company-need-alert',
             userId: u.id,
@@ -3511,7 +3832,7 @@ export async function checkCompanyNeedMatches() {
               <h2 style="color:#2563eb;">New matching candidate</h2>
               <p>Hi ${u.fullName},</p>
               <p><strong>${cand.fullName}</strong> matches one of ${company.name}'s open positions${cand.targetPosition ? ` (${cand.targetPosition})` : ''}.</p>
-              <p><a href="${appUrl}${link}">View profile</a></p>
+              <p><a href="${base}${link}">View profile</a></p>
             </div>`,
           }).catch((error) => {
             console.error('checkCompanyNeedMatches email failed:', { companyId: company.id, userId: u.id, error });
@@ -3536,7 +3857,10 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
     where: { documentRequirements: { some: { active: true, mandatory: true } } },
     select: { id: true },
   });
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // WORLDS (#2590): each RECIPIENT's link opens the product their own account
+  // lives in — the mentee and the mentors on their relations are resolved
+  // separately from their own `orgId`, one batched read per page below.
+  const origins = createOriginBook();
   let claims = 0;
   let notified = 0;
   let emailed = 0;
@@ -3558,6 +3882,10 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
         },
       });
       const byId = new Map(mentees.map((mentee) => [mentee.id, mentee]));
+      // Before this page's claims, so a failed read leaves them unwritten.
+      await origins.prefetch(
+        mentees.flatMap((mentee) => [mentee.orgId, ...mentee.menteeRelations.map((relation) => relation.mentor.orgId)]),
+      );
 
       for (const row of result.rows) {
         const mentee = byId.get(row.user.id);
@@ -3591,6 +3919,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             if (!recipient.email || !emailAllowed(recipient, 'documents') || !emailGroupAllowedForCategory(recipient, 'document-reminder')) continue;
             try {
               const brand = await emailBrand(recipient.orgId);
+              const base = await origins.urlFor(recipient.orgId);
               await sendEmail({
                 category: 'document-reminder',
                 userId: recipient.id,
@@ -3602,7 +3931,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
                   ${brandHeader(brand, t.reminderHeading)}
                   <p>${esc(t.reminderGreeting.replace('{name}', recipient.fullName))}</p>
                   <p>${esc(t.reminderBody.replace('{requirement}', label).replace('{mentee}', mentee.fullName))}</p>
-                  ${ctaBlock(brand, `${appUrl}${link}`, t.reminderCta)}
+                  ${ctaBlock(brand, `${base}${link}`, t.reminderCta)}
                 </div>`,
               });
               emailed++;
@@ -3632,7 +3961,7 @@ export async function sendWeeklyAnalyticsReport() {
     prisma.interactionLog.count({ where: { date: { gte: weekAgo } } }),
     prisma.user.findMany({
       where: { role: 'ADMIN', isActive: true },
-      select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+      select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
     }),
   ]);
 
@@ -3645,7 +3974,10 @@ export async function sendWeeklyAnalyticsReport() {
     .sort((a, b) => b._count._all - a._count._all)
     .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${s.pipelineStatus}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
     .join('');
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // WORLDS (#2590): the dashboard link is resolved per ADMIN from that admin's
+  // own organization (the report goes to every active admin of every tenant).
+  const origins = createOriginBook();
+  await origins.prefetch(admins.map((a) => a.orgId));
 
   let sent = 0;
   for (const a of admins) {
@@ -3654,6 +3986,7 @@ export async function sendWeeklyAnalyticsReport() {
     // the preference surfaces showed it as ON. 'digest' is in
     // reports_analytics.legacy now, so the old opt-out still holds visibly.
     if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
+    const base = await origins.urlFor(a.orgId);
     await sendEmail({
       category: 'analytics-report',
       userId: a.id,
@@ -3665,7 +3998,7 @@ export async function sendWeeklyAnalyticsReport() {
         <p><strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
         last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.</p>
         <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
-        <p><a href="${appUrl}/admin/analytics">Open the analytics dashboard</a></p>
+        <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
       </div>`,
     }).catch((error) => {
       console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, error });
@@ -3685,13 +4018,12 @@ const UNREAD_DIGEST_AFTER_MIN = 60;
 export async function sendUnreadMessageDigests() {
   const now = new Date();
   const cutoff = new Date(now.getTime() - UNREAD_DIGEST_AFTER_MIN * 60 * 1000);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   // #1720: `preferredLanguage` was not selected here either — the highest-volume
   // mail in the app went out in English to everyone. Both sides of a relation
   // are loaded through this select, and the digest is rendered once per
   // recipient, so each half reads its own language.
-  const userSelect = { id: true, fullName: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true } as const;
+  const userSelect = { id: true, orgId: true, fullName: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true } as const;
   const msgs = await prisma.message.findMany({
     // relationId is nullable since #768; the digest covers mentorship threads
     // only, so conversation-only messages are skipped (and left un-digested for
@@ -3731,6 +4063,12 @@ export async function sendUnreadMessageDigests() {
     byRecipient.set(recipient.id, entry);
   }
 
+  // WORLDS (#2590): the digest's message and mark-as-read links open the product
+  // the RECIPIENT's account lives in, resolved per recipient from their own
+  // `orgId`. Read for the whole batch before anything is marked digested.
+  const origins = createOriginBook();
+  await origins.prefetch([...byRecipient.values()].map((entry) => entry.recipient.orgId));
+
   let sent = 0;
   for (const { recipient, items } of byRecipient.values()) {
     // The mail's taxonomy home is `digests`, and that is the only thing checked
@@ -3741,6 +4079,7 @@ export async function sendUnreadMessageDigests() {
     // LOCALE (#1720): a message recipient is always a registered participant of
     // the relation, so their own stored preference is the only input.
     const rLocale = resolveLocale(recipient.preferredLanguage);
+    const base = await origins.urlFor(recipient.orgId);
     const U = getDictionary(rLocale).notifications.unreadDigestEmail;
     const one = items.length === 1;
     const rows = items
@@ -3751,7 +4090,7 @@ export async function sendUnreadMessageDigests() {
         // high link count is one of the strongest spam signals there is —
         // exactly what this whole change set exists to avoid. The digest is a
         // "what did I miss" summary; reacting belongs on the message email.
-        return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || esc(U.attachment)} — <a href="${appUrl}/messages/${it.relationId}">${esc(U.open)}</a></li>`;
+        return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || esc(U.attachment)} — <a href="${base}/messages/${it.relationId}">${esc(U.open)}</a></li>`;
       })
       .join('');
     // One link that clears the whole summary. Every item here belongs to the
@@ -3760,7 +4099,7 @@ export async function sendUnreadMessageDigests() {
     const markAllHtml = relationIds
       .map(
         (relationId, i) =>
-          `<a href="${markReadUrl(relationId, recipient.id)}" style="color:#6b7280;">${esc(
+          `<a href="${markReadUrl(relationId, recipient.id, base)}" style="color:#6b7280;">${esc(
             relationIds.length === 1 ? U.markOne : U.markNth.replace('{n}', String(i + 1)),
           )}</a>`,
       )

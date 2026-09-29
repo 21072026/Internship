@@ -12,7 +12,7 @@ import { broadcastMonth, checkBroadcastQuota, type BroadcastQuotaCheck } from '@
 import { buildNewsletterQuotaHoldAlert, runNewsletterTick } from '@/lib/newsletterQuotaHold';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, type Locale } from '@/i18n/config';
-import { sendEmail } from '@/services/emailService';
+import { appUrlFor, sendEmail } from '@/services/emailService';
 import { renderNewsletterHtml, type NewsletterEmailLabels } from '@/lib/newsletterEmail';
 import { nextUnusedTemplate } from '@/lib/newsletterContent';
 import {
@@ -149,6 +149,40 @@ function brandFor(orgId: string | null | undefined, cache?: NewsletterBrandCache
 }
 
 /**
+ * The origin the links in ONE recipient's copy open on (#2590): the product that
+ * recipient's account lives in — the footer's unsubscribe, archive and
+ * preferences links, and the List-Unsubscribe URL in the header.
+ *
+ * Resolved per RECIPIENT from their organization, never once per issue: an
+ * issue is filed under one tenant and normally reaches only that tenant's
+ * members, but the function that renders a copy is also the preview and the
+ * admin test send, and nothing about it should assume the audience is a single
+ * world. Memoised per run exactly like the brand — same key, same lifetime, and
+ * the same reason (the 400 members of one org must cost one lookup, not 400) —
+ * but kept in a side table keyed by the run's cache object so the exported
+ * `NewsletterBrandCache` type, which callers construct, does not change shape.
+ *
+ * A reader whose account is in the INTERNSHIP world (or has no org) gets the
+ * origin these links always carried; only a non-default world differs.
+ */
+const originMemo = new WeakMap<NewsletterBrandCache, Map<string, Promise<string>>>();
+
+function originFor(orgId: string | null | undefined, cache?: NewsletterBrandCache): Promise<string> {
+  if (!cache) return appUrlFor(orgId);
+  let perRun = originMemo.get(cache);
+  if (!perRun) {
+    perRun = new Map();
+    originMemo.set(cache, perRun);
+  }
+  const key = orgId ?? '';
+  const hit = perRun.get(key);
+  if (hit) return hit;
+  const pending = appUrlFor(orgId);
+  perRun.set(key, pending);
+  return pending;
+}
+
+/**
  * Render one recipient's copy. Exported because the admin preview and the test
  * send have to show *exactly* what a real recipient would get — a preview built
  * by a second code path is a preview of nothing.
@@ -176,6 +210,7 @@ export async function renderNewsletterFor(options: {
   const locale = resolveNewsletterLocale(variants, preferredLanguage);
   const content = resolveNewsletterContent(variants, canonical, preferredLanguage);
   const brand = await brandFor(orgId, brandCache);
+  const origin = await originFor(orgId, brandCache);
 
   return {
     subject: content.subject,
@@ -188,9 +223,9 @@ export async function renderNewsletterFor(options: {
       labels: labelsFor(locale),
       withMentorNote: showsMentorNote(audience, role),
       imageSrc: imageSrc ?? null,
-      archiveUrl: newsletterArchiveUrl(),
-      preferencesUrl: newsletterPreferencesUrl(),
-      unsubscribeUrl: userId ? newsletterUnsubscribeUrl(userId) : null,
+      archiveUrl: newsletterArchiveUrl(origin),
+      preferencesUrl: newsletterPreferencesUrl(origin),
+      unsubscribeUrl: userId ? newsletterUnsubscribeUrl(userId, origin) : null,
     }),
   };
 }
@@ -432,6 +467,11 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       orgId: user.orgId,
       brandCache,
     });
+    // The header's unsubscribe URL must open the same product the body's links do
+    // (#2590). Already resolved by the render above, so this is a memo hit — and
+    // it is awaited HERE, outside the send's try/catch, for the same reason the
+    // render is: a failed lookup is a failed run, not one recipient marked FAILED.
+    const origin = await originFor(user.orgId, brandCache);
 
     let status: 'SENT' | 'FAILED' | 'SKIPPED' = 'SENT';
     let error: string | null = null;
@@ -453,7 +493,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
           // Both halves matter: the URL alone gets a "click to unsubscribe"
           // link in Gmail, the One-Click pair gets the native control that
           // needs no page load at all.
-          'List-Unsubscribe': `<${newsletterUnsubscribeUrl(user.id)}>`,
+          'List-Unsubscribe': `<${newsletterUnsubscribeUrl(user.id, origin)}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         },
       });

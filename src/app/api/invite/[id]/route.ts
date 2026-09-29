@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { sendInvitationEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { invitationRegisterUrl } from '@/lib/inviteCreate';
+import { worldOfOrg } from '@/lib/userWorld';
 
 // Admins manage every invitation; everyone else only the ones they sent — the
 // same split the GET list uses, now that mentors can invite from their own page
@@ -45,8 +47,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     expiresAt.setDate(expiresAt.getDate() + 7);
     await prisma.invitationToken.update({ where: { id }, data: { expiresAt } });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const registerUrl = `${appUrl}/auth/register?token=${invite.token}`;
+    // WORLDS (#2590): the invitation, not the person resending it, decides which
+    // product the link opens and which organization's brand the mail wears. A
+    // resend from the bulk board or by another admin repeats the FIRST mail's
+    // destination — a marketing invitation must not turn into an internship link
+    // because of who clicked "resend". `invite.orgId` is the org the row was
+    // minted in; the session's org (what the mail used before) is only the
+    // fallback for a row that never got one — the deploy backfill stamps every
+    // nullable orgId, so that is at most a row minted by an org-less inviter
+    // since the last deploy. INTERNSHIP: the NEXT_PUBLIC_APP_URL origin, exactly
+    // as before.
+    const inviteOrgId = invite.orgId ?? resolveOrgId(session);
+    const registerUrl = invitationRegisterUrl(invite.token, await worldOfOrg(inviteOrgId));
     let emailSent = false;
     if (invite.email) {
       try {
@@ -58,7 +70,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
           to: invite.email,
           token: invite.token,
           role: invite.role,
-          orgId: resolveOrgId(session),
+          orgId: inviteOrgId,
           locale: invite.locale,
         })) === 'SENT';
       } catch (e) {

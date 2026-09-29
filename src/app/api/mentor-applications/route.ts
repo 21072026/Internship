@@ -8,6 +8,7 @@ import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { capSkills } from '@/lib/skills';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { sendMentorApplicationReceivedEmail } from '@/services/emailService';
 import type { Prisma } from '@prisma/client';
 
@@ -71,8 +72,16 @@ export async function POST(request: Request) {
   // Never reveal whether an account already exists for this email (no user
   // enumeration): silently accept without creating an application or a
   // notification, returning the exact same response as a real submission.
-  const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-  if (existingUser) {
+  //
+  // "Has an account" is asked in the world this application belongs to (#2590).
+  // A public application carries no org of its own — it is filed in the default
+  // org, i.e. the INTERNSHIP world (`null` resolves to it, the same rule the
+  // approval in [id]/route.ts reads the row back with) — so an address that
+  // holds only a MARKETING account is not "already registered" here: that person
+  // can still apply, and approval creates their internship mentor account. An
+  // address that has an INTERNSHIP account is silently accepted exactly as
+  // before (same `{ ok: true }`, nothing created).
+  if (await emailTakenInOrgWorld(email, null)) {
     return NextResponse.json({ ok: true });
   }
 

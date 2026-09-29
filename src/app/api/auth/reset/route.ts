@@ -73,6 +73,15 @@ export async function POST(request: Request) {
 
     const hashed = await bcrypt.hash(password, 12);
 
+    // WORLDS (#2590): everything below is keyed by `record.userId` — the account
+    // this link was MINTED for — and must stay that way. One mailbox can now hold
+    // an internship account and a marketing account (same address, two rows), so
+    // a step keyed by the e-mail address would change the password, revoke the
+    // sessions or clear the devices of the person's OTHER product too. The
+    // lockout counter is the one thing that IS shared by address on purpose
+    // (`clearLockoutByEmail`, sign-in's own business — one brute-force budget
+    // across a person's worlds); it is not touched from this route.
+    //
     // Set the new password and consume the token atomically. Following the
     // emailed link proves ownership of the address, so a SET_INITIAL flow also
     // marks the email verified.
