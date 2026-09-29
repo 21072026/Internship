@@ -61,12 +61,22 @@ Replacement (`writeReplaces`):
 
 - a machine write never replaces anything — an import re-run must not erase a
   confirmation, and must not un-revoke a withdrawal;
-- a DOI click replaces anything, including an earlier withdrawal (the person opted back in);
+- a DOI click replaces anything, including an earlier withdrawal (the person opted back
+  in) — but only a click dated **after** that withdrawal. Only the press that claims an
+  enquiry's confirmation writes as `doi`; pressing an already-confirmed link again (a
+  replay, weeks later) carries the old evidence over only as a conversion would, so it can
+  never revive a row revoked after that confirmation;
 - a conversion only upgrades a weaker, live basis — never downgrades a DOI or § 7(3)
   record to `INQUIRY_REPLY`, never revives a revoked row;
-- an admin replaces, **except** an advertising basis over the person's own withdrawal
-  (`revokedVia = 'LINK'` → `owner_objected`). § 7(3) itself ends at an objection, and
-  "re-granting" what somebody withdrew is exactly the contact the rule prevents.
+- an admin replaces, **except** over the person's own withdrawal (`revokedVia = 'LINK'`
+  → `owner_objected`): that row is **locked** against every admin write, a neutral
+  `NONE`/`INQUIRY_REPLY` included — any write clears the revocation, so a neutral one
+  would be step one of a two-step re-grant. § 7(3) itself ends at an objection, and
+  "re-granting" what somebody withdrew is exactly the contact the rule prevents. Only
+  the person lifts the lock, with a new confirmation.
+- an opt-out click over a row an admin already revoked still records itself
+  (`revokedVia` becomes `LINK`, the earlier `revokedAt` stays): the admin's revocation is
+  not the person's objection, and only the latter locks the row.
 
 **Why the SaleVali newsletter flag is not a basis.** SaleVali's registration box is
 pre-ticked (`salevali-client/src/app/pages/auth/Registration.jsx:46`; the Google sign-up
@@ -96,7 +106,10 @@ the enquiry as `marketingOptInRequested` + `marketingOptInTextVersion`.
    address. Keys older than two days are swept on the next insert. The form's own
    `company-inquiry` bucket (3/hour per IP) sits in front. A capped request stays an
    unconfirmed request (`marketingOptInMailSentAt` NULL); nothing is lost that the
-   person cannot redo tomorrow.
+   person cannot redo tomorrow. A mail that was not actually **sent** — a transport
+   error, or `sendEmail` answering `SKIPPED` (SMTP unconfigured, demo mode) — gives the
+   day's slot back and leaves `marketingOptInMailSentAt` NULL: that column is evidence
+   that a confirmation went out, and must never claim one falsely.
 3. **The click.** Both links point at a page (`/contact-permission/confirm`,
    `/contact-permission/opt-out`) whose button POSTs to
    `/api/contact-permission/{confirm,opt-out}` — mail scanners prefetch every URL, and a
@@ -144,10 +157,12 @@ the gate per recipient and skip on `false` — that is what this section is for.
   (`PUT /api/admin/companies/[id]/contact-permission`).
 - **Lists**: `/admin/companies` has a "Provable e-mail permission" filter
   (`GET /api/companies?permission=email`) and a badge; `/sales/accounts?permission=email`
-  the same for a rep's own accounts. The list filter checks the row, not that its
+  the same for a rep's own accounts. The query filter checks the row, not that its
   address still equals `contactEmail` (Prisma cannot compare two columns); the badge and
-  the send gate do compare, so a changed contact reads as "not permitted" everywhere it
-  matters.
+  the send gate do compare. `/sales/accounts` (one unpaginated query) drops the rows the
+  badge would say no to, so its filtered view is exactly the badge rule; the paginated
+  `/admin/companies` cannot without breaking its counts, so it says on screen, under the
+  filter, that only a badged account is permitted for its current contact e-mail.
 - **Deleting an account** (#2441/#2559) deletes its permission rows (`onDelete: Cascade`,
   listed in the delete dialog). The withdrawal stays provable on the enquiry row
   (`marketingOptOutAt`) for as long as enquiries are retained; nothing else is kept.

@@ -1,6 +1,7 @@
 import { createHmac } from 'crypto';
 import { requireServerSecret } from '@/lib/serverSecret';
 import { safeEqual } from '@/lib/secretBox';
+import { capDay, normalizeAddress } from '@/lib/contactPermissionRule';
 
 /**
  * The two signed links of the double opt-in (#2577): "yes, send me product
@@ -49,4 +50,19 @@ export function verifyContactPermissionToken(purpose: Purpose, token: string): s
 export function contactPermissionUrl(origin: string, purpose: Purpose, inquiryId: string): string {
   const path = purpose === 'confirm' ? '/contact-permission/confirm' : '/contact-permission/opt-out';
   return `${origin}${path}?token=${encodeURIComponent(makeContactPermissionToken(purpose, inquiryId))}`;
+}
+
+/**
+ * The per-recipient cap's key for the confirmation mail (one per address per
+ * UTC day, `ContactConfirmationMailCap`). Keyed (HMAC with the server secret),
+ * not a bare sha256: an unkeyed hash of an e-mail address is reversible by
+ * anybody with a list of addresses, and the privacy notice calls this a one-way
+ * hash that is not the address. Lives here, beside the other HMACs of the
+ * double opt-in, so a test can name a key without loading the mail service.
+ */
+export function doiMailCapKey(address: string, now: Date): string {
+  const hash = createHmac('sha256', requireServerSecret())
+    .update(`contact-doi-cap:${normalizeAddress(address)}`)
+    .digest('hex');
+  return `${hash}:${capDay(now)}`;
 }

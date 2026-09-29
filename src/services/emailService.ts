@@ -2319,10 +2319,10 @@ export async function sendContactPermissionConfirmationEmail({
   optOutUrl: string;
   locale?: string | null;
   orgId?: string | null;
-}) {
+}): Promise<EmailDeliveryResult> {
   const brand = await emailBrand(orgId);
   const M = getDictionary(resolveLocale(locale)).contactPermissionEmail;
-  await sendEmail({
+  return await sendEmail({
     to,
     category: 'consent',
     locale,

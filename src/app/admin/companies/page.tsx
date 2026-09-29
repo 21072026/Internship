@@ -536,6 +536,14 @@ export default function CompaniesPage() {
           <option value="all">{t.companiesPage.permissionFilter.all}</option>
           <option value="email">{t.companiesPage.permissionFilter.email}</option>
         </select>
+        {/* The filter checks the stored row; that its address is still the
+            contact e-mail only the badge (and the send gate) can check —
+            Prisma cannot compare two columns in a paginated query. */}
+        {permission === 'email' && (
+          <span className="text-xs text-gray-500" data-testid="companies-permission-hint">
+            {t.companiesPage.permissionFilter.emailHint}
+          </span>
+        )}
         <span className="text-sm text-gray-500" data-testid="companies-total">
           {t.companiesPage.resultCount.replace('{count}', String(total))}
         </span>

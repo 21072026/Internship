@@ -119,11 +119,13 @@ export interface ExistingPermission {
 }
 
 /**
- * Did the address owner themself object (the opt-out link)? Then nobody here
- * may write an advertising basis over it — § 7(3) itself ends at an objection,
- * and an admin "re-granting" what the person withdrew is exactly the contact
- * the rule exists to prevent. Only the person can undo it, by confirming a new
- * request (`doi`).
+ * Did the address owner themself object (the opt-out link)? Then the row is
+ * LOCKED: nobody here may write over it at all — not an advertising basis
+ * (§ 7(3) itself ends at an objection) and not a neutral one either, because
+ * any write replaces the row's revocation and a neutral write would be step one
+ * of a two-step re-grant (NONE clears the objection, § 7(3) then goes through).
+ * Only the person can lift it, by confirming a request AFTER the objection
+ * (`doi`, see `writeReplaces`).
  */
 export function ownerObjected(existing: ExistingPermission | null): boolean {
   return !!existing?.revokedAt && existing.revokedVia === 'LINK';
@@ -137,10 +139,13 @@ export function ownerObjected(existing: ExistingPermission | null): boolean {
  *    when there is none. An import re-run must not erase a confirmed opt-in,
  *    and it must not un-revoke an opt-out either.
  *  - An admin write replaces (they are deciding, with a reason; the
- *    ActivityLog keeps what was there) — except an advertising basis over the
- *    address owner's own withdrawal (`ownerObjected`).
+ *    ActivityLog keeps what was there) — except over the address owner's own
+ *    withdrawal (`ownerObjected`), which no admin write touches.
  *  - A DOI click is a new, explicit consent by the address owner: it replaces
- *    whatever is there, including an earlier revocation (they opted back in).
+ *    whatever is there, including an earlier revocation (they opted back in) —
+ *    but only when the click itself is LATER than that revocation. A
+ *    confirmation dated before the revocation is the consent that was revoked,
+ *    not a new one, and replaying it must not undo the revocation.
  *  - An inquiry conversion replaces only a weaker, live basis — it never
  *    downgrades a DOI or a §7(3) record to INQUIRY_REPLY, and never revives a
  *    revoked row (a revocation is the owner's word; a new request is not a
@@ -150,11 +155,15 @@ export function writeReplaces(
   writer: ContactPermissionWriter,
   incoming: ContactBasis,
   existing: ExistingPermission | null,
+  incomingConfirmedAt?: Date | null,
 ): boolean {
   if (!existing) return true;
   if (isMachineWriter(writer)) return false;
-  if (writer === 'doi') return true;
-  if (writer === 'admin') return !(ownerObjected(existing) && MARKETING_EMAIL_BASES.includes(incoming));
+  if (writer === 'doi') {
+    if (!existing.revokedAt) return true;
+    return !!incomingConfirmedAt && incomingConfirmedAt.getTime() > existing.revokedAt.getTime();
+  }
+  if (writer === 'admin') return !ownerObjected(existing);
   if (existing.revokedAt) return false;
   return RANK[incoming] > RANK[existing.basis];
 }

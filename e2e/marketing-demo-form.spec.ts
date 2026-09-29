@@ -3,7 +3,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
-import { makeContactPermissionToken } from '../src/lib/contactPermissionTokens';
+import { doiMailCapKey, makeContactPermissionToken } from '../src/lib/contactPermissionTokens';
 
 // The demo form on the MARKETING landing (#2569) and the default lead owner
 // (#2580 item 3).
@@ -353,9 +353,14 @@ test('a ticked box mails ONE confirmation a day; the click makes the account DOI
   // Same body whether or not a mail went out.
   expect(await res.json()).toEqual({ ok: true });
   const first = await prisma.companyInquiry.findFirstOrThrow({ where: { email, companyName } });
-  expect(first.marketingOptInMailSentAt).not.toBeNull();
   expect(first.marketingOptInConfirmedAt).toBeNull();
+  // SMTP is blank under e2e, so the mail is attempted (one SKIPPED consent
+  // row) but not SENT — and a mail that was not sent neither stamps the
+  // evidence column nor spends the address's daily slot.
   expect(await confirmMails()).toBe(1);
+  expect(first.marketingOptInMailSentAt).toBeNull();
+  const capKey = doiMailCapKey(email, new Date());
+  expect(await prisma.contactConfirmationMailCap.count({ where: { key: capKey } })).toBe(0);
 
   // Converted by the default owner: the account exists and may be ANSWERED,
   // which is not advertising permission.
@@ -367,7 +372,9 @@ test('a ticked box mails ONE confirmation a day; the click makes the account DOI
   expect(beforeClick.basis).toBe('INQUIRY_REPLY');
   expect(beforeClick.orgId).toBe(orgId);
 
-  // A second request for the same address the same day sends no second mail.
+  // A second request for the same address the same day sends no second mail
+  // once the day's slot IS spent (as a SENT mail would have spent it).
+  await prisma.contactConfirmationMailCap.create({ data: { key: capKey } });
   const again = await postInquiry(request, MARKETING_HOST, {
     companyName: `${companyName} Zwei`,
     contactName: 'Dora Double',
@@ -471,6 +478,72 @@ test('a ticked box mails ONE confirmation a day; the click makes the account DOI
     });
     expect(regrant.status()).toBe(400);
     expect((await regrant.json()).code).toBe('owner_objected');
+    // …not in two steps either: a neutral basis would clear the objection and
+    // let § 7(3) through on the next request, so the row is locked to it too.
+    for (const basis of ['NONE', 'INQUIRY_REPLY'] as const) {
+      const neutral = await admin.request.put(`/api/admin/companies/${companyId}/contact-permission`, {
+        data: { action: 'set', channel: 'EMAIL', basis },
+      });
+      expect(neutral.status()).toBe(400);
+      expect((await neutral.json()).code).toBe('owner_objected');
+    }
+    const stillLocked = await prisma.contactPermission.findUniqueOrThrow({
+      where: { companyId_channel: { companyId, channel: 'EMAIL' } },
+    });
+    expect(stillLocked.revokedVia).toBe('LINK');
+    expect(stillLocked.revokedAt).not.toBeNull();
+
+    // Another request's account: confirmed, then revoked by an admin (the
+    // person objected by phone). Replaying the old confirm link is not a new
+    // consent and must not revive it; the person's own opt-out afterwards
+    // still records itself, and locks the row.
+    const replayEmail = newInquiryEmail('demo-form-doi-replay');
+    const replayName = `Opt In Replay ${stamp}`;
+    const placed = await postInquiry(request, MARKETING_HOST, {
+      companyName: replayName,
+      contactName: 'Rita Replay',
+      email: replayEmail,
+      marketingOptIn: true,
+      locale: 'de',
+    });
+    expect(placed.ok()).toBeTruthy();
+    const third = await prisma.companyInquiry.findFirstOrThrow({ where: { email: replayEmail, companyName: replayName } });
+    const secondCompanyId = third.convertedCompanyId;
+    expect(secondCompanyId).not.toBeNull();
+    expect(secondCompanyId).not.toBe(companyId);
+    const secondToken = makeContactPermissionToken('confirm', third.id);
+    const confirmSecond = await request.post('/api/contact-permission/confirm', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: secondToken },
+    });
+    expect(confirmSecond.ok()).toBeTruthy();
+    const secondKey = { companyId_channel: { companyId: secondCompanyId!, channel: 'EMAIL' as const } };
+    expect((await prisma.contactPermission.findUniqueOrThrow({ where: secondKey })).basis).toBe('DOI_CONFIRMED');
+    const adminRevoke = await admin.request.put(`/api/admin/companies/${secondCompanyId}/contact-permission`, {
+      data: { action: 'revoke', channel: 'EMAIL' },
+    });
+    expect(adminRevoke.ok()).toBeTruthy();
+    const replay = await request.post('/api/contact-permission/confirm', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: secondToken },
+    });
+    expect(replay.ok()).toBeTruthy();
+    const afterReplay = await prisma.contactPermission.findUniqueOrThrow({ where: secondKey });
+    expect(afterReplay.revokedAt).not.toBeNull();
+    expect(afterReplay.revokedVia).toBe('ADMIN');
+    const optOutSecond = await request.post('/api/contact-permission/opt-out', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: makeContactPermissionToken('optout', third.id) },
+    });
+    expect(optOutSecond.ok()).toBeTruthy();
+    const afterOptOut = await prisma.contactPermission.findUniqueOrThrow({ where: secondKey });
+    expect(afterOptOut.revokedVia).toBe('LINK');
+    expect(afterOptOut.revokedAt!.getTime()).toBe(afterReplay.revokedAt!.getTime());
+    const overObjection = await admin.request.put(`/api/admin/companies/${secondCompanyId}/contact-permission`, {
+      data: { action: 'set', channel: 'EMAIL', basis: 'EXISTING_CUSTOMER_7_3', reason: 'Paid invoice 2026-0043 in April' },
+    });
+    expect(overObjection.status()).toBe(400);
+    expect((await overObjection.json()).code).toBe('owner_objected');
     await gotoSettled(admin, `/admin/companies/${companyId}`);
     await expect(admin.getByTestId('company-detail-permission-basis-EMAIL')).toHaveAttribute('data-revoked', 'true');
     await expect(admin.getByTestId('company-detail-email-permission')).toHaveAttribute('data-permitted', 'false');

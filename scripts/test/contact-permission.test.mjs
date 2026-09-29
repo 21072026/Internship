@@ -79,8 +79,14 @@ test('a conversion never downgrades a stronger basis and never revives a revocat
   assert.equal(writeReplaces('inquiry', 'INQUIRY_REPLY', { basis: 'DOI_CONFIRMED', revokedAt: null }), false);
   assert.equal(writeReplaces('inquiry', 'INQUIRY_REPLY', { basis: 'EXISTING_CUSTOMER_7_3', revokedAt: null }), false);
   assert.equal(writeReplaces('inquiry', 'DOI_CONFIRMED', { basis: 'NONE', revokedAt: NOW }), false);
-  // The address owner opting back in is a new, explicit consent.
-  assert.equal(writeReplaces('doi', 'DOI_CONFIRMED', { basis: 'NONE', revokedAt: NOW }), true);
+  // The address owner opting back in is a new, explicit consent — a click
+  // AFTER the revocation. One dated before it is the revoked consent itself.
+  const later = new Date(NOW.getTime() + 1000);
+  const earlier = new Date(NOW.getTime() - 1000);
+  assert.equal(writeReplaces('doi', 'DOI_CONFIRMED', { basis: 'NONE', revokedAt: NOW }, later), true);
+  assert.equal(writeReplaces('doi', 'DOI_CONFIRMED', { basis: 'NONE', revokedAt: NOW }, earlier), false);
+  assert.equal(writeReplaces('doi', 'DOI_CONFIRMED', { basis: 'NONE', revokedAt: NOW }), false);
+  assert.equal(writeReplaces('doi', 'DOI_CONFIRMED', { basis: 'INQUIRY_REPLY', revokedAt: null }, earlier), true);
   assert.equal(writeReplaces('admin', 'NONE', { basis: 'DOI_CONFIRMED', revokedAt: null }), true);
 });
 
@@ -143,10 +149,14 @@ test('nobody here writes an advertising basis over the address owner’s own wit
   const withdrawn = { basis: 'DOI_CONFIRMED', revokedAt: NOW, revokedVia: 'LINK' };
   assert.equal(writeReplaces('admin', 'EXISTING_CUSTOMER_7_3', withdrawn), false);
   assert.equal(writeReplaces('inquiry', 'INQUIRY_REPLY', withdrawn), false);
-  // A neutral basis is still the admin's to record, and an admin's own
-  // revocation is not the person's objection.
-  assert.equal(writeReplaces('admin', 'NONE', withdrawn), true);
+  // The objection LOCKS the row against every admin write: a neutral basis
+  // would clear the revocation, and § 7(3) would then pass on the second step.
+  for (const basis of ['NONE', 'INQUIRY_REPLY', 'EXISTING_CUSTOMER_7_3']) {
+    assert.equal(writeReplaces('admin', basis, withdrawn), false, `admin ${basis} over a LINK withdrawal`);
+  }
+  // An admin's own revocation is not the person's objection.
   assert.equal(writeReplaces('admin', 'EXISTING_CUSTOMER_7_3', { ...withdrawn, revokedVia: 'ADMIN' }), true);
-  // The person themself opting back in.
-  assert.equal(writeReplaces('doi', 'DOI_CONFIRMED', withdrawn), true);
+  // The person themself opting back in — with a click after the objection.
+  assert.equal(writeReplaces('doi', 'DOI_CONFIRMED', withdrawn, new Date(NOW.getTime() + 1)), true);
+  assert.equal(writeReplaces('doi', 'DOI_CONFIRMED', withdrawn, new Date(NOW.getTime() - 1)), false);
 });

@@ -384,7 +384,9 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   `src/lib/contactPermission.ts`, and a refused write **throws**. Three rules are load-bearing:
   **machines (import, feeds, SaleVali's pre-ticked newsletter flag) write `NONE` only** and never
   replace a row; **nobody but the address owner's own click produces `DOI_CONFIRMED`** (no admin
-  path); and **nobody writes an advertising basis over the owner's own withdrawal**. The demo
+  path); and **the owner's own withdrawal (`revokedVia = 'LINK'`) locks the row against every
+  admin write**, a neutral one included (NONE-then-§ 7(3) was a two-step re-grant) — only a
+  confirmation dated after it lifts it, and a replayed old confirm link never does. The demo
   form's DOI mail is capped at one per address per UTC day (`ContactConfirmationMailCap`, a
   primary-key insert). No advertising mail to account contacts exists yet — the first one must
   call `canSendMarketingEmail()` per recipient.

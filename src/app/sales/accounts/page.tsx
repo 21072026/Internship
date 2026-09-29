@@ -36,7 +36,7 @@ export default async function SalesAccountsPage({
 
   const tenant = await tenantWhere(session);
   const own = withinTenant({ mentorId: session.user.id }, tenant);
-  const companies = await prisma.company.findMany({
+  const found = await prisma.company.findMany({
     where: withinTenant(
       onlyPermitted ? { AND: [{ mentorships: { some: own } }, marketingEmailPermissionFilter()] } : { mentorships: { some: own } },
       tenant,
@@ -55,6 +55,14 @@ export default async function SalesAccountsPage({
       _count: { select: { mentorships: { where: own } } },
     },
   });
+
+  // The query filter checks the stored row; it cannot check that the row's
+  // address is still the contact e-mail (Prisma does not compare two columns).
+  // This view is labelled "accounts you may e-mail", so it keeps only what the
+  // badge and the send gate would also say yes to — one rule, not two.
+  const companies = onlyPermitted
+    ? found.filter((c) => !!c.contactEmail && marketingEmailAllowed(c.contactPermissions[0], c.contactEmail))
+    : found;
 
   const { t } = await getServerDictionary();
   const s = t.sales.accounts;

@@ -89,7 +89,7 @@ export async function writeContactPermission(input: PermissionWrite, client: Cli
   // A row of another tenant under this company id would mean the company id
   // itself crossed a tenant; refuse rather than overwrite.
   if (existing && existing.orgId !== input.orgId) return false;
-  if (!writeReplaces(input.writer, input.basis, existing)) return false;
+  if (!writeReplaces(input.writer, input.basis, existing, input.confirmedAt)) return false;
 
   const evidence = {
     basis: input.basis,
@@ -148,10 +148,21 @@ export async function revokeContactPermission(input: {
 }): Promise<void> {
   const now = input.now ?? new Date();
   const key = { companyId_channel: { companyId: input.companyId, channel: input.channel } };
-  const existing = await prisma.contactPermission.findUnique({ where: key, select: { orgId: true, revokedAt: true } });
+  const existing = await prisma.contactPermission.findUnique({
+    where: key,
+    select: { orgId: true, revokedAt: true, revokedVia: true },
+  });
   if (existing && existing.orgId !== input.orgId) return;
-  if (existing?.revokedAt) return;
-  if (existing) {
+  if (existing?.revokedAt) {
+    // Already revoked. An ADMIN revocation that the address owner then objects
+    // to through the link must still RECORD the owner's objection: it is what
+    // locks the row (`ownerObjected`), and an admin revocation is not one — an
+    // admin could otherwise write § 7(3) over it later. Keep the earlier
+    // revocation's date (that is when the permission stopped); only the "who"
+    // becomes the person. Anything else is already as revoked as it gets.
+    if (input.via !== 'LINK' || existing.revokedVia === 'LINK') return;
+    await prisma.contactPermission.update({ where: key, data: { revokedVia: 'LINK' } });
+  } else if (existing) {
     await prisma.contactPermission.update({ where: key, data: { revokedAt: now, revokedVia: input.via } });
   } else {
     await prisma.contactPermission.create({

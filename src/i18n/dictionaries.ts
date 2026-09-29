@@ -875,6 +875,7 @@ const en = {
       label: 'Contact permission',
       all: 'All accounts',
       email: 'Provable e-mail permission',
+      emailHint: 'Only an account whose badge shows is permitted for its current contact e-mail.',
     },
     permissionBadge: 'E-mail permission',
     deleteDialog: {
@@ -6529,6 +6530,7 @@ const tr: Dict = {
       label: 'İletişim izni',
       all: 'Tüm hesaplar',
       email: 'Kanıtlanabilir e-posta izni',
+      emailHint: 'Yalnızca rozeti görünen hesap, güncel iletişim e-postası için izinlidir.',
     },
     permissionBadge: 'E-posta izni',
     deleteDialog: {
@@ -12060,6 +12062,7 @@ const de: Dict = {
       label: 'Kontakterlaubnis',
       all: 'Alle Accounts',
       email: 'Nachweisbare E-Mail-Erlaubnis',
+      emailHint: 'Nur ein Account mit Abzeichen ist für seine aktuelle Kontakt-E-Mail erlaubt.',
     },
     permissionBadge: 'E-Mail-Erlaubnis',
     deleteDialog: {

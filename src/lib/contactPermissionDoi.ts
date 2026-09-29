@@ -4,25 +4,13 @@
 // Split from src/lib/contactPermission.ts (the writer) so that the import CLI,
 // which writes through that file, does not load the mail service.
 
-import { createHmac } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { requireServerSecret } from '@/lib/serverSecret';
 import { logActivity } from '@/lib/activity';
-import { capDay, normalizeAddress, refuseConfirmation, type DoiRefusal } from '@/lib/contactPermissionRule';
+import { refuseConfirmation, type DoiRefusal } from '@/lib/contactPermissionRule';
 import { revokeContactPermission, writeContactPermission } from '@/lib/contactPermission';
-import { contactPermissionUrl } from '@/lib/contactPermissionTokens';
+import { contactPermissionUrl, doiMailCapKey as capKey } from '@/lib/contactPermissionTokens';
 import { sendContactPermissionConfirmationEmail } from '@/services/emailService';
-
-// Keyed (HMAC with the server secret), not a bare sha256: an unkeyed hash of an
-// e-mail address is reversible by anybody with a list of addresses, and the
-// privacy notice calls this a one-way hash that is not the address.
-function capKey(address: string, now: Date): string {
-  const hash = createHmac('sha256', requireServerSecret())
-    .update(`contact-doi-cap:${normalizeAddress(address)}`)
-    .digest('hex');
-  return `${hash}:${capDay(now)}`;
-}
 
 export type DoiMailOutcome = 'sent' | 'capped' | 'failed';
 
@@ -57,8 +45,9 @@ export async function sendDoiConfirmation(input: {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return 'capped';
     throw e;
   }
+  let delivered: Awaited<ReturnType<typeof sendContactPermissionConfirmationEmail>>;
   try {
-    await sendContactPermissionConfirmationEmail({
+    delivered = await sendContactPermissionConfirmationEmail({
       to: input.email,
       contactName: input.contactName,
       companyName: input.companyName,
@@ -68,9 +57,15 @@ export async function sendDoiConfirmation(input: {
       orgId: input.orgId,
     });
   } catch (e) {
-    // Not sent, so not spent: give the day's slot back.
-    await prisma.contactConfirmationMailCap.delete({ where: { key } }).catch(() => {});
+    delivered = 'FAILED';
     console.error('Contact permission confirmation mail failed:', e);
+  }
+  // "Did not throw" is not "was sent" (#1431): with SMTP unconfigured or in
+  // demo mode sendEmail returns SKIPPED. Not sent, so not spent — give the
+  // day's slot back — and not stamped: `marketingOptInMailSentAt` is evidence
+  // that a confirmation mail went out, and must never say so falsely.
+  if (delivered !== 'SENT') {
+    await prisma.contactConfirmationMailCap.delete({ where: { key } }).catch(() => {});
     return 'failed';
   }
   await prisma.companyInquiry.updateMany({
@@ -97,14 +92,22 @@ export type ConfirmOutcome = { kind: 'confirmed' } | { kind: 'refused'; reason: 
 
 /**
  * The address owner pressed "confirm" (POST from /contact-permission/confirm).
- * Idempotent: a second press answers `confirmed` again and changes nothing.
  * If the request is already an account, the account gets its DOI_CONFIRMED
  * permission now; otherwise the conversion carries it over later
  * (`applyInquiryPermission`).
+ *
+ * Only the press that CLAIMS the confirmation writes as `doi` — the writer that
+ * may lift a revocation. A later press of the same link (a replay, weeks after
+ * an admin revoked or the person objected through another enquiry's link) is
+ * not a new consent: it answers `confirmed` again and carries the old evidence
+ * over only as a conversion would (`inquiry` — never over a revoked row, never
+ * over an equal or stronger basis), which is what repairs an account the first
+ * press could not reach, and nothing more.
  */
 export async function confirmDoi(inquiryId: string, now = new Date()): Promise<ConfirmOutcome> {
   const inquiry = await prisma.companyInquiry.findUnique({ where: { id: inquiryId }, select: INQUIRY_EVIDENCE });
   if (!inquiry) return { kind: 'refused', reason: 'not_found' };
+  let claimedNow = false;
   if (!inquiry.marketingOptInConfirmedAt) {
     const refusal = refuseConfirmation(
       { requested: inquiry.marketingOptInRequested, optedOutAt: inquiry.marketingOptOutAt, createdAt: inquiry.createdAt },
@@ -116,6 +119,7 @@ export async function confirmDoi(inquiryId: string, now = new Date()): Promise<C
       data: { marketingOptInConfirmedAt: now },
     });
     if (claimed.count === 1) {
+      claimedNow = true;
       inquiry.marketingOptInConfirmedAt = now;
       await logActivity({
         action: 'contact_permission.doi_confirmed',
@@ -132,7 +136,7 @@ export async function confirmDoi(inquiryId: string, now = new Date()): Promise<C
     return { kind: 'refused', reason: 'opted_out' };
   }
   if (inquiry.convertedCompanyId) {
-    await writeInquiryEvidence('doi', inquiry, inquiry.convertedCompanyId);
+    await writeInquiryEvidence(claimedNow ? 'doi' : 'inquiry', inquiry, inquiry.convertedCompanyId);
   }
   return { kind: 'confirmed' };
 }
