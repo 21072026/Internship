@@ -284,6 +284,7 @@ export const MARKETING_MENTOR_ADMIN_ONLY: SalesProbe[] = [
   { method: 'POST', path: '/api/invite', body: { role: 'MENTEE', email: '' }, expect: 'forbidden', why: 'invite (capability)' },
   { method: 'POST', path: '/api/admin/import', body: {}, expect: 'deny', why: 'import' },
   { method: 'POST', path: '/api/admin/marketing-accounts', body: {}, expect: 'deny', why: 'account import' },
+  { method: 'POST', path: '/api/admin/import/marketing-accounts', body: {}, expect: 'deny', why: 'account file import (#2552)' },
   { method: 'GET', path: '/api/admin/company-inquiries', expect: 'deny', why: 'demo request queue' },
   { method: 'GET', path: '/api/admin/activity', expect: 'deny', why: 'activity log' },
   { method: 'GET', path: '/api/admin/analytics', expect: 'deny', why: 'tenant analytics' },

@@ -68,6 +68,13 @@ export const TEXT_LIMITS = {
    * product (#2446), written by the marketing import (#2554).
    */
   companyExternalId: 191,
+  /**
+   * The marketing account file sent to POST /api/admin/import/marketing-accounts
+   * (#2552) — a request cap, not a column: the whole delimited text, in
+   * characters. 2 000 000 is ~5 000 rows of a wide export with room to spare;
+   * the row count has its own cap (MARKETING_IMPORT_MAX_ROWS).
+   */
+  marketingImportFile: 2_000_000,
   /** Company.country — VARCHAR(2): an ISO-3166-1 alpha-2 code, nothing else. */
   companyCountry: 2,
   /** CompanyNeed.position — VARCHAR(191) */

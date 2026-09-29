@@ -390,6 +390,21 @@ export interface MarketingImportOptions {
   /** `--delimiter`; sniffed from the header line when omitted. */
   delimiter?: string;
   chunkSize?: number;
+  /**
+   * The owner, already resolved — the admin panel (#2552) resolves it from the
+   * session, or from an owner the admin picked in the same org, so no e-mail
+   * lookup is needed. When set, `ownerEmail` is ignored.
+   */
+  owner?: MarketingImportOwner;
+  /** Who ran it, for the activity log, when that is not the owner. Defaults to the owner. */
+  actor?: { id: string; email: string | null };
+  /** The request, so the activity row carries its IP/user agent like other admin writes. */
+  request?: Request;
+  /**
+   * Refuse a file with more data rows than this (`too_many_rows`) before
+   * anything is planned. The panel sets it; the CLI does not.
+   */
+  maxRows?: number;
 }
 
 export interface MarketingImportRunResult {
@@ -407,29 +422,41 @@ export interface MarketingImportRunResult {
 export async function runMarketingAccountImport(
   options: MarketingImportOptions,
 ): Promise<MarketingImportRunResult> {
-  const owner = await resolveImportOwner(options.ownerEmail);
+  const owner = options.owner ?? (await resolveImportOwner(options.ownerEmail));
   const orgId = owner.orgId;
   const apply = options.apply === true;
+  const { maxRows } = options;
 
   const { report, stageKeys } = await runMarketingRows({
     owner,
-    parse: () => parseDelimited(options.text, { delimiter: options.delimiter }),
+    parse: () => {
+      // The same parser either way; the cap is a check on its output, so a
+      // bounded run cannot read the file differently from an unbounded one.
+      const table = parseDelimited(options.text, { delimiter: options.delimiter });
+      if (maxRows !== undefined && table.rows.length > maxRows) {
+        throw new MarketingImportError('too_many_rows', `The file has ${table.rows.length} rows; at most ${maxRows} per run`);
+      }
+      return table;
+    },
     mode: apply ? 'database' : 'preview',
     authoritative: options.authoritative,
     chunkSize: options.chunkSize,
   });
 
   if (apply) {
+    // Counts only — never a name, an address or a row (#2552: the panel's run
+    // is logged like the CLI's, and the activity log is read by every admin).
     await runWithOrg(orgId, () =>
       logActivity({
         action: 'marketing.accounts.imported',
-        actorId: owner.id,
-        actorEmail: owner.email,
+        actorId: options.actor?.id ?? owner.id,
+        actorEmail: options.actor ? options.actor.email : owner.email,
         targetType: 'Organization',
         targetId: orgId,
         detail: `rows=${report.total} ${Object.entries(report.counts)
           .map(([status, count]) => `${status}=${count}`)
-          .join(' ')}`,
+          .join(' ')}${options.authoritative ? ' authoritative' : ''}`,
+        ...(options.request ? { request: options.request } : {}),
       }),
     );
   }

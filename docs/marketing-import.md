@@ -260,7 +260,45 @@ half-written, and the rest of the file still lands.
 
 This is the runbook: what to do, in order, when you have the real customer file in hand.
 It does not restate a rule another page owns — each warning below links the page that
-does.
+does. For the one-off move of the real SaleVali table into production, follow the
+[cutover checklist](#cutover-checklist-2555) at the end; it points back into these steps.
+
+There are two doors to the **same** engine (`runMarketingAccountImport()` in
+`src/lib/marketingImportStore.ts`) — same parser, validator, match key, diff and writer,
+same row outcomes, same activity-log row:
+
+| | Where | Use it for |
+| --- | --- | --- |
+| **The admin panel** (#2552) | `/admin/settings` → import card → **Marketing accounts** | **production and the shared preview.** Runs inside the app, in the signed-in admin's own organisation; nobody connects to the database from outside |
+| **The CLI** | `npm run import:marketing-accounts` | a local database — rehearsals on synthetic data, development |
+
+### The admin panel (#2552)
+
+- **Who:** an `ADMIN` of a **MARKETING** organisation. The mode is not shown anywhere else,
+  and `POST /api/admin/import/marketing-accounts` answers an INTERNSHIP organisation
+  `403 vertical_mismatch` (a code of its own: INTERNSHIP carries every capability, so the
+  capability gate — `capability_unavailable` — could never be the one to refuse it) and a
+  `MENTOR` `403`.
+- **What it takes:** the file (picked, or pasted), the **default owner** — the signed-in
+  admin, or another active admin/rep of the organisation (the CLI's `--owner`; same rule:
+  pick one and keep it for every re-run) — and **Overwrite values the file disagrees with**
+  (the CLI's `--authoritative`, off by default). The organisation is always the admin's own;
+  there is nothing to choose.
+- **Preview (dry run)** is `--apply` left off; **Apply** is the same request with it on, and
+  is offered only after a preview of exactly that input (file, owner, overwrite flag). The
+  report shows the counts — New (`CREATE`), Update, Unchanged, Skipped, Error — and every row
+  needing attention (all `ERROR`/`SKIP` rows and every row carrying a reason); **All rows**
+  lists the rest. Row numbers and reasons are the CLI's, so steps 4 and 5 below read the
+  same.
+- **Bounds:** at most `TEXT_LIMITS.marketingImportFile` characters (2 000 000) and
+  `MARKETING_IMPORT_MAX_ROWS` (5 000) data rows per run — split a larger table into files and
+  run them one after another (each is idempotent); 30 runs per admin per 10 minutes.
+- **What the panel does not have:** the CLI's `--report` JSON and `--delimiter` (the
+  delimiter is sniffed; the API takes `delimiter` if a caller needs it). The report stays in
+  the browser tab — nothing about the rows is stored server-side; the activity log gets
+  `marketing.accounts.imported` with counts only, on apply.
+
+### The CLI
 
 ```bash
 # Dry run — the default. Nothing is written.
@@ -288,11 +326,15 @@ under `--apply`").
 
 ### Before the first run
 
-- **Where it runs.** From a checkout of the commit the target database is deployed at,
-  after `npm install` (which also runs `prisma generate`), on **Node ≥ 22.6** — the CLI
-  loads the TypeScript engine under `src/lib` through `--experimental-strip-types`. It
+- **Where it runs.** Against production or the shared preview: **the admin panel**, and
+  only the panel. The CLI runs from a checkout of the commit the target database is
+  deployed at, after `npm install` (which also runs `prisma generate`), on **Node ≥ 22.6** —
+  it loads the TypeScript engine under `src/lib` through `--experimental-strip-types`. It
   cannot run inside the app container: the runtime image is `node:20-slim` and ships
-  neither `scripts/` nor `src/` (`Dockerfile`).
+  neither `scripts/` nor `src/` (`Dockerfile`), and pointing a checkout at the production
+  database from outside is what [`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md) rules out.
+  The steps below name the CLI flags; the panel's controls are the same options (see the
+  table above).
 - **Which database.** The one `DATABASE_URL` names: the shell's value when it is set,
   otherwise the checkout's `.env`, which Prisma reads by itself. The CLI prints the
   organisation it writes to, but not the database host — know which one you are pointed at

@@ -169,6 +169,14 @@ export const MARKETING_COLUMNS_WITHOUT_TARGET: readonly string[] = MARKETING_IMP
  */
 export const MAX_FIELD_LENGTH = 191;
 
+/**
+ * The most data rows one run of the admin panel may carry (#2552). The run is
+ * one HTTP request that plans the whole file and writes one transaction per
+ * row, so it is bounded like every other request; a larger table is split into
+ * files. The CLI has no such cap (it is not a request).
+ */
+export const MARKETING_IMPORT_MAX_ROWS = 5000;
+
 export const FIELD_LIMITS: Readonly<Record<string, number>> = {
   name: TEXT_LIMITS.companyName,
   country: TEXT_LIMITS.companyCountry,
