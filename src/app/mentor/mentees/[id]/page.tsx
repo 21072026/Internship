@@ -40,6 +40,7 @@ import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { StageClockChip } from '@/components/StageClockChip';
 import { daysInStage } from '@/lib/stageClock';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
+import { TrialEndPanel } from '@/components/TrialEndPanel';
 
 interface InteractionLog {
   id: string;
@@ -66,6 +67,9 @@ interface RelationDetail {
   // The owner's follow-up (#2563) — only ever present for the owner and ADMIN.
   nextActionAt?: string | null;
   nextActionNote?: string | null;
+  // The trial window of a funnel record (#2551/#2553); null outside a trial.
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
@@ -315,6 +319,18 @@ export default function MenteeDetailPage() {
           relationId={relation.id}
           nextActionAt={relation.nextActionAt}
           nextActionNote={relation.nextActionNote}
+          onSaved={fetchRelation}
+        />
+      </div>
+
+      {/* The trial end (#2553) — nothing renders outside a trial. */}
+      <div className="mb-6 empty:hidden">
+        <TrialEndPanel
+          relationId={relation.id}
+          pipelineStatus={relation.pipelineStatus}
+          trialStartedAt={relation.trialStartedAt}
+          trialEndsAt={relation.trialEndsAt}
+          canEdit={relation.status === 'ACTIVE'}
           onSaved={fetchRelation}
         />
       </div>

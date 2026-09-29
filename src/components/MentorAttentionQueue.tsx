@@ -15,6 +15,9 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   // Amber, not red: an expired trial is a decision waiting to be made, not
   // something already broken.
   trial_expired: 'warning',
+  // Red: a running trial with no end date is one nothing will ever remind
+  // anybody about (#2553) — the data is broken, not merely waiting.
+  trial_no_end_date: 'danger',
   // Red like `overdue`: a date the owner promised themselves has gone by.
   next_action_due: 'danger',
 };
@@ -32,6 +35,7 @@ export function MentorAttentionQueue({ items, dormantCount = 0, t }: { items: At
     no_open_goal: labels.noOpenGoal,
     missing_weekly_reports: t.weeklyReports.missingAttention,
     trial_expired: labels.trialExpired,
+    trial_no_end_date: labels.trialNoEndDate,
     next_action_due: labels.nextActionDue,
   };
 

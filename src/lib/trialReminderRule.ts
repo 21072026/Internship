@@ -89,6 +89,14 @@ export const TRIAL_REMINDER_THRESHOLDS = [7, 3, 0] as const;
 export const TRIAL_ACTIVE_STAGE_KEY = 'TRIAL_ACTIVE';
 
 /**
+ * The key of the MARKETING preset's "trial ran out" stage — where the expiry
+ * sweep parks an elapsed trial (#2417). Named here for the same reason as
+ * TRIAL_ACTIVE_STAGE_KEY: `planTrialEndChange()` below compares against it,
+ * and lib/programTemplates.ts re-exports it beside its preset.
+ */
+export const TRIAL_EXPIRED_STAGE_KEY = 'TRIAL_EXPIRED';
+
+/**
  * The code default of the `trialLengthDays` org setting (src/lib/settings.ts):
  * the free-use period of a trial. 30 days, which is what the product being
  * sold actually grants (the SaleVali trial; its separate decision window after
@@ -255,4 +263,128 @@ export function selectDueTrialReminders(
   }
 
   return due;
+}
+
+// ── A PERSON SETS OR MOVES THE TRIAL END (#2553) ────────────────────────────
+//
+// `trialWindowFor()` above is what a STAGE write stamps, and it never
+// overwrites a window — a board drag must not be able to extend a trial.
+// Extending one is a real sales move, so it is its own explicit, audited write
+// (PATCH /api/mentorship/[id]/trial), and this is its rule.
+//
+// THE CLAIM ROWS ARE LEFT ALONE. A `TrialReminder` row answers "has this mark
+// been handled for this record?", and that stays true across an extension: a
+// trial moved from 3 days out to 20 days out does not get its 7-day or 3-day
+// mail a second time. Whatever the new window still has ahead of it — a mark
+// nobody has claimed yet — fires on its day as usual, because the selector only
+// ever skips thresholds that ARE claimed. Deleting the claims instead would
+// mail the same owner twice about the same record, which is exactly what the
+// claim-first design exists to prevent (see the TrialReminder model). The
+// price, stated plainly: a record whose 0-day mail already went out gets no
+// last-day mail in its extended window. The attention queue still lists it
+// when it runs out again (#2418), so it is not lost in silence.
+
+/** Anything that may carry a trial end: a Date from Prisma, or a JSON string on the client. */
+export type TrialEndValue = Date | string | null | undefined;
+
+function asDate(value: TrialEndValue): Date | null {
+  if (value === null || value === undefined || value === '') return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * A record that says "trial running" and has no end date (#2553).
+ *
+ * Such a record is invisible to the whole trial machinery — no reminder is ever
+ * due for it (`selectDueTrialReminders` skips a null end) and the expiry sweep
+ * never moves it — so it would run silently forever. The attention queue lists
+ * it as `trial_no_end_date`, and the board card and the record show a "date
+ * missing" badge, all from this one predicate, until somebody enters the date.
+ */
+export function isTrialMissingEndDate(record: {
+  pipelineStatus: string | null | undefined;
+  trialEndsAt: TrialEndValue;
+}): boolean {
+  return record.pipelineStatus === TRIAL_ACTIVE_STAGE_KEY && asDate(record.trialEndsAt) === null;
+}
+
+/** The stages in which a trial end may be set by hand: a running trial, or one that ran out. */
+export function isTrialEndEditableStage(pipelineStatus: string | null | undefined): boolean {
+  return pipelineStatus === TRIAL_ACTIVE_STAGE_KEY || pipelineStatus === TRIAL_EXPIRED_STAGE_KEY;
+}
+
+/**
+ * The trial-end day a person typed: `YYYY-MM-DD`, stored as midnight UTC — a
+ * DAY, compared by UTC day like every other trial date in this module. A real
+ * calendar date is required (`2026-02-30` is refused, not rolled into March).
+ */
+export function parseTrialEndDate(input: unknown): Date | null {
+  if (typeof input !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.trim());
+  if (!m) return null;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (year < 2000 || year > 2100) return null;
+  const value = new Date(Date.UTC(year, month - 1, day));
+  if (value.getUTCFullYear() !== year || value.getUTCMonth() !== month - 1 || value.getUTCDate() !== day) {
+    return null;
+  }
+  return value;
+}
+
+export type TrialEndChangeError = 'invalid_date' | 'not_in_trial' | 'in_the_past';
+
+export type TrialEndChangePlan =
+  | { ok: false; error: TrialEndChangeError }
+  /** Nothing to write: the record already ends on that UTC day. */
+  | { ok: true; changed: false }
+  | {
+      ok: true;
+      changed: true;
+      trialEndsAt: Date;
+      /**
+       * The record sits in TRIAL_EXPIRED and the new end is today or later, so
+       * it goes back to TRIAL_ACTIVE — as a HUMAN stage move (StatusChange +
+       * emitStageChange). The never-move-back rule of #2451 binds the machine
+       * writers only; a person extending a trial is exactly the move it leaves
+       * to people.
+       */
+      reopen: boolean;
+    };
+
+/**
+ * What setting a record's trial end to `newEndsAt` means (#2553). Pure — the
+ * clock is the caller's.
+ *
+ *   * only a record in TRIAL_ACTIVE or TRIAL_EXPIRED has a trial end worth
+ *     setting; anywhere else nothing reads the date (`not_in_trial`);
+ *   * the new end must be today or later, by UTC day. A past date is not an
+ *     extension — ending a trial is a stage move, and a past date typed here
+ *     would only be swept into TRIAL_EXPIRED on the next tick (`in_the_past`);
+ *   * the same UTC day the record already ends on is a no-op, not a write;
+ *   * shortening is allowed (a correction is a correction) — the claim rows
+ *     still guarantee that no mark is mailed twice.
+ */
+export function planTrialEndChange({
+  pipelineStatus,
+  currentEndsAt,
+  newEndsAt,
+  now,
+}: {
+  pipelineStatus: string | null | undefined;
+  currentEndsAt: TrialEndValue;
+  newEndsAt: Date | null;
+  now: Date;
+}): TrialEndChangePlan {
+  if (!newEndsAt || Number.isNaN(newEndsAt.getTime())) return { ok: false, error: 'invalid_date' };
+  if (!isTrialEndEditableStage(pipelineStatus)) return { ok: false, error: 'not_in_trial' };
+  if (daysUntilUtcDay(newEndsAt, now) < 0) return { ok: false, error: 'in_the_past' };
+  const current = asDate(currentEndsAt);
+  if (current && utcDayNumber(current) === utcDayNumber(newEndsAt)) return { ok: true, changed: false };
+  return {
+    ok: true,
+    changed: true,
+    trialEndsAt: new Date(newEndsAt.getTime()),
+    reopen: pipelineStatus === TRIAL_EXPIRED_STAGE_KEY,
+  };
 }

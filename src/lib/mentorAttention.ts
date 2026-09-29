@@ -5,9 +5,10 @@ import { getSetting } from '@/lib/settings';
 import { addUtcWeeks, firstFullUtcWeek, utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
+import { isTrialMissingEndDate } from '@/lib/trialReminderRule';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'next_action_due';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due';
 
 export interface AttentionItem {
   relationId: string;
@@ -47,6 +48,7 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
       startDate: true,
       stageDeadline: true,
       nextActionAt: true,
+      trialEndsAt: true,
       mentee: { select: { id: true, fullName: true } },
       questions: { where: { answer: null }, select: { id: true } },
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
@@ -131,6 +133,10 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
     // whole trial rather than the age of the decision. #2527 fixes that at the
     // source; nothing here should paper over it with a second calculation.
     if (r.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY) reasons.push('trial_expired');
+    // A running trial with no end date (#2553) is invisible to the reminder
+    // ladder and the expiry sweep alike — nothing would ever happen to it. It
+    // sits here until the owner enters the date, and leaves on that write.
+    if (isTrialMissingEndDate(r)) reasons.push('trial_no_end_date');
     // The follow-up date the owner wrote on the record has passed (#2563).
     // The day ITSELF is the reminder's (checkNextActionReminders); the record
     // lands here from the next day on, and leaves the moment the date is moved
