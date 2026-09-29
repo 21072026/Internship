@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **A MARKETING admin can create one lead / account by hand** (#2562, story #2397). `/admin/companies` gains a \"New lead / account\" dialog (company name, country, VAT id, contact name / e-mail / phone, source, starting stage — defaulting to the org's first on-path stage) for the call, the trade-fair badge and the LinkedIn message; until now the CSV import was the only way in. `POST /api/admin/marketing-accounts` (ADMIN only, MARKETING orgs only — `vertical_unavailable` otherwise — plus `requireCapability` on `companies` and `pipeline`, `withRequestScope` + `withTenantScope`, `marketing.account.created` in the activity log) writes **no lead of its own**: the body becomes ONE row of the marketing import contract (`manualAccountTable`) and runs through `runImport` with the import's validator, match key (VAT id, then name + country), diff and database writer, in a new create-only mode (`createOnlyWriter` / `createOnlyPlan` in `src/lib/marketingImport.ts`; `createMarketingAccount` in `src/lib/marketingImportStore.ts`, which now shares one `runMarketingRows` core with the CLI run). A row that resolves to an existing account writes nothing and answers `409 account_exists` with the account's id (the dialog opens it); a contact that already has an active funnel record answers `contact_in_funnel` instead of having that record re-pointed at the new account; another owner's lead is `already_mentored` (#419). The lead person keeps the import's stand-in address, no consent record is written (#2577), and INTERNSHIP orgs never see the form. Covered by five new cases in `scripts/test/marketing-import.test.mjs` and `e2e/marketing-manual-lead.spec.ts`.",
+  "notes": {
+    "en": [
+      "Marketing organisations can now add a single lead straight from the Companies page with \"New lead / account\" — for a lead from a call, a trade fair or LinkedIn. The lead appears on the board in your first stage right away, and an account that already exists (same VAT ID, or same name and country) is not created a second time: you are offered the existing one instead."
+    ],
+    "tr": [
+      "Pazarlama organizasyonları artık Şirketler sayfasındaki \"Yeni lead / hesap\" ile tek bir lead'i doğrudan ekleyebiliyor — telefondan, fuardan ya da LinkedIn'den gelen bir lead için. Lead hemen panoda ilk aşamanızda görünüyor; zaten var olan bir hesap (aynı VAT numarası ya da aynı ad ve ülke) ikinci kez açılmıyor, bunun yerine mevcut hesap öneriliyor."
+    ],
+    "de": [
+      "Marketing-Organisationen können jetzt über „Neuer Lead / Account“ auf der Unternehmensseite einen einzelnen Lead direkt anlegen — für einen Lead aus einem Anruf, von einer Messe oder aus LinkedIn. Der Lead erscheint sofort in Ihrer ersten Phase auf dem Board, und ein bereits vorhandener Account (gleiche USt-IdNr. oder gleicher Name und gleiches Land) wird nicht doppelt angelegt: Stattdessen wird Ihnen der vorhandene angeboten."
+    ]
+  }
+}

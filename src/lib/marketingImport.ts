@@ -45,6 +45,7 @@ import {
   headerIndex,
   importErrorMessage,
   type ParsedRow,
+  type ParsedTable,
   type PlannedRow,
   type ResolveResult,
   type RowResult,
@@ -434,6 +435,44 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
 
     return { ok: true, row: parsed.row, key: accountMatchKey(row), value: row };
   };
+}
+
+// ── One row typed in by hand (#2562) ─────────────────────────────────────────
+
+/** What the "new lead / account" form sends — field names of the column contract. */
+export type ManualAccountFields = Partial<
+  Pick<
+    MarketingAccountRow,
+    | 'name'
+    | 'country'
+    | 'vatId'
+    | 'contactName'
+    | 'contactEmail'
+    | 'contactPhone'
+    | 'source'
+    | 'stage'
+    | 'city'
+    | 'industry'
+  >
+>;
+
+/**
+ * ONE row of the import contract built from the form's fields, as a parsed
+ * table under the canonical headers — so a hand-typed lead goes through the
+ * very validator a file does (VAT/country normalization, the per-column length
+ * limits, the org's own stage keys) instead of a second, drifting copy of those
+ * rules. A field the form did not send is not a column at all.
+ */
+export function manualAccountTable(fields: ManualAccountFields): ParsedTable {
+  const header: string[] = [];
+  const values: string[] = [];
+  for (const spec of MARKETING_IMPORT_COLUMNS) {
+    const value = (fields as Record<string, unknown>)[spec.field];
+    if (typeof value !== 'string') continue;
+    header.push(spec.header);
+    values.push(value.trim());
+  }
+  return { header, rows: [{ row: 1, values }], delimiter: ',' };
 }
 
 // ── The target snapshot ──────────────────────────────────────────────────────
@@ -1038,6 +1077,41 @@ export const previewWriter: MarketingAccountWriter = {
     return row.targetId ?? null;
   },
 };
+
+// ── Create-only: the hand-typed lead (#2562) ────────────────────────────────
+
+/**
+ * Why a create-only row was not written although it planned a CREATE: its
+ * contact already carries an ACTIVE funnel record. The import re-points that
+ * record at the new account (a spreadsheet row saying "this contact now
+ * belongs to that merchant"); a person typing one lead into a form almost
+ * certainly means a second, different account, and silently moving somebody's
+ * funnel card there is the wrong default. The form sends them to the lead.
+ */
+export const CONTACT_IN_FUNNEL = 'contact_in_funnel';
+
+/**
+ * The create-only plan: identical to the import's, except that a CREATE whose
+ * contact is already on the funnel becomes a SKIP (see above). UPDATE and
+ * UNCHANGED rows pass through unchanged — they are the "already exists" answer
+ * and `createOnlyWriter` does not write them.
+ */
+export function createOnlyPlan(rows: MarketingPlannedRow[]): MarketingPlannedRow[] {
+  return rows.map((row) =>
+    row.status === 'CREATE' && row.value.funnel?.relationId
+      ? { ...row, status: 'SKIP' as const, reason: CONTACT_IN_FUNNEL }
+      : row,
+  );
+}
+
+/**
+ * A writer that CREATES through `writer` and never updates: an UPDATE is what
+ * the matched, existing account WOULD receive, so it is reported (with the
+ * account's id) and not written — the dry-run half of the same writer port.
+ */
+export function createOnlyWriter(writer: MarketingAccountWriter): MarketingAccountWriter {
+  return { createAccount: (row) => writer.createAccount(row), updateAccount: previewWriter.updateAccount };
+}
 
 /**
  * What an operator reads when a row is refused.

@@ -471,6 +471,30 @@ back `UNCHANGED`.
   own schedule — [`disaster-recovery.md`](disaster-recovery.md) says how long, and it is
   not to be copied anywhere either.
 
+## One lead typed in by hand (#2562)
+
+The **"New lead / account"** dialog on `/admin/companies` (MARKETING orgs, ADMIN only) is
+this importer with a file of one row — not a second lead writer.
+`POST /api/admin/marketing-accounts` builds the row with `manualAccountTable()` under the
+canonical headers, so the same validator, match key and diff decide it, and runs it through
+`runImport` in **create-only** mode (`createMarketingAccount()` in
+`src/lib/marketingImportStore.ts`, sharing `runMarketingRows()` with the CLI run):
+
+| Plan | Written? | Answer |
+|---|---|---|
+| `CREATE` | yes — `Company` + stand-in lead + funnel record, via the import's database writer | `201`, with `companyId` and `leadId` |
+| `UPDATE` / `UNCHANGED` (the match key found an account) | **no** (`createOnlyWriter` never updates) | `409 account_exists` + `companyId` — the dialog opens that account |
+| `CREATE` whose contact already has an ACTIVE funnel record | no (`createOnlyPlan` turns it into a `SKIP`) | `409 contact_in_funnel` + `leadId` — the import would re-point that record at the new account; a form should not |
+| the contact is another owner's lead (#419) | no (the writer's guard, transaction rolled back) | `409 already_mentored` |
+| `SKIP` for an ambiguous name | no | `409 account_ambiguous` |
+
+Differences from a file row, all deliberate: the contact e-mail is **required** (without it
+the import places no funnel record, and a hand-typed lead that is not on the board is not
+what the form promises); the owner is the acting admin; the stage defaults to the org's
+first on-path stage and an off-path stage is refused (it would need a drop-off reason the
+form has no field for). No marketing-consent record is written (#2577). INTERNSHIP orgs
+never see the dialog, and the route answers them `403 vertical_unavailable`.
+
 ## Tests
 
 `scripts/test/marketing-import.test.mjs` (`npm run test:marketing-import`) pins the four

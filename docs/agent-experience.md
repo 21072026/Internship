@@ -7385,3 +7385,18 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   ile vermek yetiyor; commit etme.
 - **Dev sunucusunda 2 worker ile ilk derleme 20 sn'lik `waitForURL` bütçelerini aşıyor** —
   alakasız spec'ler topluca kırmızıya döner. Yerelde `--workers=1` koş.
+
+## 2026-09-29 — Paylaşılan `node_modules` ile paralel worktree'ler (#2562)
+
+- **Paylaşılan Prisma client'ı başka bir ajanın şemasından üretilmiş olabilir.** e2e'de
+  `P2022: The column … does not exist` gördüm: client, kardeş bir worktree'nin eklediği
+  `MentorshipRelation.nextActionAt`'ı bekliyordu, benim şemamda yoktu. `prisma generate`
+  çalıştırmak ONLARIN client'ını bozar; doğrusu kendi veritabanını client'a uydurmak:
+  `npx prisma db push --skip-generate --schema <kopya>` — kopya
+  `node_modules/.prisma/client/schema.prisma`'dan alınır (yalnızca eklemeliyse güvenli;
+  önce `diff` ile bak).
+- **Playwright 1.63, `chromium_headless_shell-1243` bekliyor; `/opt/pw-browsers`'ta 1194 var.**
+  Sistem dizinine dokunmadan: scratchpad'de bir dizin aç, `chromium-1243 → …/chromium-1194`
+  ve `chromium_headless_shell-1243/chrome-headless-shell-linux64 → …/chromium_headless_shell-1194/chrome-linux`
+  bağlarını kur, `PLAYWRIGHT_BROWSERS_PATH=<o dizin>` ile koş. Yeni düzende ikili adı
+  `chrome-headless-shell`, eskisinde `headless_shell` — bunun için de bir bağ gerekiyor.

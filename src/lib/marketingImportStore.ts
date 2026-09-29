@@ -31,8 +31,9 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { runWithOrg } from './orgContext';
 import { logActivity } from './activity';
-import { runImport, parseDelimited, type ImportReport } from './importPreview';
+import { runImport, parseDelimited, type ImportReport, type ParsedTable } from './importPreview';
 import { resolvePipelineStages } from './pipelineStages';
+import { startStageKey } from './pipeline';
 import { statusChangeData } from './stageChange';
 import { trialLengthDaysFor } from './trialWindow';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
@@ -43,12 +44,17 @@ import {
 } from './activeMentorship';
 import {
   applyPlannedAccounts,
+  CONTACT_IN_FUNNEL,
+  createOnlyPlan,
+  createOnlyWriter,
   diffMarketingAccounts,
   funnelRelationCreateData,
   funnelRelationUpdateData,
   leadStandInEmail,
   makeMarketingValidator,
+  manualAccountTable,
   previewWriter,
+  type ManualAccountFields,
   type MarketingAccountRow,
   type MarketingAccountWriter,
   type MarketingPlanValue,
@@ -347,6 +353,53 @@ export async function runMarketingAccountImport(
 ): Promise<MarketingImportRunResult> {
   const owner = await resolveImportOwner(options.ownerEmail);
   const orgId = owner.orgId;
+  const apply = options.apply === true;
+
+  const { report, stageKeys } = await runMarketingRows({
+    owner,
+    parse: () => parseDelimited(options.text, { delimiter: options.delimiter }),
+    mode: apply ? 'database' : 'preview',
+    authoritative: options.authoritative,
+    chunkSize: options.chunkSize,
+  });
+
+  if (apply) {
+    await runWithOrg(orgId, () =>
+      logActivity({
+        action: 'marketing.accounts.imported',
+        actorId: owner.id,
+        actorEmail: owner.email,
+        targetType: 'Organization',
+        targetId: orgId,
+        detail: `rows=${report.total} ${Object.entries(report.counts)
+          .map(([status, count]) => `${status}=${count}`)
+          .join(' ')}`,
+      }),
+    );
+  }
+
+  return { owner, report, stageKeys };
+}
+
+/** Which writer a planned run applies with — the ONLY thing that differs between modes. */
+type WriterMode = 'preview' | 'database' | 'createOnly';
+
+interface MarketingRunCore {
+  owner: MarketingImportOwner;
+  parse: () => ParsedTable;
+  mode: WriterMode;
+  authoritative?: boolean;
+  chunkSize?: number;
+}
+
+/**
+ * The planning + apply half shared by every entry point: the CLI's file import
+ * and the one-row create (#2562). One validator, one match key, one diff, one
+ * writer — the manual form is a file of one row, never a second lead writer.
+ */
+async function runMarketingRows(core: MarketingRunCore) {
+  const { owner } = core;
+  const orgId = owner.orgId;
 
   return runWithOrg(orgId, async () => {
     const stages = await resolvePipelineStages(orgId);
@@ -354,13 +407,19 @@ export async function runMarketingAccountImport(
     const offPathStages = new Set(stages.filter((s) => s.isOffPath).map((s) => s.key));
 
     const validate = makeMarketingValidator({ stageKeys });
-    const apply = options.apply === true;
-    const writer = apply
-      ? databaseWriter({ orgId, offPathStages, trialLengthDays: await trialLengthDaysFor(orgId) })
-      : previewWriter;
+    const database = databaseWriter({ orgId, offPathStages, trialLengthDays: await trialLengthDaysFor(orgId) });
+    // Create-only: a CREATE is written through the import's own writer; an
+    // UPDATE is what an existing account WOULD receive, so it is reported and
+    // not written — "this account already exists" is the answer, not a merge.
+    const writer: MarketingAccountWriter =
+      core.mode === 'database'
+        ? database
+        : core.mode === 'createOnly'
+          ? createOnlyWriter(database)
+          : previewWriter;
 
     const report = await runImport<MarketingAccountRow, MarketingPlanValue>({
-      parse: () => parseDelimited(options.text, { delimiter: options.delimiter }),
+      parse: core.parse,
       validate,
       resolve: async (rows) => {
         const contactKeys = [
@@ -388,27 +447,106 @@ export async function runMarketingAccountImport(
           defaultOwnerEmail: owner.email,
           ownerIdByEmail: new Map(owners.map((o) => [o.email.toLowerCase(), o.id])),
           orgKey: orgId ?? '',
-          authoritative: options.authoritative === true,
+          authoritative: core.authoritative === true,
         });
       },
-      apply: (chunk) => applyPlannedAccounts(chunk, writer),
-      dryRun: !apply,
-      ...(options.chunkSize ? { chunkSize: options.chunkSize } : {}),
+      apply: (chunk) =>
+        applyPlannedAccounts(core.mode === 'createOnly' ? createOnlyPlan(chunk) : chunk, writer),
+      dryRun: core.mode === 'preview',
+      ...(core.chunkSize ? { chunkSize: core.chunkSize } : {}),
     });
 
-    if (apply) {
-      await logActivity({
-        action: 'marketing.accounts.imported',
-        actorId: owner.id,
-        actorEmail: owner.email,
-        targetType: 'Organization',
-        targetId: orgId,
-        detail: `rows=${report.total} ${Object.entries(report.counts)
-          .map(([status, count]) => `${status}=${count}`)
-          .join(' ')}`,
-      });
-    }
-
-    return { owner, report, stageKeys };
+    return { report, stages, stageKeys };
   });
+}
+
+// ── One account, typed in by hand (#2562) ────────────────────────────────────
+
+export type ManualAccountOutcome =
+  | { kind: 'created'; companyId: string; leadId: string | null; stage: string }
+  /** The match key found an account: nothing was written. */
+  | { kind: 'exists'; companyId: string; leadId: string | null }
+  /** Several accounts share the name and neither side names a country or VAT. */
+  | { kind: 'ambiguous'; reason: string }
+  /** The contact already has an active funnel record (see CONTACT_IN_FUNNEL). */
+  | { kind: 'contact_in_funnel'; leadId: string | null }
+  /** The contact is another owner's lead (#419) — transfer, do not duplicate. */
+  | { kind: 'already_mentored' }
+  /** The import's own validator refused the row (country, VAT, length, stage). */
+  | { kind: 'invalid'; reason: string }
+  /** The writer failed (rolled back): an internal error, not the caller's input. */
+  | { kind: 'write_failed'; reason: string };
+
+/**
+ * Create one marketing account + lead + funnel record through the import's
+ * writer, create-only (#2562). The owner is the acting user; the stage
+ * defaults to the org's start stage (`startStageKey`, the rule every create
+ * path shares through `resolveStartStage`).
+ *
+ * No marketing-consent record is written: a hand-typed lead has given none
+ * (#2577 — the manual source is NONE), and the importer writes none either.
+ */
+export async function createMarketingAccount(input: {
+  owner: MarketingImportOwner;
+  fields: ManualAccountFields;
+  request?: Request;
+}): Promise<ManualAccountOutcome> {
+  const { owner, fields } = input;
+  const stages = await runWithOrg(owner.orgId, () => resolvePipelineStages(owner.orgId));
+  const stage = fields.stage?.trim() || startStageKey(stages);
+  // A new lead starts on the path. A "lost" card that was never open is not a
+  // lead, and the off-path stages demand a drop-off reason this form has no
+  // field for — the import attaches a fixed one; a person should not.
+  if (stages.find((s) => s.key === stage)?.isOffPath) {
+    return { kind: 'invalid', reason: `stage "${stage}" is off the funnel path` };
+  }
+
+  const { report } = await runMarketingRows({
+    owner,
+    parse: () => manualAccountTable({ ...fields, stage }),
+    mode: 'createOnly',
+  });
+  const row = report.rows[0];
+  if (!row) return { kind: 'invalid', reason: 'empty row' };
+  const funnel = row.value?.funnel ?? null;
+
+  switch (row.status) {
+    case 'CREATE': {
+      const companyId = row.targetId;
+      if (!companyId) return { kind: 'invalid', reason: 'the account was not written' };
+      let leadId = funnel?.leadId ?? null;
+      if (!leadId && funnel) {
+        const lead = await runWithOrg(owner.orgId, () =>
+          prisma.user.findUnique({ where: { email: funnel.leadEmail }, select: { id: true } }),
+        );
+        leadId = lead?.id ?? null;
+      }
+      await runWithOrg(owner.orgId, () =>
+        logActivity({
+          action: 'marketing.account.created',
+          actorId: owner.id,
+          actorEmail: owner.email,
+          targetType: 'Company',
+          targetId: companyId,
+          detail: `manual stage=${stage}${leadId ? ` lead=${leadId}` : ''}`,
+          ...(input.request ? { request: input.request } : {}),
+        }),
+      );
+      return { kind: 'created', companyId, leadId, stage };
+    }
+    case 'UPDATE':
+    case 'UNCHANGED':
+      return { kind: 'exists', companyId: row.targetId ?? '', leadId: funnel?.leadId ?? null };
+    case 'SKIP':
+      if (row.reason === CONTACT_IN_FUNNEL) return { kind: 'contact_in_funnel', leadId: funnel?.leadId ?? null };
+      return { kind: 'ambiguous', reason: row.reason ?? '' };
+    default:
+      if (row.reason?.includes('already_mentored')) return { kind: 'already_mentored' };
+      // A row the VALIDATOR refused carries no plan value; one that reached the
+      // writer and failed there does. The first is the caller's input and is
+      // worth echoing; the second is ours (a unique index, a dropped
+      // connection) and is logged, not shown.
+      if (row.value) return { kind: 'write_failed', reason: row.reason ?? 'write failed' };
+      return { kind: 'invalid', reason: row.reason ?? 'refused' };
+  }
 }

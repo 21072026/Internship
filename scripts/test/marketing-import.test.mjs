@@ -699,4 +699,99 @@ test('an import never overwrites a window, and re-applying the same stage is not
     { companyId: 'co-1', now: TRIAL_NOW, trialLengthDays: 30 },
   );
   assert.equal('trialEndsAt' in rerun, false);
+
+// ── One lead typed in by hand (#2562) ────────────────────────────────────────
+//
+// The "new lead / account" form is a file of ONE row run through this very
+// engine in create-only mode: the row is built by `manualAccountTable`, planned
+// by `diffMarketingAccounts`, and written by `createOnlyWriter` — which creates
+// through the real writer and never updates. These pin the answers the route
+// turns into responses: created, "already exists", "contact is already a lead".
+
+const { manualAccountTable, createOnlyPlan, createOnlyWriter, CONTACT_IN_FUNNEL } = await import(
+  '../../src/lib/marketingImport.ts'
+);
+
+async function runManual(fields, store) {
+  const writer = createOnlyWriter(memoryWriter(store));
+  return runImport({
+    parse: () => manualAccountTable(fields),
+    validate: makeMarketingValidator({ stageKeys: STAGES }),
+    resolve: async (rows) =>
+      diffMarketingAccounts(rows, snapshotOf(store), {
+        defaultOwnerId: OWNER.id,
+        defaultOwnerEmail: OWNER.email,
+        ownerIdByEmail: new Map(),
+        orgKey: ORG,
+        authoritative: false,
+      }),
+    apply: (chunk) => applyPlannedAccounts(createOnlyPlan(chunk), writer),
+  });
+}
+
+const blankAccount = { vatId: null, country: null, industry: null, contactName: null, contactEmail: null, contactPhone: null };
+
+test('manual: the form row goes through the import validator (VAT normalized, bad country refused)', () => {
+  const table = manualAccountTable({ name: ' Acme ', vatId: 'de 123.456.789', stage: 'LEAD_NEW', contactEmail: 'Ada@Acme.example' });
+  assert.deepEqual(table.header, ['name', 'vat_id', 'stage', 'contact_email']);
+  const validate = makeMarketingValidator({ stageKeys: STAGES });
+  const ok = validate(table.rows[0], table.header);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.value.name, 'Acme');
+  assert.equal(ok.value.vatId, 'DE123456789');
+  assert.equal(ok.value.contactEmail, 'ada@acme.example');
+  const bad = manualAccountTable({ name: 'Acme', country: 'Germany' });
+  assert.equal(validate(bad.rows[0], bad.header).ok, false);
+});
+
+test('manual: a new account creates the account, a stand-in lead and one funnel record', async () => {
+  const store = memoryStore();
+  const report = await runManual(
+    { name: 'Acme GmbH', country: 'DE', stage: 'LEAD_NEW', contactName: 'Ada', contactEmail: 'ada@acme.example' },
+    store,
+  );
+  assert.equal(report.rows[0].status, 'CREATE');
+  assert.equal(store.accounts.length, 1);
+  assert.equal(store.accounts[0].contactEmail, 'ada@acme.example');
+  assert.equal(store.leads[0].email, standIn('ada@acme.example'));
+  assert.equal(store.relations.length, 1);
+  assert.equal(store.relations[0].pipelineStatus, 'LEAD_NEW');
+  assert.equal(store.relations[0].mentorId, OWNER.id);
+});
+
+test('manual: the same VAT a second time writes nothing and names the existing account', async () => {
+  const store = memoryStore({ accounts: [{ ...blankAccount, id: 'co-acme', name: 'Acme GmbH', vatId: 'DE123456789', country: 'DE' }] });
+  const report = await runManual(
+    { name: 'ACME Handels GmbH', vatId: 'DE 123 456 789', stage: 'LEAD_NEW', contactEmail: 'bob@acme.example' },
+    store,
+  );
+  // An UPDATE in the import; in create-only it is the "already exists" answer.
+  assert.equal(report.rows[0].status, 'UPDATE');
+  assert.equal(report.rows[0].targetId, 'co-acme');
+  assert.equal(store.accounts.length, 1);
+  assert.equal(store.accounts[0].name, 'Acme GmbH', 'the existing account was not renamed');
+  assert.equal(store.leads.length, 0);
+  assert.equal(store.relations.length, 0);
+});
+
+test('manual: name + country matches when there is no VAT', async () => {
+  const store = memoryStore({ accounts: [{ ...blankAccount, id: 'co-n', name: 'Nordlicht Handel', country: 'DE' }] });
+  const report = await runManual({ name: 'nordlicht handel', country: 'de', stage: 'LEAD_NEW', contactEmail: 'x@n.example' }, store);
+  assert.ok(['UPDATE', 'UNCHANGED'].includes(report.rows[0].status));
+  assert.equal(report.rows[0].targetId, 'co-n');
+  assert.equal(store.accounts.length, 1);
+});
+
+test('manual: a contact already on the funnel is not re-pointed at a new account', async () => {
+  const store = memoryStore({
+    accounts: [{ ...blankAccount, id: 'co-old', name: 'Old Co', country: 'DE' }],
+    leads: [{ id: 'lead-1', email: standIn('ada@acme.example'), fullName: 'Ada', phone: null, city: null, country: null, preferredLanguage: null, referralSource: null, companyId: 'co-old' }],
+    relations: [{ id: 'rel-1', mentorId: OWNER.id, menteeId: 'lead-1', companyId: 'co-old', pipelineStatus: 'LEAD_CONTACTED', status: 'ACTIVE' }],
+  });
+  const report = await runManual({ name: 'Brand New AG', country: 'AT', stage: 'LEAD_NEW', contactEmail: 'ada@acme.example' }, store);
+  assert.equal(report.rows[0].status, 'SKIP');
+  assert.equal(report.rows[0].reason, CONTACT_IN_FUNNEL);
+  assert.equal(store.accounts.length, 1);
+  assert.equal(store.relations[0].companyId, 'co-old');
+  assert.equal(store.relations[0].pipelineStatus, 'LEAD_CONTACTED');
 });
