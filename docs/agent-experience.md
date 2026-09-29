@@ -7368,3 +7368,20 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Server components bypass API-route tenant filters.** `/admin` read Prisma directly, so the
   #2542 route fixes did not cover the first screen every admin opens; grep `src/app/**/page.tsx`
   for `prisma.` when scoping a model by hand.
+
+## 2026-09-29 — trial penceresi damgası (#2551)
+
+- **Scratchpad paralel ajanlar arasında paylaşılıyor olabilir.** Başka bir worktree ajanı aynı
+  `scratchpad/dev.log` yoluna yazıyordu; kendi `next dev`'imin günlüğünde başka bir veritabanının
+  (`internship_wt_2542`) sorgularını görünce yanlış DB'ye bağlandığımı sandım. Günlük dosyasına
+  issue/port numarası koy (`dev-2551-3102.log`) ve DB'yi `/proc/<pid>/cwd` ile değil sorgunun
+  kendisiyle doğrula.
+- **İzolasyon kapalıyken `/admin/settings` GLOBAL satıra yazar.** Bir e2e'de ayarı formdan
+  değiştirmek (`trialLengthDays=14`) aynı sunucudaki her tenant'ı etkiler; testi `serial` yap ve
+  `finally`'de `orgId: null` satırını sil, yoksa sonraki test varsayılanı (30) göremez.
+- **Playwright chromium sürüm uyuşmazlığı için `/opt`'a dokunmadan**: repo köküne geçici bir
+  `playwright.<ad>.config.ts` (`...base`, `use.launchOptions.executablePath` =
+  `/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell`) yazıp `--config`
+  ile vermek yetiyor; commit etme.
+- **Dev sunucusunda 2 worker ile ilk derleme 20 sn'lik `waitForURL` bütçelerini aşıyor** —
+  alakasız spec'ler topluca kırmızıya döner. Yerelde `--workers=1` koş.

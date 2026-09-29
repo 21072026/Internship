@@ -8,6 +8,7 @@ import { nextOnPathStatus } from '@/lib/pipeline';
 import { withTenantScope } from '@/lib/orgContext';
 import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { resolveOrgId } from '@/lib/orgScope';
 import { MAX_TAGS_PER_USER } from '@/lib/tags';
 import { transferMentorship } from '@/lib/mentorTransfer';
@@ -271,7 +272,7 @@ export async function POST(request: Request) {
     // Find active relations for these mentees.
     const relations = await prisma.mentorshipRelation.findMany({
       where: { menteeId: { in: candidateIds }, status: 'ACTIVE' },
-      select: { id: true, menteeId: true, pipelineStatus: true, orgId: true },
+      select: { id: true, menteeId: true, pipelineStatus: true, orgId: true, trialStartedAt: true, trialEndsAt: true },
     });
 
     let advanced = 0;
@@ -313,7 +314,13 @@ export async function POST(request: Request) {
       await prisma.$transaction([
         prisma.mentorshipRelation.update({
           where: { id: rel.id },
-          data: { pipelineStatus: nextStatus },
+          // Same trial-window stamp as every stage writer (#2551). The
+          // canonical on-path list has no TRIAL_ACTIVE, so this is `{}` today
+          // and costs no query; it is here so the path cannot drift.
+          data: {
+            pipelineStatus: nextStatus,
+            ...(await stageTrialWindow({ orgId: rel.orgId, toStage: nextStatus, enteredAt: new Date(), existing: rel })),
+          },
         }),
         prisma.statusChange.create({ data: auditRow }),
       ]);

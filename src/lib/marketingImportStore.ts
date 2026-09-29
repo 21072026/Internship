@@ -34,6 +34,7 @@ import { logActivity } from './activity';
 import { runImport, parseDelimited, type ImportReport } from './importPreview';
 import { resolvePipelineStages } from './pipelineStages';
 import { statusChangeData } from './stageChange';
+import { trialLengthDaysFor } from './trialWindow';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
 import { normalizeEmailKey } from './duplicateDetection';
 import {
@@ -43,6 +44,8 @@ import {
 import {
   applyPlannedAccounts,
   diffMarketingAccounts,
+  funnelRelationCreateData,
+  funnelRelationUpdateData,
   leadStandInEmail,
   makeMarketingValidator,
   previewWriter,
@@ -146,6 +149,8 @@ interface WriterContext {
   orgId: string | null;
   /** Stage keys the org marks `isOffPath` — the same source `stageChange.ts` reads. */
   offPathStages: ReadonlySet<string>;
+  /** The org's `trialLengthDays`, resolved once per run (#2551). */
+  trialLengthDays: number;
 }
 
 /**
@@ -233,14 +238,15 @@ async function placeOnFunnel(
   }
 
   if (!active) {
+    // A record created straight into TRIAL_ACTIVE gets its trial window in the
+    // same insert (#2551) — see funnelRelationCreateData().
     await tx.mentorshipRelation.create({
-      data: {
+      data: funnelRelationCreateData(funnel, leadId, {
         orgId: context.orgId,
-        mentorId: funnel.ownerId,
-        menteeId: leadId,
         companyId,
-        pipelineStatus: funnel.toStage,
-      },
+        now: new Date(),
+        trialLengthDays: context.trialLengthDays,
+      }),
     });
     // No StatusChange for a relation CREATED at this stage: `stageEnteredAt()`
     // already answers from `startDate` when there is no history
@@ -251,12 +257,16 @@ async function placeOnFunnel(
 
   const current = await tx.mentorshipRelation.findUnique({
     where: { id: active.id },
-    select: { pipelineStatus: true, companyId: true },
+    select: { pipelineStatus: true, companyId: true, trialStartedAt: true, trialEndsAt: true },
   });
   const fromStatus = current?.pipelineStatus ?? funnel.fromStage ?? funnel.toStage;
   await tx.mentorshipRelation.update({
     where: { id: active.id },
-    data: { pipelineStatus: funnel.toStage, companyId },
+    data: funnelRelationUpdateData(funnel, current, {
+      companyId,
+      now: new Date(),
+      trialLengthDays: context.trialLengthDays,
+    }),
   });
 
   // Stage history for a marketing account lives HERE — one `StatusChange` on
@@ -345,7 +355,9 @@ export async function runMarketingAccountImport(
 
     const validate = makeMarketingValidator({ stageKeys });
     const apply = options.apply === true;
-    const writer = apply ? databaseWriter({ orgId, offPathStages }) : previewWriter;
+    const writer = apply
+      ? databaseWriter({ orgId, offPathStages, trialLengthDays: await trialLengthDaysFor(orgId) })
+      : previewWriter;
 
     const report = await runImport<MarketingAccountRow, MarketingPlanValue>({
       parse: () => parseDelimited(options.text, { delimiter: options.delimiter }),

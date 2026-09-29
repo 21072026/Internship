@@ -17,6 +17,7 @@ import { getSetting } from '@/lib/settings';
 import { isValidTimeZone } from '@/lib/timezone';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { logActivity } from '@/lib/activity';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { isOrgEnforcingSso, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
@@ -323,8 +324,15 @@ export async function POST(request: Request) {
             if (!alreadyClosed) {
               // The invitation auto-link creates a real relation, so it starts on
               // the tenant's own first on-path stage too (#1634).
+              const pipelineStatus = await resolveStartStage(user.orgId);
               await prisma.mentorshipRelation.create({
-                data: { ...pair, orgId: user.orgId, pipelineStatus: await resolveStartStage(user.orgId) },
+                data: {
+                  ...pair,
+                  orgId: user.orgId,
+                  pipelineStatus,
+                  // Trial window if the start stage is TRIAL_ACTIVE (#2551).
+                  ...(await stageTrialWindow({ orgId: user.orgId, toStage: pipelineStatus, enteredAt: new Date() })),
+                },
               });
               await notify(
                 counterpartId,

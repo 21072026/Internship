@@ -68,6 +68,14 @@ const schema = z.object({
   // accepting it from a tenant admin cannot raise anybody's ceiling. Seven
   // digits is far past any list this product will mail.
   broadcastMonthlyRecipients: z.string().regex(/^\d{1,7}$/).or(z.literal('')).optional(),
+  // Trial length for the MARKETING funnel (#2551). 1..365: a zero-day trial
+  // would be stamped as already over and swept into TRIAL_EXPIRED overnight,
+  // so 0 is refused here (and would fall back to 30 in the rule regardless).
+  trialLengthDays: z
+    .string()
+    .regex(/^\d{1,3}$/)
+    .refine((v) => Number(v) >= 1 && Number(v) <= 365)
+    .optional(),
 });
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.

@@ -632,3 +632,71 @@ test('an owner_email nobody in the organization has keeps the account and warns'
   assert.equal(store.accounts.length, 1);
   assert.equal(store.relations.length, 0);
 });
+
+// ── The funnel record's data blocks and the trial window (#2551) ─────────────
+//
+// The import never calls emitStageChange() (stand-in leads must not be
+// notified), so the data block it writes is the ONLY place a record created in
+// TRIAL_ACTIVE can get its trial dates. The store spreads these builders
+// verbatim into its create/update.
+
+const { funnelRelationCreateData, funnelRelationUpdateData } = await import('../../src/lib/marketingImport.ts');
+const TRIAL_NOW = new Date('2026-05-04T09:00:00.000Z');
+const TRIAL_DAY = 24 * 60 * 60 * 1000;
+
+test('a record the import creates in TRIAL_ACTIVE gets a trial window', () => {
+  const data = funnelRelationCreateData({ ownerId: OWNER.id, toStage: 'TRIAL_ACTIVE' }, 'lead-1', {
+    orgId: ORG,
+    companyId: 'co-1',
+    now: TRIAL_NOW,
+    trialLengthDays: 30,
+  });
+  assert.equal(data.pipelineStatus, 'TRIAL_ACTIVE');
+  assert.equal(data.mentorId, OWNER.id);
+  assert.equal(data.menteeId, 'lead-1');
+  assert.equal(data.companyId, 'co-1');
+  assert.equal(data.orgId, ORG);
+  assert.equal(data.trialStartedAt.toISOString(), TRIAL_NOW.toISOString());
+  assert.equal(data.trialEndsAt.getTime() - TRIAL_NOW.getTime(), 30 * TRIAL_DAY);
+});
+
+test('a record the import creates at any other stage carries no trial dates', () => {
+  const data = funnelRelationCreateData({ ownerId: OWNER.id, toStage: 'LEAD_QUALIFIED' }, 'lead-1', {
+    orgId: ORG,
+    companyId: 'co-1',
+    now: TRIAL_NOW,
+    trialLengthDays: 30,
+  });
+  assert.equal('trialStartedAt' in data, false);
+  assert.equal('trialEndsAt' in data, false);
+});
+
+test('an import that MOVES an existing record into TRIAL_ACTIVE stamps it; the org length is used', () => {
+  const data = funnelRelationUpdateData(
+    { toStage: 'TRIAL_ACTIVE' },
+    { pipelineStatus: 'LEAD_QUALIFIED', trialStartedAt: null, trialEndsAt: null },
+    { companyId: 'co-1', now: TRIAL_NOW, trialLengthDays: 14 },
+  );
+  assert.equal(data.pipelineStatus, 'TRIAL_ACTIVE');
+  assert.equal(data.companyId, 'co-1');
+  assert.equal(data.trialEndsAt.getTime() - TRIAL_NOW.getTime(), 14 * TRIAL_DAY);
+});
+
+test('an import never overwrites a window, and re-applying the same stage is not an entry', () => {
+  const existing = { trialStartedAt: new Date('2026-04-01T00:00:00Z'), trialEndsAt: new Date('2026-05-01T00:00:00Z') };
+  // Back into TRIAL_ACTIVE from TRIAL_EXPIRED: the first window stands.
+  const back = funnelRelationUpdateData(
+    { toStage: 'TRIAL_ACTIVE' },
+    { pipelineStatus: 'TRIAL_EXPIRED', ...existing },
+    { companyId: 'co-1', now: TRIAL_NOW, trialLengthDays: 30 },
+  );
+  assert.equal('trialEndsAt' in back, false);
+  // A re-run of the same file against a legacy TRIAL_ACTIVE record with no
+  // window: the file did not move it, so today is not its trial start.
+  const rerun = funnelRelationUpdateData(
+    { toStage: 'TRIAL_ACTIVE' },
+    { pipelineStatus: 'TRIAL_ACTIVE', trialStartedAt: null, trialEndsAt: null },
+    { companyId: 'co-1', now: TRIAL_NOW, trialLengthDays: 30 },
+  );
+  assert.equal('trialEndsAt' in rerun, false);
+});

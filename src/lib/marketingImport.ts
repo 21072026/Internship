@@ -54,6 +54,7 @@ import { normalizeEmailKey, normalizeNameKey, normalizePhoneKey } from './duplic
 import { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 import { planFieldUpdates } from './externalSyncPolicy';
 import { TEXT_LIMITS } from './textLimits';
+import { trialWindowFor, type ExistingTrialWindow, type TrialWindowData } from './trialReminderRule';
 
 // ── The column contract ──────────────────────────────────────────────────────
 // One declaration, read by the validator, printed by the CLI and written out
@@ -942,6 +943,79 @@ function planFunnel(
 }
 
 // ── apply ────────────────────────────────────────────────────────────────────
+
+// ── The funnel record's data blocks ──────────────────────────────────────────
+// Built here, not in the store, so the one decision in them that is easy to get
+// wrong — the trial window (#2551) — is unit-tested with the rest of the
+// importer. The store spreads these into its `create`/`update` verbatim.
+
+/** What a funnel write needs besides the plan: ids the store knows, and its clock. */
+export interface FunnelWriteContext {
+  orgId: string | null;
+  companyId: string;
+  /** The row's clock — when the record enters `toStage`. */
+  now: Date;
+  /** The org's resolved `trialLengthDays` setting. */
+  trialLengthDays: number;
+}
+
+/**
+ * The `create` data of a funnel record placed at `funnel.toStage`. A record
+ * created straight into TRIAL_ACTIVE gets its trial window here: the import
+ * never calls `emitStageChange()` (stand-in leads must not be notified), so no
+ * later hook would ever stamp it.
+ */
+export function funnelRelationCreateData(
+  funnel: Pick<MarketingFunnelPlan, 'ownerId' | 'toStage'>,
+  leadId: string,
+  context: FunnelWriteContext,
+): {
+  orgId: string | null;
+  mentorId: string;
+  menteeId: string;
+  companyId: string;
+  pipelineStatus: string;
+} & TrialWindowData {
+  return {
+    orgId: context.orgId,
+    mentorId: funnel.ownerId,
+    menteeId: leadId,
+    companyId: context.companyId,
+    pipelineStatus: funnel.toStage,
+    ...trialWindowFor({
+      toStage: funnel.toStage,
+      enteredAt: context.now,
+      existing: null,
+      lengthDays: context.trialLengthDays,
+    }),
+  };
+}
+
+/**
+ * The `update` data of an existing funnel record. The window is stamped only
+ * on a real move into TRIAL_ACTIVE — re-applying the stage a record already
+ * sits at is not an entry, and would date a trial from the day of the re-run —
+ * and never over a window the record already has.
+ */
+export function funnelRelationUpdateData(
+  funnel: Pick<MarketingFunnelPlan, 'toStage'>,
+  current: ({ pipelineStatus: string } & ExistingTrialWindow) | null,
+  context: Omit<FunnelWriteContext, 'orgId'>,
+): { pipelineStatus: string; companyId: string } & TrialWindowData {
+  const moving = !current || current.pipelineStatus !== funnel.toStage;
+  return {
+    pipelineStatus: funnel.toStage,
+    companyId: context.companyId,
+    ...(moving
+      ? trialWindowFor({
+          toStage: funnel.toStage,
+          enteredAt: context.now,
+          existing: current,
+          lengthDays: context.trialLengthDays,
+        })
+      : {}),
+  };
+}
 
 /**
  * The write side of one chunk. The store implements it inside a transaction;

@@ -16,7 +16,7 @@ import {
   AlreadyMentoredError,
 } from '@/lib/activeMentorship';
 import { ENDED_REASSIGNED, type AdminEndReasonCode } from '@/lib/relationLifecycle';
-import { hasRelationHistory } from '@/lib/relationHistory';
+import { carriedOverFields, hasRelationHistory } from '@/lib/relationHistory';
 
 // ---------------------------------------------------------------------------
 // CHANGE THIS MENTEE'S MENTOR — one operation (#2289).
@@ -55,7 +55,9 @@ import { hasRelationHistory } from '@/lib/relationHistory';
 // readable instead of merely still existing somewhere (docs/mentor-transfer.md).
 //
 // What the new relation DOES carry forward is the mentee's own journey:
-// `pipelineStatus`, `stageDeadline`, company, project and cohort. Resetting a
+// `pipelineStatus`, `stageDeadline`, company, project, cohort and a marketing
+// record's trial window (#2551) — one list, CARRIED_OVER_FIELDS in
+// src/lib/relationHistory.ts, copied verbatim, never re-stamped. Resetting a
 // hired-track candidate to the first stage because their mentor changed is a
 // second falsehood, and the one the pipeline board would show everybody.
 // ---------------------------------------------------------------------------
@@ -116,6 +118,8 @@ export async function transferMentorship(opts: {
       cohortId: true,
       pipelineStatus: true,
       stageDeadline: true,
+      trialStartedAt: true,
+      trialEndsAt: true,
       mentor: {
         select: {
           id: true,
@@ -264,12 +268,10 @@ export async function transferMentorship(opts: {
           orgId: relation.orgId,
           // The mentee's journey follows the mentee (see the header): the board
           // must not show a hired-track candidate back at the first stage
-          // because their mentor changed.
-          pipelineStatus: relation.pipelineStatus,
-          stageDeadline: relation.stageDeadline,
-          companyId: relation.companyId,
-          projectId: relation.projectId,
-          cohortId: relation.cohortId,
+          // because their mentor changed, and a running trial keeps the window
+          // it was stamped with (#2551) — copied, never re-derived, so the
+          // successor is not handed a fresh 30 days.
+          ...carriedOverFields(relation),
           previousRelationId: relation.id,
         },
         select: { id: true },

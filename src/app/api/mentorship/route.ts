@@ -15,6 +15,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { daysInStage } from '@/lib/stageClock';
 import {
   findActiveMentorship,
@@ -267,6 +268,9 @@ export async function POST(request: Request) {
     // show the new relation in. Falls back to the canonical first stage for an
     // org that never touched the stage editor.
     const pipelineStatus = await resolveStartStage(mentee.orgId);
+    // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
+    // the create (#2551); for every other start stage this is `{}`, no query.
+    const trialWindow = await stageTrialWindow({ orgId: mentee.orgId, toStage: pipelineStatus, enteredAt: new Date() });
 
     // The guard and the write, adjacent and atomic (#419). The pre-flight above
     // ran before the plan gate, the availability count and resolveStartStage —
@@ -286,6 +290,7 @@ export async function POST(request: Request) {
             menteeId,
             orgId: mentee.orgId,
             pipelineStatus,
+            ...trialWindow,
             companyId: companyId || null,
             projectId: projectId || null,
             startDate: startDate ? new Date(startDate) : new Date(),

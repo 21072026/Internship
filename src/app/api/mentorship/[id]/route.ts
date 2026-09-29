@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { emitStageChange } from '@/lib/stageChangeEffects';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { withTenantScope } from '@/lib/orgContext';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
@@ -207,7 +208,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = {
         ...rest,
-        ...(stageChanging ? { pipelineStatus } : {}),
+        ...(stageChanging
+          ? {
+              pipelineStatus,
+              // A move into TRIAL_ACTIVE stamps the trial window in the same
+              // write (#2551); a record that already has one keeps it.
+              ...(await stageTrialWindow({
+                orgId: relation.orgId,
+                toStage: pipelineStatus,
+                enteredAt: new Date(),
+                existing: relation,
+              })),
+            }
+          : {}),
       };
       // Stamp/clear the end of the relation — it anchors the post-mentorship
       // CV/document access window (#854).
