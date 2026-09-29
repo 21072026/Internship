@@ -69,10 +69,12 @@ test('the monthly AI quota round-trips through the settings form', async ({ page
 // #2342: the form starts on code defaults (quota '200') and fills itself from
 // GET /api/admin/settings. On a slow runner the test above typed 37 before that
 // GET answered, the late load put 200 back, and the save carried no quota. The
-// form is now locked until the stored values are in. This test makes the slow
-// runner deterministic by holding the page's own GET for 3s: Playwright's
-// `fill` waits for the box to become editable, so on the fixed form it types
-// after the load; on the unfixed one it types into the defaults and loses.
+// form is now locked until the stored values are in. This test replays that
+// exact interleaving: the page's own GET is held for 3s, the value is typed,
+// and the click waits until the GET has answered — so on the unfixed form the
+// load lands BETWEEN the fill and the save, puts the default back, and the PUT
+// carries no quota. On the fixed form `fill` cannot type before the load (the
+// box is disabled until then), so the typed value is what gets saved.
 test('a value typed while the settings are still loading is not lost to the late load', async ({ page }) => {
   const adminEmail = uniqueEmail('quota-race-admin');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Quota Race Admin');
@@ -88,6 +90,7 @@ test('a value typed while the settings are still loading is not lost to the late
       if (route.request().method() === 'GET') await new Promise((r) => setTimeout(r, 3_000));
       await route.continue();
     });
+    const loaded = page.waitForResponse((r) => r.url().endsWith('/api/admin/settings') && r.request().method() === 'GET');
     await page.goto('/admin/settings');
 
     const form = page.getByTestId('settings-form');
@@ -96,6 +99,8 @@ test('a value typed while the settings are still loading is not lost to the late
     await expect(page.getByTestId('ai-monthly-quota')).toBeDisabled();
 
     await page.getByTestId('ai-monthly-quota').fill(target, { timeout: 20_000 });
+    // The late load is what lost the value: let it land before the save.
+    await loaded;
     await expect(form).toHaveAttribute('data-state', 'ready');
     const saved = page.waitForResponse((r) => r.url().endsWith('/api/admin/settings') && r.request().method() === 'PUT');
     await form.getByRole('button', { name: 'Save settings' }).click();
