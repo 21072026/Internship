@@ -139,8 +139,18 @@ export async function GET(request: Request) {
   // every fifteen minutes and nobody can see why. Only due SCHEDULED rows are
   // asked (newsletterQuotaHold returns null for everything else without a
   // query), so a page of sent history costs nothing extra.
+  //
+  // Only for the viewer's OWN tenant. This listing is not tenant-scoped yet
+  // (the middleware stays dormant until MT_ENFORCE_ISOLATION), and the figures
+  // are another organization's broadcast usage: an admin is told why their own
+  // issue is waiting, never how far along somebody else's month is.
   const now = new Date();
-  const holds = await Promise.all(issues.map((issue) => newsletterQuotaHold(issue, now)));
+  const viewerOrgId = resolveOrgId(session);
+  const holds = await Promise.all(
+    issues.map((issue) =>
+      issue.orgId !== null && issue.orgId === viewerOrgId ? newsletterQuotaHold(issue, now) : Promise.resolve(null),
+    ),
+  );
 
   return NextResponse.json({
     newsletters: issues.map(({ image, content, orgId: _orgId, ...issue }, index) => {

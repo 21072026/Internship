@@ -324,7 +324,9 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       status: true,
       content: true,
       orgId: true,
-      image: { select: { contentType: true, size: true, data: true } },
+      // Not the image: its bytes are loaded only once the issue is claimed
+      // below. A held issue is refused before that, every tick until its band
+      // allows, and must not pull the hero blob each time just to be refused.
     },
   });
   if (!issue) return { newsletterId, recipients: 0, sent: 0, failed: 0, skipped: 0, noop: true, reason: 'not_found' };
@@ -383,11 +385,15 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     return { newsletterId, recipients: 0, sent: 0, failed: 0, skipped: 0, noop: true, reason: 'claimed_elsewhere' };
   }
 
-  const attachments = issue.image
+  const image = await prisma.newsletterImage.findUnique({
+    where: { newsletterId },
+    select: { contentType: true, data: true },
+  });
+  const attachments = image
     ? [{
-        filename: newsletterImageFilename(issue.image.contentType),
-        content: Buffer.from(issue.image.data),
-        contentType: issue.image.contentType,
+        filename: newsletterImageFilename(image.contentType),
+        content: Buffer.from(image.data),
+        contentType: image.contentType,
         cid: IMAGE_CID,
       }]
     : undefined;
@@ -421,7 +427,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       audience: issue.audience as NewsletterAudience,
       role: user.role,
       preferredLanguage: user.preferredLanguage,
-      imageSrc: issue.image ? `cid:${IMAGE_CID}` : null,
+      imageSrc: image ? `cid:${IMAGE_CID}` : null,
       userId: user.id,
       orgId: user.orgId,
       brandCache,
@@ -504,68 +510,94 @@ export const NEWSLETTER_QUOTA_HOLD_ACTION = 'newsletter.quota_hold';
 const OPS_ALERT_CATEGORY = 'ops-alert';
 
 /**
- * Make a held issue loud — ONCE (#2335).
+ * Make held issues loud — ONCE (#2335).
  *
  * An issue nobody pressed Send on (the cadence's own, or one an admin scheduled
  * for a date) used to leave nothing behind but a server-log warning every
  * fifteen minutes; for a cron-driven issue there is no 403 for anybody to read.
- * The first time a tick finds it held in a broadcast month, this writes one
- * ActivityLog row naming the tenant and the figures, then mails ALERT_EMAIL_TO.
- * The row is the dedupe key (restart-safe, unlike an in-memory timer) and the
- * durable record — written FIRST, the same order the dead-letter alert uses,
- * so it exists even when the mail cannot leave.
+ * The first time a tick finds an issue held in a broadcast month, this writes
+ * one ActivityLog row for it, then mails ALERT_EMAIL_TO — one mail per tick,
+ * covering every issue the tick newly found held, so a tenant with several
+ * queued issues is one mail, not several. The row is the dedupe key
+ * (restart-safe, unlike an in-memory timer) and the durable record — written
+ * FIRST, the same order the dead-letter alert uses, so it exists even when the
+ * mail cannot leave.
+ *
+ * The row carries the tenant's id and nothing else about it: the activity feed
+ * is installation-wide today, so another tenant's name and broadcast figures
+ * stay in the operator's mail (and in the tenant's own history line), not in a
+ * list every ADMIN can page through.
  *
  * Never throws: failing to report a hold must not turn into failing the tick.
  */
-async function reportNewsletterQuotaHold(newsletterId: string, quota: BroadcastQuotaCheck, now: Date): Promise<void> {
+async function reportNewsletterQuotaHolds(
+  held: { newsletterId: string; quota: BroadcastQuotaCheck }[],
+  now: Date,
+): Promise<void> {
+  if (held.length === 0) return;
   try {
     const { start } = broadcastMonth(now);
-    const reported = await prisma.activityLog.findFirst({
-      where: { action: NEWSLETTER_QUOTA_HOLD_ACTION, targetId: newsletterId, createdAt: { gte: start } },
-      select: { id: true },
-    });
-    if (reported) return;
+    const reported = new Set(
+      (
+        await prisma.activityLog.findMany({
+          where: {
+            action: NEWSLETTER_QUOTA_HOLD_ACTION,
+            targetId: { in: held.map((h) => h.newsletterId) },
+            createdAt: { gte: start },
+          },
+          select: { targetId: true },
+        })
+      ).map((row) => row.targetId),
+    );
+    const fresh = held.filter((h) => !reported.has(h.newsletterId));
+    if (fresh.length === 0) return;
 
-    const [issue, org] = await Promise.all([
-      prisma.newsletter.findUnique({ where: { id: newsletterId }, select: { subject: true, scheduledAt: true } }),
-      quota.orgId
-        ? prisma.organization.findUnique({ where: { id: quota.orgId }, select: { name: true, slug: true } })
-        : Promise.resolve(null),
+    const orgIds = [...new Set(fresh.map((h) => h.quota.orgId).filter((id): id is string => !!id))];
+    const [issues, orgs] = await Promise.all([
+      prisma.newsletter.findMany({
+        where: { id: { in: fresh.map((h) => h.newsletterId) } },
+        select: { id: true, subject: true, scheduledAt: true },
+      }),
+      orgIds.length
+        ? prisma.organization.findMany({ where: { id: { in: orgIds } }, select: { id: true, name: true, slug: true } })
+        : Promise.resolve([]),
     ]);
+    const issueById = new Map(issues.map((i) => [i.id, i]));
+    const orgById = new Map(orgs.map((o) => [o.id, o]));
 
-    // ActivityLog.detail is VARCHAR(191) and an oversized value is silently
-    // dropped (P2000, the #1268 lesson): one small capped object — who, and the
-    // four figures the refusal was made from.
-    const detail = JSON.stringify({
-      orgId: quota.orgId,
-      org: org?.slug?.slice(0, 40) ?? null,
-      used: quota.used,
-      limit: quota.limit,
-      requested: quota.requested,
-      resetsAt: quota.resetsAt.toISOString().slice(0, 10),
-    }).slice(0, 191);
-    await logActivity({
-      level: 'warning',
-      action: NEWSLETTER_QUOTA_HOLD_ACTION,
-      targetType: 'newsletter',
-      targetId: newsletterId,
-      detail,
-    });
+    for (const { newsletterId, quota } of fresh) {
+      await logActivity({
+        level: 'warning',
+        action: NEWSLETTER_QUOTA_HOLD_ACTION,
+        targetType: 'newsletter',
+        targetId: newsletterId,
+        // ActivityLog.detail is VARCHAR(191) and an oversized value is silently
+        // dropped (P2000, the #1268 lesson) — and see above for why this is
+        // all it says about the tenant.
+        detail: JSON.stringify({ orgId: quota.orgId, month: start.toISOString().slice(0, 7) }).slice(0, 191),
+      });
+    }
 
     const alertTo = process.env.ALERT_EMAIL_TO;
     if (!alertTo) return;
-    const message = buildNewsletterQuotaHoldAlert({
-      newsletterId,
-      subject: issue?.subject ?? '',
-      orgName: org?.name ?? null,
-      orgSlug: org?.slug ?? null,
-      used: quota.used,
-      limit: quota.limit,
-      requested: quota.requested,
-      remaining: quota.remaining,
-      resetsAt: quota.resetsAt.toISOString(),
-      scheduledAt: issue?.scheduledAt?.toISOString() ?? null,
-    });
+    const message = buildNewsletterQuotaHoldAlert(
+      fresh.map(({ newsletterId, quota }) => {
+        const issue = issueById.get(newsletterId);
+        const org = quota.orgId ? orgById.get(quota.orgId) : undefined;
+        return {
+          newsletterId,
+          subject: issue?.subject ?? '',
+          orgName: org?.name ?? null,
+          orgSlug: org?.slug ?? null,
+          used: quota.used,
+          limit: quota.limit,
+          requested: quota.requested,
+          remaining: quota.remaining,
+          resetsAt: quota.resetsAt.toISOString(),
+          scheduledAt: issue?.scheduledAt?.toISOString() ?? null,
+        };
+      }),
+    );
     const delivery = await sendEmail({
       to: alertTo,
       subject: message.subject,
@@ -575,9 +607,11 @@ async function reportNewsletterQuotaHold(newsletterId: string, quota: BroadcastQ
       // the server env, not a User row — there is no preference to read and no
       // unsubscribe token to mint for it.
     });
-    if (delivery !== 'SENT') logger.warning('Newsletter quota-hold alert was not delivered', { newsletterId, delivery });
+    if (delivery !== 'SENT') {
+      logger.warning('Newsletter quota-hold alert was not delivered', { held: fresh.length, delivery });
+    }
   } catch (e) {
-    logger.error('Newsletter quota hold could not be reported', { newsletterId, error: String(e) });
+    logger.error('Newsletter quota hold could not be reported', { held: held.length, error: String(e) });
   }
 }
 
@@ -586,21 +620,23 @@ async function reportNewsletterQuotaHold(newsletterId: string, quota: BroadcastQ
  *
  * Which of them one tick attempts is `runNewsletterTick`'s rule
  * (src/lib/newsletterQuotaHold.ts, #2335): an issue its tenant's band is
- * holding does not take a slot another tenant's issue could use, and a tenant
- * with a held issue has its later ones wait behind it. Before that rule, the
- * ten oldest due issues were attempted whatever happened to them — so ten held
- * issues from one tenant whose month was spent stopped every other tenant's
- * newsletter until that one tenant's meter reset.
+ * holding does not take a slot another tenant's issue could use, every issue is
+ * still metered on its own, a tenant's held attempts per tick are capped, and a
+ * resume is never skipped. Before that rule, the ten oldest due issues were
+ * attempted whatever happened to them — so ten held issues from one tenant
+ * whose month was spent stopped every other tenant's newsletter until that one
+ * tenant's meter reset.
  */
 export async function dispatchDueNewsletters(now: Date = new Date()): Promise<{
   dispatched: number;
   results: NewsletterDispatchResult[];
-  /** Due issues left for the next tick because an older one of their tenant is held. */
-  waiting: string[];
+  /** Due SCHEDULED issues left for the next tick because their tenant used up its held attempts. */
+  deferred: string[];
 }> {
-  // Ids and tenants only, and deliberately no `take`: the per-tick cap is the
-  // rule's budget, counted over attempts that could mail someone. A `take` here
-  // would cap the SCAN instead, and one tenant's held backlog could fill it.
+  // Ids, tenants and states only, and deliberately no `take`: the per-tick cap
+  // is the rule's budget, counted over attempts that could mail someone. A
+  // `take` here would cap the SCAN instead, and one tenant's held backlog could
+  // fill it. `status` is what tells the rule a row is a resume.
   const due = await prisma.newsletter.findMany({
     where: {
       OR: [
@@ -611,11 +647,11 @@ export async function dispatchDueNewsletters(now: Date = new Date()): Promise<{
         { status: 'SENDING' },
       ],
     },
-    select: { id: true, orgId: true },
+    select: { id: true, orgId: true, status: true },
     orderBy: { scheduledAt: 'asc' },
   });
 
-  const { results, waiting } = await runNewsletterTick(
+  const { results, deferred } = await runNewsletterTick(
     due,
     async (issue) => {
       try {
@@ -628,10 +664,11 @@ export async function dispatchDueNewsletters(now: Date = new Date()): Promise<{
     { isHeld: (result) => !!result.quota },
   );
 
-  for (const result of results) {
-    if (result.quota) await reportNewsletterQuotaHold(result.newsletterId, result.quota, now);
-  }
-  return { dispatched: results.filter((r) => !r.noop).length, results, waiting };
+  await reportNewsletterQuotaHolds(
+    results.flatMap((r) => (r.quota ? [{ newsletterId: r.newsletterId, quota: r.quota }] : [])),
+    now,
+  );
+  return { dispatched: results.filter((r) => !r.noop).length, results, deferred };
 }
 
 const CADENCE_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };

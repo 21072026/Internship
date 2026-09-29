@@ -122,24 +122,36 @@ Three properties are load-bearing:
     every tick. The rule is now `runNewsletterTick`
     (`src/lib/newsletterQuotaHold.ts`, unit-tested in
     `scripts/test/newsletter-quota-hold.test.mjs`): a held attempt costs none of
-    the tick's budget of ten, and once a tenant has a held issue, its later ones
-    wait behind it until the next tick — in order, so a smaller later issue
-    never overtakes the one the admin queued first, and one tenant's backlog
-    costs a tick exactly one quota check.
+    the tick's budget of ten, and every due issue is still metered **on its
+    own** — a later issue of the same tenant that fits its band goes out even
+    while an older, larger one is held (a tenant-wide "wait behind it" would be
+    a second stall nobody can see: the waiting issue fits, so nothing marks it
+    held). What bounds the cost is a *per-tenant* cap of ten held attempts per
+    tick; only that tenant's further `SCHEDULED` issues are deferred to the next
+    tick (`deferred` in the cron's JSON). Ten is the old tick's own size, so no
+    tenant is worse off than before, and no tenant's backlog uses up another's
+    reach. A **resume** (a `SENDING` row left by a run that died) is never
+    deferred: it is never metered, so it cannot be held, and the tick is the
+    only thing that finishes it. A held attempt also never loads the issue's
+    image — its bytes are read only once the issue is claimed.
   - *The cadence.* `queueScheduledNewsletter`'s three gating reads (anything
     pending, the last issue sent, the library entries already used) are scoped
     to the default org, whose issues it queues. Unscoped, another tenant's held
     issue counted as "the previous cycle has not gone out yet".
   - *Visibility.* A due `SCHEDULED` issue that its band is holding carries a
     `quotaHold` object in the history (`GET /api/admin/newsletters`, computed by
-    `newsletterQuotaHold()` with the dispatcher's own audience and meter). The
-    composer renders it as an **On hold** line with the figures and the reset
-    date. The first time a cron tick finds an issue held in a broadcast month,
-    it writes one `newsletter.quota_hold` ActivityLog row (warning; detail names
-    the org and the four figures) and mails the operator at `ALERT_EMAIL_TO`
-    (category `ops-alert`, Turkish, like the dead-letter alert). The ActivityLog
-    row is the dedupe key, so later ticks stay quiet, and it is written before
-    the mail, so the record exists even when the mail cannot leave.
+    `newsletterQuotaHold()` with the dispatcher's own audience and meter) —
+    only for an issue of the viewing admin's **own** tenant: the listing is not
+    tenant-scoped yet, and the figures are that organization's broadcast usage.
+    The composer renders it as an **On hold** line with the figures and the
+    reset date. The first time a cron tick finds an issue held in a broadcast
+    month, it writes one `newsletter.quota_hold` ActivityLog row (warning;
+    detail is only `{ orgId, month }`, because the activity feed is
+    installation-wide) and the tick mails the operator at `ALERT_EMAIL_TO` once,
+    naming each newly held issue, its org and the figures (category
+    `ops-alert`, Turkish, like the dead-letter alert). The ActivityLog row is
+    the dedupe key, so later ticks stay quiet, and it is written before the
+    mail, so the record exists even when the mail cannot leave.
 
   What an issue *means* is unchanged. Scoping an editorial issue per tenant
   with truthful `skipped` tallies, per-tenant child sends, or not metering

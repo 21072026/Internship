@@ -186,29 +186,34 @@ test('free-core mail keeps working for a tenant whose broadcast band is zero', a
 // Eleven due issues from a zero-band tenant, all older than one due issue from
 // a tenant with allowance left. The old tick took the ten oldest due issues and
 // attempted each, so the eleven filled it and the other tenant's issue was never
-// reached until the spent tenant's month rolled over. The dates are in 2001 so
-// these rows sort ahead of anything a parallel spec has queued.
+// reached until the spent tenant's month rolled over. Behind them sits a
+// half-delivered issue of the spent tenant (SENDING, from a run that died): a
+// resume is never metered, so it must finish even while its tenant is held. The
+// dates are in 2001 so these rows sort ahead of anything a parallel spec has
+// queued.
 test('a tenant over its band holds only its own newsletter issues, visibly (#2335)', async ({ page }) => {
   const pw = 'QuotaHoldPass123';
   const stamp = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
   const spent = await prisma.organization.create({ data: { slug: `bqh-spent-${stamp}`, name: 'Spent Band Org' } });
   const other = await prisma.organization.create({ data: { slug: `bqh-other-${stamp}`, name: 'Allowance Left Org' } });
   const adminEmail = uniqueEmail('bqh-admin');
+  const otherAdminEmail = uniqueEmail('bqh-admin-other');
   const spentMenteeEmail = uniqueEmail('bqh-mentee-spent');
   const otherMenteeEmail = uniqueEmail('bqh-mentee-other');
   const admin = await seedUser(adminEmail, pw, 'ADMIN', 'BQH Admin');
+  const otherAdmin = await seedUser(otherAdminEmail, pw, 'ADMIN', 'BQH Other Admin');
   const spentMentee = await seedUser(spentMenteeEmail, pw, 'MENTEE', 'BQH Spent Mentee');
   const otherMentee = await seedUser(otherMenteeEmail, pw, 'MENTEE', 'BQH Other Mentee');
   await prisma.user.updateMany({ where: { id: { in: [admin.id, spentMentee.id] } }, data: { orgId: spent.id } });
-  await prisma.user.update({ where: { id: otherMentee.id }, data: { orgId: other.id } });
+  await prisma.user.updateMany({ where: { id: { in: [otherAdmin.id, otherMentee.id] } }, data: { orgId: other.id } });
   await prisma.setting.create({ data: { orgId: spent.id, key: 'broadcastMonthlyRecipients', value: '0' } });
 
-  const issue = (orgId: string, subject: string, scheduledAt: Date) =>
+  const issue = (orgId: string, subject: string, scheduledAt: Date, status: 'SCHEDULED' | 'SENDING' = 'SCHEDULED') =>
     prisma.newsletter.create({
       data: {
         orgId,
         audience: 'MENTEE',
-        status: 'SCHEDULED',
+        status,
         subject,
         content: { en: { subject, intro: 'Hold intro.', tips: [{ emoji: '💡', title: 'Tip', body: 'One line.' }] } },
         scheduledAt,
@@ -219,16 +224,26 @@ test('a tenant over its band holds only its own newsletter issues, visibly (#233
 
   const heldIds: string[] = [];
   let otherId = '';
-  const allIds = () => [...heldIds, otherId].filter(Boolean);
+  let resumeId = '';
+  const allIds = () => [...heldIds, otherId, resumeId].filter(Boolean);
   try {
     for (let i = 0; i < 11; i++) {
       heldIds.push((await issue(spent.id, `E2E held ${stamp} #${i + 1}`, new Date(Date.UTC(2001, 0, 1, 0, i)))).id);
     }
+    resumeId = (await issue(spent.id, `E2E resume ${stamp}`, new Date(Date.UTC(2001, 0, 1, 0, 30)), 'SENDING')).id;
     otherId = (await issue(other.id, `E2E other ${stamp}`, new Date(Date.UTC(2001, 0, 2)))).id;
+    // With a hero image: the dispatcher reads its bytes only once an issue is
+    // claimed (a held one is refused every tick and must not pull the blob), so
+    // the send that does go out is the one that proves the late read works.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    await prisma.newsletterImage.create({ data: { newsletterId: otherId, contentType: 'image/png', size: png.length, data: png } });
 
     await signIn(page, adminEmail, pw, '/admin');
 
-    // ── 1. The tick reaches the other tenant ────────────────────────────────
+    // ── 1. The tick reaches the other tenant, and finishes the resume ───────
     const tick = await page.request.get('/api/cron?job=newsletters');
     expect(tick.ok()).toBeTruthy();
     const { newsletters } = await tick.json();
@@ -236,6 +251,9 @@ test('a tenant over its band holds only its own newsletter issues, visibly (#233
     const otherRow = await prisma.newsletter.findUnique({ where: { id: otherId } });
     expect(otherRow?.status).toBe('SENT');
     expect(await prisma.newsletterSend.count({ where: { newsletterId: otherId, userId: otherMentee.id } })).toBe(1);
+
+    // The half-delivered issue is not left behind its tenant's held ones.
+    expect((await prisma.newsletter.findUnique({ where: { id: resumeId } }))?.status).toBe('SENT');
 
     // The spent tenant's issues are all still waiting, untouched: nothing was
     // claimed, nothing was sent, every one of them can still be edited,
@@ -245,8 +263,14 @@ test('a tenant over its band holds only its own newsletter issues, visibly (#233
     expect(held.every((h) => h.sentCount === 0)).toBe(true);
     expect(await prisma.newsletterSend.count({ where: { newsletterId: { in: heldIds } } })).toBe(0);
 
-    // Only the oldest was metered; the rest waited behind it, in order.
-    expect(newsletters.waiting).toEqual(expect.arrayContaining(heldIds.slice(1)));
+    // Each issue is metered on its own, up to the tenant's ten held attempts a
+    // tick; the eleventh is left for the next tick.
+    const refused = (newsletters.results as { newsletterId: string; reason?: string }[])
+      .filter((r) => r.reason === 'broadcast_quota_exceeded')
+      .map((r) => r.newsletterId)
+      .filter((id) => heldIds.includes(id));
+    expect(refused).toEqual(heldIds.slice(0, 10));
+    expect(newsletters.deferred).toContain(heldIds[10]);
 
     // ── 2. The hold is loud once, not every tick ────────────────────────────
     const holdRows = () =>
@@ -255,38 +279,48 @@ test('a tenant over its band holds only its own newsletter issues, visibly (#233
         select: { targetId: true, detail: true },
       });
     const first = await holdRows();
-    expect(first.length).toBeGreaterThanOrEqual(1);
-    expect(new Set(first.map((r) => r.targetId))).toEqual(new Set([heldIds[0]]));
+    expect(first).toHaveLength(10);
+    expect(new Set(first.map((r) => r.targetId))).toEqual(new Set(heldIds.slice(0, 10)));
+    // The activity feed is installation-wide: the row names the tenant by id
+    // only, never its name or its broadcast figures.
     const detail = JSON.parse(first[0].detail ?? '{}');
-    expect(detail).toMatchObject({ orgId: spent.id, org: spent.slug, used: 0, limit: 0, requested: 1 });
+    expect(detail).toEqual({ orgId: spent.id, month: new Date().toISOString().slice(0, 7) });
 
-    // A second tick refuses the same issue again, and reports nothing new.
+    // A second tick refuses the same issues again, and reports nothing new.
     expect((await page.request.get('/api/cron?job=newsletters')).ok()).toBeTruthy();
     expect((await holdRows()).length).toBe(first.length);
 
     // ── 3. The admin can see why a past-due issue has not gone out ──────────
-    let hold: Record<string, unknown> | null | undefined;
-    let otherHold: unknown = 'not found';
-    for (let pageNo = 1; pageNo <= 5 && hold === undefined; pageNo++) {
-      const history = await (await page.request.get(`/api/admin/newsletters?page=${pageNo}`)).json();
-      for (const row of history.newsletters as { id: string; quotaHold: Record<string, unknown> | null }[]) {
-        if (row.id === heldIds[0]) hold = row.quotaHold;
-        if (row.id === otherId) otherHold = row.quotaHold;
+    const historyHold = async (id: string) => {
+      for (let pageNo = 1; pageNo <= 5; pageNo++) {
+        const history = await (await page.request.get(`/api/admin/newsletters?page=${pageNo}`)).json();
+        const row = (history.newsletters as { id: string; quotaHold: Record<string, unknown> | null }[]).find(
+          (r) => r.id === id,
+        );
+        if (row) return row.quotaHold;
       }
-    }
+      return 'not found';
+    };
+    const hold = (await historyHold(heldIds[0])) as Record<string, unknown> | null;
     expect(hold).toMatchObject({ limit: 0, used: 0, requested: 1, remaining: 0 });
     expect(typeof hold?.resetsAt).toBe('string');
-    // A sent issue is history, not a hold.
-    expect(otherHold).toBeNull();
 
     await gotoSettled(page, '/admin/newsletters');
     await expect(page.getByTestId(`newsletter-quota-hold-${heldIds[0]}`)).toContainText('On hold');
+
+    // ── 4. …and only to its own tenant ──────────────────────────────────────
+    // The history is not tenant-scoped yet: another tenant's admin still sees
+    // the row, but not the spent tenant's broadcast figures.
+    await page.context().clearCookies();
+    await signIn(page, otherAdminEmail, pw, '/admin');
+    expect(await historyHold(heldIds[0])).toBeNull();
   } finally {
     await prisma.activityLog.deleteMany({ where: { targetId: { in: allIds() } } });
     await prisma.newsletterSend.deleteMany({ where: { newsletterId: { in: allIds() } } });
     await prisma.newsletter.deleteMany({ where: { id: { in: allIds() } } });
     await prisma.setting.deleteMany({ where: { orgId: { in: [spent.id, other.id] } } });
     await cleanupByEmail(adminEmail);
+    await cleanupByEmail(otherAdminEmail);
     await cleanupByEmail(spentMenteeEmail);
     await cleanupByEmail(otherMenteeEmail);
     await prisma.organization.deleteMany({ where: { id: { in: [spent.id, other.id] } } }).catch(() => {});
