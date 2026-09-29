@@ -100,7 +100,7 @@
     "next": "^15.5.26",
     "next-auth": "^4.24.7",
     "node-cron": "^3.0.3",
-    "nodemailer": "^10.0.2",
+    "nodemailer": "^10.0.12",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "react": "^19.3.0",
