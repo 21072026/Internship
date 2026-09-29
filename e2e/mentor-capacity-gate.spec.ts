@@ -28,7 +28,7 @@ test('a full mentor link refuses applications and says so before the form', asyn
     });
     expect(res.status()).toBe(409);
     expect((await res.json()).code).toBe('mentor_full');
-    expect(await prisma.user.findUnique({ where: { email: applicantEmail } })).toBeNull();
+    expect(await prisma.user.findFirst({ where: { email: applicantEmail } })).toBeNull();
 
     // Public page: the explanation, never an empty form.
     await page.goto(`/apply/${mentor.id}`);
@@ -98,8 +98,8 @@ test('mentor accepts an application: relation starts, applicant notified; declin
       const res = await request.post('/api/apply', { data: { mentorId: mentor.id, fullName: name, email } });
       expect(res.ok()).toBeTruthy();
     }
-    const acceptUser = await prisma.user.findUniqueOrThrow({ where: { email: acceptEmail } });
-    const rejectUser = await prisma.user.findUniqueOrThrow({ where: { email: rejectEmail } });
+    const acceptUser = await prisma.user.findFirstOrThrow({ where: { email: acceptEmail } });
+    const rejectUser = await prisma.user.findFirstOrThrow({ where: { email: rejectEmail } });
 
     // Mentor signs in and decides from the applications inbox.
     await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');

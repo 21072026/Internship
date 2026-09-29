@@ -7,6 +7,7 @@ import { daysInStage } from '@/lib/stageClock';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
+import { rangeEnd, rangeStart } from '@/lib/dateRange';
 
 // GET — mentor-scoped analytics: their own pipeline funnel, goal summary and
 // engagement stats (EPIC: mentor analytics / pipeline funnel, roadmap #370).
@@ -40,14 +41,11 @@ export async function GET(request: Request) {
     // empty period that reads as "you did nothing".
     const { searchParams } = new URL(request.url);
     const now = new Date();
-    const parseDate = (v: string | null): Date | null => {
-      if (!v) return null;
-      const d = new Date(v);
-      return Number.isNaN(d.getTime()) ? null : d;
-    };
-    const to = parseDate(searchParams.get('to')) ?? now;
+    // A date-only `to` names a day, so it covers that whole day (#1501) —
+    // otherwise a mentor's own report drops everything logged today.
+    const to = rangeEnd(searchParams.get('to')) ?? now;
     const defaultFrom = new Date(to.getFullYear(), to.getMonth() - 5, 1);
-    let from = parseDate(searchParams.get('from')) ?? defaultFrom;
+    let from = rangeStart(searchParams.get('from')) ?? defaultFrom;
     if (from.getTime() > to.getTime()) from = defaultFrom;
     const inRange = { gte: from, lte: to };
 

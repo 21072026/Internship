@@ -43,3 +43,37 @@ export type RelationHistoryCounts = Partial<Record<(typeof RELATION_HISTORY_COUN
 export function hasRelationHistory(counts: RelationHistoryCounts): boolean {
   return RELATION_HISTORY_COUNTS.some((key) => (counts[key] ?? 0) > 0);
 }
+
+/**
+ * The mentee's own journey: the fields a HANDOVER copies from the closed
+ * relation onto its successor (#2289), and nothing else. The board must not
+ * show a hired-track candidate back at the first stage because their mentor
+ * changed, and a customer's agreed trial must not vanish — or restart — because
+ * the account got a new owner (#2551): `trialStartedAt`/`trialEndsAt` are
+ * copied as they are, so the successor carries the SAME window and the
+ * reminder ladder and expiry sweep count from the same date.
+ *
+ * Kept as a list so the Prisma select in mentorTransfer.ts can be compared
+ * against it (scripts/test/mentor-transfer.test.mjs): a field copied but not
+ * selected would be copied as `undefined`, i.e. silently dropped.
+ */
+export const CARRIED_OVER_FIELDS = [
+  'pipelineStatus',
+  'stageDeadline',
+  'companyId',
+  'projectId',
+  'cohortId',
+  'trialStartedAt',
+  'trialEndsAt',
+] as const;
+
+export type CarriedOverField = (typeof CARRIED_OVER_FIELDS)[number];
+
+/** Pick the carried-over fields off the closing relation, verbatim. */
+export function carriedOverFields<T extends Record<CarriedOverField, unknown>>(
+  relation: T,
+): Pick<T, CarriedOverField> {
+  const out = {} as Pick<T, CarriedOverField>;
+  for (const key of CARRIED_OVER_FIELDS) out[key] = relation[key];
+  return out;
+}

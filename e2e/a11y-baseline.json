@@ -29,6 +29,8 @@
   "/mentor/board#dark": {},
   "/admin/board": {},
   "/admin/board#dark": {},
+  "/admin/companies/:id": {},
+  "/admin/companies/:id#dark": {},
   "/admin/settings": {},
   "/admin/settings#dark": {},
   "/company": {},

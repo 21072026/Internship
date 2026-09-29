@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '@/lib/programTemplates';
 
 /**
@@ -45,6 +45,12 @@ const KEPT = [
   'funnel-kpi-card',
   'stage-aging-card',
   'drop-reasons-card',
+  // Cohort conversion and the retention triangle (#2420/#2425) depend on no
+  // capability: they read the tenant's OWN stage order, so a sales funnel gets
+  // the same two tables a hiring one does. Listed here so that stays true in
+  // both directions — a later gate that hid this card from MARKETING (the
+  // vertical it was built for) would otherwise pass every test in the suite.
+  'cohort-kpi-card',
 ];
 
 type Vertical = 'INTERNSHIP' | 'MARKETING';
@@ -144,6 +150,7 @@ test('an INTERNSHIP admin keeps every analytics card — the gate is a no-op', a
 test('a MARKETING admin sees the funnel cards and none of the mentorship ones', async ({ page }) => {
   const seeded = await seedVerticalOrg('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, seeded.adminEmail, PASSWORD, '/admin');
 
     const payload = await (await page.request.get('/api/admin/analytics')).json();

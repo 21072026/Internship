@@ -33,10 +33,12 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import {
   deliverInvitation,
+  invitationOrgWhere,
   logInvitationCreated,
   persistInvitation,
   type CreateInvitationInput,
 } from '@/lib/inviteCreate';
+import { findUserInWorld, worldOfOrg } from '@/lib/userWorld';
 
 export interface ConvertInquiryInput {
   inquiryId: string;
@@ -133,9 +135,17 @@ export async function convertInquiryToCompanyAccount(
   // An address that already signs in cannot be invited again — and the useful
   // answer is not "taken", it is WHICH company already has it, so the admin can
   // link the enquiry to that account instead of inventing a second one.
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, company: { select: { name: true } } },
+  //
+  // WORLDS (#2590): "has an account" is asked in the world of the ORGANIZATION
+  // this conversion provisions (`input.orgId`) — the company's login is created
+  // there, so a contact whose address holds only an account in the OTHER product
+  // is not "taken" (they get their own, independent login through the
+  // invitation). The lookup is `findUserInWorld`, never a by-address findFirst:
+  // that would pick an arbitrary world's row and could name the wrong company in
+  // the refusal below.
+  const existingUser = await findUserInWorld(email, await worldOfOrg(input.orgId), {
+    id: true,
+    company: { select: { name: true } },
   });
   if (existingUser) {
     return { ok: false, refusal: { code: 'email_taken', companyName: existingUser.company?.name ?? null } };
@@ -147,8 +157,17 @@ export async function convertInquiryToCompanyAccount(
   // A revoked invitation (#2071) is not a live one, and neither is an expired or
   // already-used one, so withdrawing an invitation makes conversion possible
   // again exactly as it makes re-inviting possible.
+  // Scoped to the provisioning organization (#2590): a live invitation for the
+  // same mailbox into the other world's org is a different login for a different
+  // product, and does not make this conversion a duplicate.
   const pendingInvitation = await prisma.invitationToken.findFirst({
-    where: { email, used: false, revokedAt: null, expiresAt: { gt: new Date() } },
+    where: {
+      email,
+      ...(await invitationOrgWhere(input.orgId)),
+      used: false,
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+    },
     select: { companyId: true },
   });
   if (pendingInvitation) {

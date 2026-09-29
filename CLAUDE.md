@@ -95,7 +95,8 @@ flowchart LR
 - `MENTEE` → `/portal` (own profile, assigned mentor/company)
 
 ### Data model (Prisma) — key models
-- **User** (`role`: ADMIN | MENTOR | MENTEE) — profile fields, `skills` (JSON)
+- **User** (`role`: ADMIN | MENTOR | MENTEE) — profile fields, `skills` (JSON); `email` is unique
+  per *world*, not globally (one row per product a person is in — `docs/worlds.md`)
 - **MentorshipRelation** (mentor ↔ mentee, optional company) — `status` (ACTIVE|COMPLETED)
   and `pipelineStatus` (granular stage, see below)
 - **InteractionLog** (Meeting | Feedback | Email) per relation
@@ -153,6 +154,14 @@ workaround, #636, and it compiled on every PR push).
 | Production | `internship-crm` (+ `-2` at `REPLICAS=2`) | 3200 (+3210) | https://interncrm.com | `prod-<sha>` | push to `main` (+6h drift check, manual) |
 | Preview | `internship-crm-preview` (+ `-2`) | 3201 (+3211) | https://preview.interncrm.com | `preview-<sha>` | push to `main` (+6h drift check, manual) |
 | Topic (per PR) | `internship-crm-pr<N>` | 3400–3499 | `https://pr<N>.interncrm.com` | `topic-pr<N>` | every push to the PR |
+
+Production and Preview each **additionally serve the MARKETING vertical on a
+second hostname from the same container** — `marketing.bcsit-gmbh.de` (:3200) and
+`marketing.bcsit-gmbh.dev` (:3201), #2540. That host is not only a landing: it is the
+door of the marketing *product* — the URL a person signs in on decides which of their
+accounts they get (`docs/worlds.md`, #2590). They are hand-written Caddy site files with
+automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The retired
+`*.ersah.in` marketing names redirect there, and that apex now serves **mail only**.
 
 - **Replicas (#1701):** every environment is **one container today** —
   `REPLICAS` defaults to `1` in `infra/deploy-prod.sh` and at that value the
@@ -489,6 +498,19 @@ workaround, #636, and it compiled on every PR push).
   resolves to 2 and throws; scope to `getByTestId('candidates-desktop-list')` (what the Desktop
   Chrome viewport shows) or to a specific card testid. Assume the same for any future
   mobile/desktop split.
+  **Streamed Suspense content** (#2479/#2312/#2316, the one nobody expects): a route with a
+  `loading.tsx` is wrapped in a Suspense boundary, and React Fizz streams the resolved segment
+  into `<div hidden id="S:0">` parked at the end of `<body>` — a complete second copy of the
+  page, testids and DOM ids included. React 19 reveals it up to **~300ms later**, and if
+  hydration renders the content in place first, the document holds both for that window.
+  Strict mode counts hidden elements, so the first assertion after `page.goto` throws
+  `resolved to 2 elements` instead of polling (a strict-mode violation is raised on the first
+  query and is never retried — which is why it fails on the retry too). **Navigate with
+  `gotoSettled` from `e2e/helpers/auth.ts`**, which waits the container out; it is a wait, not
+  a mask, so a duplicate that persists still fails. Nine specs across the scheduled suite hit
+  this before the wait existed. Deleting a `loading.tsx` that buys nothing (a `'use client'`
+  page with no server data, e.g. `/account`) removes the window at the source — verified: that
+  route's served HTML no longer carries an `S:` container at all.
 - **Known pre-existing CI flakes**: `e2e/account-self-service.spec.ts:52` and
   `e2e/sign-out-all.spec.ts:24` fail intermittently in the Playwright smoke job (usually
   preceded by a `[WebServer] TypeError: Cannot read properties of null (reading 'user')`
@@ -512,17 +534,39 @@ workaround, #636, and it compiled on every PR push).
   `origin/main..main`), not to force through. If the actual file contents match between the
   two tips, `git reset --hard origin/main` is safe.
 - **One served-host allowlist** (`src/lib/servedHosts.ts`, #2488): one container serves several
-  public hosts (interncrm.com + marketing.ersah.in, their preview twins, a topic env's own
+  public hosts (interncrm.com + marketing.bcsit-gmbh.de, their preview twins, a topic env's own
   `pr<N>` host), and NextAuth resolves every `callbackUrl` against `NEXTAUTH_URL` without ever
   seeing the request. So a redirect or an absolute same-app link is built from the REQUEST —
   `requestOrigin(headers)` on the server, `absoluteHere(path)` on the client — and
   `callbacks.redirect` keeps an absolute target only when its hostname is in `servedHosts()`
   (the hostnames of `NEXTAUTH_URL`/`NEXT_PUBLIC_APP_URL` + `MARKETING_HOSTS`; exact match, no
   wildcard, no new env var). Never build a browser-facing URL from `NEXTAUTH_URL` or
-  `NEXT_PUBLIC_APP_URL` again; those stay for e-mail links and IdP/OAuth-registered endpoints,
-  which cannot follow the request host by nature. The rule is unit-tested
+  `NEXT_PUBLIC_APP_URL` again; those stay for IdP/OAuth-registered endpoints, which cannot
+  follow the request host by nature. An **e-mail link** cannot follow a request either, so it
+  follows the recipient tenant (#2495): `appOriginForOrg(orgId)` (`src/lib/orgLinkOrigin.ts`)
+  returns the org's `Organization.publicHost` when this deployment serves it, else the old
+  `NEXT_PUBLIC_APP_URL` — invites, password reset and verification use it; robots/sitemap
+  follow the request host and list only the pages that host's vertical serves. The rule is unit-tested
   (`npm run test:served-hosts`) and pinned end-to-end with forged proxy headers
   (`e2e/host-coherent-redirects.spec.ts`).
+- **Bir kişi, iki dünya** ([`docs/worlds.md`](docs/worlds.md), #2590): oturum açılan **URL** ürünü
+  seçer — `MARKETING_HOSTS`'taki host ⇒ MARKETING, diğer her host ⇒ INTERNSHIP
+  (`src/lib/hostWorld.ts`) — ve aynı e-posta her dünyada ayrı bir `User` **satırı**
+  olabilir (`User.email` artık `@unique` değil, DB'de `@@unique([email, orgId])`; üyelik
+  değil satır, çünkü `orgId` tenant filtrelerinin anahtarı). Dört kural yük taşıyor:
+  (1) e-postadan hesap arama **yalnızca** `src/lib/userWorld.ts` üzerinden
+  (`findUserInWorld` / `emailTakenInOrgWorld`, her arama hangi dünyada olduğunu söyler) —
+  çıplak `findFirst({ where: { email } })` bir kişiyi sessizce yanlış ürüne alır ve
+  `scripts/check-user-email-lookups.mjs` CI'da kırar; her `user.create`'ten önce
+  `emailTakenInWorld` sorulur, çünkü DB yalnızca aynı org'daki kopyayı yakalar;
+  (2) "bu e-posta zaten kayıtlı" hep *bu dünyada* demektir — öbür dünyadaki hesap davet
+  ve kayıt yolunu kapatmaz; (3) bir postadaki bağlantı alıcının **kendi** ürününü açar:
+  origin `originForWorld(...)` / `appUrlFor(orgId)`'den gelir, `NEXTAUTH_URL`'den değil;
+  (4) bir akış yalnızca üretildiği satıra etki eder (token'lar `userId` anahtarlı), ama
+  **yanlış-parola sayacı adrese göredir ve iki dünya arasında paylaşılır** — bilinçli. Doğru
+  parola + yanlış dünya `WRONG_WORLD_<VERTICAL>` verir ve giriş sayfası öbür kapıya
+  bağlantı gösterir; oturum yalnızca kendi dünyasının host'unda geçerlidir (`session`
+  callback'i yanlış host'ta `null` döner).
 - **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
   inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted
   verbatim), forwards it to the handler and echoes it on **every** response, error responses

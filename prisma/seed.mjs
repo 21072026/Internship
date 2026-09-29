@@ -8,12 +8,24 @@ const prisma = new PrismaClient();
 // Partner companies / projects from the original spreadsheet.
 const SEED_COMPANIES = ['BCS-IT', 'OKAY', 'NFC', 'Abics'];
 
+// The users of the INTERNSHIP world (#2590), as a Prisma `where` fragment: every
+// user whose organization is not a marketing one — org-less rows included, since
+// an org-less user IS the default org, i.e. the internship product. `User.email`
+// is no longer unique (one person may hold an account in each product), so "does
+// the first admin already exist?" has to say WHICH product's admin: a
+// marketing-world account under SEED_ADMIN_EMAIL must neither satisfy the check
+// nor be handed the super-admin flag that belongs to the instance operator's
+// internship account. This is the plain-ESM mirror of `worldUserWhere('INTERNSHIP')`
+// in src/lib/userWorld.ts (a .mjs seeder cannot import the TypeScript module) —
+// keep the list of non-default verticals in step with src/lib/verticals.ts.
+const INTERNSHIP_WORLD = { NOT: { org: { is: { vertical: { in: ['MARKETING'] } } } } };
+
 async function main() {
   const email = process.env.SEED_ADMIN_EMAIL || 'admin@example.com';
   const password = process.env.SEED_ADMIN_PASSWORD || 'ChangeMe123!';
   const fullName = process.env.SEED_ADMIN_NAME || 'Admin';
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findFirst({ where: { email, ...INTERNSHIP_WORLD }, orderBy: { createdAt: 'asc' } });
   if (existing) {
     console.log(`User already exists: ${email} — skipping admin seed.`);
     // Idempotent backfill (#1535): the first admin is the instance operator and

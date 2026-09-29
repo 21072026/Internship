@@ -5,6 +5,10 @@ import { z } from 'zod';
 import { getSettings, setSetting, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
+import { MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
+import { findLeadOwner } from '@/lib/leadOwner';
+import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 
 // GET — current settings for the caller's tenant, resolved org row → global row
 // → code default (see src/lib/settings.ts).
@@ -46,6 +50,10 @@ const schema = z.object({
   pageViewRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   pushSubscriptionStaleDays: z.string().regex(/^\d{1,4}$/).optional(),
   jobRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  // Repeat-read suppression window for the access log, in minutes (#2433).
+  // Same reasoning as the retention windows above: writable, not on the form.
+  // `0` logs every read; the rule clamps anything above a day to a day.
+  viewLogWindowMinutes: z.string().regex(/^\d{1,4}$/).optional(),
   // Notification history (#1646). Unlike the four above, this one IS on the
   // settings form — how long a bell keeps its history is a programme decision
   // an org has an opinion about. `0` means keep forever; the prune raises
@@ -64,6 +72,20 @@ const schema = z.object({
   // accepting it from a tenant admin cannot raise anybody's ceiling. Seven
   // digits is far past any list this product will mail.
   broadcastMonthlyRecipients: z.string().regex(/^\d{1,7}$/).or(z.literal('')).optional(),
+  // Trial length for the MARKETING funnel (#2551). 1..MAX_TRIAL_LENGTH_DAYS
+  // (the one bound the form and the rule share): a zero-day trial
+  // would be stamped as already over and swept into TRIAL_EXPIRED overnight,
+  // so 0 is refused here (and would fall back to 30 in the rule regardless).
+  trialLengthDays: z
+    .string()
+    .regex(/^\d{1,3}$/)
+    .refine((v) => Number(v) >= 1 && Number(v) <= MAX_TRIAL_LENGTH_DAYS)
+    .optional(),
+  // Default owner of a new lead (#2580). `''` clears it; any other value must
+  // name an active ADMIN/MENTOR of the caller's own org — checked below against
+  // the database, because a shape check cannot tell a colleague's id from
+  // another tenant's.
+  defaultLeadOwnerId: z.string().trim().max(64).optional(),
 });
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.
@@ -78,6 +100,14 @@ export async function PUT(request: Request) {
 
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+
+  const ownerId = parsed.data.defaultLeadOwnerId;
+  if (ownerId) {
+    const orgId = resolveOrgId(session) ?? (await defaultOrgId());
+    if (!(await findLeadOwner(orgId, ownerId))) {
+      return NextResponse.json({ error: 'Validation failed', field: 'defaultLeadOwnerId' }, { status: 400 });
+    }
+  }
 
   return withTenantScope(session, async () => {
     const entries = Object.entries(parsed.data).filter(([k]) => k in SETTING_DEFAULTS) as [SettingKey, string][];

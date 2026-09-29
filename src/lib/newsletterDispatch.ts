@@ -8,10 +8,11 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { getOrgBranding } from '@/lib/orgBranding';
 import type { ResolvedBranding } from '@/lib/branding';
 import { getSetting } from '@/lib/settings';
-import { checkBroadcastQuota, type BroadcastQuotaCheck } from '@/lib/broadcastQuota';
+import { broadcastMonth, checkBroadcastQuota, type BroadcastQuotaCheck } from '@/lib/broadcastQuota';
+import { buildNewsletterQuotaHoldAlert, runNewsletterTick } from '@/lib/newsletterQuotaHold';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, type Locale } from '@/i18n/config';
-import { sendEmail } from '@/services/emailService';
+import { appUrlFor, sendEmail } from '@/services/emailService';
 import { renderNewsletterHtml, type NewsletterEmailLabels } from '@/lib/newsletterEmail';
 import { nextUnusedTemplate } from '@/lib/newsletterContent';
 import {
@@ -148,6 +149,40 @@ function brandFor(orgId: string | null | undefined, cache?: NewsletterBrandCache
 }
 
 /**
+ * The origin the links in ONE recipient's copy open on (#2590): the product that
+ * recipient's account lives in — the footer's unsubscribe, archive and
+ * preferences links, and the List-Unsubscribe URL in the header.
+ *
+ * Resolved per RECIPIENT from their organization, never once per issue: an
+ * issue is filed under one tenant and normally reaches only that tenant's
+ * members, but the function that renders a copy is also the preview and the
+ * admin test send, and nothing about it should assume the audience is a single
+ * world. Memoised per run exactly like the brand — same key, same lifetime, and
+ * the same reason (the 400 members of one org must cost one lookup, not 400) —
+ * but kept in a side table keyed by the run's cache object so the exported
+ * `NewsletterBrandCache` type, which callers construct, does not change shape.
+ *
+ * A reader whose account is in the INTERNSHIP world (or has no org) gets the
+ * origin these links always carried; only a non-default world differs.
+ */
+const originMemo = new WeakMap<NewsletterBrandCache, Map<string, Promise<string>>>();
+
+function originFor(orgId: string | null | undefined, cache?: NewsletterBrandCache): Promise<string> {
+  if (!cache) return appUrlFor(orgId);
+  let perRun = originMemo.get(cache);
+  if (!perRun) {
+    perRun = new Map();
+    originMemo.set(cache, perRun);
+  }
+  const key = orgId ?? '';
+  const hit = perRun.get(key);
+  if (hit) return hit;
+  const pending = appUrlFor(orgId);
+  perRun.set(key, pending);
+  return pending;
+}
+
+/**
  * Render one recipient's copy. Exported because the admin preview and the test
  * send have to show *exactly* what a real recipient would get — a preview built
  * by a second code path is a preview of nothing.
@@ -175,6 +210,7 @@ export async function renderNewsletterFor(options: {
   const locale = resolveNewsletterLocale(variants, preferredLanguage);
   const content = resolveNewsletterContent(variants, canonical, preferredLanguage);
   const brand = await brandFor(orgId, brandCache);
+  const origin = await originFor(orgId, brandCache);
 
   return {
     subject: content.subject,
@@ -187,9 +223,9 @@ export async function renderNewsletterFor(options: {
       labels: labelsFor(locale),
       withMentorNote: showsMentorNote(audience, role),
       imageSrc: imageSrc ?? null,
-      archiveUrl: newsletterArchiveUrl(),
-      preferencesUrl: newsletterPreferencesUrl(),
-      unsubscribeUrl: userId ? newsletterUnsubscribeUrl(userId) : null,
+      archiveUrl: newsletterArchiveUrl(origin),
+      preferencesUrl: newsletterPreferencesUrl(origin),
+      unsubscribeUrl: userId ? newsletterUnsubscribeUrl(userId, origin) : null,
     }),
   };
 }
@@ -199,6 +235,111 @@ async function pooled<T>(items: T[], task: (item: T) => Promise<void>): Promise<
   for (let i = 0; i < items.length; i += SEND_CONCURRENCY) {
     await Promise.all(items.slice(i, i + SEND_CONCURRENCY).map(task));
   }
+}
+
+/**
+ * Everyone this issue would still mail: the active members of ITS tenant in its
+ * audience, with an address, minus everyone a previous run already reached.
+ *
+ * Shared by the dispatcher and by the history's "on hold" line
+ * (`newsletterQuotaHold`), so the figure an admin is shown is the figure the
+ * dispatcher meters — a second resolution of the audience would be a second
+ * answer to the same question.
+ */
+async function pendingRecipients(issue: { id: string; audience: string; orgId: string | null }): Promise<Recipient[]> {
+  const roles = audienceRoles(issue.audience as NewsletterAudience);
+  // Scope recipients to the issue's own tenant (#2357). This runs from the cron
+  // with no request context, so the middleware does not engage; the issue row
+  // carries its orgId and we filter by it explicitly, so a marketing issue never
+  // reaches an internship tenant's members. A legacy issue with orgId = NULL
+  // (backfilled to the default org on deploy) still resolves to one tenant.
+  const users = (await prisma.user.findMany({
+    where: { isActive: true, role: { in: roles as ('MENTEE' | 'MENTOR')[] }, orgId: issue.orgId },
+    select: { id: true, email: true, role: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
+  })) as Recipient[];
+
+  // Resume safety: everyone this issue has already reached.
+  const already = new Set(
+    (await prisma.newsletterSend.findMany({ where: { newsletterId: issue.id }, select: { email: true } })).map((r) => r.email)
+  );
+
+  return users.filter((u) => u.email && !already.has(u.email));
+}
+
+/**
+ * The broadcast quota (#1754): the first tenant band this send would cross, or
+ * null when it fits.
+ *
+ * Counted per tenant, over the recipients that would ACTUALLY be mailed —
+ * someone who opted out is skipped by the send loop and costs the sending domain
+ * nothing, so metering them would refuse sends that were never going to happen.
+ * A resumed run only ever asks for what is left to send, so finishing a
+ * half-delivered issue is never blocked by the half already delivered.
+ *
+ * ALL-OR-NOTHING PER ISSUE, deliberately. An issue that would cross its band is
+ * refused whole and nothing is sent — never truncated to the part that fits,
+ * because a sent issue is immutable and undeletable (docs/newsletter.md): the
+ * rest of the list could never receive it. Refusing whole keeps the issue
+ * re-sendable once the month rolls over, the plan changes or the operator
+ * raises the cap. Since #2357 an issue reaches only its own tenant, so the band
+ * that can hold it is that tenant's alone; the loop still walks every tenant the
+ * recipients resolve to, so a row that ever spans two again is metered against
+ * each of them rather than against whichever came first.
+ *
+ * NEVER CALLED FOR A RESUME. A SENDING issue is finishing a run the quota
+ * already authorised. Metering it again would double-count —
+ * `checkBroadcastQuota` reads NewsletterSend rows in the window, which by then
+ * include this issue's own delivered half — and because the refusal returns
+ * BEFORE the claim, it would strand the row in SENDING: half-delivered,
+ * un-editable and un-cancellable, the precise outcome the ordering exists to
+ * prevent.
+ */
+async function quotaRefusal(recipients: Recipient[]): Promise<BroadcastQuotaCheck | null> {
+  const quotaByOrg = new Map<string, number>();
+  for (const user of recipients) {
+    if (!user.orgId) continue; // no tenant resolves → unmetered, like planGate
+    if (!emailGroupAllowedForCategory(user, 'newsletter')) continue;
+    quotaByOrg.set(user.orgId, (quotaByOrg.get(user.orgId) ?? 0) + 1);
+  }
+  for (const [orgId, requested] of quotaByOrg) {
+    const quota = await checkBroadcastQuota({ orgId, requested });
+    if (!quota.allowed) return quota;
+  }
+  return null;
+}
+
+/** The part of a quota refusal the history hands to the composer (#2335). */
+export interface NewsletterQuotaHold {
+  limit: number | null;
+  used: number;
+  requested: number;
+  remaining: number | null;
+  resetsAt: string;
+}
+
+/**
+ * Is this issue due and being held by its tenant's broadcast band right now?
+ * The history's "on hold" line (#2335).
+ *
+ * Only a SCHEDULED issue whose time has come can be held: a future one may still
+ * fit when its date arrives (the meter resets monthly), and calling it blocked
+ * would be a forecast, not a fact. Evaluated with the dispatcher's own audience
+ * and meter, never a copy of them.
+ */
+export async function newsletterQuotaHold(
+  issue: { id: string; audience: string; orgId: string | null; status: string; scheduledAt: Date | null },
+  now: Date = new Date(),
+): Promise<NewsletterQuotaHold | null> {
+  if (issue.status !== 'SCHEDULED' || !issue.scheduledAt || issue.scheduledAt > now) return null;
+  const quota = await quotaRefusal(await pendingRecipients(issue));
+  if (!quota) return null;
+  return {
+    limit: quota.limit,
+    used: quota.used,
+    requested: quota.requested,
+    remaining: quota.remaining,
+    resetsAt: quota.resetsAt.toISOString(),
+  };
 }
 
 /**
@@ -218,7 +359,9 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       status: true,
       content: true,
       orgId: true,
-      image: { select: { contentType: true, size: true, data: true } },
+      // Not the image: its bytes are loaded only once the issue is claimed
+      // below. A held issue is refused before that, every tick until its band
+      // allows, and must not pull the hero blob each time just to be refused.
     },
   });
   if (!issue) return { newsletterId, recipients: 0, sent: 0, failed: 0, skipped: 0, noop: true, reason: 'not_found' };
@@ -240,67 +383,19 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   // yet: a refusal must leave the issue exactly as it was (still SCHEDULED, so
   // the cron retries it and a human can still edit or cancel it), and a claimed
   // row that then refuses to send would be stuck in SENDING for good.
-  const roles = audienceRoles(issue.audience as NewsletterAudience);
-  // Scope recipients to the issue's own tenant (#2357). This runs from the cron
-  // with no request context, so the middleware does not engage; the issue row
-  // carries its orgId and we filter by it explicitly, so a marketing issue never
-  // reaches an internship tenant's members. A legacy issue with orgId = NULL
-  // (backfilled to the default org on deploy) still resolves to one tenant.
-  const users = (await prisma.user.findMany({
-    where: { isActive: true, role: { in: roles as ('MENTEE' | 'MENTOR')[] }, orgId: issue.orgId },
-    select: { id: true, email: true, role: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
-  })) as Recipient[];
+  const recipients = await pendingRecipients(issue);
 
-  // Resume safety: everyone this issue has already reached.
-  const already = new Set(
-    (await prisma.newsletterSend.findMany({ where: { newsletterId }, select: { email: true } })).map((r) => r.email)
-  );
-
-  const recipients = users.filter((u) => u.email && !already.has(u.email));
-
-  // ── Broadcast quota (#1754) ────────────────────────────────────────────────
-  // Counted per tenant, over the recipients that would ACTUALLY be mailed —
-  // someone who opted out is skipped below and costs the sending domain
-  // nothing, so metering them would refuse sends that were never going to
-  // happen. A resumed run only ever asks for what is left to send, so finishing
-  // a half-delivered issue is never blocked by the half already delivered.
-  //
-  // ALL-OR-NOTHING PER ISSUE, deliberately. If any tenant in the audience would
-  // cross its band, the whole issue is refused and nothing is sent — rather
-  // than sending to the tenants that fit and skipping the one that does not.
-  // Excluding a tenant would mark the issue SENT, and a sent issue is immutable
-  // and undeletable (docs/newsletter.md): the skipped tenant could never
-  // receive it. Refusing whole keeps the issue re-sendable once the month rolls
-  // over, the plan changes or the operator raises the cap.
-  //
-  // A RESUME IS NEVER METERED. When `issue.status` is already 'SENDING' this
-  // call is finishing a run the quota already authorised, and it can never mail
-  // more than that authorisation covered. Metering it again would also
-  // double-count: `checkBroadcastQuota` reads NewsletterSend rows in the
-  // window, which by then include this issue's own delivered half, so
-  // `used + requested` exceeds what was actually asked for. And the refusal
-  // above returns BEFORE the claim — which leaves a SCHEDULED issue exactly as
-  // it was, but leaves a resumed one stuck in SENDING: half-delivered,
-  // un-editable and un-cancellable, the precise outcome this ordering exists to
-  // prevent.
-  const resuming = issue.status === 'SENDING';
-  const quotaByOrg = new Map<string, number>();
-  if (!resuming) {
-    for (const user of recipients) {
-      if (!user.orgId) continue; // no tenant resolves → unmetered, like planGate
-      if (!emailGroupAllowedForCategory(user, 'newsletter')) continue;
-      quotaByOrg.set(user.orgId, (quotaByOrg.get(user.orgId) ?? 0) + 1);
-    }
-  }
-  for (const [orgId, requested] of quotaByOrg) {
-    const quota = await checkBroadcastQuota({ orgId, requested });
-    if (quota.allowed) continue;
+  // A RESUME IS NEVER METERED — see quotaRefusal(). When `issue.status` is
+  // already 'SENDING' this call is finishing a run the quota already
+  // authorised, and it can never mail more than that authorisation covered.
+  const quota = issue.status === 'SENDING' ? null : await quotaRefusal(recipients);
+  if (quota) {
     logger.warning('Newsletter refused by the broadcast quota', {
       newsletterId,
-      orgId,
+      orgId: quota.orgId,
       used: quota.used,
       limit: quota.limit,
-      requested,
+      requested: quota.requested,
     });
     return {
       newsletterId,
@@ -325,11 +420,15 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
     return { newsletterId, recipients: 0, sent: 0, failed: 0, skipped: 0, noop: true, reason: 'claimed_elsewhere' };
   }
 
-  const attachments = issue.image
+  const image = await prisma.newsletterImage.findUnique({
+    where: { newsletterId },
+    select: { contentType: true, data: true },
+  });
+  const attachments = image
     ? [{
-        filename: newsletterImageFilename(issue.image.contentType),
-        content: Buffer.from(issue.image.data),
-        contentType: issue.image.contentType,
+        filename: newsletterImageFilename(image.contentType),
+        content: Buffer.from(image.data),
+        contentType: image.contentType,
         cid: IMAGE_CID,
       }]
     : undefined;
@@ -363,11 +462,16 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       audience: issue.audience as NewsletterAudience,
       role: user.role,
       preferredLanguage: user.preferredLanguage,
-      imageSrc: issue.image ? `cid:${IMAGE_CID}` : null,
+      imageSrc: image ? `cid:${IMAGE_CID}` : null,
       userId: user.id,
       orgId: user.orgId,
       brandCache,
     });
+    // The header's unsubscribe URL must open the same product the body's links do
+    // (#2590). Already resolved by the render above, so this is a memo hit — and
+    // it is awaited HERE, outside the send's try/catch, for the same reason the
+    // render is: a failed lookup is a failed run, not one recipient marked FAILED.
+    const origin = await originFor(user.orgId, brandCache);
 
     let status: 'SENT' | 'FAILED' | 'SKIPPED' = 'SENT';
     let error: string | null = null;
@@ -389,7 +493,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
           // Both halves matter: the URL alone gets a "click to unsubscribe"
           // link in Gmail, the One-Click pair gets the native control that
           // needs no page load at all.
-          'List-Unsubscribe': `<${newsletterUnsubscribeUrl(user.id)}>`,
+          'List-Unsubscribe': `<${newsletterUnsubscribeUrl(user.id, origin)}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         },
       });
@@ -441,11 +545,138 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   return { newsletterId, recipients: recipients.length, sent, failed, skipped };
 }
 
-/** Every SCHEDULED issue whose time has come, plus any run left mid-flight. */
+/** The ActivityLog action a held issue writes, once per broadcast month. */
+export const NEWSLETTER_QUOTA_HOLD_ACTION = 'newsletter.quota_hold';
+const OPS_ALERT_CATEGORY = 'ops-alert';
+
+/**
+ * Make held issues loud — ONCE (#2335).
+ *
+ * An issue nobody pressed Send on (the cadence's own, or one an admin scheduled
+ * for a date) used to leave nothing behind but a server-log warning every
+ * fifteen minutes; for a cron-driven issue there is no 403 for anybody to read.
+ * The first time a tick finds an issue held in a broadcast month, this writes
+ * one ActivityLog row for it, then mails ALERT_EMAIL_TO — one mail per tick,
+ * covering every issue the tick newly found held, so a tenant with several
+ * queued issues is one mail, not several. The row is the dedupe key
+ * (restart-safe, unlike an in-memory timer) and the durable record — written
+ * FIRST, the same order the dead-letter alert uses, so it exists even when the
+ * mail cannot leave.
+ *
+ * The row carries the tenant's id and nothing else about it: the activity feed
+ * is installation-wide today, so another tenant's name and broadcast figures
+ * stay in the operator's mail (and in the tenant's own history line), not in a
+ * list every ADMIN can page through.
+ *
+ * Never throws: failing to report a hold must not turn into failing the tick.
+ */
+async function reportNewsletterQuotaHolds(
+  held: { newsletterId: string; quota: BroadcastQuotaCheck }[],
+  now: Date,
+): Promise<void> {
+  if (held.length === 0) return;
+  try {
+    const { start } = broadcastMonth(now);
+    const reported = new Set(
+      (
+        await prisma.activityLog.findMany({
+          where: {
+            action: NEWSLETTER_QUOTA_HOLD_ACTION,
+            targetId: { in: held.map((h) => h.newsletterId) },
+            createdAt: { gte: start },
+          },
+          select: { targetId: true },
+        })
+      ).map((row) => row.targetId),
+    );
+    const fresh = held.filter((h) => !reported.has(h.newsletterId));
+    if (fresh.length === 0) return;
+
+    const orgIds = [...new Set(fresh.map((h) => h.quota.orgId).filter((id): id is string => !!id))];
+    const [issues, orgs] = await Promise.all([
+      prisma.newsletter.findMany({
+        where: { id: { in: fresh.map((h) => h.newsletterId) } },
+        select: { id: true, subject: true, scheduledAt: true },
+      }),
+      orgIds.length
+        ? prisma.organization.findMany({ where: { id: { in: orgIds } }, select: { id: true, name: true, slug: true } })
+        : Promise.resolve([]),
+    ]);
+    const issueById = new Map(issues.map((i) => [i.id, i]));
+    const orgById = new Map(orgs.map((o) => [o.id, o]));
+
+    for (const { newsletterId, quota } of fresh) {
+      await logActivity({
+        level: 'warning',
+        action: NEWSLETTER_QUOTA_HOLD_ACTION,
+        targetType: 'newsletter',
+        targetId: newsletterId,
+        // ActivityLog.detail is VARCHAR(191) and an oversized value is silently
+        // dropped (P2000, the #1268 lesson) — and see above for why this is
+        // all it says about the tenant.
+        detail: JSON.stringify({ orgId: quota.orgId, month: start.toISOString().slice(0, 7) }).slice(0, 191),
+      });
+    }
+
+    const alertTo = process.env.ALERT_EMAIL_TO;
+    if (!alertTo) return;
+    const message = buildNewsletterQuotaHoldAlert(
+      fresh.map(({ newsletterId, quota }) => {
+        const issue = issueById.get(newsletterId);
+        const org = quota.orgId ? orgById.get(quota.orgId) : undefined;
+        return {
+          newsletterId,
+          subject: issue?.subject ?? '',
+          orgName: org?.name ?? null,
+          orgSlug: org?.slug ?? null,
+          used: quota.used,
+          limit: quota.limit,
+          requested: quota.requested,
+          remaining: quota.remaining,
+          resetsAt: quota.resetsAt.toISOString(),
+          scheduledAt: issue?.scheduledAt?.toISOString() ?? null,
+        };
+      }),
+    );
+    const delivery = await sendEmail({
+      to: alertTo,
+      subject: message.subject,
+      html: message.html,
+      category: OPS_ALERT_CATEGORY,
+      // no-user-row: ALERT_EMAIL_TO is an operator alert address configured in
+      // the server env, not a User row — there is no preference to read and no
+      // unsubscribe token to mint for it.
+    });
+    if (delivery !== 'SENT') {
+      logger.warning('Newsletter quota-hold alert was not delivered', { held: fresh.length, delivery });
+    }
+  } catch (e) {
+    logger.error('Newsletter quota hold could not be reported', { held: held.length, error: String(e) });
+  }
+}
+
+/**
+ * Every SCHEDULED issue whose time has come, plus any run left mid-flight.
+ *
+ * Which of them one tick attempts is `runNewsletterTick`'s rule
+ * (src/lib/newsletterQuotaHold.ts, #2335): an issue its tenant's band is
+ * holding does not take a slot another tenant's issue could use, every issue is
+ * still metered on its own, a tenant's held attempts per tick are capped, and a
+ * resume is never skipped. Before that rule, the ten oldest due issues were
+ * attempted whatever happened to them — so ten held issues from one tenant
+ * whose month was spent stopped every other tenant's newsletter until that one
+ * tenant's meter reset.
+ */
 export async function dispatchDueNewsletters(now: Date = new Date()): Promise<{
   dispatched: number;
   results: NewsletterDispatchResult[];
+  /** Due SCHEDULED issues left for the next tick because their tenant used up its held attempts. */
+  deferred: string[];
 }> {
+  // Ids, tenants and states only, and deliberately no `take`: the per-tick cap
+  // is the rule's budget, counted over attempts that could mail someone. A
+  // `take` here would cap the SCAN instead, and one tenant's held backlog could
+  // fill it. `status` is what tells the rule a row is a resume.
   const due = await prisma.newsletter.findMany({
     where: {
       OR: [
@@ -456,20 +687,28 @@ export async function dispatchDueNewsletters(now: Date = new Date()): Promise<{
         { status: 'SENDING' },
       ],
     },
-    select: { id: true },
+    select: { id: true, orgId: true, status: true },
     orderBy: { scheduledAt: 'asc' },
-    take: 10,
   });
 
-  const results: NewsletterDispatchResult[] = [];
-  for (const issue of due) {
-    try {
-      results.push(await dispatchNewsletter(issue.id));
-    } catch (e) {
-      logger.error('Newsletter dispatch failed', { newsletterId: issue.id, error: String(e) });
-    }
-  }
-  return { dispatched: results.filter((r) => !r.noop).length, results };
+  const { results, deferred } = await runNewsletterTick(
+    due,
+    async (issue) => {
+      try {
+        return await dispatchNewsletter(issue.id);
+      } catch (e) {
+        logger.error('Newsletter dispatch failed', { newsletterId: issue.id, error: String(e) });
+        return null;
+      }
+    },
+    { isHeld: (result) => !!result.quota },
+  );
+
+  await reportNewsletterQuotaHolds(
+    results.flatMap((r) => (r.quota ? [{ newsletterId: r.newsletterId, quota: r.quota }] : [])),
+    now,
+  );
+  return { dispatched: results.filter((r) => !r.noop).length, results, deferred };
 }
 
 const CADENCE_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
@@ -495,12 +734,20 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   const days = CADENCE_DAYS[cadence];
   if (!days) return { queued: false, reason: 'disabled' };
 
+  // The cadence is the default org's — its issues are stamped with it below
+  // (#2357) — so every read that GATES it is scoped to that org too (#2335).
+  // Unscoped, any other tenant's issue counted as "the previous cycle": one held
+  // by its own tenant's spent band stopped this cadence until that tenant's
+  // month rolled over, and another tenant's send reset "too soon" for an
+  // audience that never received it.
+  const orgId = await defaultOrgId();
+
   // Anything already waiting means the previous cycle has not gone out yet.
-  const pending = await prisma.newsletter.count({ where: { status: { in: ['SCHEDULED', 'SENDING'] } } });
+  const pending = await prisma.newsletter.count({ where: { orgId, status: { in: ['SCHEDULED', 'SENDING'] } } });
   if (pending > 0) return { queued: false, reason: 'already_pending' };
 
   const last = await prisma.newsletter.findFirst({
-    where: { status: 'SENT' },
+    where: { orgId, status: 'SENT' },
     orderBy: { sentAt: 'desc' },
     select: { sentAt: true },
   });
@@ -512,7 +759,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // Which library entries have been used before — so the cadence walks the
   // library instead of re-sending its first issue forever.
   const used = await prisma.newsletter.findMany({
-    where: { templateKey: { not: null } },
+    where: { orgId, templateKey: { not: null } },
     select: { templateKey: true },
   });
   const template = nextUnusedTemplate(
@@ -539,7 +786,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
       // cadence is separate future work; scoping here keeps an internship issue
       // from reaching a marketing tenant's members via dispatchNewsletter's
       // recipient filter.
-      orgId: await defaultOrgId(),
+      orgId,
       templateKey: template.key,
       audience: template.audience,
       status: 'SCHEDULED',

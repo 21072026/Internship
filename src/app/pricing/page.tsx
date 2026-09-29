@@ -3,7 +3,8 @@ import Link from 'next/link';
 import {
   BadgeEuro, Building2, CheckCircle, GraduationCap, Info, Scale, Server, Sparkles, TrendingUp, UserPlus, Users,
 } from 'lucide-react';
-import { getServerDictionary } from '@/i18n/server';
+import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
+import { productNameFor } from '@/lib/verticals';
 import { PublicShell } from '@/components/landing/PublicShell';
 import {
   ADDONS,
@@ -32,7 +33,13 @@ export const dynamic = 'force-dynamic';
 // force-dynamic anyway.
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getServerDictionary();
-  return { title: `${t.pricing.metaTitle} — InternshipCRM`, description: t.pricing.heroSubtitle };
+  // The product name is the VERTICAL's, not a literal (#2475): a marketing
+  // host's tab said "Pricing — InternshipCRM" while every other public page had
+  // already moved to the vertical wordmark (#2498). `heroSubtitle` is overlaid
+  // for MARKETING, so the search snippet says "not published yet" rather than
+  // describing the matched-pair meter.
+  const productName = productNameFor(await resolveRequestVertical());
+  return { title: `${t.pricing.metaTitle} — ${productName}`, description: t.pricing.heroSubtitle };
 }
 
 /**
@@ -65,6 +72,50 @@ export default async function PricingPage() {
   const pct = (share: number) => formatPercent(share, locale);
   const count = (value: number | null) => formatCount(value, locale, p.unlimited);
 
+  // Which product's price is this (#2475)? Every number on this page comes from
+  // `src/lib/plans.ts`, and every one of them prices the INTERNSHIP product: the
+  // metering unit is the active matched pair, the free core is "free for mentees
+  // and mentors", the second wallet is a company hiring an intern. None of that
+  // is a statement anyone has made about the marketing product — its packaging
+  // has not been decided — so a MARKETING host does not get those sections
+  // re-worded, it does not get them at all. Inventing a marketing price here
+  // would be the one kind of wrong this page cannot afford: it is the page that
+  // makes the pricing public.
+  //
+  // What survives is what is true whatever the packaging turns out to be:
+  // self-hosting is free (AGPL-3.0), and there is no checkout — a paid plan is
+  // invoiced after a conversation. Same resolution as the landing: session
+  // first, request host second.
+  const isMarketing = (await resolveRequestVertical()) === 'MARKETING';
+
+  // Published discounts are discounts ON PLANS. With no marketing plans, the
+  // annual and education lines would be discounts off nothing; the self-host
+  // line is a licence fact and holds for every vertical.
+  const discounts = isMarketing
+    ? [{ icon: Server, text: p.discountSelfHost }]
+    : [
+        { icon: TrendingUp, text: p.discountAnnual },
+        { icon: GraduationCap, text: p.discountEducation.replace('{pct}', pct(EDUCATION_DISCOUNT_RATE)) },
+        { icon: Server, text: p.discountSelfHost },
+      ];
+
+  // Four of the six questions are about the internship meter (pairs, mentors,
+  // the education discount). The two that are not — can we self-host, how do we
+  // actually pay — are the two a marketing visitor is most likely to have.
+  const faqs = isMarketing
+    ? [
+        { q: p.faq5Q, a: p.faq5A },
+        { q: p.faq6Q, a: p.faq6A },
+      ]
+    : [
+        { q: p.faq1Q, a: p.faq1A },
+        { q: p.faq2Q, a: p.faq2A },
+        { q: p.faq3Q, a: p.faq3A },
+        { q: p.faq4Q, a: p.faq4A.replace('{pct}', pct(EDUCATION_DISCOUNT_RATE)) },
+        { q: p.faq5Q, a: p.faq5A },
+        { q: p.faq6Q, a: p.faq6A },
+      ];
+
   const programPlans = plansForAudience('PROGRAM');
   const employerPlans = plansForAudience('EMPLOYER');
 
@@ -81,6 +132,12 @@ export default async function PricingPage() {
           <p className="text-lg text-gray-600 mt-4 leading-relaxed">{p.heroSubtitle}</p>
         </div>
 
+        {/* Everything from here to the discounts states the INTERNSHIP price
+            model — the free core, the plan bands, the meter, the overage, the
+            employer wallet and the add-ons all come from src/lib/plans.ts. A
+            MARKETING host renders none of it (#2475); see the note on
+            `isMarketing` above for why it is hidden rather than re-worded. */}
+        {!isMarketing && (<>
         {/* Free core, at the very top: the promise is the product, not a
             footnote under the cheapest column. */}
         <section
@@ -223,15 +280,17 @@ export default async function PricingPage() {
           </div>
         </section>
 
-        {/* Published discounts */}
+        </>)}
+
+        {/* Published discounts. On a marketing host this is the one section that
+            survives, holding the single claim that needs no price list: the app
+            is AGPL-3.0, so running it yourself is free. Its heading is overlaid
+            to "What is already true" there — one card in a three-column grid
+            would otherwise sit in a third of the page. */}
         <section className="mt-16" data-testid="pricing-discounts">
           <h2 className="text-2xl font-bold text-gray-900 text-center">{p.discountsTitle}</h2>
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-5">
-            {[
-              { icon: TrendingUp, text: p.discountAnnual },
-              { icon: GraduationCap, text: p.discountEducation.replace('{pct}', pct(EDUCATION_DISCOUNT_RATE)) },
-              { icon: Server, text: p.discountSelfHost },
-            ].map((d) => (
+          <div className={`mt-8 grid grid-cols-1 gap-5 ${discounts.length > 1 ? 'md:grid-cols-3' : 'max-w-2xl mx-auto'}`}>
+            {discounts.map((d) => (
               <div key={d.text} className="flex items-start gap-3 p-6 rounded-xl border border-gray-200 bg-white">
                 <d.icon className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-gray-600 leading-relaxed">{d.text}</p>
@@ -244,14 +303,7 @@ export default async function PricingPage() {
         <section className="mt-16 max-w-3xl mx-auto" data-testid="pricing-faq">
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">{p.faqTitle}</h2>
           <dl className="space-y-5">
-            {[
-              { q: p.faq1Q, a: p.faq1A },
-              { q: p.faq2Q, a: p.faq2A },
-              { q: p.faq3Q, a: p.faq3A },
-              { q: p.faq4Q, a: p.faq4A.replace('{pct}', pct(EDUCATION_DISCOUNT_RATE)) },
-              { q: p.faq5Q, a: p.faq5A },
-              { q: p.faq6Q, a: p.faq6A },
-            ].map((item) => (
+            {faqs.map((item) => (
               <div key={item.q} className="p-6 rounded-xl border border-gray-200 bg-white">
                 <dt className="font-semibold text-gray-900">{item.q}</dt>
                 <dd className="mt-2 text-gray-600 leading-relaxed">{item.a}</dd>
@@ -260,7 +312,13 @@ export default async function PricingPage() {
           </dl>
         </section>
 
-        {/* Per-audience CTAs */}
+        {/* Per-audience CTAs. All four doors are internship ones — the partner
+            company, the programme owner, the mentee sign-up and the mentor
+            application — and two of them point at routes a marketing host
+            deliberately does not serve, so the whole section is left out there
+            (#2475). A marketing host has no public contact route yet; inventing
+            one here would be the same mistake as inventing a price. */}
+        {!isMarketing && (
         <section className="mt-16" data-testid="pricing-cta">
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">{p.ctaTitle}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
@@ -284,6 +342,7 @@ export default async function PricingPage() {
             ))}
           </div>
         </section>
+        )}
 
         {/* How you actually pay. Conditional on the flag for the same reason
             the placement footnote is: when checkout ships, this note is wrong,

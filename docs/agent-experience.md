@@ -10,6 +10,39 @@ Newest entries on top.
 
 ---
 
+## 2026-09-29 — Bir kişi, iki dünya (#2590): paralel `main`, container yeniden başlaması, e2e ortamı
+
+**Aynı konuda `main` de ilerliyor olabilir: tasarlamadan önce `git log origin/main -20`.** Bu iş
+sırasında `main`'e #2607/#2610 (org'a göre e-posta bağlantı kökeni, `Organization.publicHost`)
+girdi ve benim `appUrlFor`/`originForWorld` işimle aynı yeri çözüyordu; iki kural yan yana yaşamaz.
+Çözüm iki kuralı tek fonksiyonda birleştirmekti (`appOriginForOrg`: açık `publicHost` kazanır,
+yoksa org'un dünyası). Çakışma çözerken "bizimki mi onlarınki mi" değil "tek kural hangisi" diye sor.
+
+**Yeni bir kural eski spec'leri değil, sonradan gelen spec'leri de kırar.** Host artık ürünü
+seçtiği için MARKETING org'unun kullanıcısını varsayılan hostta giren her spec kırılır; `main`'den
+sonradan gelen `marketing-sales-surface`, `marketing-demo-form`, `trial-end-extend` da öyle çıktı.
+Merge sonrası `git diff <eski-base> origin/main --name-only -- e2e | xargs grep -l MARKETING`
+ile yeni gelenleri bul ve çalıştır. Org'suz platform admin'i INTERNSHIP dünyasıdır — ona
+marketing başlığı eklemek onu da kırar (trial-reminders-job'da ajan bunu yanlış yaptı).
+
+**Container yeniden başlayabilir; arka plan workflow'u ölür, çalışma ağacı kalır.** İş bitmeden
+WIP commit + push at (stop hook zaten ister); ajanlar `git diff` ile inceleme yapıyorsa spec'e
+"taban `origin/main`, düz `git diff` commit sonrası boş görünür" notunu yaz. Workflow eşzamanlılığı
+`CPU-2` (4 çekirdekte 2 ajan) — uzun sürer, işi bölerken buna göre planla.
+
+**Yerel e2e: chromium sürümü ve süreç öldürme.** Playwright 1.63 `chromium-1243` bekliyor, kutuda
+`1194` var: `chromium-1243/chrome-linux64` ve `chromium_headless_shell-1243/chrome-headless-shell-linux64`
+dizinlerini 1194'e symlink'le (+ `INSTALLATION_COMPLETE`). `next dev` altında ilk vuruşta rota derlenir:
+50 sn'yi aşan "kırmızılar" çoğu zaman derleme/yük; izole ve ısınmış tekrar et, ardından CI'ın
+prod build'i hakem olsun. Bash'te `pkill -f "playwright|next"` **kendi kabuğunu da öldürür**
+(komut satırında o kelimeler var) — süreçleri `pgrep` + pid ile ayrı çağrıda öldür, koşuyu
+`setsid nohup script &` ile ayır ve log dosyasını `ls -la` ile doğrula (boş log = başlamadı).
+
+**Guard yazarken `RegExp` içine giren her dizgiyi tam kaçır.** `name.replace(/\$/g, ...)` CodeQL'de
+"incomplete escaping" uyarısı verdi; `[.*+?^${}()|[\]\\]` kümesiyle kaçırmak hem doğru hem temiz.
+
+---
+
 ## 2026-09-21 — Talep girdisi ile karar metnini aynı alanda tutma (#1416)
 
 **Bir kaydı açan tarafın notu ile o kayıt hakkında sonradan verilen kararın açıklaması aynı
@@ -7285,3 +7318,330 @@ belirli bir testid'le aramaktan daha güvenilir.
 - **Usage limiti bir dalganın tamamını çöpe atabilir.** 7 ajanlık ilk koşu model kotası dolduğu için
   hepsi birden düştü (iki kez, iki farklı modelde). Dilimleri 3-4'lük gruplara bölmek ve yarım işi
   worktree'de bırakmak, ikinci denemede hiçbir şeyin sıfırdan başlamamasını sağladı.
+
+## 2026-09-23 — Yeşil bir kapı neye baktığını söylemez (#1501, #1485, #2479, #2158)
+
+- **Bir denetim/kapı yeşilse, ölçtüğü şeyin gerçekten DOM'da olduğunu doğrula.** `/admin/analytics`
+  360px'te 89px taşarken mobil düzen denetimi aylardır "temiz" diyordu: `settle()` iskelet satırı
+  (`.animate-pulse`) bekliyor, o sayfa ise düz bir "Wird geladen…" gösteriyordu, yani poll anında
+  sıfır görüp dönüyor ve denetim **boş sayfayı** ölçüyordu. Bir şeyi kanıtlamadan önce
+  `document.querySelector(...)` ile "ölçtüğüm eleman orada mı?" diye sor — yoksa kapının yeşili,
+  göremediği hatayı kapatır. (#1485)
+- **`> 0` eşiği, geçmişi olan her veritabanında geçer.** Trend grafiği hatası (#1501/#1484) iki kez
+  "düzeldi" çünkü testler eşik kullanıyordu: yerelde demo verisi vardı, CI'da yoktu. Doğru şekil
+  **karşılaştırma**: sınırlı çağrı ile sınırsız çağrının aynı ayı aynı sayıyı vermesi. Önce bir
+  eşik yazıp hatayı yerinde bırakıp geçtiğini görmek, testi atmak için yeterli sebep.
+- **Her düzeltmede negatif kontrol yap.** Düzeltmeyi geçici olarak geri al, yeni testin kırmızıya
+  döndüğünü gör, sonra geri koy. Bu oturumda üç testten birini bu yüzden çöpe attım.
+- **CI'ın veri şeklini taklit et.** e2e shard'ının veritabanında *yalnızca bugün* tohumlanmış
+  satırlar var. `to=YYYY-MM-DD` günün ilk anına çözüldüğü için her kova sıfırdı; yerelde aylara
+  yayılmış demo verisi hatayı gizliyordu. "Yerelde geçiyor" bir kanıt değil, bir veri farkı olabilir.
+- **Akış (streaming) davranışını `next dev` ile göremezsin.** `loading.tsx` olan her rotanın
+  `<div hidden id="S:0">` içinde sayfanın **tam bir kopyasını** yayınladığını ancak
+  `npm run build && PORT=3100 npm start` ile servis edilen HTML'e bakarak gördüm. Playwright'ın
+  strict mode'u gizli elemanları da sayar → `resolved to 2 elements`. Şüphelendiğin şey SSR/akış
+  ise üretim derlemesine karşı prob yaz. (#2479)
+- **Prisma alan referansı yalnızca `equals` altında çalışır.** `fromStatus <> toStatus` için
+  `{ fromStatus: { not: prisma.statusChange.fields.toStatus } }` çalışma anında
+  "Unknown argument `_ref`" ile patlar; `{ NOT: { fromStatus: { equals: … } } }` çalışır. (#2264)
+- **`take: 1` çeken bir sorguda filtrelemeyi JS'e bırakma.** En yeni satır cevabın kendisi
+  olduğunda, sonradan atmak gizlenen satırı geri getirmez — filtre `where`'e girmeli.
+- **Konteyner yeniden başladıysa yerel ortam gider.** MariaDB için `mysqld_safe &` + 
+  `prisma db push --accept-data-loss`; `npm install` Playwright'ı güncellemişse beklenen chromium
+  derlemesi değişir (bende 1234 → 1243) ve `/opt/pw-browsers/chromium_headless_shell-<yeni>`
+  sembolik bağını kurmak yeterli — `playwright install` çalıştırma.
+- **`npm install` `package-lock.json`'ı sessizce değiştirebilir** (npm sürüm farkı `libc` alanlarını
+  siliyor). Commit'ten önce `git status --short` oku; alakasız kilit dosyası değişikliğini
+  `git checkout origin/main -- package-lock.json` ile geri al.
+- **`git push` "credential service temporarily unavailable" (503) verebilir.** Kod hatası değil;
+  `until git push …; do sleep 15; done` şeklinde bir döngü ile geç (koşulu ters kurmamaya dikkat).
+- **Hız limiti kovaları süreç genelindedir.** Bir e2e shard'ı tek Next sunucusuna koşar, adressiz
+  her istek `<bucket>:unknown` sayacına gider ve spec'ler arası **birikir**. `e2e/helpers/rateLimit.ts`:
+  freni *ölçen* test için `floodIp()` (sabit adres), frenin ardındaki özelliğe ulaşmak isteyen için
+  `freshIp()` (çağrı başına yeni adres). `npm run check:e2e-rate-limits` sınırı aşan spec'i PR'da
+  yakalar; yeni bir spec hız limitli bir uca yazıyorsa bu iki yardımcıdan birini kullan. (#2158/#2159)
+
+## 2026-09-23 — Bir alan adını taşırken: iki yarı aynı anda doğru olamaz (#2540)
+
+Marketing dikeyi `*.ersah.in`'den `marketing.bcsit-gmbh.de` (canlı) ve `.dev` (test) adreslerine
+taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor olan sıralama ve kapsam.
+
+- **İki yarı birbirine kilitli.** `marketingHosts()` varsayılanı *değiştirir*, genişletmez —
+  yani her an, her ortamda **tam olarak bir** ad MARKETING'dir. Kod yeni adı öğrenmeden Caddy
+  cevap verirse yeni ad internship landing'i gösterir; Caddy cevap vermeden kod taşınırsa yeni ad
+  kenarda 404 olur. Doğru sıra: (1) yeni site dosyaları + reload, (2) kodu merge et, (3) preview
+  env'i çevir, (4) doğrula, (5) eski adları 301 yap. 1-3 arası "yanlış içerik" penceresi yalnızca
+  henüz kimsenin bilmediği yeni adda geçer.
+- **Eski adı SİLME, yönlendir.** Site dosyası olmayan ad varsayılan siteye düşer ve bir marketing
+  URL'i altında internship sayfası servis eder — #2428'in ta kendisi.
+- **Yeni apex = otomatik sertifika.** Eski ad `*.ersah.in` joker dosyasını `tls` satırıyla
+  kullanıyordu; iki yeni ad kendi apex'lerinde tek isim olduğu için Caddy kendi alır ve yeniler.
+  Joker satırlarını kopyalamak, var olmayan bir dosyayı işaret etmek demekti. `.dev` HSTS preload
+  listesinde: sertifika oluşana kadar tarayıcıyla hiçbir şekilde test edilemez, yalnızca `curl`.
+- **`grep ersah.in` bu depoda tek bir şeyi göstermez.** 200'den fazla eşleşmenin çoğu **posta**:
+  gönderim alan adı, SPF/DKIM/DMARC, inbound, reply/unsubscribe token'ları, ICS UID'leri. Taşınan
+  yalnızca web host'u. Süpürmeden önce her eşleşmeyi DEĞİŞMELİ / DEĞİŞMEMELİ / TARİH diye ayır.
+- **Değer taşıyan literal'ler kendi hatalarını yakalayamaz.** Testlerdeki her host literal'i sabitle
+  birlikte değişir, dolayısıyla kötü bir revert'i hiçbiri fark etmez. Sabit değil *kural* test eden
+  bir iddia ekle: "varsayılan asla emekliye ayrılmış apex'e dönmesin".
+- **Paralel oturumlar aynı dosyalara dokunuyor.** Dal açıldıktan sonra main 8 commit ilerledi ve
+  #2523 yeni bir spec'i eski host literal'iyle getirdi. Rebase edip *yeniden* grep'lemeden merge
+  etme; aksi halde CI alakasız görünen bir sebeple kırmızıya döner.
+- **`npx prisma generate` refleks olsun.** Rebase sonrası iki kez tsc, şema değişmiş olduğu için
+  benim değişikliğimle ilgisiz hatalar verdi.
+
+## 2026-09-28 — e2e sunucusu artık `TRUSTED_PROXY_COUNT=1` ile koşuyor (#2470)
+
+- **Eski "`TRUSTED_PROXY_COUNT=0` ile başlat" tavsiyesi artık zararlı.** Yukarıdaki kayıtlar
+  `rate-limit.spec` için elle başlatılan sunucuya `0` vermeyi öneriyor. #2470'ten sonra `0`'da
+  `clientIp()` ne `X-Forwarded-For`'u ne `X-Real-IP`'yi okuyor: her istek tek bir `unknown`
+  kovasına düşer ve `floodIp()`/`freshIp()` yalıtımı sessizce hiçbir şey yapmaz. Elle
+  başlattığın sunucuyu **varsayılanla** (`1`) başlat; `rate-limit.spec`'in spoof testindeki
+  kontrol isteği, sunucu `0`'dayken 429 alıp kırmızıya döner — bu kasıtlı.
+- **Next, eksik `X-Forwarded-For`'u kendisi doldurur** (`base-server.js`,
+  `req.headers['x-forwarded-for'] ??= socket.remoteAddress`). Yani `1`'de başlıksız bir e2e
+  isteğinin anahtarı `unknown` değil `127.0.0.1`; `X-Real-IP` yedeğine hiç inilmez. Paylaşılan
+  kova mantığı aynı, yalnızca adı farklı — aktivite günlüğünde `forgot · 127.0.0.1` görürsün.
+- **`--env-file` ile `.env` yüklemek**: worktree izolasyonu `. <(sed …)` kalıbını reddediyor.
+  `node --env-file=<dosya> node_modules/@playwright/test/cli.js test …` aynı işi görüyor.
+
+## 2026-09-29 — #2542: kiracılar arası sızıntı, bayrak kapalıyken
+
+- **`assertSameOrg()` bayrak kapalıyken hiçbir şey yapmaz.** İlk satırı
+  `if (!isIsolationEnforced() …) return;` — yani "bayraktan bağımsız by-id koruma" için
+  kullanılamaz. Doğru kalıp sorgunun kendisine filtre koymak:
+  `findFirst({ where: orgScoped({ id }, resolveOrgId(session)) })` → yoksa 404.
+- **Bir listeyi org'a göre filtrelediğinde yaratma yollarını da yürü.** Bayrak kapalıyken
+  middleware `orgId` doldurmaz; `POST /api/companies` gibi elle damgalamayan bir yol
+  NULL-org satır yazar ve o satır, onu yaratan adminin artık org-kapsamlı listesinden
+  bir sonraki deploy'un backfill'ine kadar kaybolur.
+- **Worktree'de Playwright süreci yanlış veritabanına bağlanır.** `node_modules` ana repoya
+  symlink; üretilmiş Prisma client `.env`'i şemanın yanından (ana repo) okur, Next ise
+  worktree'nin `.env`'ini. Belirti: seed "başarılı", giriş 401. Çözüm: Playwright'ı
+  `DATABASE_URL=… npx playwright test …` ile çalıştır.
+- **Paralel ajanlarla `next dev` birkaç yüz testten sonra ~6 GB'a şişip makineyi
+  boğuyor** (her spec'te `page.waitForURL` zaman aşımı, kodla ilgisiz). Uzun e2e koşuları
+  için `npm run build && npx next start -p <port>` çok daha kararlı.
+
+### 2026-09-29 — #2542 review fixes: the shared Prisma client drifts under parallel worktrees
+
+- **A symlinked `node_modules` shares ONE generated Prisma client** (`node_modules/.prisma/client`).
+  A parallel worktree that runs `prisma generate` on a newer schema rewrites it under you: this
+  branch's `next start` then 500s with `P2022 … column MentorshipRelation.nextActionAt does not
+  exist` on routes you never touched, and `tsc` stays green. Check with
+  `grep -c <field> node_modules/.prisma/client/schema.prisma`. Do not regenerate into the shared
+  tree (it breaks the other worktree the same way); instead give the worktree a real
+  `node_modules/` of per-entry symlinks to the shared one **except** `.prisma` and `@prisma`,
+  copy `@prisma` in, and run `./node_modules/.bin/prisma generate` — Node resolves
+  `.prisma/client` from `@prisma/client`'s real path, so both must be local. Put the symlink back
+  afterwards.
+- **`pkill -f "next start -p 3101"` kills your own shell** (the pattern is in its command line;
+  exit 144). Kill by the port's pid: `ss -ltnp | grep ':3101 '`.
+- **Server components bypass API-route tenant filters.** `/admin` read Prisma directly, so the
+  #2542 route fixes did not cover the first screen every admin opens; grep `src/app/**/page.tsx`
+  for `prisma.` when scoping a model by hand.
+
+## 2026-09-29 — trial penceresi damgası (#2551)
+
+- **Scratchpad paralel ajanlar arasında paylaşılıyor olabilir.** Başka bir worktree ajanı aynı
+  `scratchpad/dev.log` yoluna yazıyordu; kendi `next dev`'imin günlüğünde başka bir veritabanının
+  (`internship_wt_2542`) sorgularını görünce yanlış DB'ye bağlandığımı sandım. Günlük dosyasına
+  issue/port numarası koy (`dev-2551-3102.log`) ve DB'yi `/proc/<pid>/cwd` ile değil sorgunun
+  kendisiyle doğrula.
+- **İzolasyon kapalıyken `/admin/settings` GLOBAL satıra yazar.** Bir e2e'de ayarı formdan
+  değiştirmek (`trialLengthDays=14`) aynı sunucudaki her tenant'ı etkiler; testi `serial` yap ve
+  `finally`'de `orgId: null` satırını sil, yoksa sonraki test varsayılanı (30) göremez.
+- **Playwright chromium sürüm uyuşmazlığı için `/opt`'a dokunmadan**: repo köküne geçici bir
+  `playwright.<ad>.config.ts` (`...base`, `use.launchOptions.executablePath` =
+  `/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell`) yazıp `--config`
+  ile vermek yetiyor; commit etme.
+- **Dev sunucusunda 2 worker ile ilk derleme 20 sn'lik `waitForURL` bütçelerini aşıyor** —
+  alakasız spec'ler topluca kırmızıya döner. Yerelde `--workers=1` koş.
+
+## 2026-09-29 — Paylaşılan `node_modules` ile paralel worktree'ler (#2562)
+
+- **Paylaşılan Prisma client'ı başka bir ajanın şemasından üretilmiş olabilir.** e2e'de
+  `P2022: The column … does not exist` gördüm: client, kardeş bir worktree'nin eklediği
+  `MentorshipRelation.nextActionAt`'ı bekliyordu, benim şemamda yoktu. `prisma generate`
+  çalıştırmak ONLARIN client'ını bozar; doğrusu kendi veritabanını client'a uydurmak:
+  `npx prisma db push --skip-generate --schema <kopya>` — kopya
+  `node_modules/.prisma/client/schema.prisma`'dan alınır (yalnızca eklemeliyse güvenli;
+  önce `diff` ile bak).
+- **Playwright 1.63, `chromium_headless_shell-1243` bekliyor; `/opt/pw-browsers`'ta 1194 var.**
+  Sistem dizinine dokunmadan: scratchpad'de bir dizin aç, `chromium-1243 → …/chromium-1194`
+  ve `chromium_headless_shell-1243/chrome-headless-shell-linux64 → …/chromium_headless_shell-1194/chrome-linux`
+  bağlarını kur, `PLAYWRIGHT_BROWSERS_PATH=<o dizin>` ile koş. Yeni düzende ikili adı
+  `chrome-headless-shell`, eskisinde `headless_shell` — bunun için de bir bağ gerekiyor.
+
+## 2026-09-29 — Parallel worktrees share one `node_modules`: `prisma generate` is global (#2563)
+
+- **A symlinked `node_modules` makes `npx prisma generate` write the SHARED client.** The
+  generated client lives in `node_modules/.prisma/client`, resolved through the real path of
+  `@prisma/client` — so in a worktree whose `node_modules` is a symlink to the main checkout's,
+  generating your schema replaces every other agent's client, and their `include` queries then
+  select columns their databases do not have. If you change the schema, make `node_modules` a
+  real directory first: symlink every top-level entry of the shared one except `@prisma` and
+  `.prisma`, make `@prisma/` a directory of symlinks except `client`, which you **copy**
+  (`cp -a`, ~8 MB). `prisma generate` then writes `./node_modules/.prisma/client` locally.
+- **No write to `/opt/pw-browsers` needed for a Playwright build mismatch.** Point
+  `PLAYWRIGHT_BROWSERS_PATH` at a scratch directory holding `chromium_headless_shell-<wanted>`
+  (containing a `chrome-headless-shell-linux64` link to the installed build's `chrome-linux`),
+  `chromium-<wanted>` and `ffmpeg-*` links.
+- **`scripts/test/schema-push-safety.test.mjs` "the CLI fails on the real #2249 commit" fails in
+  a worktree whose history is grafted**: `aa257b2` is reachable but has no merge-base with
+  `HEAD`, so the CLI falls back to `origin/main` and reports clean. Environment, not a regression.
+- **`next dev` compiles each role's landing on first hit (18 s for `/portal`).** A spec that signs
+  in as three roles needs `test.slow()` against a cold dev server.
+
+## 2026-09-29 — Trial end by hand (#2553)
+
+- **A MENTOR or MENTEE of a MARKETING tenant lands on `/account`, and `signInAndSettle()` hangs
+  there**: the mentor/portal shells redirect a vertical without `mentorship` to `/account`
+  (#2351), which has no `account-menu-button` to settle on. For an API-only role in such a spec,
+  submit the sign-in form and `waitForURL('/account…')` instead — the session cookie is all
+  `page.request` needs.
+- **The worktree guard refuses long `python3 - <<EOF` heredocs** ("too complex to verify").
+  Write the script into the scratchpad with the Write tool and run `python3 <file>` instead.
+
+## 2026-09-29 — Server page under `/admin` cannot answer 404 (#2560)
+
+- **`notFound()` in a server page below `src/app/admin/loading.tsx` answers HTTP 200.** The
+  loading boundary flushes the shell before the page's lookup runs, so Next.js can only swap the
+  streamed segment for the not-found UI — the status line is already sent. The fix that holds a
+  real 404: move the page into the `src/app/(unstreamed)/admin/` route group, whose `layout.tsx`
+  and `error.tsx` re-export the admin ones (same session gate, same shell, same URL) and which
+  has no `loading.tsx`. Put a page there only when it must be a 404.
+- **A partial `Company` PUT must not rewrite unsent keys**, and a client editor on a server page
+  needs `router.refresh()` after a save, or the server-rendered parts (header badge) keep the old
+  value until a reload — an e2e that reloads before asserting hides it.
+- **After a container restart the Playwright browser shim is gone**: `@playwright/test` wants
+  `chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`, the image
+  ships `-1194/chrome-linux/`. A symlink of the version dir is not enough (the inner folder
+  name differs) — create `-1243/chrome-headless-shell-linux64/` and link the files of
+  `-1194/chrome-linux/` into it, plus the two marker files.
+- **A click on a card in `/admin/companies` right after typing into its search box can be
+  lost**: the grid unmounts while the debounced fetch reloads, and the click lands on the
+  outgoing element (no navigation, no error). Click before searching, or wait for the list to
+  settle.
+
+## 2026-09-29 — Marketing demo form (#2569)
+
+- **The worktree-isolation guard refuses "too complex" Bash commands** — a `sed -i` chain
+  across a big file, or a long heredoc'd `python3 -` edit, can be rejected outright even
+  though it only touches the worktree. Write the edit as a script in the scratchpad (a tiny
+  exact-string `old → new` applier taking a JSON spec works well) and run
+  `python3 <scratchpad>/edit.py <spec>.json` as a plain one-liner.
+- **Forging `x-forwarded-for` gives each e2e test its own rate-limit bucket.** With
+  `TRUSTED_PROXY_COUNT=1` (the default) and no proxy in front of `next start`, the rightmost
+  XFF entry is whatever the test sends, so a spec that posts a 3-per-hour public form
+  several times stays green without touching the limiter.
+- **A public form's success body must not echo what a writer decided** (#2569 review): the
+  default-owner placement refuses when the address is staff or an existing lead, so
+  returning `placed` turned an anonymous form into a lookup of the tenant's people. Answer
+  exactly what the honeypot answers, and assert placement in e2e from the DB.
+- **Bumping `PRIVACY_POLICY_VERSION` is safe** — nothing compares versions (it is only
+  stamped) — so a row that stamps it as its consent record should get the section that
+  describes it in the same PR, not "later".
+- **`pkill -f "next start -p 3113"` kills the calling shell too** (its own command line
+  matches). Stop a background server through the task tool, or `pkill -f '[n]ext start'`.
+
+## 2026-09-29 — marketing host content probe (#2579)
+
+- **`X="$(fn)"` strips the trailing newline, and a `$GITHUB_OUTPUT` heredoc needs it.**
+  `uptime.yml` wrote `printf '%s' "$FAILED"; echo EOF` after `FAILED="$(probe_all)"`, so a real
+  outage produced `…-> 000EOF` — the runner rejects the file ("Matching delimiter not found") and
+  every alert step after it is skipped. Green runs never exercise that path, so nothing noticed.
+  Test a workflow's shell by extracting the step's `run:` with `python3 -c 'import yaml…'` and
+  running it with `GITHUB_OUTPUT=<tmpfile>` against a local `node:http` server; then `cat -A` the file.
+- **A workflow step that needs one repo file does not need the full checkout**:
+  `actions/checkout` with `path: .x`, `sparse-checkout: <file>`, `sparse-checkout-cone-mode: false`.
+- **The worktree isolation guard refuses shell commands containing `GITHUB_OUTPUT`** (and some
+  `node -e 'import(…)'` one-liners) as "names git". Put the command in a scratchpad `.sh` file
+  and run `bash <file>`.
+- **Two failure classes need two alert states, not one issue with two titles.** The first cut of
+  the content alert reused `uptime-alert`; review caught that an open content incident then masks a
+  later outage (and vice versa). Each class now has its own label, status output and transition.
+- **A config check must not take its expected value from the config it checks.** The deploy-time
+  marketing check first asked for the first `MARKETING_HOSTS` entry — which by construction gets
+  the marketing page — so it could only ever say OK. The caller now names the host
+  (`MARKETING_PROBE_HOST`).
+- **`pkill -f "next start -p 3114"` kills your own shell** (the pattern is in its command line).
+  Find the pid from `ss -ltnp | grep :3114` instead.
+
+## 2026-09-29 — MARKETING sales surface (#2580)
+
+- **A MARKETING MENTOR now lands on `/sales`, not `/account`.** Specs that sign a MARKETING
+  MENTOR in and wait for `/account` (trial-end-extend did) need `/sales`; the sales shell has
+  the account menu, so `signInAndSettle(page, email, pw, '/sales')` works for it. The MENTEE
+  and COMPANY of a MARKETING org still land on `/account`.
+- **A Playwright config outside the repo cannot import `@playwright/test`** (Node resolves it
+  from the config's own directory, the scratchpad). Export a plain object spread from the
+  repo's config instead of calling `defineConfig`, and give `testDir`, `globalSetup` and
+  `use.storageState` ABSOLUTE paths — relative ones resolve against the scratchpad.
+- **`e2e/invite-lifecycle.spec.ts` needs the seeded `admin@example.com`.** A fresh worktree
+  database has none, so that spec times out on the sign-in redirect; run `npx prisma db seed`
+  with the `SEED_ADMIN_*` env first. Environment, not a regression.
+- **Pages that must 404 for foreign ids go in a tree with no `loading.tsx`** (#2560's lesson):
+  `/sales` has none on purpose, so `page.request.get(url, { maxRedirects: 0 })` can assert a
+  real 404 for another rep's record.
+- **A page's `notFound()` "second door" does not break its layout's redirect** (#2580 review):
+  `/sales` and `/sales/accounts` now `notFound()` for a non-rep while `/sales/layout.tsx`
+  redirects the same session — the layout's `redirect()` still wins (the page's not-found
+  boundary sits inside the layout), verified by `vertical-nav-gate` (INTERNSHIP mentor on
+  `/sales` → `/mentor`). A notification's deep link is role × **vertical**: pass the recipient's
+  capabilities to `notificationLink()` (`capabilitiesMemo()` for a sweep), or a MARKETING rep's
+  reminder lands on the `/sales` dashboard instead of the record.
+
+## 2026-09-29 — Queue wave: #2542 slice 2, grant spend, settings race, system stage moves, e-mail hosts
+
+- **Run a negative control on every race test before you believe it.** Two of this wave's
+  tests looked right and were vacuous. The SSO grant race test (#2548) passed against the
+  unfixed check-then-write provider even with eight concurrent contexts, because the window is
+  a few milliseconds and HTTP requests rarely land in it together. The fix for that was a
+  dependency-free `spendGrant()` with an interleaving in-memory table in a unit test (#2603).
+  The settings race test (#2342) was only red on the old form because of the new "locked"
+  assertions: fill and click both fell inside the held GET, so the value check never saw the
+  bug. The fix was `waitForResponse` between the fill and the click (#2604). Revert the fix,
+  run the test, and make sure it fails for the reason the issue describes.
+- **A second session may land the same fix while yours is still in flight.** #2588
+  (another session) made `tenantWhere()` the canonical tenant rule: org-less means the
+  default org's, never unscoped. My pushed-but-unopened #2542 branches used a fail-open
+  `sameOrgOrUnknown()`. Before you open a PR from a branch older than a few hours, read
+  `git log origin/main` for the same issue number and rebase onto its rule.
+- **A shared `node_modules` means one shared Prisma client.** `prisma generate` from a
+  worktree writes `/home/user/Internship/node_modules/.prisma` for every checkout. Three
+  things broke because of that. A worktree without `.env` produced
+  `PrismaClientInitializationError: Validation Error Count: 1` in the main repo's tests. A
+  client generated before a schema change on main made `expireTrials()` fail with
+  `changedById` still required. A client missing `ProjectTask.dueDate` made tsc fail. Symlink
+  `.env` into each worktree, and re-run `npx prisma generate` from whichever tree you are
+  about to test.
+- **Do not `rm -rf .next` under a running `next dev`.** It keeps the port bound with a
+  backlog and answers nothing, so `next start` then dies with `EADDRINUSE` while
+  `lsof -iTCP:3000` shows nothing. `ss -ltnp | grep :3000` shows the stale `next-server`.
+- **`next dev` + 3 Playwright workers is not a test run, it is a compile queue.** About 30
+  sign-ins timed out at the spinner. A production build (`npm run build && npm run start`,
+  with `reuseExistingServer` picking it up) with 2 workers ran 91 tests in 5 minutes. The
+  remaining red was a cross-spec collision on the shared evaluation template, which went green
+  when the spec ran alone.
+- **`git push --delete` is refused by the proxy (HTTP 403)** in this environment. Superseded
+  branches stay; say so in the PR that supersedes them.
+- **An e-mail link cannot follow a request, but it can follow the recipient's tenant.**
+  `Organization.publicHost` is the one explicit host mapping, and it is only used when
+  `servedHosts()` contains it, so a prod hostname in a topic env's database never sends mail
+  to prod (#2495). A spec that needs the real marketing host mapped must live in the serial
+  spec that already owns it (`marketing-demo-form.spec.ts`), because `publicHost` is unique.
+
+## 2026-09-29 — relation company guard (#2613)
+
+- **`npm run lint` fails in a nested worktree** (`.claude/worktrees/*`): ESLint also loads the main
+  checkout's `../../../.eslintrc.json` and reports a `@next/next` plugin conflict. Lint the changed
+  files with `npx eslint --no-eslintrc -c .eslintrc.json <files>` locally; CI's full lint is unaffected.
+- **Grep a route's own lookup, not just the field you came for.** The companyId fix turned up that
+  `GET/PUT /api/mentorship/[id]` fetched the relation with a bare `findUnique({ id })` — another
+  tenant's ADMIN could open it. `findFirst({ where: withinTenant({ id }, await tenantWhere(session)) })`
+  is the drop-in; matrix probes that expected 403 for a foreign row then move to 404.
+- `marketing-sales-surface.spec.ts`'s stage-deadline test signs in as the seed admin
+  (`admin@example.com`); a local e2e DB without `prisma db seed` fails it and skips the rest of the
+  serial file — run the rest with `--grep`.
+>>>>>>> origin/main

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { clearLockoutForUser } from '@/lib/accountLockout';
@@ -28,8 +29,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const user = await prisma.user.findUnique({
-      where: { id },
+    // Same tenant only (#2542): another tenant's account is a 404, flag or no flag.
+    const user = await prisma.user.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
       select: { id: true, email: true, role: true },
     });
     if (!user) {
@@ -42,6 +44,14 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Cannot unlock another admin' }, { status: 400 });
     }
 
+    // The lockout counter is keyed by ADDRESS (src/lib/accountLockout.ts), not by
+    // account, so with one person holding an account in each world (#2590) the
+    // two accounts share one brute-force counter: five wrong codes on the
+    // marketing host also brake the internship sign-in. That is deliberate — the
+    // thing being throttled is guessing at a mailbox's credentials — and it means
+    // this unlock, scoped to the target's own tenant above, clears the address's
+    // counter for both. The user id that leaves this route is always the
+    // tenant-checked one; the address is only read off that same row.
     const cleared = await clearLockoutForUser(user.id, user.email);
 
     await prisma.auditLog.create({

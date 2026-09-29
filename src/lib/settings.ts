@@ -118,6 +118,13 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // Read access log (#2433): a repeat of the same read (same reader, record,
+  // IP) inside this many minutes writes no second `*.view` ActivityLog row.
+  // `0` = log every read; capped at a day; a blank or broken value falls back
+  // to 15 rather than to "never log". The rule lives in src/lib/viewLogRule.ts.
+  // Not on the settings form, like the retention windows above: it decides how
+  // much of an audit trail is written, which is an operator decision.
+  viewLogWindowMinutes: '15',
   // In-app notification rows (#1646). Unlike the four telemetry windows above
   // this one IS on the settings form, because it is the one an org actually has
   // an opinion about: a notification is a rendered sentence about a person plus
@@ -173,6 +180,27 @@ export const SETTING_DEFAULTS = {
   // broadcasts off entirely — 1:1 messages, notifications and every lifecycle
   // e-mail keep working, which is the point of metering only broadcasts.
   broadcastMonthlyRecipients: '',
+  // Length of a MARKETING funnel trial, in days (#2551): when a record enters
+  // the TRIAL_ACTIVE stage without a trial window, it is stamped
+  // `trialStartedAt = entry` and `trialEndsAt = entry + this` — the date the
+  // reminder ladder and the expiry sweep count from. 30 = the free-use period
+  // of the product being sold; the decision window after it is #2572. Changing
+  // it never moves a window already stamped (trialWindowFor() in
+  // src/lib/trialReminderRule.ts refuses to overwrite one), and a blank,
+  // zero or unparseable value falls back to 30 rather than stamping trials
+  // that are over on arrival. On the settings form for MARKETING tenants only.
+  trialLengthDays: '30',
+  // Who owns a new MARKETING lead nobody named an owner for (#2580 item 3,
+  // #2569): a User id of this org (ADMIN or MENTOR, active). Read by the
+  // marketing landing's demo form (the request lands straight on this person's
+  // funnel at the first stage) and by the hand-typed lead route (#2562) when the
+  // body names no owner. `''` (default) = no default owner: a form request then
+  // stays in the admins' "unowned" list (/admin/company-inquiries) until an admin
+  // converts it — never silently dropped. A stale id (the user left, was
+  // deactivated, changed role or org) reads as `''` — resolveDefaultLeadOwner()
+  // in src/lib/leadOwner.ts is the one reader. On the settings form for
+  // MARKETING tenants only.
+  defaultLeadOwnerId: '',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

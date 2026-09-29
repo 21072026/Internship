@@ -9,6 +9,7 @@ import { templateToHtml } from '@/lib/renderTemplate';
 import { formatDate } from '@/lib/relativeTime';
 import { ContributorTermsDownload } from '@/components/ContributorTermsDownload';
 import { ContributorTermsAccept } from '@/components/ContributorTermsAccept';
+import { requireDefaultVertical } from '@/lib/verticalPage';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,9 @@ export default async function ContributorTermsPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
+  // Contribution terms for the codebase named "Internship CRM" (#2544). The
+  // marketing footer already hides the link (#2500); this closes the URL.
+  await requireDefaultVertical();
   const { next } = await searchParams;
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
 

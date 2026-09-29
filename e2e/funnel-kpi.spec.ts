@@ -177,3 +177,152 @@ test('the funnel endpoint reports seeded journeys, and the screen states the pop
     await cleanupByEmail(mentorEmail);
   }
 });
+
+// #2420 / #2425 — the cohort card.
+//
+// The assertion that matters is the ABSENT one: a record won this month cannot
+// have churned yet, so every retention bucket for the current cohort is still
+// open and must render as an em dash. A 0% there would be the screen claiming
+// perfect retention on the strength of no elapsed time at all.
+test('cohorts group by entry month, and a retention window that has not closed renders as a dash', async ({ page }) => {
+  test.slow();
+  const mentorEmail = uniqueEmail('cohort-mentor');
+  const menteeEmail = uniqueEmail('cohort-mentee');
+  const now = new Date();
+  // Inside the current UTC month, and no later than midnight today: the range
+  // picker sends `to` as a DATE (`2026-09-22`), so a relation created an hour
+  // ago is past the end of the window the screen asks for and would be in none
+  // of these numbers. Three days back, floored at the 1st of the month so the
+  // cohort key still matches when the test runs early in a month.
+  const seededAt = new Date(
+    Math.max(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1), now.getTime() - 3 * DAY)
+  );
+  const month = `${seededAt.getUTCFullYear()}-${String(seededAt.getUTCMonth() + 1).padStart(2, '0')}`;
+
+  try {
+    await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
+    const before = await (await page.request.get('/api/admin/analytics/funnel')).json();
+
+    const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Cohort Mentor');
+    const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Cohort Mentee');
+    const relation = await prisma.mentorshipRelation.create({
+      data: {
+        mentorId: mentor.id,
+        menteeId: mentee.id,
+        orgId: mentee.orgId,
+        status: 'ACTIVE',
+        // Entered and reached the outcome inside the CURRENT month.
+        startDate: seededAt,
+        pipelineStatus: 'HIRED_660',
+      },
+    });
+    await prisma.statusChange.create({
+      data: {
+        relationId: relation.id,
+        fromStatus: 'APPLICATION_100',
+        toStatus: 'HIRED_660',
+        changedById: mentor.id,
+        createdAt: new Date(seededAt.getTime() + 60 * 60 * 1000),
+      },
+    });
+
+    const after = await (await page.request.get('/api/admin/analytics/funnel')).json();
+
+    // Both ends of the cohorted conversion are resolved from the tenant's own
+    // order, never named: the first stage it starts on, and what it calls
+    // "finished" (#1882).
+    expect(after.cohortConversion.fromKey).toBe(after.order[0]);
+    expect(after.retention.wonKeys).toContain(after.cohortConversion.toKey);
+
+    const row = (payload: { cohortConversion: { months: { month: string; entered: number; converted: number }[] } }) =>
+      payload.cohortConversion.months.find((m) => m.month === month)!;
+    expect(row(after).entered - row(before).entered).toBe(1);
+    expect(row(after).converted - row(before).converted).toBe(1);
+    // The structural guarantee of #2420, checked on real data rather than only
+    // in the unit test: no month can be over 100%.
+    for (const m of after.cohortConversion.months) {
+      expect(m.converted).toBeLessThanOrEqual(m.entered);
+      if (m.rate !== null) expect(m.rate).toBeLessThanOrEqual(100);
+    }
+
+    const cohort = after.retention.cohorts.find((c: { month: string }) => c.month === month)!;
+    const beforeCohort = before.retention.cohorts.find((c: { month: string }) => c.month === month)!;
+    expect(cohort.won - beforeCohort.won).toBe(1);
+    for (const bucket of cohort.buckets) {
+      expect(bucket.rate).toBeNull();
+      expect(bucket.churned).toBeNull();
+    }
+
+    await page.goto('/admin/analytics');
+    await expect(page.getByTestId('cohort-kpi-card')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId(`cohort-conversion-${month}`)).toContainText('%');
+    await expect(page.getByTestId(`retention-${month}-1`)).toHaveText('—');
+  } finally {
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});
+
+// The retention triangle keys its rows on the month a record was WON, so its
+// population cannot be "started inside the window" — that filter drops exactly
+// the long sales cycles, and leaves the oldest row of any range (the only one
+// whose buckets have closed) able to hold nothing but deals that started and
+// closed in the same month. Worst of all, a past month's retention would then
+// move when the reader switched the range preset.
+test('a deal that arrived before the window but was won inside it is in the window’s retention cohort', async ({ page }) => {
+  test.slow();
+  const mentorEmail = uniqueEmail('cohort-late-mentor');
+  const menteeEmail = uniqueEmail('cohort-late-mentee');
+  const now = new Date();
+  // The window the screen would ask for: this calendar month, up to midnight
+  // today (the picker sends `to` as a bare date).
+  const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const wonAt = new Date(Math.max(windowStart.getTime(), now.getTime() - 3 * DAY));
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  const month = day(windowStart).slice(0, 7);
+  // `to` is today's DATE, i.e. midnight this morning — the same bare-date end
+  // the range picker sends, which is why the win is dated three days back.
+  const range = `?from=${day(windowStart)}&to=${day(now)}`;
+
+  try {
+    await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
+    const before = await (await page.request.get(`/api/admin/analytics/funnel${range}`)).json();
+
+    const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Late Mentor');
+    const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Late Mentee');
+    const relation = await prisma.mentorshipRelation.create({
+      data: {
+        mentorId: mentor.id,
+        menteeId: mentee.id,
+        orgId: mentee.orgId,
+        status: 'ACTIVE',
+        // Four months before the window opens: outside it by start date.
+        startDate: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 4, 10)),
+        pipelineStatus: 'HIRED_660',
+      },
+    });
+    await prisma.statusChange.create({
+      data: {
+        relationId: relation.id,
+        fromStatus: 'APPLICATION_100',
+        toStatus: 'HIRED_660',
+        changedById: mentor.id,
+        createdAt: wonAt,
+      },
+    });
+
+    const after = await (await page.request.get(`/api/admin/analytics/funnel${range}`)).json();
+    const cohort = (p: { retention: { cohorts: { month: string; won: number }[] } }) =>
+      p.retention.cohorts.find((c) => c.month === month)!;
+    expect(cohort(after).won - cohort(before).won).toBe(1);
+
+    // ... and it is NOT in the entry-keyed half, which is still the population
+    // the rest of the card describes: it entered before the window opened.
+    const entry = (p: { cohortConversion: { months: { month: string; entered: number }[] } }) =>
+      p.cohortConversion.months.find((m) => m.month === month)!;
+    expect(entry(after).entered - entry(before).entered).toBe(0);
+  } finally {
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});

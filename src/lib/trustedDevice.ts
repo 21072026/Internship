@@ -65,6 +65,30 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/**
+ * Whose remembered device is this cookie? A READ-ONLY peek: it rotates nothing,
+ * revokes nothing and judges nothing about expiry — it only names the account
+ * the row belongs to, or null when no row matches (unknown, or long purged).
+ *
+ * Exists for the refresh endpoint's world check (#2590). A device is a
+ * credential for ONE account, and an account lives in ONE world; the cookie is
+ * host-only, so in normal operation it only ever reaches the host it was minted
+ * on. But an organization can be moved to the other product, or a host
+ * re-pointed, and then the cookie arrives at a host whose product its account
+ * is not in. The right response to that is to decline BEFORE spending the
+ * rotation (which would rewrite the device's secret and mint a grant that the
+ * `remember` provider then refuses) — hence a peek that changes nothing.
+ * Matches the previous secret as well, for the same grace-window reason
+ * `rotateTrustedDevice` does.
+ */
+export async function trustedDeviceOwner(rawToken: string): Promise<string | null> {
+  const presented = hashToken(rawToken);
+  const device =
+    (await prisma.trustedDevice.findUnique({ where: { tokenHash: presented }, select: { userId: true } })) ??
+    (await prisma.trustedDevice.findUnique({ where: { prevTokenHash: presented }, select: { userId: true } }));
+  return device?.userId ?? null;
+}
+
 function newToken(): string {
   // 32 bytes of CSPRNG output — the whole security of the cookie rests here,
   // so it is never derived from anything user-controlled or guessable.

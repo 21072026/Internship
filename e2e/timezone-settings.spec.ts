@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
 async function signIn(page: import('@playwright/test').Page, email: string, password = 'Pass1234!') {
-  await page.goto('/auth/signin');
+  await gotoSettled(page, '/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', email);
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
@@ -27,7 +28,7 @@ test.describe('everyone can set their own timezone', () => {
 
     try {
       await signIn(page, email);
-      await page.goto('/account');
+      await gotoSettled(page, '/account');
 
       const select = page.getByTestId('timezone-select');
       await expect(select).toBeVisible();
@@ -46,7 +47,7 @@ test.describe('everyone can set their own timezone', () => {
       expect((await saved).ok()).toBe(true);
 
       await expect(page.getByTestId('timezone-current')).toContainText(/GMT\+9/);
-      await expect.poll(async () => (await prisma.user.findUnique({ where: { email } }))?.timezone).toBe('Asia/Tokyo');
+      await expect.poll(async () => (await prisma.user.findFirst({ where: { email } }))?.timezone).toBe('Asia/Tokyo');
 
       await page.reload();
       await expect(page.getByTestId('timezone-select')).toHaveValue('Asia/Tokyo');
@@ -85,7 +86,7 @@ test.describe('everyone can set their own timezone', () => {
         return route.continue();
       });
 
-      await page.goto('/account');
+      await gotoSettled(page, '/account');
       const select = page.getByTestId('timezone-select');
       await expect(select).toBeVisible();
       // Rendered, and deliberately not usable yet.
@@ -102,7 +103,7 @@ test.describe('everyone can set their own timezone', () => {
     const email = uniqueEmail('tz-register');
 
     try {
-      await page.goto('/auth/register');
+      await gotoSettled(page, '/auth/register');
       await page.fill('input[name="fullName"]', 'TZ Register');
       await page.fill('input[name="email"]', email);
       await page.fill('input[name="password"]', 'Pass1234!');
@@ -112,7 +113,7 @@ test.describe('everyone can set their own timezone', () => {
       await page.waitForURL((u) => u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
       await expect
-        .poll(async () => (await prisma.user.findUnique({ where: { email } }))?.timezone, { timeout: 20_000 })
+        .poll(async () => (await prisma.user.findFirst({ where: { email } }))?.timezone, { timeout: 20_000 })
         .toBe('Europe/Berlin');
     } finally {
       await cleanupByEmail(email);
@@ -139,7 +140,7 @@ test.describe('scheduling shows the time on every attendee’s clock', () => {
 
     try {
       await signIn(page, mentorEmail);
-      await page.goto('/mentor/meetings');
+      await gotoSettled(page, '/mentor/meetings');
       await page.getByRole('checkbox').first().check();
       await page.getByLabel('Date', { exact: true }).fill('2026-08-03');
       await page.getByLabel('Time', { exact: true }).fill('16:30');

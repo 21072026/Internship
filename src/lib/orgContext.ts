@@ -117,6 +117,16 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // request scope, where the middleware does not engage, so it still sees every
   // tenant.
   'UsageRollup',
+  // Daily product usage per account (#2446). Commercially sensitive in the same
+  // way UsageRollup is — one tenant reading another's merchant volumes is a
+  // leak, and writing them would corrupt the churn signal the vertical sells
+  // itself on. Nullable orgId (it mirrors Company's), so registration is what
+  // scopes every reader; the nightly sync (#2447) has no session and therefore
+  // binds its own org with `runWithOrg(feed.orgId, …)` before it writes, the
+  // same way src/lib/rosterIngestStore.ts does — registering a model changes
+  // its WRITES too, and a sessionless create outside a bound context would land
+  // with a null org.
+  'CompanyUsage',
   // The notification delivery ledger (#1710). One row per (recipient, event,
   // channel) — who was told what, and why they were not. It is written by the
   // router from whatever context the caller happens to be in (a request, a

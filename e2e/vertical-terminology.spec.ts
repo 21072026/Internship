@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStages } from '../src/lib/programTemplates';
 
 // Vertical terminology overlay in the live UI (#2354, epic #2348). A MARKETING
@@ -82,7 +82,7 @@ async function seedFunnelFixture(orgId: string, vertical: string, personPrefix: 
   const owner = await seedUser(ownerEmail, 'TermPass123', 'MENTOR', 'Robin Owner');
   const person = await seedUser(personEmail, 'TermPass123', 'MENTEE', 'Dana Buyer');
   await prisma.user.updateMany({ where: { id: { in: [owner.id, person.id] } }, data: { orgId } });
-  await prisma.mentorshipRelation.create({
+  const relation = await prisma.mentorshipRelation.create({
     data: {
       orgId,
       mentorId: owner.id,
@@ -93,7 +93,7 @@ async function seedFunnelFixture(orgId: string, vertical: string, personPrefix: 
       pipelineStatus: stages[0]?.key ?? 'APPLICATION_100',
     },
   });
-  return { companyId: company.id, ownerId: owner.id, emails: [ownerEmail, personEmail] };
+  return { relationId: relation.id, companyId: company.id, ownerId: owner.id, personId: person.id, ownerEmail, emails: [ownerEmail, personEmail] };
 }
 
 async function teardown(orgId: string, emails: string[], companyId?: string) {
@@ -106,6 +106,7 @@ async function teardown(orgId: string, emails: string[], companyId?: string) {
 test('a MARKETING admin sees "Leads" on the candidates page and in the nav', async ({ page }) => {
   const mkt = await adminIn('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
     await page.goto('/admin/candidates');
     await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
@@ -132,6 +133,7 @@ test('a MARKETING admin reads deal language on /admin/companies — and no mento
   const mkt = await adminIn('MARKETING');
   const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-co');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
     await page.goto('/admin/companies');
     await expect(page.getByText('Manage the accounts you sell to and what each one needs')).toBeVisible();
@@ -158,6 +160,20 @@ test('a MARKETING admin reads deal language on /admin/companies — and no mento
     await expect(page.locator('#company-entitlements-title')).toBeVisible();
     await expect(page.getByText('Rep and lead features are always free')).toBeVisible();
     expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(page.locator('#company-entitlements-title')).toHaveCount(0);
+
+    // The THIRD dialog (#2441): what deleting this account costs. It lists the
+    // dependants by name, so it reintroduced "1 mentorships" and "1 open
+    // positions" on a page whose acceptance is that neither word is left — the
+    // exact blind spot the comment above describes, one click before an
+    // irreversible action. The fixture gives the account one need and one
+    // funnel record, so both sides of the dialog are populated.
+    await page.getByTestId(`delete-company-${fixture.companyId}`).click();
+    await expect(page.getByTestId('company-delete-cascade')).toContainText('1 open needs');
+    await expect(page.getByTestId('company-delete-detach')).toContainText('1 deals');
+    expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+    await page.getByTestId('confirm-dialog-cancel').click();
   } finally {
     await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
   }
@@ -188,6 +204,7 @@ test('a MARKETING admin reads funnel language on the board — and no mentorship
   const mkt = await adminIn('MARKETING');
   const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-bd');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
     await page.goto('/admin/board');
     // Wait for the fetch to land: the columns only exist once relations arrive.
@@ -234,3 +251,78 @@ test('an INTERNSHIP admin still reads the original board strings (#2427)', async
     await teardown(intn.org.id, [intn.email, ...fixture.emails], fixture.companyId);
   }
 });
+
+// #2557: the screen a rep uses most. The lead detail's relation card said
+// "Mentorship / Not assigned to a mentor yet / Mentor", and the first-message
+// suggestions in an empty thread welcomed the lead to an internship.
+test('a MARKETING admin reads the lead detail with no mentorship word (#2557)', async ({ page }) => {
+  const mkt = await adminIn('MARKETING');
+  const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-ld');
+  try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
+    await page.goto(`/admin/candidates/${fixture.personId}`);
+    await expect(page.getByText('Owner', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+  } finally {
+    await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
+  }
+});
+
+test('a MARKETING rep\'s empty thread suggests a sales opener, not a mentorship welcome (#2557)', async ({ page }) => {
+  const mkt = await adminIn('MARKETING');
+  const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-msg');
+  try {
+    // Any landing: the rep's home is /sales by way of /mentor's redirect, and
+    // this test is about the thread, so it waits for the shell rather than
+    // the second hop (which a cold `next dev` compiles past the 20s budget).
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, fixture.ownerEmail, 'TermPass123', '/');
+    await page.goto(`/messages/${fixture.relationId}`);
+    const suggestions = page.getByTestId('message-suggestions');
+    await expect(suggestions).toBeVisible({ timeout: 20_000 });
+    await expect(suggestions.getByRole('button', { name: 'Book a demo', exact: true })).toBeVisible();
+    expect(await suggestions.innerText()).not.toMatch(MENTORSHIP_WORDS);
+    // The full text sits in each button's title — what the box is filled with.
+    const titles = await suggestions.getByRole('button').evaluateAll((els) => els.map((e) => e.getAttribute('title') ?? ''));
+    expect(titles.length).toBe(3);
+    for (const title of titles) expect(title).not.toMatch(/mentor|internship|intern\b/i);
+    expect(titles.join(' ')).toContain('Dana');
+  } finally {
+    await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
+  }
+});
+
+test('an INTERNSHIP mentor\'s empty thread keeps the mentorship welcome (#2557)', async ({ page }) => {
+  const intn = await adminIn('INTERNSHIP');
+  const fixture = await seedFunnelFixture(intn.org.id, 'INTERNSHIP', 'term-int-msg');
+  try {
+    await signInAndSettle(page, fixture.ownerEmail, 'TermPass123', '/mentor');
+    await page.goto(`/messages/${fixture.relationId}`);
+    const suggestions = page.getByTestId('message-suggestions');
+    await expect(suggestions).toBeVisible({ timeout: 20_000 });
+    await expect(suggestions.getByRole('button', { name: 'Intro call', exact: true })).toBeVisible();
+  } finally {
+    await teardown(intn.org.id, [intn.email, ...fixture.emails], fixture.companyId);
+  }
+});
+
+// #2558: the screens a SaleVali admin uses to bring the sales team in. Only
+// the words change (the Role enum is frozen): MENTOR is a rep, MENTEE a lead.
+for (const path of ['/admin/invite', '/admin/users']) {
+  test(`a MARKETING admin reads ${path} with no mentorship word (#2558)`, async ({ page }) => {
+    const mkt = await adminIn('MARKETING');
+    const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', `term-mkt-${path.split('/').pop()}`);
+    try {
+      await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+      await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
+      await page.goto(path);
+      await expect(page.locator('#main-content h1').first()).toBeVisible({ timeout: 20_000 });
+      // The users list is fetched after the first paint: wait for the seeded rep.
+      if (path === '/admin/users') await expect(page.getByText('Robin Owner').first()).toBeVisible({ timeout: 20_000 });
+      expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+    } finally {
+      await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
+    }
+  });
+}

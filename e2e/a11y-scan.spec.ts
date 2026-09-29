@@ -11,7 +11,7 @@ import {
   cleanupMenteeWithRelation,
   type SeededRelation,
 } from './helpers/db';
-import { signInAsFreshUser } from './helpers/auth';
+import { signInAsFreshUser, settleStreamedSuspense } from './helpers/auth';
 
 // Role-based WCAG scan (#862, story #826).
 //
@@ -394,6 +394,19 @@ test('admin: board and settings', async ({ page }) => {
   await signInAsFreshUser(page, email, PASSWORD, '/admin');
   await scanAll(page, [
     { key: '/admin/board', ready: boardHasCard },
+    {
+      // The account detail page (#2560), on the shared fixture's company so
+      // the funnel table and the interaction list have a row each. Keyed
+      // without the id so the baseline entry survives the next fixture.
+      key: '/admin/companies/:id',
+      url: `/admin/companies/${related.companyId}`,
+      // A server page under /admin's loading.tsx: wait out the streamed
+      // Suspense copy (#2479) so the scan sees the page once.
+      ready: async (p) => {
+        await settleStreamedSuspense(p);
+        await expect(p.getByTestId('company-detail-relations')).toBeVisible();
+      },
+    },
     {
       key: '/admin/settings',
       // Two waits, because this screen finishes in two stages: the form itself

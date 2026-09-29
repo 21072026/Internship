@@ -101,7 +101,7 @@ test('ending one relation row of a multi-mentee meeting hides the siblings too',
   const { mentorEmail, menteeEmail, relation } = await seedPair('endsib');
   const otherEmail = uniqueEmail('endsib-mentee2');
   const other = await seedUser(otherEmail, password, 'MENTEE', 'End Sibling');
-  const mentor = await prisma.user.findUnique({ where: { email: mentorEmail } });
+  const mentor = await prisma.user.findFirst({ where: { email: mentorEmail } });
   const relation2 = await prisma.mentorshipRelation.create({
     data: { mentorId: mentor!.id, menteeId: other.id },
   });

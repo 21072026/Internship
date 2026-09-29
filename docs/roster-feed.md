@@ -27,7 +27,9 @@ The roster feed is the engine's first consumer, not its only one. The **marketin
 import** (#2391) is the second: same `runImport`, same parser, its own four hooks in
 `src/lib/marketingImport.ts` / `src/lib/marketingImportStore.ts`, its column contract in
 [`marketing-import.md`](marketing-import.md). Read that one for the worked example of
-adding a consumer.
+adding a consumer, and its [**Running it**](marketing-import.md#running-it) section for
+the operator's side of a by-hand import against real data: the backup first, choosing
+`--owner`, the dry run, reading the report, fixing the rows it refuses, and `--apply`.
 
 ## The two properties that matter
 

@@ -11,6 +11,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { clearRememberCookies } from '@/lib/rememberCookie';
 import { isPasswordLoginBlocked, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 
 const schema = z.object({
   email: z.string().email().optional(),
@@ -52,8 +53,12 @@ export async function PUT(request: Request) {
     }
 
     if (changingEmail) {
-      const taken = await prisma.user.findUnique({ where: { email } });
-      if (taken) {
+      // "In use" means IN THIS ACCOUNT'S WORLD (#2590): the same person may
+      // hold an account under this address in the other product, and that is
+      // not a conflict — it is the whole point of one mailbox, two worlds. The
+      // world is the one of the row being changed (its own org), never the
+      // address's, so this can only ever move THIS account.
+      if (await emailTakenInOrgWorld(email, user.orgId)) {
         return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
       }
       data.email = email;
@@ -140,14 +145,22 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 });
     }
 
-    // The last remaining admin can't delete themselves.
+    // The last remaining admin can't delete themselves. "Another admin" means
+    // another PERSON (#2590): the same address holding an ADMIN account in the
+    // other world is this very person, not a successor — counting it would let
+    // someone who is the only admin of both products delete either one and
+    // leave that product without any admin. A single-world admin has no twin,
+    // so this is the same `admins <= 1` test as before.
     if (session.user.role === 'ADMIN') {
-      const admins = await prisma.user.count({ where: { role: 'ADMIN' } });
-      if (admins <= 1) {
+      const admins = await prisma.user.count({ where: { role: 'ADMIN', NOT: { email: me.email } } });
+      if (admins < 1) {
         return NextResponse.json({ error: 'The last admin account cannot be deleted' }, { status: 400 });
       }
     }
 
+    // Acts on exactly this one row (#2590): hardDeleteUser is keyed by user id,
+    // and its address-keyed cleanup stands down while another account (the
+    // other world's) still holds the address — see forgetEmailLog.
     await hardDeleteUser(id);
 
     await logActivity({ action: 'account.delete', level: 'warning', actorId: id, actorEmail: session.user.email ?? null });

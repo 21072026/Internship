@@ -43,10 +43,87 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
-      nav: { candidates: 'Leads' },
-      // `mentor` is the "Mentor: {name}" line on a candidate row AND inside the
-      // person hover card, which the board renders on every card's owner chip.
-      candidates: { title: 'Leads', subtitle: 'Browse and search leads', mentor: 'Rep' },
+      nav: { candidates: 'Leads', companyInquiries: 'Demo requests', myCompanies: 'My accounts' },
+      // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
+      // mentor yet / Mentor" on the screen a rep uses most.
+      // The role-convert button on the lead detail and the users list (#2557):
+      // the role enum is unchanged, only the words — MENTOR is a rep, MENTEE a lead.
+      // Bringing the sales team in (#2558): the invite screen, the users list's
+      // role labels and filter chips, and the invitation mail itself.
+      invite: {
+        subtitle: 'Invite sales reps and leads to join',
+        connectMentor: 'Assign to this rep (optional)',
+        connectMentee: 'Give this lead to the new rep (optional)',
+        connectHint: 'Chosen here, the lead is assigned the moment they register — no follow-up step.',
+      },
+      notifications: {
+        invitationEmail: {
+          roles: { MENTOR: 'a sales rep', MENTEE: 'a lead' },
+        },
+      },
+      usersAdmin: {
+        mentor: 'Rep',
+        mentee: 'Lead',
+        makeMentor: 'Make rep',
+        makeMentee: 'Make lead',
+        convertToMentorConfirm: '{name} will be signed out of every device and becomes a rep at their next sign-in. Their existing records are kept.',
+        convertToMenteeConfirm: '{name} will be signed out of every device and becomes a lead at their next sign-in. Their existing records are kept.',
+      },
+      candidateDetail: {
+        mentorship: 'Owner',
+        notAssigned: 'No rep owns this lead yet',
+        mentor: 'Rep',
+      },
+      // The suggested first messages in an empty thread (#2557). The rep's set
+      // (welcome/introCall/goals) and the lead's set (hello/intro/question) keep
+      // their `{name}` placeholder; the words are a sales conversation about a
+      // SaleVali demo and trial, not an internship.
+      messages: {
+        openers: {
+          welcome: {
+            label: '👋 Welcome',
+            text: 'Hi {name}, thanks for your interest in SaleVali! I am your contact from here on — write to me in this chat whenever something comes up.',
+          },
+          introCall: {
+            label: 'Book a demo',
+            text: 'Hi {name}, shall we do a short demo? Which days and times work for you this week?',
+          },
+          goals: {
+            label: 'Ask about needs',
+            text: 'Hi {name}, before the demo I would like to hear which marketplaces you sell on and what you want to get out of the trial.',
+          },
+          intro: {
+            label: 'Introduce our shop',
+            text: 'Hi {name}, let me introduce our shop briefly: ',
+          },
+        },
+      },
+      // The demo form on the marketing landing and the list its requests land
+      // in (#2569). The form is the internship enquiry form re-used; these are
+      // the strings that would otherwise talk about hiring and invitations.
+      forCompanies: {
+        submit: 'Request a demo',
+        successBody: 'Your request reached our sales team. We answer within two working days to find a time for the demo.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo requests',
+        subtitle: 'Requests from the demo form on your website. A request with a default lead owner is already on the pipeline; the rest wait here, unowned, until an admin adds them.',
+        emptyTitle: 'No requests waiting',
+        emptyBody: 'Demo requests from your website land here, and every admin is notified by email as they arrive.',
+      },
+      candidates: {
+        title: 'Leads',
+        subtitle: 'Browse and search leads',
+        // `mentor` is the "Mentor: {name}" line on a candidate row AND inside the
+        // person hover card, which the board renders on every card's owner chip.
+        mentor: 'Rep',
+        mineFilter: 'My accounts',
+        // The bulk control assigns the person `mentor` above names, so it says
+        // the same word — the action key stays `assignOwner` (#2439), only the
+        // label follows the vertical.
+        bulkOwnerLabel: 'Rep',
+        bulkAssignOwner: 'Assign rep',
+      },
       // Public chrome + auth pages (#2501): the header aria-label, footer
       // tagline and sign-in/register copy a marketing visitor reads.
       publicNav: {
@@ -82,6 +159,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'Create the first deal',
         },
       },
+      // Lead attribution on /admin/analytics (#2421). `cohortTotal`/`cohortHired`
+      // are the shared column headers of both the attribution and the cohort
+      // table, so overriding them dresses the two consistently. `cohortHired` is
+      // only a FALLBACK on the attribution table: a tenant that named its own
+      // finished stage sees that name instead (#1882).
+      analytics: {
+        cohortTotal: 'Leads',
+        cohortHired: 'Won',
+        sourceConversionTitle: 'Conversion by source',
+        sourceConversionEmpty: 'No sources yet — assign leads a source to see conversion per source.',
+        sourceUnsourced: '{n} lead(s) have no source and are not shown above.',
+      },
       // The company list (#2426, story #2394). A marketing tenant's companies
       // are the ACCOUNTS it sells to: the relation counter is a deal, a
       // CompanyNeed is what the account needs, and a company login follows its
@@ -95,12 +184,40 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // that means the same thing in both products, so it is left alone — an
       // overlay entry that changes nothing is noise the next reader has to
       // re-derive.
+      // The account detail page (#2560): the funnel records are deals owned
+      // by a rep, and a CompanyNeed is what the account needs.
+      companyDetail: {
+        sections: { funnel: 'Deals', needs: 'Open needs' },
+        funnel: {
+          person: 'Lead',
+          owner: 'Rep',
+          empty: 'No deals on this account yet.',
+          continues: 'Continues an earlier deal owned by {name}',
+        },
+        needsEmpty: 'No needs recorded.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'The id this account carries in the product you sell. It is how usage data finds this account, so it must be unique within your organization.' },
+      },
       companiesPage: {
         subtitle: 'Manage the accounts you sell to and what each one needs',
         addLoginHint: 'Create a read-only login for a company to follow its linked leads.',
         mentorships: 'deals',
         positions: 'needs',
         openPositions: 'Open needs',
+        // The delete dialog (#2441) is this page's THIRD dialog, and the same
+        // acceptance covers it: it names the dependants of the account being
+        // deleted, so a marketing admin was reading "1 mentorships" and "1 open
+        // positions" one click before an irreversible action.
+        //
+        // Three of the twelve labels are overridden, for the same reason as
+        // above — the rest name the same thing in both products
+        // (`entitlements`, `needAlerts`, `projects`, `users`, `fromInquiries`)
+        // or belong to the `placements` capability a MARKETING tenant does not
+        // carry (`requisitions`, `interviewRequests`, `offers`, `placements`),
+        // and are left alone rather than translated speculatively.
+        deleteDialog: {
+          labels: { needs: 'open needs', interests: 'lead interests', mentorships: 'deals' },
+        },
       },
       // The two DIALOGS /admin/companies opens are part of that page, so the
       // acceptance ("no mentorship word on /admin/companies") covers them: the
@@ -152,6 +269,35 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // namespace (admin/company/source, "Open profile", "Message") is neutral
       // and left alone.
       personCard: { roleMentor: 'Rep', roleMentee: 'Lead' },
+      // The sales rep's surface at /sales (#2580). It exists only in a vertical
+      // without mentorship, and the board it renders is the mentor board, so
+      // the few mentor.* strings that board reads are dressed here too — they
+      // are never shown by a mentor shell in this vertical, which has none.
+      panel: { sales: 'Sales' },
+      sales: {
+        dashboard: { title: 'Your sales pipeline', subtitle: 'Your own leads and accounts, and what needs you today.' },
+        stats: { open: 'Open leads', accounts: 'Accounts' },
+        records: {
+          title: 'My leads',
+          empty: 'No leads are assigned to you yet. An admin — or the default lead owner setting — assigns them to you.',
+          person: 'Lead',
+          company: 'Account',
+        },
+        accounts: {
+          title: 'My accounts',
+          subtitle: 'The accounts behind your own leads.',
+          empty: 'None of your leads is linked to an account yet.',
+          name: 'Account',
+          records: 'Your leads',
+          back: 'My accounts',
+        },
+        lead: { back: 'My leads', company: 'Account' },
+      },
+      mentor: {
+        boardSubtitle: 'Your leads by stage — drag a card, or use its stage menu, to move it',
+        menteeBoardSearchPlaceholder: 'Find a lead...',
+        noMatchingMentees: 'No leads match this filter',
+      },
       // The day-one empty states of the same two screens (both rendered by the
       // pages #2426/#2427 name, so the acceptance "no mentorship word on
       // /admin/companies or the board" is not met without them): a fresh tenant
@@ -159,6 +305,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       emptyStates: {
         board: {
           adminBody: 'Every deal shows up here as a card, in the stage it has reached. Add the first leads and their cards appear as soon as a rep owns them.',
+          // The rep's own board on /sales (#2580).
+          mentorBody: 'Your leads appear here as cards once they are assigned to you.',
         },
         companies: {
           adminBody: 'Companies are the accounts you sell to: once one exists you can attach what it needs, its contact people and the deals open against it.',
@@ -177,7 +325,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         fPipelineT: 'Pipeline tracking',
         fPipelineD: 'Every lead on one board, from new to won or lost — drag-and-drop stages, a deadline per stage with overdue flags, and a full history of who moved what and when.',
         fCompanyT: 'Accounts & contacts',
-        fCompanyD: 'Track the companies you sell to and the people inside them, log what each account needs, and see every open deal against it in one place.',
+        fCompanyD: 'Track the companies you sell to and the people inside them — add a new account and its lead in one step, log what each account needs, and see every open deal against it in one place.',
         fCommsT: 'Communication',
         fCommsD: 'Meeting invites with RSVP, in-app messaging on every deal, single and bulk emails, announcements, per-category notification preferences, reminders and a weekly digest.',
         fDocsT: 'Documents & templates',
@@ -198,7 +346,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         stageHired: 'Won',
         moreTitle: 'And a lot more',
         moreSubtitle: 'A quick sample of what else ships out of the box.',
-        more1: 'CSV import and Excel export for leads',
+        more1: 'Add a lead by hand, or import leads from CSV and export them to Excel',
         more2: 'Saved views, filters and fast server-side pagination',
         more3: 'Tags to slice leads and accounts any way you like',
         more4: 'Read-only REST API with OpenAPI spec, API keys and signed webhooks',
@@ -221,12 +369,110 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         featuresTitle: 'Everything your team needs to close',
         featuresSubtitle: 'Purpose-built for tracking customers and moving deals forward.',
       },
+      // The public feature catalogue (#2475). `/features` renders whatever
+      // getFeatures() returns for this vertical; the cards themselves are
+      // filtered by capability in src/lib/features.ts, and what is left here is
+      // the frame plus the four core cards whose wording still said
+      // "mentor"/"mentee"/"mentorship" although the feature itself is core CRM.
+      featureCatalog: {
+        title: 'Everything SaleVali can do',
+        subtitle: 'The full feature catalogue — from first contact to a closed deal, for your whole team.',
+        categories: { collaboration: 'Working together' },
+        items: {
+          // `messaging` carries no capability tag — a shared inbox is core CRM
+          // and MARKETING has it — so the capability filter cannot reach this
+          // card, and its wording was the last place a marketing visitor read
+          // the internship relation model on /features: "per-mentorship
+          // threads". The thread is per pipeline record, which is a deal here.
+          messaging: { d: 'A unified inbox with a thread per deal, attachments and email mirroring you can reply to — answer the notification from your mail app and it lands back in the thread. Messages arrive live while the inbox is open, and can notify your device even when the app is closed. A half-written reply is kept per conversation until you send it, and you can see when the other person is writing. The answers you give over and over live in a shared pool of canned responses — written once in English, Turkish and German, inserted in your own language, one click.' },
+          videoCalls: { d: 'Start a call with a lead, an account team or a chat in one click and hold it in a side panel next to their record, on our own Jitsi tenant — no accounts, no install, and no time limit. If a call has to fall back to the free public room, the panel says so before anyone joins, with a one-click way to keep talking. The link is emailed to everyone invited and works in any browser.' },
+          externalGuests: { d: 'A meeting is not always only your own team. Type any email address into the scheduler and that person is invited to the same room with the same Yes/No buttons — no account, no sign-up, and an .ics for their own calendar. You see who accepted, and an invitation sent to the wrong address can be withdrawn, which stops its link working.' },
+          // `ownWorkspace` is untagged (a mentor's own mentees are the same
+          // promise), so the rep's version of it is a sentence here (#2580).
+          ownWorkspace: { t: 'A workspace for every sales rep', d: 'Each rep signs in to their own book: their leads and accounts, the follow-ups and trial ends that are due, their own board — and a quick way to log the call they just made. Another rep\u2019s deals, or another organization\u2019s, are not a hidden tab away; they simply do not exist on that page.' },
+          inviteLinks: { d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away, and a private note keeps a wall of links legible.' },
+        },
+      },
+      // /pricing (#2475). The marketing product has NO published price list —
+      // the packaging has not been decided — so the page hides every section
+      // that would have to state one (see src/app/pricing/page.tsx) and these
+      // strings replace the internship framing of what is left. Nothing here
+      // invents a number, a plan or a seat: the two claims that survive are the
+      // ones that are true whatever the packaging turns out to be (self-hosting
+      // is free; there is no checkout, you get an invoice after a conversation).
+      pricing: {
+        heroBadge: 'Marketing pricing is not published yet',
+        heroTitle: 'What we can tell you about the price today',
+        heroSubtitle: 'The packaging for the marketing product has not been set yet, so there is no price list on this page — we would rather show you nothing than a number we would have to take back. What is already true, whatever the packaging turns out to be, is below.',
+        discountsTitle: 'What is already true',
+      },
     },
     tr: {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
-      nav: { candidates: 'Müşteri Adayları' },
-      candidates: { title: 'Müşteri Adayları', subtitle: 'Müşteri adaylarını görüntüle ve ara', mentor: 'Temsilci' },
+      nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
+      invite: {
+        subtitle: 'Satış temsilcilerini ve müşteri adaylarını davet et',
+        connectMentor: 'Bu temsilciye ata (isteğe bağlı)',
+        connectMentee: 'Bu müşteri adayını yeni temsilciye ver (isteğe bağlı)',
+        connectHint: 'Burada seçilirse müşteri adayı, kayıt olduğu anda atanır — ayrıca bir adım gerekmez.',
+      },
+      notifications: {
+        invitationEmail: {
+          roles: { MENTOR: 'satış temsilcisi', MENTEE: 'müşteri adayı' },
+        },
+      },
+      usersAdmin: {
+        mentor: 'Temsilci',
+        mentee: 'Müşteri adayı',
+        makeMentor: 'Temsilci yap',
+        makeMentee: 'Müşteri adayı yap',
+        convertToMentorConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde temsilci olur. Mevcut kayıtları korunur.',
+        convertToMenteeConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde müşteri adayı olur. Mevcut kayıtları korunur.',
+      },
+      candidateDetail: {
+        mentorship: 'Sorumlu',
+        notAssigned: 'Bu müşteri adayı henüz bir temsilciye atanmadı',
+        mentor: 'Temsilci',
+      },
+      messages: {
+        openers: {
+          welcome: {
+            label: '👋 Hoş geldiniz',
+            text: 'Merhaba {name}, SaleVali\'ye gösterdiğiniz ilgi için teşekkürler! Bundan sonra muhatabınız benim — aklınıza takılan her şeyi bu sohbetten yazabilirsiniz.',
+          },
+          introCall: {
+            label: 'Demo ayarla',
+            text: 'Merhaba {name}, kısa bir demo yapalım mı? Bu hafta hangi gün ve saatler size uygun?',
+          },
+          goals: {
+            label: 'İhtiyaçları sor',
+            text: 'Merhaba {name}, demodan önce hangi pazaryerlerinde satış yaptığınızı ve denemeden ne beklediğinizi öğrenmek isterim.',
+          },
+          intro: {
+            label: 'Mağazamızı tanıtayım',
+            text: 'Merhaba {name}, mağazamızı kısaca tanıtmak isterim: ',
+          },
+        },
+      },
+      forCompanies: {
+        submit: 'Demo isteyin',
+        successBody: 'Talebiniz satış ekibimize ulaştı. Demo için bir zaman bulmak üzere iki iş günü içinde dönüyoruz.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo talepleri',
+        subtitle: 'Web sitenizdeki demo formundan gelen talepler. Varsayılan aday sahibi varsa talep zaten hatta; yoksa bir yönetici ekleyene kadar burada sahipsiz bekler.',
+        emptyTitle: 'Bekleyen talep yok',
+        emptyBody: 'Web sitenizden gelen demo talepleri buraya düşer ve geldikçe tüm yöneticilere e-postayla bildirilir.',
+      },
+      candidates: {
+        title: 'Müşteri Adayları',
+        subtitle: 'Müşteri adaylarını görüntüle ve ara',
+        mentor: 'Temsilci',
+        mineFilter: 'Benim müşterilerim',
+        bulkOwnerLabel: 'Temsilci',
+        bulkAssignOwner: 'Temsilci ata',
+      },
       publicNav: {
         homeLink: 'SaleVali — ana sayfaya git',
         tagline: 'Müşteri adayları, firmalar ve anlaşmalar tek hatta — ilk temastan kapanışa.',
@@ -257,12 +503,38 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'İlk fırsatı oluştur',
         },
       },
+      analytics: {
+        cohortTotal: 'Müşteri adayı',
+        cohortHired: 'Kazanılan',
+        sourceConversionTitle: 'Kaynağa göre dönüşüm',
+        sourceConversionEmpty: 'Henüz kaynak yok — kaynak bazlı dönüşümü görmek için müşteri adaylarına kaynak ata.',
+        sourceUnsourced: '{n} müşteri adayının kaynağı yok ve yukarıda gösterilmiyor.',
+      },
+      companyDetail: {
+        sections: { funnel: 'Fırsatlar', needs: 'Açık ihtiyaçlar' },
+        funnel: {
+          person: 'Müşteri adayı',
+          owner: 'Temsilci',
+          empty: 'Bu hesapta henüz fırsat yok.',
+          continues: '{name} temsilcisindeki önceki fırsatın devamı',
+        },
+        needsEmpty: 'Kayıtlı ihtiyaç yok.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'Bu hesabın sattığınız üründeki kimliği. Kullanım verisi hesabı bununla bulur; bu yüzden kuruluşunuz içinde benzersiz olmalı.' },
+      },
       companiesPage: {
         subtitle: 'Sattığın müşteri firmalarını ve ihtiyaçlarını yönet',
         addLoginHint: 'Bir şirketin kendi müşteri adaylarını izlemesi için salt-okunur giriş oluştur.',
         mentorships: 'fırsat',
         positions: 'ihtiyaç',
         openPositions: 'Açık ihtiyaçlar',
+        deleteDialog: {
+          labels: {
+            needs: 'açık ihtiyaç',
+            interests: 'müşteri adayı ilgisi',
+            mentorships: 'fırsat',
+          },
+        },
       },
       companyForm: {
         quota: 'İhtiyaç kontenjanı',
@@ -280,9 +552,35 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         groups: { pre: 'Müşteri Adayları', internship: 'Fırsatlar', custom: 'Satış hunisi' },
       },
       personCard: { roleMentor: 'Temsilci', roleMentee: 'Müşteri adayı' },
+      panel: { sales: 'Satış' },
+      sales: {
+        dashboard: { title: 'Satış pipeline\'ın', subtitle: 'Kendi müşteri adayların ve hesapların, bugün seni bekleyenler.' },
+        stats: { open: 'Açık müşteri adayları', accounts: 'Hesaplar' },
+        records: {
+          title: 'Müşteri adaylarım',
+          empty: 'Henüz sana atanmış bir müşteri adayı yok. Bir yönetici — ya da varsayılan sahip ayarı — atar.',
+          person: 'Müşteri adayı',
+          company: 'Hesap',
+        },
+        accounts: {
+          title: 'Hesaplarım',
+          subtitle: 'Kendi müşteri adaylarının bağlı olduğu hesaplar.',
+          empty: 'Müşteri adaylarından hiçbiri henüz bir hesaba bağlı değil.',
+          name: 'Hesap',
+          records: 'Senin müşteri adayların',
+          back: 'Hesaplarım',
+        },
+        lead: { back: 'Müşteri adaylarım', company: 'Hesap' },
+      },
+      mentor: {
+        boardSubtitle: 'Müşteri adayların aşamaya göre — taşımak için kartı sürükle ya da aşama menüsünü kullan',
+        menteeBoardSearchPlaceholder: 'Müşteri adayı bul...',
+        noMatchingMentees: 'Bu filtreye uyan müşteri adayı yok',
+      },
       emptyStates: {
         board: {
           adminBody: 'Her fırsat burada, ulaştığı aşamada bir kart olarak görünür. İlk müşteri adaylarını ekle; bir temsilci sahiplendiği anda kartları burada belirir.',
+          mentorBody: 'Sana atanan müşteri adayları burada kart olarak görünür.',
         },
         companies: {
           adminBody: 'Şirketler sattığın müşteri hesaplarıdır: bir şirket eklediğinde ona ihtiyaçlarını, iletişim kişilerini ve açık fırsatlarını bağlayabilirsin.',
@@ -296,7 +594,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         fPipelineT: 'Hat takibi',
         fPipelineD: 'Her müşteri adayı tek panoda, yeniden kazanıldı ya da kaybedildiye — sürükle-bırak aşamalar, aşama başına son tarih ve gecikme işaretleri, kimin neyi ne zaman taşıdığının tam geçmişi.',
         fCompanyT: 'Firmalar & kişiler',
-        fCompanyD: 'Sattığınız firmaları ve içindeki kişileri takip edin, her firmanın ihtiyacını kaydedin, açık fırsatların hepsini tek yerde görün.',
+        fCompanyD: 'Sattığınız firmaları ve içindeki kişileri takip edin — yeni bir firmayı ve müşteri adayını tek adımda ekleyin, her firmanın ihtiyacını kaydedin, açık fırsatların hepsini tek yerde görün.',
         fCommsT: 'İletişim',
         fCommsD: 'RSVP’li toplantı davetleri, her fırsatta uygulama içi mesajlaşma, tekil ve toplu e-posta, duyurular, kategori bazlı bildirim tercihleri, hatırlatmalar ve haftalık özet.',
         fDocsT: 'Belgeler & şablonlar',
@@ -317,7 +615,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         stageHired: 'Kazanıldı',
         moreTitle: 'Ve çok daha fazlası',
         moreSubtitle: 'Kutudan çıkan diğer şeylerden kısa bir örnek.',
-        more1: 'Adaylar için CSV içe ve Excel dışa aktarma',
+        more1: 'Müşteri adayını elle ekleyin ya da CSV ile içe, Excel ile dışa aktarın',
         more2: 'Kayıtlı görünümler, filtreler ve hızlı sunucu taraflı sayfalama',
         more3: 'Aday ve firmaları istediğiniz gibi dilimlemek için etiketler',
         more4: 'OpenAPI şemalı salt-okunur REST API, API anahtarları ve imzalı webhook’lar',
@@ -340,10 +638,89 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         featuresTitle: 'Kapatmak için ekibinin ihtiyacı olan her şey',
         featuresSubtitle: 'Müşterileri takip etmek ve anlaşmaları ilerletmek için tasarlandı.',
       },
+      featureCatalog: {
+        title: 'SaleVali neler yapabilir',
+        subtitle: 'Tüm özellik kataloğu — ilk temastan kapanan anlaşmaya, tüm ekibiniz için.',
+        categories: { collaboration: 'Birlikte çalışma' },
+        items: {
+          messaging: { d: 'Fırsat başına thread’ler, ekler ve cevaplanabilir e-posta yansıtması olan tek gelen kutusu — bildirimi kendi e-posta uygulamanızdan yanıtlayın, cevabınız thread’e düşer. Mesajlar gelen kutusu açıkken anında görünür; izin verirseniz uygulama kapalıyken de cihazınıza bildirim gelir. Yarım kalan yanıt gönderilene kadar sohbet başına saklanır ve karşı taraf yazarken bunu görürsünüz. Sürekli verdiğiniz yanıtlar ortak bir hazır yanıt havuzunda durur — İngilizce, Türkçe ve Almanca bir kez yazılır, kendi dilinizde tek tıkla eklenir.' },
+          videoCalls: { d: 'Bir müşteri adayı, firma ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kaydın yanındaki yan panelde kendi Jitsi kiracımızda açılır — hesap yok, kurulum yok, süre sınırı yok. Görüşme ücretsiz herkese açık odaya düşmek zorunda kalırsa panel bunu kimse katılmadan önce söyler ve konuşmayı sürdürmenin tek tıklık yolunu verir. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
+          externalGuests: { d: 'Bir toplantı her zaman yalnızca kendi ekibinizden ibaret değildir. Planlayıcıya herhangi bir e-posta adresi yaz; o kişi aynı odaya, aynı Evet/Hayır butonlarıyla davet edilsin — hesap yok, kayıt yok, kendi takvimi için .ics var. Kimin kabul ettiğini görürsün ve yanlış adrese giden bir davet geri alınabilir; bağlantısı da o anda çalışmayı bırakır.' },
+          ownWorkspace: { t: 'Her satış temsilcisine kendi çalışma alanı', d: 'Her temsilci kendi portföyüne giriş yapar: müşteri adayları ve hesapları, vadesi gelen takipler ve deneme bitişleri, kendi panosu — ve az önce yaptığı görüşmeyi hemen kaydetme imkânı. Başka bir temsilcinin ya da başka bir kuruluşun fırsatları gizli bir sekmede durmaz; o sayfada hiç yoktur.' },
+          inviteLinks: { d: 'Adresini bilmediğin birini davet et: alanı boş bırak, elden verebileceğin tek kullanımlık ve 7 gün geçerli bir bağlantı üretilsin. Bağlantıyla kaydolan kişi doğrudan gönderene bağlanır ve özel bir not, birbirine benzeyen bağlantıları ayırt edilebilir kılar.' },
+        },
+      },
+      pricing: {
+        heroBadge: 'Pazarlama fiyatlandırması henüz yayınlanmadı',
+        heroTitle: 'Fiyat hakkında bugün söyleyebileceklerimiz',
+        heroSubtitle: 'Pazarlama ürününün paketlemesi henüz belirlenmedi; bu yüzden bu sayfada fiyat listesi yok — geri almak zorunda kalacağımız bir rakam göstermektense hiçbir şey göstermemeyi tercih ederiz. Paketleme ne olursa olsun bugün de doğru olanlar aşağıda.',
+        discountsTitle: 'Şimdiden doğru olanlar',
+      },
     },
     de: {
-      nav: { candidates: 'Leads' },
-      candidates: { title: 'Leads', subtitle: 'Leads durchsuchen', mentor: 'Vertriebsmitarbeiter' },
+      nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
+      invite: {
+        subtitle: 'Vertriebsmitarbeiter und Leads einladen',
+        connectMentor: 'Diesem Vertriebsmitarbeiter zuordnen (optional)',
+        connectMentee: 'Diesen Lead dem neuen Vertriebsmitarbeiter geben (optional)',
+        connectHint: 'Hier gewählt, wird der Lead bei der Registrierung sofort zugeordnet — kein weiterer Schritt.',
+      },
+      notifications: {
+        invitationEmail: {
+          roles: { MENTOR: 'Vertriebsmitarbeiter', MENTEE: 'Lead' },
+        },
+      },
+      usersAdmin: {
+        mentor: 'Vertriebsmitarbeiter',
+        mentee: 'Lead',
+        makeMentor: 'Zum Vertriebsmitarbeiter machen',
+        makeMentee: 'Zum Lead machen',
+        convertToMentorConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung Vertriebsmitarbeiter. Bestehende Datensätze bleiben erhalten.',
+        convertToMenteeConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung ein Lead. Bestehende Datensätze bleiben erhalten.',
+      },
+      candidateDetail: {
+        mentorship: 'Zuständig',
+        notAssigned: 'Diesem Lead ist noch kein Vertriebsmitarbeiter zugeordnet',
+        mentor: 'Vertriebsmitarbeiter',
+      },
+      messages: {
+        openers: {
+          welcome: {
+            label: '👋 Willkommen',
+            text: 'Hallo {name}, danke für Ihr Interesse an SaleVali! Ich bin ab jetzt Ihr Ansprechpartner — schreiben Sie mir in diesem Chat, wann immer etwas ist.',
+          },
+          introCall: {
+            label: 'Demo vereinbaren',
+            text: 'Hallo {name}, sollen wir eine kurze Demo machen? Welche Tage und Zeiten passen Ihnen diese Woche?',
+          },
+          goals: {
+            label: 'Nach dem Bedarf fragen',
+            text: 'Hallo {name}, vor der Demo würde ich gern hören, auf welchen Marktplätzen Sie verkaufen und was Sie sich von der Testphase erwarten.',
+          },
+          intro: {
+            label: 'Unseren Shop vorstellen',
+            text: 'Hallo {name}, ich stelle unseren Shop kurz vor: ',
+          },
+        },
+      },
+      forCompanies: {
+        submit: 'Demo anfragen',
+        successBody: 'Ihre Anfrage hat unser Vertriebsteam erreicht. Wir melden uns innerhalb von zwei Werktagen, um einen Termin für die Demo zu finden.',
+      },
+      companyInquiriesAdmin: {
+        title: 'Demo-Anfragen',
+        subtitle: 'Anfragen aus dem Demo-Formular Ihrer Website. Mit Standard-Zuständigkeit ist eine Anfrage schon in der Pipeline; die übrigen warten hier ohne Zuständige, bis ein Admin sie übernimmt.',
+        emptyTitle: 'Keine Anfragen offen',
+        emptyBody: 'Demo-Anfragen von Ihrer Website landen hier, und alle Admins werden bei Eingang per E-Mail benachrichtigt.',
+      },
+      candidates: {
+        title: 'Leads',
+        subtitle: 'Leads durchsuchen',
+        mentor: 'Vertriebsmitarbeiter',
+        mineFilter: 'Meine Kunden',
+        bulkOwnerLabel: 'Vertriebsmitarbeiter',
+        bulkAssignOwner: 'Vertriebsmitarbeiter zuweisen',
+      },
       publicNav: {
         homeLink: 'SaleVali — zur Startseite',
         tagline: 'Leads, Accounts und Deals in einer Pipeline — vom ersten Kontakt bis zum Abschluss.',
@@ -374,12 +751,34 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           assignMentorship: 'Ersten Deal anlegen',
         },
       },
+      analytics: {
+        cohortTotal: 'Leads',
+        cohortHired: 'Gewonnen',
+        sourceConversionTitle: 'Konversion nach Quelle',
+        sourceConversionEmpty: 'Noch keine Quellen — weise Leads eine Quelle zu, um die Konversion pro Quelle zu sehen.',
+        sourceUnsourced: '{n} Lead(s) ohne Quelle werden oben nicht angezeigt.',
+      },
+      companyDetail: {
+        sections: { funnel: 'Deals', needs: 'Offener Bedarf' },
+        funnel: {
+          person: 'Lead',
+          owner: 'Vertriebsmitarbeiter',
+          empty: 'Für diesen Account gibt es noch keine Deals.',
+          continues: 'Setzt einen früheren Deal von {name} fort',
+        },
+        needsEmpty: 'Kein Bedarf erfasst.',
+        // The external id is what the usage feed keys on (#2560) — a MARKETING-only notion.
+        externalId: { hint: 'Die ID dieses Accounts in dem Produkt, das Sie verkaufen. Nutzungsdaten finden den Account darüber, daher muss sie in Ihrer Organisation eindeutig sein.' },
+      },
       companiesPage: {
         subtitle: 'Kunden-Accounts und ihren Bedarf verwalten',
         addLoginHint: 'Erstelle einen Zugang mit Lesezugriff, damit ein Unternehmen seine verknüpften Leads einsehen kann.',
         mentorships: 'Deals',
         positions: 'Bedarfe',
         openPositions: 'Offener Bedarf',
+        deleteDialog: {
+          labels: { needs: 'offene Bedarfe', interests: 'Lead-Interessen', mentorships: 'Deals' },
+        },
       },
       companyForm: {
         quota: 'Bedarfskontingent',
@@ -397,9 +796,35 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
       },
       personCard: { roleMentor: 'Vertriebsmitarbeiter', roleMentee: 'Lead' },
+      panel: { sales: 'Vertrieb' },
+      sales: {
+        dashboard: { title: 'Deine Vertriebs-Pipeline', subtitle: 'Deine eigenen Leads und Accounts und was heute ansteht.' },
+        stats: { open: 'Offene Leads', accounts: 'Accounts' },
+        records: {
+          title: 'Meine Leads',
+          empty: 'Dir ist noch kein Lead zugewiesen. Ein Admin — oder die Einstellung für den Standard-Owner — weist sie dir zu.',
+          person: 'Lead',
+          company: 'Account',
+        },
+        accounts: {
+          title: 'Meine Accounts',
+          subtitle: 'Die Accounts hinter deinen eigenen Leads.',
+          empty: 'Noch keiner deiner Leads ist mit einem Account verknüpft.',
+          name: 'Account',
+          records: 'Deine Leads',
+          back: 'Meine Accounts',
+        },
+        lead: { back: 'Meine Leads', company: 'Account' },
+      },
+      mentor: {
+        boardSubtitle: 'Deine Leads nach Phase — ziehe eine Karte oder nutze ihr Phasenmenü, um sie zu verschieben',
+        menteeBoardSearchPlaceholder: 'Lead suchen...',
+        noMatchingMentees: 'Keine Leads passen zu diesem Filter',
+      },
       emptyStates: {
         board: {
           adminBody: 'Jeder Deal erscheint hier als Karte, in der Phase, die er erreicht hat. Lege die ersten Leads an — sobald ein Vertriebsmitarbeiter sie übernimmt, taucht ihre Karte auf.',
+          mentorBody: 'Deine Leads erscheinen hier als Karten, sobald sie dir zugewiesen sind.',
         },
         companies: {
           adminBody: 'Unternehmen sind die Accounts, an die du verkaufst: sobald eines existiert, kannst du ihm seinen Bedarf, Ansprechpersonen und die offenen Deals zuordnen.',
@@ -413,7 +838,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         fPipelineT: 'Pipeline-Tracking',
         fPipelineD: 'Jeder Lead auf einem Board, von neu bis gewonnen oder verloren — Drag-and-drop-Phasen, eine Frist pro Phase mit Überfälligkeitsmarkern und eine vollständige Historie, wer was wann verschoben hat.',
         fCompanyT: 'Accounts & Kontakte',
-        fCompanyD: 'Verfolgen Sie die Unternehmen, an die Sie verkaufen, und die Menschen darin, halten Sie den Bedarf jedes Accounts fest und sehen Sie jeden offenen Deal an einem Ort.',
+        fCompanyD: 'Verfolgen Sie die Unternehmen, an die Sie verkaufen, und die Menschen darin — legen Sie einen neuen Account samt Lead in einem Schritt an, halten Sie den Bedarf jedes Accounts fest und sehen Sie jeden offenen Deal an einem Ort.',
         fCommsT: 'Kommunikation',
         fCommsD: 'Meeting-Einladungen mit RSVP, In-App-Nachrichten zu jedem Deal, Einzel- und Massen-E-Mails, Ankündigungen, Benachrichtigungseinstellungen pro Kategorie, Erinnerungen und ein Wochen-Digest.',
         fDocsT: 'Dokumente & Vorlagen',
@@ -434,7 +859,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         stageHired: 'Gewonnen',
         moreTitle: 'Und noch viel mehr',
         moreSubtitle: 'Eine kleine Auswahl dessen, was sonst noch mitgeliefert wird.',
-        more1: 'CSV-Import und Excel-Export für Leads',
+        more1: 'Leads von Hand anlegen, per CSV importieren und nach Excel exportieren',
         more2: 'Gespeicherte Ansichten, Filter und schnelle serverseitige Paginierung',
         more3: 'Tags, um Leads und Accounts beliebig zu gliedern',
         more4: 'Schreibgeschützte REST-API mit OpenAPI-Spezifikation, API-Schlüsseln und signierten Webhooks',
@@ -456,6 +881,24 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroSubtitle: 'Verfolgen Sie Ihre Kunden vom ersten Kontakt bis zum Abschluss. Sehen Sie auf einen Blick, wo jeder Deal steht, wer ihn zuletzt bearbeitet hat und was als Nächstes zu tun ist — statt es aus einer Tabelle zusammenzusuchen.',
         featuresTitle: 'Alles, was Ihr Team zum Abschluss braucht',
         featuresSubtitle: 'Entwickelt, um Kunden zu verfolgen und Deals voranzutreiben.',
+      },
+      featureCatalog: {
+        title: 'Alles, was SaleVali kann',
+        subtitle: 'Der vollständige Funktionskatalog — vom Erstkontakt bis zum Abschluss, für Ihr ganzes Team.',
+        categories: { collaboration: 'Zusammenarbeit' },
+        items: {
+          messaging: { d: 'Ein zentraler Posteingang mit einem Thread pro Deal, Anhängen und beantwortbarer E-Mail-Spiegelung — antworte aus deinem Mailprogramm, und die Antwort landet im Thread. Nachrichten erscheinen live, solange der Posteingang offen ist, und können dein Gerät auch bei geschlossener App benachrichtigen. Eine halb geschriebene Antwort bleibt pro Gespräch erhalten, bis du sie sendest, und du siehst, wenn die andere Person schreibt. Antworten, die du immer wieder gibst, liegen in einem gemeinsamen Pool vorgefertigter Antworten — einmal auf Englisch, Türkisch und Deutsch verfasst, mit einem Klick in deiner eigenen Sprache eingefügt.' },
+          videoCalls: { d: 'Starte mit einem Klick einen Anruf mit einem Lead, einem Account-Team oder einem Chat — er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Muss ein Anruf auf den freien öffentlichen Raum ausweichen, sagt das Panel das, bevor jemand beitritt, samt Ein-Klick-Weg zum Weiterreden. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
+          externalGuests: { d: 'Ein Meeting besteht nicht immer nur aus dem eigenen Team. Tippe eine beliebige E-Mail-Adresse in die Planung, und diese Person ist im selben Raum eingeladen — mit denselben Ja/Nein-Buttons, ohne Konto, ohne Registrierung und mit .ics für den eigenen Kalender. Du siehst, wer zugesagt hat, und eine an die falsche Adresse gegangene Einladung lässt sich zurückziehen; ihr Link funktioniert dann nicht mehr.' },
+          ownWorkspace: { t: 'Ein Arbeitsbereich für jeden Vertriebsmitarbeiter', d: 'Jeder Vertriebsmitarbeiter meldet sich in seinem eigenen Bestand an: seine Leads und Accounts, fällige Wiedervorlagen und Testphasen-Enden, sein eigenes Board — und das Gespräch, das er gerade geführt hat, gleich erfassen. Die Deals eines Kollegen oder einer anderen Organisation liegen nicht einen versteckten Reiter entfernt; auf dieser Seite gibt es sie schlicht nicht.' },
+          inviteLinks: { d: 'Lade jemanden ein, dessen Adresse du nicht kennst: Feld leer lassen, und es entsteht ein einmalig gültiger 7-Tage-Link zum persönlichen Übergeben. Wer sich damit registriert, ist sofort mit der einladenden Person verbunden — und eine private Notiz hält eine Wand aus Links unterscheidbar.' },
+        },
+      },
+      pricing: {
+        heroBadge: 'Die Marketing-Preise sind noch nicht veröffentlicht',
+        heroTitle: 'Was wir heute über den Preis sagen können',
+        heroSubtitle: 'Die Paketierung des Marketing-Produkts steht noch nicht fest, deshalb gibt es auf dieser Seite keine Preisliste — lieber zeigen wir nichts als eine Zahl, die wir zurücknehmen müssten. Was unabhängig von der Paketierung schon heute gilt, steht unten.',
+        discountsTitle: 'Was schon heute gilt',
       },
     },
   },

@@ -28,7 +28,7 @@ test('a mentee cannot access another user\'s CV or admin APIs (IDOR/RBAC)', asyn
     expect((await page.request.get('/api/users')).status()).toBe(401);
     expect((await page.request.get('/api/admin/analytics')).status()).toBe(401);
     // The mentee can read their own CV endpoint (404, not 403 — no CV, but allowed).
-    expect((await page.request.get(`/api/cv/${(await prisma.user.findUnique({ where: { email: aEmail } }))!.id}`)).status()).toBe(404);
+    expect((await page.request.get(`/api/cv/${(await prisma.user.findFirst({ where: { email: aEmail } }))!.id}`)).status()).toBe(404);
   } finally {
     await prisma.cvFile.deleteMany({ where: { userId: b.id } });
     await cleanupByEmail(aEmail);

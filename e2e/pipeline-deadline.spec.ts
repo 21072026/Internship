@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAsFreshUser } from './helpers/auth';
+import { signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -45,7 +45,7 @@ test('stage deadlines flag overdue, surface on the calendar, and trigger reminde
       type: 'deadline.stagePassed',
       link: `/mentor/mentees/${rel.id}`,
     }));
-    await page.goto('/notifications');
+    await gotoSettled(page, '/notifications');
     await page.getByRole('link', { name: /Stage deadline passed/ }).click();
     await expect(page).toHaveURL(`/mentor/mentees/${rel.id}`);
     await expect(page.getByText('DL Mentee').first()).toBeVisible();

@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getServerDictionary } from '@/i18n/server';
+import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import { getFeatures, FEATURE_CATEGORIES } from '@/lib/features';
+import { verticalCapabilities } from '@/lib/verticals';
 import { PublicShell } from '@/components/landing/PublicShell';
 
 const iconBg: Record<string, string> = {
@@ -15,10 +16,24 @@ const iconBg: Record<string, string> = {
 // Public feature catalogue (#584/#587) — every shipped feature, categorized,
 // fed from the single source in src/lib/features.ts (same data as the landing
 // page's featured cards).
+//
+// Filtered by the request's vertical (#2475), with EXACTLY the expression the
+// landing already uses for its featured grid. Without it a marketing visitor
+// read the whole internship catalogue here — mentor self-service, weekly
+// internship reports, offers, intern projects — one click from a landing page
+// that had just been cleaned of all of it (#2500). INTERNSHIP carries every
+// capability, so the internship catalogue is byte-identical to before; a card
+// with no capability is core and shows everywhere (see the tagging rule at the
+// top of src/lib/features.ts).
+//
+// A category whose cards are all filtered out renders no heading at all — the
+// loop below already skips an empty category, which is why "Mentoring &
+// collaboration" does not appear as an empty band on a marketing host.
 export default async function FeaturesPage() {
   const { t } = await getServerDictionary();
   const F = t.featureCatalog;
-  const features = getFeatures(t);
+  const caps = verticalCapabilities(await resolveRequestVertical());
+  const features = getFeatures(t).filter((f) => !f.capability || caps.includes(f.capability));
 
   return (
     <PublicShell>

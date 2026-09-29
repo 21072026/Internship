@@ -3,9 +3,12 @@ import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { enforceRateLimit } from '@/lib/rateLimit';
-import { readRememberToken, rotateTrustedDevice } from '@/lib/trustedDevice';
+import { readRememberToken, rotateTrustedDevice, trustedDeviceOwner } from '@/lib/trustedDevice';
 import { clearRememberCookies, setRememberCookies } from '@/lib/rememberCookie';
 import { isPasswordLoginBlockedForUserId, SSO_REQUIRED_CODE } from '@/lib/ssoEnforcement';
+import { authWrongWorld } from '@/lib/authErrors';
+import { worldForHeaders } from '@/lib/hostWorld';
+import { worldOfOrg } from '@/lib/userWorld';
 
 /** How long the bridge token the browser immediately trades in stays usable. */
 const GRANT_TTL_MS = 60 * 1000;
@@ -40,6 +43,31 @@ export async function POST(request: Request) {
     // No cookie: not an error, just a browser that was never remembered. 204 so
     // the sign-in page can tell "nothing to do" from "it failed".
     return new NextResponse(null, { status: 204 });
+  }
+
+  // WORLDS (#2590): the URL a person is on decides which product they are in,
+  // so a remembered device only re-opens the door of ITS OWN account's product.
+  // The cookie is host-only, so it normally reaches only the host it was minted
+  // on — but an organization moved to the other product (or a re-pointed host)
+  // leaves a cookie standing on a host whose product its account is not in.
+  // Declined here, BEFORE the rotation below: rotating would rewrite the
+  // device's secret and mint a grant the `remember` provider (auth.ts,
+  // `assertAccountMatchesHost`) then refuses anyway — the provider stays the
+  // authority, this is the same rule asked one step earlier so nothing is spent.
+  // The cookies are dropped (the device can never work on this host, and
+  // /auth/resume must not be re-entered on every page view), but the device row
+  // is left alone: it is still a valid credential for its own product's host.
+  const ownerId = await trustedDeviceOwner(token);
+  if (ownerId) {
+    const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { orgId: true } });
+    if (owner) {
+      const accountWorld = await worldOfOrg(owner.orgId);
+      if (accountWorld !== worldForHeaders((name) => request.headers.get(name))) {
+        const res = NextResponse.json({ error: authWrongWorld(accountWorld) }, { status: 401 });
+        clearRememberCookies(res);
+        return res;
+      }
+    }
   }
 
   const result = await rotateTrustedDevice(token, request);

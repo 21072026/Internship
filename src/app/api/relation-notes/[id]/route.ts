@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 const patchSchema = z.object({ body: z.string().min(1).max(5000) });
 
@@ -13,8 +15,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const note = await prisma.relationNote.findUnique({ where: { id }, select: { authorId: true } });
-  if (!note) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const note = await prisma.relationNote.findUnique({
+    where: { id },
+    select: { authorId: true, relation: { select: { orgId: true } } },
+  });
+  // RelationNote has no orgId; its tenant is its relation's. Another tenant's
+  // note reads as not found, before any write (#2542).
+  if (!note || !(await inCallerTenant(note.relation.orgId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   if (note.authorId !== session.user.id && session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -36,8 +45,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const note = await prisma.relationNote.findUnique({ where: { id }, select: { authorId: true } });
-  if (!note) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const note = await prisma.relationNote.findUnique({
+    where: { id },
+    select: { authorId: true, relation: { select: { orgId: true } } },
+  });
+  // RelationNote has no orgId; its tenant is its relation's. Another tenant's
+  // note reads as not found, before any write (#2542).
+  if (!note || !(await inCallerTenant(note.relation.orgId, resolveOrgId(session)))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   if (note.authorId !== session.user.id && session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

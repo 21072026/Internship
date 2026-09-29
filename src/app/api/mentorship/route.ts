@@ -15,6 +15,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { daysInStage } from '@/lib/stageClock';
 import {
   findActiveMentorship,
@@ -22,6 +23,8 @@ import {
   alreadyMentoredBody,
 } from '@/lib/activeMentorship';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
+import { stripNextActionFor } from '@/lib/nextActionRule';
+import { refuseForeignCompany } from '@/lib/relationCompany';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -141,14 +144,17 @@ export async function GET(request: Request) {
     // see exactly the payload they saw before.
     const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
     const withStageClock = <
-      T extends { startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
+      T extends { mentorId: string; startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
     >(
       rows: T[]
     ) =>
       rows.map(({ statusChanges, mentee, ...rest }) => {
         const { reEngageAt, ...menteeRest } = mentee;
         return {
-          ...rest,
+          // The owner's next action (#2563) rides along for the owner and ADMIN
+          // only — the board card shows it; a MENTEE/COMPANY/SOURCE reader of
+          // the same list does not get the owner's note about them.
+          ...stripNextActionFor(session.user, rest),
           mentee: menteeRest,
           daysInStage: daysInStage({ startDate: rest.startDate, statusChanges }),
           ...(seesPool ? { stageClockPaused: reEngageAt != null } : {}),
@@ -199,6 +205,12 @@ export async function POST(request: Request) {
     }
 
     const { mentorId, menteeId, companyId, projectId, startDate } = parsed.data;
+
+    // The company must be the admin's own tenant's (#2613): unchecked, another
+    // tenant's id was attached and its name came back in the response, and an
+    // unknown one was a foreign-key 500. Both now answer the same 404.
+    const foreignCompany = await refuseForeignCompany(session, companyId);
+    if (foreignCompany) return foreignCompany;
 
     const [mentor, mentee] = await Promise.all([
       prisma.user.findUnique({ where: { id: mentorId } }),
@@ -267,6 +279,9 @@ export async function POST(request: Request) {
     // show the new relation in. Falls back to the canonical first stage for an
     // org that never touched the stage editor.
     const pipelineStatus = await resolveStartStage(mentee.orgId);
+    // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
+    // the create (#2551); for every other start stage this is `{}`, no query.
+    const trialWindow = await stageTrialWindow({ orgId: mentee.orgId, toStage: pipelineStatus, enteredAt: new Date() });
 
     // The guard and the write, adjacent and atomic (#419). The pre-flight above
     // ran before the plan gate, the availability count and resolveStartStage —
@@ -286,6 +301,7 @@ export async function POST(request: Request) {
             menteeId,
             orgId: mentee.orgId,
             pipelineStatus,
+            ...trialWindow,
             companyId: companyId || null,
             projectId: projectId || null,
             startDate: startDate ? new Date(startDate) : new Date(),

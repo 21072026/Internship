@@ -30,7 +30,7 @@ test('bulk import dry-run validates rows without creating users', async ({ page 
     expect(d.rows).toHaveLength(3);
 
     // Nothing was actually created.
-    const created = await prisma.user.findUnique({ where: { email: goodEmail } });
+    const created = await prisma.user.findFirst({ where: { email: goodEmail } });
     expect(created).toBeNull();
   } finally {
     await prisma.user.deleteMany({ where: { email: goodEmail } });

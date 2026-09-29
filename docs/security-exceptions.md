@@ -9,7 +9,7 @@ Bir bastırma dosyası yerine düz metin: gerekçe diğer güvenlik dokümanlar�
 yanında okunabilir kalıyor ve biri okuduğunda **hâlâ geçerli mi** diye sorması
 gerektiği belli oluyor.
 
-Son gözden geçirme: **2026-09-14** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
+Son gözden geçirme: **2026-09-29** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
 
 ## Açık bulgular
 
@@ -122,6 +122,44 @@ olduğunu öğreniyor.
 organizasyonlar. Muaf (`ssoExempt`) kullanıcılar ve zorunluluk uygulanmayan her
 kiracı eski genel hatayı almaya devam ediyor. Ayrıntılar:
 [`docs/sso-saml.md`](sso-saml.md) § *Enforced SSO*.
+
+### `WRONG_WORLD_*` bir adresin öbür üründe hesabı olduğunu, parolanın sahibine açık eder (#2590)
+
+**Ne:** Bir kişi iki üründe (internship / marketing) aynı e-postayla ayrı hesap
+tutabiliyor ve hangisine gireceğini oturum açtığı host seçiyor
+([`docs/worlds.md`](worlds.md)). `src/lib/auth.ts`, parola **doğrulandıktan
+sonra**, hesap host'un ürününde değil de öbüründeyse `WRONG_WORLD_INTERNSHIP` /
+`WRONG_WORLD_MARKETING` fırlatıyor; giriş sayfası "bu hesap SaleVali içinde"
+diyor ve o ürünün `/auth/signin` sayfasına bağlantı veriyor.
+
+**Taviz:** Giriş uç noktası bilinmeyen e-posta ile yanlış parolayı aynı genel
+hatayla yanıtlıyordu. Bu yeni hata, tek bir durumda o özelliği bozuyor: cevabı alan
+kişi öbür üründe bir hesabı olduğunu **ve hangisi olduğunu** öğreniyor.
+
+**Neden kabul edildi:**
+- Alternatifi, parolası **doğru** olan bir kişiye "e-posta veya parola hatalı"
+  demek. Tam bu kişi (bakımcının kendisi, iki ürüne de girmesi gereken herkes)
+  tekrar dener, kendini kilitler ve destek arar; yanlış cevap gerçek bir
+  operasyonel maliyet üretiyor — `SSO_REQUIRED` için yapılan tartımın aynısı.
+- Kontrol parola karşılaştırmasından **sonra** duruyor. Bilinmeyen adres, yanlış
+  parola ve öbür üründeki bir hesaba yanlış parola aynı `Invalid email or password`
+  cevabını alır, aynı sayaçlara yazılır (`login-fail:<email>` ve `AccountLockout`)
+  ve aynı kilitte biter; dışarıdan biri için bir sorgu oracle'ı yok. Bilgiyi almak
+  için hesabın parolasını zaten bilmek gerekiyor, yani öğrenen kişi o hesabın sahibi.
+- Açığa çıkan bilgi iki değerli: "bu adres ve parola öbür üründe". Parola, oturum,
+  rol ya da veri hakkında hiçbir şey vermiyor; iki ürünün adı ve host'u zaten
+  herkese açık.
+- Parola sıfırlama formu bu tavizin **dışında**: `/api/auth/forgot` bulundu /
+  öbür üründe bulundu / belirsiz / yok durumlarında aynı gövdeyi döndürüyor;
+  öbür üründeki hesap için yalnızca posta gidiyor, yani posta kutusunun sahibine.
+- Sahte bir `X-Forwarded-Host` hiçbir şeyi genişletmiyor: sahtekâr en fazla kendi
+  parolasıyla kendi öbür hesabını seçtiriyor ya da kendi girişini başarısız kılıyor
+  (`src/lib/hostWorld.ts`, TRUST NOTE).
+
+**Kapsam:** Yalnızca parolası doğrulanmış girişler. Zorunlu SSO'lu bir kiracının
+öbür üründeki hesabı için bcrypt'ten önce `SSO_REQUIRED` gelir (yukarıdaki
+istisna). Grant sağlayıcıları (`impersonate`, `sso`, `remember`) parola içermez;
+aynı kodu zaten grant'ı elinde tutan kişiye döner.
 
 ### `js/xss-through-dom` — kurtarma kodlarını indirme bağlantısı (#1542)
 

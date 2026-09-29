@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 // The SEND decides with the group predicate, so the state this reports must use
 // the same one. `emailAllowed(x, 'newsletter')` reads only the legacy key, which
 // disagrees with the send for anyone who opted out through the newsletter's own
@@ -56,7 +57,17 @@ export async function GET(request: Request) {
   const audiences = (['MENTEE', 'MENTOR', 'BOTH'] as NewsletterAudience[]).filter((a) =>
     audienceIncludesRole(a, me.role)
   );
-  const where = { status: 'SENT' as const, audience: { in: audiences } };
+  // Audience is also PER TENANT (#2542, #2590): the dispatcher mails an issue to
+  // its own organization's members only, so the archive that "agrees with the
+  // inbox" (see the header) has to be that organization's issues only. Unscoped,
+  // a reader of the marketing product saw the internship product's sent issues
+  // (and the reverse) — and one person with an account in each world saw both
+  // archives in each. Explicit because the middleware scopes nothing while
+  // MT_ENFORCE_ISOLATION is off. A no-op for a single-tenant deployment.
+  const where = withinTenant(
+    { status: 'SENT' as const, audience: { in: audiences } },
+    await tenantWhere(session),
+  );
 
   const [total, issues] = await Promise.all([
     prisma.newsletter.count({ where }),

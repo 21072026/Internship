@@ -125,6 +125,60 @@
       "target": 2,
       "screen": "/admin/sources — the SOURCE role has no demo account at all, so the screen is blank",
       "issue": "#2062"
+    },
+    {
+      "model": "Organization",
+      "where": { "vertical": "MARKETING" },
+      "label": "Organization(MARKETING)",
+      "minRows": 1,
+      "target": 1,
+      "screen": "the MARKETING vertical itself — without a second tenant every demo row is an INTERNSHIP org",
+      "issue": "#2443"
+    },
+    {
+      "model": "PipelineStage",
+      "where": { "org": { "vertical": "MARKETING" } },
+      "label": "PipelineStage(MARKETING)",
+      "minRows": 9,
+      "target": 9,
+      "screen": "the marketing funnel board — LEAD_NEW … DEAL_LOST from the shipped MARKETING_FUNNEL preset",
+      "issue": "#2443"
+    },
+    {
+      "model": "Company",
+      "where": { "org": { "vertical": "MARKETING" } },
+      "label": "Company(MARKETING)",
+      "minRows": 30,
+      "target": 30,
+      "screen": "/admin/companies on a marketing tenant — the merchant accounts themselves",
+      "issue": "#2443"
+    },
+    {
+      "model": "MentorshipRelation",
+      "where": { "org": { "vertical": "MARKETING" } },
+      "label": "MentorshipRelation(MARKETING)",
+      "minRows": 30,
+      "target": 30,
+      "screen": "the marketing funnel records (owner + lead + account), spread across every stage",
+      "issue": "#2443"
+    },
+    {
+      "model": "StatusChange",
+      "where": { "relation": { "org": { "vertical": "MARKETING" } } },
+      "label": "StatusChange(MARKETING)",
+      "minRows": 94,
+      "target": 94,
+      "screen": "stage aging + cohort conversion on a marketing tenant — back-dated history is what they are drawn from",
+      "issue": "#2443"
+    },
+    {
+      "model": "InteractionLog",
+      "where": { "relation": { "org": { "vertical": "MARKETING" } } },
+      "label": "InteractionLog(MARKETING)",
+      "minRows": 61,
+      "target": 61,
+      "screen": "the marketing attention queue and the 'no recent contact' badge (docs/last-contact.md)",
+      "issue": "#2443"
     }
   ]
 }

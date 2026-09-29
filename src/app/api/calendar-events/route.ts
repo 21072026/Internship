@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { withTenantScope } from '@/lib/orgContext';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { rangeEnd, rangeStart } from '@/lib/dateRange';
 
 // Stages that are terminal — an overdue deadline on these is not actionable.
 const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'];
@@ -18,14 +19,11 @@ const MAX_RANGE_DAYS = 400;
 // the deadline e2e, which plants a 2020 deadline) rely on it. A recurring rule
 // still has to be expanded over *some* finite span, so it gets a default one.
 function parseRange(url: URL) {
-  const parse = (raw: string | null) => {
-    if (!raw) return null;
-    const d = new Date(raw);
-    return Number.isNaN(d.getTime()) ? null : d;
-  };
   const now = new Date();
-  const from = parse(url.searchParams.get('from'));
-  let to = parse(url.searchParams.get('to'));
+  // A date-only bound names a whole day (#1501): a week view whose `to` is
+  // Sunday has to include Sunday's events, not stop at Sunday 00:00.
+  const from = rangeStart(url.searchParams.get('from'));
+  let to = rangeEnd(url.searchParams.get('to'));
   if (from && to && to < from) to = new Date(from.getTime() + DAY_MS);
   if (from && to && to.getTime() - from.getTime() > MAX_RANGE_DAYS * DAY_MS) {
     to = new Date(from.getTime() + MAX_RANGE_DAYS * DAY_MS);

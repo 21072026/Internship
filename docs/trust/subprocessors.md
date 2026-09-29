@@ -43,6 +43,19 @@ are changed together.
 
 ## Not subprocessors
 
+- **The SaleVali usage feed is a SOURCE, not a subprocessor** (#2445,
+  `docs/marketing-vertical/salevali-usage-feed.md`). A MARKETING tenant may
+  configure a nightly pull of its own product's per-account transaction counts.
+  The direction is *inbound*: what leaves this server is an authenticated GET
+  for a date window, and what arrives is business volume — no name, address or
+  anything about the merchant's own customers. It is the tenant's system and the
+  tenant's data on both ends, exactly like the roster feed (#1965), which is why
+  neither appears in the table above: that register is derived from
+  `.env.example` — the integrations the *operator* configures — and a feed
+  endpoint is configured per tenant, in a row, by that tenant.
+  The credential is never in that row; it names the environment variable that
+  holds it. Nothing fetches this feed yet (the job is #2447), and the register
+  above stays non-aspirational: a row there means the code path exists today.
 - **No payment processor.** The platform is free for mentees and mentors, and
   there is no billing integration in this codebase.
 - **No CRM, ad network or data broker.** Nothing in `.env.example` sends

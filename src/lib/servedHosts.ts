@@ -3,7 +3,7 @@
 // `node --test --experimental-strip-types` with no resolve hook.
 //
 // One container serves several public hosts behind Caddy: interncrm.com and
-// marketing.ersah.in in prod, preview.interncrm.com and preview-marketing.ersah.in
+// marketing.bcsit-gmbh.de in prod, preview.interncrm.com and marketing.bcsit-gmbh.dev
 // on preview, exactly its own pr<N>.interncrm.com in a topic env. Every redirect
 // the app hands the browser, and every absolute same-app link it renders, must
 // stay on the host the browser is on — and must NEVER be able to leave the set
@@ -17,7 +17,13 @@
 // "a host that gets the marketing copy" and "a host a redirect may stay on" can
 // never drift apart.
 
-const DEFAULT_MARKETING_HOST = 'marketing.ersah.in';
+// The LIVE marketing host (#2540). Prod configures no MARKETING_HOSTS, by
+// design, so this constant IS the production marketing domain — moving it moves
+// the live site. Preview overrides it with the test domain
+// (marketing.bcsit-gmbh.dev) in its env file. The ersah.in subdomains this
+// replaced (marketing.ersah.in / preview-marketing.ersah.in) are retired; that
+// apex keeps serving mail only.
+const DEFAULT_MARKETING_HOST = 'marketing.bcsit-gmbh.de';
 const LOCAL_ORIGIN = 'http://localhost:3000';
 
 /**
@@ -41,7 +47,7 @@ export function hostnameOf(hostHeader: string | null | undefined): string | null
  * file that never mentions it — prod's, by design, because .env.example says the
  * default covers the live domain — puts an EMPTY STRING here, not an absent
  * variable. `??` took that as a configured empty list, the set came out empty,
- * and marketing.ersah.in served the internship landing (and, once #2488 shared
+ * and the live marketing host served the internship landing (and, once #2488 shared
  * this set with the redirect allowlist, was not a served host either). The
  * trim() is what keeps prod, which configures nothing, on the default.
  */
@@ -123,7 +129,7 @@ export function requestOrigin(get: (name: string) => string | null | undefined):
  *     checked — see safeRedirect.ts for why), must be https or baseUrl's own
  *     protocol, and its `hostname` must be in servedHosts() by EXACT match, so
  *     `interncrm.com.evil.example`, `https://interncrm.com@evil.example` and
- *     `marketing.ersah.in,evil.example` all fall back to baseUrl;
+ *     `marketing.bcsit-gmbh.de,evil.example` all fall back to baseUrl;
  *   - the accepted url is re-assembled from its parts, which drops userinfo and
  *     any received port (prod hosts have none; a same-origin dev url is returned
  *     verbatim by the origin check above it).
@@ -142,4 +148,42 @@ export function resolveRedirectTarget(url: string, baseUrl: string): string {
   if (target.origin === base.origin) return url;
   if (!servedHosts().has(target.hostname.toLowerCase())) return baseUrl;
   return `${target.protocol}//${target.hostname}${target.pathname}${target.search}${target.hash}`;
+}
+
+// ── Links that cannot follow a request: e-mail (#2495) ──────────────────────
+//
+// `requestOrigin()` above answers "which host is the browser on". An e-mail has
+// no browser yet: the invitation, the password reset and the verification mail
+// are read later, somewhere else, and their link decides which PRODUCT the
+// recipient lands in. Every one of them used to read NEXT_PUBLIC_APP_URL — the
+// internship host — so a SaleVali admin's invitation said
+// https://interncrm.com/auth/register?token=… and dropped the new sales rep
+// into the other product.
+//
+// The recipient's tenant says where they belong, through the one explicit
+// host mapping the schema has: `Organization.publicHost` (#2569, exact match,
+// set by an operator, never inferred from a vertical). This is the pure half:
+// given that column, the link origin is that host ONLY IF this deployment
+// serves it (so a prod hostname copied into a topic env's database cannot send
+// a topic-env mail to production), and otherwise exactly what it always was.
+// Protocol follows the configured origin's (https everywhere but local dev); a
+// port is re-attached only when the host is the configured one — same rules as
+// requestOrigin().
+//
+// The DB half (the lookup by orgId) is src/lib/orgLinkOrigin.ts.
+const LEGACY_LINK_ORIGIN = () => process.env.NEXT_PUBLIC_APP_URL || LOCAL_ORIGIN;
+
+export function appLinkOrigin(publicHost: string | null | undefined): string {
+  const legacy = LEGACY_LINK_ORIGIN();
+  const host = hostnameOf(publicHost);
+  if (!host || !servedHosts().has(host)) return legacy;
+  let cfg: URL;
+  try {
+    cfg = new URL(legacy);
+  } catch {
+    return legacy;
+  }
+  if (cfg.hostname.toLowerCase() === host) return legacy;
+  const proto = cfg.protocol === 'http:' ? 'http' : 'https';
+  return `${proto}://${host}`;
 }

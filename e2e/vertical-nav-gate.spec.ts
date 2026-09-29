@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 
 // Vertical nav gate (#2351, epic #2348). The vertical a tenant belongs to
 // decides which modules its shell shows: INTERNSHIP carries everything (so the
@@ -50,6 +50,7 @@ test('an INTERNSHIP admin sees the full sidebar — the gate is a no-op', async 
 test('a MARKETING admin loses the mentorship/placement/sourcing links, keeps the CRM core', async ({ page }) => {
   const { org, email } = await makeAdmin('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, email, 'NavPass123', '/admin');
     const nav = page.locator('aside nav').first();
     // Core stays.
@@ -69,6 +70,7 @@ test('a MARKETING admin loses the mentorship/placement/sourcing links, keeps the
 test('a MARKETING org has no mentor shell — /mentor redirects home', async ({ page }) => {
   const { org, email } = await makeAdmin('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, email, 'NavPass123', '/admin');
     // An admin can normally open the mentor shell via mode switching; a MARKETING
     // org has no mentorship module, so the layout sends them out of it.
@@ -80,24 +82,42 @@ test('a MARKETING org has no mentor shell — /mentor redirects home', async ({ 
   }
 });
 
-test('a MENTOR in a MARKETING org lands on /account, not an infinite redirect', async ({ page }) => {
-  // The loop this guards against: '/mentor' -> gate -> '/' -> roleHome(MENTOR)
-  // -> '/mentor' -> ... A terminal redirect target breaks it. Reaching this
-  // state is a supported deploy-time act — an INTERNSHIP org with mentors
-  // reclassified to MARKETING.
+test('a MENTOR in a MARKETING org lands on the sales surface, not an infinite redirect', async ({ page }) => {
+  // Until #2580 this MENTOR was parked on /account: the vertical has no
+  // mentorship shell. The maintainer's role decision on #2580 (option b) makes
+  // a MARKETING MENTOR a sales rep with a working surface at /sales, opened by
+  // the `pipeline` capability — so the terminal target changed deliberately.
+  // The loop this still guards against: '/mentor' -> gate -> '/sales' ->
+  // gate -> '/mentor' -> ... The sales layout never sends a MENTOR of a
+  // mentorship-less vertical back to /mentor, and the post-login redirect
+  // chain below would 30x-loop instead of settling if it did.
   const { org, email } = await makeUser('MARKETING', 'MENTOR');
   try {
-    // Inline sign-in, not signInAndSettle: /account is a bare settings page with
-    // no account-menu for the helper to wait on. The post-login redirect chain
-    // itself proves no loop — roleHome for this role is the mentorship shell, so
-    // a bouncy target would 30x-loop instead of settling on /account.
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', email);
-    await page.fill('input[type="password"]', 'NavPass123');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, email, 'NavPass123', '/sales');
+    await expect(page.getByTestId('sales-dashboard')).toBeVisible();
+    // The sales nav, not the mentor one: no mentee pages, no invite.
+    const nav = page.getByTestId('sales-nav');
+    await expect(nav.getByRole('link', { name: 'Board', exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'My accounts', exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'My Mentees', exact: true })).toHaveCount(0);
     await page.goto('/mentor');
-    await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/sales/, { timeout: 20_000 });
+    // No mentorship page behind the shell's back either.
+    await page.goto('/mentor/mentees');
+    await expect(page).toHaveURL(/\/sales/, { timeout: 20_000 });
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+test('an INTERNSHIP mentor has no sales surface — /sales sends them to /mentor', async ({ page }) => {
+  const { org, email } = await makeUser('INTERNSHIP', 'MENTOR');
+  try {
+    await signInAndSettle(page, email, 'NavPass123', '/mentor');
+    await page.goto('/sales');
+    await expect(page).toHaveURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
   } finally {
     await cleanupByEmail(email);
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
@@ -107,6 +127,7 @@ test('a MENTOR in a MARKETING org lands on /account, not an infinite redirect', 
 test('a MENTEE in a MARKETING org lands on /account, not an infinite redirect', async ({ page }) => {
   const { org, email } = await makeUser('MARKETING', 'MENTEE');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     // Inline sign-in, not signInAndSettle: /account is a bare settings page with
     // no account-menu for the helper to wait on. The post-login redirect chain
     // itself proves no loop — roleHome for this role is the mentorship shell, so
@@ -117,6 +138,9 @@ test('a MENTEE in a MARKETING org lands on /account, not an infinite redirect', 
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
     await page.goto('/portal');
+    await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
+    // A lead is a record, not an operator: no sales surface for it (#2580).
+    await page.goto('/sales');
     await expect(page).toHaveURL(/\/account/, { timeout: 20_000 });
   } finally {
     await cleanupByEmail(email);

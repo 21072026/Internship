@@ -44,6 +44,20 @@ required to develop or review a change.
    screenshot with real data in an issue), tell the maintainer; don't copy it
    further, and scrub it from the issue/PR.
 
+5. **External feeds are never pointed at a live source from a dev machine.**
+   Some tenants configure an inbound feed — an HR roster export
+   (`docs/roster-feed.md`), or the SaleVali usage feed
+   (`docs/marketing-vertical/salevali-usage-feed.md`, #2445). Both pull a real
+   customer's data over the network, so:
+   - Develop and test against **fixture files**, never a tenant's live endpoint.
+     A local feed row points at a file or a throwaway HTTPS target you control.
+   - The credential is **never** in the feed row and never in this repo: the row
+     stores the NAME of an environment variable, and the value exists only in
+     the operator's server environment (`CLAUDE.md` § Never commit secrets).
+   - A run against a real source is an operator action, like a production
+     deploy. If you need one to reproduce a bug, ask the maintainer to run it
+     and share the counts — not the rows.
+
 ## Operational follow-ups (maintainer)
 
 - **Re-anonymizing preview is now a script, not a plan (#1186).**

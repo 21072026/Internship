@@ -91,6 +91,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     contactPhone: { limit: 'companyContactPhone', files: MARKETING_IMPORT_WRITERS },
     vatId: { limit: 'companyVatId', files: MARKETING_IMPORT_WRITERS },
     country: { limit: 'companyCountry', files: MARKETING_IMPORT_WRITERS },
+    externalId: {
+      exempt:
+        'no request path writes it (#2446 is the column; the nightly usage sync that stamps it is #2447). It is not typed by a person at all — the feed matches on it and fills it as a gap — so the cap belongs on that validator, which the data contract already fixes at the column width: docs/marketing-vertical/salevali-usage-feed.md § Alanlar. A form or route that ever offers this field replaces this exemption with a limit.',
+    },
   },
   CompanyNeed: {
     id: ID,
@@ -215,6 +219,17 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     openRoles: { exempt: '@db.Text, capped at 300 by the public form schema' },
     message: { limit: 'publicContactMessage', files: ['src/app/api/company-inquiry/route.ts'] },
     note: { exempt: '@db.Text, written by an admin on the triage screen' },
+    // The #2569 demo-form columns.
+    marketplaces: { exempt: '@db.Text, capped at 300 by the public form schema' },
+    consentTextVersion: SERVER_SET,
+    marketingOptInTextVersion: SERVER_SET,
+    receivedHost: { exempt: 'the request hostname, sliced to 191 by the route before it is written' },
+    utmSource: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    utmMedium: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    utmCampaign: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    utmTerm: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    utmContent: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
+    referrer: { exempt: '@db.Text, origin + path capped at 500 (REFERRER_MAX) by readInquiryAttribution' },
   },
   Organization: {
     id: ID,
@@ -233,5 +248,6 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     billingEmail: { exempt: 'written by the billing flow, not typed into this form' },
     vatId: { exempt: 'written by the billing flow, not typed into this form' },
     billingCountry: ENUMERATED,
+    publicHost: { exempt: 'written only by prisma/set-public-host.mjs, which accepts a bare hostname of at most 253 characters (normalizePublicHost); no request path writes it' },
   },
 };

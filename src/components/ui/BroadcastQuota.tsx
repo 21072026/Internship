@@ -100,6 +100,39 @@ export function BroadcastQuotaLine({ quota }: { quota: BroadcastQuotaStatus | nu
   );
 }
 
+/** What the history reports for a due issue its tenant's band is holding (#2335). */
+export interface BroadcastQuotaHold {
+  limit: number | null;
+  used: number;
+  requested: number;
+  remaining: number | null;
+  resetsAt: string;
+}
+
+/**
+ * "On hold: …" under a newsletter issue that is due and waiting on the band
+ * (#2335). Without it the row reads "Scheduled" with a time in the past, the
+ * cron refuses it every fifteen minutes, and nothing on screen says why.
+ */
+export function BroadcastQuotaHoldLine({ hold, testId }: { hold: BroadcastQuotaHold | null | undefined; testId?: string }) {
+  const t = useT();
+  const locale = useLocale();
+  if (!hold) return null;
+  const text = t.broadcastQuota.onHold
+    .replace('{requested}', String(hold.requested))
+    .replace('{remaining}', String(hold.remaining ?? 0))
+    .replace('{limit}', String(hold.limit ?? 0))
+    .replace('{used}', String(hold.used))
+    .replace('{date}', formatDate(hold.resetsAt, locale));
+  return (
+    // Plain text on the card, not a tinted box: a mid-tone amber on a *-50
+    // background goes dark-on-dark under html.dark (see globals.css).
+    <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300" data-testid={testId}>
+      {text}
+    </p>
+  );
+}
+
 /**
  * The localized refusal sentence for a 403 body. Returns null when the body is
  * not a quota refusal, so a caller can fall through to its own error handling.

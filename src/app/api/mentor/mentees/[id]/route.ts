@@ -9,6 +9,8 @@ import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { isErasedAccount, isPendingActivation, isUnusableEmail } from '@/lib/menteeAccount';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 const schema = z.object({ email: z.string().email() });
 
@@ -87,15 +89,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
       const changingEmail = email !== mentee.email;
       if (changingEmail) {
-        const taken = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-        if (taken) {
+        // Uniqueness is per WORLD of the mentee's own org (#2590): the same
+        // mailbox holding an account in the other product is a different
+        // person-record and must not block promoting this one.
+        if (await emailTakenInOrgWorld(email, mentee.orgId)) {
           return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
         }
         await prisma.user.update({ where: { id: mentee.id }, data: { email } });
       }
 
       const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const appUrl = await appOriginForOrg(session.user.orgId); // the mentor's tenant is the mentee's (#2495)
       const setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
       let emailSent = true;
       try {

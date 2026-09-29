@@ -69,6 +69,15 @@ export function verifyUnsubscribeToken(token: string): UnsubscribeScope | null {
 // No shared helper for this exists in the repo; emailActionToken.ts carries the
 // same private copy. Kept identical on purpose so both sets of links agree about
 // which host they point at.
+//
+// This is only the DEFAULT origin (the internship product). Every builder below
+// takes an optional trailing `origin` (#2590): a person can hold an internship
+// account and a marketing account under one address, and the opt-out link in a
+// mail must open the product THAT recipient's account lives in. The caller —
+// emailService.sendEmail, which knows the recipient — resolves it (from the
+// recipient's organization) and hands it over; this module stays free of any
+// database read so it remains a pure, unit-testable token builder. Omitted, the
+// result is byte-for-byte what it always was.
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 }
@@ -80,15 +89,15 @@ function appUrl(): string {
  * mutating GET would unsubscribe people who never clicked. The page does the
  * work from the browser, and scanners do not run scripts.
  */
-export function unsubscribeUrl(userId: string, group: EmailGroupId): string {
-  return `${appUrl()}/u/${encodeURIComponent(makeUnsubscribeToken(userId, group))}`;
+export function unsubscribeUrl(userId: string, group: EmailGroupId, origin: string = appUrl()): string {
+  return `${origin}/u/${encodeURIComponent(makeUnsubscribeToken(userId, group))}`;
 }
 
 /** The "manage all e-mail preferences" link — same page, but scoped to `all`,
  *  which the page renders as the preference centre without switching anything
  *  off first. */
-export function emailPreferencesUrl(userId: string): string {
-  return `${appUrl()}/u/${encodeURIComponent(makeUnsubscribeToken(userId, 'all'))}`;
+export function emailPreferencesUrl(userId: string, origin: string = appUrl()): string {
+  return `${origin}/u/${encodeURIComponent(makeUnsubscribeToken(userId, 'all'))}`;
 }
 
 /**
@@ -97,6 +106,6 @@ export function emailPreferencesUrl(userId: string): string {
  * mail client to POST it — and a link scanner does a GET, which that route
  * answers with a redirect to the page above instead of acting.
  */
-export function oneClickUnsubscribeUrl(userId: string, group: EmailGroupId): string {
-  return `${appUrl()}/api/unsubscribe/one-click?t=${encodeURIComponent(makeUnsubscribeToken(userId, group))}`;
+export function oneClickUnsubscribeUrl(userId: string, group: EmailGroupId, origin: string = appUrl()): string {
+  return `${origin}/api/unsubscribe/one-click?t=${encodeURIComponent(makeUnsubscribeToken(userId, group))}`;
 }

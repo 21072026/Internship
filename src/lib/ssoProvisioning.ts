@@ -16,6 +16,7 @@
 // Server-only (imports prisma). No client concerns.
 
 import { prisma } from './prisma';
+import { findUsersInWorld, worldOfOrg } from './userWorld';
 
 // Roles an IdP attribute mapping may grant. Defaults to the least-privilege
 // MENTEE when the assertion carries no role — an admin can elevate later.
@@ -34,34 +35,49 @@ export interface ProvisionResult {
 }
 
 // Map a verified IdP identity to a User in the tenant org, creating one on first
-// login. Idempotent per email. Throws when the email already belongs to a
-// DIFFERENT org (a misconfiguration we must not paper over by silently moving a
-// user across tenants).
+// login. Idempotent per (email, org). Throws when the email already belongs to a
+// DIFFERENT org of the same product (a misconfiguration we must not paper over
+// by silently moving a user across tenants).
+//
+// ONE PERSON, TWO WORLDS (#2590). The address can also be an account in the
+// OTHER product — an internship user and a marketing user with the same mailbox
+// are two rows in two tenants, and the IdP config tells us exactly which org
+// (hence which product) this login is for. So the match is by (email, THIS org),
+// and a row in the other world is simply not a candidate: the person gets a
+// fresh account here, and their other-world account is left exactly as it was.
+// It is never adopted, and its `orgId` is never moved to the SSO org — moving it
+// would rip the person out of the product they already use.
 export async function provisionSsoUser(identity: SsoIdentity): Promise<ProvisionResult> {
   const email = identity.email.trim().toLowerCase();
   if (!email) throw new Error('SSO identity has no email');
   if (!identity.orgId) throw new Error('SSO provisioning requires a resolved orgId');
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    // Never silently relocate a user to another tenant.
-    if (existing.orgId && existing.orgId !== identity.orgId) {
-      throw new Error('SSO identity email already belongs to a different organization');
-    }
-    // Adopt a not-yet-tenanted user (e.g. from the single-tenant default org)
-    // into this org on first SSO login; otherwise return as-is.
-    if (!existing.orgId) {
-      const user = await prisma.user.update({
-        where: { id: existing.id },
-        data: { orgId: identity.orgId },
-        select: { id: true, email: true, role: true, orgId: true },
-      });
-      return { user, created: false };
-    }
-    return {
-      user: { id: existing.id, email: existing.email, role: existing.role, orgId: existing.orgId },
-      created: false,
-    };
+  const select = { id: true, email: true, role: true, orgId: true } as const;
+
+  // 1. This org's own account for the address: the ordinary returning login.
+  const own = await prisma.user.findFirst({ where: { email, orgId: identity.orgId }, select });
+  if (own) return { user: own, created: false };
+
+  // 2. Accounts for the address in this org's WORLD but not in this org. (The
+  //    other world's rows are deliberately not looked at.)
+  const inWorld = await findUsersInWorld(email, await worldOfOrg(identity.orgId), select);
+  // Never silently relocate a user to another tenant.
+  if (inWorld.some((u) => u.orgId && u.orgId !== identity.orgId)) {
+    throw new Error('SSO identity email already belongs to a different organization');
+  }
+  // Adopt a not-yet-tenanted user (e.g. from the single-tenant default org)
+  // into this org on first SSO login. An org-less row IS the default org, i.e.
+  // the internship world, so it can only appear in `inWorld` when this org is
+  // an internship-world org too — a marketing SSO org never claims it. This is
+  // the ONLY case where a row's orgId is moved.
+  const orgless = inWorld.find((u) => !u.orgId);
+  if (orgless) {
+    const user = await prisma.user.update({
+      where: { id: orgless.id },
+      data: { orgId: identity.orgId },
+      select,
+    });
+    return { user, created: false };
   }
 
   const user = await prisma.user.create({
@@ -75,7 +91,7 @@ export async function provisionSsoUser(identity: SsoIdentity): Promise<Provision
       emailVerified: true, // the IdP vouched for this address
       skills: [],
     },
-    select: { id: true, email: true, role: true, orgId: true },
+    select,
   });
   return { user, created: true };
 }

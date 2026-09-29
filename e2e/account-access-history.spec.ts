@@ -11,6 +11,17 @@ test.afterAll(async () => {
 });
 
 test('a mentee sees who impersonated their account, when and why', async ({ page }) => {
+  // Triples the timeout (#2537). This one test walks two sign-ins (the second
+  // a guarded `signInAsFreshUser`, whose capped networkidle waits alone may
+  // spend ~20s, #1081), a full impersonation round trip and six navigations
+  // across /account, /admin/users and /portal. The default 60s is not a budget
+  // it fits outside a warm production build: against `next dev` every one of
+  // those routes compiles on first hit, and the test ran out of time at
+  // whichever wait happened to be pending — most often the card's, which read
+  // as "access-history-card never renders". It does render: the card has no
+  // gate, and the same spec passes in ~4s on CI's `next start`. `test.slow()`
+  // rather than a hand-written number, same as weekly-reports.spec.ts.
+  test.slow();
   const adminEmail = uniqueEmail('acchist-admin');
   const menteeEmail = uniqueEmail('acchist-mentee');
   // The `$&` is not decoration: the reason is free text an admin types into a

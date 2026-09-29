@@ -95,6 +95,13 @@ export default function CandidatesPage() {
   // Narrow the list to orphan applicants (#1780). Off by default: they are
   // marked wherever they appear, and this only isolates them.
   const [orphanOnly, setOrphanOnly] = useState(false);
+  // "My candidates" (#2438). Owner = the mentor on the candidate's live
+  // relation (this repo has no Company owner column), so this resolves
+  // server-side to `MentorshipRelation.mentorId = session.user.id`. Read from
+  // and written back to the URL, so the filtered view can be pasted to
+  // somebody else.
+  const [mine, setMine] = useState(false);
+  const [bulkOwnerId, setBulkOwnerId] = useState('');
 
   const COLS = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
   const toRow = (c: Candidate) => {
@@ -137,9 +144,23 @@ export default function CandidatesPage() {
   };
 
   // Read an optional ?status= filter from the URL (e.g. from dashboard pipeline bars)
+  // and the shareable ?mine=1 toggle (#2438).
   useEffect(() => {
-    setStatusFilter(new URLSearchParams(window.location.search).get('status') || '');
+    const params = new URLSearchParams(window.location.search);
+    setStatusFilter(params.get('status') || '');
+    setMine(params.get('mine') === '1');
   }, []);
+
+  // The toggle's other half: put it back in the address bar. replaceState, not
+  // a router push — this is a filter, not a navigation, and the page reads the
+  // value once on mount, so pushing would fill the back button with filter
+  // states that only apply on a reload.
+  const syncMineToUrl = (on: boolean) => {
+    const url = new URL(window.location.href);
+    if (on) url.searchParams.set('mine', '1');
+    else url.searchParams.delete('mine');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+  };
 
   // Build the shared filter query string (without pagination params).
   const buildFilterParams = useCallback(() => {
@@ -153,12 +174,13 @@ export default function CandidatesPage() {
     if (sourceFilter) params.set('source', sourceFilter);
     if (archived) params.set('archived', '1');
     if (orphanOnly) params.set('orphan', '1');
+    if (mine) params.set('mine', '1');
     if (tagFilter.length > 0) {
       params.set('tags', tagFilter.join(','));
       params.set('tagMode', tagMode);
     }
     return params;
-  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter, archived, orphanOnly, tagFilter, tagMode]);
+  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter, archived, orphanOnly, mine, tagFilter, tagMode]);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -225,7 +247,7 @@ export default function CandidatesPage() {
   // Any filter change (including switching to/from the archive) returns to page 1.
   useEffect(() => {
     setPage(1);
-  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter, archived, orphanOnly, tagFilter, tagMode]);
+  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter, archived, orphanOnly, mine, tagFilter, tagMode]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -247,7 +269,7 @@ export default function CandidatesPage() {
     });
   };
 
-  const runBulkAction = async (action: 'activate' | 'deactivate' | 'advanceStage' | 'addTag' | 'removeTag') => {
+  const runBulkAction = async (action: 'activate' | 'deactivate' | 'advanceStage' | 'addTag' | 'removeTag' | 'assignOwner') => {
     setBulkBusy(true);
     setBulkNote('');
     try {
@@ -258,6 +280,7 @@ export default function CandidatesPage() {
           candidateIds: Array.from(selected),
           action,
           ...(action === 'addTag' || action === 'removeTag' ? { tagId: bulkTagId } : {}),
+          ...(action === 'assignOwner' ? { ownerId: bulkOwnerId } : {}),
         }),
       });
       if (res.ok) {
@@ -267,6 +290,12 @@ export default function CandidatesPage() {
         const data = await res.json().catch(() => ({}));
         if (typeof data.skippedAtLimit === 'number' && data.skippedAtLimit > 0) {
           setBulkNote(t.tags.skippedAtLimit.replace('{n}', String(data.skippedAtLimit)));
+        }
+        // Owner assignment reports what actually moved, not what was ticked
+        // (#2439): a candidate with no live pairing, or one already on this
+        // owner, is skipped, and the count is the only place that shows it.
+        if (action === 'assignOwner') {
+          setBulkNote(t.candidates.bulkOwnerReassigned.replace('{n}', String(data.updated ?? 0)));
         }
         setSelected(new Set());
         await fetchCandidates();
@@ -289,7 +318,14 @@ export default function CandidatesPage() {
               type="button"
               onClick={() => {
                 setStatusFilter('');
-                window.history.replaceState(null, '', '/admin/candidates');
+                // Drop the stage param, keep everything else. This used to
+                // replace the whole query string with a bare path, which since
+                // #2438 silently wiped `mine=1` out of the address bar while
+                // the filter stayed ON — the shared URL then showed a colleague
+                // a different list than the one it was copied from.
+                const url = new URL(window.location.href);
+                url.searchParams.delete('status');
+                window.history.replaceState(null, '', `${url.pathname}${url.search}`);
               }}
               className="text-blue-500 hover:text-blue-800"
               aria-label="clear filter"
@@ -485,6 +521,30 @@ export default function CandidatesPage() {
         {t.candidates.orphanFilter}
       </button>
 
+      {/* "My candidates" (#2438). A toggle beside the other row-property
+          filters rather than a tab: it narrows the same list and composes with
+          every other filter — status, tags, search, source and the rest are
+          untouched when it flips. */}
+      <button
+        type="button"
+        data-testid="candidates-mine-filter"
+        aria-pressed={mine}
+        onClick={() => {
+          const next = !mine;
+          setMine(next);
+          syncMineToUrl(next);
+          setSelected(new Set());
+        }}
+        className={`mb-4 ml-0 inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-4 py-1.5 text-sm sm:ml-3 ${
+          mine
+            ? 'border-blue-300 bg-blue-100 text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100'
+            : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800'
+        }`}
+      >
+        <Users className="h-4 w-4" aria-hidden />
+        {t.candidates.mineFilter}
+      </button>
+
       {/* Results count + bulk selection */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-3">
@@ -545,6 +605,36 @@ export default function CandidatesPage() {
                   onClick={() => runBulkAction('removeTag')}
                 >
                   {t.tags.bulkRemove}
+                </Button>
+              </>
+            )}
+            {/* Bulk owner assignment (#2439) — the same selection bar, one more
+                action. Reassigning an owner is a mentor change per row, so the
+                server runs each one through transferMentorship(); the button
+                only names the destination. */}
+            {mentors.length > 0 && (
+              <>
+                <select
+                  data-testid="bulk-owner-select"
+                  aria-label={t.candidates.bulkOwnerLabel}
+                  value={bulkOwnerId}
+                  onChange={(e) => setBulkOwnerId(e.target.value)}
+                  className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-xs text-gray-700 dark:text-gray-200"
+                >
+                  <option value="">{t.candidates.bulkOwnerLabel}</option>
+                  {mentors.map((m) => (
+                    <option key={m.id} value={m.id}>{m.fullName}</option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-testid="bulk-assign-owner"
+                  disabled={!bulkOwnerId}
+                  loading={bulkBusy}
+                  onClick={() => runBulkAction('assignOwner')}
+                >
+                  {t.candidates.bulkAssignOwner}
                 </Button>
               </>
             )}

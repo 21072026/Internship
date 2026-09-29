@@ -81,6 +81,10 @@ test('phone width: the admin rows keep the person identifiable', { tag: '@smoke'
 });
 
 test('phone width: the admin screens stay inside the viewport in German', async ({ page }) => {
+  // `settle()` now waits for each page's own content instead of returning the
+  // instant it finds no skeletons (#1485), so this walk costs real seconds per
+  // route rather than measuring six empty pages in a few hundred milliseconds.
+  test.slow();
   const adminEmail = uniqueEmail('mobile-sweep-admin');
   const pw = 'MobileAudit123!';
   await seedUser(adminEmail, pw, 'ADMIN', 'Mobile Sweep Admin');
@@ -111,6 +115,7 @@ test('phone width: the admin screens stay inside the viewport in German', async 
 });
 
 test('phone width: the mentor screens stay inside the viewport in German', async ({ page }) => {
+  test.slow(); // see the note on the German admin walk above
   const mentorEmail = uniqueEmail('mobile-sweep-mentor');
   const menteeEmail = uniqueEmail('mobile-sweep-mentee-with-a-long-address');
   const pw = 'MobileAudit123!';
@@ -149,6 +154,7 @@ test('phone width: the mentor screens stay inside the viewport in German', async
 });
 
 test('tablet width: the md: breakpoint does not break the role shells', async ({ page }) => {
+  test.slow(); // see the note on the German admin walk above
   // 768px is where `md:` turns on but the `lg:` sidebar has not: a two-column
   // grid inside a full-width main is the shape most likely to overflow, and no
   // spec had ever measured it (every viewport in the suite was a phone or a
@@ -174,6 +180,7 @@ test('tablet width: the md: breakpoint does not break the role shells', async ({
 });
 
 test('phone width: the profile pages hold together', async ({ page }) => {
+  test.slow(); // see the note on the German admin walk above
   // /portal/profile and /mentor/profile are the longest forms in the product and
   // were never measured at phone width — the audit covered dashboards and lists
   // only (#828). A form is where a label/field pair squeezes first.
@@ -213,6 +220,7 @@ test('phone width: the profile pages hold together', async ({ page }) => {
 });
 
 test('phone width in dark mode: the retint does not change the geometry', async ({ page }) => {
+  test.slow(); // see the note on the German admin walk above
   // Dark mode and a phone viewport had never been combined (#828). They are not
   // independent: globals.css retints by REMAPPING utility classes, and a rule
   // that swaps a border for a ring, or a background for one with a different

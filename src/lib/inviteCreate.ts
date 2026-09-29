@@ -27,7 +27,9 @@ import crypto from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { sendInvitationEmail } from '@/services/emailService';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 export const INVITATION_TTL_DAYS = 7;
 
@@ -79,9 +81,36 @@ export interface CreatedInvitation {
   mailError: unknown;
 }
 
-export function invitationRegisterUrl(token: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  return `${appUrl}/auth/register?token=${token}`;
+/** The register link, on the invited tenant's own product host (#2495). */
+export async function invitationRegisterUrl(token: string, orgId: string | null | undefined): Promise<string> {
+  return `${await appOriginForOrg(orgId)}/auth/register?token=${token}`;
+}
+
+/**
+ * `where` fragment for "the invitations of THIS organization" — the key every
+ * same-address invitation lookup uses since a mailbox can be invited into both
+ * worlds at once (#2590).
+ *
+ * Before worlds an address was one person's, so "is there a pending invitation
+ * for this email" was a global question. It no longer is: an open invitation
+ * into the marketing organization must not block (or be mistaken for) the
+ * internship one for the same mailbox — they end in two independent accounts.
+ * The unit that IS still exclusive is (address, organization), which is what
+ * this filters on.
+ *
+ * A NULL `orgId` is the default organization (rows minted before the deploy
+ * backfill stamped them, or by an inviter who had no org yet — registration
+ * resolves it the same way), so for the default org both spellings match, and
+ * a null `orgId` argument means the default org. Nothing else matches NULL.
+ * Behaviour-neutral on a single-organization deployment: every row there is the
+ * default org's, so this selects exactly the rows the old unscoped filter did.
+ */
+export async function invitationOrgWhere(
+  orgId: string | null | undefined,
+): Promise<Prisma.InvitationTokenWhereInput> {
+  const fallback = await defaultOrgId();
+  const effective = orgId ?? fallback;
+  return effective === fallback ? { OR: [{ orgId: fallback }, { orgId: null }] } : { orgId: effective };
 }
 
 /** The persisted half of an invitation — no mail attempted yet. */
@@ -185,7 +214,7 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Cr
   return {
     invitationId: persisted.invitationId,
     token: persisted.token,
-    registerUrl: invitationRegisterUrl(persisted.token),
+    registerUrl: await invitationRegisterUrl(persisted.token, input.orgId),
     emailSent,
     mailError,
   };

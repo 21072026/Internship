@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Bringing the sales team into a MARKETING tenant speaks sales** (#2558, first slice). `/admin/invite` said \"Invite mentors and mentees\" and offered hardcoded English `Mentee`/`Mentor` role options. `/admin/users` labelled every row and filter chip Mentor/Mentee. The invitation mail asked the recipient to join \"as a mentor\". The invite page's role options now come from `t.usersAdmin.mentee/mentor/admin`; the INTERNSHIP labels are identical and are now also translated. `sendInvitationEmail` reads the inviting org's vertical overlay (`verticalFor(orgId)` → `applyVerticalOverlay`). MARKETING en/tr/de overlays cover `invite.subtitle/connectMentor/connectMentee/connectHint`, `usersAdmin.mentor/mentee` and `notifications.invitationEmail.roles`. The role enum is unchanged: MENTOR is a rep and MENTEE a lead, as labels only. `e2e/vertical-terminology.spec.ts` scans both screens for a MARKETING admin. The analytics, settings and account overlays in the issue remain open.",
+  "notes": {
+    "en": ["In SaleVali, inviting your team and the user list now talk about sales reps and leads, and the invitation e-mail invites a sales rep."],
+    "tr": ["SaleVali'de ekip daveti ve kullanıcı listesi artık satış temsilcisi ve müşteri adayından söz ediyor; davet e-postası da satış temsilcisi olarak davet ediyor."],
+    "de": ["In SaleVali sprechen die Team-Einladung und die Benutzerliste jetzt von Vertriebsmitarbeitern und Leads, und die Einladungs-E-Mail lädt als Vertriebsmitarbeiter ein."]
+  }
+}

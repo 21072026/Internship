@@ -120,7 +120,7 @@ export default function PipelineStagesPage({ params }: { params: Promise<{ id: s
         )}
 
         {loading ? (
-          <p className="text-sm text-gray-400">{t.common.loading}</p>
+          <p className="text-sm text-gray-400" data-testid="page-loading">{t.common.loading}</p>
         ) : (
           <div className="space-y-2">
             {stages.map((s, i) => (

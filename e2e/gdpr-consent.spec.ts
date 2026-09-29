@@ -31,7 +31,7 @@ test('registration records the accepted privacy-policy version', async ({ page }
     });
     expect(res.ok()).toBeTruthy();
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     expect(user).not.toBeNull();
     const consent = await prisma.userConsent.findUnique({
       where: { userId_type: { userId: user!.id, type: 'PRIVACY_POLICY' } },

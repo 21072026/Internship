@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Notification mails link to the sending tenant's own product host** (#2495, second slice). Every template in `emailService.ts` that already brands itself through `emailBrand(orgId)` now takes its link origin from that brand (`brand.appUrl`, which is `appOriginForOrg(orgId)`), instead of the module's `appUrl()` (`NEXT_PUBLIC_APP_URL`). That covers the mentorship decisions and assignments, rematch notices, the mentor-application approval, offer sent/decided, trial reminders, role change, 2FA reset, meeting requests and decisions, project join requests, weekly-report reminders, dormant check-ins, project meeting-series reminders, and the next-action reminder that MARKETING sales reps receive. A tenant with no served host mapping gets exactly the old links. Still on the old origin: the recipient-less cron digests, meeting calendar invites, the time-zone note and the unsubscribe/reaction/newsletter token links, which are listed on the issue.",
+  "notes": {
+    "en": ["Reminder and notification e-mails from a SaleVali workspace now open SaleVali."],
+    "tr": ["Bir SaleVali çalışma alanından gelen hatırlatma ve bildirim e-postaları artık SaleVali'yi açıyor."],
+    "de": ["Erinnerungs- und Benachrichtigungs-E-Mails aus einem SaleVali-Arbeitsbereich öffnen jetzt SaleVali."]
+  }
+}

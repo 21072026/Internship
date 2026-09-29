@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { createInvitation } from '@/lib/inviteCreate';
+import { createInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { withTenantScope } from '@/lib/orgContext';
 import { isProjectOwner } from '@/lib/projectAccess';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -12,6 +13,7 @@ import { locales } from '@/i18n/config';
 import { z } from 'zod';
 import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
 import { requireCapability } from '@/lib/capabilityGate';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 // Email invitations (#51).
 //
@@ -62,6 +64,15 @@ export async function POST(request: Request) {
     const allowed = session ? ALLOWED_ROLES[session.user.role] : undefined;
     if (!session || !allowed) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // A MENTOR or MENTEE invitation is the mentorship module's self-serve path
+    // (a mentor inviting their own mentee, a mentee a peer). A vertical without
+    // `mentorship` — a MARKETING sales rep is a MENTOR (#2580) — invites nobody:
+    // bringing people into the tenant stays an ADMIN act there. INTERNSHIP
+    // carries the module, so this is a no-op for it.
+    if (session.user.role !== 'ADMIN') {
+      const denied = await requireCapability(session.user.orgId, 'mentorship');
+      if (denied) return denied;
     }
 
     return await withTenantScope(session, async () => {
@@ -159,8 +170,18 @@ export async function POST(request: Request) {
       // invitation. An email-less link has nothing to collide with — and several
       // of them at once is the point (one per person you hand it to).
       if (email) {
-        const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (existingUser) {
+        // "Already registered" is asked IN THE INVITER'S WORLD (#2590). One
+        // mailbox can hold an internship account and a marketing account (two
+        // rows, two tenants), so a marketing admin inviting an address that only
+        // exists on the internship side must go through — the invitation proves
+        // control of the mailbox and the acceptance creates the second,
+        // independent account (register/route.ts). The refusal below therefore
+        // says nothing about the OTHER world: an address that lives only there
+        // reads exactly like an unknown one, so this form cannot be used to
+        // probe which mailboxes hold an account in a product the caller does
+        // not run. Single-world deployments: same lookup, same 409.
+        const inviterOrgId = resolveOrgId(session);
+        if (await emailTakenInOrgWorld(email, inviterOrgId)) {
           return NextResponse.json(
             { error: 'A user with this email already exists' },
             { status: 409 }
@@ -170,7 +191,11 @@ export async function POST(request: Request) {
         const existingToken = await prisma.invitationToken.findFirst({
           // A revoked invitation (#2071) is not an active one — withdrawing it
           // has to make re-inviting the same address possible again.
-          where: { email, used: false, revokedAt: null, expiresAt: { gt: new Date() } },
+          // Keyed by (email, ORGANIZATION), not by email alone (#2590): an open
+          // invitation for this mailbox into the other world's organization is a
+          // different invitation that ends in a different account, and must
+          // neither block this one nor leak that it exists.
+          where: { email, ...(await invitationOrgWhere(inviterOrgId)), used: false, revokedAt: null, expiresAt: { gt: new Date() } },
         });
         if (existingToken) {
           return NextResponse.json(
@@ -262,7 +287,7 @@ export async function GET() {
       // resending it is meaningless, so losing the tab would strand the token
       // forever. Hand its URL back — but only to the person who minted it, and
       // only while it is still usable. Every other row keeps its token private.
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const appUrl = await appOriginForOrg(resolveOrgId(session)); // the tenant's own host (#2495)
       const now = new Date();
       const withLinks = invitations.map(({ token, invitedById, ...i }) => ({
         ...i,

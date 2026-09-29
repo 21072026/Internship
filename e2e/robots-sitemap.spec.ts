@@ -147,3 +147,42 @@ test('sitemap entries all resolve for an anonymous visitor', async ({ request })
     expect(res.status(), `${path} is in the sitemap but answers ${res.status()}`).toBe(200);
   }
 });
+
+// #2495: one container serves both products, and a host must advertise its
+// own. The marketing host's robots.txt used to announce the INTERNSHIP sitemap
+// (NEXTAUTH_URL's), and the sitemap listed pages that 404 there. Forged proxy
+// headers, as in host-coherent-redirects.spec.ts: MARKETING_HOSTS defaults to
+// the live marketing domain, so no env change is needed.
+const MARKETING_HOST = 'marketing.bcsit-gmbh.de';
+const AS_MARKETING = { 'x-forwarded-host': MARKETING_HOST, 'x-forwarded-proto': 'https' };
+
+test('the marketing host announces and lists only its own product', async ({ request }) => {
+  const robots = await (await request.get('/robots.txt', { headers: AS_MARKETING })).text();
+  test.skip(isClosed(robots), 'this deployment is non-production and closed to crawlers entirely');
+  const sitemapLine = robots.match(/^Sitemap:\s*(\S+)$/m);
+  expect(sitemapLine, robots).not.toBeNull();
+  expect(sitemapLine![1]).toBe(`https://${MARKETING_HOST}/sitemap.xml`);
+
+  const xml = await (await request.get('/sitemap.xml', { headers: AS_MARKETING })).text();
+  const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1].trim()));
+  expect(locs.length).toBeGreaterThan(0);
+  for (const loc of locs) expect(loc.host, loc.href).toBe(MARKETING_HOST);
+  const paths = locs.map((l) => l.pathname);
+  expect(paths).toContain('/');
+  expect(paths).toContain('/pricing');
+  // The internship product's pages: 404 on this host, or its story, not ours.
+  for (const p of ['/for-companies', '/apply-as-mentor', '/release-notes', '/contributor-terms', '/projects', '/stories', '/code-of-conduct']) {
+    expect(paths, `${p} must not be listed on the marketing host`).not.toContain(p);
+  }
+  // …and every listed page answers on the host that lists it.
+  for (const path of paths) {
+    const res = await request.get(path, { headers: AS_MARKETING, maxRedirects: 0 });
+    expect(res.status(), `${path} is in the marketing sitemap but answers ${res.status()}`).toBe(200);
+  }
+});
+
+test('the internship host keeps its own sitemap, unchanged', async ({ request }) => {
+  const xml = await (await request.get('/sitemap.xml')).text();
+  const paths = locPathnames(xml);
+  for (const p of ['/for-companies', '/apply-as-mentor', '/release-notes']) expect(paths).toContain(p);
+});

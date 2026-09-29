@@ -23,6 +23,7 @@ import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runRetentionPrune } from '@/lib/retentionEntries';
 import { runUsageRollup } from '@/lib/jobs/usageRollup';
+import { runTrialReminders } from '@/lib/jobs/trialReminders';
 
 export async function GET(request: Request) {
   try {
@@ -91,6 +92,24 @@ export async function GET(request: Request) {
     // this month's billing numbers refreshed now rather than at 02:40.
     if (job === 'usage-rollup') {
       return NextResponse.json({ message: 'Usage rollup ran', usageRollup: await runUsageRollup() });
+    }
+    // Trial reminders (#2415, story #2392) — named only, deliberately NOT part
+    // of the batch below. Two reasons, and they are not the same reason the
+    // three jobs above have: this one is MARKETING-vertical work that means
+    // nothing on an INTERNSHIP box, and it also moves records between pipeline
+    // stages (the auto-expiry, #2417), which is not what "run the mail jobs
+    // now" should quietly do. An admin runs it when they want today's trial
+    // sweep now rather than at 05:20.
+    if (job === 'trial-reminders') {
+      // `orgId` NARROWS the sweep to one tenant; it can never broaden it, and
+      // the route is already ADMIN-only. Two callers want it: an operator
+      // re-running one customer's sweep after fixing that customer's data, and
+      // e2e/trial-reminders-job.spec.ts, which must assert exact counts without
+      // being perturbed by whatever else is in the database — the same reason
+      // `runUsageRollup()` takes `orgIds`.
+      const orgId = new URL(request.url).searchParams.get('orgId');
+      const trialReminders = await runTrialReminders(orgId ? { orgIds: [orgId] } : {});
+      return NextResponse.json({ message: 'Trial reminders ran', trialReminders });
     }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();

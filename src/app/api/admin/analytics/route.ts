@@ -7,6 +7,7 @@ import { buildSignupWindow, type SignupCounts } from '@/lib/signupFunnel';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { getLocale } from '@/i18n/server';
+import { rangeEnd, rangeStart } from '@/lib/dateRange';
 
 // GET — aggregate analytics for the admin dashboard:
 // pipeline funnel, mentor workload/outcomes, engagement and RSVP rate.
@@ -26,16 +27,16 @@ export async function GET(request: Request) {
   return await withTenantScope(session, async () => {
   const { searchParams } = new URL(request.url);
   const now = new Date();
-  const parseDate = (v: string | null): Date | null => {
-    if (!v) return null;
-    const d = new Date(v);
-    return Number.isNaN(d.getTime()) ? null : d;
-  };
   // Range: default from = start of the month 5 months ago; to = now. If the
   // client sends bad/inverted dates we fall back to the default rather than 500.
-  const to = parseDate(searchParams.get('to')) ?? now;
+  //
+  // `rangeEnd` rather than a bare `new Date(…)`: the screen's presets send
+  // `to` as `YYYY-MM-DD`, which parses to that day's FIRST instant, so an
+  // `lte` bound used to exclude everything that happened on the day the admin
+  // picked — including today, on the default view (#1501).
+  const to = rangeEnd(searchParams.get('to')) ?? now;
   const defaultFrom = new Date(to.getFullYear(), to.getMonth() - 5, 1);
-  let from = parseDate(searchParams.get('from')) ?? defaultFrom;
+  let from = rangeStart(searchParams.get('from')) ?? defaultFrom;
   if (from.getTime() > to.getTime()) from = defaultFrom;
 
   // Monthly buckets spanning [from, to], oldest first, as YYYY-MM keys.

@@ -15,7 +15,7 @@ export default async function TodosPage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.todos.title}</h1>
       <p className="mt-1 mb-6 text-sm text-gray-500">{t.todos.subtitle}</p>
-      <MyTodos myId={session.user.id} />
+      <MyTodos myId={session.user.id} role={session.user.role} />
     </div>
   );
 }

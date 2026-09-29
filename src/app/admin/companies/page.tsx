@@ -1,17 +1,22 @@
 'use client';
 import { useT } from "@/i18n/client";
 
-import { useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useModalFocus } from '@/components/ui/useModalFocus';
+import { COMPANY_SORT_KEYS, DEFAULT_COMPANY_SORT, type CompanySort } from '@/lib/companySort';
 
 
 import { CompanyForm } from '@/components/forms/CompanyForm';
 import { CompanyEntitlements } from '@/components/admin/CompanyEntitlements';
-import { Building2, Plus, Pencil, Trash2, Search, Sparkles } from 'lucide-react';
+import { NewMarketingLeadDialog } from '@/components/admin/NewMarketingLeadDialog';
+import { useVertical } from '@/lib/verticalClient';
+import { Building2, Plus, Pencil, Trash2, Search, Sparkles, UserPlus, Download } from 'lucide-react';
 
 interface Company {
   id: string;
@@ -23,13 +28,53 @@ interface Company {
   _count: { mentorships: number };
 }
 
+const PAGE_SIZE = 24;
+
 export default function CompaniesPage() {
   const t = useT();
+  // The manual lead form is the MARKETING product's (#2562): an INTERNSHIP
+  // tenant's "lead" is an applicant, with its own intake paths. The route
+  // refuses a non-marketing org as well; this only keeps the button honest.
+  const isMarketing = useVertical() === 'MARKETING';
+  const [showNewLead, setShowNewLead] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
+  // The company <select> below provisions a login and must offer EVERY company,
+  // not the page currently on screen — so it reads the same route with `all=1`
+  // rather than borrowing the paged list (#2437).
+  //
+  // ON DEMAND, not on mount. Paging the grid is pointless if the screen behind
+  // it still downloads the whole account book on every visit: with 800 accounts
+  // that unbounded read is the cost #2437 exists to remove, and it would have
+  // been paid by every admin who opened this page and never touched the login
+  // form. It now fires the first time the picker is actually used (focus covers
+  // both mouse and keyboard), and refreshes afterwards only if it was loaded.
+  const [allCompanies, setAllCompanies] = useState<{ id: string; name: string }[]>([]);
+  const allLoadedRef = useRef(false);
+  /** Which company the in-flight delete-impact request was asked about. */
+  const impactForRef = useRef<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<CompanySort>(DEFAULT_COMPANY_SORT);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [impact, setImpact] = useState<{
+    cascade: Record<string, number>;
+    detach: Record<string, number>;
+  } | null>(null);
+  const [impactFailed, setImpactFailed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  // The record the edit dialog is filled from. It is read from
+  // GET /api/companies/[id], not borrowed from the paged list row that was
+  // clicked: opening a company is the read the access log records (#2433), and
+  // that route is where it is recorded. The list row still decides which
+  // company the dialog is for, and titles it while the read is in flight.
+  const [editingDetail, setEditingDetail] = useState<Company | null>(null);
+  const [editLoadFailed, setEditLoadFailed] = useState(false);
+  /** Which company the in-flight detail read was asked about. */
+  const editForRef = useRef<string | null>(null);
   const [entitlingCompany, setEntitlingCompany] = useState<Company | null>(null);
   const [error, setError] = useState('');
   const [clCompanyId, setClCompanyId] = useState('');
@@ -38,8 +83,33 @@ export default function CompaniesPage() {
   const [clMsg, setClMsg] = useState('');
   const [clBusy, setClBusy] = useState(false);
   const closeCompanyForm = () => {
+    editForRef.current = null;
     setShowForm(false);
     setEditingCompany(null);
+    setEditingDetail(null);
+    setEditLoadFailed(false);
+  };
+
+  // Same tagging as the delete-impact read below: open A, close, open B, and
+  // A's slower answer must not fill B's form, one click before a save that
+  // would write A's fields onto B.
+  const openEdit = async (company: Company) => {
+    editForRef.current = company.id;
+    setEditingCompany(company);
+    setEditingDetail(null);
+    setEditLoadFailed(false);
+    try {
+      const res = await fetch(`/api/companies/${company.id}`);
+      if (!res.ok) throw new Error('detail');
+      const data = await res.json();
+      if (editForRef.current !== company.id) return;
+      setEditingDetail(data.company);
+    } catch {
+      // No silent fallback to the list row: a form that opens anyway would be
+      // a company opened without the read that records it.
+      if (editForRef.current !== company.id) return;
+      setEditLoadFailed(true);
+    }
   };
   const companyDialogRef = useModalFocus<HTMLDivElement>(showForm || editingCompany !== null, closeCompanyForm);
 
@@ -71,27 +141,65 @@ export default function CompaniesPage() {
     }
   };
 
-  const fetchCompanies = async () => {
+  // Search, ordering and paging are all decided by the server (#2436/#2437):
+  // the page asks for one page of rows and renders exactly what comes back.
+  // There is deliberately no client-side `filter()` or re-sort left — with a
+  // page of 24 rows, filtering in the browser would hide matches that are on
+  // another page and quietly turn "search" into "search this screen".
+  const fetchCompanies = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/companies');
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(PAGE_SIZE),
+        sort,
+      });
+      if (search.trim()) params.set('search', search.trim());
+      const res = await fetch(`/api/companies?${params}`);
       const data = await res.json();
       setCompanies(data.companies || []);
+      setTotal(typeof data.total === 'number' ? data.total : (data.companies?.length ?? 0));
     } catch {
       setError(t.companiesPage.loadFailed);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, search, sort, t]);
 
-  useEffect(() => {
-    fetchCompanies();
+  const fetchAllCompanies = useCallback(async () => {
+    try {
+      allLoadedRef.current = true;
+      const res = await fetch('/api/companies?all=1');
+      const data = await res.json();
+      setAllCompanies(data.companies || []);
+    } catch {
+      /* The login picker is secondary; the list above already reports failures. */
+    }
   }, []);
 
-  const filteredCompanies = companies.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.industry?.toLowerCase().includes(search.toLowerCase())
+  /** First use of the picker loads it; later uses reuse what is already there. */
+  const loadPickerOnce = useCallback(() => {
+    if (!allLoadedRef.current) void fetchAllCompanies();
+  }, [fetchAllCompanies]);
+
+  /** A create/update/delete only has to refresh a picker somebody opened. */
+  const refreshPickerIfLoaded = useCallback(
+    () => (allLoadedRef.current ? fetchAllCompanies() : Promise.resolve()),
+    [fetchAllCompanies]
   );
+
+  useEffect(() => {
+    const timeout = setTimeout(fetchCompanies, 300);
+    return () => clearTimeout(timeout);
+  }, [fetchCompanies]);
+
+  // A new search term or a different order restarts at page 1 — page 4 of the
+  // previous result set is an empty screen with no explanation.
+  useEffect(() => {
+    setPage(1);
+  }, [search, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const handleCreate = async (data: {
     name: string;
@@ -109,7 +217,7 @@ export default function CompaniesPage() {
       const body = await res.json();
       throw new Error(body.error || t.companiesPage.createFailed);
     }
-    await fetchCompanies();
+    await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
     setShowForm(false);
   };
 
@@ -130,15 +238,70 @@ export default function CompaniesPage() {
       const body = await res.json();
       throw new Error(body.error || t.companiesPage.updateFailed);
     }
-    await fetchCompanies();
-    setEditingCompany(null);
+    await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
+    closeCompanyForm();
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(t.companiesPage.confirmDelete.replace('{name}', name))) return;
-    await fetch(`/api/companies/${id}`, { method: 'DELETE' });
-    await fetchCompanies();
+  // Deleting an account is the one action on this page that cannot be undone,
+  // and the native `confirm()` it used to go through could only repeat the
+  // company's name back (#2441). The dialog now states the consequences the
+  // schema actually produces — what cascades away with the row, and what stays
+  // behind with its company link cleared — with the counts fetched first.
+  const dd = t.companiesPage.deleteDialog;
+
+  const askDelete = async (company: Company) => {
+    // The counts are fetched per company and arrive whenever they arrive. Open
+    // A, cancel, open B, and A's slower answer would otherwise land in B's
+    // dialog — one account's consequences under another account's name, one
+    // click before an irreversible delete. Every answer is therefore tagged
+    // with the account it was asked about and a late one is dropped.
+    impactForRef.current = company.id;
+    setPendingDelete({ id: company.id, name: company.name });
+    setImpact(null);
+    setImpactFailed(false);
+    try {
+      const res = await fetch(`/api/companies/${company.id}/delete-impact`);
+      if (!res.ok) throw new Error('impact');
+      const data = await res.json();
+      if (impactForRef.current !== company.id) return;
+      setImpact({ cascade: data.impact?.cascade ?? {}, detach: data.impact?.detach ?? {} });
+    } catch {
+      // Say that the counts are missing rather than showing a dialog that
+      // silently implies "nothing is linked".
+      if (impactForRef.current !== company.id) return;
+      setImpactFailed(true);
+    }
   };
+
+  const closeDeleteDialog = () => {
+    impactForRef.current = null;
+    setPendingDelete(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/companies/${pendingDelete.id}`, { method: 'DELETE' });
+      if (!res.ok) setError(t.common.deleteFailed);
+      closeDeleteDialog();
+      await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const impactItems = (counts: Record<string, number>) =>
+    Object.entries(counts)
+      .map(([key, count]) =>
+        dd.item
+          .replace('{count}', String(count))
+          .replace('{label}', dd.labels[key as keyof typeof dd.labels] ?? key)
+      )
+      .join(', ');
+
+  const cascadeItems = impact ? impactItems(impact.cascade) : '';
+  const detachItems = impact ? impactItems(impact.detach) : '';
 
   return (
     <div>
@@ -149,11 +312,32 @@ export default function CompaniesPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.companiesPage.title}</h1>
           <p className="text-gray-500 mt-1">{t.companiesPage.subtitle}</p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4" />
-          {t.companiesPage.addCompany}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {isMarketing && (
+            <Button data-testid="new-lead-button" onClick={() => setShowNewLead(true)}>
+              <UserPlus className="h-4 w-4" />
+              {t.companiesPage.newLead.button}
+            </Button>
+          )}
+          <Button variant={isMarketing ? 'outline' : 'primary'} onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4" />
+            {t.companiesPage.addCompany}
+          </Button>
+        </div>
       </div>
+
+      {isMarketing && showNewLead && (
+        <NewMarketingLeadDialog
+          onClose={() => setShowNewLead(false)}
+          onCreated={() => Promise.all([fetchCompanies(), refreshPickerIfLoaded()]).then(() => undefined)}
+          onOpenAccount={(companyId) => {
+            setShowNewLead(false);
+            // The edit dialog reads the full record from GET /api/companies/[id]
+            // (the access-logged read, #2433); the row only has to name it.
+            void openEdit({ id: companyId, name: '', needs: [], _count: { mentorships: 0 } });
+          }}
+        />
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -170,12 +354,14 @@ export default function CompaniesPage() {
         {clMsg && <p className="text-sm text-gray-700 mb-3">{clMsg}</p>}
         <div className="flex flex-wrap items-end gap-2">
           <select
+            data-testid="company-login-picker"
             value={clCompanyId}
+            onFocus={loadPickerOnce}
             onChange={(e) => setClCompanyId(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
           >
             <option value="">{t.companiesPage.selectCompany}</option>
-            {companies.map((c) => (
+            {allCompanies.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -222,12 +408,29 @@ export default function CompaniesPage() {
             <h2 id="company-form-title" className="text-xl font-bold text-gray-900 mb-6">
               {editingCompany ? t.companiesPage.editCompany : t.companiesPage.addCompany}
             </h2>
-            <CompanyForm
-              defaultValues={editingCompany || undefined}
-              onSubmit={editingCompany ? handleUpdate : handleCreate}
-              onCancel={closeCompanyForm}
-              isEditing={!!editingCompany}
-            />
+            {editingCompany && !editingDetail ? (
+              editLoadFailed ? (
+                <div data-testid="company-edit-load-failed">
+                  <p className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {t.companiesPage.openFailed}
+                  </p>
+                  <Button type="button" variant="outline" onClick={closeCompanyForm}>
+                    {t.common.cancel}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-center py-8 text-gray-400" data-testid="company-edit-loading">
+                  {t.common.loading}
+                </p>
+              )
+            ) : (
+              <CompanyForm
+                defaultValues={editingDetail || undefined}
+                onSubmit={editingCompany ? handleUpdate : handleCreate}
+                onCancel={closeCompanyForm}
+                isEditing={!!editingCompany}
+              />
+            )}
           </div>
         </div>
       )}
@@ -241,24 +444,88 @@ export default function CompaniesPage() {
         />
       )}
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-sm">
+      {/* Delete confirmation (#2441) — replaces the browser's confirm(). */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={dd.title}
+        variant="danger"
+        loading={deleting}
+        confirmLabel={dd.confirm}
+        cancelLabel={t.common.cancel}
+        onConfirm={confirmDelete}
+        onCancel={closeDeleteDialog}
+        message={
+          pendingDelete ? (
+            <>
+              <p>{dd.intro.replace('{name}', pendingDelete.name)}</p>
+              {impactFailed && (
+                <p className="mt-2" data-testid="company-delete-impact-failed">
+                  {dd.impactFailed}
+                </p>
+              )}
+              {impact && (
+                <>
+                  {cascadeItems && (
+                    <p className="mt-2" data-testid="company-delete-cascade">
+                      {dd.cascade.replace('{items}', cascadeItems)}
+                    </p>
+                  )}
+                  {detachItems && (
+                    <p className="mt-2" data-testid="company-delete-detach">
+                      {dd.detach.replace('{items}', detachItems)}
+                    </p>
+                  )}
+                  {!cascadeItems && !detachItems && (
+                    <p className="mt-2" data-testid="company-delete-nothing-else">
+                      {dd.nothingElse}
+                    </p>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            ''
+          )
+        }
+      />
+
+      {/* Search + order. Both are query parameters on /api/companies — the
+          search box has its own testid because AdminNav renders a sidebar
+          input[type="search"] on every admin page. */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 min-w-[12rem]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
+            data-testid="companies-search"
             placeholder={t.companiesPage.searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
           />
         </div>
+        <select
+          data-testid="companies-sort"
+          aria-label={t.companiesPage.sortLabel}
+          value={sort}
+          onChange={(e) => setSort(e.target.value as CompanySort)}
+          className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+        >
+          {COMPANY_SORT_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {t.companiesPage.sortOptions[key]}
+            </option>
+          ))}
+        </select>
+        <span className="text-sm text-gray-500" data-testid="companies-total">
+          {t.companiesPage.resultCount.replace('{count}', String(total))}
+        </span>
       </div>
 
       {/* Companies Grid */}
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
-      ) : filteredCompanies.length === 0 ? (
+        <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>
+      ) : companies.length === 0 ? (
         <Card>
           <EmptyState
             testId="admin-companies"
@@ -276,13 +543,23 @@ export default function CompaniesPage() {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredCompanies.map((company) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" data-testid="companies-list">
+          {companies.map((company) => (
             <Card key={company.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle>{company.name}</CardTitle>
+                    {/* The account detail page (#2560). The name is the link: the
+                        icon buttons beside it keep their own jobs. */}
+                    <CardTitle>
+                      <Link
+                        href={`/admin/companies/${company.id}`}
+                        data-testid={`company-detail-link-${company.id}`}
+                        className="hover:text-blue-700 hover:underline"
+                      >
+                        {company.name}
+                      </Link>
+                    </CardTitle>
                     {company.industry && (
                       <CardDescription>{company.industry}</CardDescription>
                     )}
@@ -296,15 +573,31 @@ export default function CompaniesPage() {
                     >
                       <Sparkles className="h-4 w-4" />
                     </button>
+                    {/* One company, one JSON file (#2435). A plain link, like the
+                        account export on /admin/settings: the route answers with
+                        Content-Disposition, so the browser saves it. */}
+                    <a
+                      href={`/api/companies/${company.id}/export`}
+                      download
+                      data-testid={`export-company-${company.id}`}
+                      title={t.companiesPage.exportJson}
+                      aria-label={t.companiesPage.exportJson}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
                     <button
-                      onClick={() => setEditingCompany(company)}
+                      onClick={() => void openEdit(company)}
                       data-testid={`edit-company-${company.id}`}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(company.id, company.name)}
+                      onClick={() => askDelete(company)}
+                      data-testid={`delete-company-${company.id}`}
+                      title={dd.title}
+                      aria-label={dd.title}
                       className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -348,6 +641,18 @@ export default function CompaniesPage() {
               )}
             </Card>
           ))}
+        </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-8" data-testid="companies-pagination">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            {t.common.prev}
+          </Button>
+          <span className="text-sm text-gray-500">{page} / {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+            {t.common.next}
+          </Button>
         </div>
       )}
     </div>

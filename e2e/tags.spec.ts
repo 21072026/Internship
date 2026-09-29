@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // #887 — free-form tags on people.
@@ -27,7 +27,7 @@ test.afterAll(async () => {
 // covers a DB that predates it, and runs before sign-in because the orgId
 // reaches the handler through the JWT, not through a fresh read.
 async function adminOrgId(): Promise<string> {
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { id: true, orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { id: true, orgId: true });
   if (admin?.orgId) return admin.orgId;
   const org =
     (await prisma.organization.findFirst({ where: { slug: 'default' } })) ??

@@ -183,6 +183,39 @@ konuşması.
   silindikten sonra not metniyle birlikte hayatta kalır ve özneye giden tek
   bağı kopmuş olur — hiçbir sorgunun bir daha bulamayacağı bir PII.
 
+### Firma kaydındaki kişi: kişiyi sil, firmayı koru (#2434)
+
+Bir firmanın ticari geçmişi (ihtiyaçları, teklifleri, iş talepleri, ilişkileri,
+geldiği başvuru) kurumundur; o kayıtlardaki **adı geçen insan** değildir.
+`CompanyInquiry.contactName/email/phone/note` ve `Company.contactName/contactEmail/contactPhone`
+(#2407) bir kişinin kimliği ve doğrudan hattı — ve iki silme yolu da bunlara hiç
+uğramıyordu: "Erased candidate" diyen bir hesabın yanında aynı kişinin adı,
+e-postası ve telefonu başvuruda duruyordu. Artık her iki yol da bu satırları
+temizliyor; kural [`src/lib/companyContactErasure.ts`](../src/lib/companyContactErasure.ts)'te
+(birim testli), Prisma tarafı `accountErasure.ts` → `companyContactOps()`.
+
+- **Eşleşme adresle:** iki tablonun da `User`'a foreign key'i yok. Adres, kullanıcı
+  satırı yeniden yazılmadan/silinmeden **önce** okunur ve yazmalar temizliğin
+  geri kalanıyla **aynı `$transaction`** içinde koşar.
+- **Mezar taşı / temizlik ayrımı aynı:** kişinin yazdığı `message` mezar taşı
+  (null); kimliğini taşıyan `contactName`/`email`/`phone` ve hakkında yazılan
+  `note` temizlenir. Zorunlu kolonlar `User` satırının mezar taşını alır
+  (`Erased contact`, `erased-<id>@erased.local`). Firma adı, açık roller, durum,
+  dönüşüm bağlantısı ve tarihler hesabındır, kalır; `Company` satırı hiç silinmez.
+- **Yalnızca kişinin kendi kiracısı:** adres kiracı sınırı değildir — iki kiracı
+  aynı firmayı tutabilir ve her kiracı ayrı veri sorumlusudur. `MT_ENFORCE_ISOLATION`
+  kapalıyken (#2542) middleware filtre eklemez, bu yüzden her iki `updateMany`
+  silinen kişinin **kendi satırındaki** org'a (`orgScoped()`) daraltılır; org'u
+  olmayan kişi varsayılan org'undur. Varsayılan org için henüz backfill
+  damgalanmamış (`orgId` NULL) satırlar da dahildir, çünkü deploy backfill'i
+  (`prisma/backfill-organization.mjs`) onları varsayılan org'a atar — başka hiçbir
+  org için NULL satıra dokunulmaz. Kanıt: [`e2e/erasure-company-contact.spec.ts`](../e2e/erasure-company-contact.spec.ts)
+  (aynı adresi taşıyan iki kiracı, damgasız bir satır ve aynı kiracıda başka bir kişi).
+- **Kalan boşluklar:** yöneticilere giden `signup.companyInquiry` bildirimi
+  kişinin adını adres olmadan taşır (#2106); hesabı hiç olmamış bir muhatap ve
+  başvuruların saklama süresi #2559 (bu fonksiyonu genişletir, ikinci bir silme
+  yolu yazmaz).
+
 ### Şema değişikliği yok
 
 Null'lamak yerine boşaltmak (`''`) bir tercih değil, **şemanın zorunluluğu**:
@@ -288,7 +321,8 @@ ile değiştirilir.
 | `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
 | `Notification` | `notificationRetentionDays` | 180 gün | Bir bildirim satırı, biri hakkında yazılmış bir cümle ve kaydına giden bir link — `EmailLog`'un budanma gerekçesiyle aynı türden kişisel veri, ama #1646'ya kadar hiç silinmeyen tek tablo. 180 gün, diğer kullanıcı bazlı geçmiş tablosu olan `PageView` ile aynı; ürün iki sayı yerine bir sayı savunuyor. **Okunmamış satır silinmez**, 30 günden yeni satır silinmez, onay ve hesaba erişim bildirimleri hiç silinmez (aşağıya bakın). `0` = sonsuza kadar sakla. |
-| `TrialReminder` | *(ayar yok)* | 365 gün | Kayıt defterindeki **kişisel veri taşımayan tek** girdi (#2414): satır yalnızca "bu deneme için bu eşik zaten işlendi" diyor — bir ilişki kimliği, bir tam sayı ve bir zaman damgası. Bu soru ancak deneme geri sayarken sorulur; bir yıl sonra deneme çoktan sonuçlanmıştır ve satır kimsenin okumadığı bir bastırma defteridir. Silmek güvenli, çünkü seçim **tam takvim günü** eşleşmesi yapıyor (`src/lib/trialReminderRule.ts`): süresi geçmiş bir denemenin farkı negatiftir ve bir daha hiçbir eşiğe eşit olamaz, dolayısıyla eski bir claim satırını silmek çoktan biten bir deneme için hatırlatmayı diriltemez. Kural "en fazla" karşılaştırmasına dönerse bu pencere de yeniden düşünülmelidir. Operatör düğmesi yok: kişisel veri içermeyen bir tablonun ayarını kimse okumaz. |
+| `TrialReminder` | *(ayar yok)* | 365 gün | Kayıt defterindeki, kişisel veri taşımayan iki girdiden biri (#2414; diğeri `CompanyUsage`): satır yalnızca "bu deneme için bu eşik zaten işlendi" diyor — bir ilişki kimliği, bir tam sayı ve bir zaman damgası. Bu soru ancak deneme geri sayarken sorulur; bir yıl sonra deneme çoktan sonuçlanmıştır ve satır kimsenin okumadığı bir bastırma defteridir. Silmek güvenli, çünkü seçim **tam takvim günü** eşleşmesi yapıyor (`src/lib/trialReminderRule.ts`): süresi geçmiş bir denemenin farkı negatiftir ve bir daha hiçbir eşiğe eşit olamaz, dolayısıyla eski bir claim satırını silmek çoktan biten bir deneme için hatırlatmayı diriltemez. Kural "en fazla" karşılaştırmasına dönerse bu pencere de yeniden düşünülmelidir. Operatör düğmesi yok: kişisel veri içermeyen bir tablonun ayarını kimse okumaz. |
+| `CompanyUsage` | *(ayar yok)* | 400 gün | Kayıt defterinin **en uzun** penceresi ve kişisel veri taşımayan ikinci girdi: hesap başına günde bir satır, dış beslemeden, sonsuza kadar (#2446). `PageView`'ın büyüme şekli, o yüzden aynı kapıdan geçiyor — ama savunduğu şey bir kişiye verilmiş söz değil, tablo boyutu. 400 gün, yıldan yıla karşılaştırmanın iki ucunu da içeride tutar ve en geniş okuyucunun (90 günlük sparkline, 120 günlük churn kuralı) çok ötesindedir. Satırlar `date` (kullanımın gerçekleştiği gün) ile tarihlenir, `createdAt` ile değil: geçmişi dolduran bir koşu eski günleri *bugün* yazar. |
 | **Sahipsiz başvuru hesapları** (`User`) | `orphanApplicantGraceDays` | 90 gün | Kayıt defterindeki **tek kişisel hesap** girdisi ve tek satır silmeyen-anonimleştiren girdi. Yalnızca **global** katmandan okunur (koşu hiçbir kiracıya bağlı değildir), kiracıya özel bir satır yazılsa da çalışan pencere o olmaz. Ayrıntısı bu bölümün sonundaki "Sahipsiz başvuru hesapları (#1780)" başlığında. |
 
 ### Bildirim penceresinin iki freni ve tek istisnası (#1646)

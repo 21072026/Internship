@@ -10,6 +10,7 @@ import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { ReleaseNoteMedia } from '@/components/ReleaseNoteMedia';
 import { GITHUB_URL } from '@/components/landing/links';
+import { requireDefaultVertical } from '@/lib/verticalPage';
 
 // Discoverability half of the feed (#1383): browsers and readers pick a feed up
 // from this link, so subscribing is one click from the page. Locale-independent,
@@ -33,6 +34,11 @@ export async function generateMetadata(): Promise<Metadata> {
 // Public, user-facing "what's new" page — friendly feature highlights per
 // release, localized. Distinct from CHANGELOG.md (developer-facing, in the repo).
 export default async function ReleaseNotesPage() {
+  // One feed for the whole codebase, and most of it is the internship
+  // product's changelog — 205 visible lines of it on the marketing host
+  // (#2544). Nothing tags a release with the vertical it concerns, so the feed
+  // cannot be filtered honestly; until it can, it is the default product's.
+  await requireDefaultVertical();
   const { locale, t } = await getServerDictionary();
   const h = await headers();
   const feedUrl = releaseFeedUrl(publicOrigin((n) => h.get(n)), locale);

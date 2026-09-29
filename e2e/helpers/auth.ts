@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 
 /**
  * Sign in through the UI and wait until the post-login redirect chain has
@@ -121,4 +121,126 @@ export async function gotoSettled(page: Page, url: string) {
     await page.waitForLoadState('networkidle');
     await page.goto(url);
   }
+  await settleStreamedSuspense(page);
+}
+
+/**
+ * Wait until React has finished revealing its streamed Suspense content, so the
+ * page segment exists in the document ONCE (#2479, #2312, #2316).
+ *
+ * WHAT IS ACTUALLY THERE. A route with a `loading.tsx` is wrapped in a Suspense
+ * boundary, and React Fizz streams it in two pieces: the shell with the
+ * skeleton, then — parked at the end of `<body>` — `<div hidden id="S:0">`
+ * holding a COMPLETE copy of the resolved segment. Verified against a
+ * production build of this app: every route with a `loading.tsx` serves that
+ * container, and for `/account` it opens with the page's own `<h1>`.
+ *
+ * React 19 does not splice it in immediately. `$RC` marks the boundary and
+ * schedules the reveal up to ~300ms later. Meanwhile the client bundle
+ * hydrates and can render the boundary's children itself; when hydration wins
+ * that race the skeleton is replaced in place while `S:0` is still sitting
+ * there, and for that window the document holds two copies of every element in
+ * the segment — including its testids and its DOM ids.
+ *
+ * Playwright's strict mode counts matched elements regardless of CSS
+ * visibility (the same rule behind the `md:hidden` dual-list pitfall), so a
+ * first assertion after `page.goto` throws instead of polling: a strict-mode
+ * violation is raised on the first query and is never retried. That is the
+ * `resolved to 2 elements` signature that has hit nine specs across the
+ * scheduled suite.
+ *
+ * This is a WAIT, not a mask. A duplicate that does not go away still fails —
+ * the container is only ever transient, so if it is still there after the
+ * timeout something genuinely rendered twice and the test should say so.
+ */
+export async function settleStreamedSuspense(page: Page, timeout = 15_000) {
+  await page.waitForFunction(
+    () => !document.querySelector('body > div[hidden][id^="S:"]'),
+    undefined,
+    { timeout }
+  );
+}
+
+/**
+ * The marketing product's public host (MARKETING_HOSTS' default). One container
+ * serves it next to interncrm.com, and the app tells them apart by the proxy's
+ * `X-Forwarded-Host` — which a spec forges to stand in for "the browser is on
+ * marketing.bcsit-gmbh.de" (#2590). The host decides which of a person's
+ * accounts they sign into, so it is the one header a two-world spec cannot omit.
+ */
+export const MARKETING_HOST = 'marketing.bcsit-gmbh.de';
+
+/** The header that makes a request arrive "on" `host`, for `request.*` calls and `setExtraHTTPHeaders`. */
+export function asHost(host: string): Record<string, string> {
+  return { 'x-forwarded-host': host };
+}
+
+export type ApiSignInResult = {
+  /** True when NextAuth minted a session (no `error` in the URL it answered with). */
+  ok: boolean;
+  /** NextAuth's `?error=` value — the thrown authorize() message, e.g. `WRONG_WORLD_MARKETING` — or null. */
+  error: string | null;
+  /** The URL NextAuth wants the browser to go to (`json: 'true'` turns its 302 into this body). */
+  url: string;
+};
+
+/**
+ * Sign in through the NextAuth credentials provider itself — CSRF token and all,
+ * no browser — arriving on a forged host (#2590). Pass `host` to sign in "on" the
+ * marketing site (`MARKETING_HOST`); omit it for the default (internship) world.
+ *
+ * WHY NOT THE FORM. The form cannot be pointed at another host: Playwright sends
+ * the real one. What a two-world spec needs to pin — the same address and
+ * password signing into a DIFFERENT account per host, or being refused with
+ * `WRONG_WORLD_*` — is decided inside authorize(), so the provider is called
+ * directly, the way `signIn()` does, with the same header on the CSRF fetch and
+ * on the POST (a spec that forged only one of the two would be testing a
+ * request no proxy ever makes).
+ *
+ * The session cookie lands in `request`'s own jar, so a follow-up
+ * `apiSession(request, host)` — or any `request.get('/api/...')` on the same
+ * context — is that person, signed in on that host. It never touches a `Page`.
+ */
+export async function signInViaApi(
+  request: APIRequestContext,
+  email: string,
+  password: string,
+  opts: { host?: string; totp?: string; headers?: Record<string, string> } = {}
+): Promise<ApiSignInResult> {
+  const headers = { ...(opts.host ? asHost(opts.host) : {}), ...opts.headers };
+  const csrf = await (await request.get('/api/auth/csrf', { headers })).json();
+  const res = await request.post('/api/auth/callback/credentials', {
+    headers,
+    form: { csrfToken: csrf.csrfToken, email, password, totp: opts.totp ?? '', json: 'true' },
+    maxRedirects: 0,
+  });
+  const body = await res.text();
+  let url = '';
+  try {
+    url = (JSON.parse(body) as { url?: string }).url ?? '';
+  } catch {
+    url = res.headers()['location'] ?? '';
+  }
+  let error: string | null = null;
+  try {
+    error = new URL(url, 'http://placeholder.invalid').searchParams.get('error');
+  } catch {
+    /* an unparsable URL carries no error code */
+  }
+  return { ok: !error && url !== '', error, url };
+}
+
+/**
+ * The session `/api/auth/session` returns for `request` when it arrives on
+ * `host` — `null` when there is none. A session presented on the OTHER world's
+ * host is refused server-side (the session callback returns null), so this is
+ * also how a spec asserts "signed in here, and still nowhere on the other site".
+ */
+export async function apiSession(
+  request: APIRequestContext,
+  host?: string
+): Promise<{ user: { id?: string; email?: string | null; role?: string; orgId?: string | null } } | null> {
+  const res = await request.get('/api/auth/session', { headers: host ? asHost(host) : {} });
+  const session = await res.json().catch(() => null);
+  return session && session.user ? session : null;
 }

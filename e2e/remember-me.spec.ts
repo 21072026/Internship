@@ -1,5 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -27,7 +28,7 @@ async function expireSession(context: BrowserContext) {
 }
 
 async function signIn(page: Page, email: string, pw: string, remember: boolean) {
-  await page.goto('/auth/signin');
+  await gotoSettled(page, '/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', email);
   await page.fill('input[type="password"]', pw);
   const box = page.getByTestId('remember-me');
@@ -73,7 +74,7 @@ test('a remembered device signs itself back in after the session expires', async
     // Asking for a page again is all it takes: middleware routes the request
     // through /auth/resume, which trades the device cookie for a session and
     // lands on the URL that was asked for — no sign-in form in between.
-    await page.goto('/portal');
+    await gotoSettled(page, '/portal');
     await page.waitForURL((u) => u.pathname === '/portal', { timeout: 20_000 });
     expect(await sessionEmail(page)).toBe(email);
 
@@ -177,7 +178,7 @@ test('leaving the box unticked remembers nothing', async ({ browser }) => {
     expect(await prisma.trustedDevice.count({ where: { user: { email } } })).toBe(0);
 
     await expireSession(context);
-    await page.goto('/portal');
+    await gotoSettled(page, '/portal');
     // Nothing to resume from, so the app does what it always did.
     await page.waitForURL((u) => u.pathname.startsWith('/auth/signin'), { timeout: 20_000 });
     await expect(page.getByTestId('remember-me')).toBeVisible();
@@ -198,7 +199,7 @@ test('the account page lists the remembered device and can forget it', async ({ 
     const page = await context.newPage();
     await signIn(page, email, pw, true);
 
-    await page.goto('/account');
+    await gotoSettled(page, '/account');
     const list = page.getByTestId('trusted-devices');
     await expect(list).toBeVisible();
     // The browser it was enrolled from is marked as the current one.
@@ -230,7 +231,7 @@ test('a remembered browser can still open the sign-in form on purpose', async ({
     await signIn(page, email, pw, true);
     await expireSession(context);
 
-    await page.goto('/auth/signin');
+    await gotoSettled(page, '/auth/signin');
     await expect(page.getByTestId('remember-me')).toBeVisible();
     expect(new URL(page.url()).pathname).toBe('/auth/signin');
   } finally {

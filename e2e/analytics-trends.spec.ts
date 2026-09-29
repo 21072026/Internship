@@ -115,3 +115,72 @@ test('every trend bar turns its percentage into real pixels', async ({ page }) =
     await cleanupByEmail(email);
   }
 });
+
+/**
+ * #1501 / #1484 — the trends chart was twelve bars of zero again, and this time
+ * the layout fix from #1425 was still working: the rows had height, the
+ * percentages became pixels, the percentages were just all 0.
+ *
+ * The screen's range presets send `to` as `YYYY-MM-DD`, and `new Date(
+ * '2026-09-23')` is that day's FIRST instant. Used as an `lte` bound it
+ * excluded everything that happened *during* the day the admin picked —
+ * including today, on the default "6m" preset. Locally that is invisible
+ * (older rows keep the chart full); in a CI shard, where the database holds
+ * nothing but rows the specs seeded today, every bucket read zero.
+ *
+ * Asserted against the API rather than the chart, and as a comparison rather
+ * than a threshold: the two calls are seconds apart over the same rows, so the
+ * current month's count must agree. Any "> 0" assertion passes on a database
+ * with history in it, which is exactly how this shipped.
+ */
+test('a bounded range includes the day it ends on', async ({ page }) => {
+  const email = uniqueEmail('at-today-admin');
+  const pw = 'AdminPass123';
+  await seedUser(email, pw, 'ADMIN', 'AT Today Admin');
+  const mentor = await seedUser(uniqueEmail('at-today-mentor'), pw, 'MENTOR', 'AT Today Mentor');
+  const mentee = await seedUser(uniqueEmail('at-today-mentee'), pw, 'MENTEE', 'AT Today Mentee');
+  const relation = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE', startDate: new Date() },
+  });
+  await prisma.interactionLog.create({
+    data: { relationId: relation.id, type: 'Meeting', notes: 'Logged today', date: new Date() },
+  });
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', email);
+    await page.fill('input[type="password"]', pw);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    // The exact query string the "6m" preset builds (page.tsx `rangeQuery`).
+    const to = new Date();
+    const from = new Date(to);
+    from.setMonth(from.getMonth() - 6);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+    const open = await (await page.request.get('/api/admin/analytics')).json();
+    const bounded = await (
+      await page.request.get(`/api/admin/analytics?from=${iso(from)}&to=${iso(to)}`)
+    ).json();
+
+    // Same rows, so the month both calls end in must carry the same counts.
+    // The unbounded call's `to` is `now`, which has always included today.
+    const month = open.trends.months[open.trends.months.length - 1];
+    expect(bounded.trends.months[bounded.trends.months.length - 1]).toBe(month);
+    const last = (t: { newRelations: number[]; interactions: number[] }) => ({
+      newRelations: t.newRelations[t.newRelations.length - 1],
+      interactions: t.interactions[t.interactions.length - 1],
+    });
+    expect(last(bounded.trends), `${month}: a bounded range must not drop today's rows`).toEqual(
+      last(open.trends)
+    );
+    // And the seeded rows are in there, so the comparison is not two zeros.
+    expect(last(open.trends).newRelations).toBeGreaterThan(0);
+    expect(last(open.trends).interactions).toBeGreaterThan(0);
+  } finally {
+    await prisma.interactionLog.deleteMany({ where: { relationId: relation.id } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: relation.id } });
+    await cleanupByEmail(email);
+  }
+});

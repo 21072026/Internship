@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "- **\"My candidates\" quick filter and bulk owner assignment on the candidates grid** (#2438, #2439, story #2397). `GET /api/candidates` takes `?mine=1`, which resolves to \"has a LIVE `MentorshipRelation` whose `mentorId` is the signed-in user\" — the owner field this repo already has; no owner column was added to `Company`. It is merged into the same relation `some` as the stage/company/project filters, so it intersects with status, tags, search and source instead of resetting them, and the toggle is written back to the URL (`replaceState`) so a filtered view can be pasted to a colleague. `POST /api/admin/candidates/bulk` gains an `assignOwner` action + `ownerId` field on the existing zod schema — no new route, no new selection machinery, still ADMIN-only, still capped at 200 ids, still `logActivity()`. It deliberately does NOT `updateMany` on `mentorId`: each row goes through `transferMentorship()` (#2289, docs/mentor-transfer.md), so a pairing with no history is corrected in place while one carrying work is closed `ENDED_REASSIGNED` and chained to a successor that keeps the stage — `InteractionLog` has no author column, and a bulk re-point would credit one mentor's meetings to another. Eligibility is per row (a candidate with no live pairing, or already on that owner, is skipped) and the response reports what actually moved, which the grid shows as \"N reassigned\". Each mentor involved is notified ONCE for the whole batch (`mentorship.bulkAssigned` / `mentorship.bulkReassignedAway`, in-app only) instead of once per row, and an error mid-batch is caught so the count already achieved is still returned (`partial: true`).",
+  "notes": {
+    "en": [
+      "Candidates: a \"My candidates\" toggle filters the list to the people you own, works together with every other filter, and stays in the URL so you can share the view.",
+      "Candidates: tick several people and hand them all to another owner in one go — the result says how many were actually reassigned."
+    ],
+    "tr": [
+      "Adaylar: \"Bana atananlar\" düğmesi listeyi sizin kayıtlarınıza indiriyor, diğer filtrelerle birlikte çalışıyor ve adres çubuğunda kaldığı için görünümü paylaşabiliyorsunuz.",
+      "Adaylar: birden fazla kişiyi seçip tek seferde başka bir sahibe devredebilirsiniz — sonuç kaç kaydın gerçekten yeniden atandığını söylüyor."
+    ],
+    "de": [
+      "Kandidaten: Der Schalter \"Meine Kandidaten\" filtert die Liste auf Ihre eigenen Datensätze, wirkt zusammen mit allen anderen Filtern und bleibt in der URL, sodass Sie die Ansicht teilen können.",
+      "Kandidaten: Mehrere Personen auswählen und in einem Schritt einer anderen zuständigen Person übergeben — das Ergebnis nennt die Zahl der tatsächlich neu zugewiesenen Datensätze."
+    ]
+  }
+}

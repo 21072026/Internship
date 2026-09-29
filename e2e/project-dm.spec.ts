@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 // Project-based direct messaging (#768/#769/#770): two mentees who share a
 // project — and have no mentorship between them — can find each other in
@@ -13,7 +14,7 @@ test.afterAll(async () => {
 });
 
 async function signIn(page: import('@playwright/test').Page, email: string, pw: string, home: string) {
-  await page.goto('/auth/signin');
+  await gotoSettled(page, '/auth/signin');
   await page.fill('input[type="email"], input[name="email"]', email);
   await page.fill('input[type="password"]', pw);
   await page.click('button[type="submit"]');
@@ -42,7 +43,7 @@ test('project co-members can start a DM, and lose the composer when the project 
 
   try {
     await signIn(page, aEmail, pw, '/portal');
-    await page.goto('/messages');
+    await gotoSettled(page, '/messages');
 
     // The co-member is offered as a "new chat" candidate.
     // Next's streaming SSR (loading.tsx wraps this route in a Suspense
@@ -81,14 +82,14 @@ test('project co-members can start a DM, and lose the composer when the project 
     // Back in the inbox the DM now appears as a thread. Same streaming
     // duplicate as the toggle above, and `.first()` for the same reason —
     // `toBeVisible()` alone can hit the ambiguity again on almost every retry.
-    await page.goto('/messages');
+    await gotoSettled(page, '/messages');
     await expect(page.locator('a[href^="/messages/c/"]').filter({ hasText: 'Peer Bravo' }).first()).toBeVisible({
       timeout: 10_000,
     });
 
     // Remove A from the project: history stays readable, the composer goes.
     await prisma.projectMember.deleteMany({ where: { projectId: project.id, userId: peerA.id } });
-    await page.goto(`/messages/c/${conversationId}`);
+    await gotoSettled(page, `/messages/c/${conversationId}`);
     await expect(page.getByText('Hello from the same project!')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('thread-readonly')).toBeVisible();
     await expect(page.getByTestId('message-input')).toHaveCount(0);

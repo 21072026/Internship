@@ -109,7 +109,8 @@ function OffersIndex() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/companies')
+    // `all=1`: this is a <select> of every company, not a paged list (#2437).
+    fetch('/api/companies?all=1')
       .then((res) => (res.ok ? res.json() : null))
       .then((d) => { if (!cancelled) setCompanies(d?.companies ?? []); })
       .catch(() => {});

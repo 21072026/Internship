@@ -7,6 +7,8 @@ import { createImpersonationGrant } from '@/lib/impersonation';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { worldOfOrg } from '@/lib/userWorld';
 
 const schema = z.object({ targetUserId: z.string().min(1), reason: z.string().max(300).optional() });
 
@@ -28,9 +30,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'You cannot impersonate yourself' }, { status: 400 });
   }
 
-  const target = await prisma.user.findUnique({ where: { id: parsed.data.targetUserId } });
+  // The caller's own tenant, by hand (#2542 — src/lib/tenantFilter.ts): the
+  // middleware injects nothing while MT_ENFORCE_ISOLATION is off, and this is
+  // the one route that turns a user id into a SESSION AS that user, so an id
+  // from another customer's tenant must read exactly like an id that does not
+  // exist. The same shape as the sibling admin-on-a-user routes (erase, lockout,
+  // reset-password). A no-op for a single-tenant deployment.
+  const target = await prisma.user.findFirst({
+    where: withinTenant({ id: parsed.data.targetUserId }, await tenantWhere(session)),
+  });
   if (!target) {
     return NextResponse.json({ error: 'Target user not found' }, { status: 404 });
+  }
+  // WORLDS (#2590): a session belongs to ONE world and only works on that
+  // world's host, so an admin of one product can never become a user of the
+  // other. The `impersonate` provider (auth.ts, `assertAccountMatchesHost`)
+  // enforces it at sign-in; this is the same rule asked before anything is
+  // written. Without it a grant would be minted, IMPERSONATE_START audited and
+  // the target TOLD their account had been accessed — for a sign-in that is then
+  // refused. That notice would go to a real person in the other product about
+  // access that never happened. The caller's world is the world of their own
+  // org, which is the host they are on (a session presented on the other
+  // world's host is not a session at all — the session callback in auth.ts).
+  if ((await worldOfOrg(session.user.orgId)) !== (await worldOfOrg(target.orgId))) {
+    return NextResponse.json(
+      { error: 'That user belongs to the other product and cannot be impersonated from here', code: 'wrong_world' },
+      { status: 400 }
+    );
   }
   // Impersonating another admin would grant elevated destructive access while
   // masked as a different session — never allowed, regardless of reason.

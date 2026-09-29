@@ -165,6 +165,7 @@ regresyondur**:
 | Yabancı ilişkiye yazma | MENTOR → başka ilişkiye interaction = `403` |
 | Yetki yükseltme | `PUT /api/profile` ile `role: 'ADMIN'` geçmiyor (zod allowlist) |
 | Admin uçları | MENTEE/MENTOR/COMPANY hepsinden `401` |
+| MARKETING satış temsilcisi (#2580) | MARKETING'deki `MENTOR` `/sales`'te yalnızca **kendi** kayıtlarını görür; başka temsilcinin / başka org'un kaydı ve hesabı `404` (sayfa) ya da `403`/`404` (API); `/api/admin/*`, kullanıcı/firma yazmaları ve `POST /api/invite` reddedilir. Matris: [`role-access-matrix.md`](role-access-matrix.md) § MARKETING satış temsilcisi, fixture `e2e/fixtures/authz-matrix.ts` → `MARKETING_MENTOR_*` |
 | Güvenlik başlıkları | CSP, HSTS, nosniff, `frame-ancestors 'none'`, `object-src 'none'` ✅ |
 | XSS sink'leri | `dangerouslySetInnerHTML` 2 yerde, ikisi de güvenli (escape'li / sabit) |
 | API anahtarı saklama | SHA-256 hash'li (`src/lib/apiKey.ts`) — token saklamada örnek alınmalı |

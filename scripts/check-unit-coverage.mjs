@@ -63,12 +63,20 @@ const TEST_DIR = 'scripts/test';
 // act on is a gate that gets deleted.
 const FLOORS = new Map([
   [
+    'src/lib/companySort.ts',
+    { floor: 95, measured: 99.12, why: 'company list ordering: unknown sort falls back, never-moved accounts last (#2436)' },
+  ],
+  [
     'src/lib/verticals.ts',
     { floor: 95, measured: 100.0, why: 'vertical catalogue: unknown key must fall back, never blank a tenant (#2350)' },
   ],
   [
     'src/lib/mentorDirectory.ts',
     { floor: 95, measured: 100.0, why: 'scan cap / truncated-result reporting (#1820)' },
+  ],
+  [
+    'src/lib/newsletterQuotaHold.ts',
+    { floor: 95, measured: 100.0, why: "one tenant's held newsletter must not starve another tenant's tick (#2335)" },
   ],
   [
     'src/lib/jobs/lease.ts',
@@ -95,8 +103,28 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'stage visits counted separately from candidates (#1427)' },
   ],
   [
+    'src/lib/funnelKpi.ts',
+    {
+      floor: 90,
+      measured: 92.5,
+      why: 'cohort by ENTRY month (a month cannot exceed 100%) and a null, never 0%, for a retention window that has not closed (#2420/#2425)',
+    },
+  ],
+  [
     'src/lib/stageClock.ts',
     { floor: 85, measured: 89.86, why: 'an old no-op StatusChange must not restart "days in stage" (#2264)' },
+  ],
+  [
+    'src/lib/taskDue.ts',
+    { floor: 95, measured: 100.0, why: 'a to-do due TODAY is not late, and a date names a calendar day (#2440)' },
+  ],
+  [
+    'src/lib/todoVisibility.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a to-do somebody wrote for themselves must not reach a team list or a digest mail (#2440)',
+    },
   ],
   [
     // Not floored because somebody wrote tests for it: `stageClock.ts` imports
@@ -106,6 +134,10 @@ const FLOORS = new Map([
     // something runs it.
     'src/lib/pipeline.ts',
     { floor: 85, measured: 87.86, why: 'canonical stage list + labels, reached through the stage clock (#2264)' },
+  ],
+  [
+    'src/lib/dateRange.ts',
+    { floor: 95, measured: 100.0, why: 'a date-only `to` covers the whole day it names — the default analytics view dropped today (#1501)' },
   ],
   [
     'src/lib/lastContactRule.ts',
@@ -176,6 +208,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/clientIp.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the rate-limit key: a proxy header is read only behind TRUSTED_PROXY_COUNT, or a client picks its own bucket per request (#858, #2470)',
+    },
+  ],
+  [
     'src/lib/requestId.ts',
     {
       floor: 95,
@@ -205,6 +245,30 @@ const FLOORS = new Map([
       floor: 95,
       measured: 100.0,
       why: 'who may clear someone else\'s second factor: never a peer admin, never self, never while impersonating (#1543)',
+    },
+  ],
+  [
+    'src/lib/leadAttribution.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'conversion counted against the TENANT\'s finished stages, and ONE filtered population behind both halves of every ratio \u2014 a SOURCE login never attributed to itself (#2421)',
+    },
+  ],
+  [
+    'src/lib/viewLogRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'the company access log is de-noised, never silenced: no setting value turns it off, a failed lookup records the read, and an impersonated read is attributed to the admin behind it (#2433)',
+    },
+  ],
+  [
+    'src/lib/companyContactErasure.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'erase the person, keep the company: an address-matched scrub never reaches another tenant\'s row, an org-less subject is never "every org", and no account column is touched (#2434)',
     },
   ],
   [

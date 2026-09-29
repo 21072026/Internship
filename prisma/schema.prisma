@@ -130,6 +130,15 @@ model Organization {
   // ISO-3166 alpha-2 ("DE", "TR"). Decides VAT treatment, so it is stored,
   // never inferred from an IP or a locale.
   billingCountry   String?
+  // The public hostname whose sessionless forms write into THIS tenant (#2569):
+  // the marketing landing's demo form on marketing.bcsit-gmbh.de lands in the
+  // org whose `publicHost` is exactly that name. An explicit mapping, never a
+  // heuristic ("the first MARKETING org"): a marketing host no org claims is a
+  // CLOSED form, not the internship tenant's inbox. Lowercase hostname, no port,
+  // no wildcard — the same exact-match rule as src/lib/servedHosts.ts. Unique, so
+  // one host can never name two tenants. Resolution + trust reasoning:
+  // src/lib/publicHostOrg.ts. Nullable, so `db push` is additive (#2298).
+  publicHost       String?  @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -160,6 +169,7 @@ model Organization {
   subscription         Subscription?
   orgEntitlements      OrgEntitlement[]
   usageRollups         UsageRollup[]
+  companyUsage         CompanyUsage[]
   webhooks             Webhook[]
   announcements        Announcement[]
   newsletters          Newsletter[]
@@ -286,7 +296,16 @@ model User {
   orgId                   String?
   org                     Organization? @relation(fields: [orgId], references: [id])
   id                      String        @id @default(cuid())
-  email                   String        @unique
+  // NOT globally unique any more (worlds, epic #2348): one PERSON may hold one
+  // account per WORLD — the internship product and the marketing product are
+  // two different tenants, and the host a person signs in on decides which one
+  // they are in. Uniqueness is per (email, org) at the database and per
+  // (email, vertical) in the app: src/lib/userWorld.ts is the only place that
+  // looks an account up by e-mail, and it always answers "in which world?".
+  // Read docs/worlds.md before adding a lookup — `findUnique({ where: { email } })`
+  // no longer type-checks, and a bare `findFirst({ where: { email } })` is
+  // exactly the bug that would sign a person into the wrong product.
+  email                   String
   password                String
   role                    Role          @default(MENTEE)
   fullName                String
@@ -515,6 +534,12 @@ model User {
   placements                        Placement[]                   @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
 
+  // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
+  // distinct, so a row whose orgId is still NULL (the default org, until the
+  // next deploy's backfill stamps it) is NOT covered by this index — the
+  // per-world rule in src/lib/userWorld.ts (`emailTakenInWorld`) is what stops
+  // a second one, and it is checked on every create path.
+  @@unique([email, orgId])
   @@index([role])
   @@index([referredById])
   @@index([orgId, externalId])
@@ -1317,6 +1342,27 @@ model Company {
   size         String?
   address      String?
   quota        Int?
+  // The id this account carries in the product the tenant sells (#2446) — the
+  // SaleVali merchant id for a MARKETING org, whatever a later feed keys on for
+  // anyone else. Nullable and unbackfilled: a company typed in by hand, or
+  // imported from the old spreadsheet, never has one, and a required column
+  // would fail the import that creates it.
+  //
+  // NOT `@unique`, for the same reason User.externalId (see its comment) and
+  // Job.idempotencyKey are not: a global unique reaches across the tenant
+  // boundary, and the per-tenant version buys nothing it is asked for — MySQL
+  // treats NULLs in a unique index as DISTINCT, so `@@unique([orgId, externalId])`
+  // de-duplicates nothing at all while every row still holds a null, i.e. today.
+  //
+  // `vatId` above IS `@@unique([orgId, vatId])`, and the difference is who
+  // writes: a VAT number is typed by a human through the account form and the
+  // import, where a rejected write is an answerable message about the row in
+  // front of them. An external id is stamped by a background feed with nobody
+  // watching, and this epic's rule is that an ambiguous id is REPORTED (count +
+  // sample), never guessed at and never turned into a failed chunk at 03:00.
+  // The index below is what that lookup reads ("which company of THIS org is
+  // external id X?"). Contract: docs/marketing-vertical/salevali-usage-feed.md.
+  externalId   String?       @db.VarChar(191)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -1335,9 +1381,70 @@ model Company {
   // single row because nothing stops a second enquiry from the same company
   // later being linked to the account it already has.
   fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
+  usage             CompanyUsage[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
+  // Tenant-leading, like every other lookup index in TENANT_MODELS: under
+  // MT_ENFORCE_ISOLATION the middleware injects `orgId` into the feed's
+  // `findMany({ where: { externalId } })`, and without this it would filter the
+  // whole table row by row.
+  @@index([orgId, externalId])
+}
+
+// One day of product usage for one account (#2446, story #2399).
+//
+// The grain is ACCOUNT × DAY, and that is the whole reason this table exists
+// next to `UsageRollup` rather than inside it: UsageRollup is the billing meter
+// — (org, metric, calendar MONTH), written absolutely by the nightly rollup
+// (src/lib/metering.ts) — and a churn signal made of monthly totals arrives six
+// weeks after the merchant stopped trading. Nothing here is billable and
+// nothing here gates anything; it is a signal.
+//
+// Filled by the nightly usage sync (#2447) from the feed described in
+// docs/marketing-vertical/salevali-usage-feed.md. No job, endpoint or screen
+// reads it yet — this slice is the table and the contract only.
+model CompanyUsage {
+  id String @id @default(cuid())
+
+  // Nullable, mirroring Company's own `orgId` (the phase-1 tenant models): a
+  // single-tenant installation has companies with no org, and a required column
+  // here would make them unable to hold usage at all. Registered in
+  // TENANT_MODELS (src/lib/orgContext.ts), which also means every SESSIONLESS
+  // writer — the cron sync, a backfill — must bind `runWithOrg(feed.orgId, …)`
+  // or pass `orgId` itself, exactly as src/lib/rosterIngestStore.ts does.
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id])
+  companyId String
+  // A DAY, not an instant. `@db.Date` for the same reason ProgramCost's period
+  // is: usage belongs to a calendar day at the source, and a DateTime would
+  // shift it by a timezone offset when it is read back on another continent —
+  // which for this table would mean two rows for the same day, or none.
+  date      DateTime      @db.Date
+
+  // Counts, both absolute (never deltas): re-fetching an overlapping window
+  // OVERWRITES a day rather than adding to it, which is what makes the sync
+  // idempotent. `orders` is optional because the feed may not carry it.
+  transactions Int  @default(0)
+  orders       Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // The upsert key: one row per account per day, so the overlapping re-fetch
+  // the sync doctrine prescribes cannot produce a second row for a day it
+  // already has. It doubles as the index the 90-day sparkline range scan reads
+  // — a separate `@@index([companyId, date])` would be a byte-identical second
+  // B-tree, maintained on every insert into the fastest-growing table here.
+  @@unique([companyId, date])
+  // Date-leading, for the one question the composite index above cannot serve:
+  // "the oldest rows across ALL accounts, older than X". That is precisely the
+  // PageView lesson (see its `@@index([createdAt])` and the note on it) — the
+  // retention sweep in src/lib/retentionEntries.ts asks exactly that, nightly,
+  // on a table that gains one row per account per day for ever.
+  @@index([date])
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -1474,31 +1581,63 @@ enum CompanyInquiryStatus {
 }
 
 // A company asking to be shown the product, submitted from the public
-// /for-companies page. Companies have no self-service sign-up — a COMPANY user
+// /for-companies page (internship) or the demo form on the MARKETING landing
+// (#2569) — which tenant receives it is decided by the host, see
+// src/lib/publicHostOrg.ts. Companies have no self-service sign-up — a COMPANY user
 // is only born from an InvitationToken — so this is the bridge: the enquiry is
 // stored (rather than only emailed) so a request cannot quietly go missing in
 // an inbox, and so an admin can see what is still unanswered.
 model CompanyInquiry {
-  orgId              String?
-  org                Organization?        @relation(fields: [orgId], references: [id])
-  id                 String               @id @default(cuid())
-  companyName        String
-  contactName        String
-  email              String
-  phone              String?
+  orgId                     String?
+  org                       Organization?        @relation(fields: [orgId], references: [id])
+  id                        String               @id @default(cuid())
+  companyName               String
+  contactName               String
+  email                     String
+  phone                     String?
   // Roles they are hiring for, and anything else they typed.
-  openRoles          String?              @db.Text
-  message            String?              @db.Text
+  openRoles                 String?              @db.Text
+  message                   String?              @db.Text
   // Preferred UI language ('en' | 'tr' | 'de') — the language they read the
   // page in, so a reply can be written in it.
-  locale             String?
-  status             CompanyInquiryStatus @default(NEW)
+  locale                    String?
+  status                    CompanyInquiryStatus @default(NEW)
   // When they accepted the privacy terms — set server-side on submit.
-  consentAt          DateTime?
-  handledAt          DateTime?
-  handledById        String?
-  note               String?              @db.Text
-  createdAt          DateTime             @default(now())
+  consentAt                 DateTime?
+  // WHICH privacy text they accepted (#2569): PRIVACY_POLICY_VERSION
+  // (src/lib/privacy.ts) at the moment of submit, stamped by the server — a
+  // consent record without the text version cannot say what was agreed to.
+  consentTextVersion        String?
+  // The separate, UNCHECKED-by-default "send me product news" box on the
+  // marketing form (#2569). A REQUEST, never a send permission: it is a single
+  // opt-in anyone could tick for anyone's address, and under UWG §7(2) Nr. 2 it
+  // proves nothing until the address owner confirms it (double opt-in). NULL =
+  // the form that produced this row never asked (the internship form).
+  marketingOptInRequested   Boolean?
+  // WHICH product-news wording they ticked (MARKETING_OPT_IN_TEXT_VERSION,
+  // src/lib/privacy.ts), stamped by the server — separate from the privacy text
+  // version above; the language it was shown in is `locale`. NULL when unticked.
+  marketingOptInTextVersion String?
+  // When the address owner CONFIRMED it (double opt-in). No confirmation mail
+  // exists yet, so this is NULL on every row — and while it is NULL, nothing
+  // may be mailed on the strength of the request (docs/marketing-vertical/demo-form.md).
+  marketingOptInConfirmedAt DateTime?
+  // Marketplaces they sell on (MARKETING form), free text.
+  marketplaces              String?              @db.Text
+  // Where the request came from (#2569): the host that received it and the
+  // campaign parameters / referrer the browser carried. Stored RAW; binding
+  // them to a `Source` row is #2570's mapping. No IP is stored.
+  receivedHost              String?
+  utmSource                 String?
+  utmMedium                 String?
+  utmCampaign               String?
+  utmTerm                   String?
+  utmContent                String?
+  referrer                  String?              @db.Text
+  handledAt                 DateTime?
+  handledById               String?
+  note                      String?              @db.Text
+  createdAt                 DateTime             @default(now())
   // What this enquiry BECAME (#1863). An admin converts a warm lead into a real
   // Company plus an invited COMPANY login in one action; these two columns are
   // the record of that. Their presence is also the idempotence key: the convert
@@ -1509,8 +1648,14 @@ model CompanyInquiry {
   //
   // The enquiry itself is never deleted — it is the record of where the
   // relationship came from — so this is a link, not a replacement.
-  convertedCompanyId String?
-  convertedAt        DateTime?
+  //
+  // In a MARKETING org the conversion is a funnel record instead (#2569,
+  // src/lib/inquiryLead.ts), written by the marketing import in its own
+  // transaction, so the claim is taken BEFORE it: `convertedAt` set while
+  // `convertedCompanyId` is still null means "being converted right now" (a
+  // claim older than ten minutes is a crashed attempt and may be retaken).
+  convertedCompanyId        String?
+  convertedAt               DateTime?
 
   handledBy        User?    @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
   convertedCompany Company? @relation("ConvertedFromInquiry", fields: [convertedCompanyId], references: [id], onDelete: SetNull)
@@ -1897,6 +2042,12 @@ model ProjectTask {
   // Set when this to-do came from the shared pool: the text is read from the
   // template, in the reader's language, every time it is displayed.
   templateId  String?
+  // When it is meant to be finished (#2440). Nullable and nullable it stays: a
+  // to-do without a date is the normal case, so "overdue" is a claim only about
+  // the rows that carry one, and undated ones sort to the END of the list.
+  // Read as a CALENDAR DAY, never as an instant — src/lib/taskDue.ts is the one
+  // place that decides what "late" means.
+  dueDate     DateTime?
 
   project  Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee User?                @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
@@ -2097,6 +2248,28 @@ model MentorshipRelation {
   // contractual date, and moving the record to another stage would erase it.
   trialStartedAt          DateTime?
   trialEndsAt             DateTime?
+  // The owner's own "next step" on this record (#2563): a date and a short
+  // line — "call Thursday about pricing". All three nullable and additive, so
+  // `db push` adds them over a populated table and an untouched row means what
+  // it meant before.
+  //
+  // Deliberately NOT `stageDeadline`, for the same reason the trial dates above
+  // are not: `stageDeadline` is the internal SLA that src/lib/stageSla.ts
+  // rewrites on every stage change. A follow-up date is set by a person and
+  // must survive every stage move — no stage write path touches these columns.
+  // Stored as a UTC calendar day (midnight UTC); the rule, including what
+  // "due" and "overdue" mean, is src/lib/nextActionRule.ts.
+  //
+  // Two columns, not a table: a record has ONE next step, and what was done
+  // before it is already the InteractionLog. The note is owner/ADMIN prose, so
+  // the read paths that hand relation scalars to the MENTEE strip all three
+  // (stripNextActionFor in the same module).
+  nextActionAt            DateTime?
+  nextActionNote          String?          @db.VarChar(280)
+  // Set when the due-day reminder for the CURRENT nextActionAt went out, by a
+  // conditional claim in checkNextActionReminders(); a write that moves the
+  // date clears it, so each date reminds its owner exactly once.
+  nextActionRemindedAt    DateTime?
   // How the mentorship ENDED, when the plain ACTIVE/COMPLETED pair does not say
   // it (#1801). Today the only value is ENDED_REMATCHED — the mentee asked for a
   // different mentor and an admin approved it. Nullable and additive: an
@@ -2162,6 +2335,9 @@ model MentorshipRelation {
   // The daily trial sweep asks for one org's relations in one stage whose trial
   // ends inside the next week; this is the column that narrows it.
   @@index([trialEndsAt])
+  // The daily follow-up sweep asks for the ACTIVE relations whose next action
+  // falls on or before today (#2563).
+  @@index([nextActionAt])
 }
 
 // A mentor's structured evaluation of a mentee within a mentorship.
@@ -2729,7 +2905,11 @@ model StatusChange {
   relationId  String
   fromStatus  String
   toStatus    String
-  changedById String
+  // NULL = the system moved it (#2527): an unattended sweep such as
+  // expireTrials() has no User to name, and naming a real person (the owner, an
+  // org admin) would print a name next to something they did not do. Same
+  // precedent as ActivityLog.actorId. Readers render NULL as "System".
+  changedById String?
   createdAt   DateTime @default(now())
   // Drop-off reason (#810): required by the API when `toStatus` resolves to a
   // negative/off-path stage in the org's pipeline (PipelineStage.isOffPath —
@@ -2741,7 +2921,10 @@ model StatusChange {
   reasonNote  String?  @db.Text
 
   relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  changedBy User               @relation("StatusChangedBy", fields: [changedById], references: [id])
+  // Restrict, as it was while the column was required: erasure deletes a
+  // person's moves explicitly (accountErasure.ts), and an implicit SET NULL
+  // would silently relabel them as the system's.
+  changedBy User?              @relation("StatusChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
 }
 
 model InvitationToken {

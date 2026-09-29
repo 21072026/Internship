@@ -73,10 +73,39 @@ export async function setLocale(page: Page, locale: 'tr' | 'de') {
 export async function settle(page: Page, opts: { timeout?: number } = {}) {
   const timeout = opts.timeout ?? 20_000;
   await page.getByTestId('account-menu-button').waitFor({ state: 'visible', timeout });
-  // Every list on these pages renders SkeletonRows while it fetches; waiting for
-  // the last one to go is more reliable than `networkidle`, which these shells
-  // never reach (see helpers/auth.ts).
-  await expect.poll(async () => page.locator('.animate-pulse').count(), { timeout }).toBe(0);
+  await settleContent(page, timeout);
+}
+
+/**
+ * The two ways a page in this app says "not yet", and why BOTH have to be
+ * waited for (#1485).
+ *
+ * Most lists render `SkeletonRows` — `.animate-pulse` — while they fetch, and
+ * waiting for the last one to go is more reliable than `networkidle`, which
+ * these shells never reach (see helpers/auth.ts). But a screen that fetches one
+ * aggregate rather than a list renders a single centred line of text instead,
+ * with no skeleton anywhere: `/admin/analytics` is the worst case, since
+ * everything the audit is there to measure lives behind that line.
+ *
+ * With only the skeleton wait, the poll saw zero immediately and the audit
+ * measured an empty page — so `/admin/analytics` reported CLEAN at 360px in
+ * German while still spilling 89px, exactly as #1485 recorded it from CI. An
+ * audit that passes because it is looking at nothing is worse than no audit:
+ * it closes the bug it cannot see.
+ *
+ * Hence `data-testid="page-loading"` on every one of those placeholders, and
+ * this wait. A new screen that shows a bare "Loading…" without that testid is
+ * invisible to the audit again — put it on the placeholder, not here.
+ */
+async function settleContent(page: Page, timeout: number) {
+  await expect
+    .poll(
+      async () =>
+        (await page.locator('.animate-pulse').count()) +
+        (await page.getByTestId('page-loading').count()),
+      { timeout }
+    )
+    .toBe(0);
 }
 
 /**
@@ -92,7 +121,7 @@ export async function settle(page: Page, opts: { timeout?: number } = {}) {
 export async function settleStandalone(page: Page, opts: { timeout?: number } = {}) {
   const timeout = opts.timeout ?? 20_000;
   await page.getByRole('heading', { level: 1 }).first().waitFor({ state: 'visible', timeout });
-  await expect.poll(async () => page.locator('.animate-pulse').count(), { timeout }).toBe(0);
+  await settleContent(page, timeout);
 }
 
 /**

@@ -6,9 +6,13 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { emitStageChange } from '@/lib/stageChangeEffects';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { refuseForeignCompany } from '@/lib/relationCompany';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
+import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
 import {
   findActiveMentorship,
   hasOtherActiveMentorship,
@@ -31,6 +35,11 @@ const updateRelationSchema = z.object({
   // central whitelist (src/lib/dropoffReasons.ts), never z.enum.
   reasonCode: z.string().max(40).optional(),
   reasonNote: z.string().max(2000).optional(),
+  // The owner's next step (#2563). Loose here on purpose — the shape rules
+  // (date-only, a real calendar day, note width) live in lib/nextActionRule.ts
+  // and are applied below, so this route and any later writer share them.
+  nextActionAt: z.string().nullable().optional(),
+  nextActionNote: z.string().nullable().optional(),
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -43,8 +52,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
 
     return await withTenantScope(session, async () => {
-      const relation = await prisma.mentorshipRelation.findUnique({
-        where: { id },
+      // Scoped to the caller's tenant by hand (#2613, the #2542 pattern): with
+      // MT_ENFORCE_ISOLATION off, another tenant's ADMIN opened this by id.
+      // Another tenant's relation answers exactly like a missing one.
+      const relation = await prisma.mentorshipRelation.findFirst({
+        where: withinTenant({ id }, await tenantWhere(session)),
         include: {
           mentor: { select: { id: true, fullName: true, email: true, department: true } },
           mentee: {
@@ -126,7 +138,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
       return NextResponse.json({
         relation: {
-          ...relation,
+          // The next-action note is the owner's prose about the mentee (#2563):
+          // the mentee reads this same route, so the three columns ship only to
+          // the owner and ADMIN.
+          ...stripNextActionFor(session.user, relation),
           statusChanges: relation.statusChanges.filter((change) =>
             isStageTransition(change.fromStatus, change.toStatus)
           ),
@@ -152,8 +167,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     return await withTenantScope(session, async () => {
-      const relation = await prisma.mentorshipRelation.findUnique({
-        where: { id },
+      const relation = await prisma.mentorshipRelation.findFirst({
+        where: withinTenant({ id }, await tenantWhere(session)),
       });
 
       if (!relation) {
@@ -177,8 +192,38 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         );
       }
 
-      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, ...rest } = parsed.data;
+      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, ...rest } = parsed.data;
+
+      // Parsed before anything is written, like the drop-off reason below.
+      const parsedNextAt = nextActionAt !== undefined ? parseNextActionDate(nextActionAt) : null;
+      if (parsedNextAt && !parsedNextAt.ok) {
+        return NextResponse.json({ error: 'Invalid next action date', code: parsedNextAt.error }, { status: 400 });
+      }
+      const parsedNextNote = nextActionNote !== undefined ? parseNextActionNote(nextActionNote) : null;
+      if (parsedNextNote && !parsedNextNote.ok) {
+        return NextResponse.json({ error: 'Next action note is too long', code: parsedNextNote.error }, { status: 400 });
+      }
       const stageChanging = !!pipelineStatus && isStageTransition(relation.pipelineStatus, pipelineStatus);
+
+      // Re-pointing the relation at a company (#2580 review, #2613) is an ADMIN
+      // decision in every vertical: a rep's /sales/accounts and a mentor's view
+      // of the placement company are built from their relations' companies, so
+      // an owner who could re-point would open any account in the tenant. No
+      // non-admin screen sends `companyId`; echoing the current value stays a
+      // no-op. The role check runs first, so an owner learns nothing about
+      // which ids exist. The admin's target must be in their own tenant — the
+      // org middleware scopes only the top-level `where`, so an unchecked id
+      // attached another tenant's company and read its name back.
+      if (rest.companyId !== undefined && rest.companyId !== relation.companyId) {
+        if (session.user.role !== 'ADMIN') {
+          return NextResponse.json(
+            { error: 'Only an admin can change the company', code: 'company_change_admin_only' },
+            { status: 403 }
+          );
+        }
+        const refused = await refuseForeignCompany(session, rest.companyId);
+        if (refused) return refused;
+      }
 
       // Validate the drop-off reason BEFORE writing anything — a rejected
       // reason must never leave the relation moved with no audit trail behind it.
@@ -207,7 +252,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = {
         ...rest,
-        ...(stageChanging ? { pipelineStatus } : {}),
+        ...(stageChanging
+          ? {
+              pipelineStatus,
+              // A move into TRIAL_ACTIVE stamps the trial window in the same
+              // write (#2551); a record that already has one keeps it.
+              ...(await stageTrialWindow({
+                orgId: relation.orgId,
+                toStage: pipelineStatus,
+                enteredAt: new Date(),
+                existing: relation,
+              })),
+            }
+          : {}),
       };
       // Stamp/clear the end of the relation — it anchors the post-mentorship
       // CV/document access window (#854).
@@ -219,6 +276,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         // A fresh deadline (or cleared) re-arms the overdue reminder.
         data.deadlineReminderSentAt = null;
       }
+      // Independent of the stage SLA (#2563): a stage change in this same
+      // request neither reads nor clears these, and moving the date re-arms
+      // its one reminder (nextActionPatch).
+      Object.assign(
+        data,
+        nextActionPatch(relation, {
+          nextActionAt: parsedNextAt?.ok ? parsedNextAt.value : undefined,
+          nextActionNote: parsedNextNote?.ok ? parsedNextNote.value : undefined,
+        })
+      );
 
       // A stage-only request that selects the current value is a successful
       // no-op. Avoid issuing an empty UPDATE while keeping existing clients'

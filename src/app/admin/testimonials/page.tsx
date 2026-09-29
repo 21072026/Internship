@@ -109,7 +109,7 @@ export default function AdminTestimonialsPage() {
         </CardHeader>
         <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">{t.testimonials.admin.consentNote}</p>
         {rows === null ? (
-          <p className="py-4 text-sm text-gray-400">{t.common.loading}</p>
+          <p className="py-4 text-sm text-gray-400" data-testid="page-loading">{t.common.loading}</p>
         ) : buckets[tab].length === 0 ? (
           <p className="py-4 text-sm text-gray-500" data-testid="testimonials-empty">{t.testimonials.admin.empty}</p>
         ) : (

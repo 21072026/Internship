@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { assertSafeDemoTarget } from './demoTarget.mjs';
 import { assignDefaultOrg } from './backfill-organization.mjs';
+import { seedMarketingDemo } from './seed-demo-marketing.mjs';
 
 // Rich DEMO seed (#550) — fully synthetic data for local development and demos,
 // so nobody needs real user PII to work on the app. Idempotent: every record it
@@ -185,8 +186,22 @@ function demoPdf(lines) {
   return Buffer.from(body, 'latin1');
 }
 
+// The users of the INTERNSHIP world (#2590), as a Prisma `where` fragment.
+// Everything this half of the seeder creates is the internship product's demo
+// set, and it is created org-less: the org backfill further down
+// (`assignDefaultOrg`) later stamps the default org onto every NULL-orgId row,
+// so on a re-seed these rows carry the default org's id — hence "not a
+// marketing organization's user" rather than an `orgId` equality that would
+// miss one state or the other. `User.email` is no longer unique (the marketing
+// tenant seeded below lives in the same @demo.example.com namespace), so the
+// lookup must say which world it means; it must never adopt — let alone later
+// move — a row that belongs to the marketing tenant. Plain-ESM mirror of
+// `worldUserWhere('INTERNSHIP')`, src/lib/userWorld.ts; keep the list of
+// non-default verticals in step with src/lib/verticals.ts.
+const INTERNSHIP_WORLD = { NOT: { org: { is: { vertical: { in: ['MARKETING'] } } } } };
+
 async function upsertUser({ email, fullName, role, extra = {} }) {
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findFirst({ where: { email, ...INTERNSHIP_WORLD }, orderBy: { createdAt: 'asc' } });
   if (existing) return existing;
   const hash = await bcrypt.hash(PASSWORD, 10);
   const user = await prisma.user.create({
@@ -735,6 +750,37 @@ async function main() {
     placementsCreated++;
   }
   console.log(`programme economics: ${costsCreated} cost line(s), ${placementsCreated} placement(s) created`);
+
+  // ---------------------------------------------------------------------------
+  // The SECOND tenant: the MARKETING vertical (#2443, story #2398). Everything
+  // above is one INTERNSHIP organization; the shipped marketing funnel preset
+  // had nothing behind it at all, so nobody could look at the marketing product.
+  //
+  // Placed HERE, and the position is load-bearing three times over:
+  //   · AFTER the org backfill, which assigns the default org to every row whose
+  //     orgId is still NULL. The marketing rows all carry an explicit orgId, but
+  //     creating them earlier would make that true only for as long as nobody
+  //     forgets a column;
+  //   · AFTER everything that hangs off `demoRelations` — "every relation whose
+  //     mentee is a demo account" — because the internship half staples weekly
+  //     reports, goals, evaluations, placements and document requirements onto
+  //     that list. Marketing leads live in the same @demo.example.com namespace,
+  //     so seeding them earlier would write an internship oversight story onto
+  //     funnel records of a vertical that carries neither the `evaluations` nor
+  //     the `placements` capability;
+  //   · BEFORE the contributor-terms pass below, which enumerates every demo
+  //     user. Seeding after it would leave this tenant's thirty-four accounts
+  //     without an acceptance row until the NEXT run — idempotent, but only
+  //     converging on the second pass, which is not what a fresh topic
+  //     environment gets.
+  // ---------------------------------------------------------------------------
+  await seedMarketingDemo({
+    prisma,
+    // Hashed once and shared: bcrypt at cost 10 is ~80 ms, and this tenant alone
+    // opens thirty-four accounts.
+    passwordHash: await bcrypt.hash(PASSWORD, 10),
+    domain: DEMO_DOMAIN,
+  });
 
   // Contributor terms (#1025, #1026). The demo set portrays projects that have
   // been running for a while, and someone who has been on a project for months

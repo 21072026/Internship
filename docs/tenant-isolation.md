@@ -177,7 +177,9 @@ is on:
   invitee holds — and the row's own `orgId` is what assigns the new account its
   tenant (#1272);
 - `POST /api/invite/opened` stamps `openedAt`, also by token;
-- `POST /api/auth/verify-email` advances the matching invitation by **address**.
+- `POST /api/auth/verify-email` advances the matching invitation by **address and
+  organization** (#2590 — the organization of the account whose token was clicked;
+  see [Users: one address, two tenants](#users-one-address-two-tenants-2590)).
 
 Wrapping any of those would narrow the lookup to an org the invitee cannot
 present, and the invitation would become unusable to the person it was sent to.
@@ -212,6 +214,98 @@ the file pass while testing nothing.
 
 `MT_ENFORCE_ISOLATION` itself is **not** flipped by #1559 — that is #1572, after
 the rollout checklist below.
+
+**Users, candidates and companies joined the hand-filtered routes in #2542**,
+once the MARKETING vertical made a second real tenant on the same database and
+a MARKETING admin turned out to read the INTERNSHIP tenant's user list and
+company book with the flag off. `GET /api/users`, `GET /api/candidates` and
+`GET /api/companies` narrow their `where` to the caller's tenant, and every
+by-id handler on a user or a company (`/api/users/[id]` and its
+`activity`/`resend-verification`, `/api/companies/[id]` and its `delete-impact`,
+`/api/admin/users/[id]/*`, the company lookup of `/api/admin/company-users`)
+looks the row up through the same filter, so another tenant's id is the same
+404 as a missing one. Three things to know before copying it:
+
+- **The filter goes in the query.** That is the flag-independent by-id guard —
+  **not** `assertSameOrg()`, which returns early while the flag is off.
+- **The filter is `tenantWhere(session)` (`src/lib/tenantFilter.ts`), not a bare
+  `orgScoped()`**, for one reason: a row whose `orgId` is still NULL belongs to
+  the default org (the rule `backfill-organization.mjs` applies on every deploy),
+  so the default org's admins also match `orgId IS NULL` and a not-yet-backfilled
+  row does not vanish from the only screen listing it. Every other org matches
+  its own id only. Compose it with `withinTenant()` (an `AND`, so a caller's
+  `OR` can neither widen nor replace it). Once the backfill is green and #1572
+  flips the flag there are no NULL rows, and it is the filter the middleware
+  injects.
+- **Walk the create paths.** With the flag off nothing stamps `orgId`, so a
+  create path whose rows these lists filter now stamps the caller's org itself
+  (`POST /api/companies`, `/api/admin/company-users`, `/api/admin/source-users`,
+  `/api/source/mentees`) — otherwise a new MARKETING row would be NULL, i.e. the
+  default org's.
+- **A signed-in session with no org is the default org's too**, never
+  unscoped: a 12h JWT minted before the backfill stamped its user still carries
+  `orgId: null`, and `{}` there would fail open across every tenant. Only a
+  missing session gives `{}`.
+- **Server components need it as well.** `/admin` (`src/app/admin/page.tsx`)
+  reads Prisma directly, so no API route's filter reaches it; its counts and
+  "recent" lists carry `withinTenant(…, tenant)` themselves.
+- **History is not fixed by code.** Rows the four create paths wrote before
+  #2542 were NULL and the backfill gave them to the default org, even when a
+  MARKETING admin created them. `node prisma/check-tenant-misattribution.mjs`
+  (read-only, exits 0) lists default-org users and companies whose creator
+  (ActivityLog) or links (company logins, mentorships) belong to another tenant;
+  run it on prod and shared preview and reassign what it finds in a reviewed
+  one-off, or record that it found nothing.
+
+`e2e/tenant-scope-users-companies.spec.ts` proves it on the default (flag-off)
+server with an INTERNSHIP and a MARKETING tenant, both directions; the
+`CROSS_TENANT` block of `e2e/fixtures/authz-matrix.ts` is where the next such
+route goes. Left for their own changes: `Source` (created without an `orgId` by
+`/api/sources` and `/api/admin/sources`, so its lookups are not narrowed yet) and
+the remaining tenant-held routes not named above.
+
+### Users: one address, two tenants (#2590)
+
+`User.email` is **no longer globally unique**. The internship product and the
+marketing product are two tenants of two verticals, and one person may hold an
+account in each under the same address: two `User` rows, two `orgId`s, one
+mailbox (the model and its rules are in [`docs/worlds.md`](worlds.md)). For
+tenant isolation that changes four things:
+
+- **The database backstop shrank.** `@@unique([email, orgId])` only catches two
+  rows in the *same* organization — and not even that while `orgId` is still NULL,
+  since MySQL treats NULLs as distinct. "At most one account per address per
+  product" is therefore an application rule, enforced by calling
+  `emailTakenInWorld()` / `emailTakenInOrgWorld()` (`src/lib/userWorld.ts`) before
+  **every** user create. A new create path that skips it is a tenant-isolation bug
+  the schema will not catch.
+- **An address is no longer a key into one tenant.** Every e-mail lookup names its
+  world, through `userWorld.ts` and nowhere else. The deliberate exception is
+  `findUsersByEmail` ("any world"), whose callers are the ones whose job is to cross
+  worlds — the sign-in page pointing at the other door, account erasure, the
+  wrong-door rescue mail — each with a comment saying why. A bare
+  `findFirst({ where: { email } })` would pick an arbitrary tenant's row.
+- **Sessionless lookups run unscoped, on purpose.** Sign-in, `forgot`, `register`
+  and `verify-email` have no session, so no `runWithOrg` context is bound and the
+  middleware early-returns even with `MT_ENFORCE_ISOLATION=true`; the world comes
+  from the request **host** (`worldForHeaders`) or from the invitation's own org
+  (`worldOfOrg`), never from a tenant context. The host may pick which of a
+  person's *own* accounts they are signed into and may refuse a request; it never
+  widens what anyone can read (`hostWorld.ts`, TRUST NOTE). Tenant scope, roles and
+  data access still come from the session's org.
+- **Moving an organization to the other product moves its people.** A world is
+  derived from `Organization.vertical`, so `PATCH /api/admin/organizations` with a
+  new `vertical` changes the world of every user of that org in one `UPDATE`. It is
+  refused with `409 vertical_move_email_conflict` when the destination world already
+  holds an account for any of the org's addresses (`src/lib/verticalMove.ts`, which
+  reads the *other* tenants' rows through `runUnscoped` and reports a count, never an
+  address).
+
+Address-keyed side tables (`AccountLockout`, `EmailLog`, `NewsletterSend`, invitation
+lookups) were audited for the same reason: the lockout counter stays shared by
+address on purpose (one brute-force budget per mailbox), invitation lookups are keyed
+by `(email, orgId)` (`invitationOrgWhere`), and erasing one account no longer sweeps
+rows another world's account still owns.
 
 ### Settings: per-tenant with a global fallback (#1553)
 
@@ -294,6 +388,24 @@ parameter because a super admin manages any tenant (#1535). Binding the caller's
 own org there would narrow every query to the wrong tenant and break the feature;
 `requireAdminOrg()` is what refuses a plain ADMIN a foreign `id`, and every query
 names `orgId: id` itself.
+
+The **document-requirement** routes have the same shape and are unwrapped for
+the same reason (#2542): `/api/admin/document-requirements` (GET/POST, org from
+the query or body), `/api/admin/document-requirements/[id]` (PATCH/DELETE) and
+`/api/admin/documents/missing`. Their gate is `mayManageOrgRequirements()`
+(`src/lib/documentRequirementAccess.ts`): the caller's own org (an org-less caller is
+the default org's, by `tenantWhere()`'s rule) or a super admin passes; anyone else gets **404**
+before any lookup or write, and `[id]` checks the **stored** row's org, not the
+org the caller sent.
+
+The **file routes** — documents, CVs, avatars, message and support attachments —
+read models with no `orgId` at all, so the middleware can never scope them. Each
+resolves the row's parent (owner, template uploader, relation, conversation
+participants, ticket requester; `src/lib/ownerOrg.ts` for users) and answers 404
+when `inCallerTenant()` (`src/lib/tenantFilter.ts`, the one-row form of
+`tenantWhere()`) says it is another org's — a NULL org on either side is the
+default org's, never a wildcard. That holds with the flag on
+or off.
 
 ### API-key requests have no session — so they bind their org themselves (#1546)
 

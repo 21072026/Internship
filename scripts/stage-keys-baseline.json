@@ -8,10 +8,6 @@
     "hits": 2,
     "issue": "#1884"
   },
-  "src/app/api/admin/sources/route.ts": {
-    "hits": 2,
-    "issue": "#1884"
-  },
   "src/app/api/calendar-events/route.ts": {
     "hits": 3,
     "issue": "#1884"

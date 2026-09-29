@@ -40,7 +40,8 @@ publishing it.
 - **Rate limiting is proxy-aware.** The real client IP is counted back from the
   right of `X-Forwarded-For` by a configured number of hops (`TRUSTED_PROXY_COUNT`),
   because the left-hand entries are attacker-controlled and rotating them used to
-  bypass every IP-based limit.
+  bypass every IP-based limit. With no proxy configured (`0`) neither that header
+  nor `X-Real-IP` is read at all.
   → `.env.example`
 
 ## What the application does *not* do

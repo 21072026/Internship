@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
@@ -17,7 +18,7 @@ import {
   normalizeNewsletterContent,
   writtenNewsletterLocales,
 } from '@/lib/newsletter';
-import { dispatchNewsletter } from '@/lib/newsletterDispatch';
+import { dispatchNewsletter, newsletterQuotaHold } from '@/lib/newsletterDispatch';
 import { broadcastQuotaError } from '@/lib/broadcastQuota';
 
 /**
@@ -98,9 +99,19 @@ export async function GET(request: Request) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const pageSize = 20;
 
+  // The caller's own tenant, by hand (#2542, #2590). This history — and the
+  // by-id actions built on it (edit, cancel, delete, SEND) — used to span every
+  // tenant: with a second product on the same database, an admin of one saw the
+  // other's issues and could arm one that mails the OTHER product's members. The
+  // middleware scopes nothing while MT_ENFORCE_ISOLATION is off (and these
+  // handlers bind no tenant scope), so the filter is explicit. A no-op for a
+  // single-tenant deployment: every issue there is the default org's, and the
+  // default org also matches a legacy `orgId IS NULL` row.
+  const tenant = await tenantWhere(session);
   const [total, issues] = await Promise.all([
-    prisma.newsletter.count(),
+    prisma.newsletter.count({ where: withinTenant({}, tenant) }),
     prisma.newsletter.findMany({
+      where: withinTenant({}, tenant),
       // Newest activity first, whichever kind it was: a draft touched today
       // belongs above an issue sent last month.
       orderBy: [{ createdAt: 'desc' }],
@@ -116,6 +127,8 @@ export async function GET(request: Request) {
         scheduledAt: true,
         sentAt: true,
         createdById: true,
+        // Read for the quota-hold check below only; not part of the response.
+        orgId: true,
         recipientCount: true,
         sentCount: true,
         failedCount: true,
@@ -132,11 +145,30 @@ export async function GET(request: Request) {
   const authors = await prisma.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, fullName: true } });
   const authorName = new Map(authors.map((a) => [a.id, a.fullName]));
 
+  // A due issue its tenant's broadcast band is holding (#2335). Without this the
+  // row just reads "Scheduled" with a time in the past — the cron refuses it
+  // every fifteen minutes and nobody can see why. Only due SCHEDULED rows are
+  // asked (newsletterQuotaHold returns null for everything else without a
+  // query), so a page of sent history costs nothing extra.
+  //
+  // Only for the viewer's OWN tenant. This listing is not tenant-scoped yet
+  // (the middleware stays dormant until MT_ENFORCE_ISOLATION), and the figures
+  // are another organization's broadcast usage: an admin is told why their own
+  // issue is waiting, never how far along somebody else's month is.
+  const now = new Date();
+  const viewerOrgId = resolveOrgId(session);
+  const holds = await Promise.all(
+    issues.map((issue) =>
+      issue.orgId !== null && issue.orgId === viewerOrgId ? newsletterQuotaHold(issue, now) : Promise.resolve(null),
+    ),
+  );
+
   return NextResponse.json({
-    newsletters: issues.map(({ image, content, ...issue }) => {
+    newsletters: issues.map(({ image, content, orgId: _orgId, ...issue }, index) => {
       const variants = normalizeNewsletterContent(content);
       return {
         ...issue,
+        quotaHold: holds[index],
         // Normalised rather than raw: the edit form binds one tab per language
         // and should never be handed an unexpected key.
         content: variants,

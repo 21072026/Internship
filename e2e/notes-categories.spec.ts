@@ -44,7 +44,7 @@ test('personal notes have a dedicated page and can be categorized/filtered', asy
     await expect(taskNote).toBeVisible();
     await expect(personalNote).toHaveCount(0);
   } finally {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     if (user) await prisma.personalNote.deleteMany({ where: { userId: user.id } });
     await cleanupByEmail(email);
   }

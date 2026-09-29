@@ -11,8 +11,11 @@ import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import {
   findActiveMentorship,
   ALREADY_MENTORED_ERROR,
@@ -61,15 +64,18 @@ export async function POST(request: Request) {
         ? email!.trim().toLowerCase()
         : `mentee.${slugify(fullName)}.${crypto.randomBytes(2).toString('hex')}@${PLACEHOLDER_EMAIL_DOMAIN}`;
 
-      const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
-      if (existing) {
+      // The creating user's tenant. Resolved before the duplicate check because
+      // "already exists" is a per-WORLD question (#2590): the same mailbox may
+      // hold an account in the other product, and that is a different person-
+      // record — not a reason to refuse this mentee.
+      const orgId = resolveOrgId(session);
+      if (await emailTakenInOrgWorld(finalEmail, orgId)) {
         return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
       }
 
       // Plan gate (#547): a new mentee here means a new active relation. Gate on
       // the creating user's tenant before creating anything. No-op for the
       // unlimited default org.
-      const orgId = resolveOrgId(session);
       const gate = await checkActiveRelationLimit(orgId);
       if (!gate.allowed) {
         return NextResponse.json(planLimitError(gate), { status: 403 });
@@ -127,6 +133,9 @@ export async function POST(request: Request) {
       // a mentee added here must land in a column the mentor can actually see.
       // Read, so it stays outside the transaction.
       const pipelineStatus = await resolveStartStage(orgId);
+      // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
+      // the create (#2551); for every other start stage this is `{}`, no query.
+      const trialWindow = await stageTrialWindow({ orgId, toStage: pipelineStatus, enteredAt: new Date() });
 
       // Account + mentorship in ONE transaction: a failure between the two used
       // to leave a mentee account with no relation, invisible to the mentor who
@@ -164,6 +173,7 @@ export async function POST(request: Request) {
               menteeId: created.id,
               orgId,
               pipelineStatus,
+              ...trialWindow,
             },
           });
           return created;
@@ -181,7 +191,7 @@ export async function POST(request: Request) {
       let setPasswordUrl: string | null = null;
       if (hasRealEmail) {
         const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const appUrl = await appOriginForOrg(session.user.orgId); // the mentor's tenant is the mentee's (#2495)
         setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
         try {
           // #1720: the mentee account was created moments ago and has no

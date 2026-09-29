@@ -74,7 +74,7 @@ export default function MentorApplicationsPage() {
           </div>
         </CardHeader>
         {requests === null ? (
-          <p className="py-4 text-sm text-gray-400">{t.common.loading}</p>
+          <p className="py-4 text-sm text-gray-400" data-testid="page-loading">{t.common.loading}</p>
         ) : requests.length === 0 ? (
           <p className="py-4 text-sm text-gray-500" data-testid="mentor-applications-empty">{t.mentorApplications.empty}</p>
         ) : (

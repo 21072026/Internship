@@ -10,6 +10,7 @@ import {
 } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
 import {
+  MIN_TEXT_WIDTH,
   PHONE,
   auditLayout,
   fixedOverlaps,
@@ -360,6 +361,88 @@ test('phone width: the operations and settings admin screens stay inside the vie
   test.slow();
   await asAdmin(page);
   await sweep(page, OPERATIONS, 'the operations and settings admin screens');
+});
+
+/**
+ * The stage-SLA editor, measured with its rows GUARANTEED to be there (#2373).
+ *
+ * The sweep above visits /admin/settings, but `StageSlaEditor` renders
+ * `null` when the org resolves no pipeline stages — and a freshly seeded admin
+ * often resolves none, so the sweep walks straight past the component. That is
+ * how this bug was closed once on a local pass that had measured nothing, and
+ * reopened from a scheduled run that measured plenty: the CI database has
+ * stages in it and this container did not.
+ *
+ * So the rows are stubbed rather than seeded. The point is the GEOMETRY of a
+ * row carrying a long German stage label at 360px, and stubbing makes that
+ * independent of whatever pipeline the database happens to hold — the sweep
+ * keeps covering the rest of the page.
+ *
+ * The labels are the real ones from `src/lib/pipeline.ts`'s German dictionary,
+ * copied from a live `/api/admin/stage-sla` response, including the longest.
+ * The failure they produced: two `w-24` number inputs plus `gap-3` left the
+ * label 62px — narrower than MIN_TEXT_WIDTH, i.e. a truncation that stops
+ * carrying information. `w-16 sm:w-24` (#2508) gives it 126px back.
+ */
+const SLA_STAGES = [
+  ['APPLICATION_100', '100 · Erstkontakt'],
+  ['APPROVAL_PENDING_220', '220 · Warte auf Freigabe'],
+  ['INTERVIEW_PENDING_250', '250 · Warte auf Vorstellungsgespräch'],
+  ['INTRODUCTION_PENDING_270', '270 · Warte auf Vorstellung'],
+  ['INTERNSHIP_IN_PROGRESS_450', '450 · Praktikum läuft'],
+] as const;
+
+test('phone width: a stage-SLA row keeps its German label readable', async ({ page }) => {
+  test.slow();
+  await page.route('**/api/admin/stage-sla', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        defaultWipLimit: 8,
+        stages: SLA_STAGES.map(([key, label]) => ({
+          key,
+          label,
+          isOffPath: false,
+          isTerminal: false,
+          days: null,
+          wipLimit: null,
+        })),
+      }),
+    });
+  });
+
+  await asAdmin(page);
+  await gotoSettled(page, '/admin/settings');
+  await settle(page);
+  // Attached, not visible: the component is far down a long page, and the
+  // audit measures boxes rather than what happens to be scrolled into view.
+  await page.getByTestId('stage-sla-rows').waitFor({ state: 'attached', timeout: 15_000 });
+
+  const rows = await page.getByTestId('stage-sla-rows').evaluate((list) =>
+    Array.from(list.children).map((row) => {
+      const el = row as HTMLElement;
+      const label = el.querySelector('span') as HTMLElement;
+      return {
+        text: (label.textContent ?? '').trim(),
+        labelWidth: label.getBoundingClientRect().width,
+        spill: el.scrollWidth - el.getBoundingClientRect().width,
+      };
+    })
+  );
+
+  expect(rows.length, 'the stubbed rows must actually render').toBe(SLA_STAGES.length);
+  for (const row of rows) {
+    expect(row.spill, `the row for "${row.text}" spills ${row.spill}px`).toBeLessThan(1);
+    expect(
+      row.labelWidth,
+      `"${row.text}" is ${Math.round(row.labelWidth)}px wide — a label this narrow stops carrying information`
+    ).toBeGreaterThanOrEqual(MIN_TEXT_WIDTH);
+  }
+
+  // And the page as a whole, now that the editor is on it.
+  expect(await auditLayout(page), '/admin/settings at 360px (de) with the SLA editor rendered').toEqual([]);
 });
 
 test('phone width: the person-scoped shells stay inside the viewport in German', async ({ page }) => {

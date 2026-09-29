@@ -39,6 +39,8 @@ import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { StageClockChip } from '@/components/StageClockChip';
 import { daysInStage } from '@/lib/stageClock';
+import { FollowUpPanel } from '@/components/FollowUpPanel';
+import { TrialEndPanel } from '@/components/TrialEndPanel';
 
 interface InteractionLog {
   id: string;
@@ -62,6 +64,12 @@ interface RelationDetail {
   // The mentee is in the re-engagement pool (#834) — the clock shows, but it
   // can never read as a breach. Derived server-side; see the route.
   stageClockPaused?: boolean;
+  // The owner's follow-up (#2563) — only ever present for the owner and ADMIN.
+  nextActionAt?: string | null;
+  nextActionNote?: string | null;
+  // The trial window of a funnel record (#2551/#2553); null outside a trial.
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
@@ -93,7 +101,7 @@ interface RelationDetail {
     fromStatus: string;
     toStatus: string;
     createdAt: string;
-    changedBy: { fullName: string };
+    changedBy: { fullName: string } | null;
   }[];
 }
 
@@ -114,6 +122,9 @@ export default function MenteeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ date: '', subject: '', notes: '', type: 'Meeting' });
+  // The "set the next follow-up while logging" shortcut (#2563). Kept out of
+  // formData: it is not part of the interaction and is written by another route.
+  const [followUpDate, setFollowUpDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [savingStage, setSavingStage] = useState(false);
@@ -141,6 +152,20 @@ export default function MenteeDetailPage() {
     setSubmitting(true);
     setFormError('');
     try {
+      // The follow-up goes FIRST because it is the idempotent half: putting the
+      // same date twice changes nothing, logging the same interaction twice
+      // does. So a failure here stops before anything is written and leaves
+      // every field filled for a retry, and a failure of the interaction
+      // below can be retried as a whole without a duplicate. The note already
+      // on the record stays: the shortcut moves the date.
+      if (followUpDate) {
+        const fu = await fetch(`/api/mentorship/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nextActionAt: followUpDate }),
+        });
+        if (!fu.ok) throw new Error(t.followUp.saveError);
+      }
       const res = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,6 +175,7 @@ export default function MenteeDetailPage() {
         const body = await res.json();
         throw new Error(body.error || 'Failed');
       }
+      setFollowUpDate('');
       await fetchRelation();
       setShowForm(false);
       setFormData({ date: '', subject: '', notes: '', type: 'Meeting' });
@@ -214,7 +240,7 @@ export default function MenteeDetailPage() {
     }
   };
 
-  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
+  if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
   if (!relation) return <div className="text-center py-12 text-gray-400">{t.mentor.relationNotFound}</div>;
 
   return (
@@ -287,6 +313,27 @@ export default function MenteeDetailPage() {
         pending={!!relation.mentee.pendingActivation}
         onUpdated={fetchRelation}
       />
+
+      <div className="mb-6">
+        <FollowUpPanel
+          relationId={relation.id}
+          nextActionAt={relation.nextActionAt}
+          nextActionNote={relation.nextActionNote}
+          onSaved={fetchRelation}
+        />
+      </div>
+
+      {/* The trial end (#2553) — nothing renders outside a trial. */}
+      <div className="mb-6 empty:hidden">
+        <TrialEndPanel
+          relationId={relation.id}
+          pipelineStatus={relation.pipelineStatus}
+          trialStartedAt={relation.trialStartedAt}
+          trialEndsAt={relation.trialEndsAt}
+          canEdit={relation.status === 'ACTIVE'}
+          onSaved={fetchRelation}
+        />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Who this mentee is and how they got here: reference material the
@@ -427,7 +474,7 @@ export default function MenteeDetailPage() {
                       <span className="font-medium text-gray-900">{label(sc.toStatus)}</span>
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {sc.changedBy.fullName} · {formatDateTime(sc.createdAt, locale)}
+                      {sc.changedBy?.fullName ?? t.common.systemActor} · {formatDateTime(sc.createdAt, locale)}
                     </p>
                   </li>
                 ))}
@@ -492,6 +539,13 @@ export default function MenteeDetailPage() {
                     showCounter
                   />
                 </div>
+                <Input
+                  label={t.followUp.alsoUpdate}
+                  type="date"
+                  data-testid="interaction-log-follow-up"
+                  value={followUpDate}
+                  onChange={(e) => setFollowUpDate(e.target.value)}
+                />
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleAddInteraction} loading={submitting}>{t.mentor.save}</Button>
                   <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>{t.mentor.cancel}</Button>

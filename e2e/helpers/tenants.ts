@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type { Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './db';
-import { signInAsFreshUser } from './auth';
+import { MARKETING_HOST, asHost, signInAsFreshUser } from './auth';
 import { roleHome } from '../../src/lib/roleHome';
 import { defaultPipelineStages } from '../../src/lib/pipeline';
 
@@ -78,12 +78,18 @@ export type TenantActor = {
   password: string;
   /** Where this actor lands after sign-in (`src/lib/roleHome.ts`). */
   landing: string;
+  /**
+   * The world (= the org's `vertical`) this account lives in (#2590). A session
+   * only works on its own world's host, so the sign-in helper needs it to pick
+   * the host the browser must arrive on.
+   */
+  vertical: TenantVertical;
 };
 
 export type SeededTenant = {
   /** 'A' or 'B' — only for readable assertion messages. */
   label: string;
-  org: { id: string; slug: string; name: string };
+  org: { id: string; slug: string; name: string; vertical: string };
   admin: TenantActor;
   mentor: TenantActor;
   mentee: TenantActor;
@@ -159,6 +165,7 @@ async function seedActor(
   prefix: string,
   role: TenantRole,
   fullName: string,
+  vertical: TenantVertical,
   companyId?: string
 ): Promise<TenantActor> {
   const email = uniqueEmail(prefix);
@@ -168,18 +175,19 @@ async function seedActor(
     where: { id: user.id },
     data: { orgId, ...(companyId ? { companyId } : {}) },
   });
-  return { id: user.id, email, fullName, role, password: TENANT_PASSWORD, landing: roleHome(role) };
+  return { id: user.id, email, fullName, role, password: TENANT_PASSWORD, landing: roleHome(role), vertical };
 }
 
 async function seedTenant(
   scratch: SeedScratch,
   label: string,
   slugPrefix: string,
-  stamp: string
+  stamp: string,
+  vertical: TenantVertical
 ): Promise<SeededTenant> {
   const name = `Iso ${label}`;
   const org = await prisma.organization.create({
-    data: { name: `${name} Org ${stamp}`, slug: `${slugPrefix}-${stamp}` },
+    data: { name: `${name} Org ${stamp}`, slug: `${slugPrefix}-${stamp}`, vertical },
   });
   scratch.orgIds.push(org.id);
 
@@ -189,15 +197,16 @@ async function seedTenant(
     data: { orgId: org.id, name: `${name} Company ${stamp}`, industry: 'Software' },
   });
 
-  const admin = await seedActor(scratch, org.id, `iso-${slugPrefix}-admin`, 'ADMIN', `${name} Admin`);
-  const mentor = await seedActor(scratch, org.id, `iso-${slugPrefix}-mentor`, 'MENTOR', `${name} Mentor`);
-  const mentee = await seedActor(scratch, org.id, `iso-${slugPrefix}-mentee`, 'MENTEE', `${name} Mentee`);
+  const admin = await seedActor(scratch, org.id, `iso-${slugPrefix}-admin`, 'ADMIN', `${name} Admin`, vertical);
+  const mentor = await seedActor(scratch, org.id, `iso-${slugPrefix}-mentor`, 'MENTOR', `${name} Mentor`, vertical);
+  const mentee = await seedActor(scratch, org.id, `iso-${slugPrefix}-mentee`, 'MENTEE', `${name} Mentee`, vertical);
   const companyUser = await seedActor(
     scratch,
     org.id,
     `iso-${slugPrefix}-company`,
     'COMPANY',
     `${name} Company User`,
+    vertical,
     company.id
   );
 
@@ -278,7 +287,7 @@ async function seedTenant(
 
   return {
     label,
-    org: { id: org.id, slug: org.slug, name: org.name },
+    org: { id: org.id, slug: org.slug, name: org.name, vertical: org.vertical },
     admin,
     mentor,
     mentee,
@@ -293,12 +302,23 @@ async function seedTenant(
   };
 }
 
+/** `Organization.vertical` keys (src/lib/verticals.ts). */
+export type TenantVertical = 'INTERNSHIP' | 'MARKETING';
+
+/**
+ * Which product each tenant is (#2542). Both default to INTERNSHIP, the shape
+ * every spec written before the second product assumed; a cross-VERTICAL test
+ * sets one of them to MARKETING, because "a MARKETING admin reads the
+ * INTERNSHIP tenant's users" is the real-world shape of the leak.
+ */
+export type SeedTwoTenantsOptions = { verticalA?: TenantVertical; verticalB?: TenantVertical };
+
 /**
  * Create the two tenants. Call from `test.beforeAll` and `await
  * tenants.cleanup()` from `test.afterAll` — including on failure, or the next
  * run inherits the rows.
  */
-export async function seedTwoTenants(): Promise<TwoTenants> {
+export async function seedTwoTenants(options: SeedTwoTenantsOptions = {}): Promise<TwoTenants> {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   // Seeding is not a transaction, and a caller that never received a handle
   // cannot tear anything down: `beforeAll` rejects, `tenants` stays undefined
@@ -309,8 +329,8 @@ export async function seedTwoTenants(): Promise<TwoTenants> {
   // the database for good, with no failure that names the leak.
   const scratch: SeedScratch = { orgIds: [], emails: [] };
   try {
-    const orgA = await seedTenant(scratch, 'A', 'iso-a', stamp);
-    const orgB = await seedTenant(scratch, 'B', 'iso-b', stamp);
+    const orgA = await seedTenant(scratch, 'A', 'iso-a', stamp, options.verticalA ?? 'INTERNSHIP');
+    const orgB = await seedTenant(scratch, 'B', 'iso-b', stamp, options.verticalB ?? 'INTERNSHIP');
     const orgIds = [orgA.org.id, orgB.org.id];
 
     return {
@@ -375,13 +395,29 @@ async function removeSeededRows({ orgIds, emails }: SeedScratch): Promise<void> 
 }
 
 /**
+ * Put the browser context "on" a world's host (#2590): the marketing world is
+ * `marketing.bcsit-gmbh.de` (forged with `x-forwarded-host`, for the page AND
+ * `page.request`, which share the context's headers), every other world is the
+ * plain default host. A session works only on its own world's host, so a spec
+ * that hops between a MARKETING and an INTERNSHIP account calls this before each
+ * sign-in — the previous account's header must not leak onto the next one.
+ * Passing `{}` clears the header (context-level headers are replaced, not merged).
+ */
+export async function putOnWorld(page: Page, vertical: TenantVertical): Promise<void> {
+  await page.context().setExtraHTTPHeaders(vertical === 'MARKETING' ? asHost(MARKETING_HOST) : {});
+}
+
+/**
  * Sign in as one of the fixture's actors and wait for their role landing page.
  *
  * Wraps `signInAsFreshUser` rather than `signInAndSettle`: an isolation spec
  * hops between tenants inside one test, and that helper carries the guards for
  * signing in as a *different* user than the one currently signed in (see the
- * doc comment in `e2e/helpers/auth.ts`).
+ * doc comment in `e2e/helpers/auth.ts`). The context is moved onto the actor's
+ * own world host first ({@link putOnWorld}) and STAYS there, so every following
+ * `page.goto` / `page.request` call of the spec is that person on their site.
  */
 export async function signInAsTenantActor(page: Page, actor: TenantActor): Promise<void> {
+  await putOnWorld(page, actor.vertical);
   await signInAsFreshUser(page, actor.email, actor.password, actor.landing);
 }

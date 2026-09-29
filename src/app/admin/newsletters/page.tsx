@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Plus, Send, Trash2, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import {
+  BroadcastQuotaHoldLine,
   BroadcastQuotaLine,
   useBroadcastQuota,
   useBroadcastQuotaMessage,
+  type BroadcastQuotaHold,
 } from '@/components/ui/BroadcastQuota';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -73,6 +75,8 @@ interface IssueRecord {
   createdByName: string | null;
   createdBySystem: boolean;
   imageUrl: string | null;
+  /** Set when the issue is due and its tenant's broadcast band is holding it (#2335). */
+  quotaHold?: BroadcastQuotaHold | null;
 }
 
 const emptyIssue = (): NewsletterIssueContent => ({ subject: '', intro: '', tips: [{ emoji: '💡', title: '', body: '' }] });
@@ -723,6 +727,7 @@ export default function AdminNewslettersPage() {
                         {!issue.sentAt && issue.scheduledAt && ` · ${n.metaScheduled.replace('{when}', formatDateTime(issue.scheduledAt, locale))}`}
                         {issue.createdBySystem && ` · ${n.queuedBySystem}`}
                       </p>
+                      <BroadcastQuotaHoldLine hold={issue.quotaHold} testId={`newsletter-quota-hold-${issue.id}`} />
                       {issue.status === 'SENT' && (
                         <p className="mt-1 text-xs text-gray-500">
                           {n.metaRecipients.replace('{n}', String(issue.recipientCount))}

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { accountState } from '@/lib/accountState';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import type { Prisma } from '@prisma/client';
@@ -113,18 +114,30 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Tenant (#2542). `User` is in TENANT_MODELS, so with MT_ENFORCE_ISOLATION
+    // on the middleware scopes these reads too — but the flag is off in every
+    // deployment today, and since the MARKETING vertical became a second real
+    // tenant this route handed one tenant's admin the other's whole user list.
+    // So every `where` below is narrowed by hand (src/lib/tenantFilter.ts), the
+    // pattern /api/admin/invitations follows: it reads the same
+    // `resolveOrgId(session)` the middleware would inject.
+    const tenant = await tenantWhere(session);
+
     return await withTenantScope(session, async () => {
       // Mentors get a minimal, PII-free directory of active mentors/admins —
       // just enough for the project owner/member picker (#618).
       if (session.user.role === 'MENTOR') {
         const users = await prisma.user.findMany({
-          where: {
-            isActive: true,
-            OR: [
-              { role: { in: ['MENTOR', 'ADMIN'] } },
-              { role: 'MENTEE', menteeRelations: { some: { mentorId: session.user.id } } },
-            ],
-          },
+          where: withinTenant<Prisma.UserWhereInput>(
+            {
+              isActive: true,
+              OR: [
+                { role: { in: ['MENTOR', 'ADMIN'] } },
+                { role: 'MENTEE', menteeRelations: { some: { mentorId: session.user.id } } },
+              ],
+            },
+            tenant,
+          ),
           select: SELECTS.picker,
           orderBy: { fullName: 'asc' },
         });
@@ -141,12 +154,12 @@ export async function GET(request: Request) {
       const status = searchParams.get('status');
       const search = searchParams.get('search')?.trim();
 
-      const where: Prisma.UserWhereInput = {};
-      if (role) where.role = role;
-      if (status === 'active') where.isActive = true;
-      if (status === 'archived') where.isActive = false;
+      const filters: Prisma.UserWhereInput = {};
+      if (role) filters.role = role;
+      if (status === 'active') filters.isActive = true;
+      if (status === 'archived') filters.isActive = false;
       if (search) {
-        where.OR = [{ fullName: { contains: search } }, { email: { contains: search } }];
+        filters.OR = [{ fullName: { contains: search } }, { email: { contains: search } }];
       }
 
       // Tag filter (#887), evaluated in the DATABASE. The candidate list pages
@@ -162,11 +175,16 @@ export async function GET(request: Request) {
         const modeParam = searchParams.get('tagMode');
         const mode = isTagMode(modeParam) ? modeParam : 'or';
         if (mode === 'and') {
-          where.AND = tagIds.map((tagId) => ({ tags: { some: { tagId } } }));
+          filters.AND = tagIds.map((tagId) => ({ tags: { some: { tagId } } }));
         } else {
-          where.tags = { some: { tagId: { in: tagIds } } };
+          filters.tags = { some: { tagId: { in: tagIds } } };
         }
       }
+
+      // The request's filters, narrowed to the caller's tenant as a conjunct —
+      // an `AND`, so the search's `OR` and the tag filter's `AND` above can
+      // neither widen nor replace it.
+      const where = withinTenant(filters, tenant);
 
       // Mentor picker with capacity/availability (#942): same `where` filters
       // as everything else here, but the response needs two computed fields no
@@ -215,7 +233,7 @@ export async function GET(request: Request) {
       const [total, archivedCount, users] = await Promise.all([
         prisma.user.count({ where }),
         // For the "Archived (N)" tab: same role/search filter, opposite status.
-        prisma.user.count({ where: { ...where, isActive: false } }),
+        prisma.user.count({ where: withinTenant({ ...filters, isActive: false }, tenant) }),
         prisma.user.findMany({
           where,
           select,

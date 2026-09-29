@@ -41,7 +41,7 @@ test('invited registration inherits the invitation’s org immediately', async (
     data: { token: invite.token, email, password: PASSWORD, fullName: 'Invited OrgUser' },
   });
   expect(res.status()).toBe(201);
-  const user = await prisma.user.findUnique({ where: { email }, select: { orgId: true } });
+  const user = await prisma.user.findFirst({ where: { email }, select: { orgId: true } });
   expect(user?.orgId).toBe(orgId);
 });
 
@@ -53,7 +53,7 @@ test('token-less self-registration gets the default org, not null', async ({ req
     data: { email, password: PASSWORD, fullName: 'SelfReg OrgUser' },
   });
   expect(res.status()).toBe(201);
-  const user = await prisma.user.findUnique({ where: { email }, select: { orgId: true } });
+  const user = await prisma.user.findFirst({ where: { email }, select: { orgId: true } });
   expect(user?.orgId).toBe(orgId);
 });
 
@@ -74,6 +74,6 @@ test('a legacy invitation without an org still registers (falls back to default 
     data: { token: invite.token, email, password: PASSWORD, fullName: 'Legacy Invite OrgUser' },
   });
   expect(res.status()).toBe(201);
-  const user = await prisma.user.findUnique({ where: { email }, select: { orgId: true } });
+  const user = await prisma.user.findFirst({ where: { email }, select: { orgId: true } });
   expect(user?.orgId).toBe(orgId);
 });

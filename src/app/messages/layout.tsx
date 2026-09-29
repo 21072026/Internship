@@ -32,6 +32,10 @@ export async function generateViewport(): Promise<Viewport> {
 // Conversation threads are available to any authenticated participant.
 // MessagesShell provides the mobile app shell (full-height frame + header with
 // back/home) and the desktop document flow — see the comment in that file.
+// RoleShell adds the role's sidebar (#2358), but on desktop only: below `lg` its
+// top bar and padding sat around a frame sized to the whole viewport and pushed
+// the chat 88px past the bottom of the screen (#2463). On a phone MessagesShell's
+// own header is the way back out.
 export default async function MessagesLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   // The callbackUrl is what makes the manifest's "Messages" shortcut (#2084)
@@ -39,7 +43,7 @@ export default async function MessagesLayout({ children }: { children: React.Rea
   if (!session) redirect('/auth/signin?callbackUrl=/messages');
 
   return (
-    <RoleShell>
+    <RoleShell mobileChrome={false}>
       <MessagesShell homeHref={roleHome(session.user.role)}>{children}</MessagesShell>
     </RoleShell>
   );

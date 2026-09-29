@@ -23,6 +23,7 @@ dosyalardaki şu varsayımlar **geçersiz**:
 | `LifecycleStage` enum'u | `PipelineStage` satırları + `MARKETING_FUNNEL` preset'i (`src/lib/programTemplates.ts`) |
 | Kendi i18n'i | `src/i18n/` + `check:i18n` kapısı |
 | Marketing'e özel roller | Rol yok; dikey **yetenek** kısıtlar (`src/lib/verticals.ts`) |
+| Marketing'in ayrı kullanıcı tabanı (aynı kişi iki ayrı uygulamada, aynı e-posta) | Tek `User` tablosu, ama e-posta **dünya başına** benzersiz: aynı kişi iki ürüne aynı adresle, ayrı hesap ve ayrı parolayla girer; hangisini kullandığını girdiği **host** belirler — [`../worlds.md`](../worlds.md) |
 
 **Bir görevi buradan alıp doğrudan uygulamayın.** Önce `CURATION.md`'ye bakın:
 her görev, bu repoda zaten var olana karşı denetlenip **KEEP / ADAPT / DROP**
@@ -42,9 +43,15 @@ sürece tek bir PR sessizce farklı davranamaz.
 ## Dosyalar
 
 - `pipeline-record.md` — funnel kaydı nedir (bağlayıcı varsayılan karar)
+- `../worlds.md` — bir kişi, iki dünya: aynı e-posta iki üründe ayrı hesap, giriş
+  yapılan host'a göre ürün seçimi (#2590); devralınan değil, bu repo'nun kararı
 - `CURATION.md` — görev görev karar listesi (asıl okunacak dosya)
 - `backlog/INDEX.md` — devralınan epic tablosu
 - `backlog/epic-01..09-*.md` — devralınan epic'ler, olduğu gibi
+- `salevali-domain.md` — SaleVali'nin ticari modeli (fiyatlandırma, kanallar)
+- `salevali-usage-feed.md` — kullanım beslemesinin veri sözleşmesi (#2445),
+  devralınan değil: bu repo'nun kararlarıyla yazıldı
+- `old-server-teardown.md` — eski Marketing kutusunun sökümü
 
 ## Neden olduğu gibi saklandı
 

@@ -56,7 +56,7 @@ export default function CompanyRequisitionDetailPage() {
     });
     if (!res.ok) setError(text.errors.saveFailed); else await load();
   };
-  if (!requisition) return <p className="py-10 text-center text-gray-500">{t.common.loading}</p>;
+  if (!requisition) return <p className="py-10 text-center text-gray-500" data-testid="page-loading">{t.common.loading}</p>;
   return <div data-testid="requisition-shortlist"><Link href="/company/requisitions" className="text-sm text-blue-600">← {t.requisitions.title}</Link><h1 className="my-5 text-2xl font-bold text-gray-900 dark:text-gray-100">{requisition.title}</h1>
     {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
     <Card className="mb-5"><CardHeader><CardTitle>{text.shortlist}</CardTitle></CardHeader><div className="grid grid-cols-1 gap-3 md:grid-cols-2"><Select value={candidateId} onChange={(e) => setCandidateId(e.target.value)} placeholder={text.selectCandidate} options={candidates.map((candidate) => ({ value: candidate.id, label: candidate.fullName }))} /><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={text.note} /></div><Button className="mt-3" disabled={!candidateId} onClick={() => void add()}>{text.shortlistAction}</Button></Card>

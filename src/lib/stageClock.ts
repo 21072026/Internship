@@ -73,13 +73,31 @@ const asTime = (value: Date | string): number =>
  * formula came to disagree.
  */
 export function stageEnteredAt(relation: StageClockSource): number {
-  let entered = asTime(relation.startDate);
+  const started = asTime(relation.startDate);
+  const moved = lastStageMoveAt(relation);
+  return moved !== null && moved > started ? moved : started;
+}
+
+/**
+ * When the relation last actually MOVED stage, or `null` if it never did.
+ *
+ * `stageEnteredAt` floors that instant at `startDate` (see above), which makes
+ * it unable to answer "has this record moved at all": a relation created today
+ * and a relation that moved today read identically. The company list needs
+ * exactly that distinction — #2436 orders accounts by their last stage movement
+ * and requires rows with NO movement to land at the END of the list rather than
+ * mixed in at their creation date. Hence a separate, nullable answer, built on
+ * this module's own `isRealMove` rule so "a move" keeps meaning one thing on
+ * every surface.
+ */
+export function lastStageMoveAt(relation: StageClockSource): number | null {
+  let latest: number | null = null;
   for (const change of relation.statusChanges ?? []) {
     if (!isRealMove(change)) continue;
     const at = asTime(change.createdAt);
-    if (at > entered) entered = at;
+    if (latest === null || at > latest) latest = at;
   }
-  return entered;
+  return latest;
 }
 
 /** Whole days spent in the current stage. Never negative. */

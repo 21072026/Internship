@@ -1,7 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAsFreshUser } from './helpers/auth';
-import { COMPANY_ID_PARAM, MATRIX, type MatrixUser, type Role } from './fixtures/authz-matrix';
+import {
+  COMPANY_ID_PARAM,
+  CROSS_TENANT,
+  FOREIGN_COMPANY_ID_PARAM,
+  FOREIGN_USER_ID_PARAM,
+  MATRIX,
+  type MatrixUser,
+  type Role,
+} from './fixtures/authz-matrix';
 
 /**
  * Executable role × endpoint read matrix (#899).
@@ -44,6 +52,15 @@ const otherMenteeEmail = uniqueEmail('mx-other-mentee');
 // nothing at all. This second account is the positive half at route level
 // (#2432): it must read its own row and 404 on the foreign one.
 const assignedCompanyEmail = uniqueEmail('mx-company-assigned');
+// A second TENANT (#2542), on the MARKETING vertical — the real-world shape of
+// the leak: one product's admin reading the other product's people. Nobody
+// seeded above may see any of these, whatever their role.
+const foreignMenteeEmail = uniqueEmail('mx-foreign-mentee');
+const foreignAdminEmail = uniqueEmail('mx-foreign-admin');
+let foreignOrgId = '';
+let foreignCompanyId = '';
+/** Every id of the foreign tenant, for the "body must not carry it" check. */
+const foreignIds: string[] = [];
 
 const users = {} as Record<Role, MatrixUser>;
 let ownCompanyId = '';
@@ -120,6 +137,19 @@ test.beforeAll(async () => {
     ],
   });
 
+  const foreignOrg = await prisma.organization.create({
+    data: { name: `Matrix Foreign Org ${Date.now()}`, slug: `matrix-foreign-${Date.now()}`, vertical: 'MARKETING' },
+  });
+  foreignOrgId = foreignOrg.id;
+  const [foreignMentee, foreignAdmin, foreignCompany] = await Promise.all([
+    seedUser(foreignMenteeEmail, 'x', 'MENTEE', 'Matrix Foreign Mentee'),
+    seedUser(foreignAdminEmail, 'x', 'ADMIN', 'Matrix Foreign Admin'),
+    prisma.company.create({ data: { name: `Matrix Foreign ${Date.now()}`, orgId: foreignOrgId } }),
+  ]);
+  await prisma.user.updateMany({ where: { id: { in: [foreignMentee.id, foreignAdmin.id] } }, data: { orgId: foreignOrgId } });
+  foreignCompanyId = foreignCompany.id;
+  foreignIds.push(foreignMentee.id, foreignAdmin.id, foreignCompany.id);
+
   users.ADMIN = { id: admin.id, role: 'ADMIN' };
   // The mentor's one relation points at "our" company — the only company its
   // `company` scope may reach (#2432).
@@ -132,10 +162,18 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await prisma.interactionLog.deleteMany({ where: { relationId: { in: [ownRelationId, foreignRelationId] } } });
   await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [ownRelationId, foreignRelationId] } } });
-  for (const email of [...Object.values(emails), otherMentorEmail, otherMenteeEmail, assignedCompanyEmail]) {
+  for (const email of [
+    ...Object.values(emails),
+    otherMentorEmail,
+    otherMenteeEmail,
+    assignedCompanyEmail,
+    foreignMenteeEmail,
+    foreignAdminEmail,
+  ]) {
     await cleanupByEmail(email);
   }
-  await prisma.company.deleteMany({ where: { id: { in: [ownCompanyId, otherCompanyId] } } });
+  await prisma.company.deleteMany({ where: { id: { in: [ownCompanyId, otherCompanyId, foreignCompanyId] } } });
+  await prisma.organization.deleteMany({ where: { id: foreignOrgId } });
   await prisma.source.deleteMany({ where: { id: ownSourceId } });
   await prisma.organization.deleteMany({ where: { id: orgId } });
   await prisma.$disconnect();
@@ -219,6 +257,28 @@ for (const role of Object.keys(LANDING) as Role[]) {
         }
       }
     }
+
+    // The second tenant (#2542). Folded into this test rather than a test of
+    // its own so the smoke set does not grow by five: it signs in once either
+    // way, and the probes are plain GETs.
+    for (const entry of CROSS_TENANT) {
+      const path = entry.path
+        .replace(FOREIGN_USER_ID_PARAM, foreignIds[0])
+        .replace(FOREIGN_COMPANY_ID_PARAM, foreignCompanyId);
+      const res = await page.request.get(path);
+      const body = await res.text();
+      for (const id of foreignIds) {
+        expect(body, `${role} ${path} carried a row of another tenant`).not.toContain(id);
+      }
+      if (entry.kind === 'detail') {
+        expect([401, 403, 404], `${role} ${path} must not open another tenant's row`).toContain(res.status());
+        // The admin is authorized on every one of these routes, so a refusal
+        // other than "not found" would mean the probe never reached the lookup.
+        if (role === 'ADMIN') expect(res.status(), `ADMIN ${path}`).toBe(404);
+      } else if (role === 'ADMIN') {
+        expect(res.status(), `ADMIN ${path}`).toBe(200);
+      }
+    }
   });
 }
 
@@ -255,7 +315,10 @@ test('MENTEE and SOURCE cannot read the company book; a mentor reads only its ow
   }
 
   await signInAsFreshUser(page, emails.MENTOR, PASSWORD, LANDING.MENTOR);
-  const res = await page.request.get('/api/companies');
+  // `all=1` since #2437 paged this route: the claim under test is "exactly the
+  // companies of this mentor's relations", and a foreign row merely sitting on
+  // page 2 would satisfy a paged assertion while the leak was real.
+  const res = await page.request.get('/api/companies?all=1');
   expect(res.status()).toBe(200);
   const ids = ((await res.json()).companies as { id: string }[]).map((c) => c.id);
   expect(ids, 'the company of the mentor\'s own relation must be readable').toContain(ownCompanyId);
@@ -287,7 +350,7 @@ test('MENTEE and SOURCE cannot read the company book; a mentor reads only its ow
 test('an assigned COMPANY account reads its own company and nothing else', async ({ page }) => {
   await signInAsFreshUser(page, assignedCompanyEmail, PASSWORD, '/company');
 
-  const list = await page.request.get('/api/companies');
+  const list = await page.request.get('/api/companies?all=1');
   expect(list.status()).toBe(200);
   const ids = ((await list.json()).companies as { id: string }[]).map((c) => c.id);
   expect(ids, 'an assigned company account reads exactly its own row').toEqual([ownCompanyId]);

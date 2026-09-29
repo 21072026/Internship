@@ -187,12 +187,19 @@ export default function AdminOrganizationsPage() {
   // the API is the control.
   const changeVertical = async (id: string, next: string) => {
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch('/api/admin/organizations', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, vertical: next }),
       });
       if (res.ok) await load();
+      // A move can now be REFUSED (409 `vertical_move_email_conflict`, #2590: it
+      // would give one e-mail two accounts in the same product). Say so — the
+      // select just snaps back to the stored value, and a silent snap-back reads
+      // as "the click did not register". The server's sentence carries a count
+      // and no address, so it is safe to show verbatim.
+      else setError((await res.json().catch(() => ({}))).error ?? t.common.error);
     } finally {
       setSaving(false);
     }

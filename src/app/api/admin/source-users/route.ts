@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 
 const schema = z.object({
   sourceId: z.string().min(1),
@@ -28,14 +30,23 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const { sourceId, email, fullName } = parsed.data;
 
+  // Not org-scoped (#2542 left it): `Source` rows are still created without an
+  // orgId by /api/sources and /api/admin/sources, so a hand filter here would
+  // refuse every source this tenant made itself until those stamp one.
+  const orgId = resolveOrgId(session);
   const source = await prisma.source.findUnique({ where: { id: sourceId } });
   if (!source) return NextResponse.json({ error: 'Source not found' }, { status: 404 });
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+  // "Already exists" means IN THE ADMIN'S WORLD (#2590) — see
+  // /api/admin/company-users: an account under the same address in the other
+  // product is a different person-record, not a conflict.
+  if (await emailTakenInOrgWorld(email, orgId)) {
+    return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+  }
 
   const user = await prisma.user.create({
-    data: { email, fullName, role: 'SOURCE', sourceId, password: '!source-no-login', emailVerified: false, skills: [] },
+    // `orgId` by hand (#2542): see /api/admin/company-users.
+    data: { email, fullName, role: 'SOURCE', sourceId, orgId, password: '!source-no-login', emailVerified: false, skills: [] },
   });
 
   const token = await createPasswordResetToken(user.id, 'SET_INITIAL');

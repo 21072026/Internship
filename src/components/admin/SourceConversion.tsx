@@ -14,11 +14,21 @@ interface SourceRow {
   conversionToHired: number;
 }
 
-// Premium source-conversion report (Faz 2, #539) on the admin analytics page.
+// Lead attribution — the premium source-conversion report (Faz 2, #539) on the
+// admin analytics page.
 //
 // Mounted only when the tenant holds the premium analytics tier — the page's
 // single PremiumAnalyticsLocked panel speaks for the whole tier, so this
 // component no longer fires a request that is expected to 403 (#1442).
+//
+// THIS IS THE ONLY WAY A MARKETING TENANT REACHES ATTRIBUTION (#2421). The
+// /admin/sources screen is nav-gated on the `sourcing` capability, which the
+// MARKETING vertical does not carry; /admin/analytics carries no capability tag
+// and is visible to every vertical. It is NOT a mentorship card — whoever hides
+// the mentor-workload/RSVP cards for MARKETING (#2423) must leave this one
+// mounted. The column headers come from the dictionary and, for a marketing
+// tenant, from the terminology overlay on top of it (src/i18n/verticalOverlays.ts),
+// so the same table reads "Leads / Won" there and "Mentees / Hired" here.
 export function SourceConversion() {
   const t = useT();
   const c = t.analytics;
@@ -66,9 +76,9 @@ export function SourceConversion() {
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
               {rows.map((r) => (
-                <tr key={r.id}>
+                <tr key={r.id} data-testid={`source-row-${r.id}`}>
                   <td className="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{r.name}</td>
-                  <td className="py-2 pr-3">{r.mentees}</td>
+                  <td className="py-2 pr-3" data-testid="source-total">{r.mentees}</td>
                   <td className="py-2 pr-3">{r.inPipeline}</td>
                   <td className="py-2 pr-3">{r.hired}</td>
                   <td className="py-2">{r.conversionToHired}%</td>

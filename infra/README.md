@@ -84,44 +84,149 @@ self-contained nginx server block for `pr<N>.interncrm.com` into `$NGINX_CONF_DI
 from step 2 and `proxy_pass`es to the topic's port; teardown removes it. Both
 reload nginx afterwards.
 
-### The marketing host: `marketing.ersah.in` (#2428, epic #2348)
+### The marketing hosts: `marketing.bcsit-gmbh.de` / `.dev` (#2540, epic #2348)
 
-The MARKETING vertical's public landing is served **from the same prod
-container** as `interncrm.com` — two urls, two products, one deployment (#2355).
-What makes the box answer for the second domain:
+The MARKETING vertical's public landing is served **from the same containers** as
+the internship product — two urls, two products, one deployment (#2355). The live
+marketing domain is `marketing.bcsit-gmbh.de` (prod, `:3200`) and the test one is
+`marketing.bcsit-gmbh.dev` (preview, `:3201`). They replaced
+`marketing.ersah.in` / `preview-marketing.ersah.in` on 2026-09-23 (#2540); that
+apex now does **mail only**, and the two retired names redirect here.
 
-- **DNS** — an explicit `A` record `marketing.ersah.in → 92.5.120.186`, blessed
-  through the `dns-records.yml` workflow (the `*.ersah.in` wildcard and the MX
-  records were deliberately left alone: mail for that apex lives elsewhere).
-- **TLS** — the domain is on a *different apex* than the `*.interncrm.com`
-  wildcard, so it has its own certificate: `wildcard-cert.yml domain=ersah.in`
-  issues `*.ersah.in` by dns-01 into `/etc/caddy/certs/ersah.in.{cer,key}`.
-- **Site file** — `/etc/caddy/sites/marketing.ersah.in.caddy`, one
-  `reverse_proxy 127.0.0.1:3200` to the prod container (preview's
-  `preview-marketing.ersah.in.caddy` points at `:3201`). Same shape as the
-  topic site files `topic-deploy.sh` writes; nothing else is special about it.
+What makes the box answer for them:
+
+- **DNS** — an explicit `A` record per host → `92.5.120.186`, created on the
+  company domains directly (the `*.ersah.in` wildcard and its MX records were
+  deliberately left alone: mail for that apex lives elsewhere).
+- **TLS** — each name is on its own apex with **no wildcard on the box**, so
+  Caddy issues a certificate for it **automatically** (the same way the
+  `interncrm.com` apex works: its site file carries no `tls` directive). Nothing
+  to run by hand, and nothing to renew — do *not* copy the `tls /etc/caddy/certs/…`
+  lines the retired `*.ersah.in` hosts used. `.dev` is an HSTS-preloaded TLD, so
+  plain HTTP is not merely discouraged there, it is unusable: the certificate has
+  to be in place before a browser will talk to the host at all.
+- **Site file** — `/etc/caddy/sites/marketing.bcsit-gmbh.de.caddy`, one
+  `reverse_proxy 127.0.0.1:3200` to the prod container
+  (`marketing.bcsit-gmbh.dev.caddy` points at `:3201`). Same shape as the topic
+  site files `topic-deploy.sh` writes; nothing else is special about them.
 - **Which host means MARKETING** is the app's business, not Caddy's:
   `src/lib/hostVertical.ts` reads `X-Forwarded-Host`/`Host` and compares it with
   `MARKETING_HOSTS` (comma-separated bare hostnames). **Unset, empty or
-  whitespace-only means the default `marketing.ersah.in`**, so **prod's env file
-  sets nothing**. Preview does set `MARKETING_HOSTS='preview-marketing.ersah.in'`
-  in `/etc/internship-crm/preview.env` — and by setting it, preview stops
-  answering for the prod domain (the list replaces the default, it does not
-  extend it). `deploy-prod.sh` threads the variable as
+  whitespace-only means the default `marketing.bcsit-gmbh.de`**, so **prod's env
+  file sets nothing** — the constant in `src/lib/servedHosts.ts` IS the live
+  marketing domain. Preview does set
+  `MARKETING_HOSTS='marketing.bcsit-gmbh.dev'` in
+  `/etc/internship-crm/preview.env` — and by setting it, preview stops answering
+  for the prod domain (the list replaces the default, it does not extend it).
+  `deploy-prod.sh` threads the variable as
   `-e MARKETING_HOSTS="${MARKETING_HOSTS:-}"`, i.e. an env file with no value
   puts an **empty string** in the container; the app treats that as unset
-  (`src/lib/servedHosts.ts` `marketingHosts()`, unit-tested — the same set the #2488 redirect allowlist reads, so an empty value also made the marketing domain a non-served host) — it once did not, and the prod
-  marketing domain served the internship landing until #2428 (2026-09-21).
+  (`src/lib/servedHosts.ts` `marketingHosts()`, unit-tested — the same set the
+  #2488 redirect allowlist reads, so an empty value also made the marketing
+  domain a non-served host) — it once did not, and the prod marketing domain
+  served the internship landing until #2428 (2026-09-21).
 - Signed-in users never go through this: their vertical is their
   `Organization.vertical`. The host decides copy and chrome only (see the TRUST
   NOTE in `hostVertical.ts`).
 
-Verify after a deploy (both must hold):
+Moving the marketing domain again means changing **both** halves close together:
+while the app still defaults to the old name, the new host serves the internship
+landing, and the moment the default moves, the old host does. Add the new site
+file first (so the name resolves and gets its certificate), then ship the code
+default, then repoint `preview.env`, then turn the old site file into a redirect.
+
+Verify after a deploy (both must hold, on each host):
 
 ```bash
-curl -s https://marketing.ersah.in/ | grep -o '<title>[^<]*</title>'   # names SaleVali, not "Internship CRM"
-curl -s https://marketing.ersah.in/api/health | jq '{status,sha}'      # same sha as interncrm.com
+curl -s https://marketing.bcsit-gmbh.de/ | grep -o '<title>[^<]*</title>'  # names SaleVali, not "Internship CRM"
+curl -s https://marketing.bcsit-gmbh.de/api/health | jq '{status,sha}'     # same sha as interncrm.com
+curl -s https://marketing.bcsit-gmbh.dev/api/health | jq '{status,sha}'    # same sha as preview.interncrm.com
+curl -sI https://marketing.ersah.in/ | head -2                             # 308 → marketing.bcsit-gmbh.de
 ```
+
+The first line is **no longer only a hand check** (#2579). `uptime.yml` reads
+`/` and `/imprint` on both marketing hosts every run with
+`scripts/marketing-content-probe.mjs` — the `<title>` must name `SaleVali` and
+must not say `Internship CRM`. A finding opens its **own** incident: a separate
+`uptime-content-alert` issue + mail (subject *"Marketing host yanlış ürünü
+gösteriyor"*), never the outage's `uptime-alert` one. The two must not share a
+state — a content problem can stay open for days waiting on an env-file edit,
+and an outage of interncrm.com during those days would otherwise find
+"already alerting" and stay silent (the gap #2169 closed). A content finding on
+a host whose `/api/health` is already down is left to the outage alert, so one
+dead marketing host still opens one incident. The same title check runs inside
+`deploy-prod.sh` right after the swap, on every replica, but there it only
+**warns** (`::warning::` in the deploy job): the fix is an env-file edit, not a
+rollback. The host it asks for is named by the caller (`MARKETING_PROBE_HOST`
+in `deploy-prod.yml` / `deploy-preview.yml`), **not** read from
+`MARKETING_HOSTS` — whatever that variable names gets the marketing page by
+construction, so a check that took its host from there could never catch it
+being wrong; it also warns when the expected host is missing from the
+effective `MARKETING_HOSTS` set. Run the probe by hand with
+`node scripts/marketing-content-probe.mjs https://marketing.bcsit-gmbh.de/ https://marketing.bcsit-gmbh.dev/imprint`
+— silent and exit 0 when right, one `<url> -> <reason>` line per wrong page and
+exit 1 otherwise.
+
+#### Go-live checklist for the MARKETING org (#2579 — operator, needs prod access)
+
+The code half of #2579 is the probe above; the rest can only be done on the live
+system, by someone signed in there. Each step is **read-only unless it says
+otherwise**, goes through the app (never an outside connection to the prod
+database — `docs/DATA_ACCESS_POLICY.md`), and its result is posted as a comment
+on the story, #2578. Nothing below has been run by the change that wrote it.
+
+1. **Is there a MARKETING org, and is it complete?** As a super admin, open
+   `/admin/organizations`. Note how many rows show vertical `MARKETING`, and for
+   each: name, `brandName`, plan and the owner account(s) (a role, not a
+   person's details — the comment goes on a public issue). Then open
+   `/admin/organizations/<id>/pipeline` for each and check the stage list holds
+   **both** `TRIAL_ACTIVE` ("Trial running") and `TRIAL_EXPIRED`.
+   Why it matters: `expireTrials()` (`src/lib/jobs/trialReminders.ts`) returns 0
+   for an org that lacks either one — silently, by design — so a MARKETING org
+   without them never expires a trial.
+2. **Fix what step 1 found** (writes):
+   - *No MARKETING org:* create it from `/admin/organizations` with vertical
+     `MARKETING`. The marketing preset, trial stages included, is seeded by the
+     create call itself (`provisionStagePreset()`,
+     `src/lib/pipelineStages.ts`; stages in `src/lib/programTemplates.ts`) — do
+     not add them by hand afterwards.
+   - *An org exists but a trial stage is missing:* add it in that org's stage
+     editor (`/admin/organizations/<id>/pipeline`) with the exact key
+     (`TRIAL_ACTIVE` / `TRIAL_EXPIRED`, non-terminal, **not** off-path) and put
+     the count of stages added in the #2578 comment.
+   - *More than one org is affected:* stop editing by hand and open a task for
+     an idempotent deploy backfill instead (plain `.mjs`, an ESM mirror of the
+     marketing funnel with a parity test, and an explicit `orgId` on every
+     create — a deploy step has no session to bind one).
+   - Then prove the job sees the org. **This is a write, not a read:**
+     `GET /api/cron?job=trial-reminders&orgId=<id>` runs the real job for that
+     org — it mails every trial reminder that is due and expires overdue trials
+     to `TRIAL_EXPIRED`, exactly like the 05:20 UTC tick. Run it before real
+     prospects are in the org, or right after the 05:20 run so nothing is due.
+     Copy the URL exactly: a mistyped `job=` value does not fail, it falls
+     through to the full cron mail batch. Signed in as an ADMIN of that org,
+     the JSON's `trialReminders.orgs` must be `1` — which proves **only** the
+     vertical gate (the org is counted in scope because its vertical is
+     `MARKETING`), not that the trial stages exist; stage presence is proven
+     by the stage-editor check in step 1. `trialReminders.expired` /
+     `considered` are the fields that show the stages actually in use. (The
+     05:20 cron logs a line only on a tick that did something, so a quiet day
+     shows nothing in the container log.)
+3. **Host → org mapping** — *blocked on #2569*, which defines it; nothing in
+   `main` maps a host to an org today (`src/lib/hostVertical.ts` maps a host to a
+   *vertical* only). Once it lands: confirm prod's marketing host maps to the
+   org from step 1 and preview's to its preview twin. With no mapping the public
+   form stays closed — that is the safe failure, but it is still a failure to
+   report.
+4. **The content probe is green.** In Actions → *Uptime*, the latest run's
+   *Probe* step ends with `reach up` and `content up`, and no open issue
+   carries the `uptime-alert` or `uptime-content-alert` label. If it is red
+   for content, the first suspect is `MARKETING_HOSTS` in the environment's
+   env file (above).
+5. **The retired name still redirects:**
+   `curl -sI https://marketing.ersah.in/ | head -2` shows `308` and
+   `location: https://marketing.bcsit-gmbh.de/`. Repeat for
+   `preview-marketing.ersah.in` → `marketing.bcsit-gmbh.dev`.
 
 ### Proxy hops and `TRUSTED_PROXY_COUNT` (#858)
 
@@ -139,8 +244,12 @@ Cloudflare's proxy, bump `TRUSTED_PROXY_COUNT` to `2` for it in the same
 change**, or every visitor will be bucketed as the Cloudflare edge and one
 person's rate limit will throttle everyone.
 
-`0` disables the header entirely — right for a container reached directly, and
-what `playwright.config.ts` sets for the e2e webServer.
+`0` disables **both** proxy headers — `X-Forwarded-For` and `X-Real-IP` alike,
+since with nothing in front a client writes either one (#2470) — so every caller
+shares one bucket per limit. Right for a container reached directly; strict, but
+no header buys a way around it. The e2e webServer runs at `1` like production:
+its helpers send the `X-Forwarded-For` a one-hop proxy would
+(`e2e/helpers/rateLimit.ts`).
 
 ### Where the rate-limit counters live (`RATE_LIMIT_REDIS_URL`, #1696)
 
@@ -329,7 +438,10 @@ drops it when the PR closes; the daily topic sweep drops any that leak.
 
 Two consequences worth stating: a `prisma db push` on one PR no longer reshapes the
 schema under every other PR, and **no real preview data is reachable from a topic
-environment** — sign in with `admin.demo@demo.example.com` / `DemoPass123!`. The
+environment** — sign in with `admin.demo@demo.example.com` / `DemoPass123!`, or with
+`admin.marketing@demo.example.com` (same password) for the second, MARKETING-vertical
+demo tenant the seeder creates (#2443: thirty merchant accounts on the marketing
+funnel). The
 shared preview env at `preview.interncrm.com` keeps its own single database.
 
 Privileges usually need no setup: the script runs as root on the database host,

@@ -3,8 +3,8 @@
 // A signed-in user's vertical comes from their organization (verticalContext).
 // But the landing page and every other public page has no session, and the whole
 // point of #2355 is that TWO urls serve TWO products from ONE deployment:
-// interncrm.com shows the internship landing, marketing.ersah.in the marketing
-// one. The only per-request signal a public page has is the Host header, so that
+// interncrm.com shows the internship landing, marketing.bcsit-gmbh.de the
+// marketing one. The only per-request signal a public page has is the Host header, so that
 // is what decides the vertical there.
 //
 // Kept as a tiny, env-driven map rather than hard-coded hostnames: the marketing
@@ -21,15 +21,16 @@ import { DEFAULT_VERTICAL, type VerticalKey } from '@/lib/verticals';
 // with the redirect allowlist (#2488): a host that gets the marketing landing is
 // by construction a host a redirect may stay on. `hostnameOf` is re-exported so
 // existing importers keep working.
-import { hostnameOf, marketingHosts } from '@/lib/servedHosts';
+import { hostnameOf } from '@/lib/servedHosts';
+import { worldForHostHeader } from '@/lib/hostWorld';
 export { hostnameOf };
 
 // The vertical a given host serves. Pure, so it is unit-testable without the
-// request headers.
+// request headers. The rule itself lives in hostWorld.ts (docs/worlds.md): the
+// host that shows a product's landing is the same host that signs a person
+// into that product's account, and those two must never be two copies.
 export function verticalForHost(hostHeader: string | null | undefined): VerticalKey {
-  const host = hostnameOf(hostHeader);
-  if (host && marketingHosts().has(host)) return 'MARKETING';
-  return DEFAULT_VERTICAL;
+  return worldForHostHeader(hostHeader);
 }
 
 // The vertical for the current request's host. Reads X-Forwarded-Host first,
@@ -43,11 +44,20 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
 // value read here is the proxy's, not the client's. Even so, keep the contract:
 // the host-resolved vertical is COSMETIC — copy, landing sections, chrome — and
 // must not decide anything with cross-user weight (tenant scoping, roles, data
-// access). The ONE permitted authz-adjacent use is /api/register refusing a
-// token-less sign-up on a MARKETING host (#2501): its failure mode under a
-// forged header is refusing the forger's own request, nothing else. Anything
-// beyond that must key off a signal the request cannot influence (the session's
-// org, the invitation row), never this header.
+// access). There are exactly TWO permitted authz-adjacent uses, each chosen
+// because its worst case under a forged header harms only the forger:
+//   1. /api/register refusing a token-less sign-up on a MARKETING host (#2501):
+//      a forged header refuses the forger's own request, nothing else.
+//   2. The public enquiry / demo form choosing WHICH tenant's inbox a brand-new
+//      unauthenticated request is filed into (#2569, src/lib/publicHostOrg.ts):
+//      the host is looked up in an explicit `Organization.publicHost` mapping
+//      (exact match, no heuristic), and an unmapped marketing host is a closed
+//      form. A forged header can at worst put the forger's OWN request into
+//      another tenant's queue — a stranger's demo request, i.e. spam, under the
+//      same rate limit — and nothing is ever READ back out: the response names
+//      no org and carries no data.
+// Anything beyond that must key off a signal the request cannot influence (the
+// session's org, the invitation row), never this header.
 export async function hostVertical(): Promise<VerticalKey> {
   try {
     const h = await headers();

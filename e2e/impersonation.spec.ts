@@ -10,7 +10,7 @@ test('impersonating a company user loads that company\'s candidates', async ({ p
   const companyEmail = uniqueEmail('impco-company');
   const mentorEmail = uniqueEmail('impco-mentor');
   const menteeEmail = uniqueEmail('impco-mentee');
-  await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'ImpCo Admin');
+  const admin = await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'ImpCo Admin');
   const companyUser = await seedUser(companyEmail, 'x', 'COMPANY', 'ImpCo Login');
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'ImpCo Mentor');
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Zoltan Candidate');
@@ -21,6 +21,9 @@ test('impersonating a company user loads that company\'s candidates', async ({ p
   });
   const company = await prisma.company.create({ data: { name: 'ImpCo GmbH', orgId: org.id } });
   await prisma.user.update({ where: { id: companyUser.id }, data: { companyId: company.id, orgId: org.id } });
+  // /admin/users lists only the caller's tenant (#2542), so the admin doing the
+  // impersonating has to live in the company user's org too.
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: org.id } });
   const rel = await prisma.mentorshipRelation.create({
     data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id, orgId: org.id },
   });

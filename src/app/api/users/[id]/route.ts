@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { isPendingActivation, isErasedAccount, isUnusableEmail } from '@/lib/menteeAccount';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
@@ -15,6 +16,13 @@ import { getLastContacts } from '@/lib/lastContact';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 import { countExemptAdmins } from '@/lib/ssoEnforcement';
 
+// Tenant (#2542): every lookup by id in this file is narrowed to the caller's
+// own tenant (`tenantWhere`, src/lib/tenantFilter.ts), so a record of another
+// tenant answers exactly like an id that does not exist — 404, confirming
+// nothing. Not `assertSameOrg()`: that guard is a no-op while
+// MT_ENFORCE_ISOLATION is off, which is every deployment today, and a
+// MARKETING admin could read (and switch off) an INTERNSHIP mentee by id.
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -24,8 +32,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
 
     return await withTenantScope(session, async () => {
-      const user = await prisma.user.findUnique({
-        where: { id },
+      const user = await prisma.user.findFirst({
+        where: withinTenant({ id }, await tenantWhere(session)),
         select: {
           id: true,
           email: true,
@@ -134,6 +142,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     return await withTenantScope(session, async () => {
+      const tenant = await tenantWhere(session);
+      // The target must be in the caller's tenant before any field is looked
+      // at — otherwise the validation answers below (400 "last SSO
+      // exemption", "Only MENTOR and MENTEE accounts…") would describe a
+      // foreign account, and the update would write it.
+      const inTenant = await prisma.user.findFirst({ where: withinTenant({ id }, tenant), select: { id: true } });
+      if (!inTenant) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
       const body = await request.json();
       const data: {
         isActive?: boolean;
@@ -231,7 +249,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           return NextResponse.json({ error: 'A user cannot be their own source' }, { status: 400 });
         }
         if (target) {
-          const referrer = await prisma.user.findUnique({ where: { id: target }, select: { role: true } });
+          // Same tenant only (#2542): a referrer from another tenant is not a
+          // person this admin can see, so it is not one they can point at.
+          const referrer = await prisma.user.findFirst({ where: withinTenant({ id: target }, tenant), select: { role: true } });
           if (!referrer || !['ADMIN', 'MENTOR', 'MENTEE'].includes(referrer.role)) {
             return NextResponse.json({ error: 'Invalid source user' }, { status: 400 });
           }
