@@ -180,6 +180,18 @@ else's work ([`mentor-transfer.md`](mentor-transfer.md), #419).
 - The **funnel record** — a `MentorshipRelation` (owner, lead, account, stage), created
   through `src/lib/activeMentorship.ts` so "one mentee, at most one active mentor" (#419)
   holds.
+- The **trial window** (#2551) — when a row lands in `TRIAL_ACTIVE` (a create at that
+  stage, or an update that *moves* a record into it), `funnelRelationCreateData` /
+  `funnelRelationUpdateData` stamp `trialStartedAt` = the run time and `trialEndsAt` =
+  run time + the organisation's `trialLengthDays` (default 30), through the same rule
+  every other write into the stage uses (`trialWindowFor`, `src/lib/trialReminderRule.ts`).
+  A re-run that does not move a record stamps nothing, and an existing window is never
+  overwritten.
+
+  > **Warning:** the dates count from the **import day**, not from when the customer's
+  > trial actually began. A file of customers whose trials are already running gives
+  > every one of them a fresh `trialLengthDays` window. If that matters, correct the
+  > dates in the app after the run.
 - **Stage history** — a `StatusChange` on the relation when an existing record *moves*
   (`src/lib/stageChange.ts`, which refuses a no-op row by construction). A relation
   **created** at a stage gets no `StatusChange`: `stageEnteredAt()` already answers from
