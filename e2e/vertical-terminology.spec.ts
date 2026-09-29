@@ -336,6 +336,7 @@ test('a MARKETING rep reads /account with no mentorship word (#2558)', async ({ 
   const mkt = await adminIn('MARKETING');
   const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-acct');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, fixture.ownerEmail, 'TermPass123', '/');
     await page.goto('/account');
     await expect(page.getByTestId('account-menu-button').or(page.locator('h1, h2').first())).toBeVisible({ timeout: 20_000 });
