@@ -14,6 +14,7 @@ import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { MatchQuality } from '@/components/admin/MatchQuality';
 import { TrialConversionCard, type TrialConversionData } from '@/components/admin/TrialConversionCard';
+import { DealValueCard } from '@/components/admin/DealValueCard';
 import { useT } from '@/i18n/client';
 import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
@@ -695,6 +696,11 @@ export default function AdminAnalyticsPage() {
       {/* Trial → paid (#2556) — only for a tenant whose stage set has a trial
           stage; the route returns null for everyone else. */}
       {kpi?.trialConversion && <TrialConversionCard data={kpi.trialConversion} />}
+
+      {/* The estimated value of won deals (#2422) — MARKETING only: the route
+          answers `enabled: false` for any other vertical and the card then
+          draws nothing, so INTERNSHIP's page is unchanged. */}
+      <DealValueCard query={rangeQuery(range)} />
 
       {/* One column when the mentor card is not drawn (#2423), so the funnel
           does not sit next to an empty half of the row. */}

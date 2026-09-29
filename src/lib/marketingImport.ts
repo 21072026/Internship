@@ -58,6 +58,7 @@ import { normalizeEmailKey, normalizeNameKey, normalizePhoneKey } from './duplic
 import { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 import { planFieldUpdates } from './externalSyncPolicy';
 import { typedSourceName } from './leadSourceName';
+import { parseMinorUnits } from './money';
 import { TEXT_LIMITS } from './textLimits';
 import {
   DEFAULT_TRIAL_LENGTH_DAYS,
@@ -395,26 +396,10 @@ export function leadIndexKey(email: string): string {
   return isPlaceholderEmail(literal) ? literal : '';
 }
 
-/**
- * Money as integer minor units (CLAUDE.md: never a float). Accepts `1.234,50`
- * and `1,234.50` — the same file carries both when Excel has seen two locales —
- * by treating the LAST separator as the decimal point.
- */
-export function parseMinorUnits(raw: string): number | null {
-  const text = raw.trim();
-  if (!text) return null;
-  const cleaned = text.replace(/[^\d.,-]/g, '');
-  if (!/^-?[\d.,]+$/.test(cleaned) || !/\d/.test(cleaned)) return NaN;
-  const lastSep = Math.max(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','));
-  const tail = lastSep >= 0 ? cleaned.slice(lastSep + 1) : '';
-  // A trailing group of exactly 1-2 digits is a decimal fraction; 3 is a
-  // thousands group ("1.234" is one thousand two hundred thirty-four euro).
-  const hasFraction = lastSep >= 0 && tail.length > 0 && tail.length <= 2;
-  const whole = (hasFraction ? cleaned.slice(0, lastSep) : cleaned).replace(/[.,]/g, '');
-  const fraction = hasFraction ? tail.padEnd(2, '0') : '00';
-  const value = Number(`${whole}${fraction}`);
-  return Number.isSafeInteger(value) ? value : NaN;
-}
+// Money as integer minor units: the parser lives in ./money since #2422 (the
+// deal-value editor shares it) and is re-exported so existing callers and tests
+// keep their import.
+export { parseMinorUnits };
 
 /** `;`-separated, trimmed, de-duplicated, order preserved. */
 export function parseChannels(raw: string): string[] {
@@ -695,6 +680,11 @@ export interface MarketingRelationTarget {
   trialStartedAt?: Date | null;
   trialEndsAt?: Date | null;
   startDate?: Date | null;
+  /**
+   * The record's estimated monthly value today (`RelationValue.valueMinor`,
+   * #2422), null/absent for "no estimate" — what the `mrr` column gap-fills.
+   */
+  valueMinor?: number | null;
 }
 
 export interface MarketingTargetSnapshot {
@@ -782,6 +772,13 @@ export interface MarketingFunnelPlan {
    * (`missing` — a trial no reminder will fire for). Null for any other stage.
    */
   trialEnd: 'file' | 'kept' | 'default' | 'missing' | null;
+  /**
+   * The estimated monthly value to write (#2422) — the row's `mrr`, in minor
+   * units, EUR — or null when nothing is written: the file said nothing, it
+   * already agrees, or the record has an estimate the run may not overwrite
+   * (`planFieldUpdates`, gap-fill unless `--authoritative`).
+   */
+  valueMinor: number | null;
   /** True when anything above has to be written. */
   pending: boolean;
 }
@@ -1291,6 +1288,7 @@ function funnelChangedFields(funnel: MarketingFunnelPlan): string[] {
     if (funnel.fromStage !== funnel.toStage) fields.push('pipelineStatus');
     fields.push(...funnel.relationChanged.map((f) => `funnelRecord.${f}`));
   }
+  if (funnel.valueMinor !== null) fields.push('value');
   return fields;
 }
 
@@ -1386,6 +1384,17 @@ function planFunnel(
   const resolvedSourceName =
     context.leadSourceName !== undefined ? context.leadSourceName : typedSourceName(value.source);
   const sourceName = attributable ? resolvedSourceName : null;
+
+  // The estimated value (#2422): the file's `mrr` onto the record, through the
+  // one do-not-clobber policy every external writer shares. A record being
+  // created has nothing to clobber.
+  const valuePlan = planFieldUpdates(
+    { valueMinor: relation?.valueMinor ?? null },
+    { valueMinor: value.mrrMinor ?? undefined },
+    { authoritative: context.authoritative },
+  );
+  const valueMinor = valuePlan.changes.valueMinor ?? null;
+  if (valuePlan.withheld.length > 0) warnings.push('left alone: estimated value (mrr)');
 
   const toStage = value.stage;
   const fromStage = relation ? relation.pipelineStatus : null;
@@ -1483,6 +1492,7 @@ function planFunnel(
     relationChanged.length > 0 ||
     fromStage !== toStage ||
     relationCompanyDiffers ||
+    valueMinor !== null ||
     // A relation owned by someone else is a refusal, not a no-op: it must reach
     // the writer so the guard can report it as an ERROR on this row.
     relation.mentorId !== ownerId;
@@ -1503,6 +1513,7 @@ function planFunnel(
     relationChanged,
     relationWithheld,
     trialEnd,
+    valueMinor,
     pending,
   };
 }

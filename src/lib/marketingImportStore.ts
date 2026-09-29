@@ -196,11 +196,17 @@ async function loadSnapshot(
           trialStartedAt: true,
           trialEndsAt: true,
           startDate: true,
+          // The estimate the `mrr` column may gap-fill (#2422).
+          value: { select: { valueMinor: true } },
         },
       })
     : [];
 
-  return { accounts, leads, relations };
+  return {
+    accounts,
+    leads,
+    relations: relations.map(({ value, ...r }) => ({ ...r, valueMinor: value?.valueMinor ?? null })),
+  };
 }
 
 // ── The writer ───────────────────────────────────────────────────────────────
@@ -277,6 +283,28 @@ function accountCreateData(row: MarketingPlannedRow, orgId: string | null) {
     contactPhone: changes.contactPhone ?? null,
     externalId: changes.externalId ?? null,
   };
+}
+
+/**
+ * The row's `mrr` as the record's estimated monthly value (#2422). The plan
+ * already applied the gap-fill policy (`funnel.valueMinor` is null when there
+ * is nothing to write); the file carries no currency column, and every amount
+ * the import parses is euro cents (MarketingAccountRow.mrrMinor). The relation's
+ * org is stamped explicitly: an import run binds no tenant context of its own.
+ */
+async function writeImportedValue(
+  tx: TxClient,
+  relationId: string,
+  funnel: NonNullable<MarketingPlannedRow['value']['funnel']>,
+  context: WriterContext,
+): Promise<void> {
+  if (funnel.valueMinor === null) return;
+  const data = { valueMinor: funnel.valueMinor, currency: 'EUR', source: 'IMPORT', updatedById: funnel.ownerId };
+  await tx.relationValue.upsert({
+    where: { relationId },
+    create: { ...data, relationId, orgId: context.orgId },
+    update: data,
+  });
 }
 
 /**
@@ -357,14 +385,16 @@ async function placeOnFunnel(
   if (!active) {
     // A record created straight into TRIAL_ACTIVE gets its trial window in the
     // same insert (#2551) — see funnelRelationCreateData().
-    await tx.mentorshipRelation.create({
+    const created = await tx.mentorshipRelation.create({
       data: funnelRelationCreateData(funnel, leadId, {
         orgId: context.orgId,
         companyId,
         now: new Date(),
         trialLengthDays: context.trialLengthDays,
       }),
+      select: { id: true },
     });
+    await writeImportedValue(tx, created.id, funnel, context);
     // No StatusChange for a relation CREATED at this stage: `stageEnteredAt()`
     // already answers from `startDate` when there is no history
     // (src/lib/stageClock.ts), and a from→to row would record a move that never
@@ -377,6 +407,7 @@ async function placeOnFunnel(
     select: { pipelineStatus: true, companyId: true, trialStartedAt: true, trialEndsAt: true },
   });
   const fromStatus = current?.pipelineStatus ?? funnel.fromStage ?? funnel.toStage;
+  await writeImportedValue(tx, active.id, funnel, context);
   await tx.mentorshipRelation.update({
     where: { id: active.id },
     data: funnelRelationUpdateData(funnel, current, {

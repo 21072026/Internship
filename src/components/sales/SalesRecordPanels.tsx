@@ -3,8 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
+import { DealValuePanel, type DealValueState } from '@/components/DealValuePanel';
 
-// The two editors a sales rep has on their own record (#2580): the follow-up
+// The editors a sales rep has on their own record (#2580): the follow-up
 // (#2563, PUT /api/mentorship/[id] — owner or ADMIN) and the trial end (#2553,
 // PATCH /api/mentorship/[id]/trial — owner or ADMIN, `pipeline` capability).
 // The page around them is a server component, so a save refreshes it — the
@@ -17,6 +18,7 @@ export function SalesRecordPanels({
   nextActionNote,
   trialStartedAt,
   trialEndsAt,
+  dealValue,
 }: {
   relationId: string;
   status: string;
@@ -25,6 +27,7 @@ export function SalesRecordPanels({
   nextActionNote: string | null;
   trialStartedAt: string | null;
   trialEndsAt: string | null;
+  dealValue: DealValueState;
 }) {
   const router = useRouter();
   const refresh = () => router.refresh();
@@ -48,6 +51,11 @@ export function SalesRecordPanels({
           canEdit={status === 'ACTIVE'}
           onSaved={refresh}
         />
+      </div>
+      {/* The estimated monthly value (#2422, PUT /api/mentorship/[id]/value —
+          owner or ADMIN). */}
+      <div className="mb-6">
+        <DealValuePanel relationId={relationId} initial={dealValue} onSaved={refresh} />
       </div>
     </>
   );

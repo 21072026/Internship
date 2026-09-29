@@ -7753,3 +7753,25 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   has an EN/TR/DE label by importing `src/i18n/dictionaries.ts` directly.
 
 - **Review follow-up (#2573):** making a list per vertical isn't finished until the copy around it is too. Grep for every string that frames the list (card titles, empty states, dialog hints) and give each a `verticalOverlays.ts` leaf. Leave a leaf out when the base text already fits (TR `dialogHint` did). Also: killing the `npx next start` wrapper PID orphans `next-server` on the port. Check `ss -ltnp` and kill the child too.
+
+
+## 2026-09-29 — Estimated deal value (#2422)
+
+- **Before adding a column to `MentorshipRelation`, count the read paths that `include` it
+  whole.** `GET /api/mentorship`, `GET/PUT /api/mentorship/[id]` and many more return every
+  relation scalar to the mentee, the company user and the source; #2563 had to strip its
+  next-action columns by hand on two of them. A commercial figure went into its own 1:1 table
+  (`RelationValue`, `relationId` as `@id`) instead — a row nobody `include`s leaks nowhere, and
+  the e2e asserts the lead's payloads never carry `valueMinor`.
+- **A sibling worktree may be writing the helper your issue depends on.** #2556's
+  `relationChains`/`mergeChainJourney` were in flight in another worktree's `funnelKpi.ts`
+  (readable under `.claude/worktrees/*`); putting a second copy there guarantees a conflict. Keep
+  the fold private to your own module, mirror the semantics, and name the swap as a follow-up.
+- **"Same definition as X" is cheapest to prove with a parity test**, not by editing X: the
+  deal-value unit test runs `retentionTriangle` and `valueByMonth` on the same journeys and
+  compares the won counts month by month.
+- **`e2e/trial-end-extend.spec.ts` signs a MARKETING admin in on the default host** and now gets
+  `WRONG_WORLD` (#2590's per-host worlds): the sign-in page shows "this account lives in
+  SaleVali". It touches nothing a trial-end change does; fix the spec's host, not your code.
+- **A feature card that is true only WITHOUT a module** had no tag to express it; `features.ts`
+  now has `withoutCapability` and one `isFeatureShown()` filter shared by `/` and `/features`.

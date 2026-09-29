@@ -4,7 +4,7 @@ import {
   Github, ShieldCheck, Languages, ScrollText, Code2, FlaskConical,
 } from 'lucide-react';
 import { IS_DEMO_MODE, demoUrl } from '@/lib/demoMode';
-import { getFeatures } from '@/lib/features';
+import { getFeatures, isFeatureShown } from '@/lib/features';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
@@ -55,7 +55,7 @@ export default async function HomePage() {
   const vertical = await resolveRequestVertical();
   const isMarketing = vertical === 'MARKETING';
   const caps = verticalCapabilities(vertical);
-  const features = getFeatures(t).filter((f) => f.featured && (!f.capability || caps.includes(f.capability)));
+  const features = getFeatures(t).filter((f) => f.featured && isFeatureShown(f, caps));
 
   // The marketing landing's demo form (#2569). /for-companies is an internship
   // page (404 here since #2544), so the form lives on this page. It is only OPEN

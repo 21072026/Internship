@@ -221,6 +221,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // sweep's own counting) inside one tenant. Without it a per-org report of
   // "who did we warn about an expiring trial?" would answer across tenants.
   'TrialReminder',
+  // A funnel record's estimated monthly value (#2422). Commercial data, like
+  // Placement next door: one tenant must never read or sum another's pipeline
+  // value. Every writer — the owner/ADMIN edit route, the marketing import and
+  // the mentor transfer — stamps the relation's own orgId explicitly, so the
+  // sessionless import run is right without a bound context; the registration
+  // keeps every reader (the monthly series on /admin/analytics) in its tenant.
+  'RelationValue',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

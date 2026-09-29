@@ -139,10 +139,13 @@ function memoryWriter(store) {
         ...data,
         // `@default(now())` on the column.
         startDate: data.startDate ?? now,
+        // The estimated value (#2422) — `writeImportedValue` in the Prisma writer.
+        valueMinor: funnel.valueMinor,
       });
       return;
     }
     Object.assign(active, funnelRelationUpdateData(funnel, active, { companyId, now, trialLengthDays }));
+    if (funnel.valueMinor !== null) active.valueMinor = funnel.valueMinor;
   };
   return {
     async createAccount(row) {
@@ -456,6 +459,30 @@ test('a second apply of the same file is all UNCHANGED', async () => {
   assert.equal(store.accounts.length, 3);
   assert.equal(store.leads.length, 2);
   assert.equal(store.relations.length, 2);
+});
+
+test('the mrr column lands as the record\'s estimated value, gap-fill unless authoritative (#2422)', async () => {
+  const store = memoryStore();
+  await runFile(FIXTURE_TEXT, store, { apply: true });
+  const lead = store.leads.find((l) => l.email === standIn('lena@nordlicht.example'));
+  const relation = store.relations.find((r) => r.menteeId === lead.id);
+  assert.equal(relation.valueMinor, 125000, '"1.250,00" is 125 000 cents — integer, never a float');
+  // An mrr of 0 is a value (a free account), not "no opinion".
+  const ayse = store.leads.find((l) => l.email === standIn('ayse@ist.example'));
+  assert.equal(store.relations.find((r) => r.menteeId === ayse.id).valueMinor, 0);
+
+  // A rep re-estimates the account; the next run of the old file leaves it alone …
+  relation.valueMinor = 99000;
+  const gapFill = await runFile(FIXTURE_TEXT, store, { apply: true });
+  assert.equal(relation.valueMinor, 99000);
+  const row = gapFill.rows.find((r) => r.value.input.name === 'Nordlicht Handel GmbH');
+  assert.equal(row.status, 'UNCHANGED');
+  assert.match(row.reason, /left alone: estimated value/);
+
+  // … and only an authoritative run overwrites it.
+  const authoritative = await runFile(FIXTURE_TEXT, store, { apply: true, authoritative: true });
+  assert.equal(relation.valueMinor, 125000);
+  assert.ok(authoritative.rows.find((r) => r.value.input.name === 'Nordlicht Handel GmbH').changed.includes('value'));
 });
 
 test('a row with a stage but no contact keeps its account and warns about the stage', async () => {

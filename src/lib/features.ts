@@ -62,8 +62,24 @@ export interface Feature {
   // rule at the top of this file (#2500/#2475). Untagged = shown to every
   // vertical. Both the landing grid and /features filter on it.
   capability?: VerticalCapability;
+  // The opposite tag (#2422): the card's promise holds only for a vertical that
+  // does NOT carry this module. Used where a feature exists precisely because
+  // the module is absent — the sales-side estimated deal value is shown where
+  // there is a pipeline and no mentorship, the same rule as `/sales`. Rare on
+  // purpose; everything in the tagging note above still applies.
+  withoutCapability?: VerticalCapability;
   title: string;
   desc: string;
+}
+
+/**
+ * Whether a card's promise holds for a vertical carrying `caps` — the one
+ * filter both readers (the landing grid and /features) apply.
+ */
+export function isFeatureShown(feature: Pick<Feature, 'capability' | 'withoutCapability'>, caps: readonly VerticalCapability[]): boolean {
+  if (feature.capability && !caps.includes(feature.capability)) return false;
+  if (feature.withoutCapability && caps.includes(feature.withoutCapability)) return false;
+  return true;
 }
 
 export const FEATURE_CATEGORIES: FeatureCategory[] = [
@@ -138,6 +154,10 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'ownWorkspace', category: 'tracking', icon: Users, color: 'green', title: C.ownWorkspace.t, desc: C.ownWorkspace.d },
     // #2560 — the account detail page; every vertical with companies has it.
     { key: 'accountDetail', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.accountDetail.t, desc: C.accountDetail.d },
+    // #2422 — the estimated monthly value of an account, and its monthly series
+    // on the analytics page. Sales-side only: an internship programme values a
+    // placement through the ROI model instead, so it carries withoutCapability.
+    { key: 'dealValue', category: 'insights', icon: BadgeEuro, color: 'green', withoutCapability: 'mentorship', title: C.dealValue.t, desc: C.dealValue.d },
     // #2569 — the public enquiry / demo form, filed by host into the right org.
     { key: 'webRequests', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.webRequests.t, desc: C.webRequests.d },
     // #2577 — per-account contact permission with its proof, and the double opt-in.

@@ -276,6 +276,21 @@ export async function transferMentorship(opts: {
         },
         select: { id: true },
       });
+      // The account's estimated value follows the journey too (#2422): it is
+      // a property of the customer, not of the owner. Copied, not moved — the
+      // closed predecessor keeps its own row, and the monthly series folds the
+      // chain into one journey valued by its newest link, so nothing is
+      // counted twice (src/lib/dealValue.ts). Same transaction, so a rolled
+      // back transfer leaves no orphan estimate behind.
+      const value = await tx.relationValue.findUnique({
+        where: { relationId: relation.id },
+        select: { valueMinor: true, currency: true, source: true },
+      });
+      if (value) {
+        await tx.relationValue.create({
+          data: { ...value, relationId: created.id, orgId: relation.orgId, updatedById: actorId },
+        });
+      }
       return created.id;
     });
   } catch (e) {

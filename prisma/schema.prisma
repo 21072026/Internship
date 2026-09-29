@@ -175,6 +175,7 @@ model Organization {
   announcements        Announcement[]
   newsletters          Newsletter[]
   trialReminders       TrialReminder[]
+  relationValues       RelationValue[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -2448,6 +2449,9 @@ model MentorshipRelation {
   weeklyReportReminders WeeklyReportReminder[]
   trialReminders        TrialReminder[]
   placement             Placement?
+  // The record's ESTIMATED monthly value (#2422) — its own row, never a scalar
+  // here; see model RelationValue for why.
+  value                 RelationValue?
   rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
   previousRelation      MentorshipRelation?    @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
   // At most one successor in practice (a closed relation is transferred once),
@@ -3524,6 +3528,45 @@ model TrialReminder {
 
   @@unique([relationId, threshold])
   @@index([sentAt])
+}
+
+// The ESTIMATED monthly value of a funnel record (#2422, story #2393): what the
+// account is thought to be worth per month once won. An ESTIMATE, and every
+// label that shows it says so — the MARKETING vertical sells usage-based
+// pricing (a base fee plus transaction tiers), so an account's real monthly
+// revenue moves every month and lives in the billing system, not here. This
+// table only stores the figure somebody typed or imported, and
+// src/lib/dealValue.ts adds those figures up month by month.
+//
+// ITS OWN TABLE, NOT TWO COLUMNS ON MentorshipRelation — the one deliberate
+// deviation from the issue text. Dozens of read paths return every scalar of a
+// relation (`include:` without a top-level `select`) to its mentee, its
+// company user and its source, and #1801 makes "the person a record is about
+// does not read the operator's view of them back" a rule. A column would leak
+// on every one of those paths until each was found and stripped; a row nobody
+// `include`s leaks on none. Same shape as Placement.valueMinor next door.
+//
+// MONEY, the src/lib/roi.ts rules: an integer in MINOR units (cents) plus an
+// ISO 4217 code, never a float. No row means "no estimate", which is not 0.
+model RelationValue {
+  // Nullable orgId, like the relation it hangs off; every writer stamps the
+  // relation's own orgId explicitly (the importer and the transfer run where
+  // the middleware may bind none).
+  orgId       String?
+  org         Organization?      @relation(fields: [orgId], references: [id])
+  relationId  String             @id
+  relation    MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  valueMinor  Int
+  currency    String             @default("EUR") @db.VarChar(3)
+  // MANUAL (the record's owner or an ADMIN typed it) | IMPORT (the marketing
+  // account import's `mrr` column). A transfer copies the predecessor's.
+  source      String             @default("MANUAL") @db.VarChar(20)
+  // Plain id, no FK: erasing a person must not be blocked by, or cascade into,
+  // a commercial figure they once typed (same reasoning as Placement.offerId).
+  updatedById String?
+  updatedAt   DateTime           @updatedAt
+
+  @@index([orgId])
 }
 
 // Structured hiring demand (#806). CompanyNeed remains in place during the
