@@ -252,6 +252,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/companyContactErasure.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'erase the person, keep the company: an address-matched scrub never reaches another tenant\'s row, an org-less subject is never "every org", and no account column is touched (#2434)',
+    },
+  ],
+  [
     'src/lib/marketingImport.ts',
     {
       floor: 95,
