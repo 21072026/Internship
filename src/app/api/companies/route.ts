@@ -9,11 +9,25 @@ import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import {
   companySortKeys,
-  compareSortKeys,
+  derivedPageWindow,
   isDerivedSort,
   parseCompanySort,
+  rankByDerivedKey,
   type CompanySortRelation,
 } from '@/lib/companySort';
+import { REAL_STAGE_MOVE } from '@/lib/stageChange';
+import type { Prisma } from '@prisma/client';
+
+// The `name` order, made total. `Company.name` is not unique (the marketing
+// import dedupes on name + country), and MySQL may return tied rows in a
+// different order for a different LIMIT/OFFSET — so without the id two
+// same-named accounts could repeat on one page and vanish from the next. The
+// derived orders page their never-moved tail with this same order (#2528), so
+// the two stay one definition.
+const COMPANY_NAME_ORDER: Prisma.CompanyOrderByWithRelationInput[] = [
+  { name: 'asc' },
+  { id: 'asc' },
+];
 
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required').max(TEXT_LIMITS.companyName),
@@ -130,49 +144,102 @@ export async function GET(request: Request) {
         companies = await prisma.company.findMany({
           where,
           include,
-          orderBy: sort === 'created' ? { createdAt: 'desc' } : { name: 'asc' },
+          orderBy: sort === 'created' ? { createdAt: 'desc' } : COMPANY_NAME_ORDER,
           ...(all ? {} : { skip, take: pageSize }),
         });
       } else {
         // "Last stage movement" and "longest waiting in stage" are not columns
         // on Company and cannot be reached by Prisma's `orderBy` (it only
-        // crosses a to-many relation through `_count`), so the scoped set is
-        // ranked here and the page is sliced from the ranked list — the same
-        // shape `/api/candidates` uses for its in-memory skill filter. The
-        // extra cost is one relation query, and only for these two orders.
+        // crosses a to-many relation through `_count`), so they are ranked
+        // here. Bounded since #2528 — this used to read every scoped company
+        // (needs, `_count` and all) plus EVERY StatusChange of every relation
+        // of those companies, on any `?sort=movement`, just to slice a page.
+        // Now the database does the heavy half:
         //
-        // It is an UNBOUNDED cost, and that is tracked as #2528: this reads
-        // every scoped company and every StatusChange of every relation of
-        // those companies before slicing a page out. Fine for an admin's
-        // account book today; the two ways to bound it (fetch only the newest
-        // real change, or maintain the column) are written up there.
-        const rows = await prisma.company.findMany({ where, include, orderBy: { name: 'asc' } });
+        //   1. the scoped relations that have EVER really moved — three narrow
+        //      columns each, no history;
+        //   2. their newest real move, as a `MAX(createdAt) … GROUP BY` — one
+        //      row per relation. Not a nested `statusChanges: { take: 1 }`:
+        //      across many parents Prisma 5 drops that LIMIT and paginates in
+        //      the engine, so every real row would still be loaded;
+        //   3. the names of the accounts that got a key, to rank them;
+        //   4. full rows for the page only — the keyed head, and then the
+        //      keyless tail, which is last by definition and in name order, so
+        //      the database pages it (`derivedPageWindow`).
+        //
         // Scoped exactly like the `_count` above, and for the same reason: an
         // ORDER derived from rows the caller may not read is still a fact about
         // them. Unscoped, `sort=movement` would rank a MENTOR's companies by
         // when OTHER mentors last moved a stage there — the inference the count
         // comment three screens up refuses to allow.
-        const relations: CompanySortRelation[] = await prisma.mentorshipRelation.findMany({
-          where: andScope(relationScope, { companyId: { in: rows.map((c) => c.id) } }),
-          select: {
-            companyId: true,
-            startDate: true,
-            // `fromStatus`/`toStatus` come along so `stageClock` can skip the
-            // no-op rows (#2264) — the newest row is not necessarily a move.
-            statusChanges: { select: { createdAt: true, fromStatus: true, toStatus: true } },
-          },
+        const moved = await prisma.mentorshipRelation.findMany({
+          where: andScope(relationScope, {
+            company: { is: where },
+            // The query-side twin of stageClock's `isRealMove` (#2264): a
+            // relation whose only rows are no-ops has never moved.
+            statusChanges: { some: REAL_STAGE_MOVE },
+          }),
+          select: { id: true, companyId: true, startDate: true },
+        });
+        // StatusChange carries no `orgId` of its own, so it is reached through
+        // the relation ids the tenant-scoped query above returned — never
+        // through a nested relation filter, which the middleware does not see.
+        const lastMoves = moved.length
+          ? await prisma.statusChange.groupBy({
+              by: ['relationId'],
+              where: { ...REAL_STAGE_MOVE, relationId: { in: moved.map((r) => r.id) } },
+              _max: { createdAt: true },
+            })
+          : [];
+        const lastMoveOf = new Map(lastMoves.map((m) => [m.relationId, m._max.createdAt]));
+        // Each relation hands the clock its single newest real move, which
+        // `StageClockSource` accepts as is (the no-ops were filtered by the
+        // query). So "has this record ever moved" and both keys are still
+        // decided by `companySortKeys` / `lastStageMoveAt`, nowhere else.
+        const relations: CompanySortRelation[] = moved.map((r) => {
+          const at = lastMoveOf.get(r.id);
+          return {
+            companyId: r.companyId,
+            startDate: r.startDate,
+            statusChanges: at ? [{ createdAt: at }] : [],
+          };
         });
         const keys = companySortKeys(relations, sort);
-        // Name is the tie-breaker, including between the accounts that have no
-        // key at all: those all land at the end (compareSortKeys), and they
-        // stay alphabetical there instead of in whatever order MySQL returned.
-        const ranked = rows
-          .slice()
-          .sort(
-            (a, b) =>
-              compareSortKeys(keys.get(a.id), keys.get(b.id)) || a.name.localeCompare(b.name)
-          );
-        companies = all ? ranked : ranked.slice(skip, skip + pageSize);
+
+        // `where` again, so the head is the scoped + searched set by the same
+        // rule as `total`, whatever the relation filter above reached.
+        const keyed = keys.size
+          ? await prisma.company.findMany({
+              where: andScope(where, { id: { in: [...keys.keys()] } }),
+              select: { id: true, name: true },
+            })
+          : [];
+        const ranked = rankByDerivedKey(keyed, keys).map((c) => c.id);
+
+        const slot = all ? null : derivedPageWindow(ranked.length, skip, pageSize);
+        const headIds = slot ? ranked.slice(slot.headStart, slot.headEnd) : ranked;
+        const tailWhere = andScope(where, ranked.length > 0 && { id: { notIn: ranked } });
+        const [head, tail] = await Promise.all([
+          headIds.length
+            ? prisma.company.findMany({ where: andScope(where, { id: { in: headIds } }), include })
+            : [],
+          !slot || slot.tailTake > 0
+            ? prisma.company.findMany({
+                where: tailWhere,
+                include,
+                orderBy: COMPANY_NAME_ORDER,
+                ...(slot ? { skip: slot.tailSkip, take: slot.tailTake } : {}),
+              })
+            : [],
+        ]);
+        const headById = new Map(head.map((c) => [c.id, c]));
+        companies = [
+          ...headIds.flatMap((id) => {
+            const row = headById.get(id);
+            return row ? [row] : [];
+          }),
+          ...tail,
+        ];
       }
 
       // Which ROWS came back is the scope above (#2431); which COLUMNS of
