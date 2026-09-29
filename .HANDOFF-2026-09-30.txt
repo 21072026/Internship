@@ -1,0 +1,32 @@
+# Marketing vertical backlog — handoff, 2026-09-30 (Wave 1-3 complete, Wave 4 ready)
+
+## Session 2 Summary (2026-09-23 → 2026-09-30)
+✅ Merged 9 PRs: #2521-26 (wave 2), #2529-31 (wave 3)
+✅ Fixed merge conflicts: #2524 (companies page), #2530 (todo visibility)
+✅ Closed: feat/2396 wip commit cleanup
+✅ Released: #2532 merged (marketing wave retrospective docs)
+✅ Wave 4 design: CompanyContact model + admin detail page plan ready
+
+## Where to start (Wave 4)
+
+### 1. CompanyContact (#2442 — OPEN, ready to start)
+Plan file: /Users/testtest/.claude/plans/elegant-imagining-fiddle.md (APPROVED)
+
+Key points:
+- New model: CompanyContact { id, orgId, companyId, email, name, phone?, role? }
+- Pattern: InteractionLog-style (separate create form, not nested)
+- Authorization: reuse Company scope + new redaction layer
+- Files: schema + 2 API routes + admin detail page + modal + e2e
+
+### 2. Remaining Wave 4 (dependency order)
+- Lead ingest (#2450-2452)
+- Usage sync + churn (#2447, #2449) — needs #2529 ✓
+- Usage sparkline (#2448) — needs #2529 + company detail page
+- #2356 → prod MT_ENFORCE_ISOLATION flip (not code, needs audit + approval)
+
+## Before every slice
+1. git fetch origin main
+2. npx prisma generate
+3. Read PLAYBOOK.md
+
+Status: All 9 PRs merged, Wave 4 design complete, ready for implementation.
