@@ -7519,3 +7519,43 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   `/sales` → `/mentor`). A notification's deep link is role × **vertical**: pass the recipient's
   capabilities to `notificationLink()` (`capabilitiesMemo()` for a sweep), or a MARKETING rep's
   reminder lands on the `/sales` dashboard instead of the record.
+
+## 2026-09-29 — Queue wave: #2542 slice 2, grant spend, settings race, system stage moves, e-mail hosts
+
+- **Run a negative control on every race test before you believe it.** Two of this wave's
+  tests looked right and were vacuous. The SSO grant race test (#2548) passed against the
+  unfixed check-then-write provider even with eight concurrent contexts, because the window is
+  a few milliseconds and HTTP requests rarely land in it together. The fix for that was a
+  dependency-free `spendGrant()` with an interleaving in-memory table in a unit test (#2603).
+  The settings race test (#2342) was only red on the old form because of the new "locked"
+  assertions: fill and click both fell inside the held GET, so the value check never saw the
+  bug. The fix was `waitForResponse` between the fill and the click (#2604). Revert the fix,
+  run the test, and make sure it fails for the reason the issue describes.
+- **A second session may land the same fix while yours is still in flight.** #2588
+  (another session) made `tenantWhere()` the canonical tenant rule: org-less means the
+  default org's, never unscoped. My pushed-but-unopened #2542 branches used a fail-open
+  `sameOrgOrUnknown()`. Before you open a PR from a branch older than a few hours, read
+  `git log origin/main` for the same issue number and rebase onto its rule.
+- **A shared `node_modules` means one shared Prisma client.** `prisma generate` from a
+  worktree writes `/home/user/Internship/node_modules/.prisma` for every checkout. Three
+  things broke because of that. A worktree without `.env` produced
+  `PrismaClientInitializationError: Validation Error Count: 1` in the main repo's tests. A
+  client generated before a schema change on main made `expireTrials()` fail with
+  `changedById` still required. A client missing `ProjectTask.dueDate` made tsc fail. Symlink
+  `.env` into each worktree, and re-run `npx prisma generate` from whichever tree you are
+  about to test.
+- **Do not `rm -rf .next` under a running `next dev`.** It keeps the port bound with a
+  backlog and answers nothing, so `next start` then dies with `EADDRINUSE` while
+  `lsof -iTCP:3000` shows nothing. `ss -ltnp | grep :3000` shows the stale `next-server`.
+- **`next dev` + 3 Playwright workers is not a test run, it is a compile queue.** About 30
+  sign-ins timed out at the spinner. A production build (`npm run build && npm run start`,
+  with `reuseExistingServer` picking it up) with 2 workers ran 91 tests in 5 minutes. The
+  remaining red was a cross-spec collision on the shared evaluation template, which went green
+  when the spec ran alone.
+- **`git push --delete` is refused by the proxy (HTTP 403)** in this environment. Superseded
+  branches stay; say so in the PR that supersedes them.
+- **An e-mail link cannot follow a request, but it can follow the recipient's tenant.**
+  `Organization.publicHost` is the one explicit host mapping, and it is only used when
+  `servedHosts()` contains it, so a prod hostname in a topic env's database never sends mail
+  to prod (#2495). A spec that needs the real marketing host mapped must live in the serial
+  spec that already owns it (`marketing-demo-form.spec.ts`), because `publicHost` is unique.
