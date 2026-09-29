@@ -108,6 +108,16 @@ than merely still existing somewhere. What still reads only the live relation:
 follow-up** — the column is stored and honest today, and no reader is required
 to use it yet.
 
+The funnel analytics **do** walk it (#2556). `/api/admin/analytics/funnel`
+folds every chain into one journey before it computes anything —
+`relationChains()` + `mergeChainJourney()` in `src/lib/funnelKpi.ts`: the start
+is the root's, the stage changes are the union of every link's. Read per
+relation, a handover opened a second journey already at the carried-over stage,
+so the transfer month gained an entry and (for a won account) a second win,
+while the closed predecessor never churned. The route also loads the rest of
+each chain the date window touched, so a windowed read folds whole chains too.
+A new KPI that counts journeys must read them folded the same way.
+
 ### The guard, inside the transaction
 
 `findActiveMentorship(tx, menteeId, { exceptRelationId: id })` is re-asked

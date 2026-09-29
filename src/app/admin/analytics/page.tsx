@@ -13,6 +13,7 @@ import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocke
 import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { MatchQuality } from '@/components/admin/MatchQuality';
+import { TrialConversionCard, type TrialConversionData } from '@/components/admin/TrialConversionCard';
 import { useT } from '@/i18n/client';
 import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
@@ -138,6 +139,10 @@ interface FunnelKpi {
       buckets: { months: number; churned: number | null; rate: number | null }[];
     }[];
   };
+  // Trial → paid (#2556). Null for a tenant with no trial stage — the card is
+  // then not drawn at all. `rate` is null for an empty OR immature month;
+  // `bySource` is null while the premium tier is off.
+  trialConversion?: TrialConversionData | null;
   journeys: number;
 }
 
@@ -240,6 +245,29 @@ export default function AdminAnalyticsPage() {
           `${kpi.timeToHire.completed}/${kpi.timeToHire.considered}`,
         ]],
       });
+    }
+    // Trial → paid (#2556): one row per trial month, and the source split
+    // when the tier includes it. An immature month exports "—", not a rate
+    // the screen would not show.
+    if (kpi.trialConversion) {
+      const tk = t.analytics.trialKpi;
+      sheets.push({
+        name: 'Trial to paid',
+        columns: [tk.month, tk.started, tk.paid, tk.rate],
+        rows: kpi.trialConversion.months.map((m) => [m.month, m.started, m.paid, m.rate === null ? '—' : `${m.rate}%`]),
+      });
+      if (kpi.trialConversion.bySource && kpi.trialConversion.bySource.length > 0) {
+        sheets.push({
+          name: 'Trial by source',
+          columns: [tk.source, tk.started, tk.paid, tk.rate],
+          rows: kpi.trialConversion.bySource.map((s) => [
+            s.name ?? tk.noSource,
+            s.trials,
+            s.paid,
+            s.rate === null ? '—' : `${s.rate}%`,
+          ]),
+        });
+      }
     }
     if (kpi.capacity.length > 0) {
       sheets.push({
@@ -663,6 +691,10 @@ export default function AdminAnalyticsPage() {
           </div>
         </Card>
       )}
+
+      {/* Trial → paid (#2556) — only for a tenant whose stage set has a trial
+          stage; the route returns null for everyone else. */}
+      {kpi?.trialConversion && <TrialConversionCard data={kpi.trialConversion} />}
 
       {/* One column when the mentor card is not drawn (#2423), so the funnel
           does not sit next to an empty half of the row. */}

@@ -5,16 +5,24 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolvePipelineStages, outcomeStageKeysFrom } from '@/lib/pipelineStages';
 import { onPathKeys } from '@/lib/pipeline';
+import type { Prisma } from '@prisma/client';
 import {
   biggestDropOff,
   cohortMonths,
   conversionByEntryMonth,
   DEFAULT_RETENTION_BUCKETS,
+  mergeChainJourney,
+  relationChains,
   retentionTriangle,
   stageConversions,
   timeToHire,
+  trialConversion,
   type Journey,
+  type TrialJourney,
 } from '@/lib/funnelKpi';
+import { sourceIsReferral } from '@/lib/referrer';
+import { TRIAL_ACTIVE_STAGE_KEY } from '@/lib/trialReminderRule';
+import { getSetting } from '@/lib/settings';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
@@ -68,6 +76,70 @@ async function mentorCapacity() {
     .sort((a, b) => b.activeMenteeCount - a.activeMenteeCount);
 }
 
+const RELATION_SELECT = {
+  id: true,
+  previousRelationId: true,
+  pipelineStatus: true,
+  startDate: true,
+  trialStartedAt: true,
+  trialEndsAt: true,
+  mentee: { select: { sourceId: true, role: true } },
+  statusChanges: {
+    orderBy: { createdAt: 'asc' },
+    select: { fromStatus: true, toStatus: true, createdAt: true },
+  },
+} satisfies Prisma.MentorshipRelationSelect;
+
+type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION_SELECT }>;
+
+/** One relation's own journey, before its chain is folded. */
+function relationJourney(r: RelationRow): Journey {
+  return {
+    // Where the journey began: the stage the first recorded move came FROM,
+    // else — for a relation that never moved — where it sits now.
+    startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
+    startedAt: r.startDate.getTime(),
+    changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
+  };
+}
+
+// A chain is one or two links in practice (one per handover); the cap only
+// bounds a pathological history so the report cannot loop on it.
+const MAX_CHAIN_ROUNDS = 20;
+
+/**
+ * Pull in, in place, every predecessor and successor of the loaded relations,
+ * transitively (#2556). Runs inside the caller's tenant scope, like every
+ * other query here. Without a range the first query already loaded everything,
+ * so both lookups come back empty and this costs one round trip.
+ */
+async function loadWholeChains(relations: RelationRow[]): Promise<void> {
+  const known = new Set(relations.map((r) => r.id));
+  let frontier = relations;
+  for (let round = 0; round < MAX_CHAIN_ROUNDS && frontier.length > 0; round++) {
+    const missingParents = [
+      ...new Set(
+        frontier.map((r) => r.previousRelationId).filter((id): id is string => !!id && !known.has(id)),
+      ),
+    ];
+    const [parents, children] = await Promise.all([
+      missingParents.length > 0
+        ? prisma.mentorshipRelation.findMany({ where: { id: { in: missingParents } }, select: RELATION_SELECT })
+        : Promise.resolve([] as RelationRow[]),
+      prisma.mentorshipRelation.findMany({
+        where: { previousRelationId: { in: frontier.map((r) => r.id) } },
+        select: RELATION_SELECT,
+      }),
+    ]);
+    frontier = [...parents, ...children].filter((r) => {
+      if (known.has(r.id)) return false;
+      known.add(r.id);
+      return true;
+    });
+    relations.push(...frontier);
+  }
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
@@ -115,27 +187,42 @@ export async function GET(request: Request) {
             ],
           }
         : {},
-      select: {
-        id: true,
-        pipelineStatus: true,
-        startDate: true,
-        statusChanges: { orderBy: { createdAt: 'asc' }, select: { fromStatus: true, toStatus: true, createdAt: true } },
-      },
+      select: RELATION_SELECT,
     });
+    // The rest of every transfer chain the window touched (#2556), so a chain
+    // is folded whole: a successor opened inside the window must not stand in
+    // for a journey whose real start is its predecessor's, and a successor
+    // opened after the window must not drop the win it recorded.
+    await loadWholeChains(relations);
 
     const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
     const [stages, capabilities] = await Promise.all([resolvePipelineStages(orgId), shellCapabilities(orgId)]);
     const order = onPathKeys(stages);
 
+    // One journey per transfer CHAIN, not per relation (#2556): a handover
+    // opens a successor on the same stage, and counted separately it would be
+    // a second entry and a second win in the transfer month. The chain's start
+    // is its root's, its changes the union of every link's.
+    const chains = relationChains(relations);
+    const trialJourneys: TrialJourney[] = chains.map((chain) => {
+      const merged = mergeChainJourney(chain.map(relationJourney));
+      const root = chain[0];
+      // The trial window is carried over verbatim on a transfer (#2551), so
+      // the earliest recorded start of any link is the chain's.
+      const trialStarts = chain.map((r) => r.trialStartedAt?.getTime()).filter((t): t is number => t != null);
+      const trialEnds = chain.map((r) => r.trialEndsAt?.getTime()).filter((t): t is number => t != null);
+      return {
+        ...merged,
+        trialStartedAt: trialStarts.length > 0 ? Math.min(...trialStarts) : null,
+        trialEndsAt: trialEnds.length > 0 ? Math.max(...trialEnds) : null,
+        // The same lead on every link (a transfer keeps `menteeId`), and only
+        // a lead whose `sourceId` IS a referral pointer (src/lib/referrer.ts).
+        sourceId: root.mentee && sourceIsReferral(root.mentee.role) ? root.mentee.sourceId : null,
+      };
+    });
     // Everything the window touched — the population the retention triangle is
     // read over, because a record's cohort there is the month it was WON.
-    const activeJourneys: Journey[] = relations.map((r) => ({
-      // Where the journey began: the stage the first recorded move came FROM,
-      // else — for a relation that never moved — where it sits now.
-      startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
-      startedAt: r.startDate.getTime(),
-      changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
-    }));
+    const activeJourneys: Journey[] = trialJourneys;
     // … of which the ones that also STARTED in it: every entry-keyed number
     // below, unchanged from before the cohorts landed.
     const journeys: Journey[] = rangeOk
@@ -191,6 +278,39 @@ export async function GET(request: Request) {
       }),
     };
 
+    // Trial → paid (#2556) — only for a tenant whose stage set HAS a trial
+    // stage, resolved from its own rows (an INTERNSHIP org, or a MARKETING org
+    // that deleted the stage, gets null and no card). Paid is the tenant's own
+    // won stage, the same `toKey` as the cohort conversion above. Cohorted over
+    // the same months, but read over `activeJourneys`: a trial that started in
+    // the window may belong to a record that entered the funnel before it.
+    const trialKey = stages.find((s) => s.key === TRIAL_ACTIVE_STAGE_KEY)?.key ?? null;
+    let trial = null;
+    if (trialKey && toKey) {
+      const [trialLength, premium] = await Promise.all([
+        getSetting('trialLengthDays', orgId),
+        getSetting('premiumAnalytics', orgId),
+      ]);
+      const trialDays = Math.max(1, Number.parseInt(trialLength, 10) || 30);
+      const result = trialConversion(order, trialJourneys, trialKey, toKey, months, { trialDays });
+      // The per-source split is lead ATTRIBUTION, which stays behind the
+      // premium tier whatever the vertical (#2421, decision 2 in
+      // /api/admin/analytics/sources). Null = locked, [] = nothing mature yet.
+      let bySource: { sourceId: string | null; name: string | null; trials: number; paid: number; rate: number | null }[] | null =
+        null;
+      if (premium === 'true') {
+        const ids = result.bySource.map((r) => r.sourceId).filter((id): id is string => !!id);
+        const names = new Map(
+          (ids.length > 0
+            ? await prisma.source.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+            : []
+          ).map((s) => [s.id, s.name]),
+        );
+        bySource = result.bySource.map((r) => ({ ...r, name: r.sourceId ? names.get(r.sourceId) ?? null : null }));
+      }
+      trial = { trialKey, paidKey: toKey, trialDays, months: result.months, bySource };
+    }
+
     // Mentor capacity — only for a vertical that has mentors at all (#2423). A
     // MARKETING org's ADMIN/MENTOR rows are reps, and measuring them against a
     // "mentor ceiling" would be a confident answer to a question that tenant
@@ -207,6 +327,7 @@ export async function GET(request: Request) {
       capacity,
       cohortConversion,
       retention,
+      trialConversion: trial,
       // Echoed so the screen can say which journeys these numbers describe.
       // The entry-keyed population: what every number on the card but the
       // retention triangle is computed over.
