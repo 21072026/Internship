@@ -168,6 +168,7 @@ desenle yazılmıştır:
 | Uç / modül | Desen | Not |
 |---|---|---|
 | `GET /api/companies`, `GET /api/companies/[id]` | `scopeForRole(user, 'company')` | Bu matris |
+| `GET /api/companies/[id]/export` | yalnız `ADMIN` (taklit edilmemiş) + `scopeForRole(user, 'company')` + elle `orgScoped(…, resolveOrgId(session))` | Firmanın tüm kaydı tek JSON dosyası ([#2435](https://github.com/21072026/Internship/issues/2435)); aşağıda § Tek dosya |
 | `GET /api/requisitions` (yükteki firma seçici) | `scopeForRole(user, 'company')` | Route girişte `ADMIN`/`COMPANY` dışını 403'lüyor; elle yazılmış `role === 'COMPANY'` filtresi kapsam builder'ıyla değiştirildi |
 | `POST /api/requisitions`, `/api/company/interests`, `/api/company/*` | girişte rol allowlist'i + `companyId = session.user.companyId` | Firma id'si oturumdan gelir, gövdeden değil |
 | `/api/search` firma dalı | `role === 'ADMIN'` ternary'si | Diğer roller `[]` |
@@ -237,6 +238,41 @@ Kural bağımlılıksız [`src/lib/viewLogRule.ts`](../src/lib/viewLogRule.ts)'t
 `logViewActivity()` ([`src/lib/activity.ts`](../src/lib/activity.ts)). Başka bir
 kaydın okunmasını loglamak isteyen aynı fonksiyonu çağırır — ikinci bir log
 yolu açmaz.
+
+### Tek dosya — firma dışa aktarımı (`company.export`)
+
+[#2435](https://github.com/21072026/Internship/issues/2435). "Bende ne var?"
+diye soran bir müşteriye ya da devredilen bir hesaba, o firmaya ait her şey
+tek JSON dosyasında verilir: `GET /api/companies/[id]/export`, `/admin/companies`
+kartındaki indirme düğmesi. Şekli `/api/account/export` (GDPR öz-hizmet)
+örnek alır: tek GET, `Content-Disposition: attachment`, `Cache-Control:
+no-store`, tek denetim satırı. **Yeni tablo yok.**
+
+- **Kim:** yalnız `ADMIN`, taklit edilmemiş oturumla. Firmayı *okuyabilen*
+  MENTOR ve COMPANY bile **403** + `authz.scope_denied` alır (hedef = route
+  deseni, id değil). Neden rol başına daraltılmış bir dosya değil: her bölümün
+  her kolonunu her okuma ucuna karşı yeniden kanıtlamak gerekirdi — ilk taslak
+  COMPANY okuyucusuna, `GET /api/offers`'ın ona göstermediği DRAFT teklifleri
+  ve `compensationNote`'u veriyordu.
+- **Hangi firma:** detay okumasıyla aynı sınır, dosya okumadan geniş olamaz —
+  `scopeForRole(user, 'company')` **ve** bayraktan bağımsız
+  `orgScoped(…, resolveOrgId(session))` (#2542 deseni; `assertSameOrg`
+  `MT_ENFORCE_ISOLATION` kapalıyken no-op olduğu için bugün tek başına koruma
+  sağlamaz). Başka org'un firması, olmayan bir id ile aynı **404**'ü alır.
+- **İçerik:** `company`, `needs`, `requisitions`, `offers` (bu firmayı adlandıran
+  ya da firmasız olup bu firmanın bir ilişkisinde duran; **başka** firmayı
+  adlandıran teklif o firmanındır), `interests`, `inquiries` (bu firmaya
+  dönüştürülen `CompanyInquiry`), `relations` (`relation` kapsamından; kişiler
+  yalnız `id`/`fullName`/`email`), `interactions` (`InteractionLog`),
+  `statusChanges`. Bilinçli olarak dışarıda: `placements`, `usage`, firma
+  kullanıcı hesapları (her birinin kendi `/api/account/export`'u var) ve
+  diğer ilişkiler — eklemek bu listenin kararıdır, bir `include`'un yan etkisi
+  değil.
+- **Denetim:** sunulan her dosya `logActivity()` ile bir `company.export`
+  satırı yazar; tekrar bastırması **yok** (ikinci indirme ikinci kopyadır).
+  `detail`'de firma adı yok (`company.view` ile aynı gerekçe). 404 yazmaz.
+
+Sabitleyen: `e2e/company-export.spec.ts` ve `e2e/fixtures/authz-matrix.ts`.
 
 ## Bu matrisin dışında kalanlar / Out of scope for this matrix
 

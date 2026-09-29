@@ -686,6 +686,8 @@ const en = {
     createFailed: 'Failed to create company',
     updateFailed: 'Failed to update company',
     openFailed: 'This company could not be opened. Close this window and try again.',
+    // #2435 — the per-company JSON export on each card.
+    exportJson: 'Export all data (JSON)',
     sortLabel: 'Sort by',
     sortOptions: {
       name: 'Name (A–Z)',
@@ -5982,6 +5984,7 @@ const tr: Dict = {
     createFailed: 'Şirket oluşturulamadı',
     updateFailed: 'Şirket güncellenemedi',
     openFailed: 'Bu şirket açılamadı. Bu pencereyi kapatıp tekrar deneyin.',
+    exportJson: 'Tüm verileri dışa aktar (JSON)',
     sortLabel: 'Sıralama',
     sortOptions: {
       name: 'Ad (A–Z)',
@@ -11162,6 +11165,7 @@ const de: Dict = {
     createFailed: 'Unternehmen konnte nicht erstellt werden',
     updateFailed: 'Unternehmen konnte nicht aktualisiert werden',
     openFailed: 'Dieses Unternehmen konnte nicht geöffnet werden. Schließe dieses Fenster und versuche es erneut.',
+    exportJson: 'Alle Daten exportieren (JSON)',
     sortLabel: 'Sortieren nach',
     sortOptions: {
       name: 'Name (A–Z)',

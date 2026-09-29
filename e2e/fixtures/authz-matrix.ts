@@ -187,4 +187,18 @@ export const MATRIX: MatrixEntry[] = [
     expect: { ADMIN: 'all', MENTOR: 'own', MENTEE: 'deny', COMPANY: 'own', SOURCE: 'deny' },
     ownership: (row, user) => companyBelongsTo(row as { id?: string }, user),
   },
+  {
+    // One company, one JSON file (#2435). ADMIN-only: MENTOR and COMPANY may
+    // READ a company, but no role other than the operator may take the whole
+    // account book away in one file (the route header says why), so both of
+    // their cells are `deny` here where the detail route above says `own`.
+    // Probed with the own and the foreign id like the detail route; the file's
+    // contents, the cross-org 404 and the audit row are pinned by
+    // e2e/company-export.spec.ts.
+    path: `/api/companies/${COMPANY_ID_PARAM}/export`,
+    collection: 'company',
+    single: true,
+    expect: { ADMIN: 'all', MENTOR: 'deny', MENTEE: 'deny', COMPANY: 'deny', SOURCE: 'deny' },
+    ownership: () => true,
+  },
 ];

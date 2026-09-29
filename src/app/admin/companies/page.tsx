@@ -13,7 +13,7 @@ import { COMPANY_SORT_KEYS, DEFAULT_COMPANY_SORT, type CompanySort } from '@/lib
 
 import { CompanyForm } from '@/components/forms/CompanyForm';
 import { CompanyEntitlements } from '@/components/admin/CompanyEntitlements';
-import { Building2, Plus, Pencil, Trash2, Search, Sparkles } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, Search, Sparkles, Download } from 'lucide-react';
 
 interface Company {
   id: string;
@@ -534,6 +534,19 @@ export default function CompaniesPage() {
                     >
                       <Sparkles className="h-4 w-4" />
                     </button>
+                    {/* One company, one JSON file (#2435). A plain link, like the
+                        account export on /admin/settings: the route answers with
+                        Content-Disposition, so the browser saves it. */}
+                    <a
+                      href={`/api/companies/${company.id}/export`}
+                      download
+                      data-testid={`export-company-${company.id}`}
+                      title={t.companiesPage.exportJson}
+                      aria-label={t.companiesPage.exportJson}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
                     <button
                       onClick={() => void openEdit(company)}
                       data-testid={`edit-company-${company.id}`}
