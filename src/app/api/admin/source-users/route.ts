@@ -8,6 +8,7 @@ import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 
 const schema = z.object({
   sourceId: z.string().min(1),
@@ -36,8 +37,12 @@ export async function POST(request: Request) {
   const source = await prisma.source.findUnique({ where: { id: sourceId } });
   if (!source) return NextResponse.json({ error: 'Source not found' }, { status: 404 });
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+  // "Already exists" means IN THE ADMIN'S WORLD (#2590) — see
+  // /api/admin/company-users: an account under the same address in the other
+  // product is a different person-record, not a conflict.
+  if (await emailTakenInOrgWorld(email, orgId)) {
+    return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
+  }
 
   const user = await prisma.user.create({
     // `orgId` by hand (#2542): see /api/admin/company-users.

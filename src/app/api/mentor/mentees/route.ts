@@ -14,6 +14,7 @@ import { resolveStartStage } from '@/lib/pipelineStages';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import {
   findActiveMentorship,
@@ -63,15 +64,18 @@ export async function POST(request: Request) {
         ? email!.trim().toLowerCase()
         : `mentee.${slugify(fullName)}.${crypto.randomBytes(2).toString('hex')}@${PLACEHOLDER_EMAIL_DOMAIN}`;
 
-      const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
-      if (existing) {
+      // The creating user's tenant. Resolved before the duplicate check because
+      // "already exists" is a per-WORLD question (#2590): the same mailbox may
+      // hold an account in the other product, and that is a different person-
+      // record — not a reason to refuse this mentee.
+      const orgId = resolveOrgId(session);
+      if (await emailTakenInOrgWorld(finalEmail, orgId)) {
         return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
       }
 
       // Plan gate (#547): a new mentee here means a new active relation. Gate on
       // the creating user's tenant before creating anything. No-op for the
       // unlimited default org.
-      const orgId = resolveOrgId(session);
       const gate = await checkActiveRelationLimit(orgId);
       if (!gate.allowed) {
         return NextResponse.json(planLimitError(gate), { status: 403 });

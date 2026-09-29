@@ -355,7 +355,7 @@ test('each organisation prunes notifications to its own window, and 0 keeps them
     expect(entry?.note).toMatch(/^off:\d+\/\d+$/);
   } finally {
     for (const email of emails) {
-      const user = await prisma.user.findUnique({ where: { email } });
+      const user = await prisma.user.findFirst({ where: { email } });
       if (user) await prisma.notification.deleteMany({ where: { userId: user.id } });
       await cleanupByEmail(email);
     }

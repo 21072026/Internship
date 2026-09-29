@@ -170,7 +170,7 @@ test(
         })
         .toBe(email);
 
-      const user = await prisma.user.findUnique({ where: { email } });
+      const user = await prisma.user.findFirst({ where: { email } });
       expect(user, 'the assertion should have JIT-provisioned a user').toBeTruthy();
       expect(user!.orgId).toBe(org.id);
       expect(user!.role).toBe('MENTEE'); // least privilege by default
@@ -310,7 +310,7 @@ test('SAML: a consumed SsoLoginGrant cannot be replayed into a second session', 
     await page.waitForURL(/\/(auth\/signin|auth\/error|api\/auth\/error)/, { timeout: 30_000 });
     expect(await sessionEmail(page.request)).toBeNull();
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     const grants = await prisma.ssoLoginGrant.findMany({ where: { userId: user!.id } });
     expect(grants).toHaveLength(1);
     expect(grants[0].used).toBe(true);
@@ -353,7 +353,7 @@ test('SAML: concurrent redemptions of one grant mint exactly one session (#2548)
     const sessions = await Promise.all(contexts.map((ctx) => sessionEmail(ctx.request)));
     expect(sessions.filter((e) => e === email), `sessions: ${JSON.stringify(sessions)}`).toHaveLength(1);
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     const grants = await prisma.ssoLoginGrant.findMany({ where: { userId: user!.id } });
     expect(grants).toHaveLength(1);
     expect(grants[0].used).toBe(true);
@@ -479,8 +479,11 @@ test('OIDC: the round trip signs a user into the right tenant', async ({ page })
     // query the entry point carries and will fall back to its default subject.
     await expect.poll(() => sessionEmail(page.request), { timeout: 30_000 }).not.toBeNull();
     const email = (await sessionEmail(page.request))!;
-    const user = await prisma.user.findUnique({ where: { email } });
-    expect(user!.orgId).toBe(org.id);
+    // The address is the stub IdP's default subject, so it is NOT unique to this
+    // run — and since #2590 the same address may sit in several organizations.
+    // Ask for the account IN the tenant that ran the round trip.
+    const user = await prisma.user.findFirst({ where: { email, orgId: org.id }, select: { id: true } });
+    expect(user, 'the round trip should have signed the asserted identity into this tenant').not.toBeNull();
   } finally {
     await dropSsoOrg(org.id, []);
   }

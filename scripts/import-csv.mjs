@@ -25,6 +25,19 @@ const args = Object.fromEntries(
 );
 const APPLY = !!args.apply;
 
+// The users of the INTERNSHIP world (#2590), as a Prisma `where` fragment: every
+// user whose organization is not a marketing one (org-less rows included — an
+// org-less user IS the default org). This importer loads the legacy MENTORING
+// spreadsheet, i.e. internship mentees under an internship mentor, and
+// `User.email` is no longer unique: one person may hold an account in each
+// product, so "is this owner / this mentee already here?" must name the world —
+// a marketing-org account under the same address is a different person-record
+// and is neither the owner nor a mentee to update. Plain-ESM mirror of
+// `worldUserWhere('INTERNSHIP')`, src/lib/userWorld.ts (a .mjs script cannot
+// import the TypeScript module); keep the list of non-default verticals in step
+// with src/lib/verticals.ts.
+const INTERNSHIP_WORLD = { NOT: { org: { is: { vertical: { in: ['MARKETING'] } } } } };
+
 const STATUS_MAP = {
   100: 'APPLICATION_100',
   220: 'APPROVAL_PENDING_220',
@@ -140,7 +153,10 @@ async function apply(mapped) {
   const { PrismaClient } = await import('@prisma/client');
   const prisma = new PrismaClient();
   try {
-    const owner = await prisma.user.findUnique({ where: { email: String(args.owner) } });
+    const owner = await prisma.user.findFirst({
+      where: { email: String(args.owner), ...INTERNSHIP_WORLD },
+      orderBy: { createdAt: 'asc' },
+    });
     if (!owner) throw new Error(`Owner not found: ${args.owner}`);
     if (!['ADMIN', 'MENTOR'].includes(owner.role))
       throw new Error(`Owner must be ADMIN or MENTOR (is ${owner.role})`);
@@ -173,9 +189,14 @@ async function apply(mapped) {
         birthDate: r.birthDate,
         cvUrl: r.cvUrl,
       };
-      const existing = await prisma.user.findUnique({ where: { email: r.email } });
+      const existing = await prisma.user.findFirst({
+        where: { email: r.email, ...INTERNSHIP_WORLD },
+        orderBy: { createdAt: 'asc' },
+      });
+      // Updated by ID, never by address: `email` is no longer a unique key, and
+      // the row to change is exactly the one found in this world above.
       const user = existing
-        ? ((updated++), await prisma.user.update({ where: { email: r.email }, data }))
+        ? ((updated++), await prisma.user.update({ where: { id: existing.id }, data }))
         : ((created++),
           await prisma.user.create({
             data: { ...data, email: r.email, password: '!imported-no-login' },

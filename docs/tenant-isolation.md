@@ -177,7 +177,9 @@ is on:
   invitee holds — and the row's own `orgId` is what assigns the new account its
   tenant (#1272);
 - `POST /api/invite/opened` stamps `openedAt`, also by token;
-- `POST /api/auth/verify-email` advances the matching invitation by **address**.
+- `POST /api/auth/verify-email` advances the matching invitation by **address and
+  organization** (#2590 — the organization of the account whose token was clicked;
+  see [Users: one address, two tenants](#users-one-address-two-tenants-2590)).
 
 Wrapping any of those would narrow the lookup to an org the invitee cannot
 present, and the invitation would become unusable to the person it was sent to.
@@ -261,6 +263,49 @@ server with an INTERNSHIP and a MARKETING tenant, both directions; the
 route goes. Left for their own changes: `Source` (created without an `orgId` by
 `/api/sources` and `/api/admin/sources`, so its lookups are not narrowed yet) and
 the remaining tenant-held routes not named above.
+
+### Users: one address, two tenants (#2590)
+
+`User.email` is **no longer globally unique**. The internship product and the
+marketing product are two tenants of two verticals, and one person may hold an
+account in each under the same address: two `User` rows, two `orgId`s, one
+mailbox (the model and its rules are in [`docs/worlds.md`](worlds.md)). For
+tenant isolation that changes four things:
+
+- **The database backstop shrank.** `@@unique([email, orgId])` only catches two
+  rows in the *same* organization — and not even that while `orgId` is still NULL,
+  since MySQL treats NULLs as distinct. "At most one account per address per
+  product" is therefore an application rule, enforced by calling
+  `emailTakenInWorld()` / `emailTakenInOrgWorld()` (`src/lib/userWorld.ts`) before
+  **every** user create. A new create path that skips it is a tenant-isolation bug
+  the schema will not catch.
+- **An address is no longer a key into one tenant.** Every e-mail lookup names its
+  world, through `userWorld.ts` and nowhere else. The deliberate exception is
+  `findUsersByEmail` ("any world"), whose callers are the ones whose job is to cross
+  worlds — the sign-in page pointing at the other door, account erasure, the
+  wrong-door rescue mail — each with a comment saying why. A bare
+  `findFirst({ where: { email } })` would pick an arbitrary tenant's row.
+- **Sessionless lookups run unscoped, on purpose.** Sign-in, `forgot`, `register`
+  and `verify-email` have no session, so no `runWithOrg` context is bound and the
+  middleware early-returns even with `MT_ENFORCE_ISOLATION=true`; the world comes
+  from the request **host** (`worldForHeaders`) or from the invitation's own org
+  (`worldOfOrg`), never from a tenant context. The host may pick which of a
+  person's *own* accounts they are signed into and may refuse a request; it never
+  widens what anyone can read (`hostWorld.ts`, TRUST NOTE). Tenant scope, roles and
+  data access still come from the session's org.
+- **Moving an organization to the other product moves its people.** A world is
+  derived from `Organization.vertical`, so `PATCH /api/admin/organizations` with a
+  new `vertical` changes the world of every user of that org in one `UPDATE`. It is
+  refused with `409 vertical_move_email_conflict` when the destination world already
+  holds an account for any of the org's addresses (`src/lib/verticalMove.ts`, which
+  reads the *other* tenants' rows through `runUnscoped` and reports a count, never an
+  address).
+
+Address-keyed side tables (`AccountLockout`, `EmailLog`, `NewsletterSend`, invitation
+lookups) were audited for the same reason: the lockout counter stays shared by
+address on purpose (one brute-force budget per mailbox), invitation lookups are keyed
+by `(email, orgId)` (`invitationOrgWhere`), and erasing one account no longer sweeps
+rows another world's account still owns.
 
 ### Settings: per-tenant with a global fallback (#1553)
 

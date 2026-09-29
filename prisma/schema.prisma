@@ -296,7 +296,16 @@ model User {
   orgId                   String?
   org                     Organization? @relation(fields: [orgId], references: [id])
   id                      String        @id @default(cuid())
-  email                   String        @unique
+  // NOT globally unique any more (worlds, epic #2348): one PERSON may hold one
+  // account per WORLD — the internship product and the marketing product are
+  // two different tenants, and the host a person signs in on decides which one
+  // they are in. Uniqueness is per (email, org) at the database and per
+  // (email, vertical) in the app: src/lib/userWorld.ts is the only place that
+  // looks an account up by e-mail, and it always answers "in which world?".
+  // Read docs/worlds.md before adding a lookup — `findUnique({ where: { email } })`
+  // no longer type-checks, and a bare `findFirst({ where: { email } })` is
+  // exactly the bug that would sign a person into the wrong product.
+  email                   String
   password                String
   role                    Role          @default(MENTEE)
   fullName                String
@@ -525,6 +534,12 @@ model User {
   placements                        Placement[]                   @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
 
+  // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
+  // distinct, so a row whose orgId is still NULL (the default org, until the
+  // next deploy's backfill stamps it) is NOT covered by this index — the
+  // per-world rule in src/lib/userWorld.ts (`emailTakenInWorld`) is what stops
+  // a second one, and it is checked on every create path.
+  @@unique([email, orgId])
   @@index([role])
   @@index([referredById])
   @@index([orgId, externalId])

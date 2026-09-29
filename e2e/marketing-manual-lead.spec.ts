@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // One lead / account typed in by hand in a MARKETING org (#2562).
@@ -85,6 +85,9 @@ test('a MARKETING admin creates a lead by hand; the same VAT a second time creat
   const vat = `DE${String(Date.now()).slice(-9)}`;
 
   try {
+    // A MARKETING-org account only has a session on the marketing host (#2590):
+    // the header stays on the context for every navigation and page.request below.
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
     await signInAndSettle(page, adminEmail, PW, '/admin');
     await gotoSettled(page, '/admin/companies');
 
@@ -186,6 +189,9 @@ test('INTERNSHIP never sees the form and the route refuses it; MENTEE and COMPAN
     expect(intRes.status()).toBe(403);
     expect((await intRes.json()).code).toBe('vertical_unavailable');
 
+    // The MARKETING-org logins below only work on the marketing host (#2590);
+    // the INTERNSHIP admin above stayed on the default one.
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
     await signInAsFreshUser(page, menteeEmail, PW, '/portal');
     expect((await page.request.post('/api/admin/marketing-accounts', { data: body })).status()).toBe(403);
 

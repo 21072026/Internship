@@ -23,7 +23,7 @@ test('mentee lifecycle: invite token -> register -> login -> portal', async ({ p
     await page.waitForURL((u) => u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
     // The account now exists in the DB
-    const created = await prisma.user.findUnique({ where: { email } });
+    const created = await prisma.user.findFirst({ where: { email } });
     expect(created?.role).toBe('MENTEE');
 
     // Log in as the new mentee

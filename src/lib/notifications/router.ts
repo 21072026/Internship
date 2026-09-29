@@ -264,6 +264,15 @@ interface DeliveryContext {
  * that renders and sends the mail arrives with the worker; until then a row
  * here is a durable "this person is owed an e-mail", which is strictly more
  * than the nothing that was recorded before.
+ *
+ * WORLDS (#2590). `link` is stored RELATIVE ("/messages/…") and must stay so: it
+ * is a path inside the recipient's product, not an address. Whoever renders the
+ * queued mail (the worker handler this row is waiting for) must build the
+ * absolute URL PER RECIPIENT from the recipient's own organization —
+ * `appUrlFor(orgId)` in services/emailService.ts, the same resolver every other
+ * mail uses — and never from NEXT_PUBLIC_APP_URL directly, or a marketing
+ * account's notification mail opens the internship host. The row carries what
+ * that needs: `userId` in the payload and `orgId` on the job itself.
  */
 async function enqueueEmail(ctx: DeliveryContext): Promise<{ ok: boolean; error?: string }> {
   try {

@@ -123,6 +123,11 @@ async function handlePost(request: Request) {
         case 'contact_in_funnel':
           return NextResponse.json({ code: 'contact_in_funnel', leadId: outcome.leadId }, { status: 409 });
         case 'contact_is_user':
+          // Staff of THIS organization only (#2590): an account under the same
+          // address in the internship world is a different person-record in
+          // another tenant and never produces this answer — the lookup behind
+          // it is scoped to `orgId`, which the route already checked is a
+          // MARKETING org.
           return NextResponse.json({ code: 'contact_is_user' }, { status: 409 });
         case 'already_mentored':
           return NextResponse.json({ code: 'already_mentored' }, { status: 409 });

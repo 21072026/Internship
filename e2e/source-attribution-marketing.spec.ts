@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // Lead attribution for a MARKETING tenant (#2421, story #2393).
@@ -96,6 +96,8 @@ test('a MARKETING admin reaches lead attribution from /admin/analytics, and a so
   });
 
   try {
+    // MARKETING-org account => marketing host only (#2590); kept for every request below.
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
     await signInAndSettle(page, adminEmail, pw, '/admin');
 
     // The screen that normally owns sources is not reachable for this vertical.

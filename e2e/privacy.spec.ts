@@ -35,7 +35,7 @@ test('registration records consent and the privacy page is public', async ({ pag
       data: { email, password: 'ConsentPass123', fullName: 'Consent User' },
     });
     expect(res.ok()).toBeTruthy();
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { email } });
     expect(user?.consentAt).not.toBeNull();
 
     await page.goto('/privacy');

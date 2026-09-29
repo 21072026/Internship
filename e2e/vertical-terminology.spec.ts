@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStages } from '../src/lib/programTemplates';
 
 // Vertical terminology overlay in the live UI (#2354, epic #2348). A MARKETING
@@ -106,6 +106,7 @@ async function teardown(orgId: string, emails: string[], companyId?: string) {
 test('a MARKETING admin sees "Leads" on the candidates page and in the nav', async ({ page }) => {
   const mkt = await adminIn('MARKETING');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
     await page.goto('/admin/candidates');
     await expect(page.getByRole('heading', { name: 'Leads', exact: true })).toBeVisible();
@@ -132,6 +133,7 @@ test('a MARKETING admin reads deal language on /admin/companies — and no mento
   const mkt = await adminIn('MARKETING');
   const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-co');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
     await page.goto('/admin/companies');
     await expect(page.getByText('Manage the accounts you sell to and what each one needs')).toBeVisible();
@@ -202,6 +204,7 @@ test('a MARKETING admin reads funnel language on the board — and no mentorship
   const mkt = await adminIn('MARKETING');
   const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-bd');
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
     await page.goto('/admin/board');
     // Wait for the fetch to land: the columns only exist once relations arrive.

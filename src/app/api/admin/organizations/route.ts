@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, planIncludingFeature, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
+import { countVerticalMoveConflicts, VERTICAL_MOVE_EMAIL_CONFLICT } from '@/lib/verticalMove';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
@@ -330,6 +331,42 @@ export async function PATCH(request: Request) {
       { error: 'Only a super admin may change an organization\'s vertical' },
       { status: 403 }
     );
+  }
+
+  // A vertical change MOVES every person of the organization into the other
+  // world in one UPDATE (worlds, #2590 — src/lib/userWorld.ts: a world is
+  // derived from the org, never stored on the user). One person may hold one
+  // account per world with the same e-mail, but never two in the SAME world, and
+  // the database cannot say so (its unique is per organization). If the
+  // destination world already has an account for any address this organization
+  // holds, the move would silently create exactly that pair — refused, before
+  // anything else in this request is written, with the number of clashes and no
+  // address (the addresses belong to other tenants' people; see
+  // src/lib/verticalMove.ts). The check is skipped for a no-op or a change that
+  // keeps the org in the world it is already in.
+  if (vertical !== undefined && toVerticalKey(existing.vertical) !== toVerticalKey(vertical)) {
+    const conflicts = await countVerticalMoveConflicts(id, existing.vertical, toVerticalKey(vertical));
+    if (conflicts > 0) {
+      await logActivity({
+        action: 'org.vertical_move_refused',
+        level: 'warning',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        targetType: 'organization',
+        targetId: id,
+        detail: `to ${toVerticalKey(vertical)}: ${conflicts} e-mail address(es) already have an account in that product`,
+        request,
+      });
+      return NextResponse.json(
+        {
+          code: VERTICAL_MOVE_EMAIL_CONFLICT,
+          conflicts,
+          error:
+            'This organization cannot move to the other product yet: some of its people already have an account there under the same e-mail address, and one e-mail may hold only one account per product.',
+        },
+        { status: 409 }
+      );
+    }
   }
 
   // Entitlement is read from the plan this request leaves the org on. Now that

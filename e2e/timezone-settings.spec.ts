@@ -47,7 +47,7 @@ test.describe('everyone can set their own timezone', () => {
       expect((await saved).ok()).toBe(true);
 
       await expect(page.getByTestId('timezone-current')).toContainText(/GMT\+9/);
-      await expect.poll(async () => (await prisma.user.findUnique({ where: { email } }))?.timezone).toBe('Asia/Tokyo');
+      await expect.poll(async () => (await prisma.user.findFirst({ where: { email } }))?.timezone).toBe('Asia/Tokyo');
 
       await page.reload();
       await expect(page.getByTestId('timezone-select')).toHaveValue('Asia/Tokyo');
@@ -113,7 +113,7 @@ test.describe('everyone can set their own timezone', () => {
       await page.waitForURL((u) => u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
       await expect
-        .poll(async () => (await prisma.user.findUnique({ where: { email } }))?.timezone, { timeout: 20_000 })
+        .poll(async () => (await prisma.user.findFirst({ where: { email } }))?.timezone, { timeout: 20_000 })
         .toBe('Europe/Berlin');
     } finally {
       await cleanupByEmail(email);

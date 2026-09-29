@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import {
   canonicalNewsletterContent,
   newsletterImageUrl,
@@ -46,8 +47,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const issue = await prisma.newsletter.findUnique({
-    where: { id },
+  // The caller's own tenant's issue only (#2542, #2590): another product's issue
+  // reads exactly like an id that does not exist. See the list route.
+  const issue = await prisma.newsletter.findFirst({
+    where: withinTenant({ id }, await tenantWhere(session)),
     select: {
       id: true, templateKey: true, audience: true, status: true, subject: true, content: true,
       scheduledAt: true, sentAt: true, createdById: true, recipientCount: true, sentCount: true,
@@ -91,7 +94,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
 
-  const existing = await prisma.newsletter.findUnique({ where: { id }, select: { id: true, status: true, content: true } });
+  const existing = await prisma.newsletter.findFirst({
+    where: withinTenant({ id }, await tenantWhere(session)),
+    select: { id: true, status: true, content: true },
+  });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   // 409 rather than 403: the request is allowed, the issue's state is what
   // refuses it. SENDING is excluded too — editing an issue mid-flight would
@@ -165,7 +171,10 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const existing = await prisma.newsletter.findUnique({ where: { id }, select: { status: true } });
+  const existing = await prisma.newsletter.findFirst({
+    where: withinTenant({ id }, await tenantWhere(session)),
+    select: { status: true },
+  });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (existing.status !== 'DRAFT' && existing.status !== 'CANCELED') {
     return NextResponse.json({ error: 'A sent newsletter is part of the record and cannot be deleted', status: existing.status }, { status: 409 });

@@ -18,6 +18,28 @@
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
+
+// ONE BRUTE-FORCE BUDGET PER MAILBOX, ACROSS WORLDS (#2590) — on purpose.
+//
+// Everything below is keyed by ADDRESS (`@@unique([email, reason])`), and that
+// stays true now that one address can be an account in the internship product
+// AND another in the marketing product. The thing being throttled is guessing
+// at credentials for a mailbox, and an attacker does not care which host the
+// form was served from: if each world had its own counter, typing the same
+// address into both sign-in pages would double the number of guesses per window
+// for the price of a second tab. So the two accounts share one budget — five
+// wrong codes on the marketing host also brake the internship sign-in — and
+// sign-in feeds this module the typed address whichever world it resolved (auth.ts
+// charges a wrong password against the OTHER world's account too, for the same
+// reason). Do not split the key by world.
+//
+// What that costs, accepted: an unlock clears the address's counters for both
+// products (clearLockoutForUser matches by address as well as by id — the row is
+// one row), and the row's `userId`/`orgId` describe the account of the LAST
+// failed attempt, so they are descriptive, not part of the key. The admin unlock
+// route only ever passes a user id it has already tenant-checked, so a tenant
+// admin still cannot reach a row for an address they hold no account for.
 
 // 'recovery' is the 2FA recovery-code door (#1542): a third stage, with its own
 // row, because it is a second way past the second factor and must not spend —
@@ -184,9 +206,18 @@ export interface LockoutView {
   lockedUntil: string;
 }
 
-export async function listActiveLockouts(): Promise<LockoutView[]> {
+/**
+ * `tenant` is the CALLER's tenant (`tenantWhere(session)`): the list names
+ * e-mail addresses, and a lockout row's `orgId` is the org of the account whose
+ * password was being guessed (sign-in stamps it). Without the filter an admin of
+ * one product read the locked-out addresses of the other product's people — and,
+ * since one address can be an account in each world (#2590), learned that a
+ * given person holds one there. Optional only so a caller with no session (there
+ * is none today) keeps compiling; the admin route always passes it.
+ */
+export async function listActiveLockouts(tenant?: TenantWhere): Promise<LockoutView[]> {
   const rows = await prisma.accountLockout.findMany({
-    where: { lockedUntil: { gt: new Date() } },
+    where: withinTenant({ lockedUntil: { gt: new Date() } }, tenant ?? {}),
     select: { userId: true, email: true, reason: true, failedCount: true, lockedUntil: true },
     take: 500,
   });

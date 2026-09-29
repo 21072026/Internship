@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 // Static imports, not `await import()`: Playwright resolves the `@/…` alias when
 // it transforms the spec's import graph, Node at runtime does not.
 import { findDueTrialReminders } from '../src/lib/trialReminders';
@@ -80,6 +80,8 @@ async function moveOnBoard(page: Page, leadName: string, relationId: string, sta
 test('a board move into TRIAL_ACTIVE stamps entry + 30 days; re-entry keeps the first window', async ({ page }) => {
   const seeded = await seedMarketingOrg('trial-stamp');
   try {
+    // The org is MARKETING: its admin has a session on the marketing host only (#2590).
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
     await signInAndSettle(page, seeded.adminEmail, PASSWORD, '/admin');
     await gotoSettled(page, '/admin/board');
     await expect(page.getByTestId('board-card').filter({ hasText: seeded.leadName })).toBeVisible({ timeout: 15_000 });
@@ -119,6 +121,8 @@ test('a board move into TRIAL_ACTIVE stamps entry + 30 days; re-entry keeps the 
 test('the trial length comes from the org setting on /admin/settings', async ({ page }) => {
   const seeded = await seedMarketingOrg('trial-len');
   try {
+    // The org is MARKETING: its admin has a session on the marketing host only (#2590).
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
     await signInAndSettle(page, seeded.adminEmail, PASSWORD, '/admin');
     await gotoSettled(page, '/admin/settings');
     const field = page.getByTestId('trial-length-days');

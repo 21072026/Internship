@@ -45,7 +45,7 @@ test('a declined public applicant is recognised, listed and can be erased', asyn
     });
     expect(applied.status()).toBe(200);
 
-    const applicant = await prisma.user.findUnique({ where: { email: applicantEmail } });
+    const applicant = await prisma.user.findFirst({ where: { email: applicantEmail } });
     expect(applicant).not.toBeNull();
     applicantId = applicant!.id;
     // The sentinel #1780 fixed: an apply-link account has never had a password,

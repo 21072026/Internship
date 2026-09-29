@@ -149,6 +149,16 @@ const CANDIDATE_SELECT = {
 // Possible duplicates of `input` among the org's MENTEEs. Used by the creation
 // paths (pre-flight / report-only) and by the admin check endpoint. Org-scoped:
 // records from other tenants are never compared (null org matches null org).
+//
+// WORLDS (#2590): that scoping is what keeps this correct now that one person
+// can hold an account in each product under the SAME address. A candidate whose
+// twin lives in the other world (another organization, another product) is not
+// a duplicate — it is the same human being in two deliberately separate books —
+// and reporting it would invite an admin to merge them, which destroys exactly
+// the separation the model exists for. Two safeguards, both by organization:
+// this query only ever reads ONE org's rows, so an other-world account is not
+// even loaded; and `mergeUsers` refuses a pair from different organizations
+// (`org_mismatch`). Do not widen either to "same e-mail anywhere".
 export async function findPossibleDuplicates(
   input: DuplicateInput & { orgId: string | null; excludeId?: string },
 ): Promise<DuplicateMatch[]> {

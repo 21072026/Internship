@@ -35,7 +35,7 @@ test('admin saves system settings and bulk-imports mentees from CSV', async ({ p
     expect(res.skipped).toBe(1);
 
     // The imported mentees exist as MENTEE accounts.
-    const a = await prisma.user.findUnique({ where: { email: importedA } });
+    const a = await prisma.user.findFirst({ where: { email: importedA } });
     expect(a?.role).toBe('MENTEE');
   } finally {
     await prisma.user.deleteMany({ where: { email: { in: [importedA, importedB] } } });

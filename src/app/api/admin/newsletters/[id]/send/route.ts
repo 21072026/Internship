@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { sendEmail } from '@/services/emailService';
 import { broadcastQuotaError } from '@/lib/broadcastQuota';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import {
   NEWSLETTER_EMAIL_CATEGORY,
   canonicalNewsletterContent,
@@ -52,8 +53,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-  const issue = await prisma.newsletter.findUnique({
-    where: { id },
+  // The caller's own tenant's issue only (#2542, #2590): "send now" mails the
+  // issue's members, so an id from another product must read like one that does
+  // not exist — the list route says why this is explicit and not left to the
+  // (dormant) middleware.
+  const issue = await prisma.newsletter.findFirst({
+    where: withinTenant({ id }, await tenantWhere(session)),
     select: {
       id: true, status: true, audience: true, content: true,
       image: { select: { contentType: true, data: true } },

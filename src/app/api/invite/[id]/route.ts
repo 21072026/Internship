@@ -59,7 +59,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
           to: invite.email,
           token: invite.token,
           role: invite.role,
-          orgId: resolveOrgId(session),
+          orgId: invite.orgId ?? resolveOrgId(session), // the invitation, not the resender, decides the product (#2590)
           locale: invite.locale,
         })) === 'SENT';
       } catch (e) {

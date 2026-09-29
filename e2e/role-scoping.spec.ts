@@ -46,13 +46,13 @@ test.beforeAll(async () => {
   const source = await prisma.source.create({ data: { name: `Scope Source ${Date.now()}` } });
   sourceRecordId = source.id;
 
-  await seedUser(companyEmail, PASSWORD, 'COMPANY', 'Scope Company');
-  await seedUser(sourceEmail, PASSWORD, 'SOURCE', 'Scope Source User');
+  const companyUser = await seedUser(companyEmail, PASSWORD, 'COMPANY', 'Scope Company');
+  const sourceUser = await seedUser(sourceEmail, PASSWORD, 'SOURCE', 'Scope Source User');
   await Promise.all([
     prisma.user.update({ where: { id: mentor.id }, data: { orgId } }),
     prisma.user.update({ where: { id: mentee.id }, data: { orgId } }),
-    prisma.user.update({ where: { email: companyEmail }, data: { companyId: own.id, orgId } }),
-    prisma.user.update({ where: { email: sourceEmail }, data: { sourceId: source.id, orgId } }),
+    prisma.user.update({ where: { id: companyUser.id }, data: { companyId: own.id, orgId } }),
+    prisma.user.update({ where: { id: sourceUser.id }, data: { sourceId: source.id, orgId } }),
   ]);
 
   const relation = await prisma.mentorshipRelation.create({

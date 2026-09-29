@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // #822 — evaluation criteria as org data instead of hardcoded arrays.
@@ -20,7 +20,7 @@ test.afterAll(async () => {
 // admin who configures it — seedUser leaves orgId null, which would otherwise
 // resolve to the built-ins no matter what the admin saved.
 async function seedPair(prefix: string) {
-  const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { orgId: true } });
+  const admin = await userInWorld(ADMIN_EMAIL, 'INTERNSHIP', { orgId: true });
   const orgId = admin?.orgId ?? null;
   const mentorEmail = uniqueEmail(`${prefix}-mentor`);
   const menteeEmail = uniqueEmail(`${prefix}-mentee`);

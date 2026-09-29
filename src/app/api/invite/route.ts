@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { createInvitation } from '@/lib/inviteCreate';
+import { createInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { withTenantScope } from '@/lib/orgContext';
 import { isProjectOwner } from '@/lib/projectAccess';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -169,8 +170,18 @@ export async function POST(request: Request) {
       // invitation. An email-less link has nothing to collide with — and several
       // of them at once is the point (one per person you hand it to).
       if (email) {
-        const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (existingUser) {
+        // "Already registered" is asked IN THE INVITER'S WORLD (#2590). One
+        // mailbox can hold an internship account and a marketing account (two
+        // rows, two tenants), so a marketing admin inviting an address that only
+        // exists on the internship side must go through — the invitation proves
+        // control of the mailbox and the acceptance creates the second,
+        // independent account (register/route.ts). The refusal below therefore
+        // says nothing about the OTHER world: an address that lives only there
+        // reads exactly like an unknown one, so this form cannot be used to
+        // probe which mailboxes hold an account in a product the caller does
+        // not run. Single-world deployments: same lookup, same 409.
+        const inviterOrgId = resolveOrgId(session);
+        if (await emailTakenInOrgWorld(email, inviterOrgId)) {
           return NextResponse.json(
             { error: 'A user with this email already exists' },
             { status: 409 }
@@ -180,7 +191,11 @@ export async function POST(request: Request) {
         const existingToken = await prisma.invitationToken.findFirst({
           // A revoked invitation (#2071) is not an active one — withdrawing it
           // has to make re-inviting the same address possible again.
-          where: { email, used: false, revokedAt: null, expiresAt: { gt: new Date() } },
+          // Keyed by (email, ORGANIZATION), not by email alone (#2590): an open
+          // invitation for this mailbox into the other world's organization is a
+          // different invitation that ends in a different account, and must
+          // neither block this one nor leak that it exists.
+          where: { email, ...(await invitationOrgWhere(inviterOrgId)), used: false, revokedAt: null, expiresAt: { gt: new Date() } },
         });
         if (existingToken) {
           return NextResponse.json(

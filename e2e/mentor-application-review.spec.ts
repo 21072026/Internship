@@ -175,7 +175,7 @@ test('approving a new applicant creates an invitation and a second approve attem
     await expect
       .poll(async () => (await prisma.mentorApplication.findUnique({ where: { id: app.id } }))?.status)
       .toBe('APPROVED');
-    expect(await prisma.user.findUnique({ where: { email: app.email } })).toBeNull();
+    expect(await prisma.user.findFirst({ where: { email: app.email } })).toBeNull();
     expect(await prisma.invitationToken.count({ where: { email: app.email } })).toBe(1);
 
     // Second decision on the same application (double click / retry) must not

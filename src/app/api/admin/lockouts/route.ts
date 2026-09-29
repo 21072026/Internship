@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { listActiveLockouts } from '@/lib/accountLockout';
+import { tenantWhere } from '@/lib/tenantFilter';
 
 // GET — which accounts are currently locked out by brute-force protection.
 //
@@ -15,7 +16,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return await withTenantScope(session, async () => {
-    const lockouts = await listActiveLockouts();
+    // The caller's own tenant, by hand (#2542, #2590) — see listActiveLockouts.
+    const lockouts = await listActiveLockouts(await tenantWhere(session));
     return NextResponse.json({ lockouts });
   });
 }

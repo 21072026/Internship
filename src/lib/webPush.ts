@@ -29,7 +29,17 @@ import { notificationCategoryAllowed, type NotificationCategory } from '@/lib/no
 export interface PushPayload {
   title: string;
   body: string;
-  /** In-app path to open on click. */
+  /**
+   * In-app path to open on click. RELATIVE ON PURPOSE (#2590): the service worker
+   * resolves it against its own origin (public/sw.js — `openWindow(target)` and
+   * the same-origin focus check), and a push subscription only exists on the
+   * host where the person granted permission, i.e. the product their account
+   * lives in. A relative path therefore already opens the RECIPIENT'S product —
+   * for an internship account on the internship host, for a marketing account on
+   * the marketing host — with no origin to resolve, and an absolute URL here
+   * could only ever be the wrong one for somebody. Do not "fix" this by
+   * prefixing an origin.
+   */
   url?: string;
   /** Collapse key — a second message in the same thread replaces the first. */
   tag?: string;
@@ -51,7 +61,9 @@ export function pushConfigured(): boolean {
     return false;
   }
   // The subject identifies us to the push service; it must be a mailto: or https
-  // URL, and web-push rejects anything else at configure time.
+  // URL, and web-push rejects anything else at configure time. It names the
+  // SENDER (this deployment), not a destination anyone opens, so it is one value
+  // for every recipient and deliberately not world-aware (#2590).
   const subject = process.env.VAPID_SUBJECT || `mailto:admin@${process.env.NEXTAUTH_URL?.replace(/^https?:\/\//, '') || 'localhost'}`;
   try {
     webpush.setVapidDetails(subject, publicKey, privateKey);

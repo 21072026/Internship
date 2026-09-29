@@ -9,7 +9,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { planLimits, isOrgPlan } from '@/lib/orgPlans';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
-import { createInvitation, discardInvitation } from '@/lib/inviteCreate';
+import { createInvitation, discardInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
+import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { locales } from '@/i18n/config';
 import {
   BULK_INVITE_MAX_CHARS,
@@ -115,11 +116,25 @@ export async function POST(request: Request) {
       const existingUserEmails = new Set<string>();
       const pendingInviteEmails = new Set<string>();
       const now = new Date();
+      // WORLDS (#2590). Both pre-flight questions — "does this address already
+      // have an account?" and "is there already a live invitation for it?" — are
+      // asked about the INVITER'S product only, exactly like the single-address
+      // form (/api/invite). A mailbox can hold an internship account and a
+      // marketing account; a row whose address lives only in the other world is
+      // invitable here (the acceptance creates the second, independent account)
+      // and is reported as a plain `invite`, so the report can't be read as a
+      // probe of who holds an account in a product the admin does not run. A
+      // single-world deployment gets the same two sets it always did.
+      const inviterWorld = await worldOfOrg(orgId);
+      const pendingOrgWhere = await invitationOrgWhere(orgId);
       for (const part of chunk(candidates, LOOKUP_CHUNK)) {
-        const users = await prisma.user.findMany({ where: { email: { in: part } }, select: { email: true } });
+        const users = await prisma.user.findMany({
+          where: { email: { in: part }, ...worldUserWhere(inviterWorld) },
+          select: { email: true },
+        });
         for (const u of users) existingUserEmails.add(u.email.toLowerCase());
         const tokens = await prisma.invitationToken.findMany({
-          where: { email: { in: part }, used: false, expiresAt: { gt: now } },
+          where: { email: { in: part }, ...pendingOrgWhere, used: false, expiresAt: { gt: now } },
           select: { email: true },
         });
         for (const t of tokens) if (t.email) pendingInviteEmails.add(t.email.toLowerCase());
