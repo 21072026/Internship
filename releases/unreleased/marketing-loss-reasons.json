@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Lost-deal reasons for the MARKETING funnel** (#2573). A rep moving a lead to `DEAL_LOST` had to pick a hiring drop-off reason (\"Skill mismatch\", \"Location\"), so every loss was filed as OTHER and the breakdown said nothing. `src/lib/dropoffReasons.ts` now carries `MARKETING_DROPOFF_REASON_CODES`: PRICE, MISSING_MARKETPLACE, MISSING_FEATURE, COMPETITOR, NO_RESPONSE, NOT_A_FIT, BUSINESS_CLOSED, TECHNICAL_ISSUE and OTHER. It also adds `dropoffReasonCodesFor(vertical)` / `isDropoffReasonCodeFor()`. These stay client-safe, z.string() + whitelist, and never z.enum. `validateDropoffReason()` validates against the org's own vertical. That is the single gate for mentorship PUT, status-changes and bulk, so another product's code is refused rather than mapped. `DropoffReasonDialog` offers the session vertical's list. EN/TR/DE labels were added to `dropoff.reasons`, so the analytics drop-off breakdown labels them too. The INTERNSHIP list is unchanged. Covered by `scripts/test/dropoff-reasons.test.mjs` and `e2e/dropoff-reasons-vertical.spec.ts`.",
+  "notes": {
+    "en": ["In SaleVali, a lost deal now records why in sales terms — price, a missing marketplace or feature, a competitor, no response and more — and the analytics break losses down by those reasons."],
+    "tr": ["SaleVali'de kaybedilen bir fırsat artık satış diliyle kaydediliyor — fiyat, eksik pazaryeri ya da özellik, rakip, yanıt yok ve diğerleri — ve analizler kayıpları bu nedenlere göre ayırıyor."],
+    "de": ["In SaleVali wird bei einem verlorenen Deal der Grund jetzt in Vertriebsbegriffen erfasst — Preis, fehlender Marktplatz oder fehlende Funktion, Wettbewerber, keine Antwort und mehr —, und die Analyse schlüsselt Verluste danach auf."]
+  }
+}
