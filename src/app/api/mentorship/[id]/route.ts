@@ -9,7 +9,7 @@ import { emitStageChange } from '@/lib/stageChangeEffects';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import { requireCapability } from '@/lib/capabilityGate';
+import { refuseForeignCompany } from '@/lib/relationCompany';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
@@ -52,8 +52,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
 
     return await withTenantScope(session, async () => {
-      const relation = await prisma.mentorshipRelation.findUnique({
-        where: { id },
+      // Scoped to the caller's tenant by hand (#2613, the #2542 pattern): with
+      // MT_ENFORCE_ISOLATION off, another tenant's ADMIN opened this by id.
+      // Another tenant's relation answers exactly like a missing one.
+      const relation = await prisma.mentorshipRelation.findFirst({
+        where: withinTenant({ id }, await tenantWhere(session)),
         include: {
           mentor: { select: { id: true, fullName: true, email: true, department: true } },
           mentee: {
@@ -164,8 +167,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     return await withTenantScope(session, async () => {
-      const relation = await prisma.mentorshipRelation.findUnique({
-        where: { id },
+      const relation = await prisma.mentorshipRelation.findFirst({
+        where: withinTenant({ id }, await tenantWhere(session)),
       });
 
       if (!relation) {
@@ -202,28 +205,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
       const stageChanging = !!pipelineStatus && isStageTransition(relation.pipelineStatus, pipelineStatus);
 
-      // Re-pointing the relation at a company (#2580 review). `companyId` is a
-      // free string in the schema, and the org middleware only scopes the
-      // top-level `where` — so without this a caller could attach ANY company id,
-      // another tenant's included, and read its name back from the response.
+      // Re-pointing the relation at a company (#2580 review, #2613) is an ADMIN
+      // decision in every vertical: a rep's /sales/accounts and a mentor's view
+      // of the placement company are built from their relations' companies, so
+      // an owner who could re-point would open any account in the tenant. No
+      // non-admin screen sends `companyId`; echoing the current value stays a
+      // no-op. The role check runs first, so an owner learns nothing about
+      // which ids exist. The admin's target must be in their own tenant — the
+      // org middleware scopes only the top-level `where`, so an unchecked id
+      // attached another tenant's company and read its name back.
       if (rest.companyId !== undefined && rest.companyId !== relation.companyId) {
-        // Where the mentorship module is absent (a MARKETING sales rep is a
-        // MENTOR), the account a lead belongs to is an ADMIN decision: the
-        // rep's /sales/accounts is built from their relations' companies, so
-        // re-pointing would let them open any account in the tenant.
         if (session.user.role !== 'ADMIN') {
-          const denied = await requireCapability(session.user.orgId, 'mentorship');
-          if (denied) return denied;
+          return NextResponse.json(
+            { error: 'Only an admin can change the company', code: 'company_change_admin_only' },
+            { status: 403 }
+          );
         }
-        if (rest.companyId !== null) {
-          const company = await prisma.company.findFirst({
-            where: withinTenant({ id: rest.companyId }, await tenantWhere(session)),
-            select: { id: true },
-          });
-          if (!company) {
-            return NextResponse.json({ error: 'Company not found' }, { status: 404 });
-          }
-        }
+        const refused = await refuseForeignCompany(session, rest.companyId);
+        if (refused) return refused;
       }
 
       // Validate the drop-off reason BEFORE writing anything — a rejected

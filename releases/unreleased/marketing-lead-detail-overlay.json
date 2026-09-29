@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **The lead detail and the first-message suggestions speak sales in a MARKETING tenant** (#2557). The relation card on `/admin/candidates/[id]` read \"Mentorship / Not assigned to a mentor yet / Mentor\", its role-convert button read \"Make mentor\" / \"Make mentee\", and the suggested openers in an empty thread welcomed the lead to an internship. MARKETING en/tr/de overlays in `src/i18n/verticalOverlays.ts` now cover `candidateDetail.mentorship/notAssigned/mentor`, `usersAdmin.makeMentor/makeMentee/convertTo*Confirm` (the role enum is unchanged, only the labels: MENTOR → rep, MENTEE → lead) and the four `messages.openers.*` that mentioned mentoring (welcome, intro call → book a demo, goals → needs, intro → our shop). `{name}` is kept. No keys were added and INTERNSHIP still overrides nothing. `e2e/vertical-terminology.spec.ts` checks the lead detail's whole content region and a rep's empty thread, and that the internship mentor keeps the original openers.",
+  "notes": {
+    "en": ["In SaleVali, the lead page and the suggested first messages now talk about reps, demos and trials instead of mentors and internships."],
+    "tr": ["SaleVali'de müşteri adayı sayfası ve önerilen ilk mesajlar artık mentor ve staj yerine temsilci, demo ve denemeden söz ediyor."],
+    "de": ["In SaleVali sprechen die Lead-Seite und die vorgeschlagenen ersten Nachrichten jetzt von Vertrieb, Demo und Testphase statt von Mentoring und Praktikum."]
+  }
+}

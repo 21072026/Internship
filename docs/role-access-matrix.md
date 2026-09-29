@@ -308,10 +308,11 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 | `/sales/accounts`, `/sales/accounts/[id]` | ✅ kendi / 404 | Sayaç yalnızca kendi kayıtları |
 | `/sales/leads/[id]` | ✅ kendi / 404 | Takip (#2563) ve deneme bitişi (#2553) editörleri |
 | `PUT /api/mentorship/[id]` (aşama, takip) | ✅ kendi / 403 | Sahip ∨ ADMIN |
-| `PUT /api/mentorship/[id]` `{companyId}` | **403** `capability_unavailable` | Kaydı başka bir hesaba bağlamak `mentorship` olmayan dikeyde ADMIN kararı — yoksa `/sales/accounts` o hesabı açardı; her rolde `companyId` kiracı içinde çözülmezse 404 (#2580 inceleme) |
+| `PUT /api/mentorship/[id]` `{companyId}` | **403** `company_change_admin_only` | Kaydı başka bir hesaba bağlamak **her dikeyde** ADMIN kararı (#2613) — yoksa `/sales/accounts` o hesabı açardı. Rol kontrolü id aranmadan önce cevaplar; mevcut değeri geri göndermek no-op'tur |
 | `POST /api/interactions` (kendi kaydı) | ✅ 201 | `/sales/leads/[id]` üzerinden; `mentorship` olmayan dikeyde menteeye `interaction.logged` bildirimi gitmez |
 | `PATCH /api/mentorship/[id]/trial` | ✅ kendi / 403 | Sahip ∨ ADMIN, `pipeline` yeteneği |
-| `GET /api/mentorship/[id]` başkasının | 403 | |
+| `GET/PUT /api/mentorship/[id]` başka temsilcinin | 403 | Aynı kiracı, sahip değil |
+| `GET/PUT /api/mentorship/[id]` başka org'un | 404 | İlişki çağıranın kiracısı içinde aranır (#2613); ADMIN dahil |
 | `GET /api/companies/[id]` başkasının | 404 | `company` kapsamı |
 | `POST /api/invite` | **403** `capability_unavailable` | ADMIN dışı davet artık `mentorship` yeteneği ister (#2580) |
 | `/api/admin/*` (ayarlar, org, davetler, import, analitik, aktivite, kullanıcı işlemleri) | 401/403 | ADMIN-only kalır |
@@ -353,7 +354,8 @@ ellenmedi; en kritikleri:
 | İşlem | Kural |
 |---|---|
 | `POST /api/interactions` | `ADMIN` veya ilişkinin mentoru |
-| `POST /api/mentorship` | yalnız `ADMIN` |
+| `POST /api/mentorship` | yalnız `ADMIN`; `companyId` çağıranın kiracısında çözülmezse **404** `company_not_found` (#2613) |
+| `PUT /api/mentorship/[id]` `{companyId}` | yalnız `ADMIN`, **her dikeyde** — sahip mentor/temsilci **403** `company_change_admin_only` (hiçbir ADMIN-dışı ekran `companyId` göndermez; mevcut değeri geri göndermek no-op). Hedef çağıranın kiracısında çözülür: başka kiracının firması ile var olmayan id **aynı 404** gövdesini alır, isim dönmez, FK hatası oluşmaz (`src/lib/relationCompany.ts`, #2613) |
 | `POST /api/projects` | `ADMIN` veya `MENTOR` (mentor daima sahip olur) |
 | `POST /api/source/mentees` | yalnız `SOURCE`, kendi `sourceId`'si ile |
 | `GET/POST /api/sources` | `ADMIN` veya `MENTOR` — birleşik "getiren kişi / kaynak" seçiminin listesi ve yerinde kaynak yaratma (#1296). Yönetim uçları (istatistik, silme) `ADMIN`-only `/api/admin/sources` altında kalıyor. |
