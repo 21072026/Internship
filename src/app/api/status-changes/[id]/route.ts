@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
 
 // DELETE — admin removes an incorrect stage-history entry.
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,6 +12,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   }
 
   const { id } = await params;
+  // StatusChange has no orgId; its tenant is its relation's. Another tenant's
+  // stage-history entry reads as not found and is never deleted (#2542).
+  const entry = await prisma.statusChange.findUnique({
+    where: { id },
+    select: { relation: { select: { orgId: true } } },
+  });
+  if (!entry || !sameOrgOrUnknown(entry.relation.orgId, resolveOrgId(session))) {
+    return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
+  }
   try {
     await prisma.statusChange.delete({ where: { id } });
   } catch {

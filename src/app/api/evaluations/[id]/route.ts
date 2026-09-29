@@ -4,7 +4,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { assertSameOrg, requireOrg } from '@/lib/orgScope';
+import { requireOrg, resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { isWithinEditWindow } from '@/lib/evaluation';
@@ -23,9 +23,22 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const { id } = await params;
     const evaluation = await prisma.evaluation.findUnique({
       where: { id },
-      select: { id: true, authorId: true, relationId: true, type: true },
+      select: {
+        id: true,
+        authorId: true,
+        relationId: true,
+        type: true,
+        relation: { select: { orgId: true } },
+        panel: { select: { orgId: true } },
+      },
     });
-    if (!evaluation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Evaluation has no orgId; its tenant is its relation's or, for a
+    // relation-less interview scorecard, its panel's. Another tenant's row reads
+    // as not found before anything is deleted (#2542).
+    const rowOrgId = evaluation?.relation?.orgId ?? evaluation?.panel?.orgId ?? null;
+    if (!evaluation || !sameOrgOrUnknown(rowOrgId, resolveOrgId(session))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     if (evaluation.authorId !== session.user.id && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -94,15 +107,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         sharedPublicly: true,
         excerptApprovedAt: true,
         relation: { select: { orgId: true } },
+        panel: { select: { orgId: true } },
       },
     });
-    if (!evaluation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Evaluation is not in TENANT_MODELS, so withTenantScope does not narrow a
-    // lookup by id for us — assert the tenant explicitly before authorizing, or
-    // an admin of another org could correct this row once isolation is on. A
-    // no-op while MT_ENFORCE_ISOLATION is off.
-    assertSameOrg(evaluation.relation?.orgId ?? null, requireOrg(session));
+    // lookup by id for us — check the tenant explicitly before authorizing. This
+    // used to be the flag-gated assertSameOrg, a no-op in production, so any
+    // tenant's admin could correct this row (#2542); another tenant's row now
+    // reads as not found. requireOrg still fails closed once the flag is on.
+    const callerOrgId = requireOrg(session);
+    if (!evaluation || !sameOrgOrUnknown(evaluation.relation?.orgId ?? evaluation.panel?.orgId, callerOrgId)) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     if (evaluation.authorId !== session.user.id && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

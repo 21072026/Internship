@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { notify } from '@/lib/notify';
+import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId, sameOrgOrUnknown } from '@/lib/orgScope';
 
 const schema = z.object({ answer: z.string().min(1).max(4000) });
 
@@ -16,8 +18,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (capGate) return capGate;
   const { id } = await params;
 
+  return await withTenantScope(session, async () => {
   const q = await prisma.mentorQuestion.findUnique({ where: { id }, include: { relation: true } });
-  if (!q) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // MentorQuestion has no orgId and the nested include is never scoped: a
+  // question on another tenant's relation reads as not found (#2542).
+  if (!q || !sameOrgOrUnknown(q.relation.orgId, resolveOrgId(session))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const allowed = session.user.role === 'ADMIN' || q.relation.mentorId === session.user.id;
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -35,4 +42,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       : `/messages/${q.relation.id}`;
   await notify(q.askedById, 'question.answered', {}, link);
   return NextResponse.json({ question: updated });
+  });
 }
