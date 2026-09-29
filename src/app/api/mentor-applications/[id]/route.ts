@@ -16,6 +16,7 @@ import {
   sendMentorApplicationRejectedEmail,
 } from '@/services/emailService';
 import { capSkills } from '@/lib/skills';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 // Admin decide endpoint for #904 mentor applications (#933): take into review,
 // approve (creates or upgrades the MENTOR account), or reject. Mirrors the
@@ -255,7 +256,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       await notify(user.id, 'mentor_application.approved', {}, '/mentor');
     } else {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const appUrl = await appOriginForOrg(application.orgId); // #2495
       void sendMentorApplicationApprovedEmail({
         to: application.email,
         fullName: application.fullName,

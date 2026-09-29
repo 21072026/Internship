@@ -3,7 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { listPublishedStories } from '@/lib/testimonials';
-import { siteUrl } from '@/lib/siteUrl';
+import { requestSiteUrl } from '@/lib/siteUrl';
+import { hostVertical } from '@/lib/hostVertical';
+import { DEFAULT_VERTICAL, verticalHasCapability, type VerticalCapability, type VerticalKey } from '@/lib/verticals';
 
 // /sitemap.xml (#1380). Most public pages are reachable only from the footer
 // (components/landing/PublicFooter.tsx), so a crawler finding them was a matter
@@ -54,30 +56,53 @@ const STORIES_PAGE_LIMIT = 50;
  *
  * Authenticated areas are absent by construction, and robots.ts disallows them.
  */
-const PUBLIC_ROUTES: readonly { path: string; priority: number; changeFrequency: 'daily' | 'weekly' | 'monthly' }[] = [
+/**
+ * Which host lists a route (#2495). One container serves both products, and a
+ * host must only advertise what it serves in ITS product: `needs` mirrors the
+ * page's own guard (`requireVerticalCapability` / `requireDefaultVertical` in
+ * src/lib/verticalPage.ts, or the capability check in the page itself), so the
+ * marketing host's sitemap never lists a page that 404s there — or one that
+ * renders but tells the other product's story (the mentorship code of conduct,
+ * the mentee success stories). Absent = every vertical.
+ */
+type RouteNeeds = VerticalCapability | 'default-vertical';
+
+const PUBLIC_ROUTES: readonly {
+  path: string;
+  priority: number;
+  changeFrequency: 'daily' | 'weekly' | 'monthly';
+  needs?: RouteNeeds;
+}[] = [
   { path: '/', priority: 1.0, changeFrequency: 'weekly' },
   { path: '/features', priority: 0.8, changeFrequency: 'weekly' },
-  { path: '/for-companies', priority: 0.8, changeFrequency: 'monthly' },
+  { path: '/for-companies', priority: 0.8, changeFrequency: 'monthly', needs: 'placements' },
   // The price is one of the two things a stranger searches for by name
   // (#1730), so it sits with /features rather than down among the legal
   // pages. `monthly` is honest: a published price list that changed weekly
   // would not be a published price list.
   { path: '/pricing', priority: 0.8, changeFrequency: 'monthly' },
-  { path: '/apply-as-mentor', priority: 0.8, changeFrequency: 'monthly' },
-  { path: '/projects', priority: 0.7, changeFrequency: 'weekly' },
-  { path: '/release-notes', priority: 0.5, changeFrequency: 'daily' },
-  { path: '/code-of-conduct', priority: 0.3, changeFrequency: 'monthly' },
-  { path: '/contributor-terms', priority: 0.3, changeFrequency: 'monthly' },
+  { path: '/apply-as-mentor', priority: 0.8, changeFrequency: 'monthly', needs: 'mentorship' },
+  { path: '/projects', priority: 0.7, changeFrequency: 'weekly', needs: 'projects' },
+  { path: '/release-notes', priority: 0.5, changeFrequency: 'daily', needs: 'default-vertical' },
+  { path: '/code-of-conduct', priority: 0.3, changeFrequency: 'monthly', needs: 'mentorship' },
+  { path: '/contributor-terms', priority: 0.3, changeFrequency: 'monthly', needs: 'default-vertical' },
   { path: '/privacy', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/terms', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/imprint', priority: 0.3, changeFrequency: 'monthly' },
 ];
 
+function routeListedFor(vertical: VerticalKey, needs: RouteNeeds | undefined): boolean {
+  if (!needs) return true;
+  if (needs === 'default-vertical') return vertical === DEFAULT_VERTICAL;
+  return verticalHasCapability(vertical, needs);
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = siteUrl();
+  const base = await requestSiteUrl();
+  const vertical = await hostVertical();
   const shipped = lastShipped();
 
-  const entries: MetadataRoute.Sitemap = PUBLIC_ROUTES.map((r) => ({
+  const entries: MetadataRoute.Sitemap = PUBLIC_ROUTES.filter((r) => routeListedFor(vertical, r.needs)).map((r) => ({
     url: `${base}${r.path}`,
     lastModified: shipped,
     changeFrequency: r.changeFrequency,
@@ -88,7 +113,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // (app/demo/page.tsx), and a sitemap that lists 404s is worse than a short
   // one. Note that the demo's own robots.txt closes the whole site, so this is
   // belt-and-braces rather than an invitation.
-  if (IS_DEMO_MODE) {
+  if (IS_DEMO_MODE && vertical === DEFAULT_VERTICAL) {
     entries.push({
       url: `${base}/demo`,
       lastModified: shipped,
@@ -111,7 +136,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // participant author — neither is ever a story). With `take: 1` a single
     // such row at the top of the list answers "no stories" while the page
     // renders content, and the sitemap would silently omit a live page.
-    const stories = await listPublishedStories(STORIES_PAGE_LIMIT);
+    // Mentee success stories are the internship product's (#2495).
+    const stories = routeListedFor(vertical, 'mentorship') ? await listPublishedStories(STORIES_PAGE_LIMIT) : [];
     if (stories.length > 0) {
       entries.push({
         url: `${base}/stories`,
@@ -124,7 +150,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Showcase projects. `isPublic` is the opt-in the detail page checks, and
     // ACTIVE keeps drafts, cancelled and archived work out of the index even
     // though their pages would render.
-    const projects = await prisma.project.findMany({
+    const projects = !routeListedFor(vertical, 'projects') ? [] : await prisma.project.findMany({
       where: { isPublic: true, status: 'ACTIVE' },
       orderBy: { updatedAt: 'desc' },
       select: { id: true, updatedAt: true },

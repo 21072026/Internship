@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { APP_ENV } from '@/lib/appEnv';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
-import { siteUrl } from '@/lib/siteUrl';
+import { requestSiteUrl } from '@/lib/siteUrl';
 
 // /robots.txt (#1380). Same file convention as manifest.ts — Next serves this
 // at /robots.txt, so no route handler is needed.
@@ -57,7 +57,7 @@ const PROTECTED_PATHS = [
 // Prefixes with no public sibling to protect, so the plain prefix is enough.
 const PROTECTED_PREFIXES = ['/api/', '/auth/'];
 
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
   // Preview, the per-PR topic environments and the public demo all serve the
   // same content as production. Indexing them would put three or four copies
   // of every page in the index and let a search result drop a visitor into a
@@ -74,6 +74,7 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: [...PROTECTED_PATHS.flatMap((p) => [`${p}$`, `${p}/`]), ...PROTECTED_PREFIXES],
     },
-    sitemap: `${siteUrl()}/sitemap.xml`,
+    // The sitemap of the host being crawled, not of NEXTAUTH_URL's (#2495).
+    sitemap: `${await requestSiteUrl()}/sitemap.xml`,
   };
 }

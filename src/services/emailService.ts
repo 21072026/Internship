@@ -50,6 +50,7 @@ import {
   type EmailPrefUser,
 } from '@/lib/emailGroups';
 import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/lib/unsubscribeToken';
+import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -703,7 +704,8 @@ export async function sendInvitationEmail({
   /** The inviter's choice, stored on InvitationToken.locale. */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // The recipient's tenant decides the product the link opens (#2495).
+  const appUrl = await appOriginForOrg(orgId);
   const registerUrl = `${appUrl}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
@@ -779,7 +781,7 @@ export async function sendPasswordResetEmail({
   /** The account's User.preferredLanguage (or, for SET_INITIAL, its creator's). */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = await appOriginForOrg(orgId); // the account's own product (#2495)
   const resetUrl = `${appUrl}/auth/reset?token=${token}`;
   const isInitial = purpose === 'SET_INITIAL';
   const brand = await emailBrand(orgId);
@@ -842,7 +844,7 @@ export async function sendVerificationEmail({
   /** The account's User.preferredLanguage. */
   locale?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = await appOriginForOrg(orgId); // the account's own product (#2495)
   const verifyUrl = `${appUrl}/auth/verify?token=${token}`;
   const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
