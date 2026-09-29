@@ -685,6 +685,7 @@ const en = {
     loadFailed: 'Failed to load companies',
     createFailed: 'Failed to create company',
     updateFailed: 'Failed to update company',
+    openFailed: 'This company could not be opened. Close this window and try again.',
     sortLabel: 'Sort by',
     sortOptions: {
       name: 'Name (A–Z)',
@@ -5979,6 +5980,7 @@ const tr: Dict = {
     loadFailed: 'Şirketler yüklenemedi',
     createFailed: 'Şirket oluşturulamadı',
     updateFailed: 'Şirket güncellenemedi',
+    openFailed: 'Bu şirket açılamadı. Bu pencereyi kapatıp tekrar deneyin.',
     sortLabel: 'Sıralama',
     sortOptions: {
       name: 'Ad (A–Z)',
@@ -11157,6 +11159,7 @@ const de: Dict = {
     loadFailed: 'Unternehmen konnten nicht geladen werden',
     createFailed: 'Unternehmen konnte nicht erstellt werden',
     updateFailed: 'Unternehmen konnte nicht aktualisiert werden',
+    openFailed: 'Dieses Unternehmen konnte nicht geöffnet werden. Schließe dieses Fenster und versuche es erneut.',
     sortLabel: 'Sortieren nach',
     sortOptions: {
       name: 'Name (A–Z)',

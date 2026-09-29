@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
+import { logViewActivity } from '@/lib/activity';
 
 const updateCompanySchema = z.object({
   name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
@@ -78,6 +79,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
+
+    // Access log (#2433): "who read this customer record?" is an ActivityLog
+    // question, so a successful read writes a `company.view` entry. A 404 is
+    // not a read and writes nothing; a 403 already wrote its scope denial.
+    // logViewActivity() never throws, and a repeat of the same read inside the
+    // `viewLogWindowMinutes` window writes no second row (src/lib/viewLogRule.ts).
+    // The entry names the REAL reader: behind an impersonated session that is
+    // the admin, with `as <userId>` in `detail`. It carries no company name,
+    // because the activity feed is not tenant-scoped yet.
+    //
+    // This is the read the product makes when an admin opens a company: the
+    // edit dialog on /admin/companies fills itself from this route, not from
+    // the paged list it was clicked in.
+    await logViewActivity({
+      action: 'company.view',
+      reader: session.user,
+      targetType: 'company',
+      targetId: company.id,
+      request,
+    });
 
     // Which ROW this reader may fetch is the scope above (#2431); which
     // COLUMNS of it a non-admin may read is src/lib/companyVisibility.ts — the

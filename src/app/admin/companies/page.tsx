@@ -58,6 +58,15 @@ export default function CompaniesPage() {
   const [deleting, setDeleting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  // The record the edit dialog is filled from. It is read from
+  // GET /api/companies/[id], not borrowed from the paged list row that was
+  // clicked: opening a company is the read the access log records (#2433), and
+  // that route is where it is recorded. The list row still decides which
+  // company the dialog is for, and titles it while the read is in flight.
+  const [editingDetail, setEditingDetail] = useState<Company | null>(null);
+  const [editLoadFailed, setEditLoadFailed] = useState(false);
+  /** Which company the in-flight detail read was asked about. */
+  const editForRef = useRef<string | null>(null);
   const [entitlingCompany, setEntitlingCompany] = useState<Company | null>(null);
   const [error, setError] = useState('');
   const [clCompanyId, setClCompanyId] = useState('');
@@ -66,8 +75,33 @@ export default function CompaniesPage() {
   const [clMsg, setClMsg] = useState('');
   const [clBusy, setClBusy] = useState(false);
   const closeCompanyForm = () => {
+    editForRef.current = null;
     setShowForm(false);
     setEditingCompany(null);
+    setEditingDetail(null);
+    setEditLoadFailed(false);
+  };
+
+  // Same tagging as the delete-impact read below: open A, close, open B, and
+  // A's slower answer must not fill B's form, one click before a save that
+  // would write A's fields onto B.
+  const openEdit = async (company: Company) => {
+    editForRef.current = company.id;
+    setEditingCompany(company);
+    setEditingDetail(null);
+    setEditLoadFailed(false);
+    try {
+      const res = await fetch(`/api/companies/${company.id}`);
+      if (!res.ok) throw new Error('detail');
+      const data = await res.json();
+      if (editForRef.current !== company.id) return;
+      setEditingDetail(data.company);
+    } catch {
+      // No silent fallback to the list row: a form that opens anyway would be
+      // a company opened without the read that records it.
+      if (editForRef.current !== company.id) return;
+      setEditLoadFailed(true);
+    }
   };
   const companyDialogRef = useModalFocus<HTMLDivElement>(showForm || editingCompany !== null, closeCompanyForm);
 
@@ -197,7 +231,7 @@ export default function CompaniesPage() {
       throw new Error(body.error || t.companiesPage.updateFailed);
     }
     await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
-    setEditingCompany(null);
+    closeCompanyForm();
   };
 
   // Deleting an account is the one action on this page that cannot be undone,
@@ -345,12 +379,29 @@ export default function CompaniesPage() {
             <h2 id="company-form-title" className="text-xl font-bold text-gray-900 mb-6">
               {editingCompany ? t.companiesPage.editCompany : t.companiesPage.addCompany}
             </h2>
-            <CompanyForm
-              defaultValues={editingCompany || undefined}
-              onSubmit={editingCompany ? handleUpdate : handleCreate}
-              onCancel={closeCompanyForm}
-              isEditing={!!editingCompany}
-            />
+            {editingCompany && !editingDetail ? (
+              editLoadFailed ? (
+                <div data-testid="company-edit-load-failed">
+                  <p className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {t.companiesPage.openFailed}
+                  </p>
+                  <Button type="button" variant="outline" onClick={closeCompanyForm}>
+                    {t.common.cancel}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-center py-8 text-gray-400" data-testid="company-edit-loading">
+                  {t.common.loading}
+                </p>
+              )
+            ) : (
+              <CompanyForm
+                defaultValues={editingDetail || undefined}
+                onSubmit={editingCompany ? handleUpdate : handleCreate}
+                onCancel={closeCompanyForm}
+                isEditing={!!editingCompany}
+              />
+            )}
           </div>
         </div>
       )}
@@ -484,7 +535,7 @@ export default function CompaniesPage() {
                       <Sparkles className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => setEditingCompany(company)}
+                      onClick={() => void openEdit(company)}
                       data-testid={`edit-company-${company.id}`}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
                     >

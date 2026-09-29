@@ -118,6 +118,13 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // Read access log (#2433): a repeat of the same read (same reader, record,
+  // IP) inside this many minutes writes no second `*.view` ActivityLog row.
+  // `0` = log every read; capped at a day; a blank or broken value falls back
+  // to 15 rather than to "never log". The rule lives in src/lib/viewLogRule.ts.
+  // Not on the settings form, like the retention windows above: it decides how
+  // much of an audit trail is written, which is an operator decision.
+  viewLogWindowMinutes: '15',
   // In-app notification rows (#1646). Unlike the four telemetry windows above
   // this one IS on the settings form, because it is the one an org actually has
   // an opinion about: a notification is a rendered sentence about a person plus
