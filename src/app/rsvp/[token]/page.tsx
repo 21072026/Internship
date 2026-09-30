@@ -2,7 +2,8 @@
 
 import { use, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { GraduationCap, CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import { BrandTile } from '@/components/BrandMark';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 
@@ -50,9 +51,7 @@ export default function RsvpPage({ params }: { params: Promise<{ token: string }
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-6">
-          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center">
-            <GraduationCap className="h-8 w-8 text-white" />
-          </div>
+          <BrandTile />
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
           {meeting === undefined ? (

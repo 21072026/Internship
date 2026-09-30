@@ -21,7 +21,10 @@ import { loadProjectTeam } from '@/lib/projectTeam';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
-import { sendEmail } from '@/services/emailService';
+import { sendEmail, appUrlFor } from '@/services/emailService';
+import { getOrgBranding } from '@/lib/orgBranding';
+import { verticalFor } from '@/lib/verticalContext';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { logger } from '@/lib/logger';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -364,7 +367,7 @@ async function handlePost(request: Request) {
       // who turned the category off still got the bell filling up.
       const rcpt = await prisma.user.findUnique({
         where: { id: recipient },
-        select: { email: true, emailNotifications: true, notificationPrefs: true },
+        select: { email: true, emailNotifications: true, notificationPrefs: true, orgId: true },
       });
       // Fail OPEN on a missing row: `!rcpt || allowed`, never `rcpt && allowed`.
       // A notification that vanishes because a lookup came back empty is worse
@@ -380,7 +383,20 @@ async function handlePost(request: Request) {
       // deliberately does NOT consult the group — turning off `direct_messages`
       // e-mail is not a request to go silent inside the app.
       if (rcpt?.email && emailAllowed(rcpt, 'messages') && emailGroupAllowedForCategory(rcpt, 'message')) {
-        const sender = session.user.name ?? 'Your mentor';
+        // The mail belongs to the RECIPIENT's world (docs/worlds.md): its sender
+        // name and every one-click link. Per recipient, because a group thread
+        // can span organizations.
+        const [origin, brand] = await Promise.all([
+          appUrlFor(rcpt.orgId).catch(() => undefined),
+          getOrgBranding(rcpt.orgId).catch(() => null),
+        ]);
+        // Unreachable in practice (User.fullName is required); the org read
+        // runs only then, and INTERNSHIP keeps the fallback it always had.
+        const sender =
+          session.user.name ??
+          (rcpt.orgId && (await verticalFor(rcpt.orgId).catch(() => DEFAULT_VERTICAL)) !== DEFAULT_VERTICAL
+            ? 'Someone'
+            : 'Your mentor');
         const safe = body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
         const attachCount = fileBufs.length;
         // One-click actions straight from the inbox (#1204). Someone who reads
@@ -390,8 +406,8 @@ async function handlePost(request: Request) {
         // message; "mark as read" needs a mentorship to scope the thread, which
         // is the same condition reply-by-email already has.
         const actions = replyRelationId
-          ? `${reactionLinksHtml(message.id, recipient)}<p style="font-size:13px;color:#6b7280;">${
-              `<a href="${markReadUrl(replyRelationId, recipient)}" style="color:#6b7280;">Mark this conversation as read</a>`
+          ? `${reactionLinksHtml(message.id, recipient, origin)}<p style="font-size:13px;color:#6b7280;">${
+              `<a href="${markReadUrl(replyRelationId, recipient, origin)}" style="color:#6b7280;">Mark this conversation as read</a>`
             }</p>`
           : '';
         sendEmail({
@@ -404,6 +420,8 @@ async function handlePost(request: Request) {
           // No `locale`: the body below is hard-coded English, and a translated
           // footer under an English message reads as a bug rather than a courtesy.
           userId: recipient,
+          orgId: rcpt.orgId ?? null,
+          fromName: brand?.name,
           subject: `New message from ${sender}`,
           html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>Reply to this email or open the conversation in the app.</p>${actions}`,
           // Project DMs with no mentorship behind them get the same notification

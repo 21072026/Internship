@@ -1229,7 +1229,11 @@ export async function sendMeetingGuestInviteEmail({
   // gets the default (internship) origin, which is what every guest mail was.
   orgId?: string | null;
 }) {
-  const url = await appUrlFor(orgId);
+  // The organizer's brand, whole: sender name, header and accent. No org is
+  // the internship defaults (DEFAULT_ACCENT is the blue this used to hardcode).
+  const brand = await emailBrand(orgId);
+  // appUrlFor's rule, without its second read of the same org row.
+  const url = orgId ? brand.appUrl : appUrl();
   const yes = `${url}/rsvp/${rsvpToken}?r=yes`;
   const no = `${url}/rsvp/${rsvpToken}?r=no`;
   const resolved = resolveLocale(locale);
@@ -1256,6 +1260,8 @@ export async function sendMeetingGuestInviteEmail({
 
   await sendEmail({
     to,
+    fromName: brand.name,
+    orgId: orgId ?? null,
     subject: M.subject.replace('{title}', title),
     ...(ics ? { attachments: [ics] } : {}),
     // no-user-row: a guest is an address somebody typed into the scheduler,
@@ -1265,7 +1271,7 @@ export async function sendMeetingGuestInviteEmail({
     locale: resolved,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">${esc(title)}</h2>
+        ${brandHeader(brand, esc(title))}
         ${name ? `<p>${esc(M.greeting.replace('{name}', name))}</p>` : ''}
         <p>${invitedBy ? esc(M.guestBody).replace('{organizer}', invitedBy) : esc(M.guestBodyAnonymous)}</p>
         ${when ? `<p><strong>${esc(M.when)}</strong> ${esc(when)}</p>` : ''}
@@ -1274,7 +1280,7 @@ export async function sendMeetingGuestInviteEmail({
         <p style="margin-top: 20px;">${esc(M.rsvpAsk)}</p>
         <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">${esc(M.rsvpYes)}</a>
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.rsvpNo)}</a>
-        <p style="margin-top:16px;"><a href="${url}/rsvp/${rsvpToken}" style="color:#2563eb;font-size:14px;">${esc(M.guestOpen)}</a></p>
+        <p style="margin-top:16px;"><a href="${url}/rsvp/${rsvpToken}" style="color:${esc(brand.accent)};font-size:14px;">${esc(M.guestOpen)}</a></p>
         ` : ''}
         ${when ? `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
           ${
