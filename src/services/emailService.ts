@@ -3795,7 +3795,7 @@ async function sendOverdueTodoMail(
     userId: u.id,
     orgId: u.orgId,
     to: u.email,
-    locale,
+    locale: u.preferredLanguage,
     subject: A.todoSubject,
     html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
       ${worldHeading(brand, esc(A.todoSubject), `<h2 style="color:#2563eb;">${esc(A.todoSubject)}</h2>`)}

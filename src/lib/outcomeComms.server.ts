@@ -60,6 +60,7 @@ export async function emitOutcomeComms(opts: {
       select: {
         id: true,
         mentorId: true,
+        orgId: true,
         mentor: { select: { role: true } },
         org: { select: { vertical: true } },
         mentee: {
@@ -98,7 +99,9 @@ export async function emitOutcomeComms(opts: {
     }
 
     if (!placements) return;
-    if ((await getSetting('outcomeAutoSend')) !== 'true') return;
+    // The relation's own org decides — a stage change is not always inside a
+    // request bound to that org's tenant context.
+    if ((await getSetting('outcomeAutoSend', relation.orgId ?? null)) !== 'true') return;
 
     // Auto-send is on: the same template the composer would have shown, in the
     // mentee's own language, with their opt-out respected.

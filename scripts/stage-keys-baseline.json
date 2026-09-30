@@ -21,7 +21,7 @@
     "issue": "#1880"
   },
   "src/services/emailService.ts": {
-    "hits": 5,
+    "hits": 3,
     "issue": "#1884"
   }
 }
