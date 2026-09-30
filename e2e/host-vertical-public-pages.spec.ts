@@ -291,6 +291,12 @@ test('the legal, trust and accessibility pages name SaleVali on the marketing ho
   // The terms are short enough to hold to the whole rule: no internship model.
   await page.goto('/terms');
   await expect(page.locator('main')).not.toContainText(/mentor|mentee|internship/i);
+  // The AI page and the privacy notice's AI section describe only what a
+  // SaleVali tenant can reach — not the four mentorship-shell features.
+  for (const path of ['/ai', '/privacy']) {
+    expect((await page.goto(path))?.status(), `${path} on the marketing host`).toBe(200);
+    await expect(page.locator('main'), `${path} describes the mentorship product`).not.toContainText(/mentee|mentor/i);
+  }
 });
 
 test('the internship host keeps the original legal, trust and accessibility copy', async ({ page }) => {
@@ -301,6 +307,8 @@ test('the internship host keeps the original legal, trust and accessibility copy
   }
   await page.goto('/terms');
   await expect(page.locator('main')).toContainText('By using InternshipCRM you agree to these terms.');
+  await page.goto('/ai');
+  await expect(page.getByTestId('ai-tasks')).toContainText('Mentor matching');
 });
 
 test('the public OpenAPI spec is titled with the product of the host it was fetched from', async ({ request }) => {
@@ -334,6 +342,11 @@ test('a public profile is served only on its owner\'s product host, wearing that
     await expect(page.getByRole('heading', { name: `World Rep ${stamp}` })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('link', { name: 'SaleVali' }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Internship ?CRM/ })).toHaveCount(0);
+    // A rep is not a mentor: no "Mentor" badge, no mentee count, no capacity,
+    // no request-this-mentor CTA. innerText, because the RSC payload in
+    // <script> carries the whole dictionary.
+    await expect(page.locator('body')).not.toContainText(/mentor|mentee/i, { useInnerText: true });
+    await expect(page.getByTestId('public-profile-active-mentees')).toHaveCount(0);
 
     // The OG card still answers (a generic card, never a 404) on either host.
     for (const [path, h] of [[`/p/${rep.id}/opengraph-image`, headers], [`/p/${intern.id}/opengraph-image`, headers]] as const) {

@@ -95,6 +95,22 @@ test('no MARKETING string on /admin/companies or the board reads like the intern
   }
 });
 
+// The public statements every marketing footer links to (docs/worlds.md). The
+// /ai task list is an array, which flatten() keeps as one leaf, so each
+// namespace is checked as its serialized whole.
+const PUBLIC_STATEMENT_NAMESPACES = ['ai', 'privacy'] as const;
+
+test('the AI page and the privacy notice describe no mentorship feature to a MARKETING visitor', () => {
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    const merged = applyVerticalOverlay(dictionaries[locale], locale, 'MARKETING');
+    for (const ns of PUBLIC_STATEMENT_NAMESPACES) {
+      const text = JSON.stringify(merged[ns]);
+      expect(text.match(MENTORSHIP_WORDS)?.[0], `${locale}: "${ns}" still describes the internship product`).toBeUndefined();
+    }
+    expect(merged.publicProfile.mentor, `${locale}: a rep's profile badge`).not.toMatch(MENTORSHIP_WORDS);
+  }
+});
+
 test('each locale that carries a MARKETING override localizes it, not a copy of English', () => {
   const tr = applyVerticalOverlay(dictionaries.tr, 'tr', 'MARKETING');
   // "Fırsat" is reserved for the deal/pipeline concept (#2498); the person list is

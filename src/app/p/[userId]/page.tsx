@@ -6,7 +6,7 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { prisma } from '@/lib/prisma';
 import { getPublicEvaluationSummary } from '@/lib/testimonials';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
-import { toVerticalKey } from '@/lib/verticals';
+import { toVerticalKey, verticalHasCapability } from '@/lib/verticals';
 import { BrandMark } from '@/components/BrandMark';
 import { ProfileViewPing } from '@/components/ProfileViewPing';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -67,13 +67,17 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   });
 
   if (!user) notFound();
-  if (toVerticalKey(user.org?.vertical) !== (await resolveRequestVertical())) notFound();
+  const world = await resolveRequestVertical();
+  if (toVerticalKey(user.org?.vertical) !== world) notFound();
+  // A MENTOR of a vertical without mentorship is a sales rep: no mentees, no
+  // capacity, nothing to request. Those blocks exist only where the module does.
+  const hasMentorship = verticalHasCapability(world, 'mentorship');
 
   // Project showcase (#1091): the user's own work in PUBLIC projects only —
   // a private project must never leak even its name, so both queries carry
   // the isPublic filter. Task TITLES are project-internal and never shown,
   // only the completed count. The whole section is skippable per user.
-  const [memberships, doneTasks] = user.publicShowProjects
+  const [memberships, doneTasks] = user.publicShowProjects && verticalHasCapability(world, 'projects')
     ? await Promise.all([
         prisma.projectMember.findMany({
           where: { userId, project: { isPublic: true } },
@@ -90,7 +94,8 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
 
   // Consent-gated mentor evaluation summary (#1094) — every gate enforced
   // server-side in the lib; null means the section does not exist at all.
-  const evaluationSummary = user.role === 'MENTEE' ? await getPublicEvaluationSummary(userId) : null;
+  const evaluationSummary =
+    user.role === 'MENTEE' && verticalHasCapability(world, 'evaluations') ? await getPublicEvaluationSummary(userId) : null;
 
   // "Request this mentor" (#1773) — a shortcut into the portal's request panel,
   // so it is offered only to a signed-in MENTEE looking at a directory-visible
@@ -101,6 +106,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   // The session decode is skipped entirely when no session cookie is present —
   // this page is mostly served to signed-out visitors (#1197).
   const viewerIsMentee =
+    hasMentorship &&
     user.role === 'MENTOR' &&
     user.isActive &&
     user.consents.length > 0 &&
@@ -204,7 +210,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                 </dd>
               </div>
             )}
-            {isMentor && (
+            {isMentor && hasMentorship && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <dt className="text-gray-500">{t.publicProfile.activeMentees}</dt>

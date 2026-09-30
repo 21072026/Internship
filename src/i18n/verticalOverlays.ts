@@ -441,16 +441,17 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // product or its relation model are replaced; the legal substance
       // (controller, rights, retention, subprocessors) is the same codebase's.
       share: { title: 'Shared with SaleVali' },
-      publicProfile: { poweredBy: 'SaleVali' },
+      publicProfile: { poweredBy: 'SaleVali', mentor: 'Sales rep' },
       imprint: { intro: 'Who runs this SaleVali instance, and how to reach them.' },
       privacy: {
         intro: 'We store the information you provide in order to manage leads, accounts and deals. This notice explains what we process, why, who can see it, how long we keep it, and your rights (GDPR Arts. 13–15).',
         controllerBody: 'The controller for the personal data processed here is {operator}, the operator of this SaleVali instance. The postal address and any further contact details are published in the imprint.',
         controllerUnset: 'The controller is whoever operates this SaleVali instance; their details are published in this deployment’s imprint.',
         purposesBody: 'To operate the platform: tracking leads and accounts through the sales pipeline, assigning them to sales reps, logging interactions, scheduling and communication.',
-        legalBasisBody: 'Processing relies on your consent (Art. 6(1)(a)) and on the legitimate interest of running the sales process (Art. 6(1)(f)). Optional processing, such as AI-assisted CV reading, always requires separate consent.',
-        recipientsBody: 'Depending on your role: a lead’s record and interaction history are visible to the sales rep who owns it and to administrators. Reps see only their own leads and accounts. We never sell your data. Extracted CV text is sent to an AI provider only if you separately enable AI-assisted CV reading. On the public home page, and only after you accept marketing cookies, the live chat is loaded from tawk.to — it receives your IP address and whatever you type into the chat. Decline, or leave the chat alone, and nothing is sent to them.',
+        legalBasisBody: 'Processing relies on your consent (Art. 6(1)(a)) and on the legitimate interest of running the sales process (Art. 6(1)(f)). Optional processing always requires separate consent.',
+        recipientsBody: 'Depending on your role: a lead’s record and interaction history are visible to the sales rep who owns it and to administrators. Reps see only their own leads and accounts. We never sell your data. On the public home page, and only after you accept marketing cookies, the live chat is loaded from tawk.to — it receives your IP address and whatever you type into the chat. Decline, or leave the chat alone, and nothing is sent to them.',
         use: 'Your data is used only to operate the platform — pipeline tracking and communication.',
+        aiBody: 'One feature can send text to an AI provider: when an administrator assigns a lead to a sales rep, the rep suggestion sends the lead’s skills, position and interests and up to five reps’ skills, interests and current load, with no name or identifier on either side. It asks for no consent because nothing identifying anyone is sent, and an administrator can switch it off for the whole organisation. Neither the text sent nor the text generated is stored. What it sends, what it deliberately withholds and who the provider is are set out in full on the AI page.',
       },
       terms: {
         intro: 'By using SaleVali you agree to these terms.',
@@ -474,6 +475,32 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         limitations: {
           thinFixture: 'The automated scan runs against the shared codebase in its default product configuration, so the screens and wording only SaleVali shows are not yet under the automated gate.',
         },
+      },
+      // /ai and the privacy notice's AI section described five features, four
+      // of which live in the mentorship shells this vertical does not have.
+      // What a SaleVali tenant can reach is the rep suggestion on the leads
+      // list (AssignMentorInline → /api/admin/mentor-suggest), so that is the
+      // one feature named. Arrays are replaced whole by the overlay merge.
+      ai: {
+        intro: 'One feature in this product sends text to a language model run by a third party. This page names it, says exactly what leaves our server and what deliberately does not, and — where we have not yet done something a reviewer would like us to have done — says that too.',
+        tasks: [
+          {
+            name: 'Rep suggestion',
+            audience: 'For administrators, when assigning a lead to a sales rep.',
+            sent: 'A lead’s skills, position and interests, and up to five reps as anonymous letters A–E with their skills, interests and current load.',
+            withheld: 'Every name, e-mail address and identifier on both sides. The letters are matched back to real people on our own server, after the answer comes back.',
+            consent: 'None is asked, because nothing identifying anyone is sent.',
+          },
+        ],
+        consentBody: 'The feature above sends nothing that identifies anyone, so it asks nobody for consent. Nothing else in the product depends on it — no core flow needs AI, and with AI switched off every feature you already had keeps working.',
+        humanBody: 'No model sets a pipeline stage, accepts or rejects anyone, makes an offer or changes an account. The rep suggestion is ranked first by a plain rule — shared skills, then who has room — and the model only re-orders that shortlist and adds one sentence of reasoning; an administrator reads it and chooses.',
+        retentionBody: 'Neither what is sent nor what comes back is stored. Generated text is shown in your browser and is gone when you reload. For each call we store a single metering row — which feature, when, which account — with no prompt, no output and no excerpt of either, so the monthly limit can be counted without keeping anyone’s data.',
+        notYet: [
+          'We hold no SOC 2 or ISO 27001 certification for this application.',
+          'We have signed no separate data-processing agreement and no zero-retention agreement with the AI provider; we use their published commercial terms.',
+          'We cannot promise a processing region — requests are served wherever the provider serves them.',
+          'We have published no evaluation measuring how accurate or how biased the rep suggestion is.',
+        ],
       },
     },
     tr: {
@@ -751,16 +778,17 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         discountsTitle: 'Şimdiden doğru olanlar',
       },
       share: { title: 'SaleVali ile paylaşıldı' },
-      publicProfile: { poweredBy: 'SaleVali' },
+      publicProfile: { poweredBy: 'SaleVali', mentor: 'Satış temsilcisi' },
       imprint: { intro: 'Bu SaleVali kurulumunu kim işletiyor ve kendisine nasıl ulaşılır.' },
       privacy: {
         intro: 'Müşteri adaylarını, hesapları ve fırsatları yönetmek için sağladığın bilgileri saklarız. Bu bildirim; neyi, neden işlediğimizi, kimin görebileceğini, ne kadar sakladığımızı ve haklarını açıklar (GDPR Md. 13–15).',
         controllerBody: 'Burada işlenen kişisel verilerin sorumlusu, bu SaleVali kurulumunu işleten {operator}. Posta adresi ve diğer iletişim bilgileri künyede yayınlanıyor.',
         controllerUnset: 'Veri sorumlusu, bu SaleVali kurulumunu işleten taraftır; bilgileri bu dağıtımın künyesinde yayınlanır.',
         purposesBody: 'Platformu işletmek için: müşteri adaylarını ve hesapları satış hattında takip etme, satış temsilcilerine atama, etkileşimleri kaydetme, planlama ve iletişim.',
-        legalBasisBody: 'İşleme, rızana (Md. 6(1)(a)) ve satış sürecini yürütmenin meşru menfaatine (Md. 6(1)(f)) dayanır. AI destekli CV okuma gibi isteğe bağlı işlemeler her zaman ayrı bir rıza gerektirir.',
-        recipientsBody: 'Rolüne göre: bir müşteri adayının kaydı ve etkileşim geçmişi, onu üstlenen satış temsilcisi ve yöneticiler tarafından görülür. Temsilciler yalnızca kendi müşteri adaylarını ve hesaplarını görür. Verini asla satmayız. CV’den çıkarılan metin, yalnızca AI destekli CV okumayı ayrıca etkinleştirirsen bir AI sağlayıcısına gönderilir. Herkese açık ana sayfada, yalnızca pazarlama çerezlerini kabul edersen canlı sohbet tawk.to üzerinden yüklenir; IP adresini ve sohbete yazdıklarını alır. Kabul etmezsen ya da sohbete dokunmazsan onlara hiçbir şey gitmez.',
+        legalBasisBody: 'İşleme, rızana (Md. 6(1)(a)) ve satış sürecini yürütmenin meşru menfaatine (Md. 6(1)(f)) dayanır. İsteğe bağlı işlemeler her zaman ayrı bir rıza gerektirir.',
+        recipientsBody: 'Rolüne göre: bir müşteri adayının kaydı ve etkileşim geçmişi, onu üstlenen satış temsilcisi ve yöneticiler tarafından görülür. Temsilciler yalnızca kendi müşteri adaylarını ve hesaplarını görür. Verini asla satmayız. Herkese açık ana sayfada, yalnızca pazarlama çerezlerini kabul edersen canlı sohbet tawk.to üzerinden yüklenir; IP adresini ve sohbete yazdıklarını alır. Kabul etmezsen ya da sohbete dokunmazsan onlara hiçbir şey gitmez.',
         use: 'Verilerin yalnızca platformu işletmek için kullanılır — satış hattı takibi ve iletişim.',
+        aiBody: 'Bir özellik bir yapay zekâ sağlayıcısına metin gönderebilir: bir yönetici bir müşteri adayını bir satış temsilcisine atarken, temsilci önerisi müşteri adayının yetkinliklerini, pozisyonunu ve ilgi alanlarını, en fazla beş temsilcinin de yetkinliklerini, ilgi alanlarını ve mevcut yüklerini gönderir; iki tarafta da ad veya kimlik yoktur. Kimseyi tanımlayan hiçbir şey gönderilmediği için rıza istemez; bir yönetici onu tüm kurum için kapatabilir. Ne gönderilen ne de üretilen metin saklanır. Neyi gönderdiği, neyi bilerek göndermediği ve sağlayıcının kim olduğu yapay zekâ sayfasında tek tek yazılıdır.',
       },
       terms: {
         intro: 'SaleVali kullanarak bu şartları kabul etmiş olursun.',
@@ -784,6 +812,27 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         limitations: {
           thinFixture: 'Otomatik tarama, ortak kod tabanını varsayılan ürün yapılandırmasıyla çalıştırıyor; dolayısıyla yalnızca SaleVali’nin gösterdiği ekranlar ve metinler henüz otomatik denetimin kapsamında değil.',
         },
+      },
+      ai: {
+        intro: 'Bu üründe bir özellik, üçüncü bir tarafın çalıştırdığı bir dil modeline metin gönderir. Bu sayfa onu adıyla anar; sunucumuzdan tam olarak neyin çıktığını ve neyin bilerek çıkmadığını söyler; bir denetçinin yapmış olmamızı bekleyeceği bir şeyi henüz yapmadıysak onu da söyler.',
+        tasks: [
+          {
+            name: 'Temsilci önerisi',
+            audience: 'Yöneticiler için, bir müşteri adayını bir satış temsilcisine atarken.',
+            sent: 'Bir müşteri adayının yetkinlikleri, pozisyonu ve ilgi alanları ile en fazla beş temsilci; temsilciler A–E harfleriyle anonim olarak, yalnızca yetkinlik, ilgi alanı ve mevcut yükleriyle.',
+            withheld: 'Her iki taraftaki tüm adlar, e-posta adresleri ve kimlikler. Harfler, yanıt geldikten sonra kendi sunucumuzda gerçek kişilere eşlenir.',
+            consent: 'İstenmez, çünkü kimseyi tanımlayan hiçbir şey gönderilmez.',
+          },
+        ],
+        consentBody: 'Yukarıdaki özellik kimseyi tanımlayan hiçbir şey göndermez, bu yüzden kimseden rıza istemez. Üründe başka hiçbir şey ona bağlı değildir — hiçbir temel akış yapay zekâya ihtiyaç duymaz ve yapay zekâ kapalıyken elindeki her özellik çalışmaya devam eder.',
+        humanBody: 'Hiçbir model bir hat aşaması belirlemez, kimseyi kabul veya reddetmez, teklif vermez, hesap durumu değiştirmez. Temsilci önerisi önce düz bir kuralla sıralanır — ortak yetkinlikler, sonra yeri olan — ve model yalnızca bu kısa listeyi yeniden sıralayıp birer cümlelik gerekçe ekler; okuyup karar veren yöneticidir.',
+        retentionBody: 'Ne gönderilen ne de dönen metin saklanır. Üretilen metin tarayıcında gösterilir ve sayfayı yenilediğinde kaybolur. Her çağrı için tek bir ölçüm satırı tutarız: hangi özellik, ne zaman, hangi hesap. İstem, çıktı ya da bunlardan bir alıntı yok — böylece aylık limit, kimsenin verisi saklanmadan sayılabilir.',
+        notYet: [
+          'Bu uygulama için SOC 2 veya ISO 27001 sertifikamız yok.',
+          'Yapay zekâ sağlayıcısıyla ayrı bir veri işleme sözleşmesi ya da sıfır saklama anlaşması imzalamış değiliz; yayımlanmış ticari koşullarını kullanıyoruz.',
+          'Bir işleme bölgesi taahhüt edemiyoruz — istekler sağlayıcının hizmet verdiği yerde işlenir.',
+          'Temsilci önerisinin ne kadar isabetli ya da ne kadar yanlı olduğunu ölçen bir değerlendirme yayımlamadık.',
+        ],
       },
     },
     de: {
@@ -1055,16 +1104,17 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         discountsTitle: 'Was schon heute gilt',
       },
       share: { title: 'Mit SaleVali geteilt' },
-      publicProfile: { poweredBy: 'SaleVali' },
+      publicProfile: { poweredBy: 'SaleVali', mentor: 'Vertriebsmitarbeiter' },
       imprint: { intro: 'Wer diese SaleVali-Instanz betreibt und wie man ihn erreicht.' },
       privacy: {
         intro: 'Wir speichern die von dir bereitgestellten Informationen, um Leads, Accounts und Deals zu verwalten. Dieser Hinweis erklärt, was wir verarbeiten, warum, wer es sehen kann, wie lange wir es aufbewahren und welche Rechte du hast (DSGVO Art. 13–15).',
         controllerBody: 'Verantwortlicher für die hier verarbeiteten personenbezogenen Daten ist {operator}, Betreiber dieser SaleVali-Instanz. Anschrift und weitere Kontaktdaten stehen im Impressum.',
         controllerUnset: 'Verantwortlicher ist, wer diese SaleVali-Instanz betreibt; die Angaben stehen im Impressum dieses Deployments.',
         purposesBody: 'Zum Betrieb der Plattform: Verfolgung von Leads und Accounts durch die Vertriebs-Pipeline, Zuordnung zu Vertriebsmitarbeitern, Protokollierung von Interaktionen, Terminplanung und Kommunikation.',
-        legalBasisBody: 'Die Verarbeitung stützt sich auf deine Einwilligung (Art. 6(1)(a)) und auf das berechtigte Interesse am Betrieb des Vertriebsprozesses (Art. 6(1)(f)). Optionale Verarbeitung wie KI-gestütztes Lesen des Lebenslaufs erfordert stets eine gesonderte Einwilligung.',
-        recipientsBody: 'Je nach Rolle: Datensatz und Interaktionsverlauf eines Leads sind für den zuständigen Vertriebsmitarbeiter und für Administratoren sichtbar. Vertriebsmitarbeiter sehen nur ihre eigenen Leads und Accounts. Wir verkaufen deine Daten nicht. Extrahierter Lebenslauftext wird nur an einen KI-Anbieter gesendet, wenn du das KI-gestützte Lesen gesondert aktivierst. Auf der öffentlichen Startseite wird der Live-Chat nur nach Zustimmung zu Marketing-Cookies von tawk.to geladen; dabei erhält tawk.to deine IP-Adresse und alles, was du in den Chat schreibst. Lehnst du ab oder nutzt den Chat nicht, wird nichts an sie übermittelt.',
+        legalBasisBody: 'Die Verarbeitung stützt sich auf deine Einwilligung (Art. 6(1)(a)) und auf das berechtigte Interesse am Betrieb des Vertriebsprozesses (Art. 6(1)(f)). Optionale Verarbeitung erfordert stets eine gesonderte Einwilligung.',
+        recipientsBody: 'Je nach Rolle: Datensatz und Interaktionsverlauf eines Leads sind für den zuständigen Vertriebsmitarbeiter und für Administratoren sichtbar. Vertriebsmitarbeiter sehen nur ihre eigenen Leads und Accounts. Wir verkaufen deine Daten nicht. Auf der öffentlichen Startseite wird der Live-Chat nur nach Zustimmung zu Marketing-Cookies von tawk.to geladen; dabei erhält tawk.to deine IP-Adresse und alles, was du in den Chat schreibst. Lehnst du ab oder nutzt den Chat nicht, wird nichts an sie übermittelt.',
         use: 'Deine Daten werden nur zum Betrieb der Plattform verwendet — Pipeline-Tracking und Kommunikation.',
+        aiBody: 'Eine Funktion kann Text an einen KI-Anbieter senden: Wenn ein Admin einen Lead einem Vertriebsmitarbeiter zuordnet, sendet der Vorschlag passender Vertriebsmitarbeiter Fähigkeiten, Position und Interessen des Leads sowie Fähigkeiten, Interessen und aktuelle Auslastung von bis zu fünf Vertriebsmitarbeitern — ohne Namen oder Kennung auf beiden Seiten. Sie braucht keine Einwilligung, weil nichts gesendet wird, was jemanden identifiziert, und ein Admin kann sie für die ganze Organisation abschalten. Weder der gesendete noch der erzeugte Text wird gespeichert. Was sie sendet, was sie bewusst zurückhält und wer der Anbieter ist, steht vollständig auf der KI-Seite.',
       },
       terms: {
         intro: 'Mit der Nutzung von SaleVali stimmst du diesen Bedingungen zu.',
@@ -1088,6 +1138,27 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         limitations: {
           thinFixture: 'Der automatische Scan läuft gegen die gemeinsame Codebasis in ihrer Standard-Produktkonfiguration. Ansichten und Texte, die nur SaleVali zeigt, stehen daher noch nicht unter der automatischen Prüfung.',
         },
+      },
+      ai: {
+        intro: 'Eine Funktion in diesem Produkt sendet Text an ein Sprachmodell eines Drittanbieters. Diese Seite benennt sie, sagt genau, was unseren Server verlässt und was bewusst nicht — und wenn wir etwas noch nicht getan haben, das eine Prüferin gern gesehen hätte, steht auch das hier.',
+        tasks: [
+          {
+            name: 'Vorschlag für die Vertriebszuordnung',
+            audience: 'Für Admins, bei der Zuordnung eines Leads zu einem Vertriebsmitarbeiter.',
+            sent: 'Fähigkeiten, Position und Interessen eines Leads sowie bis zu fünf Vertriebsmitarbeiter als anonyme Buchstaben A–E mit Fähigkeiten, Interessen und aktueller Auslastung.',
+            withheld: 'Sämtliche Namen, E-Mail-Adressen und Kennungen auf beiden Seiten. Die Buchstaben werden erst nach der Antwort auf unserem eigenen Server wieder echten Personen zugeordnet.',
+            consent: 'Keine — es wird nichts gesendet, was jemanden identifiziert.',
+          },
+        ],
+        consentBody: 'Die Funktion oben sendet nichts, was jemanden identifiziert, und fragt deshalb niemanden nach einer Einwilligung. Nichts anderes im Produkt hängt an ihr — kein Kernablauf braucht KI, und mit abgeschalteter KI funktioniert alles weiter, was du schon hattest.',
+        humanBody: 'Kein Modell setzt eine Pipeline-Stufe, nimmt jemanden an oder lehnt jemanden ab, macht ein Angebot oder ändert ein Konto. Der Zuordnungsvorschlag wird zuerst nach einer einfachen Regel sortiert — gemeinsame Fähigkeiten, dann freie Kapazität — und das Modell ordnet diese kurze Liste nur neu und ergänzt je einen Satz Begründung; lesen und entscheiden tut ein Mensch.',
+        retentionBody: 'Weder das Gesendete noch das Zurückkommende wird gespeichert. Erzeugter Text erscheint in deinem Browser und ist beim Neuladen weg. Pro Aufruf speichern wir eine einzige Zeile zur Abrechnung: welche Funktion, wann, welches Konto. Kein Prompt, keine Ausgabe, kein Auszug davon — so lässt sich das Monatslimit zählen, ohne die Daten von irgendjemandem aufzubewahren.',
+        notYet: [
+          'Für diese Anwendung haben wir keine SOC-2- oder ISO-27001-Zertifizierung.',
+          'Mit dem KI-Anbieter haben wir keinen gesonderten Auftragsverarbeitungsvertrag und keine Zero-Retention-Vereinbarung geschlossen; wir nutzen seine veröffentlichten kommerziellen Bedingungen.',
+          'Wir können keine Verarbeitungsregion zusichern — Anfragen werden dort verarbeitet, wo der Anbieter sie bedient.',
+          'Wir haben keine Evaluation veröffentlicht, die misst, wie treffsicher oder wie verzerrt der Zuordnungsvorschlag ist.',
+        ],
       },
     },
   },

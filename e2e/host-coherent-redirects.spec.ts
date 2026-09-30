@@ -73,9 +73,13 @@ test('the SSO login failure redirect stays on the host the browser is on', async
   expect(defLoc.searchParams.get('error')).toBe('sso_unavailable');
 });
 
+// The feed is the internship product's (docs/worlds.md): the marketing host
+// 404s both the page and the feed, so it must not advertise one — neither its
+// own dead URL nor the internship host's.
 test('the release-notes feed link is built on the host the page was served from', async ({ request }) => {
   const marketing = await (await request.get('/release-notes', { headers: AS_MARKETING })).text();
-  expect(marketing).toContain(`https://${MARKETING}/release-notes/feed.xml`);
+  expect(marketing).not.toContain('/release-notes/feed.xml');
+  expect(marketing).not.toContain('Internship CRM — release notes');
 
   const def = await (await request.get('/release-notes')).text();
   expect(def).not.toContain(`${MARKETING}/release-notes/feed.xml`);

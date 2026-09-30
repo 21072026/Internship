@@ -11,6 +11,9 @@ import { THEME_COLOR } from '@/lib/accent';
 // Node runtime, not Edge — the query goes through the shared Prisma client.
 export const runtime = 'nodejs';
 // Static by Next's contract, so it names no product; the card itself does.
+// A per-host alt needs generateImageMetadata, which moves the image to
+// /opengraph-image/<id> on both hosts — a bigger change to every shared link
+// than the two words dropped here.
 export const alt = 'Public profile';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
@@ -96,7 +99,7 @@ export default async function OpengraphImage({
   const location = [user.city, user.country].filter(Boolean).join(', ');
   const skills = (Array.isArray(user.skills) ? (user.skills as string[]) : []).slice(0, 5);
   const isMentor = user.role === 'MENTOR';
-  const sub = isMentor ? 'Mentor' : (user.targetPosition ?? user.department ?? user.university ?? '');
+  const sub = isMentor ? t.publicProfile.mentor : (user.targetPosition ?? user.department ?? user.university ?? '');
   const initials = (headline ?? '?').slice(0, 2).toUpperCase();
   // Truncate in JS — satori does not support -webkit-box line clamping.
   const bio = user.bio && user.bio.length > 160 ? `${user.bio.slice(0, 157)}…` : user.bio;
