@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **An empty `MARKETING_HOSTS` no longer switches the marketing domain off** (#2428, epic #2348). `infra/deploy-prod.sh` threads the variable into the container as `-e MARKETING_HOSTS=\"${MARKETING_HOSTS:-}\"`, so prod — which by design configures nothing — ran with an empty string, `?? 'marketing.ersah.in'` took that as a configured empty list, and https://marketing.ersah.in served the internship landing. `marketingHosts()` in `src/lib/servedHosts.ts` (shared since #2488 with the redirect allowlist, so the empty value also made the marketing domain a non-served host) now treats unset, empty and whitespace-only alike: the default applies. Unit-tested. `infra/README.md` documents the marketing host end to end (DNS, `*.ersah.in` cert, Caddy site file, `MARKETING_HOSTS` semantics, how to verify).",
-  "notes": {
-    "en": ["The marketing product's own domain shows the marketing landing page again."],
-    "tr": ["Pazarlama ürününün kendi alan adı yeniden pazarlama açılış sayfasını gösteriyor."],
-    "de": ["Die eigene Domain des Marketing-Produkts zeigt wieder die Marketing-Startseite."]
-  }
-}
