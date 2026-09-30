@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logActivity } from '@/lib/activity';
-import { sendEmail } from '@/services/emailService';
+import { brandHeader, emailBrand, sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -205,7 +205,7 @@ async function handlePost(request: Request) {
   // number mailed cannot disagree. A no-op for a single-tenant deployment.
   const users = await prisma.user.findMany({
     where: withinTenant({ isActive: true }, await tenantWhere(session)),
-    select: { id: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
+    select: { id: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true, orgId: true },
   });
 
   // Who would actually be MAILED — computed here, before anything is written,
@@ -281,6 +281,16 @@ async function handlePost(request: Request) {
     const attachments = imageData && image
       ? [{ filename: emailImageFilename(image.type), content: imageData, contentType: image.type, cid: IMAGE_CID }]
       : undefined;
+    // Each reader's copy wears their own org's brand — sender name, logo,
+    // accent — so a SaleVali broadcast never arrives "from Internship CRM"
+    // (docs/worlds.md). The audience is one tenant, so this is one lookup.
+    const brands = new Map<string, ReturnType<typeof emailBrand>>();
+    const brandOf = (orgId: string | null) => {
+      const key = orgId ?? '';
+      let hit = brands.get(key);
+      if (!hit) brands.set(key, (hit = emailBrand(orgId)));
+      return hit;
+    };
     await Promise.all(
       // The list the quota was checked against, not a second filter over
       // `users`: two copies of "who gets mailed" is how a metered count and a
@@ -297,12 +307,14 @@ async function handlePost(request: Request) {
           // around it — before #1163 only the subject and the link label were
           // translated while the message itself went out in one language.
           const safe = escapeHtml(resolveAnnouncementText({ text, translations }, u.preferredLanguage));
-          const html = `<h2>${t.announcements.emailSubject}</h2><p>${safe.replace(/\n/g, '<br>')}</p>${imageHtml}${link ? `<p><a href="${link}">${t.announcements.emailOpenLink}</a></p>` : ''}`;
-          return sendEmail({
+          const bodyHtml = `<p>${safe.replace(/\n/g, '<br>')}</p>${imageHtml}${link ? `<p><a href="${link}">${t.announcements.emailOpenLink}</a></p>` : ''}`;
+          // Inside the per-recipient chain, so a failed brand read is one
+          // logged failure like a failed send, not a rejected broadcast.
+          return brandOf(u.orgId).then((brand) => sendEmail({
             to: u.email,
             category: 'announcement',
             subject: t.announcements.emailSubject,
-            html,
+            html: `${brandHeader(brand, t.announcements.emailSubject)}${bodyHtml}`,
             attachments,
             // One mail per recipient in the broadcast, each with its own
             // unsubscribe token — this is the highest-volume mail the product
@@ -321,7 +333,11 @@ async function handlePost(request: Request) {
             // and the filter above uses the very same row, so the two cannot
             // disagree about what this person chose.
             prefs: u,
-          }).then(
+            // Handed over with `prefs`, which skips the read that would have
+            // learned it.
+            orgId: u.orgId,
+            fromName: brand.name,
+          })).then(
             () => { emailed++; },
             (e) => logger.error('Failed to send announcement email', { error: String(e) })
           );

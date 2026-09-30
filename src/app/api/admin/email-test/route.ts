@@ -2,10 +2,22 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
-import { sendEmail, verifySmtpConnection, verifyBulkSmtpConnection, mailChannelInfo } from '@/services/emailService';
+import {
+  brandHeader,
+  emailBrand,
+  sendEmail,
+  verifySmtpConnection,
+  verifyBulkSmtpConnection,
+  mailChannelInfo,
+} from '@/services/emailService';
 import { logActivity } from '@/lib/activity';
+import { resolveOrgId } from '@/lib/orgScope';
 
 const schema = z.object({ to: z.string().email() });
+
+// The brand name is tenant-supplied text going into markup.
+const esc = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
 
 // GET — SMTP connectivity + the addresses the app sends from, so an admin can
 // confirm configuration at a glance before sending a probe.
@@ -46,13 +58,20 @@ export async function POST(request: Request) {
 
   const stamp = new Date().toISOString();
   try {
+    // The probe speaks for the admin's own product (docs/worlds.md): a SaleVali
+    // admin's test must not arrive as an Internship CRM mail. Inside the try, so
+    // a failed brand read is reported like any other probe failure.
+    const brand = await emailBrand(resolveOrgId(session));
+    const productName = esc(brand.name);
     await sendEmail({
       to: parsed.data.to,
       category: 'test',
-      subject: `Internship CRM deliverability test — ${stamp}`,
+      subject: `${brand.name} deliverability test — ${stamp}`,
+      fromName: brand.name,
+      orgId: resolveOrgId(session),
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color:#2563eb;">Deliverability test</h2>
-        <p>This is an automated test email from Internship CRM to verify outbound delivery
+        ${brandHeader(brand, 'Deliverability test')}
+        <p>This is an automated test email from ${productName} to verify outbound delivery
         and sender authentication (SPF / DKIM / DMARC).</p>
         <p style="color:#6b7280;font-size:13px;">Sent at ${stamp} from
         ${process.env.SMTP_FROM || process.env.SMTP_USER} via ${process.env.SMTP_HOST || 'the configured SMTP host'}.</p>

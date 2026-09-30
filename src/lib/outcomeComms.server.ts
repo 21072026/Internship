@@ -7,6 +7,7 @@ import { sendEmail } from '@/services/emailService';
 import { getDictionary } from '@/i18n/dictionaries';
 import { locales, type Locale } from '@/i18n/config';
 import { logger } from '@/lib/logger';
+import { verticalHasCapability } from '@/lib/verticals';
 import {
   OUTCOME_TEMPLATE_KEY,
   outcomeComposerLink,
@@ -58,6 +59,7 @@ export async function emitOutcomeComms(opts: {
       select: {
         id: true,
         mentorId: true,
+        org: { select: { vertical: true } },
         mentee: {
           select: {
             id: true,
@@ -84,6 +86,11 @@ export async function emitOutcomeComms(opts: {
     }
 
     if ((await getSetting('outcomeAutoSend')) !== 'true') return;
+    // The templates are placement outcomes ("no placement this round"), written
+    // for the internship world. An org without placements gets no automatic
+    // mail at all rather than that text under another brand: its rep has been
+    // notified above and writes the message (docs/worlds.md).
+    if (!verticalHasCapability(relation.org?.vertical, 'placements')) return;
 
     // Auto-send is on: the same template the composer would have shown, in the
     // mentee's own language, with their opt-out respected.

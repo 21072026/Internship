@@ -186,7 +186,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       settings: {
         reminderDaysHint: 'Remind a rep after this many days without a logged interaction',
         weeklyDigest: 'Send the weekly rep digest',
-        outcomeAutoSendHint: 'Off by default. When off, reaching an outcome stage notifies the rep and prefills a draft they read, edit and send. When on, the templated message goes to the lead without review — a rejection cannot be recalled.',
+        outcomeAutoSendHint: 'Leads are never messaged automatically: reaching an outcome stage notifies the rep and prefills a draft they read, edit and send. A rejection cannot be recalled.',
         require2faAdminsMentors: 'Required for admins and reps',
         aiMonthlyQuotaHint: 'How many calls to the AI provider may be made per calendar month. Every AI feature draws on the same pool; only a call that actually succeeded is counted, and the counter resets on the 1st. Usage is metered across the whole installation rather than per organisation, so on a shared installation every organisation spends from the same month’s pool. Once it is spent the AI gate refuses further calls until next month — nothing else in the app is affected. 0 switches AI off entirely.',
         bulkImport: 'Bulk import leads',
@@ -550,7 +550,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       settings: {
         reminderDaysHint: 'Bu kadar gün etkileşim kaydedilmezse temsilciye hatırlat',
         weeklyDigest: 'Haftalık temsilci özetini gönder',
-        outcomeAutoSendHint: 'Varsayılan olarak kapalı. Kapalıyken sonuç aşamasına ulaşılınca temsilci bilgilendirilir ve okuyup düzenleyip göndereceği bir taslak hazırlanır. Açıkken şablon mesaj incelenmeden müşteri adayına gider — bir ret geri alınamaz.',
+        outcomeAutoSendHint: 'Müşteri adaylarına hiçbir zaman otomatik mesaj gitmez: sonuç aşamasına ulaşılınca temsilci bilgilendirilir ve okuyup düzenleyip göndereceği bir taslak hazırlanır. Bir ret geri alınamaz.',
         require2faAdminsMentors: 'Yöneticiler ve temsilciler için zorunlu',
         aiMonthlyQuotaHint: 'Bir takvim ayında yapay zekâ sağlayıcısına kaç çağrı yapılabileceği. Tüm yapay zekâ özellikleri aynı havuzdan harcar; yalnızca başarılı olan çağrı sayılır ve sayaç ayın 1\'inde sıfırlanır. Kullanım kurum başına değil tüm kurulum genelinde ölçülür; paylaşılan bir kurulumda her kurum aynı ayın havuzundan harcar. Havuz bitince yapay zekâ kapısı bir sonraki aya kadar yeni çağrıları reddeder — uygulamanın geri kalanı etkilenmez. 0 yapay zekâyı tamamen kapatır.',
         bulkImport: 'Müşteri adaylarını toplu içe aktar',
@@ -823,7 +823,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       settings: {
         reminderDaysHint: 'Einen Vertriebsmitarbeiter nach so vielen Tagen ohne erfasste Interaktion erinnern',
         weeklyDigest: 'Wöchentliche Zusammenfassung für Vertriebsmitarbeiter senden',
-        outcomeAutoSendHint: 'Standardmäßig aus. Aus: Beim Erreichen einer Ergebnisphase wird der Vertriebsmitarbeiter benachrichtigt und erhält einen Entwurf zum Lesen, Bearbeiten und Senden. An: Die Vorlage geht ohne Prüfung an den Lead — eine Absage lässt sich nicht zurückholen.',
+        outcomeAutoSendHint: 'Leads erhalten nie eine automatische Nachricht: Beim Erreichen einer Ergebnisphase wird der Vertriebsmitarbeiter benachrichtigt und erhält einen Entwurf zum Lesen, Bearbeiten und Senden. Eine Absage lässt sich nicht zurückholen.',
         require2faAdminsMentors: 'Pflicht für Admins und Vertriebsmitarbeiter',
         aiMonthlyQuotaHint: 'Wie viele Aufrufe an den KI-Anbieter pro Kalendermonat erlaubt sind. Alle KI-Funktionen nutzen dasselbe Kontingent; gezählt wird nur ein erfolgreicher Aufruf, und der Zähler wird am 1. zurückgesetzt. Die Nutzung wird für die gesamte Installation gemessen, nicht pro Organisation — auf einer geteilten Installation verbraucht jede Organisation aus demselben Monatskontingent. Ist es aufgebraucht, lehnt die KI-Schranke weitere Aufrufe bis zum nächsten Monat ab; der Rest der App ist nicht betroffen. 0 schaltet KI komplett ab.',
         bulkImport: 'Leads per Massenimport hinzufügen',

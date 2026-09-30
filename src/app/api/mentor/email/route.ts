@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { sendEmail } from '@/services/emailService';
+import { emailBrand, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { conversationForRelation } from '@/lib/conversations';
@@ -79,6 +79,10 @@ export async function POST(request: Request) {
     // function avoids `$`-sequences in a name being interpreted by String.replace.
     const fill = (s: string, name: string) => s.replace(/\{name\}/g, () => name);
 
+    // The sender is the relation's org brand (docs/worlds.md): a SaleVali lead
+    // must not receive their rep's mail "from Internship CRM". One read per org.
+    const brands = new Map<string, Awaited<ReturnType<typeof emailBrand>>>();
+
     let sent = 0;
     for (const rel of relations) {
       const name = rel.mentee.fullName;
@@ -93,6 +97,9 @@ export async function POST(request: Request) {
         .join('')}</div>`;
       if (emailAllowed(rel.mentee, 'messages') && emailGroupAllowedForCategory(rel.mentee, 'mentor-direct')) {
         try {
+          const orgKey = rel.orgId ?? '';
+          let brand = brands.get(orgKey);
+          if (!brand) brands.set(orgKey, (brand = await emailBrand(rel.orgId)));
           // Reply-To routes mentee replies back into this thread (inbound email).
           // The recipient is baked into the token so a reply still threads when
           // the mentee answers from a different address than their profile one.
@@ -111,6 +118,8 @@ export async function POST(request: Request) {
             category: 'mentor-direct',
             userId: rel.mentee.id,
             locale: rel.mentee.preferredLanguage,
+            fromName: brand.name,
+            orgId: rel.orgId,
           });
         } catch (e) {
           console.error('Mentor email failed for', rel.mentee.email, e);

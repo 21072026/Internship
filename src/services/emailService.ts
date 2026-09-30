@@ -28,6 +28,7 @@ import { overdueBefore } from '@/lib/taskDue';
 import { visibleToViewer } from '@/lib/todoVisibility';
 import { formatDate } from '@/lib/relativeTime';
 import { getOrgBranding } from '@/lib/orgBranding';
+import { mailAccentFor } from '@/lib/accent';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { buildMeetingIcs } from '@/lib/ics';
@@ -61,13 +62,17 @@ import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
-// defaults, so behavior is unchanged. The accent falls back to the product blue.
-const DEFAULT_ACCENT = '#2563eb';
-async function emailBrand(orgId?: string | null) {
+// defaults, so behavior is unchanged. An unset accent falls back to the org's
+// WORLD colour (SaleVali magenta, else the product blue) — a marketing tenant
+// that never picked a colour must not get internship-blue mail.
+//
+// Exported for the routes that assemble their own mail body (announcements, the
+// deliverability probe): one brand rule, not a second lookup per route.
+export async function emailBrand(orgId?: string | null) {
   const b = await getOrgBranding(orgId ?? null);
   return {
     name: b.name,
-    accent: b.color || DEFAULT_ACCENT,
+    accent: b.color || mailAccentFor(b.vertical),
     logoUrl: b.logoUrl,
     supportEmail: b.supportEmail,
     // The origin every link in this org's mail points at (#2495): its own
@@ -86,7 +91,7 @@ async function emailBrand(orgId?: string | null) {
 // scheme-checked on write (isSafeBrandLogoUrl) and `brandColor` must be a hex
 // value; escaping here is the second layer, for rows written before those
 // checks existed.
-function brandHeader(brand: { name: string; accent: string; logoUrl: string | null }, heading: string): string {
+export function brandHeader(brand: { name: string; accent: string; logoUrl: string | null }, heading: string): string {
   const logo = brand.logoUrl
     ? `<img src="${esc(brand.logoUrl)}" alt="${esc(brand.name)}" style="max-height:40px;margin-bottom:12px;" />`
     : '';
@@ -201,22 +206,33 @@ function htmlToText(html: string): string {
 }
 
 // A From header with a display name ("Internship CRM <noreply@…>") looks less
-// like bulk/spam than a bare address. Honor an address that already includes a
-// name; otherwise wrap the configured address.
-function fromHeader(brandName?: string | null, transport: MailTransport = 'primary'): string {
+// like bulk/spam than a bare address.
+//
+// The display name is the caller's brand when it gave one. A name already
+// written into SMTP_FROM ("Name <addr>") is only the DEFAULT now: it used to be
+// returned verbatim, which silently dropped every tenant's brand name — so on
+// such a deployment a SaleVali recipient got the internship name on every mail.
+function fromIdentity(brandName?: string | null, transport: MailTransport = 'primary'): { name: string; address: string } {
   // Bulk mail may carry its own sender identity (e.g. noreply@ersah.in) so that
   // digest complaints never touch the domain the password-reset mail is signed
   // with. Falls back to the primary address when unset, which keeps a
   // single-identity setup working unchanged.
-  const addr =
+  const configured =
     (transport === 'bulk' ? process.env.SMTP_BULK_FROM : undefined) ||
     process.env.SMTP_FROM ||
     (transport === 'bulk' ? process.env.SMTP_BULK_USER : undefined) ||
     process.env.SMTP_USER ||
     '';
-  if (addr.includes('<') || !addr) return addr;
-  const name = brandName || process.env.MAIL_FROM_NAME || 'Internship CRM';
-  return `${name} <${addr}>`;
+  const angled = configured.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+  const address = (angled ? angled[2] : configured).trim();
+  const configuredName = angled?.[1].trim() || null;
+  const name = brandName || configuredName || process.env.MAIL_FROM_NAME || 'Internship CRM';
+  return { name, address };
+}
+
+function fromHeader(brandName?: string | null, transport: MailTransport = 'primary'): string {
+  const { name, address } = fromIdentity(brandName, transport);
+  return address ? `${name} <${address}>` : '';
 }
 
 // Record the outcome of one send attempt (#1194). Never throws and never blocks
@@ -360,15 +376,15 @@ function withUnsubscribeFooter(html: string, footer: string): string {
 // RFC 2919 wants a globally unique id in a namespace we own. The app host is
 // stable, ASCII and always present; a group id is already a dot-atom.
 //
-// Deliberately NOT world-aware (#2590): List-Id is an IDENTIFIER, not a link. It
-// names the mailing list in a namespace this deployment owns, and mail clients
-// group and de-duplicate on it — so it has to be the same string for every
-// recipient of a group, whichever product their account lives in. Only the
-// List-Unsubscribe URL below (something a person's client opens) follows the
-// recipient's world.
-function listIdHost(): string {
+// The namespace is the RECIPIENT'S product host — the same origin their
+// List-Unsubscribe URL uses. Mail clients show it as the list's name ("via
+// digests.<host>"), so a fixed internship host named the other product in every
+// SaleVali digest. The id still reads the same for everyone a group reaches
+// within one world, which is all the grouping ever needed: one mailbox never
+// receives one list from both worlds under one account.
+function listIdHost(origin?: string): string {
   try {
-    return new URL(appUrl()).host;
+    return new URL(origin ?? appUrl()).host;
   } catch {
     return 'localhost';
   }
@@ -395,7 +411,7 @@ function unsubscribeHeaders(userId: string, group: EmailGroupId, origin?: string
   // these mails often expect a reply through the `reply+` address, which an
   // auto-response suppression header would interfere with.
   if (isBulkGroup(group)) {
-    h['List-Id'] = `<${group}.${listIdHost()}>`;
+    h['List-Id'] = `<${group}.${listIdHost(origin)}>`;
     h['Precedence'] = 'bulk';
     h['Auto-Submitted'] = 'auto-generated';
     h['X-Auto-Response-Suppress'] = 'OOF, AutoReply';
@@ -437,6 +453,7 @@ export const __testable = {
   unsubscribeFooterHtml,
   withUnsubscribeFooter,
   unsubscribeHeaders,
+  fromIdentity,
   htmlToText,
   // #1720 — the localisable fragments shared by the system mails. Exported for
   // the same reason as the footer builders above: SMTP never runs in a test
@@ -461,6 +478,44 @@ export const __testable = {
 // want to name the outcome; sendEmail itself never returns it.
 export type EmailDeliveryResult = 'SENT' | 'SKIPPED' | 'FAILED';
 
+/**
+ * The From display name for a mail whose caller named none (docs/worlds.md):
+ * whatever a mail produces stays in its recipient's world, and a builder that
+ * forgot `fromName` must not introduce a SaleVali reader as "Internship CRM".
+ *
+ * `null` — the default world: keep the configured name, byte-for-byte what it
+ * always was (an internship tenant's brand is applied by the builders that pass
+ * `fromName`, as before). A string — the recipient org's brand name. `false` —
+ * the lookup failed, so the world is unknown; the caller sends a bare address.
+ * With neither org nor user there is no recipient identity (an operator alert,
+ * a guest nobody resolved): the default, and the caller's job to say otherwise.
+ */
+async function recipientSenderName(
+  orgId: string | null | undefined,
+  userId: string | null | undefined,
+  known?: { orgId: string | null; vertical: string | null | undefined },
+): Promise<string | null | false> {
+  try {
+    let org = orgId;
+    if (org === undefined) {
+      const row = known ?? (userId
+        ? await prisma.user
+            .findUnique({ where: { id: userId }, select: { orgId: true, org: { select: { vertical: true } } } })
+            .then((u) => (u ? { orgId: u.orgId, vertical: u.org?.vertical } : undefined))
+        : undefined);
+      // The default world needs no brand read — the hot path of every digest.
+      if (!row || toVerticalKey(row.vertical) === DEFAULT_VERTICAL) return null;
+      org = row.orgId;
+    }
+    if (!org) return null;
+    const brand = await getOrgBranding(org);
+    return brand.vertical === DEFAULT_VERTICAL ? null : brand.name;
+  } catch (e) {
+    logger.warning('Sender name unresolved; sending from a bare address', { error: String(e) });
+    return false;
+  }
+}
+
 export async function sendEmail({
   to,
   subject,
@@ -484,8 +539,10 @@ export async function sendEmail({
   // <img src="cid:…">, which is how images inside a message body reach mail
   // clients (a URL into this app would need a session and render as broken).
   attachments?: { filename: string; content: Buffer; contentType?: string; cid?: string }[];
-  // Overrides the From display name (e.g. a tenant's brand name, #546). Falls
-  // back to MAIL_FROM_NAME / "Internship CRM" when omitted.
+  // Overrides the From display name (e.g. a tenant's brand name, #546). When
+  // omitted, a recipient outside the default world is named after their own
+  // org's brand (see recipientSenderName); everyone else keeps MAIL_FROM_NAME /
+  // "Internship CRM".
   fromName?: string | null;
   // Coarse bucket for the delivery log ("verification", "message", …). Optional
   // so the dozens of existing call sites keep compiling; the ones that matter
@@ -544,10 +601,11 @@ export async function sendEmail({
   // in the body below.
   headers?: Record<string, string>;
   // The recipient's ORGANIZATION (`User.orgId`), when the caller already holds it
-  // (#2590). It decides only one thing here: which product's host the footer's
-  // unsubscribe / preference links and the List-Unsubscribe URL point at — the
-  // recipient's own (an INTERNSHIP account: the origin they always had;
-  // a MARKETING account: the marketing host).
+  // (#2590). It decides which product the mail belongs to: the host the footer's
+  // unsubscribe / preference links, the List-Unsubscribe URL and the List-Id
+  // point at, and — when the caller named no sender — the From display name. An
+  // INTERNSHIP account keeps what it always had; a MARKETING account gets the
+  // marketing host and its own brand.
   //
   // Three states, and the difference matters: a string or an explicit `null`
   // (the default org ⇒ INTERNSHIP) is an answer and costs nothing; `undefined`
@@ -572,6 +630,8 @@ export async function sendEmail({
   const gated = unsubscribable(groupId, userId);
   // The recipient's world, when the preference read below happened to learn it.
   let storedWorld: World | undefined;
+  // …and the org behind it, so the sender name needs no second user read.
+  let storedOrg: { orgId: string | null; vertical: string | null | undefined } | undefined;
 
   // ── CENTRAL ENFORCEMENT ───────────────────────────────────────────────────
   //
@@ -599,11 +659,19 @@ export async function sendEmail({
       : await prisma.user
           .findUnique({
             where: { id: userId! },
-            select: { emailNotifications: true, notificationPrefs: true, org: { select: { vertical: true } } },
+            select: {
+              emailNotifications: true,
+              notificationPrefs: true,
+              orgId: true,
+              org: { select: { vertical: true } },
+            },
           })
           .catch(() => null);
     const u = prefs ?? stored;
-    if (orgId === undefined && stored) storedWorld = toVerticalKey(stored.org?.vertical);
+    if (orgId === undefined && stored) {
+      storedWorld = toVerticalKey(stored.org?.vertical);
+      storedOrg = { orgId: stored.orgId, vertical: stored.org?.vertical };
+    }
     // Fail OPEN on a missing row or a DB error, exactly like notifyIfAllowed: a
     // preference lookup that breaks must not silently swallow the mail.
     if (u && !emailGroupAllowed(u, groupId!)) {
@@ -663,15 +731,28 @@ export async function sendEmail({
     // pages behind them are token-only and host-agnostic (the token names the
     // user row, the host can neither widen nor redirect it), so this is about
     // arriving in the right product — its brand, its language, its next click —
-    // not about access. It is also why a failure here degrades instead of
-    // throwing: losing a whole mail because the origin of its FOOTER could not
-    // be resolved is the wrong trade; the default origin's page still works.
-    const origin =
-      orgId !== undefined
-        ? await appUrlFor(orgId).catch(() => appUrl())
-        : storedWorld !== undefined
-          ? appUrlForWorld(storedWorld)
-          : await appUrlForUser(userId).catch(() => appUrl());
+    // not about access.
+    //
+    // A lookup that fails fails the send. It used to fall back to the default
+    // origin, which put a SaleVali reader's unsubscribe link (and List-Id) on the
+    // internship host; dropping the footer instead would ship bulk mail with no
+    // opt-out. This mail is non-essential by definition (`gated`), so not
+    // sending it during a database error is the cheap side of that trade — and
+    // callers already handle a throw here, it is what an SMTP failure does.
+    let origin: string;
+    try {
+      origin =
+        orgId !== undefined
+          ? await appUrlFor(orgId)
+          : storedWorld !== undefined
+            ? appUrlForWorld(storedWorld)
+            : await appUrlForUser(userId);
+    } catch (e) {
+      const message = `Recipient origin unresolved: ${e instanceof Error ? e.message : String(e)}`;
+      logger.error('Email not sent: recipient origin unresolved', { to, category, error: message });
+      await recordEmail(to, subject, category, 'FAILED', transport, message);
+      throw e;
+    }
     body = withUnsubscribeFooter(html, unsubscribeFooterHtml(userId!, groupId!, locale, origin));
     computed = unsubscribeHeaders(userId!, groupId!, origin);
   }
@@ -680,9 +761,18 @@ export async function sendEmail({
   // permission to ignore the recipient's stored choice.
   const mergedHeaders = { ...(computed ?? {}), ...(headers ?? {}) };
 
+  // After the SMTP short-circuits on purpose: a mail that is not going out
+  // costs no brand lookup.
+  const senderName = fromName || (await recipientSenderName(orgId, userId, storedOrg));
+  const sender = fromIdentity(senderName || null, transport);
+
   try {
     await via.sendMail({
-      from: fromHeader(fromName, transport),
+      // `false`: the recipient's world could not be read — a bare address names
+      // no product, where the default name might name the wrong one. An object,
+      // not a formatted string, so a tenant brand with a comma or a quote in it
+      // is encoded by nodemailer instead of splitting the header.
+      from: !sender.address ? '' : senderName === false ? sender.address : { name: sender.name, address: sender.address },
       to,
       subject,
       html: body,
@@ -1290,7 +1380,7 @@ function ctaBlock(brand: { accent: string }, url: string, label: string): string
 // error and fall back to the internship origin: for the links a person cannot do
 // without (reset, verification, invitation) a wrong-world link is worse than a
 // mail that reports itself failed, and every caller already handles a throw from
-// its builder. The one deliberate exception is sendEmail's footer (see there).
+// its builder. sendEmail's footer is no exception (see there).
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 }
