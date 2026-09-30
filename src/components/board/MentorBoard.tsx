@@ -19,6 +19,7 @@ import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { foldSearchText, matchesMenteeQuery } from '@/lib/menteeFilter';
 import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
+import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 
 interface Mentee {
   id: string;
@@ -74,11 +75,20 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   // /mentor/mentees — see src/lib/menteeFilter.ts.
   const [search, setSearch] = useState('');
 
+  // A failed load is its own state, not an empty board (#1374).
+  const [loadError, setLoadError] = useState(false);
   const fetchRelations = useCallback(async () => {
-    const res = await fetch('/api/mentorship');
-    const data = await res.json();
-    setRelations(data.relations ?? []);
-    setLoading(false);
+    setLoadError(false);
+    try {
+      const res = await fetch('/api/mentorship');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setRelations(data.relations ?? []);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -166,6 +176,9 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   );
 
   if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
+  if (loadError && relations.length === 0) {
+    return <LoadErrorCard onRetry={() => { setLoading(true); fetchRelations(); }} testId="board-load-error" />;
+  }
 
   // Search ∩ stage. Every column header count is derived from this, so the
   // numbers describe what is actually on screen rather than the unfiltered set.
