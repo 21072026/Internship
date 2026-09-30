@@ -18,6 +18,8 @@ import {
 import { notifyOfferSent, notifyOfferDecided } from '@/lib/offerNotify';
 import { validateOfferRequisition } from '@/lib/requisitions';
 import { applyAcceptedOffer, requisitionCountDetail, type RequisitionCount } from '@/lib/hiringOutcome';
+import { advanceOnAcceptedOffer } from '@/lib/offerAutoAdvance';
+import { logger } from '@/lib/logger';
 
 const baseSelect = {
   id: true,
@@ -219,6 +221,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
       if (actionStr === 'send') await notifyOfferSent(id);
       if (actionStr === 'accept') await notifyOfferDecided(id, 'ACCEPTED');
+      // Opt-in (#2658): move the relation to the hired stage through the shared
+      // stage write path. After the commit and never able to fail the
+      // acceptance; every skip is logged with its reason.
+      if (actionStr === 'accept') {
+        try {
+          await advanceOnAcceptedOffer(offer);
+        } catch (e) {
+          logger.error('offer.auto_advance_failed', { offerId: id, error: e instanceof Error ? e.name : 'unknown' });
+        }
+      }
       if (actionStr === 'decline') await notifyOfferDecided(id, 'DECLINED');
 
       // `offer.accepted`, `offer.declined` and `requisition.filled` are

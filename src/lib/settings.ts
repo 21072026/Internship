@@ -80,6 +80,12 @@ export const SETTING_DEFAULTS = {
   // installation; an org setting rather than a per-reviewer toggle, because a
   // bias control people opt into is one the reviewers who most need it skip.
   blindReview: 'false',
+  // Accepted offer → hired stage (#2658). 'false' (default) keeps the offer
+  // panel's suggestion and nothing moves by itself. 'true' moves the relation
+  // to the pipeline's hired stage when an offer is accepted, through the same
+  // write path as a move made by hand (src/lib/offerAutoAdvance.ts). Off by
+  // default: some programmes only count a hire once the contract is signed.
+  autoAdvanceOnOfferAccept: 'false',
   // Newsletter cadence (#1469). 'off' (default) means nothing is ever queued
   // automatically and every issue is scheduled by hand. 'weekly' / 'biweekly' /
   // 'monthly' let the daily queue job pick the next unused issue from the

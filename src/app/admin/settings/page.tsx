@@ -37,6 +37,7 @@ export default function AdminSettingsPage() {
   const [outcomeAutoSend, setOutcomeAutoSend] = useState(false);
   // Blind interview review (#819) — org-wide, off by default.
   const [blindReview, setBlindReview] = useState(false);
+  const [autoAdvanceOnOfferAccept, setAutoAdvanceOnOfferAccept] = useState(false);
   const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
   const [premiumAnalytics, setPremiumAnalytics] = useState(false);
   // Monthly AI call budget (#1625). A real, enforced setting — the AI gate
@@ -215,6 +216,7 @@ export default function AdminSettingsPage() {
     setLoadedWipLimit(wip);
     setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
     setBlindReview(settings.blindReview === 'true');
+    setAutoAdvanceOnOfferAccept(settings.autoAdvanceOnOfferAccept === 'true');
     const broadcast = settings.broadcastMonthlyRecipients ?? '';
     setBroadcastQuota(broadcast);
     setLoadedBroadcastQuota(broadcast);
@@ -281,7 +283,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
@@ -394,6 +396,21 @@ export default function AdminSettingsPage() {
               </label>
               <p className="text-xs text-gray-500 mt-1">{t.settings.blindReviewHint}</p>
             </div>
+            {verticalHasCapability(vertical, 'placements') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.autoAdvanceOnOfferAccept}</label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={autoAdvanceOnOfferAccept}
+                    onChange={(e) => setAutoAdvanceOnOfferAccept(e.target.checked)}
+                    data-testid="auto-advance-offer-accept"
+                  />
+                  {t.settings.autoAdvanceOnOfferAcceptLabel}
+                </label>
+                <p className="text-xs text-gray-500 mt-1">{t.settings.autoAdvanceOnOfferAcceptHint}</p>
+              </div>
+            )}
             <div>
               <label htmlFor="require-2fa" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.require2fa}</label>
               <select
