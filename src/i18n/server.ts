@@ -1,18 +1,34 @@
 import { cache } from 'react';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
-import { defaultLocale, isLocale, LOCALE_COOKIE, type Locale } from './config';
+import { defaultLocale, isLocale, LOCALE_COOKIE, locales, type Locale } from './config';
+import { pickAcceptLanguage } from './acceptLanguage';
 import { getDictionary } from './dictionaries';
 import { applyVerticalOverlay } from './verticalOverlays';
 import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { hostVertical } from '@/lib/hostVertical';
 
-// Read the active locale. An explicit cookie (set via the language switcher)
-// always wins; otherwise fall back to the signed-in user's saved preference,
-// then the default. Any failure degrades gracefully to the default locale.
+// Read the active locale, in this order (#1384):
+//   1. the explicit cookie the language switcher sets — a choice always wins;
+//   2. the signed-in user's saved preference — also their own decision;
+//   3. the browser's Accept-Language — what the visitor reads, before they
+//      have said anything (a Turkish ad opened in English was the bug);
+//   4. the default.
+// Nothing here writes the cookie: step 3 is re-read on every request, and the
+// cookie stays the record of an explicit choice. Any failure degrades to the
+// next step.
+//
+// CACHING: one URL now answers in several languages. That is safe only because
+// every page is served `Cache-Control: private, no-store` (Next's default for
+// these dynamic routes), so no shared cache ever stores one visitor's language
+// for the next. A `Vary: Accept-Language` cannot be added from the app on Next
+// 15.5 — its app-page handler `setHeader('Vary', …)`s over both a middleware
+// value and a next.config `headers()` value (verified against `next start`).
+// e2e/accept-language.spec.ts pins the no-store; if pages ever become publicly
+// cacheable, add the Vary at the proxy (Caddy `header +Vary Accept-Language`).
 export async function getLocale(): Promise<Locale> {
   const store = await cookies();
   const v = store.get(LOCALE_COOKIE)?.value;
@@ -21,7 +37,8 @@ export async function getLocale(): Promise<Locale> {
   // A signed-out visitor has no saved preference to fall back to, so the session
   // decode and the query behind it would both come back empty. Every public page
   // goes through here, so that is a round trip per view for nothing (#1197).
-  if (!(await hasSessionCookie())) return defaultLocale;
+  // The header read below costs neither.
+  if (!(await hasSessionCookie())) return browserLocale();
 
   try {
     const session = await getServerSession(authOptions);
@@ -35,9 +52,20 @@ export async function getLocale(): Promise<Locale> {
       }
     }
   } catch {
-    // ignore — fall through to default
+    // ignore — fall through to the browser's languages
   }
-  return defaultLocale;
+  return browserLocale();
+}
+
+// Step 3: the request's Accept-Language, or the default. `headers()` is the
+// incoming request, so this is free — no session, no query.
+async function browserLocale(): Promise<Locale> {
+  try {
+    return pickAcceptLanguage((await headers()).get('accept-language'), locales) ?? defaultLocale;
+  } catch {
+    // Outside a request (a script, a cron render): there is no browser.
+    return defaultLocale;
+  }
 }
 
 // The signed-in user's tenant vertical, or the HOST's product for a signed-out
