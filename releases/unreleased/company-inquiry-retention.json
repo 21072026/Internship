@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Company enquiries have a retention period** (#2559, second slice; GDPR Art. 5(1)(e)). Every `CompanyInquiry` row holds one person's name, address, phone and own words, and until now nothing deleted any of them. A new `companyInquiry` entry in `src/lib/retentionEntries.ts` runs on the existing batch prune engine with `companyInquiryRetentionDays` (default 730, writable through the settings API like the other windows). It **deletes** an enquiry that was never converted into an account. It **keeps** a converted one, because the account came from it, and scrubs its personal columns with `inquiryErasureData()`, the same definition the account erasure and the forget-contact action use, so a tombstone reads `erased-inquiry-<id>@erased.local`. Already-tombstoned rows are not selected again, so the scrub is idempotent. Covered by a new test in `e2e/retention-prune.spec.ts`, and the window is documented in `docs/pii-access-lifecycle.md`.",
+  "notes": {
+    "en": ["Company enquiries are now kept for two years: an enquiry that never became an account is then deleted, and an older converted one keeps only the company details."],
+    "tr": ["Firma talepleri artık iki yıl saklanıyor: hesaba dönüşmeyen talep sonra siliniyor, dönüşmüş eski bir talepte ise yalnızca firma bilgileri kalıyor."],
+    "de": ["Firmenanfragen werden jetzt zwei Jahre aufbewahrt: Eine Anfrage, aus der nie ein Konto wurde, wird danach gelöscht; bei einer älteren umgewandelten bleiben nur die Firmendaten."]
+  }
+}

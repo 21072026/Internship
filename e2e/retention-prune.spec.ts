@@ -189,6 +189,7 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(result.results.map((r) => r.key).sort()).toEqual(
       [
         'activityLog',
+        'companyInquiry',
         'companyUsage',
         'emailLog',
         'job',
@@ -362,5 +363,56 @@ test('each organisation prunes notifications to its own window, and 0 keeps them
     // Users first: User.orgId has no cascade, so the organisation cannot go
     // while one of its members is still there.
     for (const orgId of orgIds) await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
+  }
+});
+
+// #2559: company enquiries are one person's contact details and own words, and
+// nothing ever deleted one. Past the window (730 days) an enquiry nobody
+// converted is deleted; a converted one keeps its row — the account came from
+// it — and loses only its personal columns.
+test('old enquiries are deleted or scrubbed, recent ones and their companies stay (#2559)', async () => {
+  const beyond = new Date(Date.now() - 800 * DAY);
+  const tag = `ret-inq-${Date.now()}`;
+  const company = await prisma.company.create({ data: { name: `Retained Co ${tag}` } });
+  const mk = (label: string, createdAt: Date, converted: boolean, email = `${label}-${tag}@example.com`) =>
+    prisma.companyInquiry.create({
+      data: {
+        companyName: `Inq ${label} ${tag}`, contactName: `Person ${label}`, email, phone: '+49 1',
+        openRoles: 'Two seats', message: 'Please call', note: 'Called', createdAt,
+        ...(converted ? { convertedCompanyId: company.id, status: 'CONTACTED' as const } : {}),
+      },
+    });
+  const oldOpen = await mk('old-open', beyond, false);
+  const oldConverted = await mk('old-conv', beyond, true);
+  const recentOpen = await mk('recent-open', recent(), false);
+  const recentConverted = await mk('recent-conv', recent(), true);
+  const alreadyErased = await mk('erased', beyond, true, `erased-contact-${tag}@erased.local`);
+  try {
+    const result = await runRetentionPrune();
+    expect(result.failed).toEqual([]);
+
+    expect(await prisma.companyInquiry.findUnique({ where: { id: oldOpen.id } })).toBeNull();
+
+    const scrubbed = await prisma.companyInquiry.findUniqueOrThrow({ where: { id: oldConverted.id } });
+    expect(scrubbed.contactName).toBe('Erased contact');
+    expect(scrubbed.email).toBe(`erased-inquiry-${oldConverted.id}@erased.local`);
+    expect([scrubbed.phone, scrubbed.message, scrubbed.note]).toEqual([null, null, null]);
+    expect([scrubbed.openRoles, scrubbed.convertedCompanyId, scrubbed.companyName]).toEqual(['Two seats', company.id, oldConverted.companyName]);
+
+    for (const r of [recentOpen, recentConverted]) {
+      const row = await prisma.companyInquiry.findUniqueOrThrow({ where: { id: r.id } });
+      expect([row.email, row.contactName, row.phone]).toEqual([r.email, r.contactName, '+49 1']);
+    }
+    // An already-tombstoned row is not rewritten again.
+    expect((await prisma.companyInquiry.findUniqueOrThrow({ where: { id: alreadyErased.id } })).email).toBe(alreadyErased.email);
+    // The account itself is never part of this.
+    expect(await prisma.company.findUnique({ where: { id: company.id } })).not.toBeNull();
+
+    // A second run finds nothing more to do with these rows.
+    await runRetentionPrune();
+    expect((await prisma.companyInquiry.findUniqueOrThrow({ where: { id: oldConverted.id } })).email).toBe(scrubbed.email);
+  } finally {
+    await prisma.companyInquiry.deleteMany({ where: { id: { in: [oldOpen.id, oldConverted.id, recentOpen.id, recentConverted.id, alreadyErased.id] } } });
+    await prisma.company.deleteMany({ where: { id: company.id } });
   }
 });
