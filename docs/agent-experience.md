@@ -7926,3 +7926,9 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   stamper and pin both callers to it, never an `EXEMPT` entry.
 - **Local MariaDB can be gone after a container pause** (the socket file is there, the process is
   not). `mysqladmin ping || service mariadb start` before any e2e run.
+
+## 2026-10-01 — per-org AI quota (#2681)
+
+- **A setting read per tenant is not enough; its meter must be per tenant too.** `aiMonthlyQuota` resolved per org, but its `AiUsage` count was global. Grep for other `count(...)` calls compared against a `getSetting()` value (e.g. broadcast recipients) before assuming a quota is isolated.
+- **Don't lean on the ambient org while `MT_ENFORCE_ISOLATION` is off.** `withTenantScope` binds nothing then, so `getSetting(key)` with no org reads the *global* row. A gate that must be per tenant should take `orgId` from the caller (`resolveOrgId(session)`).
+- **The local `internship_e2e` DB is shared by parallel sessions.** Another session's `db push` dropped my new column between my push and the test run ("column … does not exist in the current database"). Re-push right before `playwright test`, in the same command.
