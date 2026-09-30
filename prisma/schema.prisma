@@ -2960,10 +2960,12 @@ model MeetingSeries {
   createdById     String
   createdAt       DateTime @default(now())
 
-  project   Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  meetings  Meeting[]
-  reminders MeetingSeriesReminder[]
-  ends      MeetingOccurrenceEnd[]
+  project       Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  meetings      Meeting[]
+  reminders     MeetingSeriesReminder[]
+  ends          MeetingOccurrenceEnd[]
+  // The one recurring Google event per connected member (#2654).
+  calendarLinks GoogleCalendarEventLink[]
 
   @@index([projectId])
 }
@@ -3730,17 +3732,25 @@ model GoogleCalendarConnection {
 /// Per (meeting, user) rather than per meeting: the same meeting is pushed to
 /// every connected participant's own calendar, and each gets a different event
 /// id — one column on Meeting could only ever remember one of them.
+/// One mirrored Google event per (meeting OR series) × connection. Exactly one of
+/// `meetingId` / `seriesId` is set (#2654): a recurring series is mirrored as ONE
+/// recurring event with an RRULE, never as one event per occurrence, because its
+/// occurrences have no `Meeting` row (#1110). `meetingId` became nullable for
+/// that — a relaxation, so existing rows are untouched.
 model GoogleCalendarEventLink {
   id            String   @id @default(cuid())
-  meetingId     String
+  meetingId     String?
+  seriesId      String?
   connectionId  String
   googleEventId String
   pushedAt      DateTime @default(now())
 
-  meeting    Meeting                  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting    Meeting?                 @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  series     MeetingSeries?           @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   connection GoogleCalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, connectionId])
+  @@unique([seriesId, connectionId])
   @@index([connectionId])
 }
 

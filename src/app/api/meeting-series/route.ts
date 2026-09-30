@@ -14,6 +14,7 @@ import { isValidTimeZone } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingRoom';
 import { requireCapability } from '@/lib/capabilityGate';
 import { withdrawMeetings } from '@/lib/googleCalendarSync';
+import { syncSeriesBounded, syncSeriesInBackground } from '@/lib/googleCalendarSeriesSync';
 import { durationMinutesField } from '@/lib/meetingDuration';
 
 // A recurring project meeting is a *rule*, not a pile of rows (#1110).
@@ -301,6 +302,9 @@ export async function POST(request: Request) {
     });
 
     const announced = await announceNextOccurrence(series, session.user.role, session.user.id, session.user.orgId);
+    // One recurring event per connected member (#2654) — in the background, so
+    // the save never waits on Google.
+    syncSeriesInBackground(series);
     return NextResponse.json(
       { series: { ...series, nextOccurrence: announced.nextOccurrence }, invitesSent: announced.invited },
       { status: 201 }
@@ -386,6 +390,12 @@ export async function PUT(request: Request) {
             : null,
         };
 
+    // The mirrored recurring event follows the rule (#2654): an active series is
+    // PATCHed on the event it already made (a rename, a move, another project's
+    // members), a deactivated one is withdrawn before we answer — bounded.
+    if (updated.active) syncSeriesInBackground(updated);
+    else await syncSeriesBounded(updated);
+
     return NextResponse.json({ series: { ...updated, nextOccurrence: announced.nextOccurrence }, invitesSent: announced.invited });
   });
 }
@@ -422,6 +432,9 @@ export async function DELETE(request: Request) {
       where: { id: parsed.data.id },
       data: { active: false },
     });
+    // Off every member's calendar before we answer (#2654), through the same
+    // bounded withdrawal the one-off meetings use.
+    await syncSeriesBounded(series);
     return NextResponse.json({ ok: true, series, removedMeetings });
   });
 }

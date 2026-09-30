@@ -51,6 +51,7 @@ All of it. The pieces the earlier note listed as "remaining" now exist:
 | Connect | `GET /api/integrations/google/connect` → signed state → Google |
 | Callback | `GET /api/integrations/google/callback` → state check → token exchange → sealed store |
 | Event push | `src/lib/googleCalendarSync.ts`, called from `POST /api/meetings` |
+| Recurring series push (#2654) | `src/lib/googleCalendarSeriesSync.ts`, called from `/api/meeting-series` (POST, PUT, DELETE) |
 | Disconnect | `DELETE /api/integrations/google/connection` — revokes at Google, then forgets |
 | User-facing control | "Google Calendar" card on `/account` |
 
@@ -60,6 +61,18 @@ Design notes worth knowing before changing any of it:
   is mirrored onto every connected participant's own calendar and each gets a
   different Google event id; one column on `Meeting` could only ever remember one
   of them.
+- **A recurring series is ONE recurring event per connected member (#2654)**,
+  keyed by `GoogleCalendarEventLink.seriesId` (exactly one of `meetingId` /
+  `seriesId` is set). Its occurrences have no `Meeting` row (#1110) and must
+  never get one for this: the event carries `recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=…']`
+  (`src/lib/seriesRrule.ts`, unit-tested) and the series' own `timeZone`, which
+  Google needs to read BYDAY and the wall clock across a DST change. The
+  audience is the project's members. `syncSeries()` *reconciles*: an active
+  series is POSTed or PATCHed (same Google id) for every connected member, and
+  every other link — a member who left, a series moved to another project, a
+  cancelled one — is withdrawn. Create and schedule changes sync in the
+  background; a cancel (DELETE, or PUT to inactive) awaits the same bounded
+  withdrawal as `withdrawMeetings()`. Covered by `e2e/google-calendar-series.spec.ts`.
 - **The refresh token is encrypted, not hashed.** Everything else sensitive here
   is one-way, because for passwords and evidence one-way is safer. A refresh
   token has to leave the database *usable*, so it needs encryption. The key is
