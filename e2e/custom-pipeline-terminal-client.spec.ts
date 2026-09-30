@@ -29,7 +29,7 @@ test('a renamed pipeline: cohorts count its own finished stage, and a placed can
   const menteeB = uniqueEmail('cstage-client-b');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Client Stage Admin', org.id);
   const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Client Stage Mentor', org.id);
-  const a = await seedUser(menteeA, 'x', 'MENTEE', 'Still Working', org.id);
+  const a = await seedUser(menteeA, 'MenteePass123', 'MENTEE', 'Still Working', org.id);
   const b = await seedUser(menteeB, 'x', 'MENTEE', 'Already Placed', org.id);
   const cohort = await prisma.cohort.create({ data: { name: `Cohort ${stamp}`, orgId: org.id } });
   const past = new Date('2020-01-01');
@@ -57,6 +57,12 @@ test('a renamed pipeline: cohorts count its own finished stage, and a placed can
     await gotoSettled(page, `/admin/candidates/${b.id}`);
     await expect(page.getByText('Already Placed').first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('past the stage deadline')).toHaveCount(0);
+
+    // The mentee's own journey tracker speaks the tenant's stage names.
+    await signInAsFreshUser(page, menteeA, 'MenteePass123', '/portal');
+    await gotoSettled(page, '/portal/journey');
+    await expect(page.getByText('Working together').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('STAGE_WORK')).toHaveCount(0);
   } finally {
     await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [open.id, done.id] } } });
     await prisma.cohort.deleteMany({ where: { id: cohort.id } });
