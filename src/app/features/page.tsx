@@ -1,9 +1,16 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import { getFeatures, FEATURE_CATEGORIES, isFeatureShown } from '@/lib/features';
 import { verticalCapabilities } from '@/lib/verticals';
 import { PublicShell } from '@/components/landing/PublicShell';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.featureCatalog.title, description: t.featureCatalog.subtitle }));
+}
+
 
 const iconBg: Record<string, string> = {
   blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',

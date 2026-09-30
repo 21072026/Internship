@@ -1,6 +1,13 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.terms.title, description: t.seo.termsDescription }));
+}
+
 
 // Public terms of service.
 export default async function TermsPage() {

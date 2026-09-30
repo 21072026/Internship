@@ -1,3 +1,4 @@
+import { NO_INDEX } from '@/lib/pageMetadata';
 import type { Viewport } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -7,6 +8,9 @@ import { MessagesShell } from '@/components/MessagesShell';
 import { RoleShell } from '@/components/RoleShell';
 import { resolveRequestVertical } from '@/i18n/server';
 import { themeColorFor } from '@/lib/accent';
+
+// Signed-in area: never in a search result (#1376).
+export const metadata = NO_INDEX;
 
 /**
  * Route-scoped viewport (#1009). `viewportFit: 'cover'` is what makes

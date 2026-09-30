@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { ShieldCheck, Server, Users, Globe, FileText, AlertTriangle } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
@@ -16,11 +18,9 @@ import {
 // "no operator published" into the image (src/lib/imprint.ts).
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'Trust centre',
-  description:
-    'Subprocessors, security controls, and where the data is hosted — the answers a procurement review asks for.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.trust.title, description: t.trust.subtitle }));
+}
 
 const DOC_BASE = `${GITHUB_URL}/blob/main/docs/trust`;
 

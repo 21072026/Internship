@@ -50,6 +50,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // #1376: the MARKETING home title comes from the root layout's own
+      // branch; these keep the internship copy out of the resolved dictionary.
+      seo: {
+        homeTitle: 'SaleVali — Marketing CRM',
+        homeDescription: 'A CRM for tracking customers through a marketing pipeline — from first contact to close.',
+        applyAsMentorTitle: 'Apply',
+        applyAsMentorDescription: 'Apply to join the programme.',
+        profileMentorTitle: '{name}',
+        profileMenteeTitle: '{name}',
+      },
       nav: { candidates: 'Leads', companyInquiries: 'Demo requests', myCompanies: 'My accounts' },
       // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
       // mentor yet / Mentor" on the screen a rep uses most.
@@ -551,6 +561,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      seo: {
+        homeTitle: 'SaleVali — Pazarlama CRM',
+        homeDescription: 'Müşterileri ilk temastan kapanışa kadar bir pazarlama hattında izleyen CRM.',
+        applyAsMentorTitle: 'Başvur',
+        applyAsMentorDescription: 'Programa katılmak için başvurun.',
+        profileMentorTitle: '{name}',
+        profileMenteeTitle: '{name}',
+      },
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
       nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
@@ -925,6 +943,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      seo: {
+        homeTitle: 'SaleVali — Marketing-CRM',
+        homeDescription: 'Ein CRM, das Kunden durch eine Marketing-Pipeline begleitet – vom ersten Kontakt bis zum Abschluss.',
+        applyAsMentorTitle: 'Bewerben',
+        applyAsMentorDescription: 'Bewerben Sie sich für das Programm.',
+        profileMentorTitle: '{name}',
+        profileMenteeTitle: '{name}',
+      },
       nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
       invite: {
         subtitle: 'Vertriebsmitarbeiter und Leads einladen',
