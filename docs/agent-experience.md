@@ -7898,3 +7898,31 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **A unit spec that pins a buggy default is part of the bug.** `ics-builder.unit.spec.ts`
   asserted the 30-minute `DTEND` that #1984 was about; fix the assertion in the same PR and say so
   in the body.
+
+## 2026-09-30 (evening) — queue run: SSO role mapping, offer auto-advance, series → Google, calendar a11y
+
+- **Removing a role or a selector means grepping `e2e/` for it, not just running the specs you
+  think are related.** #2668 dropped `role="tablist"` from the calendar switcher; the reflow check
+  in `e2e/mobile-layout-audit.spec.ts` located the switcher by exactly that and went red. It only
+  runs in the scheduled full suite, so neither the PR's smoke gate nor my local run caught it —
+  #2669 fixed it an hour later. Before pushing, `grep -rn '<the thing you removed>' e2e/` and run
+  every file that names it; give a control you touch a `data-testid` so the next change can't do
+  it again.
+- **`aria-hidden` text is still measured by axe's `color-contrast` rule.** To give a visual-only
+  label an accessible replacement (an `sr-only` sibling + `aria-hidden` on the visible text), a
+  contrast spec that includes the hidden node keeps working — verified by asserting the node shows
+  up in `passes`/`violations`/`incomplete`, not just that `violations` is empty (an empty result
+  from an out-of-scope node looks identical).
+- **The admin settings PUT writes the GLOBAL row today** (#2628, fix in #2629). An e2e that saves a
+  setting through `/api/admin/settings` flips it for every org in the run. Seed the org's
+  `Setting` row directly and only assert the API's validation, until #2629 lands.
+- **`db push` on a table with rows accepts a required → optional relaxation** (`meetingId String`
+  → `String?`) and `check:schema-push` agrees; a compound `@@unique` on the now-nullable column
+  keeps working in the Prisma client (`meetingId_connectionId`) because MySQL treats NULLs as
+  distinct.
+- **Extracting a write path is also a ratchet event.** Moving the stage write out of
+  `PUT /api/mentorship/[id]` into `src/lib/stageMove.ts` made `trial-window-writers.test.mjs` fail
+  (the route no longer called `stageTrialWindow` itself). The fix is to teach the ratchet the new
+  stamper and pin both callers to it, never an `EXEMPT` entry.
+- **Local MariaDB can be gone after a container pause** (the socket file is there, the process is
+  not). `mysqladmin ping || service mariadb start` before any e2e run.
