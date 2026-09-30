@@ -18,7 +18,6 @@ import {
 import { notifyOfferSent, notifyOfferDecided } from '@/lib/offerNotify';
 import { validateOfferRequisition } from '@/lib/requisitions';
 import { applyAcceptedOffer, requisitionCountDetail, type RequisitionCount } from '@/lib/hiringOutcome';
-import { dispatchWebhook } from '@/lib/webhooks';
 
 const baseSelect = {
   id: true,
@@ -222,32 +221,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (actionStr === 'accept') await notifyOfferDecided(id, 'ACCEPTED');
       if (actionStr === 'decline') await notifyOfferDecided(id, 'DECLINED');
 
-      if (actionStr === 'accept' || actionStr === 'decline') {
-        await dispatchWebhook(
-          actionStr === 'accept' ? 'offer.accepted' : 'offer.declined',
-          {
-            offerId: id,
-            relationId: offer.relationId,
-            requisitionId: offer.requisitionId,
-            companyId: offer.companyId,
-            ...(actionStr === 'decline' ? { declineReasonCode } : {}),
-          },
-          offer.orgId,
-        );
-      }
-      if (outcome.count.outcome === 'counted' && outcome.count.nowFilled) {
-        await dispatchWebhook(
-          'requisition.filled',
-          {
-            requisitionId: outcome.count.requisitionId,
-            companyId: offer.companyId,
-            filled: outcome.count.filled,
-            openings: outcome.count.openings,
-            lastOfferId: id,
-          },
-          offer.orgId,
-        );
-      }
+      // `offer.accepted`, `offer.declined` and `requisition.filled` are
+      // REGISTERED in WEBHOOK_EVENTS (#1854) but deliberately not dispatched
+      // from here: `scripts/check-events.mjs` (#1697) caps direct callers of the
+      // webhook dispatcher at the ten that predate it, and an event has to leave
+      // through `emit()` (#1693), which is not in the tree yet. The same call as
+      // `meeting.cancelled` in /api/meetings/[id]. When the spine lands, raise
+      // them from here: `outcome.count` already says whether this acceptance
+      // took the requisition's last seat.
 
       return NextResponse.json({ offer: updated });
     }

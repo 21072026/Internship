@@ -23,9 +23,10 @@ export const WEBHOOK_EVENTS = [
   // the scores are now comparable (#824).
   'interview_panel.completed',
   // An offer was decided by the candidate (#1854), and an acceptance took the
-  // last seat of its requisition. `requisition.filled` fires once, on the
-  // acceptance that made `filled` reach `openings`; a manual status edit on the
-  // requisition screen does not fire it.
+  // last seat of its requisition. Registered, not yet raised: they leave
+  // through `emit()` (#1693) once it exists — see the note in
+  // src/app/api/offers/[id]/route.ts. `requisition.filled` is meant to fire
+  // once, on the acceptance that made `filled` reach `openings`.
   'offer.accepted',
   'offer.declined',
   'requisition.filled',
