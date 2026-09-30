@@ -17,6 +17,8 @@
 
 import { prisma } from '@/lib/prisma';
 import type { AppMode } from '@/lib/appMode';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { hasSalesSurface } from '@/lib/salesSurface';
 
 export interface MentorshipSides {
   /** Has at least one relation where they are the mentor. */
@@ -40,7 +42,16 @@ export async function mentorshipSides(userId: string): Promise<MentorshipSides> 
  * away, so a mentor with no mentorship of their own sees exactly what they saw
  * before this feature existed (no switcher at all, for a plain mentor).
  */
-export async function availableModes(user: { id: string; role: string }): Promise<AppMode[]> {
+export async function availableModes(user: { id: string; role: string; orgId?: string | null }): Promise<AppMode[]> {
+  const capabilities = await shellCapabilities(user.orgId ?? null);
+  // A vertical without the mentorship module (MARKETING) has no mentor shell and
+  // no mentee portal at all: its second shell is the sales surface, for an
+  // ADMIN who also works a book (#2647 follow-up). A MENTOR there IS the sales
+  // rep and has only that one shell — no switcher.
+  if (!capabilities.includes('mentorship')) {
+    return user.role === 'ADMIN' && hasSalesSurface(user.role, capabilities) ? ['admin', 'sales'] : [];
+  }
+
   const modes: AppMode[] = [];
   if (user.role === 'ADMIN') modes.push('admin');
   if (user.role === 'ADMIN' || user.role === 'MENTOR') modes.push('mentor');

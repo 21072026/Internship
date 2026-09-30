@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, GraduationCap, Sprout } from 'lucide-react';
+import { ShieldCheck, GraduationCap, Sprout, Briefcase } from 'lucide-react';
 import { useT } from '@/i18n/client';
 import { counterpartPath, modeOf, type AppMode } from '@/lib/appMode';
 
@@ -47,6 +47,7 @@ const STYLES: Record<AppMode, { icon: typeof ShieldCheck; active: string }> = {
   admin: { icon: ShieldCheck, active: 'text-blue-700 dark:!text-blue-200' },
   mentor: { icon: GraduationCap, active: 'text-green-700 dark:!text-green-200' },
   mentee: { icon: Sprout, active: 'text-purple-700 dark:!text-purple-200' },
+  sales: { icon: Briefcase, active: 'text-green-700 dark:!text-green-200' },
 };
 
 export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
@@ -112,9 +113,9 @@ export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
           );
         })}
       </div>
-      {(current === 'mentor' || current === 'mentee') && (
+      {(current === 'mentor' || current === 'mentee' || current === 'sales') && (
         <p className="px-1 pt-1.5 text-[11px] leading-snug text-gray-600 dark:text-gray-400">
-          {current === 'mentor' ? t.modeSwitch.mentorHint : t.modeSwitch.menteeHint}
+          {current === 'mentor' ? t.modeSwitch.mentorHint : current === 'sales' ? t.modeSwitch.salesHint : t.modeSwitch.menteeHint}
         </p>
       )}
     </div>
