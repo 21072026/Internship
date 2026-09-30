@@ -1920,10 +1920,16 @@ model AiUsage {
   scope     String
   userId    String?
   companyId String?
+  // The tenant whose monthly AI quota this call consumed. Nullable so the column
+  // is appliable to a populated table; legacy rows are attributed by
+  // prisma/backfill-ai-usage-org.mjs (user → company), the rest fall to the
+  // default org in backfill-organization.mjs. Registered in TENANT_MODELS.
+  orgId     String?
   createdAt DateTime @default(now())
 
   @@index([createdAt])
   @@index([scope])
+  @@index([orgId, createdAt])
 }
 
 // A company's read/interest signal on a candidate they're linked to via a

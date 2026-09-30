@@ -149,6 +149,7 @@ export async function POST(request: Request) {
   const gated = await runAiGated({
     scope: 'mentor_match',
     userId: session.user.id,
+    orgId: resolveOrgId(session),
     call: () =>
       aiRankMentors(
         {

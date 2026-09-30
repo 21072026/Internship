@@ -60,6 +60,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
       // The consent belongs to the CV owner (the person whose data is processed).
       consent: { userId: target, type: 'AI_CV_PARSING' },
       userId: session.user.id,
+      orgId: resolveOrgId(session),
       call: () => aiExtractFromText(text),
     });
     if (!gated.ok) {

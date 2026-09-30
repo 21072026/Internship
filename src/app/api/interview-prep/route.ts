@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { isAiConfigured } from '@/lib/cvExtractAi';
 import { aiInterviewPrep } from '@/lib/aiInterviewPrep';
 import { runAiGated } from '@/lib/aiGate';
+import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
     const gated = await runAiGated({
       scope: 'interview_prep',
       userId: session.user.id,
+      orgId: resolveOrgId(session),
       call: () => aiInterviewPrep(position, skills, parsed.data.focus),
     });
 

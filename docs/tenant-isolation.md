@@ -393,6 +393,14 @@ single because `setSetting()` is its only writer and does a read-modify-write
 rather than a blind insert. (`upsert` is not an option either way — a compound
 unique cannot address a `NULL` component.)
 
+**The AI quota is the worked example of a per-tenant setting with a per-tenant
+meter** (#2681). `aiMonthlyQuota` resolves per org, so the `AiUsage` rows it is
+compared against carry an `orgId` too (registered model). `runAiGated()` takes
+the org from its caller (`resolveOrgId(session)`) rather than from the bound
+context, which is empty while the flag is off. It counts with `orgWhere()` over
+the UTC metering month. A setting read per tenant but counted globally is the
+same leak with extra steps.
+
 Existing rows keep `orgId = NULL` and go on working as the global layer;
 `prisma/backfill-organization.mjs` excludes `Setting` by name for exactly this
 reason. Stamping them with the `default` org would turn platform-wide defaults

@@ -7,6 +7,7 @@ import { extractCvText } from '@/lib/cvParse';
 import { isAiConfigured } from '@/lib/cvExtractAi';
 import { aiCvFeedback } from '@/lib/aiCvFeedback';
 import { runAiGated } from '@/lib/aiGate';
+import { resolveOrgId } from '@/lib/orgScope';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
     scope: 'cv_feedback',
     consent: { userId: session.user.id, type: 'AI_CV_PARSING' },
     userId: session.user.id,
+    orgId: resolveOrgId(session),
     call: () => aiCvFeedback(text),
   });
 

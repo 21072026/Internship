@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     // The mentee's data is being processed — their consent gates the call.
     consent: { userId: rel.menteeId, type: 'AI_INTERACTION_SUMMARY' },
     userId: session.user.id,
+    orgId: resolveOrgId(session),
     call: () => aiSummarizeInteractions(rel.mentee.fullName, interactions),
   });
 
