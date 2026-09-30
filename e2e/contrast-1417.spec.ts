@@ -35,8 +35,9 @@ test('issue #1417 calendar and onboarding targets meet AA contrast in both theme
       await expect(page.locator('[data-testid="calendar-day-number"][data-outside-month="false"]').first()).toBeVisible();
       await expect(page.locator('[data-testid="calendar-day-number"][data-outside-month="true"]').first()).toBeVisible();
       await expectNoContrastViolation(page, '[data-testid="calendar-day-number"]');
-      await expectNoContrastViolation(page, '[role="tab"][aria-selected="false"]');
-      await expectNoContrastViolation(page, '[role="tab"][aria-selected="true"]');
+      // The view switcher is a group of toggle buttons since #2153, not a tablist.
+      await expectNoContrastViolation(page, '[data-testid^="calendar-view-"][aria-pressed="false"]');
+      await expectNoContrastViolation(page, '[data-testid^="calendar-view-"][aria-pressed="true"]');
 
       await page.goto('/onboarding');
       await forceTheme(page, dark);
