@@ -7926,3 +7926,16 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   stamper and pin both callers to it, never an `EXEMPT` entry.
 - **Local MariaDB can be gone after a container pause** (the socket file is there, the process is
   not). `mysqladmin ping || service mariadb start` before any e2e run.
+
+## 2026-10-01 — retention review tenant scope (#2685, PR #2686)
+
+- **Check the task against `main` before coding.** The task described code from an open PR's branch
+  (#2629: `getRetentionReview(orgId?)`, `settingsOrgOf`). Half the reported bug (the per-org
+  `retention.adminSummary`) was already fixed on `main`. `gh pr diff <n>` on the PR that flagged
+  the bug shows which state the description was written from.
+- **`User.emailVerified` defaults to `true`.** A fixture that "looks like" an /apply orphan
+  applicant must set `emailVerified: false`, or `orphanApplicantWhere()` silently matches nothing.
+  If a list comes back empty, count the rule clause by clause against the seeded id (one
+  `count({ where: { id, [key]: w[key] } })` per key) to find the clause that fails.
+- **A cron endpoint that sweeps the whole e2e DB can exceed Playwright's 15s request timeout** on
+  a well-used local DB. Give the request its own `timeout`.
