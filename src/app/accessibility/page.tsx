@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
@@ -12,6 +14,11 @@ import {
   issueUrl,
   repoFileUrl,
 } from '@/lib/accessibility';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.accessibility.title, description: t.seo.accessibilityDescription }));
+}
+
 
 // Same reason as /privacy and /imprint: the operator identity comes from the
 // deployment's env, which only exists at runtime. Prerendering would freeze

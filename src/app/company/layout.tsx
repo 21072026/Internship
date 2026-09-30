@@ -1,3 +1,4 @@
+import { NO_INDEX } from '@/lib/pageMetadata';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -14,6 +15,9 @@ import { prisma } from '@/lib/prisma';
 import { hasFeature } from '@/lib/entitlements';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
+
+// Signed-in area: never in a search result (#1376).
+export const metadata = NO_INDEX;
 
 export default async function CompanyLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);

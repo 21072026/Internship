@@ -1,8 +1,15 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { operatorIdentity } from '@/lib/imprint';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.privacy.title, description: t.seo.privacyDescription }));
+}
+
 
 // The controller's identity is read from the deployment's env, which only
 // exists at runtime — prerendering this page at build time would freeze the

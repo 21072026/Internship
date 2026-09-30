@@ -1,9 +1,16 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { FlaskConical, RotateCcw, ShieldOff } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { IS_DEMO_MODE, DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/lib/demoMode';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.demo.title, description: t.demo.subtitle }));
+}
+
 
 export const dynamic = 'force-dynamic';
 

@@ -1,6 +1,13 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import { IS_DEMO_MODE, DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/lib/demoMode';
 import { worldOrigins } from '@/lib/hostWorld';
 import { SignInClient } from './SignInClient';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.seo.signInTitle, description: t.seo.signInDescription }));
+}
+
 
 // Read per request, never prerendered: the origins below come from
 // MARKETING_HOSTS / NEXT_PUBLIC_APP_URL, and the first is a RUNTIME variable

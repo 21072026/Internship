@@ -5105,6 +5105,29 @@ const en = {
     functionalRoles: { DEVELOPER: 'Developer', TESTER: 'Tester', MARKETING: 'Marketing' },
     tasksCompleted: '{n} tasks completed',
   },
+  // Tab titles and search snippets (#1376). Server-only: read by
+  // src/lib/pageMetadata.ts. A public page's TITLE is its own H1 string
+  // wherever it has one, so the two cannot drift; these are only the titles
+  // and descriptions a page has nowhere else.
+  seo: {
+    homeTitle: 'Internship CRM — mentoring from first contact to first job',
+    homeDescription: 'Run an internship and mentoring programme in one place: applications, matching, a shared pipeline, meetings and the path to a job.',
+    applyAsMentorTitle: 'Become a mentor',
+    applyAsMentorDescription: 'Apply to mentor a student or graduate through their internship and first job search.',
+    privacyDescription: 'What personal data the service processes, why, for how long, and how to exercise your rights.',
+    termsDescription: 'The terms that govern using the service.',
+    codeOfConductDescription: 'How we expect everyone in the programme to treat one another, and how to report a problem.',
+    contributorTermsDescription: 'The terms that apply to work contributed to projects on the platform.',
+    accessibilityDescription: 'How accessible the service is, what is known not to work yet, and how to report a barrier.',
+    signInTitle: 'Sign in',
+    signInDescription: 'Sign in to your account.',
+    registerTitle: 'Create your account',
+    registerDescription: 'Finish creating the account you were invited to.',
+    projectDescription: '{name} — a project from the public showcase.',
+    profileMentorTitle: '{name} · Mentor',
+    profileMenteeTitle: '{name} · Mentee',
+    profileDescription: 'The public profile of {name}.',
+  },
   releaseNotes: {
     title: 'What’s new',
     back: 'Back to home',
@@ -10787,6 +10810,25 @@ const tr: Dict = {
     functionalRoles: { DEVELOPER: 'Geliştirici', TESTER: 'Test', MARKETING: 'Pazarlama' },
     tasksCompleted: '{n} görev tamamlandı',
   },
+  seo: {
+    homeTitle: 'Internship CRM — ilk temastan ilk işe mentorluk',
+    homeDescription: 'Staj ve mentorluk programını tek yerden yönetin: başvurular, eşleştirme, ortak bir süreç hattı, toplantılar ve işe giden yol.',
+    applyAsMentorTitle: 'Mentor olun',
+    applyAsMentorDescription: 'Bir öğrenciye ya da mezuna staj sürecinde ve ilk iş arayışında mentorluk etmek için başvurun.',
+    privacyDescription: 'Hizmetin hangi kişisel verileri, neden ve ne kadar süre işlediği ve haklarınızı nasıl kullanabileceğiniz.',
+    termsDescription: 'Hizmetin kullanım koşulları.',
+    codeOfConductDescription: 'Programdaki herkesin birbirine nasıl davranmasını beklediğimiz ve bir sorunu nasıl bildirebileceğiniz.',
+    contributorTermsDescription: 'Platformdaki projelere yapılan katkılar için geçerli koşullar.',
+    accessibilityDescription: 'Hizmetin ne kadar erişilebilir olduğu, henüz neyin çalışmadığı ve bir engeli nasıl bildirebileceğiniz.',
+    signInTitle: 'Giriş yap',
+    signInDescription: 'Hesabınıza giriş yapın.',
+    registerTitle: 'Hesabınızı oluşturun',
+    registerDescription: 'Davet edildiğiniz hesabı oluşturmayı tamamlayın.',
+    projectDescription: '{name} — herkese açık vitrindeki bir proje.',
+    profileMentorTitle: '{name} · Mentor',
+    profileMenteeTitle: '{name} · Mentee',
+    profileDescription: '{name} kişisinin herkese açık profili.',
+  },
   releaseNotes: {
     title: 'Yenilikler',
     back: 'Ana sayfaya dön',
@@ -16456,6 +16498,25 @@ const de: Dict = {
     functionalRoles: { DEVELOPER: 'Entwicklung', TESTER: 'Test', MARKETING: 'Marketing' },
     tasksCompleted: '{n} Aufgaben abgeschlossen',
   },
+  seo: {
+    homeTitle: 'Internship CRM — Mentoring vom ersten Kontakt bis zum ersten Job',
+    homeDescription: 'Praktikums- und Mentoringprogramme an einem Ort: Bewerbungen, Matching, eine gemeinsame Pipeline, Termine und der Weg in den Job.',
+    applyAsMentorTitle: 'Mentor werden',
+    applyAsMentorDescription: 'Bewerben Sie sich, um Studierende oder Absolventen durch ihr Praktikum und die erste Jobsuche zu begleiten.',
+    privacyDescription: 'Welche personenbezogenen Daten der Dienst verarbeitet, warum und wie lange – und wie Sie Ihre Rechte ausüben.',
+    termsDescription: 'Die Bedingungen für die Nutzung des Dienstes.',
+    codeOfConductDescription: 'Wie alle im Programm miteinander umgehen sollen und wie Sie ein Problem melden.',
+    contributorTermsDescription: 'Die Bedingungen für Beiträge zu Projekten auf der Plattform.',
+    accessibilityDescription: 'Wie barrierefrei der Dienst ist, was bekanntermaßen noch nicht funktioniert und wie Sie eine Barriere melden.',
+    signInTitle: 'Anmelden',
+    signInDescription: 'Melden Sie sich bei Ihrem Konto an.',
+    registerTitle: 'Konto erstellen',
+    registerDescription: 'Schließen Sie die Erstellung des Kontos ab, zu dem Sie eingeladen wurden.',
+    projectDescription: '{name} — ein Projekt aus dem öffentlichen Schaufenster.',
+    profileMentorTitle: '{name} · Mentor',
+    profileMenteeTitle: '{name} · Mentee',
+    profileDescription: 'Das öffentliche Profil von {name}.',
+  },
   releaseNotes: {
     title: 'Neuigkeiten',
     back: 'Zurück zur Startseite',
@@ -17202,7 +17263,7 @@ export function getDictionary(locale: Locale): Dict {
 // into the client payload of every page on every host, the MARKETING one
 // included. Membership here is enforced by the type: a client component that
 // reaches for `t.pricing` no longer compiles.
-export const SERVER_ONLY_NAMESPACES = ['landing', 'featureCatalog', 'trust', 'accessibility', 'pricing'] as const;
+export const SERVER_ONLY_NAMESPACES = ['landing', 'featureCatalog', 'trust', 'accessibility', 'pricing', 'seo'] as const;
 export type ClientDictionary = Omit<Dictionary, (typeof SERVER_ONLY_NAMESPACES)[number]>;
 
 /**

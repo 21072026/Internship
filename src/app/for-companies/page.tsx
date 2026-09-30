@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { CheckCircle, Code2, ScrollText, Languages, ShieldCheck } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
@@ -6,6 +8,11 @@ import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { requireVerticalCapability } from '@/lib/verticalPage';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.landing.audCompanyTitle, description: t.landing.audCompanySubtitle }));
+}
+
 
 export const dynamic = 'force-dynamic';
 
