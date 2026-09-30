@@ -2,7 +2,8 @@
 
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { GraduationCap, CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import { BrandMark } from '@/components/BrandMark';
 import { useT } from '@/i18n/client';
 
 // Landing page for the one-click links in a notification email (#1204):
@@ -58,7 +59,9 @@ export default function EmailActionPage({ params }: { params: Promise<{ token: s
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
       <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-8 text-center shadow-sm">
-        <GraduationCap className="mx-auto mb-4 h-8 w-8 text-blue-600" aria-hidden />
+        <span aria-hidden className="mx-auto mb-4 block h-8 w-8 text-blue-600">
+          <BrandMark className="h-8 w-8" />
+        </span>
 
         {result.state === 'pending' && (
           <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="email-action-pending">

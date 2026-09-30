@@ -264,3 +264,24 @@ test('the internship host still serves every one of them, and still links to the
   await page.goto('/');
   await expect(page.locator('a[href="/release-notes"]').first()).toBeAttached();
 });
+
+// ── /rsvp and /m (the pages an e-mail link lands on) ─────────────────────────
+//
+// A SaleVali rep's guest invite and one-click message links open the marketing
+// host (docs/worlds.md), so the page they land on wears that product's mark,
+// not the internship graduation cap. A bogus token is enough: the mark does not
+// depend on the token lookup.
+
+test('the RSVP and email-action pages show the mark of the product whose host serves them', async ({ page }) => {
+  const saleValiMark = page.locator('svg[aria-label="SaleVali"]');
+  for (const path of ['/rsvp/not-a-real-token', '/m/not-a-real-token']) {
+    await page.setExtraHTTPHeaders({});
+    await page.goto(path);
+    await expect(page.locator('svg').first(), `${path} renders a mark`).toBeAttached();
+    await expect(saleValiMark, `${path} on the internship host`).toHaveCount(0);
+
+    await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
+    await page.goto(path);
+    await expect(saleValiMark.first(), `${path} on the marketing host`).toBeAttached();
+  }
+});
