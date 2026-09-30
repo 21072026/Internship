@@ -2205,6 +2205,8 @@ const en = {
     subtitle: 'Possible duplicate records found by comparing name, e-mail, phone and university',
     scan: 'Rescan',
     empty: 'No possible duplicates found — the candidate list looks clean.',
+    showing: 'Showing {shown} of {total} pairs, strongest first',
+    showMore: 'Show more',
     score: 'Match strength',
     signals: {
       email: 'Same e-mail',
@@ -7902,6 +7904,8 @@ const tr: Dict = {
     subtitle: 'Ad, e-posta, telefon ve üniversite karşılaştırılarak bulunan olası yinelenen kayıtlar',
     scan: 'Yeniden tara',
     empty: 'Olası yinelenen kayıt bulunamadı — aday listesi temiz görünüyor.',
+    showing: '{total} çiftten {shown} tanesi gösteriliyor, en güçlüden başlayarak',
+    showMore: 'Daha fazla göster',
     score: 'Eşleşme gücü',
     signals: {
       email: 'Aynı e-posta',
@@ -13520,6 +13524,8 @@ const de: Dict = {
     subtitle: 'Mögliche Duplikate, gefunden über Name, E-Mail, Telefon und Universität',
     scan: 'Neu scannen',
     empty: 'Keine möglichen Duplikate gefunden — die Kandidatenliste sieht sauber aus.',
+    showing: '{shown} von {total} Paaren, die stärksten zuerst',
+    showMore: 'Mehr anzeigen',
     score: 'Übereinstimmung',
     signals: {
       email: 'Gleiche E-Mail',

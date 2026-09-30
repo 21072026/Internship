@@ -36,6 +36,7 @@ interface DuplicatePair {
 }
 
 const pairKey = (p: DuplicatePair) => `${p.a.id}:${p.b.id}`;
+const PAGE_SIZE = 25;
 
 function RecordSummary({ record }: { record: DuplicateRecord }) {
   const t = useT();
@@ -255,6 +256,10 @@ function DuplicatePairCard({ pair, onMerged }: {
 export default function DuplicatesPage() {
   const t = useT();
   const [pairs, setPairs] = useState<DuplicatePair[]>([]);
+  // The scan returns up to 200 pairs; drawing all of them at once made a page
+  // 54 000 px tall with 200 merge buttons (#1436). Strongest first, a page at
+  // a time.
+  const [shown, setShown] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -267,6 +272,7 @@ export default function DuplicatesPage() {
       if (!res.ok) throw new Error('scan failed');
       const data = await res.json();
       setPairs(data.pairs || []);
+      setShown(PAGE_SIZE);
     } catch {
       setError(t.duplicates.failed);
     } finally {
@@ -317,9 +323,21 @@ export default function DuplicatesPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {pairs.map((pair) => (
+          <p data-testid="duplicates-showing" className="text-sm text-gray-500 dark:text-gray-400">
+            {t.duplicates.showing
+              .replace('{shown}', String(Math.min(shown, pairs.length)))
+              .replace('{total}', String(pairs.length))}
+          </p>
+          {pairs.slice(0, shown).map((pair) => (
             <DuplicatePairCard key={pairKey(pair)} pair={pair} onMerged={handleMerged} />
           ))}
+          {pairs.length > shown && (
+            <div className="flex justify-center">
+              <Button data-testid="duplicates-show-more" variant="secondary" onClick={() => setShown((n) => n + PAGE_SIZE)}>
+                {t.duplicates.showMore}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
