@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "Security: admin notifications and admin digests stay inside one organization (#2542). Every \"tell the admins\" fan-out read `role: 'ADMIN'` with no org filter, and the tenant middleware does nothing while `MT_ENFORCE_ISOLATION` is off. So each tenant's admins (INTERNSHIP and MARKETING alike) were told about every other tenant's sign-ups, duplicate warnings, invitation auto-link refusals, mentorship and re-match requests, mentor applications, project join requests and testimonial declines. The new `tenantAdminIds()` / `tenantAdminWhere()` (`src/lib/tenantAdmins.ts`, rule in the unit-tested `tenantAdminsRule.ts`) pick the active admins of the subject's own org, and a NULL-org admin counts as the default org's. The daily activity digest, the retention and re-engagement summaries and the weekly analytics report are now computed and sent per org; they used to mail one tenant's mentee names and counts to every admin. `/admin/mentee-activity` is scoped to the caller's tenant. `GET /api/mentor-applications` and `/api/mentor-applications/[id]` are scoped (404 across tenants) and gated on `mentorship`. Public applications are stamped with the default org. `/api/testimonials/approve` is gated on `mentorship`. The last-admin guard on account deletion counts only admins of the same org.",
+  "notes": {
+    "en": [
+      "Admin notifications and summary e-mails now only ever cover your own organization."
+    ],
+    "tr": [
+      "Yönetici bildirimleri ve özet e-postaları artık yalnızca kendi kuruluşunuzu kapsıyor."
+    ],
+    "de": [
+      "Admin-Benachrichtigungen und Zusammenfassungs-E-Mails betreffen jetzt ausschließlich Ihre eigene Organisation."
+    ]
+  }
+}
