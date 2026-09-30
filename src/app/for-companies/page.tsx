@@ -50,7 +50,7 @@ export default async function ForCompaniesPage() {
   // No register button in the chrome: companies have no self-service sign-up
   // (#1102/#1104), so the page ends in the enquiry form instead.
   return (
-    <PublicShell showRegister={false}>
+    <PublicShell showRegister={false} breadcrumb={{ name: L.audCompanyTitle, path: '/for-companies' }}>
       <div className="max-w-5xl mx-auto px-4 py-12 sm:py-16">
         {/* Hero */}
         <div className="text-center max-w-3xl mx-auto">

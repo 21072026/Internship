@@ -47,7 +47,7 @@ export default async function ReleaseNotesPage() {
   const feedUrl = releaseFeedUrl(publicOrigin((n) => h.get(n)), locale);
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: t.releaseNotes.title, path: '/release-notes' }}>
       <div className="max-w-2xl mx-auto my-12 px-4">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
