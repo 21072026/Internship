@@ -1,5 +1,8 @@
 import { ImageResponse } from 'next/og';
 import { prisma } from '@/lib/prisma';
+import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
+import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
+import { THEME_COLOR } from '@/lib/accent';
 
 // OpenGraph card for public profiles (#966, extracted from PR #1221): when a
 // /p/<userId> link is shared on LinkedIn/WhatsApp/Slack/X, the scraper gets a
@@ -7,12 +10,17 @@ import { prisma } from '@/lib/prisma';
 //
 // Node runtime, not Edge — the query goes through the shared Prisma client.
 export const runtime = 'nodejs';
-export const alt = 'Public profile on InternshipCRM';
+// Static by Next's contract, so it names no product; the card itself does.
+export const alt = 'Public profile';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-const BRAND_BLUE = '#1D4ED8';
-const BRAND_BLUE_LIGHT = '#EFF6FF';
+// The card wears the product of the host it is fetched from (docs/worlds.md).
+// The accent is the browser-UI tint each world already uses (THEME_COLOR).
+const BRAND_BACKGROUNDS: Record<VerticalKey, { light: string; tint: string }> = {
+  INTERNSHIP: { light: '#EFF6FF', tint: '#E0E7FF' },
+  MARKETING: { light: '#FDF4FF', tint: '#FAE8FF' },
+};
 
 export default async function OpengraphImage({
   params,
@@ -20,9 +28,15 @@ export default async function OpengraphImage({
   params: Promise<{ userId: string }>;
 }) {
   const { userId } = await params;
+  const world = await resolveRequestVertical();
+  const { t } = await getServerDictionary();
+  const brandName = t.publicProfile.poweredBy;
+  const BRAND_ACCENT = THEME_COLOR[world];
+  const BRAND_BG = BRAND_BACKGROUNDS[world].light;
 
-  // Same visibility gate as the page: only opted-in mentee/mentor profiles.
-  const user = await prisma.user.findFirst({
+  // Same visibility gate as the page: only opted-in mentee/mentor profiles,
+  // and only on the owner's own product's host.
+  const found = await prisma.user.findFirst({
     where: { id: userId, publicProfile: true, role: { in: ['MENTEE', 'MENTOR'] } },
     select: {
       fullName: true,
@@ -36,8 +50,10 @@ export default async function OpengraphImage({
       targetPosition: true,
       bio: true,
       avatarUrl: true,
+      org: { select: { vertical: true } },
     },
   });
+  const user = found && toVerticalKey(found.org?.vertical) === world ? found : null;
 
   if (!user) {
     // Non-public and nonexistent profiles get the same generic brand card, so
@@ -51,11 +67,11 @@ export default async function OpengraphImage({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: BRAND_BLUE_LIGHT,
+            background: BRAND_BG,
             fontFamily: 'sans-serif',
           }}
         >
-          <div style={{ color: BRAND_BLUE, fontSize: 48, fontWeight: 700 }}>InternshipCRM</div>
+          <div style={{ color: BRAND_ACCENT, fontSize: 48, fontWeight: 700 }}>{brandName}</div>
         </div>
       ),
       { width: 1200, height: 630 }
@@ -93,7 +109,7 @@ export default async function OpengraphImage({
           height: 630,
           display: 'flex',
           flexDirection: 'column',
-          background: `linear-gradient(135deg, ${BRAND_BLUE_LIGHT} 0%, #E0E7FF 100%)`,
+          background: `linear-gradient(135deg, ${BRAND_BG} 0%, ${BRAND_BACKGROUNDS[world].tint} 100%)`,
           fontFamily: 'sans-serif',
           padding: 64,
         }}
@@ -104,17 +120,17 @@ export default async function OpengraphImage({
             style={{
               width: 40,
               height: 40,
-              background: BRAND_BLUE,
+              background: BRAND_ACCENT,
               borderRadius: 10,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <div style={{ color: '#fff', fontSize: 22, fontWeight: 700 }}>i</div>
+            <div style={{ color: '#fff', fontSize: 22, fontWeight: 700 }}>{brandName.slice(0, 1).toLowerCase()}</div>
           </div>
-          <div style={{ color: BRAND_BLUE, fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px' }}>
-            InternshipCRM
+          <div style={{ color: BRAND_ACCENT, fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px' }}>
+            {brandName}
           </div>
         </div>
 
@@ -147,14 +163,14 @@ export default async function OpengraphImage({
                 style={{
                   width: 140,
                   height: 140,
-                  background: BRAND_BLUE_LIGHT,
+                  background: BRAND_BG,
                   borderRadius: 20,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 56,
                   fontWeight: 700,
-                  color: BRAND_BLUE,
+                  color: BRAND_ACCENT,
                   border: '3px solid #E0E7FF',
                 }}
               >
@@ -169,7 +185,7 @@ export default async function OpengraphImage({
               {headline}
             </div>
             {sub && (
-              <div style={{ fontSize: 26, color: BRAND_BLUE, fontWeight: 600 }}>{sub}</div>
+              <div style={{ fontSize: 26, color: BRAND_ACCENT, fontWeight: 600 }}>{sub}</div>
             )}
             {location && (
               <div style={{ fontSize: 22, color: '#6B7280', marginTop: 4 }}>{location}</div>
@@ -185,8 +201,8 @@ export default async function OpengraphImage({
                   <div
                     key={s}
                     style={{
-                      background: BRAND_BLUE_LIGHT,
-                      color: BRAND_BLUE,
+                      background: BRAND_BG,
+                      color: BRAND_ACCENT,
                       borderRadius: 999,
                       padding: '6px 16px',
                       fontSize: 18,

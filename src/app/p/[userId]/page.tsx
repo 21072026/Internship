@@ -1,12 +1,13 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
-import { GraduationCap } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { prisma } from '@/lib/prisma';
 import { getPublicEvaluationSummary } from '@/lib/testimonials';
-import { getServerDictionary } from '@/i18n/server';
+import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
+import { toVerticalKey } from '@/lib/verticals';
+import { BrandMark } from '@/components/BrandMark';
 import { ProfileViewPing } from '@/components/ProfileViewPing';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -45,6 +46,9 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       // of the CTA gate. The profile itself still renders — only the CTA is
       // withheld, because the request API would reject the id.
       isActive: true,
+      // The owner's world (docs/worlds.md): a profile is served only on its own
+      // product's host, so a relative /p/ link never shows it in the other one.
+      org: { select: { vertical: true } },
       // Directory consent (#1773): the "request this mentor" CTA is only shown
       // for a mentor the request API would actually accept as a preferred
       // mentor — publicProfile alone is not enough, an active
@@ -63,6 +67,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   });
 
   if (!user) notFound();
+  if (toVerticalKey(user.org?.vertical) !== (await resolveRequestVertical())) notFound();
 
   // Project showcase (#1091): the user's own work in PUBLIC projects only —
   // a private project must never leak even its name, so both queries carry
@@ -120,7 +125,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         {/* Public controls: language, theme, and a link back to the product. */}
         <div className="mb-3 flex items-center justify-between gap-2">
           <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700">
-            <GraduationCap className="h-4 w-4" /> InternshipCRM
+            <BrandMark className="h-4 w-4" /> {t.publicProfile.poweredBy}
           </Link>
           <div className="flex items-center gap-2">
             <LanguageSwitcher current={locale} />
@@ -316,7 +321,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
             href="/"
             className="mt-8 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-400 hover:text-blue-600 transition-colors"
           >
-            <GraduationCap className="h-4 w-4" />
+            <BrandMark className="h-4 w-4" />
             {t.publicProfile.poweredBy}
           </Link>
         </div>

@@ -232,7 +232,9 @@ test('the internship 404 keeps all four of its doors', async ({ page }) => {
 // Asserted as a status plus the absence of links, in BOTH directions: a gate
 // that 404s both hosts would pass the marketing half and take the live
 // internship pages down with it.
-const NOT_DRESSABLE = ['/for-companies', '/apply-as-mentor', '/release-notes', '/contributor-terms'];
+// /code-of-conduct is the mentor–mentee rulebook (sitemap.ts already marks it
+// `needs: 'mentorship'`); /release-notes/feed.xml is the page's own feed.
+const NOT_DRESSABLE = ['/for-companies', '/apply-as-mentor', '/release-notes', '/contributor-terms', '/code-of-conduct'];
 
 test('pages that belong to the internship product 404 on the marketing host and are linked from nowhere on it', async ({ page }) => {
   test.slow();
@@ -243,6 +245,8 @@ test('pages that belong to the internship product 404 on the marketing host and 
   }
   // A mentor's personal apply link is the same front door.
   expect((await page.request.get('/apply/some-mentor-id', { headers })).status()).toBe(404);
+  // The release feed follows its page: no internship changelog on the SaleVali host.
+  expect((await page.request.get('/release-notes/feed.xml', { headers })).status()).toBe(404);
 
   await page.setExtraHTTPHeaders(headers);
   for (const path of ['/', '/auth/signin']) {
@@ -259,8 +263,87 @@ test('the internship host still serves every one of them, and still links to the
   for (const path of NOT_DRESSABLE) {
     expect((await page.request.get(path)).status(), `${path} must still be served on the internship host`).toBe(200);
   }
+  expect((await page.request.get('/release-notes/feed.xml')).status()).toBe(200);
   await page.goto('/auth/signin');
   await expect(page.getByTestId('apply-as-mentor-link')).toBeVisible();
   await page.goto('/');
   await expect(page.locator('a[href="/release-notes"]').first()).toBeAttached();
+});
+
+// ── Everything a page produces stays in its world (docs/worlds.md) ──────────
+//
+// The legal, trust and accessibility statements are linked from every footer,
+// so the marketing host serves them — but they must name the product that host
+// sells, not the other one. The overlay replaces only the branded sentences;
+// the internship host must still read the originals.
+const DRESSED_STATEMENTS = ['/privacy', '/terms', '/imprint', '/trust', '/accessibility'];
+
+test('the legal, trust and accessibility pages name SaleVali on the marketing host', async ({ page }) => {
+  test.slow();
+  await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
+  for (const path of DRESSED_STATEMENTS) {
+    const res = await page.goto(path);
+    expect(res?.status(), `${path} on the marketing host`).toBe(200);
+    const main = page.locator('main');
+    await expect(main, `${path} names the other product`).not.toContainText(/Internship ?CRM/);
+    await expect(main, `${path} does not name this product`).toContainText('SaleVali');
+  }
+  // The terms are short enough to hold to the whole rule: no internship model.
+  await page.goto('/terms');
+  await expect(page.locator('main')).not.toContainText(/mentor|mentee|internship/i);
+});
+
+test('the internship host keeps the original legal, trust and accessibility copy', async ({ page }) => {
+  test.slow();
+  for (const path of DRESSED_STATEMENTS) {
+    await page.goto(path);
+    await expect(page.locator('main'), `${path} on the internship host`).not.toContainText('SaleVali');
+  }
+  await page.goto('/terms');
+  await expect(page.locator('main')).toContainText('By using InternshipCRM you agree to these terms.');
+});
+
+test('the public OpenAPI spec is titled with the product of the host it was fetched from', async ({ request }) => {
+  const marketing = await (await request.get('/api/v1/openapi.json', { headers: { 'x-forwarded-host': MARKETING_HOST } })).json();
+  expect(marketing.info.title).toBe('SaleVali Public API');
+  const internship = await (await request.get('/api/v1/openapi.json')).json();
+  expect(internship.info.title).toBe('Internship CRM Public API');
+});
+
+test('a public profile is served only on its owner\'s product host, wearing that product', async ({ page, request }) => {
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const internEmail = uniqueEmail('world-profile-intern');
+  const marketingEmail = uniqueEmail('world-profile-mkt');
+  const marketingOrg = await prisma.organization.create({
+    data: { name: `World profile MARKETING ${stamp}`, slug: `world-profile-mkt-${stamp}`, vertical: 'MARKETING' },
+  });
+  try {
+    const intern = await seedUser(internEmail, 'WorldProfile123', 'MENTEE', `World Intern ${stamp}`);
+    const rep = await seedUser(marketingEmail, 'WorldProfile123', 'MENTOR', `World Rep ${stamp}`, marketingOrg.id);
+    await prisma.user.updateMany({ where: { id: { in: [intern.id, rep.id] } }, data: { publicProfile: true } });
+    const headers = { 'x-forwarded-host': MARKETING_HOST };
+
+    // Each profile 404s on the other product's host — a relative /p/ link
+    // never shows it inside the wrong world.
+    expect((await request.get(`/p/${intern.id}`, { headers })).status()).toBe(404);
+    expect((await request.get(`/p/${rep.id}`)).status()).toBe(404);
+
+    // On its own host, the marketing profile carries the SaleVali wordmark.
+    await page.setExtraHTTPHeaders(headers);
+    await page.goto(`/p/${rep.id}`);
+    await expect(page.getByRole('heading', { name: `World Rep ${stamp}` })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('link', { name: 'SaleVali' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /Internship ?CRM/ })).toHaveCount(0);
+
+    // The OG card still answers (a generic card, never a 404) on either host.
+    for (const [path, h] of [[`/p/${rep.id}/opengraph-image`, headers], [`/p/${intern.id}/opengraph-image`, headers]] as const) {
+      const res = await request.get(path, { headers: h });
+      expect(res.status()).toBe(200);
+      expect(res.headers()['content-type']).toContain('image/png');
+    }
+  } finally {
+    await cleanupByEmail(internEmail);
+    await cleanupByEmail(marketingEmail);
+    await prisma.organization.deleteMany({ where: { id: marketingOrg.id } });
+  }
 });

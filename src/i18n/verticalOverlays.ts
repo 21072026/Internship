@@ -434,6 +434,47 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroSubtitle: 'The packaging for the marketing product has not been set yet, so there is no price list on this page — we would rather show you nothing than a number we would have to take back. What is already true, whatever the packaging turns out to be, is below.',
         discountsTitle: 'What is already true',
       },
+      // The public pages every footer links to (docs/worlds.md): the share
+      // target, the public profile's wordmark and the legal/trust/accessibility
+      // statements named "InternshipCRM" and described mentorships and
+      // internships to a SaleVali visitor. Only the sentences that name the
+      // product or its relation model are replaced; the legal substance
+      // (controller, rights, retention, subprocessors) is the same codebase's.
+      share: { title: 'Shared with SaleVali' },
+      publicProfile: { poweredBy: 'SaleVali' },
+      imprint: { intro: 'Who runs this SaleVali instance, and how to reach them.' },
+      privacy: {
+        intro: 'We store the information you provide in order to manage leads, accounts and deals. This notice explains what we process, why, who can see it, how long we keep it, and your rights (GDPR Arts. 13–15).',
+        controllerBody: 'The controller for the personal data processed here is {operator}, the operator of this SaleVali instance. The postal address and any further contact details are published in the imprint.',
+        controllerUnset: 'The controller is whoever operates this SaleVali instance; their details are published in this deployment’s imprint.',
+        purposesBody: 'To operate the platform: tracking leads and accounts through the sales pipeline, assigning them to sales reps, logging interactions, scheduling and communication.',
+        legalBasisBody: 'Processing relies on your consent (Art. 6(1)(a)) and on the legitimate interest of running the sales process (Art. 6(1)(f)). Optional processing, such as AI-assisted CV reading, always requires separate consent.',
+        recipientsBody: 'Depending on your role: a lead’s record and interaction history are visible to the sales rep who owns it and to administrators. Reps see only their own leads and accounts. We never sell your data. Extracted CV text is sent to an AI provider only if you separately enable AI-assisted CV reading. On the public home page, and only after you accept marketing cookies, the live chat is loaded from tawk.to — it receives your IP address and whatever you type into the chat. Decline, or leave the chat alone, and nothing is sent to them.',
+        use: 'Your data is used only to operate the platform — pipeline tracking and communication.',
+      },
+      terms: {
+        intro: 'By using SaleVali you agree to these terms.',
+        use: 'Use the platform only for lawful customer and sales management.',
+      },
+      trust: {
+        operatorUnset: 'This instance has not published an operator yet. SaleVali is open source and every deployment names its own operator in its own imprint.',
+        posture: {
+          dataD: 'Your data is not sold. There is no payment processor, no ad network and no data broker anywhere in the codebase.',
+          crmD: 'Analytics and live chat are mounted from the public shell only, never from the application itself. A signed-in pageview would carry a lead’s name to a vendor, so it cannot happen.',
+        },
+        residencySelfHost: 'SaleVali is licensed AGPL-3.0-or-later. You may run your own instance, on your own infrastructure, in your own jurisdiction, without asking permission and without paying anyone. That is the strongest data-residency guarantee this project can offer, because it removes us from the question entirely. Dual licensing is available from the rights holder, Mehmet Erşahin — a natural person, not a company.',
+        freeNote: 'Nothing on this page is a paid add-on.',
+      },
+      accessibility: {
+        intro: 'We build SaleVali so that a sales rep, a manager or an administrator can use it with a keyboard, a screen reader, a magnifier, or a phone held at arm’s length. This statement says which standard we measure ourselves against, how we check, what does not work yet, and who to write to when you hit a barrier.',
+        scopeBody: 'The SaleVali web application served from this deployment: the public pages, the sign-in flow, and the rep and admin areas behind it. It does not cover files that users upload, e-mail as rendered by someone else’s mail client, or the third-party services named further down.',
+        evidence: {
+          dragAlternative: 'The pipeline board can be operated without drag-and-drop: every card carries a stage select that moves the deal with the keyboard alone.',
+        },
+        limitations: {
+          thinFixture: 'The automated scan runs against the shared codebase in its default product configuration, so the screens and wording only SaleVali shows are not yet under the automated gate.',
+        },
+      },
     },
     tr: {
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
@@ -709,6 +750,41 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroSubtitle: 'Pazarlama ürününün paketlemesi henüz belirlenmedi; bu yüzden bu sayfada fiyat listesi yok — geri almak zorunda kalacağımız bir rakam göstermektense hiçbir şey göstermemeyi tercih ederiz. Paketleme ne olursa olsun bugün de doğru olanlar aşağıda.',
         discountsTitle: 'Şimdiden doğru olanlar',
       },
+      share: { title: 'SaleVali ile paylaşıldı' },
+      publicProfile: { poweredBy: 'SaleVali' },
+      imprint: { intro: 'Bu SaleVali kurulumunu kim işletiyor ve kendisine nasıl ulaşılır.' },
+      privacy: {
+        intro: 'Müşteri adaylarını, hesapları ve fırsatları yönetmek için sağladığın bilgileri saklarız. Bu bildirim; neyi, neden işlediğimizi, kimin görebileceğini, ne kadar sakladığımızı ve haklarını açıklar (GDPR Md. 13–15).',
+        controllerBody: 'Burada işlenen kişisel verilerin sorumlusu, bu SaleVali kurulumunu işleten {operator}. Posta adresi ve diğer iletişim bilgileri künyede yayınlanıyor.',
+        controllerUnset: 'Veri sorumlusu, bu SaleVali kurulumunu işleten taraftır; bilgileri bu dağıtımın künyesinde yayınlanır.',
+        purposesBody: 'Platformu işletmek için: müşteri adaylarını ve hesapları satış hattında takip etme, satış temsilcilerine atama, etkileşimleri kaydetme, planlama ve iletişim.',
+        legalBasisBody: 'İşleme, rızana (Md. 6(1)(a)) ve satış sürecini yürütmenin meşru menfaatine (Md. 6(1)(f)) dayanır. AI destekli CV okuma gibi isteğe bağlı işlemeler her zaman ayrı bir rıza gerektirir.',
+        recipientsBody: 'Rolüne göre: bir müşteri adayının kaydı ve etkileşim geçmişi, onu üstlenen satış temsilcisi ve yöneticiler tarafından görülür. Temsilciler yalnızca kendi müşteri adaylarını ve hesaplarını görür. Verini asla satmayız. CV’den çıkarılan metin, yalnızca AI destekli CV okumayı ayrıca etkinleştirirsen bir AI sağlayıcısına gönderilir. Herkese açık ana sayfada, yalnızca pazarlama çerezlerini kabul edersen canlı sohbet tawk.to üzerinden yüklenir; IP adresini ve sohbete yazdıklarını alır. Kabul etmezsen ya da sohbete dokunmazsan onlara hiçbir şey gitmez.',
+        use: 'Verilerin yalnızca platformu işletmek için kullanılır — satış hattı takibi ve iletişim.',
+      },
+      terms: {
+        intro: 'SaleVali kullanarak bu şartları kabul etmiş olursun.',
+        use: 'Platformu yalnızca yasal müşteri ve satış yönetimi için kullan.',
+      },
+      trust: {
+        operatorUnset: 'Bu kurulum henüz bir işletici yayımlamadı. SaleVali açık kaynaktır ve her dağıtım kendi işleticisini kendi künyesinde belirtir.',
+        posture: {
+          dataD: 'Verin satılmaz. Kod tabanında ödeme sağlayıcısı, reklam ağı veya veri simsarı yok.',
+          crmD: 'Analitik ve canlı sohbet yalnızca herkese açık kabuktan yüklenir, hiçbir zaman uygulamanın kendisinden değil. Oturum açılmış bir sayfa görüntülemesi bir müşteri adayının adını sağlayıcıya taşırdı; bu yüzden mümkün değil.',
+        },
+        residencySelfHost: 'SaleVali AGPL-3.0-or-later lisanslıdır. Kendi kurulumunuzu, kendi altyapınızda, kendi yargı alanınızda, kimseden izin almadan ve kimseye ödeme yapmadan çalıştırabilirsiniz. Bu projenin sunabileceği en güçlü veri yerleşimi güvencesi budur, çünkü bizi sorunun dışına çıkarır. İkili lisanslama, hak sahibi Mehmet Erşahin’den alınabilir — bir şirket değil, gerçek bir kişi.',
+        freeNote: 'Bu sayfadaki hiçbir şey ücretli bir eklenti değil.',
+      },
+      accessibility: {
+        intro: 'SaleVali’yi bir satış temsilcisinin, bir yöneticinin ya da bir sistem yöneticisinin klavyeyle, ekran okuyucuyla, büyüteçle ya da kol mesafesindeki bir telefonla kullanabileceği şekilde geliştiriyoruz. Bu beyan hangi standardı ölçüt aldığımızı, bunu nasıl denetlediğimizi, henüz neyin çalışmadığını ve bir engelle karşılaştığınızda kime yazacağınızı anlatır.',
+        scopeBody: 'Bu kurulumdan sunulan SaleVali web uygulaması: herkese açık sayfalar, giriş akışı ve arkasındaki temsilci ve yönetici alanları. Kullanıcıların yüklediği dosyaları, başkasının posta istemcisinde görüntülenen e-postaları ve aşağıda adı geçen üçüncü taraf hizmetleri kapsamaz.',
+        evidence: {
+          dragAlternative: 'Pipeline panosu sürükle-bırak olmadan da kullanılabiliyor: her kartta, fırsatı yalnızca klavyeyle taşıyan bir aşama seçici var.',
+        },
+        limitations: {
+          thinFixture: 'Otomatik tarama, ortak kod tabanını varsayılan ürün yapılandırmasıyla çalıştırıyor; dolayısıyla yalnızca SaleVali’nin gösterdiği ekranlar ve metinler henüz otomatik denetimin kapsamında değil.',
+        },
+      },
     },
     de: {
       nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
@@ -977,6 +1053,41 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroTitle: 'Was wir heute über den Preis sagen können',
         heroSubtitle: 'Die Paketierung des Marketing-Produkts steht noch nicht fest, deshalb gibt es auf dieser Seite keine Preisliste — lieber zeigen wir nichts als eine Zahl, die wir zurücknehmen müssten. Was unabhängig von der Paketierung schon heute gilt, steht unten.',
         discountsTitle: 'Was schon heute gilt',
+      },
+      share: { title: 'Mit SaleVali geteilt' },
+      publicProfile: { poweredBy: 'SaleVali' },
+      imprint: { intro: 'Wer diese SaleVali-Instanz betreibt und wie man ihn erreicht.' },
+      privacy: {
+        intro: 'Wir speichern die von dir bereitgestellten Informationen, um Leads, Accounts und Deals zu verwalten. Dieser Hinweis erklärt, was wir verarbeiten, warum, wer es sehen kann, wie lange wir es aufbewahren und welche Rechte du hast (DSGVO Art. 13–15).',
+        controllerBody: 'Verantwortlicher für die hier verarbeiteten personenbezogenen Daten ist {operator}, Betreiber dieser SaleVali-Instanz. Anschrift und weitere Kontaktdaten stehen im Impressum.',
+        controllerUnset: 'Verantwortlicher ist, wer diese SaleVali-Instanz betreibt; die Angaben stehen im Impressum dieses Deployments.',
+        purposesBody: 'Zum Betrieb der Plattform: Verfolgung von Leads und Accounts durch die Vertriebs-Pipeline, Zuordnung zu Vertriebsmitarbeitern, Protokollierung von Interaktionen, Terminplanung und Kommunikation.',
+        legalBasisBody: 'Die Verarbeitung stützt sich auf deine Einwilligung (Art. 6(1)(a)) und auf das berechtigte Interesse am Betrieb des Vertriebsprozesses (Art. 6(1)(f)). Optionale Verarbeitung wie KI-gestütztes Lesen des Lebenslaufs erfordert stets eine gesonderte Einwilligung.',
+        recipientsBody: 'Je nach Rolle: Datensatz und Interaktionsverlauf eines Leads sind für den zuständigen Vertriebsmitarbeiter und für Administratoren sichtbar. Vertriebsmitarbeiter sehen nur ihre eigenen Leads und Accounts. Wir verkaufen deine Daten nicht. Extrahierter Lebenslauftext wird nur an einen KI-Anbieter gesendet, wenn du das KI-gestützte Lesen gesondert aktivierst. Auf der öffentlichen Startseite wird der Live-Chat nur nach Zustimmung zu Marketing-Cookies von tawk.to geladen; dabei erhält tawk.to deine IP-Adresse und alles, was du in den Chat schreibst. Lehnst du ab oder nutzt den Chat nicht, wird nichts an sie übermittelt.',
+        use: 'Deine Daten werden nur zum Betrieb der Plattform verwendet — Pipeline-Tracking und Kommunikation.',
+      },
+      terms: {
+        intro: 'Mit der Nutzung von SaleVali stimmst du diesen Bedingungen zu.',
+        use: 'Nutze die Plattform nur für rechtmäßiges Kunden- und Vertriebsmanagement.',
+      },
+      trust: {
+        operatorUnset: 'Diese Instanz hat noch keinen Betreiber veröffentlicht. SaleVali ist Open Source, und jedes Deployment nennt seinen eigenen Betreiber im eigenen Impressum.',
+        posture: {
+          dataD: 'Deine Daten werden nicht verkauft. Im Code gibt es keinen Zahlungsdienstleister, kein Werbenetzwerk und keinen Datenhändler.',
+          crmD: 'Analytics und Live-Chat werden ausschließlich aus der öffentlichen Hülle geladen, nie aus der Anwendung selbst. Ein Seitenaufruf im eingeloggten Bereich würde den Namen eines Leads an einen Anbieter tragen — deshalb kann er dort nicht entstehen.',
+        },
+        residencySelfHost: 'SaleVali steht unter AGPL-3.0-or-later. Ihr dürft eine eigene Instanz betreiben, auf eurer eigenen Infrastruktur, in eurer eigenen Rechtsordnung, ohne jemanden zu fragen und ohne jemanden zu bezahlen. Das ist die stärkste Standortgarantie, die dieses Projekt geben kann, weil sie uns vollständig aus der Frage nimmt. Eine Dual-Lizenz ist beim Rechteinhaber Mehmet Erşahin erhältlich — eine natürliche Person, kein Unternehmen.',
+        freeNote: 'Nichts auf dieser Seite ist ein kostenpflichtiges Add-on.',
+      },
+      accessibility: {
+        intro: 'Wir entwickeln SaleVali so, dass Vertriebsmitarbeiter, Vertriebsleitung oder Administration es mit Tastatur, Screenreader, Bildschirmlupe oder einem Handy auf Armlänge bedienen können. Diese Erklärung sagt, an welchem Standard wir uns messen, wie wir das prüfen, was noch nicht funktioniert und an wen du dich wendest, wenn du auf eine Barriere stößt.',
+        scopeBody: 'Für die aus dieser Installation ausgelieferte SaleVali-Webanwendung: die öffentlichen Seiten, den Anmeldeweg und die dahinterliegenden Bereiche für Vertrieb und Verwaltung. Nicht abgedeckt sind hochgeladene Dateien, E-Mails in der Darstellung fremder Mail-Programme sowie die weiter unten genannten Dienste Dritter.',
+        evidence: {
+          dragAlternative: 'Das Pipeline-Board lässt sich ohne Drag-and-drop bedienen: jede Karte hat ein Phasen-Auswahlfeld, das den Deal allein mit der Tastatur verschiebt.',
+        },
+        limitations: {
+          thinFixture: 'Der automatische Scan läuft gegen die gemeinsame Codebasis in ihrer Standard-Produktkonfiguration. Ansichten und Texte, die nur SaleVali zeigt, stehen daher noch nicht unter der automatischen Prüfung.',
+        },
       },
     },
   },
