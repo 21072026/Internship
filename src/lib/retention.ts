@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
+import { orgWhere } from '@/lib/tenantFilter';
 
 // GDPR storage limitation (Art. 5(1)(e)): candidate data is kept no longer than
 // necessary. We anchor retention on `consentAt` — once it is older than
@@ -70,13 +71,19 @@ export async function getRetentionMonths(): Promise<number> {
 // Candidate (mentee) accounts whose consent has passed the retention limit.
 // `due` = in the re-consent reminder window; `overdue` = past the grace period,
 // to be reviewed for erasure by an admin.
-export async function getRetentionReview(): Promise<RetentionItem[]> {
+//
+// `orgId` is the reviewing admin's org, and it is required: the admin page
+// renders outside any tenant scope, and with the middleware dormant an
+// unfiltered read listed every tenant's candidates — names and e-mail
+// addresses of another product's people (#2542). A NULL-org row is the default
+// org's (`orgWhere`), never everybody's.
+export async function getRetentionReview(orgId: string): Promise<RetentionItem[]> {
   const months = await getRetentionMonths();
   const dueCutoff = monthsAgo(months);
   const overdueCutoff = new Date(dueCutoff.getTime() - RETENTION_GRACE_DAYS * 24 * 60 * 60 * 1000);
 
   const users = await prisma.user.findMany({
-    where: { role: 'MENTEE', consentAt: { not: null, lt: dueCutoff } },
+    where: { AND: [{ role: 'MENTEE', consentAt: { not: null, lt: dueCutoff } }, await orgWhere(orgId)] },
     select: { id: true, fullName: true, email: true, consentAt: true, retentionReminderSentAt: true },
     orderBy: { consentAt: 'asc' },
   });

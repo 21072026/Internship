@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**The data-retention review stays inside the admin's own tenant** (#2685, part of #2542). With `MT_ENFORCE_ISOLATION` off, `/admin/retention` listed every tenant's candidates past the consent limit (name and e-mail): `getRetentionReview()` read MENTEEs with no org filter. It now takes the admin's org (required) and filters with `orgWhere()`, so a NULL-org row is the default org's. The orphan-applicant panel on the same page had the same leak, with an erase control on each row: `GET /api/admin/orphan-applicants` now passes `tenantWhere(session)` into `listOrphanApplicants`/`countOrphanApplicants`, while the nightly sweep still runs unscoped because it erases for every org. `GET /api/cron?job=retention` runs the re-consent reminder job on its own. `e2e/tenant-scope-retention.spec.ts` covers both surfaces in both directions, and checks that the job's `retention.adminSummary` gives each org's admins only their own count, with an org-less candidate counted for neither.",
+  "notes": {
+    "en": ["The data-retention page now shows only your own organization's candidates and applicants."],
+    "tr": ["Veri saklama sayfası artık yalnızca kendi kuruluşunuzun adaylarını ve başvuranlarını gösteriyor."],
+    "de": ["Die Seite zur Datenaufbewahrung zeigt jetzt nur noch Kandidaten und Bewerber Ihrer eigenen Organisation."]
+  }
+}
