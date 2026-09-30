@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 // API key lifecycle (#1545): an API key is no longer "a name and a hash".
 // It records who minted it, when it stops being valid, what it may read, and
@@ -120,5 +121,53 @@ test('revoking a key is soft: the row survives with revokedAt set', async ({ pag
   } finally {
     await prisma.apiKey.deleteMany({ where: { name: { startsWith: KEY_PREFIX } } });
     await cleanupByEmail(adminEmail);
+  }
+});
+
+// #2645: the list and the revoke are tenant-scoped on their own, not only
+// through the middleware (which is off while MT_ENFORCE_ISOLATION is). Before,
+// another tenant's admin read this key — with its creator's e-mail — and could
+// revoke it by id.
+test("one tenant's admin can neither see nor revoke another tenant's key (#2645)", async ({ page }) => {
+  const stamp = Date.now();
+  const ownerEmail = uniqueEmail('key-owner');
+  const otherEmail = uniqueEmail('key-other-tenant');
+  const org = await prisma.organization.create({ data: { name: `Key Org ${stamp}`, slug: `key-org-${stamp}` } });
+  const owner = await seedUser(ownerEmail, 'AdminPass123', 'ADMIN', 'Key Owner');
+  await seedUser(otherEmail, 'AdminPass123', 'ADMIN', 'Other Tenant Admin', org.id);
+  const key = await prisma.apiKey.create({
+    data: {
+      name: `${KEY_PREFIX}-tenant-${stamp}`,
+      hashedKey: `e2e-tenant-${stamp}`,
+      scopes: 'candidates:read',
+      createdById: owner.id,
+    },
+  });
+  try {
+    await signInAsAdmin(page, otherEmail);
+
+    const list = await page.request.get('/api/admin/api-keys');
+    expect(list.ok()).toBeTruthy();
+    const body = await list.text();
+    expect(body).not.toContain(key.id);
+    expect(body).not.toContain(ownerEmail);
+
+    const revoke = await page.request.delete(`/api/admin/api-keys?id=${key.id}`);
+    expect(revoke.ok()).toBeTruthy();
+    expect((await prisma.apiKey.findUnique({ where: { id: key.id } }))?.revokedAt).toBeNull();
+    expect(await prisma.activityLog.count({ where: { action: 'apikey.revoked', targetId: key.id } })).toBe(0);
+
+    // The owner's tenant still sees and manages it (a NULL-org key is the default org's).
+    // signInAsFreshUser leaves the page first, so no in-flight /admin request
+    // can write the other admin's session cookie back after it is dropped.
+    await signInAsFreshUser(page, ownerEmail, 'AdminPass123', '/admin');
+    const own = await (await page.request.get('/api/admin/api-keys')).json();
+    expect((own.keys as { id: string }[]).some((k) => k.id === key.id)).toBe(true);
+  } finally {
+    await prisma.activityLog.deleteMany({ where: { targetId: key.id } });
+    await prisma.apiKey.deleteMany({ where: { id: key.id } });
+    await cleanupByEmail(ownerEmail);
+    await cleanupByEmail(otherEmail);
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });
