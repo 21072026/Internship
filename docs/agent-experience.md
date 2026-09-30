@@ -7868,3 +7868,33 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   keeping issues in a JSON file) first in `PATH`, then run the red/red/new-sha/green sequence
   locally. `actionlint` downloads from GitHub releases through the proxy and runs without
   shellcheck (`-shellcheck=`).
+
+## 2026-09-30 (afternoon) — queue run: stage keys, requisition fill, meeting duration, load errors
+
+- **A docs-only PR never gets the Playwright smoke check** (`e2e.yml` has `paths-ignore` for
+  docs), and that check is required, so auto-merge waits forever. Merge it directly once the
+  rest is green.
+- **`check:events` (#1697) refuses an eleventh direct `dispatchWebhook()` caller.** Until
+  `emit()` (#1693) lands, a new event is *registered* in `WEBHOOK_EVENTS` and not dispatched,
+  with a note at the place it will be raised (the `meeting.cancelled` precedent). #2659 went red
+  on this; `ci.yml` runs far more guards than the ones you remember. Before pushing, loop over
+  every `npm run` it invokes:
+  `grep -o "npm run [a-z:0-9-]*" .github/workflows/ci.yml | sort -u | awk '{print $3}' | while IFS= read -r c; do npm run -s "$c" >/dev/null 2>&1 || echo "FAIL $c"; done`
+  (the two demo seeders refuse without a local `DATABASE_URL` exported).
+- **CodeQL flags `existsSync()` followed by `readFileSync()` as a high-severity file-system race**,
+  even in a CI script. Read inside a `try` and treat `ENOENT` as "absent"; delete with
+  `rmSync(path, { force: true })`. It also dislikes an object-literal lookup keyed by a
+  tenant-supplied string (`'__proto__'`); use a `Map`.
+- **Prisma field references make a capacity guard one statement**:
+  `updateMany({ where: { filled: { lt: prisma.requisition.fields.openings } }, data: { filled: { increment: 1 } } })`.
+  Concurrent transactions serialise on the row lock and the loser matches zero rows. Tested with
+  three parallel accepts racing for two seats (`e2e/offers.spec.ts`).
+- **Worktrees sharing one `node_modules` share one generated Prisma client.** After switching to a
+  worktree whose schema differs, run `npx prisma generate` again, or `tsc` reports phantom missing
+  fields from the other branch. The local DB needs `db push --accept-data-loss` for the same reason.
+- **The e2e process needs `DATABASE_URL` itself**, not only the web server: run
+  `set -a && . ./.env && set +a` before `npx playwright test`, or every seeding helper throws
+  "Environment variable not found".
+- **A unit spec that pins a buggy default is part of the bug.** `ics-builder.unit.spec.ts`
+  asserted the 30-minute `DTEND` that #1984 was about; fix the assertion in the same PR and say so
+  in the body.
