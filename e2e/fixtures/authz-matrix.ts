@@ -238,6 +238,13 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
   { path: `/api/users/${FOREIGN_USER_ID_PARAM}/activity`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}/delete-impact`, kind: 'detail' },
+  // Analytics and invitations (leak audit WP3/WP5): the payloads carry mentor,
+  // mentee and inviter ids, so a foreign one in the body is the leak.
+  { path: '/api/admin/analytics', kind: 'list' },
+  { path: '/api/admin/analytics/funnel', kind: 'list' },
+  { path: '/api/admin/analytics/aging', kind: 'list' },
+  { path: '/api/invite', kind: 'list' },
+  { path: '/api/admin/invitations', kind: 'list' },
 ];
 
 /**

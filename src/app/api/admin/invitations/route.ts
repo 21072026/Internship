@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { orgScoped, resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import {
@@ -28,10 +28,10 @@ import {
 //      "my own invitations" view for everybody else and is left as it was.)
 //   2. Tenant. `InvitationToken` IS in TENANT_MODELS since #1559, so with
 //      `MT_ENFORCE_ISOLATION=true` the central middleware scopes these queries
-//      too. The `where` stays wrapped in orgScoped() by hand anyway: that is
-//      the only filter with the flag OFF, which is every deployment today. Both
-//      read `resolveOrgId(session)`, so the hand filter and the injected one are
-//      the same value and can never contradict each other.
+//      too. The `where` is narrowed by hand anyway (`tenantWhere()`, #2542):
+//      that is the only filter with the flag OFF, which is every deployment
+//      today. It reads an org-less session and a NULL row as the default org's,
+//      which is the rule the middleware and the deploy backfill apply.
 //   3. Status. Derived in src/lib/invitationStatus.ts, never re-implemented
 //      here, so the badge, the filter, the counts and the export agree.
 
@@ -90,7 +90,10 @@ export async function GET(request: Request) {
     }
 
     return await withTenantScope(session, async () => {
-      const orgId = resolveOrgId(session);
+      // `tenantWhere`, not `orgScoped`: the latter is UNSCOPED for an org-less
+      // session (a JWT minted before the backfill stamped its user) and misses
+      // the default org's NULL rows; this one reads both as the default org.
+      const tenant = await tenantWhere(session);
       const status = parseInvitationStatus(url.searchParams.get('status'));
       const roleParam = url.searchParams.get('role');
       const role = (ROLE_VALUES as readonly string[]).includes(roleParam ?? '') ? roleParam : null;
@@ -107,13 +110,13 @@ export async function GET(request: Request) {
       if (from) createdAt.gte = from;
       if (to) createdAt.lte = to;
 
-      const where = orgScoped(
+      const where = withinTenant(
         {
           ...(role ? { role: role as (typeof ROLE_VALUES)[number] } : {}),
           ...(from || to ? { createdAt } : {}),
           ...(q ? { OR: [{ email: { contains: q } }, { label: { contains: q } }] } : {}),
         },
-        orgId,
+        tenant,
       );
 
       const rows = (await prisma.invitationToken.findMany({

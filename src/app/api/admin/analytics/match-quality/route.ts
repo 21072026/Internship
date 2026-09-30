@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { MATCH_REASON_UNSPECIFIED } from '@/lib/matchFeedback';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // How many whole months the trend covers, including the current one.
 const TREND_MONTHS = 6;
@@ -49,10 +51,22 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  // Mentor suggestions are the internship product; the screen hides the card
+  // for a vertical without `mentorship`, and the report is refused here too.
+  const gated = await requireCapability(resolveOrgId(session), 'mentorship');
+  if (gated) return gated;
+
   return await withTenantScope(session, async () => {
-    const orgId = resolveOrgId(session);
+    // The tenant rule of src/lib/tenantFilter.ts, spelled in SQL: an org-less
+    // session is the DEFAULT org's (never unscoped — that read every tenant's
+    // feedback), and the default org also owns the rows still NULL.
+    const fallback = await defaultOrgId();
+    const orgId = resolveOrgId(session) ?? fallback;
     // `rank` is a reserved word in MySQL 8 — backticked everywhere below.
-    const org = orgId ? Prisma.sql`AND orgId = ${orgId}` : Prisma.empty;
+    const org =
+      orgId === fallback
+        ? Prisma.sql`AND (orgId = ${orgId} OR orgId IS NULL)`
+        : Prisma.sql`AND orgId = ${orgId}`;
     const now = new Date();
     const since = windowStart(now);
 

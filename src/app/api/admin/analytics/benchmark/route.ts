@@ -9,6 +9,9 @@ import { runUnscoped } from '@/lib/tenantAmbient';
 import { outcomeStageKeysFrom, type OutcomeStageKeys } from '@/lib/pipelineStages';
 import { defaultPipelineStages, localizeStageLabels, type ResolvedStage } from '@/lib/pipeline';
 import { getLocale } from '@/i18n/server';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { worldOfOrg } from '@/lib/userWorld';
+import { benchmarkOrgKey, orgInWorldWhere } from '@/lib/analyticsScope';
 
 // Minimum relations for a program (org) to enter the benchmark pool. This is a
 // k-anonymity floor: tiny programs are excluded so an aggregate can't be
@@ -40,7 +43,8 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if ((await getSetting('premiumAnalytics')) !== 'true') {
+  // The CALLER's tier, org passed explicitly (this runs before the scope binds).
+  if ((await getSetting('premiumAnalytics', resolveOrgId(session))) !== 'true') {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 
@@ -58,12 +62,22 @@ export async function GET() {
     // this change, and deciding whether a cross-tenant benchmark may escape the
     // filter is a privacy call that belongs with the enforcement work rather
     // than here. The code below is correct either way — see the batched read.
+    //
+    // THE PEER POOL IS THE CALLER'S WORLD (leak audit WP3, docs/worlds.md).
+    // Every organization used to feed one pool, so a MARKETING tenant's "platform
+    // average" was mostly internship programmes — and vice versa: numbers about
+    // the other product, which that tenant has no business seeing even in
+    // aggregate, and which compare a sales funnel with a hiring pipeline. The
+    // groupBy is narrowed to the orgs of the caller's own vertical; a relation
+    // with no org is the default org's and therefore the default world's.
+    const fallbackOrgId = await defaultOrgId();
+    const myOrgId = resolveOrgId(session) ?? fallbackOrgId;
+    const world = await worldOfOrg(myOrgId);
     const grouped = await prisma.mentorshipRelation.groupBy({
       by: ['orgId', 'pipelineStatus'],
+      where: orgInWorldWhere(world),
       _count: { _all: true },
     });
-
-    const myOrgId = resolveOrgId(session);
 
     // ── Stage sets, one query for every org in the result ────────────────────
     // The viewer's own org is included even when it contributed no rows to the
@@ -122,12 +136,13 @@ export async function GET() {
     type Agg = { total: number; hired: number; dropped: number };
     const byOrg = new Map<string, Agg>();
     for (const g of grouped) {
-      const key = g.orgId ?? '__none__';
+      // A NULL-org relation is the default org's (the backfill rule), so it is
+      // counted as part of that programme, never as an extra anonymous one.
+      const key = benchmarkOrgKey(g.orgId, fallbackOrgId);
       const a = byOrg.get(key) ?? { total: 0, hired: 0, dropped: 0 };
       const n = g._count._all;
-      // `__none__` (a relation with no org at all) has no stage rows to read,
-      // so `outcomeFor` hands it the built-in catalogue — which is what it was
-      // counted against before.
+      // Folded into the default org, a NULL-org row is read against the default
+      // org's stage set — the one it is the backfill's row of.
       const outcome = outcomeFor(key);
       a.total += n;
       if (outcome.finished.includes(g.pipelineStatus)) a.hired += n;
@@ -139,9 +154,9 @@ export async function GET() {
     const dropRate = (a: Agg) => (a.total > 0 ? Math.round((a.dropped / a.total) * 100) : 0);
 
     // The viewer's own program.
-    const mine = (myOrgId && byOrg.get(myOrgId)) || null;
+    const mine = byOrg.get(myOrgId) ?? null;
     // Only the viewer's own stage vocabulary is ever named in the payload.
-    const myOutcome = outcomeFor(myOrgId ?? '__none__');
+    const myOutcome = outcomeFor(myOrgId);
 
     // Benchmark pool: every program meeting the k-anonymity floor.
     const pool = [...byOrg.values()].filter((a) => a.total >= MIN_RELATIONS);
