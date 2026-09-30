@@ -16,6 +16,7 @@ import {
   ANNOUNCEMENT_IMAGE_ACCEPT,
   ANNOUNCEMENT_IMAGE_MAX_BYTES,
   validateAnnouncementImage,
+  announcementImagePreview,
 } from '@/lib/announcementImage';
 import { locales, type Locale } from '@/i18n/config';
 import {
@@ -113,8 +114,15 @@ export default function AdminAnnouncementsPage() {
       }[invalid]);
       return;
     }
+    // The preview (and the file that is uploaded) carry the SNIFFED type and a
+    // checked blob: URL, never the clipboard-declared one (#2149).
+    const preview = await announcementImagePreview(file);
+    if (!preview) {
+      setError(t.announcements.imageUnreadable);
+      return;
+    }
     setError(null);
-    setImage({ file, url: URL.createObjectURL(file) });
+    setImage(preview);
   };
 
   // Paste an image straight from the clipboard into the composer — the same
