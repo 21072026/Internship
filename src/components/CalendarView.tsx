@@ -520,6 +520,7 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
         className="mb-3 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
         role="group"
         aria-label={t.calendar.viewSwitcher}
+        data-testid="calendar-view-switcher"
       >
         {VIEWS.map((v) => (
           <button
