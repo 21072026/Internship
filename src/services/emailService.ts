@@ -3703,7 +3703,8 @@ const OVERDUE_DIGEST_SCAN = 100;
 async function overdueTodoBlock(
   reach: Prisma.ProjectTaskWhereInput,
   locale: Locale,
-  recipientId: string
+  recipientId: string,
+  withHeading = true
 ): Promise<string> {
   const rows = await prisma.projectTask.findMany({
     where: { ...reach, done: false, archivedAt: null, dueDate: { lt: overdueBefore() } },
@@ -3740,8 +3741,49 @@ async function overdueTodoBlock(
   const rest = visible.length > OVERDUE_DIGEST_LIMIT
     ? `<p style="color:#6b7280;font-size:12px;">${esc(A.overdueMore.replace('{n}', String(visible.length - OVERDUE_DIGEST_LIMIT)))}</p>`
     : '';
-  return `<h3 style="margin:20px 0 6px;color:#b91c1c;font-size:15px;">${esc(A.overdueHeading)}</h3>
+  const heading = withHeading
+    ? `<h3 style="margin:20px 0 6px;color:#b91c1c;font-size:15px;">${esc(A.overdueHeading)}</h3>`
+    : '';
+  return `${heading}
     <ul style="margin:0;padding-left:18px;font-size:13px;color:#374151;">${items}</ul>${rest}`;
+}
+
+type DigestRecipient = {
+  id: string;
+  orgId: string | null;
+  email: string;
+  fullName: string;
+  preferredLanguage: string | null;
+};
+
+// What an org without mentorship gets instead of the daily digest: the overdue
+// to-dos alone, in its own brand and linking to /todos — /todos is not a
+// mentorship feature, and this digest was the only mail that reminded anyone.
+async function sendOverdueTodoMail(
+  u: DigestRecipient,
+  reach: Prisma.ProjectTaskWhereInput,
+  base: string,
+  brand: Awaited<ReturnType<typeof emailBrand>>
+): Promise<boolean> {
+  const locale = resolveLocale(u.preferredLanguage);
+  const block = await overdueTodoBlock(reach, locale, u.id, false);
+  if (!block) return false;
+  const A = getDictionary(locale).notifications.activityDigestEmail;
+  await sendEmail({
+    category: 'activity-digest',
+    userId: u.id,
+    orgId: u.orgId,
+    to: u.email,
+    locale,
+    subject: A.todoSubject,
+    html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+      ${worldHeading(brand, esc(A.todoSubject), `<h2 style="color:#2563eb;">${esc(A.todoSubject)}</h2>`)}
+      <p>${esc(A.todoGreeting.replace('{name}', u.fullName))}</p>
+      ${block}
+      <p style="margin-top:16px;"><a href="${base}/todos" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.todoCta)}</a></p>
+    </div>`,
+  });
+  return true;
 }
 
 // Daily mentee-activity digest. Each mentor gets a summary of THEIR mentees'
@@ -3764,12 +3806,23 @@ export async function sendDailyActivityDigests() {
   const origins = createOriginBook();
   await origins.prefetch(mentors.map((m) => m.orgId));
   // Mentee activity is mentorship work: an org without the module (a MARKETING
-  // sales book) gets neither half of this digest — skipped, not re-branded.
+  // sales book) gets neither half of this digest — skipped, not re-branded —
+  // and only the overdue to-dos of the same reach (sendOverdueTodoMail).
   const capabilitiesOf = capabilitiesMemo();
   const brandOf = createBrandBook();
   for (const m of mentors) {
     if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'activity-digest')) continue;
-    if (!interactionReminderApplies(await capabilitiesOf(m.orgId))) continue;
+    if (!interactionReminderApplies(await capabilitiesOf(m.orgId))) {
+      try {
+        const leads = await prisma.mentorshipRelation.findMany({ where: { mentorId: m.id }, select: { menteeId: true } });
+        if (leads.length === 0) continue;
+        const reach = { assigneeId: { in: leads.map((l) => l.menteeId) } };
+        if (await sendOverdueTodoMail(m, reach, await origins.urlFor(m.orgId), await brandOf(m.orgId))) sent++;
+      } catch (e) {
+        console.error('Overdue to-do mail failed:', e);
+      }
+      continue;
+    }
     const items = await getMentorMenteeActivity(m.id, since);
     if (items.length === 0) continue;
     const mLocale = resolveLocale(m.preferredLanguage);
@@ -3822,7 +3875,16 @@ export async function sendDailyActivityDigests() {
   await origins.prefetch(admins.map((a) => a.orgId));
   for (const a of admins) {
     if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
-    if (!interactionReminderApplies(await capabilitiesOf(a.orgId))) continue;
+    if (!interactionReminderApplies(await capabilitiesOf(a.orgId))) {
+      if (!a.orgId) continue;
+      try {
+        const reach = { assignee: { is: { orgId: a.orgId } } };
+        if (await sendOverdueTodoMail(a, reach, await origins.urlFor(a.orgId), await brandOf(a.orgId))) sent++;
+      } catch (e) {
+        console.error('Overdue to-do mail failed:', e);
+      }
+      continue;
+    }
     const adminItems = await orgItems(a.orgId ?? fallbackOrg!);
     if (adminItems.length === 0) continue;
     const aLocale = resolveLocale(a.preferredLanguage);
@@ -4103,6 +4165,7 @@ export async function checkCompanyNeedMatches() {
   // is a leak with a /p/<id> link attached. NULL is the default org either side.
   const defaultId = await defaultOrgId();
   const brandOf = createBrandBook();
+  const capabilitiesOf = capabilitiesMemo();
 
   // WORLDS (#2590): the "view profile" link opens the product the COMPANY USER's
   // account lives in, resolved per user from their own organization. Read for
@@ -4113,6 +4176,10 @@ export async function checkCompanyNeedMatches() {
   let alerts = 0;
 
   for (const company of companies) {
+    // Matching the talent pool against open roles is placement work: an org
+    // without the module (a MARKETING sales book) gets no alert at all —
+    // skipped before any dedupe row is written, not re-branded.
+    if (!(await capabilitiesOf(company.orgId)).includes('placements')) continue;
     // Requisition.title is the analogue of CompanyNeed.position, and the only
     // field taken from it. `requiredSkills` is deliberately NOT folded in:
     // candidateMatchesNeeds matches substrings in BOTH directions, so a short

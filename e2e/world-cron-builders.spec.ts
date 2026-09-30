@@ -12,6 +12,7 @@ import { getSystemMenteeActivity } from '@/lib/activityReport';
 import { orgWhere } from '@/lib/tenantFilter';
 import { setSetting } from '@/lib/settings';
 import { prisma as appPrisma } from '@/lib/prisma';
+import { getDictionary } from '../src/i18n/dictionaries';
 
 // The scheduled mail builders and "whatever an action produces stays in its
 // world" (docs/worlds.md): a cron sweeps every tenant with no session, so each
@@ -34,11 +35,15 @@ const emails = {
   intMentor: uniqueEmail('wc-int-mentor'),
   intMentee: uniqueEmail('wc-int-mentee'),
   mktCompanyUser: uniqueEmail('wc-mkt-company'),
+  intCompanyUser: uniqueEmail('wc-int-company'),
 };
 let mktOrgId = '';
 let intOrgId = '';
 const ids: Record<keyof typeof emails, string> = {} as Record<keyof typeof emails, string>;
 let mktCompanyId = '';
+let intCompanyId = '';
+let overdueTodoId = '';
+const todoTitle = `Cron overdue to-do ${STAMP}`;
 const position = `Cron Position ${STAMP}`;
 
 const logsTo = (to: string, category: string) =>
@@ -64,8 +69,9 @@ test.beforeAll(async () => {
   await prisma.mentorshipRelation.create({ data: { orgId: mktOrgId, mentorId: ids.mktRep, menteeId: ids.mktLead } });
   await prisma.mentorshipRelation.create({ data: { orgId: intOrgId, mentorId: ids.intMentor, menteeId: ids.intMentee } });
 
-  // Both mentees are in the consenting talent pool and match the SaleVali
-  // company's open position — only its own tenant's lead may be alerted.
+  // Both mentees are in the consenting talent pool and match both companies'
+  // open position: the INTERNSHIP company may be alerted about its own tenant's
+  // candidate only, the SaleVali company (no placements) about nobody.
   for (const id of [ids.mktLead, ids.intMentee]) {
     await prisma.user.update({
       where: { id },
@@ -88,15 +94,41 @@ test.beforeAll(async () => {
   ).id;
   ids.mktCompanyUser = (await seedUser(emails.mktCompanyUser, PW, 'COMPANY', 'Cron Mkt Company User', mktOrgId)).id;
   await prisma.user.update({ where: { id: ids.mktCompanyUser }, data: { companyId: mktCompanyId } });
+  intCompanyId = (
+    await prisma.company.create({
+      data: {
+        name: `Cron Int Co ${STAMP}`,
+        orgId: intOrgId,
+        entitlements: { create: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
+        needs: { create: { position, count: 1, period: '2026' } },
+      },
+    })
+  ).id;
+  ids.intCompanyUser = (await seedUser(emails.intCompanyUser, PW, 'COMPANY', 'Cron Int Company User', intOrgId)).id;
+  await prisma.user.update({ where: { id: ids.intCompanyUser }, data: { companyId: intCompanyId } });
+
+  // A late to-do the rep gave their lead: the one thing a sales org still
+  // hears about from the daily digest cron.
+  overdueTodoId = (
+    await prisma.projectTask.create({
+      data: {
+        title: todoTitle,
+        assigneeId: ids.mktLead,
+        createdById: ids.mktRep,
+        dueDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      },
+    })
+  ).id;
 });
 
 test.afterAll(async () => {
-  await prisma.companyNeedAlert.deleteMany({ where: { companyId: mktCompanyId } });
+  await prisma.projectTask.deleteMany({ where: { id: overdueTodoId } });
+  await prisma.companyNeedAlert.deleteMany({ where: { companyId: { in: [mktCompanyId, intCompanyId] } } });
   for (const email of Object.values(emails)) {
     await cleanupByEmail(email);
     await prisma.emailLog.deleteMany({ where: { to: email } });
   }
-  await prisma.company.deleteMany({ where: { id: mktCompanyId } });
+  await prisma.company.deleteMany({ where: { id: { in: [mktCompanyId, intCompanyId] } } });
   await prisma.setting.deleteMany({ where: { orgId: { in: [mktOrgId, intOrgId] } } });
   await prisma.organization.deleteMany({ where: { id: { in: [mktOrgId, intOrgId] } } });
   await prisma.$disconnect();
@@ -135,13 +167,19 @@ test.describe('admin digests and summaries describe one org', () => {
     expect(reached).toEqual([ids.mktAdmin]);
   });
 
-  test('the daily mentee-activity digest skips an org without mentorship, and a rep gets none either', async () => {
+  test('an org without mentorship gets no mentee-activity digest, only its overdue to-dos', async () => {
     await sendDailyActivityDigests();
     // At least one: a parallel spec's full /api/cron run may send another.
     expect((await logsTo(emails.intAdmin, 'activity-digest')).length).toBeGreaterThanOrEqual(1);
     expect((await logsTo(emails.intMentor, 'activity-digest')).length).toBeGreaterThanOrEqual(1);
-    expect(await logsTo(emails.mktAdmin, 'activity-digest')).toHaveLength(0);
-    expect(await logsTo(emails.mktRep, 'activity-digest')).toHaveLength(0);
+    const todoSubjects = (['en', 'tr', 'de'] as const).map(
+      (l) => getDictionary(l).notifications.activityDigestEmail.todoSubject,
+    );
+    for (const who of [emails.mktAdmin, emails.mktRep]) {
+      const rows = await logsTo(who, 'activity-digest');
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+      for (const row of rows) expect(todoSubjects).toContain(row.subject);
+    }
   });
 
   test('the weekly mentoring summary is not sent to a sales rep', async () => {
@@ -161,13 +199,19 @@ test.describe('admin digests and summaries describe one org', () => {
   });
 });
 
-test('an open-position alert names only a candidate of the company’s own tenant', async () => {
+test('an open-position alert names only its own tenant’s candidate, and an org without placements gets none', async () => {
   await checkCompanyNeedMatches();
-  const alerted = await prisma.companyNeedAlert.findMany({ where: { companyId: mktCompanyId }, select: { menteeId: true } });
-  expect(alerted.map((a) => a.menteeId)).toEqual([ids.mktLead]);
-  const bell = await prisma.notification.findMany({
-    where: { userId: ids.mktCompanyUser, type: 'need_match.newCandidate' },
-    select: { link: true },
-  });
-  expect(bell.map((n) => n.link)).toEqual([`/p/${ids.mktLead}`]);
+  const alertedOf = async (companyId: string) =>
+    (await prisma.companyNeedAlert.findMany({ where: { companyId }, select: { menteeId: true } })).map((a) => a.menteeId);
+  const bellOf = async (userId: string) =>
+    (
+      await prisma.notification.findMany({ where: { userId, type: 'need_match.newCandidate' }, select: { link: true } })
+    ).map((n) => n.link);
+
+  expect(await alertedOf(intCompanyId)).toEqual([ids.intMentee]);
+  expect(await bellOf(ids.intCompanyUser)).toEqual([`/p/${ids.intMentee}`]);
+
+  expect(await alertedOf(mktCompanyId)).toEqual([]);
+  expect(await bellOf(ids.mktCompanyUser)).toEqual([]);
+  expect(await logsTo(emails.mktCompanyUser, 'company-need-alert')).toHaveLength(0);
 });

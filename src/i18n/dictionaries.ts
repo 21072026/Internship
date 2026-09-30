@@ -2488,6 +2488,10 @@ const en = {
       overdueHeading: 'Overdue to-dos',
       overdueLine: '{name}: {title} \u2014 was due {date}',
       overdueMore: 'and {n} more.',
+      // The to-do-only mail an org without mentorship gets instead of this digest.
+      todoSubject: 'Overdue to-dos',
+      todoGreeting: 'Hi {name}, these to-dos are past their due date:',
+      todoCta: 'Open to-dos',
       columns: {
         mentee: 'Mentee',
         login: 'Login',
@@ -7947,6 +7951,10 @@ const tr: Dict = {
       overdueHeading: 'Gecikmiş yapılacaklar',
       overdueLine: '{name}: {title} \u2014 son gün {date} idi',
       overdueMore: 've {n} tane daha.',
+      // Mentorluk modülü olmayan bir organizasyonun bu özet yerine aldığı yalnızca-yapılacaklar maili.
+      todoSubject: 'Gecikmiş yapılacaklar',
+      todoGreeting: 'Merhaba {name}, son günü geçmiş yapılacaklar:',
+      todoCta: 'Yapılacakları aç',
       columns: {
         mentee: 'Mentee',
         login: 'Giriş',
@@ -13354,6 +13362,10 @@ const de: Dict = {
       overdueHeading: 'Überfällige Aufgaben',
       overdueLine: '{name}: {title} \u2014 war am {date} fällig',
       overdueMore: 'und {n} weitere.',
+      // Die Nur-Aufgaben-Mail, die eine Organisation ohne Mentoring statt dieser Übersicht bekommt.
+      todoSubject: 'Überfällige Aufgaben',
+      todoGreeting: 'Hallo {name}, diese Aufgaben sind überfällig:',
+      todoCta: 'Aufgaben öffnen',
       columns: {
         mentee: 'Mentee',
         login: 'Login',
