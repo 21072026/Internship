@@ -5,6 +5,7 @@ import { GraduationCap, Github, ExternalLink, Trello, ArrowLeft } from 'lucide-r
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { getServerDictionary } from '@/i18n/server';
 import { Badge } from '@/components/ui/Badge';
 import { mergeTeam, internCount, type TeamMember } from '@/lib/projectTeam';
@@ -53,7 +54,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       name: true, description: true, technologies: true, repoUrl: true, demoUrl: true, boardUrl: true, status: true,
       isPublic: true, goals: true, startDate: true, endDate: true,
       contributorTermsKey: true, contributorTermsRequired: true,
-      ownerType: true, ownerUserId: true, ownerCompanyId: true,
+      ownerType: true, ownerUserId: true, ownerCompanyId: true, orgId: true,
       ownerUser: { select: { id: true, fullName: true } }, ownerCompany: { select: { name: true } },
       // `timezone` (#1210): the weekly-meeting form previews the slot on every
       // member's clock, so the zones travel with the team.
@@ -72,24 +73,33 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   }));
   if (!p) notFound();
 
-  const role = session?.user.role;
+  // …and that binding is a no-op with the flag off, which is every deployment
+  // today (#2622): another tenant's ADMIN got the full internal view below —
+  // roster, join requests, goals, the members panel — of any project, private
+  // ones included. A signed-in visitor from another tenant is therefore read
+  // exactly like an anonymous one: the public stub of a public project (the
+  // showcase is cross-tenant by design), a 404 for anything else. `viewer` is
+  // the session only when it may act here; the header's way home still follows
+  // the real session.
+  const viewer = session && (await inCallerTenant(p.orgId, session.user.orgId)) ? session : null;
+  const role = viewer?.user.role;
   const team = mergeTeam(p.members, p.relations);
   const interns = internCount(team);
-  const isMember = !!session && team.some((m) => m.id === session.user.id);
+  const isMember = !!viewer && team.some((m) => m.id === viewer.user.id);
   const isLead =
     role === 'ADMIN' ||
-    (!!session && p.ownerUserId === session.user.id) ||
-    (!!session && p.members.some((m) => m.user.id === session.user.id && m.role === 'OWNER'));
+    (!!viewer && p.ownerUserId === viewer.user.id) ||
+    (!!viewer && p.members.some((m) => m.user.id === viewer.user.id && m.role === 'OWNER'));
   // Who may summon the whole team into a room (#1055). Mirrors the server rule
   // in resolveMeetingContext: admins and OWNER/MENTOR members — mentee members
   // join a call, they don't call everyone in.
   const canStartMeeting =
     isLead ||
-    (!!session && p.members.some((m) => m.user.id === session.user.id && m.role === 'MENTOR'));
+    (!!viewer && p.members.some((m) => m.user.id === viewer.user.id && m.role === 'MENTOR'));
   const canInternal =
     isLead ||
     isMember ||
-    (role === 'COMPANY' && !!session?.user.companyId && p.ownerCompanyId === session.user.companyId);
+    (role === 'COMPANY' && !!viewer?.user.companyId && p.ownerCompanyId === viewer.user.companyId);
   if (!p.isPublic && !canInternal) notFound();
 
   // Project-level contributor terms (#1026). This is the gate the design doc
@@ -103,7 +113,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   // locking an admin out of a project they must supervise would be a bug, not a
   // safeguard.
   const gate = isMember && role !== 'ADMIN'
-    ? await projectTermsState(session!.user.id, { id, ...p }, locale)
+    ? await projectTermsState(viewer!.user.id, { id, ...p }, locale)
     : { terms: null, accepted: true };
 
   if (gate.terms && !gate.accepted) {
@@ -166,10 +176,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   // A public project accepts join requests from anyone signed in who is not on
   // it yet (mentees and mentors alike).
-  const canRequestToJoin = !!session && !isMember && p.isPublic && (role === 'MENTEE' || role === 'MENTOR');
+  const canRequestToJoin = !!viewer && !isMember && p.isPublic && (role === 'MENTEE' || role === 'MENTOR');
   const existingRequest = canRequestToJoin
     ? await prisma.projectJoinRequest.findUnique({
-        where: { projectId_userId: { projectId: id, userId: session!.user.id } },
+        where: { projectId_userId: { projectId: id, userId: viewer!.user.id } },
         select: { status: true },
       })
     : null;
@@ -197,7 +207,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           the app (#51 follow-up). */}
       <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm">
         <div className="mx-auto flex h-16 max-w-2xl items-center gap-2 px-3 sm:px-4">
-          <Link href={session ? roleHome(role) : '/'} className="flex min-w-0 items-center gap-2">
+          <Link href={session ? roleHome(session.user.role) : '/'} className="flex min-w-0 items-center gap-2">
             <BrandWordmark />
           </Link>
         </div>
@@ -240,7 +250,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             {p.boardUrl && <a href={p.boardUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline"><Trello className="h-4 w-4" />{t.projects.board}</a>}
           </div>
 
-          {session && (isMember || canRequestToJoin) && (
+          {viewer && (isMember || canRequestToJoin) && (
             <ProjectQuickActions
               projectId={id}
               ownerUserId={p.ownerUser?.id ?? null}
@@ -291,16 +301,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               {/* A MENTEE owner manages their roster too, minus the add pickers:
                   the member POST refuses them on purpose (#2270) and they grow
                   the team through join requests instead. */}
-              {isLead && session && (
-                <ProjectMembersPanel projectId={id} myId={session.user.id} canAdd={role !== 'MENTEE'} isPublic={p.isPublic} />
+              {isLead && viewer && (
+                <ProjectMembersPanel projectId={id} myId={viewer.user.id} canAdd={role !== 'MENTEE'} isPublic={p.isPublic} />
               )}
 
               {isLead && <ProjectJoinRequests projectId={id} />}
 
               <ProjectWeeklyMeeting projectId={id} canManage={isLead} canStartInstant={canStartMeeting} projectName={p.name} team={team} />
 
-              {session && (
-                <ProjectGoals projectId={id} myId={session.user.id} canLead={isLead} isMember={isMember} />
+              {viewer && (
+                <ProjectGoals projectId={id} myId={viewer.user.id} canLead={isLead} isMember={isMember} />
               )}
             </div>
           ) : (

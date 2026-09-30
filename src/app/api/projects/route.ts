@@ -8,6 +8,7 @@ import { resolveOwner } from '@/lib/projectAccess';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { mergeTeam, internCount } from '@/lib/projectTeam';
@@ -63,7 +64,11 @@ export async function GET() {
   // hand-rolled `where.OR = […]` filter added here would replace the scope in
   // exactly the way it did on /api/mentorship; adding it as another argument
   // to this call cannot.
-  const where = andScope<Prisma.ProjectWhereInput>(scope);
+  // The caller's tenant is its own conjunct (#2622): the ADMIN scope is `{}`
+  // and the org middleware scopes nothing with MT_ENFORCE_ISOLATION off, so an
+  // admin listed every tenant's projects and a mentee every tenant's public
+  // ones. The cross-tenant public showcase is /projects, not this list.
+  const where = andScope<Prisma.ProjectWhereInput>(scope, await tenantWhere(session));
 
   const projects = await prisma.project.findMany({ where, include, orderBy: { updatedAt: 'desc' } });
   // The card's "who's on it" row and its intern count come from the merged team
@@ -174,12 +179,17 @@ export async function POST(request: Request) {
   } else {
     // ADMIN ownership defaults to the acting admin when no user id is supplied.
     const ownerUserId = d.ownerType === 'ADMIN' ? d.ownerUserId || session.user.id : d.ownerUserId;
-    owner = await resolveOwner({ ownerType: d.ownerType, ownerUserId, ownerCompanyId: d.ownerCompanyId });
+    owner = await resolveOwner(session, { ownerType: d.ownerType, ownerUserId, ownerCompanyId: d.ownerCompanyId });
     if (!owner) return NextResponse.json({ error: 'A valid owner (admin, mentor, mentee or company) is required' }, { status: 400 });
   }
 
   const project = await prisma.project.create({
     data: {
+      // Stamped by hand (#2622, as #2542 did for companies): with the flag off
+      // the middleware fills nothing in, and a NULL-org project is the default
+      // org's — invisible to the admin of any other tenant who just created it,
+      // now that the list and every by-id route are tenant-scoped.
+      orgId: resolveOrgId(session),
       // Person owners also get an OWNER member row (#617) so the members
       // table is authoritative from day one.
       ...(owner.ownerUserId ? { members: { create: { userId: owner.ownerUserId, role: 'OWNER' } } } : {}),

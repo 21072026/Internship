@@ -100,7 +100,16 @@ export async function submitSignInForm(page: Page, email: string, password: stri
 }
 
 async function dropSessionAndOpenSignIn(page: Page) {
-  await page.goto('about:blank');
+  // The previous sign-in's own redirect (e.g. to /mentor) can still be in
+  // flight here and win the race against about:blank (#2625). Let it land,
+  // then leave — the session is dropped below either way.
+  try {
+    await page.goto('about:blank');
+  } catch (error) {
+    if (!/interrupted by another navigation/i.test(String(error))) throw error;
+    await page.waitForLoadState('load').catch(() => {});
+    await page.goto('about:blank');
+  }
   await page.context().clearCookies({ name: /next-auth\.session-token/ });
   await page.goto('/auth/signin');
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});

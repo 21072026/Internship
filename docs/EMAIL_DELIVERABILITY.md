@@ -237,7 +237,9 @@ server. `EmailLog.transport` records which channel carried each message.
 
 `sendEmail()` records every attempt (#1194): recipient, subject, category,
 `SENT` / `FAILED` / `SKIPPED`, and the error. Read it at **Admin → Settings →
-Email health** or `GET /api/admin/email-log`.
+Email health** or `GET /api/admin/email-log`. **Super admins only** (#2635):
+the log is installation-wide, since `EmailLog` has no `orgId`, so a tenant admin
+gets a 403 and the settings page leaves the section out.
 
 This exists because the failure mode it covers is invisible otherwise: the
 function used to `return` silently when `SMTP_USER` was unset, and most callers

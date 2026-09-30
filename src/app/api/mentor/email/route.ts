@@ -96,6 +96,8 @@ export async function POST(request: Request) {
           // Reply-To routes mentee replies back into this thread (inbound email).
           // The recipient is baked into the token so a reply still threads when
           // the mentee answers from a different address than their profile one.
+          // Absent when no inbound domain is configured (#2217).
+          const replyTo = replyAddress(rel.id, rel.mentee.id);
           //
           // `locale` is the mentee's own language because the body already is:
           // resolveEmail() above picked the mentee's translation of the message,
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
             to: rel.mentee.email,
             subject: personalSubject,
             html,
-            replyTo: replyAddress(rel.id, rel.mentee.id),
+            ...(replyTo ? { replyTo } : {}),
             category: 'mentor-direct',
             userId: rel.mentee.id,
             locale: rel.mentee.preferredLanguage,

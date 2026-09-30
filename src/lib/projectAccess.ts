@@ -1,4 +1,6 @@
+import type { Session } from 'next-auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 interface SessionUser {
   id: string;
@@ -55,16 +57,22 @@ export async function isProjectMember(user: SessionUser, projectId: string) {
 }
 
 // Validate + normalise an owner triplet so exactly one target is set and it
-// matches ownerType, and the referenced entity exists. Returns null if invalid.
-export async function resolveOwner(input: {
-  ownerType?: string;
-  ownerUserId?: string | null;
-  ownerCompanyId?: string | null;
-}): Promise<ProjectOwner | null> {
+// matches ownerType, and the referenced entity exists IN THE CALLER'S TENANT
+// (#2622 — by id alone, another tenant's user or company could own a project,
+// and its name came back in the response). Returns null if invalid.
+export async function resolveOwner(
+  session: Session,
+  input: {
+    ownerType?: string;
+    ownerUserId?: string | null;
+    ownerCompanyId?: string | null;
+  },
+): Promise<ProjectOwner | null> {
+  const tenant = await tenantWhere(session);
   const t = input.ownerType;
   if (t === 'ADMIN' || t === 'MENTOR' || t === 'MENTEE') {
     if (!input.ownerUserId) return null;
-    const u = await prisma.user.findUnique({ where: { id: input.ownerUserId }, select: { role: true } });
+    const u = await prisma.user.findFirst({ where: withinTenant({ id: input.ownerUserId }, tenant), select: { role: true } });
     if (!u) return null;
     if (t === 'ADMIN' && u.role !== 'ADMIN') return null;
     if (t === 'MENTOR' && u.role !== 'MENTOR') return null;
@@ -73,9 +81,22 @@ export async function resolveOwner(input: {
   }
   if (t === 'COMPANY') {
     if (!input.ownerCompanyId) return null;
-    const c = await prisma.company.findUnique({ where: { id: input.ownerCompanyId }, select: { id: true } });
+    const c = await prisma.company.findFirst({ where: withinTenant({ id: input.ownerCompanyId }, tenant), select: { id: true } });
     if (!c) return null;
     return { ownerType: 'COMPANY', ownerUserId: null, ownerCompanyId: input.ownerCompanyId };
   }
   return null;
+}
+
+// Is project `id` in the caller's tenant? (#2622) Every rule above answers true
+// for any ADMIN, and with MT_ENFORCE_ISOLATION off the org middleware scopes
+// nothing — so each /api/projects/[id]/** handler asks this first and answers
+// false with the 404 a missing project gets: another tenant's project is not
+// "forbidden", it does not exist here. One query, the #2542 filter.
+export async function projectInCallerTenant(session: Session, id: string): Promise<boolean> {
+  const project = await prisma.project.findFirst({
+    where: withinTenant({ id }, await tenantWhere(session)),
+    select: { id: true },
+  });
+  return !!project;
 }

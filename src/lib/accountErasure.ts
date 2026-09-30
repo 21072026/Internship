@@ -4,10 +4,12 @@ import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import {
+  accountlessTombstoneId,
   companyContactErasureData,
   erasedAddress,
   erasureScoped,
   inquiryErasureData,
+  normalizeContactEmail,
 } from '@/lib/companyContactErasure';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
@@ -84,19 +86,54 @@ async function forgetEmailLog(userId: string): Promise<void> {
 async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, orgId: true } });
   if (!user?.email) return [];
-  const fallbackOrgId = await defaultOrgId();
+  return contactScrubOps(user.email, user.orgId, userId, await defaultOrgId());
+}
+
+/**
+ * The two writes that forget a company contact, for both callers: an erased
+ * ACCOUNT (above) and a contact who never had one (`forgetCompanyContact`,
+ * #2559). One builder, so the two paths cannot scrub different columns or scope
+ * the address differently — the #2434 rule is the whole rule for both.
+ */
+function contactScrubOps(
+  email: string,
+  subjectOrgId: string | null,
+  tombstoneId: string,
+  fallbackOrgId: string,
+): [Prisma.PrismaPromise<Prisma.BatchPayload>, Prisma.PrismaPromise<Prisma.BatchPayload>] {
   return [
     prisma.companyInquiry.updateMany({
-      where: erasureScoped({ email: user.email }, user.orgId, fallbackOrgId),
-      data: inquiryErasureData(userId),
+      where: erasureScoped({ email }, subjectOrgId, fallbackOrgId),
+      data: inquiryErasureData(tombstoneId),
     }),
     // The company itself stays, with its name, needs, offers, requisitions,
     // interests and relations; only the named person on it goes.
     prisma.company.updateMany({
-      where: erasureScoped({ contactEmail: user.email }, user.orgId, fallbackOrgId),
+      where: erasureScoped({ contactEmail: email }, subjectOrgId, fallbackOrgId),
       data: companyContactErasureData(),
     }),
   ];
+}
+
+/**
+ * Forget a company contact who has NO account (#2559, DSGVO Art. 17): a web
+ * enquiry's sender or an imported account's named person. Matched on the
+ * address inside ONE tenant — `orgId` is the requesting admin's org, and the
+ * org-less/default rule is the same as for an erased account (rule 3 in
+ * companyContactErasure.ts). One transaction; returns how many rows each table
+ * gave up. A person who does have an account in this org goes through the
+ * account erasure instead, which also reaches their messages and notes — the
+ * route refuses the address before calling this.
+ */
+export async function forgetCompanyContact(
+  email: string,
+  orgId: string | null,
+  randomId: string,
+): Promise<{ inquiries: number; companies: number }> {
+  const [inquiries, companies] = await prisma.$transaction(
+    contactScrubOps(normalizeContactEmail(email), orgId, accountlessTombstoneId(randomId), await defaultOrgId()),
+  );
+  return { inquiries: inquiries.count, companies: companies.count };
 }
 
 // ── Free text: what each surface gets, and why (#2052) ───────────────────────
@@ -154,10 +191,10 @@ async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<u
 //     One of those is company-side: the `signup.companyInquiry` notification
 //     every admin receives carries the contact's name in `Notification.params`
 //     and no address, so nothing here can tell it from a namesake's.
-//   - a company contact who never had an ACCOUNT: both erasure paths start from
-//     a `User` row, so an enquiry whose sender never signed up is unreachable
-//     from here. #2559 extends companyContactOps() for that case (and adds a
-//     retention period for enquiries) rather than writing a second path.
+//   - a company contact who never had an ACCOUNT is not reachable from a `User`
+//     row; `forgetCompanyContact()` below (#2559) forgets them by address
+//     through the SAME scrub builder, so there is still one rule, not two.
+//     A retention period for unconverted enquiries is #2559's second slice.
 //
 // Emptying rather than nulling is forced by the schema: `Message.body`,
 // `SupportMessage.body`, `PersonalNote.body`, `RelationNote.body` and

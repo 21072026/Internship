@@ -113,9 +113,25 @@ export function erasureScoped<W extends Record<string, unknown>>(
 }
 
 /**
+ * The tombstone key for a contact who never had an account (#2559). There is no
+ * `User` id to build `erasedAddress()` from, so a fresh opaque id stands in —
+ * one per erasure, never derived from the address (a hash of it would be the
+ * address again for anyone who can guess it).
+ */
+export function accountlessTombstoneId(randomId: string): string {
+  return `contact-${randomId}`;
+}
+
+/** Normalise an address an admin typed, for matching (#2559). */
+export function normalizeContactEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/**
  * What an enquiry carrying the person's address is rewritten to. Every key here
  * is a personal field; anything not listed (company name, roles, status, the
- * conversion link, dates) is the account's and stays.
+ * conversion link, dates) is the account's and stays. `userId` is the erased
+ * account's id, or `accountlessTombstoneId()` for a contact with none.
  */
 export function inquiryErasureData(userId: string) {
   return {

@@ -79,6 +79,25 @@ bir `COMPANY` hesabı "filtre yok" değil "hiçbir şey" görmeli.
 Vitrin rolleri (`MENTEE`, `SOURCE`) için yanıt ayrıca **PII'dan arındırılıyor**:
 üye ve ilişki isimleri çıkarılıp yalnız sayı bırakılıyor.
 
+**Her rol için kapsam ayrıca çağıranın kiracısıyla `AND`'lenir** (#2622,
+`tenantWhere(session)`): `MT_ENFORCE_ISOLATION` kapalıyken ADMIN'in `{}`'i
+**bütün kiracıların** projelerini, menti/kaynağın `isPublic`'i bütün kiracıların
+açık projelerini listeliyordu. Kiracılar arası açık vitrin `/projects`'tir (anonim,
+dikey başına), bu liste değil.
+
+`/api/projects/[id]` ve altındaki `members`, `join-requests`, `task-templates`,
+`tasks` uçlarının **hepsi** önce `projectInCallerTenant()`'e sorar
+(`src/lib/projectAccess.ts`): başka kiracının projesi **yok bir proje ile aynı
+404**'ü alır — `canViewProject`/`isProjectOwner`/`canManageProject` her ADMIN'e
+`true` dediği için bu kontrol olmadan başka kiracının admini projeyi okuyor,
+düzenliyor, siliyor, ekibini/katılma isteklerini/hedeflerini yönetiyordu.
+Ayrıca: `members` POST eklenecek kullanıcıyı, `resolveOwner()` sahip
+kullanıcıyı/firmayı çağıranın kiracısında çözer (yoksa 400); `POST /api/projects`
+`orgId`'yi elle damgalar (bayrak kapalıyken middleware damgalamaz, NULL-org proje
+varsayılan org'undur). `/projects/[id]` sayfası başka kiracıdan oturum açmış
+ziyaretçiyi **anonim** gibi okur: açık projede vitrin kartı, gerisinde 404.
+`/api/project-tasks/[taskId]` zaten `inCallerTenant` ile korunuyordu.
+
 ## MARKETING dikeyi / `company` kaynağı — `Company`
 
 Story [#2396](https://github.com/21072026/Internship/issues/2396); karar

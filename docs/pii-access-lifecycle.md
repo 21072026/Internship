@@ -211,10 +211,20 @@ temizliyor; kural [`src/lib/companyContactErasure.ts`](../src/lib/companyContact
   (`prisma/backfill-organization.mjs`) onları varsayılan org'a atar — başka hiçbir
   org için NULL satıra dokunulmaz. Kanıt: [`e2e/erasure-company-contact.spec.ts`](../e2e/erasure-company-contact.spec.ts)
   (aynı adresi taşıyan iki kiracı, damgasız bir satır ve aynı kiracıda başka bir kişi).
+- **Hesabı hiç olmamış muhatap (#2559):** web talebinin göndereni ya da içe
+  aktarılan hesabın adı geçen kişisi bir `User` satırı olmadan yalnızca adres
+  olarak durur. `/admin/company-inquiries` satırındaki **Bu kişiyi unut**
+  (`POST /api/admin/company-contacts/forget`) onu adresle, yöneticinin kendi
+  kiracısında unutur: aynı kural, aynı scrub kurucusu (`contactScrubOps()`),
+  ikinci bir silme yolu yok. Kapılar hesap silmeyle aynı: yalnız ADMIN, taklit
+  sırasında asla, yöneticinin kendi parolası ve adresin yeniden yazılması.
+  Kurumda bu adrese ait bir hesap varsa istek `has_account` ile reddedilir —
+  o kişi hesabından silinir, çünkü mesajları ve notları da oradan erişilir.
+  ActivityLog satırı yalnızca sayıları taşır; unutulan adres loglanmaz.
+  Kanıt: [`e2e/forget-company-contact.spec.ts`](../e2e/forget-company-contact.spec.ts).
 - **Kalan boşluklar:** yöneticilere giden `signup.companyInquiry` bildirimi
-  kişinin adını adres olmadan taşır (#2106); hesabı hiç olmamış bir muhatap ve
-  başvuruların saklama süresi #2559 (bu fonksiyonu genişletir, ikinci bir silme
-  yolu yazmaz).
+  kişinin adını adres olmadan taşır (#2106); dönüştürülmemiş başvuruların saklama
+  süresi #2559'un ikinci dilimidir.
 
 ### Şema değişikliği yok
 
@@ -319,6 +329,7 @@ ile değiştirilir.
 | `PageView` | `pageViewRetentionDays` | 180 gün | En kısası, çünkü en müdahaleci ve eskidikçe en işe yaramaz olan bu. Onu okuyan **tek** yüzey (mentee aktivite raporu) en fazla 30 gün geriye bakabiliyor; 180 gün bunun altı katı ve yukarıdaki 6 aylık mentorluk sonrası penceresiyle aynı. |
 | `PushSubscription` | `pushSubscriptionStaleDays` | 180 gün | Şema yorumunun kendi deyimiyle "ölü ağırlık". Asıl temizlik push sağlayıcısının reddinde oluyor (`src/lib/webPush.ts`: 404/410 anında siler, 5 ardışık hatadan sonra da siler); bu girdi yalnızca hiç push gönderilmemiş satırı yakalar. |
 | `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
+| `CompanyInquiry` | `companyInquiryRetentionDays` | 730 gün | Her talep bir kişinin adı, adresi, telefonu ve kendi yazdıklarıdır ve bu girdiden önce hiçbiri silinmiyordu (#2559). Hiç hesaba dönüştürülmemiş talep **silinir**; dönüştürülmüş olan satır kalır (hesap oradan geldi) ve yalnızca kişisel kolonlarını kaybeder — hesap silmenin temizlediği kolonların aynısı (`inquiryErasureData()`). İki yıl: sessizleşen bir müşteri adayının geri dönmesine ve talep kaynaklarının yıldan yıla karşılaştırılmasına yeter, cevapsız kalmış bir talebi sonsuza dek tutmaz. Talepteki pazarlama izni kaydı da satırla birlikte gider; kalıcı bir opt-out kanıtı gerekiyorsa o #2577'nin kararıdır. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
 | `Notification` | `notificationRetentionDays` | 180 gün | Bir bildirim satırı, biri hakkında yazılmış bir cümle ve kaydına giden bir link — `EmailLog`'un budanma gerekçesiyle aynı türden kişisel veri, ama #1646'ya kadar hiç silinmeyen tek tablo. 180 gün, diğer kullanıcı bazlı geçmiş tablosu olan `PageView` ile aynı; ürün iki sayı yerine bir sayı savunuyor. **Okunmamış satır silinmez**, 30 günden yeni satır silinmez, onay ve hesaba erişim bildirimleri hiç silinmez (aşağıya bakın). `0` = sonsuza kadar sakla. |
 | `TrialReminder` | *(ayar yok)* | 365 gün | Kayıt defterindeki, kişisel veri taşımayan iki girdiden biri (#2414; diğeri `CompanyUsage`): satır yalnızca "bu deneme için bu eşik zaten işlendi" diyor — bir ilişki kimliği, bir tam sayı ve bir zaman damgası. Bu soru ancak deneme geri sayarken sorulur; bir yıl sonra deneme çoktan sonuçlanmıştır ve satır kimsenin okumadığı bir bastırma defteridir. Silmek güvenli, çünkü seçim **tam takvim günü** eşleşmesi yapıyor (`src/lib/trialReminderRule.ts`): süresi geçmiş bir denemenin farkı negatiftir ve bir daha hiçbir eşiğe eşit olamaz, dolayısıyla eski bir claim satırını silmek çoktan biten bir deneme için hatırlatmayı diriltemez. Kural "en fazla" karşılaştırmasına dönerse bu pencere de yeniden düşünülmelidir. Operatör düğmesi yok: kişisel veri içermeyen bir tablonun ayarını kimse okumaz. |

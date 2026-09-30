@@ -12,7 +12,8 @@
 
 import { prisma } from './prisma';
 import { resolvePipelineStages } from './pipelineStages';
-import { isDropoffReasonCode } from './dropoffReasons';
+import { isDropoffReasonCodeFor } from './dropoffReasons';
+import { verticalFor } from './verticalContext';
 
 export function isStageTransition(fromStatus: string, toStatus: string): boolean {
   return fromStatus !== toStatus;
@@ -43,7 +44,10 @@ export async function validateDropoffReason(input: DropoffReasonInput): Promise<
   if (!input.reasonCode) {
     return { ok: false, error: 'reasonCode is required when moving into a negative/off-path stage' };
   }
-  if (!isDropoffReasonCode(input.reasonCode)) {
+  // The ORG's vertical decides the list (#2573): a MARKETING loss is not a
+  // hiring drop-off, and the other product's codes are refused, not mapped.
+  const vertical = input.orgId ? await verticalFor(input.orgId) : null;
+  if (!isDropoffReasonCodeFor(vertical, input.reasonCode)) {
     return { ok: false, error: 'Unknown reasonCode' };
   }
   if (input.reasonCode === 'OTHER' && !input.reasonNote?.trim()) {

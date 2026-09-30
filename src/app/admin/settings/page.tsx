@@ -122,6 +122,7 @@ export default function AdminSettingsPage() {
   // The outbound delivery log (#1194) — the only place that can answer "did our
   // mail actually go out?". Without it a broken SMTP setup is indistinguishable
   // from users who simply never replied.
+  const [emailLogAllowed, setEmailLogAllowed] = useState(true);
   const [emailLog, setEmailLog] = useState<{
     entries: { id: string; to: string; subject: string; category: string | null; transport: string | null; status: string; error: string | null; createdAt: string }[];
     summary: { SENT: number; FAILED: number; SKIPPED: number };
@@ -140,7 +141,16 @@ export default function AdminSettingsPage() {
   } | null>(null);
 
   const loadEmailLog = useCallback(() => {
-    fetch('/api/admin/email-log?limit=25').then((r) => (r.ok ? r.json() : null)).then((d) => d && setEmailLog(d)).catch(() => {});
+    // The log is installation-wide (every tenant's recipients), so only a
+    // super admin may read it (#2635); a tenant admin gets a 403 and the
+    // section is not drawn at all rather than drawn empty.
+    fetch('/api/admin/email-log?limit=25')
+      .then((r) => {
+        if (r.status === 403) setEmailLogAllowed(false);
+        return r.ok ? r.json() : null;
+      })
+      .then((d) => d && setEmailLog(d))
+      .catch(() => {});
     fetch('/api/admin/email-health').then((r) => (r.ok ? r.json() : null)).then((d) => d?.email && setEmailHealth(d.email)).catch(() => {});
   }, []);
 
@@ -593,92 +603,94 @@ export default function AdminSettingsPage() {
 
           <p className="text-xs text-gray-400">{t.settings.emailTesters}</p>
 
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">{t.settings.emailLog}</h3>
-              <Button type="button" variant="ghost" size="sm" onClick={loadEmailLog}>{t.settings.emailLogRefresh}</Button>
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t.settings.emailLogHint}</p>
+          {emailLogAllowed && (
+            <div data-testid="email-log-section" className="pt-4 border-t border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">{t.settings.emailLog}</h3>
+                <Button type="button" variant="ghost" size="sm" onClick={loadEmailLog}>{t.settings.emailLogRefresh}</Button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t.settings.emailLogHint}</p>
 
-            {emailLog && (
-              <p className="text-xs mb-2">
-                <span className="text-green-700 dark:text-green-400">{t.settings.emailLogSent.replace('{n}', String(emailLog.summary.SENT))}</span>
-                {' · '}
-                <span className={emailLog.summary.FAILED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
-                  {t.settings.emailLogFailed.replace('{n}', String(emailLog.summary.FAILED))}
-                </span>
-                {' · '}
-                <span className={emailLog.summary.SKIPPED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
-                  {t.settings.emailLogSkipped.replace('{n}', String(emailLog.summary.SKIPPED))}
-                </span>
-              </p>
-            )}
-
-            {/* Which categories are spending the relay's allowance — so a noisy
-                job can be moved to the bulk channel instead of paying more. */}
-            {emailLog && emailLog.byCategory.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-1.5" data-testid="email-category-usage">
-                {emailLog.byCategory.slice(0, 8).map((c) => (
-                  <span
-                    key={`${c.category}-${c.transport}`}
-                    className={`rounded px-1.5 py-0.5 text-[11px] ${
-                      c.transport === 'bulk'
-                        ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
-                        : 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                    }`}
-                    title={c.transport === 'bulk' ? t.settings.bulkChannelOn : t.settings.primaryChannel}
-                  >
-                    {c.category} {c.count}
+              {emailLog && (
+                <p className="text-xs mb-2">
+                  <span className="text-green-700 dark:text-green-400">{t.settings.emailLogSent.replace('{n}', String(emailLog.summary.SENT))}</span>
+                  {' · '}
+                  <span className={emailLog.summary.FAILED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
+                    {t.settings.emailLogFailed.replace('{n}', String(emailLog.summary.FAILED))}
                   </span>
-                ))}
-              </div>
-            )}
+                  {' · '}
+                  <span className={emailLog.summary.SKIPPED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
+                    {t.settings.emailLogSkipped.replace('{n}', String(emailLog.summary.SKIPPED))}
+                  </span>
+                </p>
+              )}
 
-            {emailLog && emailLog.entries.length === 0 && (
-              <p className="text-xs text-gray-400">{t.settings.emailLogNone}</p>
-            )}
+              {/* Which categories are spending the relay's allowance — so a noisy
+                  job can be moved to the bulk channel instead of paying more. */}
+              {emailLog && emailLog.byCategory.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-1.5" data-testid="email-category-usage">
+                  {emailLog.byCategory.slice(0, 8).map((c) => (
+                    <span
+                      key={`${c.category}-${c.transport}`}
+                      className={`rounded px-1.5 py-0.5 text-[11px] ${
+                        c.transport === 'bulk'
+                          ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                          : 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                      }`}
+                      title={c.transport === 'bulk' ? t.settings.bulkChannelOn : t.settings.primaryChannel}
+                    >
+                      {c.category} {c.count}
+                    </span>
+                  ))}
+                </div>
+              )}
 
-            {emailLog && emailLog.entries.length > 0 && (
-              /* tabIndex makes the scroller reachable by keyboard: the log's
-                 rows do not wrap, so without it a mouse-less user cannot pan to
-                 the columns past the fold. Same trade-off as the board's
-                 HorizontalScrollArea — no `role="region"` to go with it, since
-                 an unnamed region would only swap this violation for a
-                 `region`-name one. */
-              <div className="overflow-x-auto" tabIndex={0}>
-                <table className="w-full text-xs" data-testid="email-log-table">
-                  <tbody>
-                    {emailLog.entries.map((e) => (
-                      <tr key={e.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <td className="py-1.5 pr-2 whitespace-nowrap text-gray-400">
-                          {formatDateTime(e.createdAt, locale, WITH_SECONDS)}
-                        </td>
-                        <td className="py-1.5 pr-2 whitespace-nowrap">
-                          <span
-                            className={
-                              e.status === 'SENT'
-                                ? 'text-green-700 dark:text-green-400'
-                                : 'text-red-600 dark:text-red-400'
-                            }
-                          >
-                            ● {e.status}
-                          </span>
-                        </td>
-                        <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400">
-                          {e.category ?? '—'}
-                          {e.transport === 'bulk' && <span className="text-gray-400"> ·{t.settings.bulkTag}</span>}
-                        </td>
-                        <td className="py-1.5 pr-2 truncate max-w-[16rem]" title={e.to}>{e.to}</td>
-                        <td className="py-1.5 text-gray-500 dark:text-gray-400 truncate max-w-[20rem]" title={e.error ?? e.subject}>
-                          {e.error ?? e.subject}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+              {emailLog && emailLog.entries.length === 0 && (
+                <p className="text-xs text-gray-400">{t.settings.emailLogNone}</p>
+              )}
+
+              {emailLog && emailLog.entries.length > 0 && (
+                /* tabIndex makes the scroller reachable by keyboard: the log's
+                   rows do not wrap, so without it a mouse-less user cannot pan to
+                   the columns past the fold. Same trade-off as the board's
+                   HorizontalScrollArea — no `role="region"` to go with it, since
+                   an unnamed region would only swap this violation for a
+                   `region`-name one. */
+                <div className="overflow-x-auto" tabIndex={0}>
+                  <table className="w-full text-xs" data-testid="email-log-table">
+                    <tbody>
+                      {emailLog.entries.map((e) => (
+                        <tr key={e.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                          <td className="py-1.5 pr-2 whitespace-nowrap text-gray-400">
+                            {formatDateTime(e.createdAt, locale, WITH_SECONDS)}
+                          </td>
+                          <td className="py-1.5 pr-2 whitespace-nowrap">
+                            <span
+                              className={
+                                e.status === 'SENT'
+                                  ? 'text-green-700 dark:text-green-400'
+                                  : 'text-red-600 dark:text-red-400'
+                              }
+                            >
+                              ● {e.status}
+                            </span>
+                          </td>
+                          <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400">
+                            {e.category ?? '—'}
+                            {e.transport === 'bulk' && <span className="text-gray-400"> ·{t.settings.bulkTag}</span>}
+                          </td>
+                          <td className="py-1.5 pr-2 truncate max-w-[16rem]" title={e.to}>{e.to}</td>
+                          <td className="py-1.5 text-gray-500 dark:text-gray-400 truncate max-w-[20rem]" title={e.error ?? e.subject}>
+                            {e.error ?? e.subject}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Card>
 

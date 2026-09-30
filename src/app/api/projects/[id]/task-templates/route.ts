@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
-import { canManageProject, isProjectMember } from '@/lib/projectAccess';
+import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/goalTemplates';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
@@ -55,6 +55,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const a = await access(session, id);
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -86,6 +88,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const a = await access(session, id);
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -122,6 +126,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const a = await access(session, id);
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -168,6 +174,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const a = await access(session, id);
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

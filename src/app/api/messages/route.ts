@@ -410,6 +410,8 @@ async function handlePost(request: Request) {
               `<a href="${markReadUrl(replyRelationId, recipient, origin)}" style="color:#6b7280;">Mark this conversation as read</a>`
             }</p>`
           : '';
+        // Only invite a reply by e-mail when a reply address exists (#2217).
+        const replyTo = replyRelationId ? replyAddress(replyRelationId, recipient) : undefined;
         sendEmail({
           to: rcpt.email,
           category: 'message',
@@ -423,10 +425,10 @@ async function handlePost(request: Request) {
           orgId: rcpt.orgId ?? null,
           fromName: brand?.name,
           subject: `New message from ${sender}`,
-          html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>Reply to this email or open the conversation in the app.</p>${actions}`,
+          html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>${replyTo ? 'Reply to this email or open the conversation in the app.' : 'Open the conversation in the app to reply.'}</p>${actions}`,
           // Project DMs with no mentorship behind them get the same notification
           // without a Reply-To (see replyRelationId above).
-          ...(replyRelationId ? { replyTo: replyAddress(replyRelationId, recipient) } : {}),
+          ...(replyTo ? { replyTo } : {}),
           // Mirror the attachments (incl. pasted images) into the email too.
           attachments: fileBufs.map((fb) => ({ filename: fb.filename, content: fb.data, contentType: fb.contentType })),
         }).catch((e) => logger.error('Failed to mirror message email', { error: String(e) }));

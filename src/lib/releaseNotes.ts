@@ -65,6 +65,852 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.227.2-beta',
+    date: '2026-09-30',
+    time: '07:44',
+    commit: 'd58f31c',
+    highlights: {
+      en: [
+        "On a marketing workspace, the privacy settings on your account page no longer offer consents for mentorship features that workspace doesn't have.",
+      ],
+      tr: [
+        "Pazarlama çalışma alanında hesap sayfasındaki gizlilik ayarları artık o alanda bulunmayan mentorluk özellikleri için onay sormuyor.",
+      ],
+      de: [
+        "In einem Marketing-Arbeitsbereich bieten die Datenschutzeinstellungen auf deiner Kontoseite keine Einwilligungen mehr für Mentoring-Funktionen an, die es dort nicht gibt.",
+      ],
+    },
+  },
+  {
+    version: '0.227.1-beta',
+    date: '2026-09-30',
+    time: '06:39',
+    commit: '2fcfc60',
+    highlights: {
+      en: [
+        "Company enquiries are now kept for two years: an enquiry that never became an account is then deleted, and an older converted one keeps only the company details.",
+      ],
+      tr: [
+        "Firma talepleri artık iki yıl saklanıyor: hesaba dönüşmeyen talep sonra siliniyor, dönüşmüş eski bir talepte ise yalnızca firma bilgileri kalıyor.",
+      ],
+      de: [
+        "Firmenanfragen werden jetzt zwei Jahre aufbewahrt: Eine Anfrage, aus der nie ein Konto wurde, wird danach gelöscht; bei einer älteren umgewandelten bleiben nur die Firmendaten.",
+      ],
+    },
+  },
+  {
+    version: '0.227.0-beta',
+    date: '2026-09-30',
+    time: '06:30',
+    commit: '571a0b7',
+    highlights: {
+      en: [
+        "Admins can now erase the personal data of a company contact who never signed up — from the enquiry list, within their own organisation only.",
+      ],
+      tr: [
+        "Yöneticiler artık hiç kayıt olmamış bir firma muhatabının kişisel verisini talepler listesinden, yalnızca kendi kurumları içinde silebiliyor.",
+      ],
+      de: [
+        "Admins können jetzt die personenbezogenen Daten eines Firmenkontakts ohne eigenes Konto löschen — direkt aus der Anfrageliste und nur innerhalb der eigenen Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.226.0-beta',
+    date: '2026-09-29',
+    time: '22:54',
+    commit: '950af5c',
+    highlights: {
+      en: [
+        "In SaleVali, a lost deal now records why in sales terms — price, a missing marketplace or feature, a competitor, no response and more — and the analytics break losses down by those reasons.",
+      ],
+      tr: [
+        "SaleVali'de kaybedilen bir fırsat artık satış diliyle kaydediliyor — fiyat, eksik pazaryeri ya da özellik, rakip, yanıt yok ve diğerleri — ve analizler kayıpları bu nedenlere göre ayırıyor.",
+      ],
+      de: [
+        "In SaleVali wird bei einem verlorenen Deal der Grund jetzt in Vertriebsbegriffen erfasst — Preis, fehlender Marktplatz oder fehlende Funktion, Wettbewerber, keine Antwort und mehr —, und die Analyse schlüsselt Verluste danach auf.",
+      ],
+    },
+  },
+  {
+    version: '0.225.3-beta',
+    date: '2026-09-29',
+    time: '22:13',
+    commit: '2316b30',
+    highlights: {
+      en: [
+        "In SaleVali, the analytics, settings and account pages no longer mention mentors or mentees.",
+      ],
+      tr: [
+        "SaleVali'de analiz, ayarlar ve hesap sayfaları artık mentor ya da mentee'den söz etmiyor.",
+      ],
+      de: [
+        "In SaleVali erwähnen die Analyse-, Einstellungs- und Kontoseiten keine Mentoren oder Mentees mehr.",
+      ],
+    },
+  },
+  {
+    version: '0.225.1-beta',
+    date: '2026-09-29',
+    time: '22:00',
+    commit: '61fdc24',
+    highlights: {
+      en: [
+        "In SaleVali, inviting your team and the user list now talk about sales reps and leads, and the invitation e-mail invites a sales rep.",
+      ],
+      tr: [
+        "SaleVali'de ekip daveti ve kullanıcı listesi artık satış temsilcisi ve müşteri adayından söz ediyor; davet e-postası da satış temsilcisi olarak davet ediyor.",
+      ],
+      de: [
+        "In SaleVali sprechen die Team-Einladung und die Benutzerliste jetzt von Vertriebsmitarbeitern und Leads, und die Einladungs-E-Mail lädt als Vertriebsmitarbeiter ein.",
+      ],
+    },
+  },
+  {
+    version: '0.225.0-beta',
+    date: '2026-09-29',
+    time: '21:35',
+    commit: '25301cb',
+    highlights: {
+      en: [
+        "One e-mail address can now have an account in Internship CRM and another in SaleVali at the same time. The site you sign in on decides which one you get: interncrm.com opens Internship CRM, marketing.bcsit-gmbh.de opens SaleVali, and your session stays in that product.",
+        "Entering the right password on the wrong site no longer says \"invalid email or password\". It tells you which product your account is in and links straight to its sign-in page.",
+      ],
+      tr: [
+        "Aynı e-posta adresiyle artık hem Internship CRM'de hem SaleVali'de ayrı birer hesabın olabilir. Hangisine gireceğini oturum açtığın site belirler: interncrm.com Internship CRM'i, marketing.bcsit-gmbh.de SaleVali'yi açar ve oturumun o üründe kalır.",
+        "Doğru parolayı yanlış sitede girmek artık \"e-posta veya parola hatalı\" demiyor. Hesabının hangi üründe olduğunu söylüyor ve doğrudan o ürünün giriş sayfasına bağlantı veriyor.",
+      ],
+      de: [
+        "Dieselbe E-Mail-Adresse kann jetzt gleichzeitig ein Konto in Internship CRM und ein weiteres in SaleVali haben. Welches Konto geöffnet wird, entscheidet die Seite, auf der die Anmeldung erfolgt: interncrm.com öffnet Internship CRM, marketing.bcsit-gmbh.de öffnet SaleVali, und die Sitzung bleibt in diesem Produkt.",
+        "Wer das richtige Passwort auf der falschen Seite eingibt, sieht nicht mehr „E-Mail oder Passwort ungültig“. Stattdessen steht dort, in welchem Produkt das Konto liegt, mit einem Link direkt zu dessen Anmeldeseite.",
+      ],
+    },
+  },
+  {
+    version: '0.224.5-beta',
+    date: '2026-09-29',
+    time: '21:25',
+    commit: 'cbf2267',
+    highlights: {
+      en: [
+        "In SaleVali, the lead page and the suggested first messages now talk about reps, demos and trials instead of mentors and internships.",
+      ],
+      tr: [
+        "SaleVali'de müşteri adayı sayfası ve önerilen ilk mesajlar artık mentor ve staj yerine temsilci, demo ve denemeden söz ediyor.",
+      ],
+      de: [
+        "In SaleVali sprechen die Lead-Seite und die vorgeschlagenen ersten Nachrichten jetzt von Vertrieb, Demo und Testphase statt von Mentoring und Praktikum.",
+      ],
+    },
+  },
+  {
+    version: '0.224.3-beta',
+    date: '2026-09-29',
+    time: '21:00',
+    commit: 'b20229e',
+    highlights: {
+      en: [
+        "Reminder and notification e-mails from a SaleVali workspace now open SaleVali.",
+      ],
+      tr: [
+        "Bir SaleVali çalışma alanından gelen hatırlatma ve bildirim e-postaları artık SaleVali'yi açıyor.",
+      ],
+      de: [
+        "Erinnerungs- und Benachrichtigungs-E-Mails aus einem SaleVali-Arbeitsbereich öffnen jetzt SaleVali.",
+      ],
+    },
+  },
+  {
+    version: '0.224.2-beta',
+    date: '2026-09-29',
+    time: '20:55',
+    commit: 'f9cf6e6',
+    highlights: {
+      en: [
+        "Invitations and password e-mails from a SaleVali workspace now open SaleVali, not the internship app.",
+      ],
+      tr: [
+        "Bir SaleVali çalışma alanından gelen davet ve şifre e-postaları artık staj uygulamasını değil SaleVali'yi açıyor.",
+      ],
+      de: [
+        "Einladungen und Passwort-E-Mails aus einem SaleVali-Arbeitsbereich öffnen jetzt SaleVali statt der Praktikums-App.",
+      ],
+    },
+  },
+  {
+    version: '0.224.1-beta',
+    date: '2026-09-29',
+    time: '20:25',
+    commit: 'bebf7fd',
+    highlights: {
+      en: [
+        "Fixed the message composer jumping above the visible screen on mobile Safari when the keyboard opens.",
+      ],
+      tr: [
+        "Mobil Safari'de klavye açıldığında mesaj yazma kutusunun ekranın görünür alanının üstünde kalması sorunu giderildi.",
+      ],
+      de: [
+        "Behoben: Das Nachrichtenfeld sprang auf mobilem Safari beim Öffnen der Tastatur aus dem sichtbaren Bereich.",
+      ],
+    },
+  },
+  {
+    version: '0.224.0-beta',
+    date: '2026-09-29',
+    time: '20:23',
+    commit: 'c7ec3dd',
+    highlights: {
+      en: [
+        "To-dos can now have a due date. Late ones are marked “Overdue” — in words, not just in red — and a counter shows how many; a to-do due today is not late. Undated to-dos sit at the end of the list.",
+        "Mentors and admins can see one list of everything their people are carrying, on the same to-dos page.",
+      ],
+      tr: [
+        "Yapılacaklara artık bitiş tarihi verilebiliyor. Geciken maddeler “Gecikti” yazısıyla — yalnızca renkle değil — işaretleniyor ve kaç tane olduğu sayılıyor; bugün biten bir madde gecikmiş sayılmıyor. Tarihsiz maddeler listenin sonunda duruyor.",
+        "Mentorlar ve yöneticiler sorumlu oldukları kişilerin tüm yapacağını aynı sayfada tek listede görebiliyor.",
+      ],
+      de: [
+        "Aufgaben können jetzt ein Fälligkeitsdatum haben. Überfällige werden als „Überfällig“ ausgewiesen — als Text, nicht nur in Rot — und gezählt; heute fällig heißt nicht zu spät. Aufgaben ohne Datum stehen am Ende der Liste.",
+        "Mentorinnen, Mentoren und Admins sehen auf derselben Seite eine Liste mit allem, was ihre Leute offen haben.",
+      ],
+    },
+  },
+  {
+    version: '0.223.3-beta',
+    date: '2026-09-29',
+    time: '19:51',
+    commit: '55cc9d9',
+    highlights: {
+      en: [
+        "When a trial ends on its own, the record's stage history now shows the move, made by \"System\", and its time in the new stage starts from that day.",
+      ],
+      tr: [
+        "Bir deneme süresi kendiliğinden bittiğinde kaydın aşama geçmişi artık bu hareketi \"Sistem\" tarafından yapılmış olarak gösteriyor; yeni aşamadaki süre de o günden başlıyor.",
+      ],
+      de: [
+        "Endet eine Testphase von selbst, zeigt der Phasenverlauf des Datensatzes den Wechsel jetzt mit „System“ als Urheber, und die Zeit in der neuen Phase zählt ab diesem Tag.",
+      ],
+    },
+  },
+  {
+    version: '0.223.1-beta',
+    date: '2026-09-29',
+    time: '19:39',
+    commit: '3914a75',
+    highlights: {
+      en: [
+        "The system settings form waits until your saved values have loaded before it lets you edit or save, so a quick change is no longer lost and cannot reset other settings to their defaults.",
+      ],
+      tr: [
+        "Sistem ayarları formu, kayıtlı değerler yüklenmeden düzenlemeye ya da kaydetmeye izin vermiyor: hızlı yapılan bir değişiklik artık kaybolmuyor ve diğer ayarları varsayılana döndüremiyor.",
+      ],
+      de: [
+        "Das Formular für die Systemeinstellungen lässt Bearbeiten und Speichern erst zu, wenn Ihre gespeicherten Werte geladen sind. Eine schnelle Änderung geht so nicht mehr verloren und kann andere Einstellungen nicht auf die Standardwerte zurücksetzen.",
+      ],
+    },
+  },
+  {
+    version: '0.223.0-beta',
+    date: '2026-09-29',
+    time: '19:23',
+    commit: '48f063c',
+    highlights: {
+      en: [
+        "Admins can now download everything stored about one company as a single JSON file, from the new download button on each company card. Each download is recorded in the activity log.",
+      ],
+      tr: [
+        "Yöneticiler artık bir şirkete ait tüm kayıtları, her şirket kartındaki yeni indirme düğmesiyle tek bir JSON dosyası olarak indirebiliyor. Her indirme etkinlik kaydına yazılıyor.",
+      ],
+      de: [
+        "Admins können jetzt alle zu einem Unternehmen gespeicherten Daten als eine einzige JSON-Datei herunterladen – über die neue Download-Schaltfläche auf jeder Unternehmenskarte. Jeder Download wird im Aktivitätsprotokoll erfasst.",
+      ],
+    },
+  },
+  {
+    version: '0.222.3-beta',
+    date: '2026-09-29',
+    time: '19:10',
+    commit: '4e27e4b',
+    highlights: {
+      en: [
+        "Erasing a person's account now also removes them from the company records they appear on: their name, e-mail address and phone number are cleared from the company enquiry they sent and from the company's contact details. The company itself and its history are kept, and records belonging to other organisations are never changed.",
+      ],
+      tr: [
+        "Bir kişinin hesabını silmek artık onu yer aldığı firma kayıtlarından da çıkarıyor: adı, e-posta adresi ve telefon numarası gönderdiği firma başvurusundan ve firmanın iletişim bilgilerinden temizleniyor. Firmanın kendisi ve geçmişi korunuyor; başka kuruluşlara ait kayıtlar hiçbir zaman değiştirilmiyor.",
+      ],
+      de: [
+        "Wird das Konto einer Person gelöscht, wird sie jetzt auch aus den Unternehmensdatensätzen entfernt, in denen sie vorkommt: Name, E-Mail-Adresse und Telefonnummer werden aus der von ihr gesendeten Unternehmensanfrage und aus den Kontaktdaten des Unternehmens gelöscht. Das Unternehmen selbst und seine Historie bleiben erhalten, und Datensätze anderer Organisationen werden nie verändert.",
+      ],
+    },
+  },
+  {
+    version: '0.222.1-beta',
+    date: '2026-09-29',
+    time: '19:09',
+    commit: 'a80a8c8',
+    highlights: {
+      en: [
+        "On a phone, a chat fills the screen again: the conversation no longer runs past the bottom edge, and the message box stays in view without scrolling the page.",
+      ],
+      tr: [
+        "Telefonda sohbet yeniden ekranı tam dolduruyor: konuşma artık ekranın altından taşmıyor, mesaj yazma kutusu sayfayı kaydırmadan görünür kalıyor.",
+      ],
+      de: [
+        "Auf dem Smartphone füllt ein Chat wieder genau den Bildschirm: Die Unterhaltung ragt nicht mehr über den unteren Rand hinaus, und das Eingabefeld bleibt ohne Scrollen der Seite sichtbar.",
+      ],
+    },
+  },
+  {
+    version: '0.222.0-beta',
+    date: '2026-09-29',
+    time: '17:25',
+    commit: '85acf70',
+    highlights: {
+      en: [
+        "Sales reps of a marketing organisation now have their own workspace: sign in and you see your attention list (expired trials, trials without an end date, overdue follow-ups), your leads, your board and your accounts — only your own — and you can log a call or meeting straight from a lead, where your reminders now open it directly. Admin settings, user management, invitations, imports and deletions stay with admins.",
+      ],
+      tr: [
+        "Pazarlama organizasyonlarının satış temsilcileri artık kendi çalışma alanına sahip: giriş yaptığınızda ilgi bekleyen listenizi (süresi dolan denemeler, bitiş tarihi olmayan denemeler, geciken takipler), müşteri adaylarınızı, panonuzu ve hesaplarınızı görürsünüz — yalnızca kendinizinkileri — ve bir görüşmeyi ya da toplantıyı doğrudan müşteri adayının sayfasından kaydedebilirsiniz; hatırlatmalarınız da artık doğrudan o sayfayı açar. Yönetim ayarları, kullanıcı yönetimi, davetler, içe aktarmalar ve silmeler yöneticilerde kalır.",
+      ],
+      de: [
+        "Vertriebsmitarbeiter einer Marketing-Organisation haben jetzt einen eigenen Arbeitsbereich: Nach der Anmeldung sehen Sie Ihre Aufmerksamkeitsliste (abgelaufene Testphasen, Testphasen ohne Enddatum, überfällige Follow-ups), Ihre Leads, Ihr Board und Ihre Accounts — nur Ihre eigenen — und Sie erfassen ein Gespräch oder Meeting direkt am Lead, den Ihre Erinnerungen jetzt auch direkt öffnen. Admin-Einstellungen, Benutzerverwaltung, Einladungen, Importe und Löschungen bleiben bei den Admins.",
+      ],
+    },
+  },
+  {
+    version: '0.221.0-beta',
+    date: '2026-09-29',
+    time: '16:29',
+    commit: '9dd83d5',
+    highlights: {
+      en: [
+        "Every trial now shows when it ends — on the record and on its board card, with the days left. The owner or an admin can extend it right there; an extended trial that had already run out goes back to \"trial running\", and reminders already sent are not sent again. A running trial without an end date is flagged in red so it gets one.",
+      ],
+      tr: [
+        "Her deneme artık ne zaman bittiğini gösteriyor — kayıtta ve pano kartında, kalan gün sayısıyla. Kaydın sahibi ya da bir yönetici bitişi oradan uzatabilir; süresi dolmuş bir deneme uzatılınca yeniden \"deneme sürüyor\" aşamasına döner ve gönderilmiş hatırlatmalar tekrar gönderilmez. Bitiş tarihi olmayan bir deneme kırmızıyla işaretlenir, böylece tarihi girilir.",
+      ],
+      de: [
+        "Jede Testphase zeigt jetzt, wann sie endet — am Datensatz und auf seiner Board-Karte, mit den verbleibenden Tagen. Der Verantwortliche oder ein Admin kann sie direkt dort verlängern; eine bereits abgelaufene Testphase kehrt dabei zu „Testphase läuft“ zurück, und bereits verschickte Erinnerungen gehen nicht noch einmal raus. Eine laufende Testphase ohne Enddatum wird rot markiert, damit sie eines bekommt.",
+      ],
+    },
+  },
+  {
+    version: '0.220.0-beta',
+    date: '2026-09-29',
+    time: '16:29',
+    commit: '9dd83d5',
+    highlights: {
+      en: [
+        "The marketing website now has a demo request form. Each request lands in your own organization with its campaign source and consent record, and goes straight onto the pipeline of the default lead owner you pick in Settings — or waits, marked unowned, under Demo requests until an admin adds it.",
+      ],
+      tr: [
+        "Pazarlama web sitesinde artık bir demo talep formu var. Her talep, geldiği kampanya ve onay kaydıyla birlikte kendi kuruluşunuza düşer; Ayarlar’da seçtiğiniz varsayılan aday sahibinin hattına doğrudan eklenir — ya da bir yönetici ekleyene kadar Demo talepleri’nde sahipsiz olarak bekler.",
+      ],
+      de: [
+        "Die Marketing-Website hat jetzt ein Formular für Demo-Anfragen. Jede Anfrage landet mit Kampagnenquelle und Einwilligungsnachweis in Ihrer eigenen Organisation und geht direkt in die Pipeline der Standard-Zuständigkeit, die Sie in den Einstellungen wählen — oder wartet unter Demo-Anfragen als „ohne Zuständige“, bis ein Admin sie übernimmt.",
+      ],
+    },
+  },
+  {
+    version: '0.219.0-beta',
+    date: '2026-09-29',
+    time: '16:29',
+    commit: '9dd83d5',
+    highlights: {
+      en: [
+        "Every company now has its own page: open it from the company list to see the account, the contact person, every record in the pipeline with its stage, owner, trial and next step, and the latest interactions — and record the id the account has in your own product.",
+      ],
+      tr: [
+        "Her şirketin artık kendi sayfası var: şirket listesinden açın; hesabı, muhatap kişiyi, pipeline’daki her kaydı aşaması, sahibi, denemesi ve sonraki adımıyla, son etkileşimleri görün — ve hesabın kendi ürününüzdeki kimliğini kaydedin.",
+      ],
+      de: [
+        "Jedes Unternehmen hat jetzt eine eigene Seite: Öffnen Sie sie aus der Unternehmensliste und sehen Sie den Account, die Ansprechperson, jeden Datensatz in der Pipeline mit Phase, Verantwortlichem, Testphase und nächstem Schritt sowie die letzten Interaktionen — und hinterlegen Sie die ID, die der Account in Ihrem eigenen Produkt trägt.",
+      ],
+    },
+  },
+  {
+    version: '0.218.0-beta',
+    date: '2026-09-29',
+    time: '08:32',
+    commit: '2faf45f',
+    highlights: {
+      en: [
+        "Moving an account into \"Trial running\" now sets its trial dates automatically — by default a 30-day trial, adjustable under Settings — so the trial reminders and the automatic move to \"Trial expired\" work for every account. A trial that leaves the stage and comes back keeps its original end date.",
+      ],
+      tr: [
+        "Bir hesabı \"Deneme sürüyor\" aşamasına taşımak artık deneme tarihlerini otomatik olarak belirliyor — varsayılan 30 gün, Ayarlar'dan değiştirilebilir — böylece deneme hatırlatmaları ve \"Deneme süresi doldu\" aşamasına otomatik geçiş her hesap için çalışıyor. Aşamadan çıkıp geri dönen bir deneme ilk bitiş tarihini koruyor.",
+      ],
+      de: [
+        "Wird ein Account nach \"Testphase läuft\" verschoben, werden die Testdaten jetzt automatisch gesetzt — standardmäßig 30 Tage, in den Einstellungen anpassbar —, sodass die Testphasen-Erinnerungen und der automatische Wechsel nach \"Testphase abgelaufen\" für jeden Account funktionieren. Eine Testphase, die die Phase verlässt und zurückkehrt, behält ihr ursprüngliches Enddatum.",
+      ],
+    },
+  },
+  {
+    version: '0.217.1-beta',
+    date: '2026-09-29',
+    time: '08:32',
+    commit: '2faf45f',
+    highlights: {
+      en: [
+        "Organizations on the same installation no longer see each other's people or companies: user and candidate lists, the company list and every record opened by link now show only your own organization's data.",
+      ],
+      tr: [
+        "Aynı kurulumdaki organizasyonlar artık birbirlerinin kişilerini ve firmalarını görmüyor: kullanıcı ve aday listeleri, firma listesi ve bağlantıyla açılan her kayıt yalnızca kendi organizasyonunuzun verisini gösteriyor.",
+      ],
+      de: [
+        "Organisationen auf derselben Installation sehen die Personen und Firmen der jeweils anderen nicht mehr: Benutzer- und Kandidatenlisten, die Firmenliste und jeder per Link geöffnete Datensatz zeigen nur noch die Daten Ihrer eigenen Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.217.0-beta',
+    date: '2026-09-29',
+    time: '08:32',
+    commit: '2faf45f',
+    highlights: {
+      en: [
+        "Write the next step and a follow-up date on any record. On that day you get one reminder in the app and by e-mail; from the next day the record shows in your needs-attention list as \"Follow-up overdue\" until you move or clear the date. Changing the stage never touches it, and the account list can now be sorted by the next follow-up.",
+      ],
+      tr: [
+        "Her kayda sonraki adımı ve bir takip tarihini yazabilirsiniz. O gün uygulama içinde ve e-postayla tek bir hatırlatma alırsınız; ertesi günden itibaren kayıt, tarihi ileri alana ya da silene kadar dikkat listenizde \"Takip tarihi geçti\" olarak görünür. Aşama değişikliği bu tarihe dokunmaz ve hesap listesi artık en yakın takip tarihine göre sıralanabiliyor.",
+      ],
+      de: [
+        "Tragen Sie an jedem Datensatz den nächsten Schritt und eine Wiedervorlage ein. An diesem Tag erhalten Sie eine Erinnerung in der App und per E-Mail; ab dem Folgetag erscheint der Datensatz in Ihrer Aufmerksamkeitsliste als „Wiedervorlage überfällig“, bis Sie das Datum verschieben oder entfernen. Ein Stufenwechsel ändert es nie, und die Kontenliste lässt sich jetzt nach der nächsten Wiedervorlage sortieren.",
+      ],
+    },
+  },
+  {
+    version: '0.216.0-beta',
+    date: '2026-09-29',
+    time: '08:32',
+    commit: '2faf45f',
+    highlights: {
+      en: [
+        "Marketing organisations can now add a single lead straight from the Companies page with \"New lead / account\" — for a lead from a call, a trade fair or LinkedIn. The lead appears on the board in your first stage right away, and an account that already exists (same VAT ID, or same name and country) is not created a second time: you are offered the existing one instead.",
+      ],
+      tr: [
+        "Pazarlama organizasyonları artık Şirketler sayfasındaki \"Yeni lead / hesap\" ile tek bir lead'i doğrudan ekleyebiliyor — telefondan, fuardan ya da LinkedIn'den gelen bir lead için. Lead hemen panoda ilk aşamanızda görünüyor; zaten var olan bir hesap (aynı VAT numarası ya da aynı ad ve ülke) ikinci kez açılmıyor, bunun yerine mevcut hesap öneriliyor.",
+      ],
+      de: [
+        "Marketing-Organisationen können jetzt über „Neuer Lead / Account“ auf der Unternehmensseite einen einzelnen Lead direkt anlegen — für einen Lead aus einem Anruf, von einer Messe oder aus LinkedIn. Der Lead erscheint sofort in Ihrer ersten Phase auf dem Board, und ein bereits vorhandener Account (gleiche USt-IdNr. oder gleicher Name und gleiches Land) wird nicht doppelt angelegt: Stattdessen wird Ihnen der vorhandene angeboten.",
+      ],
+    },
+  },
+  {
+    version: '0.215.2-beta',
+    date: '2026-09-29',
+    time: '00:32',
+    commit: '43337a8',
+    highlights: {
+      en: [
+        "A newsletter issue held back by this month's broadcast quota now says so in the newsletter history, with the numbers and the date the meter resets, and still goes out by itself once the quota allows.",
+      ],
+      tr: [
+        "Bu ayın yayın kotası yüzünden bekleyen bir bülten sayısı artık bülten geçmişinde bunu rakamlarla ve sayacın sıfırlanacağı tarihle gösteriyor; kota izin verdiğinde yine kendiliğinden gönderiliyor.",
+      ],
+      de: [
+        "Eine Newsletter-Ausgabe, die wegen des monatlichen Versandkontingents zurückgehalten wird, zeigt das jetzt im Newsletter-Verlauf an – mit den Zahlen und dem Datum, an dem der Zähler zurückgesetzt wird. Sobald das Kontingent es erlaubt, wird sie weiterhin automatisch versendet.",
+      ],
+    },
+  },
+  {
+    version: '0.215.0-beta',
+    date: '2026-09-29',
+    time: '00:15',
+    commit: '6ff1cbe',
+    highlights: {
+      en: [
+        "Opening a company on the Companies page is now recorded in the admin activity log, so admins can see who opened which company and when. Repeated opens by the same person within a few minutes are recorded once. Browsing the company list is not recorded.",
+      ],
+      tr: [
+        "Şirketler sayfasında bir şirketin açılması artık yönetici etkinlik kaydına yazılıyor; böylece yöneticiler hangi şirketi kimin ne zaman açtığını görebiliyor. Aynı kişinin birkaç dakika içindeki tekrarlı açılışları tek kez kaydediliyor. Şirket listesine göz atmak kaydedilmiyor.",
+      ],
+      de: [
+        "Das Öffnen eines Unternehmens auf der Seite „Unternehmen“ wird jetzt im Admin-Aktivitätsprotokoll erfasst, sodass Admins sehen, wer welches Unternehmen wann geöffnet hat. Wiederholtes Öffnen durch dieselbe Person innerhalb weniger Minuten wird einmal erfasst. Das Durchblättern der Unternehmensliste wird nicht erfasst.",
+      ],
+    },
+  },
+  {
+    version: '0.214.4-beta',
+    date: '2026-09-28',
+    time: '22:50',
+    commit: '2232850',
+    highlights: {
+      en: [
+        "The marketing site no longer shows pages that belong to the internship product — the company placement pitch, the mentor application and the internship changelog.",
+      ],
+      tr: [
+        "Pazarlama sitesi artık staj ürününe ait sayfaları göstermiyor — firma yerleştirme sayfası, mentor başvurusu ve staj ürününün sürüm notları.",
+      ],
+      de: [
+        "Die Marketing-Website zeigt keine Seiten des Praktikumsprodukts mehr — weder die Seite zur Vermittlung an Unternehmen noch die Mentorenbewerbung oder die Versionshinweise des Praktikumsprodukts.",
+      ],
+    },
+  },
+  {
+    version: '0.214.3-beta',
+    date: '2026-09-23',
+    time: '20:18',
+    commit: '6b0a0f1',
+    highlights: {
+      en: [
+        "The marketing product now lives at marketing.bcsit-gmbh.de. The old address redirects there, and because a sign-in is tied to one address you will be asked to sign in again on the new one.",
+      ],
+      tr: [
+        "Pazarlama ürünü artık marketing.bcsit-gmbh.de adresinde. Eski adres oraya yönlendiriyor; oturum adrese bağlı olduğu için yeni adreste bir kez daha giriş yapmanız istenecek.",
+      ],
+      de: [
+        "Das Marketing-Produkt ist jetzt unter marketing.bcsit-gmbh.de erreichbar. Die alte Adresse leitet dorthin weiter; da eine Anmeldung an eine Adresse gebunden ist, müssen Sie sich dort einmal neu anmelden.",
+      ],
+    },
+  },
+  {
+    version: '0.214.0-beta',
+    date: '2026-09-23',
+    time: '20:05',
+    commit: '4e9f0a0',
+    highlights: {
+      en: [
+        "The company list can now be sorted by name, by when a company was added, by the last stage movement on its records, or by how long its records have been sitting in a stage. Companies that have never moved are listed last rather than at the top.",
+        "Search and paging on the company list now happen on the server, so searching finds companies on every page instead of only the ones currently on screen.",
+        "Deleting a company now asks in the app rather than in a browser pop-up, and says exactly what goes with it and what stays behind without a company link.",
+      ],
+      tr: [
+        "Şirket listesi artık ada göre, eklenme tarihine göre, kayıtlarındaki son aşama hareketine göre veya kayıtlarının aşamada ne kadardır beklediğine göre sıralanabiliyor. Hiç hareket etmemiş şirketler en üstte değil, en sonda listeleniyor.",
+        "Şirket listesinde arama ve sayfalama artık sunucuda yapılıyor; arama yalnızca ekrandaki şirketleri değil, tüm sayfalardaki şirketleri buluyor.",
+        "Şirket silme artık tarayıcı uyarısı yerine uygulama içinde soruluyor ve neyin birlikte silineceğini, neyin kalıp şirket bağını kaybedeceğini tek tek söylüyor.",
+      ],
+      de: [
+        "Die Unternehmensliste lässt sich jetzt nach Name, nach Hinzufügedatum, nach der letzten Phasenbewegung ihrer Datensätze oder danach sortieren, wie lange diese schon in einer Phase liegen. Unternehmen ohne jede Bewegung stehen am Ende der Liste statt oben.",
+        "Suche und Blättern in der Unternehmensliste laufen jetzt auf dem Server: Die Suche findet Unternehmen auf allen Seiten, nicht nur die gerade angezeigten.",
+        "Das Löschen eines Unternehmens wird jetzt in der Anwendung bestätigt statt im Browser-Dialog — samt genauer Angabe, was mitgelöscht wird und was ohne Unternehmensverknüpfung erhalten bleibt.",
+      ],
+    },
+  },
+  {
+    version: '0.213.0-beta',
+    date: '2026-09-23',
+    time: '20:03',
+    commit: '177c071',
+    highlights: {
+      en: [
+        "The analytics page has a new Cohorts card: conversion grouped by the month a record entered the pipeline, so a deal that closes months later counts towards the month it arrived and no month can read above 100%.",
+        "Next to it, retention after your won stage — of the records won in a month, how many had left 1, 3, 6 and 12 months later. A period that has not finished yet shows a dash instead of 0%, because a cohort won last month has had no chance to leave.",
+      ],
+      tr: [
+        "Analitik sayfasına yeni bir Kohortlar kartı eklendi: dönüşüm, kaydın pipeline'a girdiği aya göre gruplandı. Aylar sonra kapanan bir anlaşma geldiği aya yazılıyor, böylece hiçbir ayın oranı %100'ün üzerine çıkmıyor.",
+        "Yanında, kazanılan aşamanızdan sonrası için elde tutma: bir ayda kazanılan kayıtların 1, 3, 6 ve 12 ay sonra kaçının ayrılmış olduğu. Henüz dolmamış bir dönem %0 yerine tire gösteriyor — geçen ay kazanılan bir kohortun ayrılmaya fırsatı olmamıştır.",
+      ],
+      de: [
+        "Die Analyseseite hat eine neue Kohorten-Karte: die Konversion wird nach dem Monat gruppiert, in dem ein Datensatz in die Pipeline eingetreten ist. Ein Abschluss Monate später zählt zum Monat des Eintritts, sodass keine Quote über 100% liegen kann.",
+        "Daneben die Bindung nach Ihrer Gewonnen-Stufe: von den in einem Monat gewonnenen Datensätzen, wie viele nach 1, 3, 6 und 12 Monaten abgewandert waren. Ein noch laufender Zeitraum zeigt einen Strich statt 0% — eine im Vormonat gewonnene Kohorte hatte noch keine Gelegenheit zu gehen.",
+      ],
+    },
+  },
+  {
+    version: '0.212.0-beta',
+    date: '2026-09-23',
+    time: '20:03',
+    commit: '56bb0cd',
+    highlights: {
+      en: [
+        "Trial reminders now go out on their own: the owner of an account hears seven days, three days and one last time on the day the trial ends — once per mark, never twice.",
+        "A trial that has run out no longer sits on the board as a running one. It moves to \"Trial expired\" by itself, unless somebody already moved it, and shows up in the owner's \"Needs attention\" list until they decide what happens next.",
+      ],
+      tr: [
+        "Deneme hatırlatmaları artık kendi başına gidiyor: hesabın sahibi bitişe yedi gün, üç gün ve son gün kala haber alıyor — her eşik için bir kez, asla iki kez.",
+        "Süresi dolan bir deneme panoda artık \"sürüyor\" gibi durmuyor. Kimse elle taşımadıysa kendiliğinden \"Deneme süresi doldu\" aşamasına geçiyor ve karar verilene kadar sahibinin \"Dikkat gerekiyor\" listesinde görünüyor.",
+      ],
+      de: [
+        "Testphasen-Erinnerungen laufen jetzt eigenständig: Die Inhaberin oder der Inhaber eines Kontos hört sieben Tage, drei Tage und ein letztes Mal am Endtag davon — je Stufe einmal, nie zweimal.",
+        "Eine abgelaufene Testphase steht nicht länger als laufende auf dem Board. Sie wechselt von selbst zu \"Testphase abgelaufen\", sofern sie niemand schon bewegt hat, und erscheint bis zur Entscheidung in der Liste \"Braucht Aufmerksamkeit\".",
+      ],
+    },
+  },
+  {
+    version: '0.211.0-beta',
+    date: '2026-09-23',
+    time: '20:03',
+    commit: '629c77e',
+    highlights: {
+      en: [
+        "On the marketing site, the feature catalogue now lists only what the marketing product actually does — no mentors, evaluations, placements or intern projects.",
+        "The marketing site says plainly that its pricing is not published yet instead of showing the internship price list, and the project showcase is no longer a mix of both products.",
+        "A wrong URL on the marketing site now shows a 404 page that offers only the marketing product's own pages, instead of the mentor application and a sign-up button that site does not accept.",
+      ],
+      tr: [
+        "Pazarlama sitesinde özellik kataloğu artık yalnızca pazarlama ürününün gerçekten yaptıklarını listeliyor — mentor, değerlendirme, yerleştirme ve stajyer projeleri yok.",
+        "Pazarlama sitesi, staj fiyat listesini göstermek yerine fiyatlandırmasının henüz yayınlanmadığını açıkça söylüyor; proje vitrini de artık iki ürünün karışımı değil.",
+        "Pazarlama sitesinde hatalı bir adres artık yalnızca pazarlama ürününün kendi sayfalarını öneren bir 404 sayfası gösteriyor; mentor başvurusu ve o sitenin kabul etmediği kayıt butonu yok.",
+      ],
+      de: [
+        "Auf der Marketing-Seite listet der Funktionskatalog jetzt nur noch das, was das Marketing-Produkt wirklich kann — keine Mentor:innen, Bewertungen, Vermittlungen oder Praktikumsprojekte.",
+        "Die Marketing-Seite sagt klar, dass ihre Preise noch nicht veröffentlicht sind, statt die Praktikums-Preisliste zu zeigen, und die Projektgalerie mischt die beiden Produkte nicht mehr.",
+        "Eine falsche Adresse auf der Marketing-Seite zeigt jetzt eine 404-Seite, die nur noch die eigenen Seiten des Marketing-Produkts anbietet — ohne Mentor-Bewerbung und ohne Registrieren-Button, den diese Seite gar nicht akzeptiert.",
+      ],
+    },
+  },
+  {
+    version: '0.210.0-beta',
+    date: '2026-09-23',
+    time: '20:03',
+    commit: 'ba5a668',
+    highlights: {
+      en: [
+        "Marketing teams can now see which source each lead came from and how many of them closed — on the analytics page, with the pipeline's own \"won\" stage counted instead of a fixed one.",
+      ],
+      tr: [
+        "Pazarlama ekipleri artık her müşteri adayının hangi kaynaktan geldiğini ve kaçının kazanıldığını analitik sayfasında görebiliyor — sabit bir aşama yerine hattın kendi \"kazanıldı\" aşaması sayılıyor.",
+      ],
+      de: [
+        "Marketing-Teams sehen jetzt auf der Analytik-Seite, aus welcher Quelle jeder Lead kam und wie viele davon gewonnen wurden — gezählt wird die eigene \"Gewonnen\"-Phase der Pipeline statt einer festen.",
+      ],
+    },
+  },
+  {
+    version: '0.209.0-beta',
+    date: '2026-09-23',
+    time: '20:02',
+    commit: '40450d4',
+    highlights: {
+      en: [
+        "Candidates: a \"My candidates\" toggle filters the list to the people you own, works together with every other filter, and stays in the URL so you can share the view.",
+        "Candidates: tick several people and hand them all to another owner in one go — the result says how many were actually reassigned.",
+      ],
+      tr: [
+        "Adaylar: \"Bana atananlar\" düğmesi listeyi sizin kayıtlarınıza indiriyor, diğer filtrelerle birlikte çalışıyor ve adres çubuğunda kaldığı için görünümü paylaşabiliyorsunuz.",
+        "Adaylar: birden fazla kişiyi seçip tek seferde başka bir sahibe devredebilirsiniz — sonuç kaç kaydın gerçekten yeniden atandığını söylüyor.",
+      ],
+      de: [
+        "Kandidaten: Der Schalter \"Meine Kandidaten\" filtert die Liste auf Ihre eigenen Datensätze, wirkt zusammen mit allen anderen Filtern und bleibt in der URL, sodass Sie die Ansicht teilen können.",
+        "Kandidaten: Mehrere Personen auswählen und in einem Schritt einer anderen zuständigen Person übergeben — das Ergebnis nennt die Zahl der tatsächlich neu zugewiesenen Datensätze.",
+      ],
+    },
+  },
+  {
+    version: '0.208.1-beta',
+    date: '2026-09-23',
+    time: '11:53',
+    commit: '9f01234',
+    highlights: {
+      en: [
+        "Analytics ranges now include the day they end on. Picking a range that finishes today shows today's relations, interactions and meetings instead of stopping at midnight.",
+      ],
+      tr: [
+        "Analiz tarih aralıkları artık bittiği günü de kapsıyor. Bugünle biten bir aralık seçtiğinde bugünün eşleştirmeleri, etkileşimleri ve görüşmeleri de görünüyor — gece yarısında kesilmiyor.",
+      ],
+      de: [
+        "Analyse-Zeiträume schließen jetzt den Tag ein, an dem sie enden. Ein Zeitraum bis heute zeigt auch die heutigen Mentorenbeziehungen, Interaktionen und Termine, statt um Mitternacht abzuschneiden.",
+      ],
+    },
+  },
+  {
+    version: '0.208.0-beta',
+    date: '2026-09-22',
+    time: '15:05',
+    commit: 'eb08011',
+    highlights: {
+      en: [
+        "An account list kept in a spreadsheet can now be imported: companies, their VAT id, country and primary contact, and where each one sits in the funnel. It previews before it writes, and running the same file twice changes nothing.",
+      ],
+      tr: [
+        "Elektronik tabloda tutulan müşteri listesi artık içe aktarılabiliyor: firmalar, vergi numarası, ülke ve birincil muhatap ile her birinin funnel'daki yeri. Yazmadan önce önizleme veriyor; aynı dosyayı ikinci kez çalıştırmak hiçbir şeyi değiştirmiyor.",
+      ],
+      de: [
+        "Eine in einer Tabelle gepflegte Kundenliste lässt sich jetzt importieren: Firmen mit USt-IdNr., Land und Ansprechpartner sowie ihre Position im Funnel. Der Lauf zeigt erst eine Vorschau, und dieselbe Datei ein zweites Mal einzulesen ändert nichts.",
+      ],
+    },
+  },
+  {
+    version: '0.207.0-beta',
+    date: '2026-09-22',
+    time: '14:50',
+    commit: 'c9802f9',
+    highlights: {
+      en: [
+        "A marketing pipeline now has trial stages: an account can sit in \"Trial running\" and move to \"Trial expired\" while somebody decides what happens next.",
+      ],
+      tr: [
+        "Pazarlama hattına deneme aşamaları eklendi: bir hesap \"Deneme sürüyor\" aşamasında bekleyebiliyor, sonrasında karar verilene kadar \"Deneme süresi doldu\" aşamasına geçiyor.",
+      ],
+      de: [
+        "Die Marketing-Pipeline hat jetzt Testphasen-Stufen: Ein Konto kann in \"Testphase läuft\" stehen und wechselt danach zu \"Testphase abgelaufen\", bis jemand entscheidet, wie es weitergeht.",
+      ],
+    },
+  },
+  {
+    version: '0.206.1-beta',
+    date: '2026-09-22',
+    time: '14:50',
+    commit: '69365c1',
+    highlights: {
+      en: [
+        "A marketing organisation's company list and stage board — including their dialogs and hover cards — now speak its own language: accounts, leads and deals instead of mentorships, mentees and internships.",
+      ],
+      tr: [
+        "Pazarlama organizasyonunun firma listesi ve aşama panosu — açtıkları pencereler ve kart önizlemeleri dahil — artık kendi dilini konuşuyor: mentorluk, mentee ve staj yerine müşteri hesabı, müşteri adayı ve fırsat.",
+      ],
+      de: [
+        "Unternehmensliste und Phasen-Board einer Marketing-Organisation — samt ihrer Dialoge und Hover-Karten — sprechen jetzt ihre eigene Sprache: Accounts, Leads und Deals statt Mentorings, Mentees und Praktika.",
+      ],
+    },
+  },
+  {
+    version: '0.206.0-beta',
+    date: '2026-09-22',
+    time: '14:50',
+    commit: '5698e2d',
+    highlights: {
+      en: [
+        "The analytics page now shows a marketing organisation only the cards that apply to it: the pipeline funnel, stage conversion, ageing and drop-off reasons. Mentor workload, mentor capacity, RSVP acceptance, the sign-up funnel and project cards are no longer shown where there are no mentors or projects.",
+        "The headline conversion tile is labelled with your own final stage — for example \"Won rate\" — and counts against it, instead of assuming a stage called \"Hired\".",
+      ],
+      tr: [
+        "Analitik sayfası bir pazarlama organizasyonuna artık yalnızca ona uyan kartları gösteriyor: pipeline hunisi, aşama dönüşümü, yaşlanma ve düşüş nedenleri. Mentor yükü, mentor kapasitesi, RSVP kabul oranı, kayıt hunisi ve proje kartları mentor ya da proje olmayan yerde artık görünmüyor.",
+        "Manşet dönüşüm kutusu kendi son aşamanızın adıyla etiketleniyor — örneğin \"Kazanıldı oranı\" — ve ona göre sayıyor; \"İşe alındı\" diye bir aşama olduğunu varsaymıyor.",
+      ],
+      de: [
+        "Die Analyseseite zeigt einer Marketing-Organisation jetzt nur die Karten, die zu ihr passen: Pipeline-Funnel, Stufenkonversion, Verweildauer und Abbruchgründe. Mentorenauslastung, Mentorenkapazität, Zusagequote, Registrierungs-Funnel und Projektkarten erscheinen nicht mehr, wo es keine Mentoren oder Projekte gibt.",
+        "Die Kennzahl zur Konversion trägt den Namen Ihrer eigenen letzten Stufe — zum Beispiel „Gewonnen-Quote“ — und zählt gegen sie, statt eine Stufe namens „Eingestellt“ vorauszusetzen.",
+      ],
+    },
+  },
+  {
+    version: '0.205.5-beta',
+    date: '2026-09-22',
+    time: '14:50',
+    commit: '6f76b8b',
+    highlights: {
+      en: [
+        "Company records are now visible only to the roles that need them: admins see all, a company account sees its own record, a mentor sees the companies of their own relations. Mentee and partner-source accounts can no longer list companies.",
+      ],
+      tr: [
+        "Firma kayıtları artık yalnızca ihtiyacı olan rollere görünür: admin tümünü, şirket hesabı kendi kaydını, mentor kendi ilişkilerindeki firmaları görür. Menti ve kaynak hesapları firma listesini artık okuyamaz.",
+      ],
+      de: [
+        "Unternehmensdatensätze sehen jetzt nur noch die Rollen, die sie brauchen: Admins alle, ein Unternehmenskonto den eigenen Eintrag, Mentoren die Unternehmen ihrer eigenen Beziehungen. Mentee- und Quellen-Konten können die Unternehmensliste nicht mehr lesen.",
+      ],
+    },
+  },
+  {
+    version: '0.205.4-beta',
+    date: '2026-09-22',
+    time: '10:27',
+    commit: 'ab2bdfc',
+    highlights: {
+      en: [
+        "Organizations whose plan does not include the projects module can no longer start a video call from a project group chat.",
+      ],
+      tr: [
+        "Planında proje modülü bulunmayan kuruluşlar artık proje grup sohbetinden görüntülü görüşme başlatamıyor.",
+      ],
+      de: [
+        "Organisationen, deren Tarif das Projektmodul nicht enthält, können keinen Videoanruf mehr aus einem Projekt-Gruppenchat starten.",
+      ],
+    },
+  },
+  {
+    version: '0.205.3-beta',
+    date: '2026-09-22',
+    time: '10:16',
+    commit: '9083b49',
+    highlights: {
+      en: [
+        "When a project is deleted, its group chat is now fully closed: nobody can read it, post to it, or start a video call in it.",
+      ],
+      tr: [
+        "Bir proje silindiğinde grup sohbeti artık tamamen kapanıyor: kimse okuyamıyor, yazamıyor ve içinde görüntülü görüşme başlatamıyor.",
+      ],
+      de: [
+        "Wenn ein Projekt gelöscht wird, ist sein Gruppenchat jetzt vollständig geschlossen: Niemand kann ihn lesen, darin schreiben oder einen Videoanruf darin starten.",
+      ],
+    },
+  },
+  {
+    version: '0.205.2-beta',
+    date: '2026-09-22',
+    time: '09:59',
+    commit: '7529409',
+    highlights: {
+      en: [
+        "The marketing product's own domain shows the marketing landing page again.",
+      ],
+      tr: [
+        "Pazarlama ürününün kendi alan adı yeniden pazarlama açılış sayfasını gösteriyor.",
+      ],
+      de: [
+        "Die eigene Domain des Marketing-Produkts zeigt wieder die Marketing-Startseite.",
+      ],
+    },
+  },
+  {
+    version: '0.205.1-beta',
+    date: '2026-09-22',
+    time: '05:48',
+    commit: '4c2eb8b',
+    highlights: {
+      en: [
+        "Fixed the per-stage wait-time settings on a phone: stage names no longer get cut down to a couple of characters.",
+      ],
+      tr: [
+        "Telefonda aşama başına bekleme süresi ayarları düzeltildi: aşama adları artık birkaç harfe sıkışmıyor.",
+      ],
+      de: [
+        "Die Service-Level-Einstellungen je Phase auf dem Handy repariert: Phasennamen werden nicht mehr auf ein paar Zeichen zusammengequetscht.",
+      ],
+    },
+  },
+  {
+    version: '0.205.0-beta',
+    date: '2026-09-21',
+    time: '22:32',
+    commit: 'e60b9c5',
+    highlights: {
+      en: [
+        "The marketing product now looks like SaleVali — its magenta accent, its V mark and its own app icon — and Magenta is a new accent anyone can pick in Account.",
+      ],
+      tr: [
+        "Pazarlama ürünü artık SaleVali gibi görünüyor — macenta vurgu rengi, V işareti ve kendi uygulama simgesi; Macenta ayrıca Hesap'ta herkesin seçebileceği yeni bir vurgu rengi.",
+      ],
+      de: [
+        "Das Marketing-Produkt sieht jetzt aus wie SaleVali — Magenta-Akzent, das V-Zeichen und ein eigenes App-Symbol; Magenta ist außerdem eine neue Akzentfarbe, die jeder im Konto wählen kann.",
+      ],
+    },
+  },
+  {
+    version: '0.204.2-beta',
+    date: '2026-09-21',
+    time: '19:58',
+    commit: 'eb79038',
+    highlights: {
+      en: [
+        "Signing out — or being sent back to sign-in — on the marketing site now keeps you on the marketing site instead of jumping to the internship one.",
+      ],
+      tr: [
+        "Pazarlama sitesinde çıkış yapınca — ya da giriş sayfasına yönlendirilince — artık pazarlama sitesinde kalıyorsunuz; staj sitesine atlamıyor.",
+      ],
+      de: [
+        "Wer sich auf der Marketing-Seite abmeldet — oder zur Anmeldung zurückgeschickt wird — bleibt jetzt auf der Marketing-Seite statt zur Praktikums-Seite zu springen.",
+      ],
+    },
+  },
+  {
+    version: '0.204.1-beta',
+    date: '2026-09-21',
+    time: '19:35',
+    commit: '51d6592',
+    highlights: {
+      en: [
+        "A recurring meeting whose project has been deleted can now only be cancelled or edited by the mentor who set it up, or by an administrator.",
+      ],
+      tr: [
+        "Projesi silinmiş bir tekrarlayan toplantıyı artık yalnızca onu kuran mentor ya da bir yönetici iptal edebilir veya düzenleyebilir.",
+      ],
+      de: [
+        "Ein wiederkehrendes Meeting, dessen Projekt gelöscht wurde, kann jetzt nur noch von der Person, die es angelegt hat, oder von einer Administration abgesagt oder bearbeitet werden.",
+      ],
+    },
+  },
+  {
     version: '0.204.0-beta',
     date: '2026-09-21',
     time: '10:28',
