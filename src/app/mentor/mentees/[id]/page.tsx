@@ -41,6 +41,7 @@ import { StageClockChip } from '@/components/StageClockChip';
 import { daysInStage } from '@/lib/stageClock';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
+import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 
 interface InteractionLog {
   id: string;
@@ -133,11 +134,27 @@ export default function MenteeDetailPage() {
   const [deletingInteraction, setDeletingInteraction] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'reports'>('overview');
 
+  // A failed load is its own state (#1374). A 404 still reads as "not found"
+  // below; anything else that is not ok is an error with a retry, never an
+  // endless "Loading…". Also the refresh after a save: on failure the page
+  // keeps what it last showed rather than blanking it.
+  const [loadError, setLoadError] = useState(false);
   const fetchRelation = useCallback(async () => {
-    const res = await fetch(`/api/mentorship/${id}`);
-    const data = await res.json();
-    setRelation(data.relation);
-    setLoading(false);
+    setLoadError(false);
+    try {
+      const res = await fetch(`/api/mentorship/${id}`);
+      if (res.status === 404) {
+        setRelation(null);
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setRelation(data.relation);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -241,6 +258,7 @@ export default function MenteeDetailPage() {
   };
 
   if (loading) return <div className="text-center py-12 text-gray-400" data-testid="page-loading">{t.common.loading}</div>;
+  if (loadError && !relation) return <LoadErrorCard onRetry={() => { setLoading(true); fetchRelation(); }} testId="mentee-load-error" />;
   if (!relation) return <div className="text-center py-12 text-gray-400">{t.mentor.relationNotFound}</div>;
 
   return (
