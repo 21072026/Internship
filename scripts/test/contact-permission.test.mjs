@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -131,10 +131,10 @@ test('the import writer only ever records NONE, through the one writer', () => {
 
   const offenders = [];
   const walk = (dir) => {
-    for (const entry of readdirSync(dir)) {
-      const path = join(dir, entry);
-      if (statSync(path).isDirectory()) walk(path);
-      else if (/\.tsx?$/.test(entry) && !path.endsWith(join('lib', 'contactPermission.ts'))) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile() && /\.tsx?$/.test(entry.name) && !path.endsWith(join('lib', 'contactPermission.ts'))) {
         if (/\.contactPermission\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\(/.test(readFileSync(path, 'utf8'))) {
           offenders.push(path);
         }
