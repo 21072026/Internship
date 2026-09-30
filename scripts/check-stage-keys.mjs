@@ -29,7 +29,7 @@
 // Run: node scripts/check-stage-keys.mjs            (npm run check:stage-keys)
 //      node scripts/check-stage-keys.mjs --update    rewrite the baseline
 
-import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const args = process.argv.slice(2);
@@ -100,14 +100,20 @@ for (const file of sourceFiles(ROOTS)) {
 // file is an empty ratchet, so every hit anywhere outside ALLOWED fails.
 const BASELINE_COMMENT =
   'Hardcoded pipeline stage keys still on main, per file, with the issue that owns the cleanup (#1886). This list may only ever SHRINK: scripts/check-stage-keys.mjs fails on any file that is not listed here, and on a listed file whose count went up. When a cleanup PR lowers a count, run `node scripts/check-stage-keys.mjs --update`; the file is deleted again once it is empty.';
-const { _comment = BASELINE_COMMENT, ...recorded } = existsSync(BASELINE_FILE)
-  ? JSON.parse(readFileSync(BASELINE_FILE, 'utf8'))
-  : {};
+function readBaseline() {
+  try {
+    return JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));
+  } catch (e) {
+    if (e?.code === 'ENOENT') return {};
+    throw e;
+  }
+}
+const { _comment = BASELINE_COMMENT, ...recorded } = readBaseline();
 const byPath = [...hits].sort((a, b) => a[0].localeCompare(b[0]));
 
 if (UPDATE) {
   if (byPath.length === 0) {
-    if (existsSync(BASELINE_FILE)) unlinkSync(BASELINE_FILE);
+    rmSync(BASELINE_FILE, { force: true });
     console.log('stage keys — nothing left to baseline; baseline file removed.');
     process.exit(0);
   }
