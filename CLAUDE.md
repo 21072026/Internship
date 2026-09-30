@@ -564,8 +564,9 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   origin `originForWorld(...)` / `appUrlFor(orgId)`'den gelir, `NEXTAUTH_URL`'den değil;
   (4) bir akış yalnızca üretildiği satıra etki eder (token'lar `userId` anahtarlı), ama
   **yanlış-parola sayacı adrese göredir ve iki dünya arasında paylaşılır** — bilinçli. Doğru
-  parola + yanlış dünya `WRONG_WORLD_<VERTICAL>` verir ve giriş sayfası öbür kapıya
-  bağlantı gösterir; oturum yalnızca kendi dünyasının host'unda geçerlidir (`session`
+  parola + yanlış dünya `WRONG_WORLD_<VERTICAL>` verir, ama giriş sayfası öbür ürünü
+  **adlandırmaz ve bağlamaz** — bir eylemin ürettiği her şey başladığı dünyada kalır
+  (öbür dünyanın daveti ve SSO org kodu da bu host'ta bilinmeyen gibi reddedilir); oturum yalnızca kendi dünyasının host'unda geçerlidir (`session`
   callback'i yanlış host'ta `null` döner).
 - **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
   inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted

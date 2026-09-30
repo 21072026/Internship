@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { MARKETING_HOST, asHost, signInViaApi, apiSession, submitSignInForm } from './helpers/auth';
+import { MARKETING_HOST, asHost, signInViaApi, apiSession, submitSignInForm, gotoSettled } from './helpers/auth';
 import { freshIp } from './helpers/rateLimit';
 
 // One person, two worlds (#2590, docs/worlds.md).
@@ -172,8 +172,9 @@ test(
       return token;
     };
     const register = async (token: string) =>
+      // On the marketing host: an invitation is only accepted in its own world.
       request.post('/api/register', {
-        headers: freshIp('worlds-register'),
+        headers: { ...asHost(MARKETING_HOST), ...freshIp('worlds-register') },
         data: { token, email, password: MARKETING_PW, fullName: 'Worlds Registrant', consent: true },
       });
 
@@ -252,7 +253,118 @@ test('forgot-password on the marketing host never mails an internship-only accou
   expect(await unknown.text()).toBe(await onMarketing.text());
 });
 
-test('the sign-in page on the marketing host sends an internship-only person to the internship door', async ({ page }) => {
+test('verification resend on the marketing host never mails an internship-only account; on its own host it does', async ({ request }) => {
+  const email = uniqueEmail('worlds-resend');
+  emails.push(email);
+  const user = await seedUser(email, INTERNSHIP_PW, 'MENTEE', 'Worlds Resend Mentee');
+  await prisma.user.update({ where: { id: user.id }, data: { emailVerified: false } });
+  const tokensOf = () => prisma.emailVerificationToken.count({ where: { userId: user.id } });
+
+  const onMarketing = await request.post('/api/auth/verify-email/resend', {
+    headers: { ...asHost(MARKETING_HOST), ...freshIp('worlds-resend-m') },
+    data: { email },
+  });
+  expect(onMarketing.status()).toBe(200);
+  expect(await onMarketing.json()).toEqual({ ok: true });
+  expect(await tokensOf()).toBe(0);
+
+  const onDefault = await request.post('/api/auth/verify-email/resend', {
+    headers: freshIp('worlds-resend-d'),
+    data: { email },
+  });
+  expect(onDefault.status()).toBe(200);
+  expect(await onDefault.text()).toBe(await onMarketing.text());
+  expect(await tokensOf()).toBe(1);
+});
+
+test('an invitation of the other world is refused on this host like an unknown token, and nothing is created', async ({ request }) => {
+  const email = uniqueEmail('worlds-reg-cross');
+  emails.push(email);
+  const org = await seedMarketingOrg('regcross');
+  const mint = async (orgId: string | null) => {
+    const token = crypto.randomBytes(32).toString('hex');
+    await prisma.invitationToken.create({
+      data: { token, email, role: 'MENTEE', ...(orgId ? { orgId } : {}), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+    });
+    return token;
+  };
+  const register = (token: string, headers: Record<string, string>) =>
+    request.post('/api/register', {
+      headers,
+      data: { token, email, password: MARKETING_PW, fullName: 'Worlds Cross Registrant', consent: true },
+    });
+  const unknown = await register(crypto.randomBytes(32).toString('hex'), freshIp('worlds-reg-cross-u'));
+  const unknownBody = await unknown.json();
+
+  // A SaleVali invitation used on the internship host.
+  const mktToken = await mint(org.id);
+  const onDefault = await register(mktToken, freshIp('worlds-reg-cross-d'));
+  expect(onDefault.status()).toBe(400);
+  expect(await onDefault.json()).toEqual(unknownBody);
+  // Opening the link here does not mark it as opened for its admin either.
+  await request.post('/api/invite/opened', { headers: freshIp('worlds-reg-cross-o'), data: { token: mktToken } });
+  const mktRow = await prisma.invitationToken.findUnique({ where: { token: mktToken } });
+  expect(mktRow?.used).toBe(false);
+  expect(mktRow?.openedAt ?? null).toBeNull();
+
+  // …and the mirror: an Internship CRM invitation used on the marketing host.
+  const intToken = await mint(null);
+  const onMarketing = await register(intToken, { ...asHost(MARKETING_HOST), ...freshIp('worlds-reg-cross-m') });
+  expect(onMarketing.status()).toBe(400);
+  expect(await onMarketing.json()).toEqual(unknownBody);
+  expect((await prisma.invitationToken.findUnique({ where: { token: intToken } }))?.used).toBe(false);
+
+  expect(await prisma.user.count({ where: { email } })).toBe(0);
+});
+
+test('an SSO org code of the other world is refused on this host like an unknown one', async ({ request }) => {
+  const ssoOrg = async (vertical: 'INTERNSHIP' | 'MARKETING') => {
+    const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const org = await prisma.organization.create({
+      data: {
+        name: `Worlds SSO ${vertical} ${stamp}`,
+        slug: `worlds-sso-${vertical.toLowerCase()}-${stamp}`,
+        vertical,
+        // Active SSO needs a complete SAML config on a plan that carries it
+        // (isSsoActive); none of it is ever contacted by the refusal.
+        plan: 'ENTERPRISE',
+        ssoEnabled: true,
+        ssoProvider: 'saml',
+        ssoIssuer: 'https://idp.worlds.example/issuer',
+        ssoEntryPoint: 'https://idp.worlds.example/sso',
+        ssoCertificate: 'MIIC-not-a-real-certificate',
+      },
+    });
+    orgIds.push(org.id);
+    return org;
+  };
+  const login = async (slug: string, headers: Record<string, string> = {}) => {
+    const res = await request.get(`/api/auth/sso/${slug}/login`, { headers, maxRedirects: 0 });
+    expect(res.status()).toBeGreaterThanOrEqual(300);
+    expect(res.status()).toBeLessThan(400);
+    return new URL(res.headers()['location']);
+  };
+  const internship = await ssoOrg('INTERNSHIP');
+  const marketing = await ssoOrg('MARKETING');
+
+  const unknownOnMarketing = await login('worlds-no-such-org', asHost(MARKETING_HOST));
+  const crossOnMarketing = await login(internship.slug, asHost(MARKETING_HOST));
+  expect(crossOnMarketing.hostname).toBe(MARKETING_HOST);
+  expect(`${crossOnMarketing.pathname}${crossOnMarketing.search}`).toBe(
+    `${unknownOnMarketing.pathname}${unknownOnMarketing.search}`
+  );
+  expect(crossOnMarketing.search).toBe('?error=sso_unavailable');
+
+  const crossOnDefault = await login(marketing.slug);
+  expect(crossOnDefault.hostname).not.toBe(MARKETING_HOST);
+  expect(`${crossOnDefault.pathname}${crossOnDefault.search}`).toBe('/auth/signin?error=sso_unavailable');
+
+  // Each code on its own world's host gets past the world check.
+  expect((await login(internship.slug)).search).not.toContain('sso_unavailable');
+  expect((await login(marketing.slug, asHost(MARKETING_HOST))).search).not.toContain('sso_unavailable');
+});
+
+test('the sign-in page on the marketing host answers an internship-only person in its own world, naming nothing else', async ({ page }) => {
   const email = uniqueEmail('worlds-ui');
   emails.push(email);
   await seedUser(email, INTERNSHIP_PW, 'ADMIN', 'Worlds UI Admin');
@@ -260,13 +372,20 @@ test('the sign-in page on the marketing host sends an internship-only person to 
   await page.context().setExtraHTTPHeaders({ ...asHost(MARKETING_HOST), ...freshIp('worlds-ui') });
   await submitSignInForm(page, email, INTERNSHIP_PW);
 
-  const link = page.getByTestId('wrong-world-link');
-  await expect(link).toBeVisible({ timeout: 15_000 });
-  const href = (await link.getAttribute('href')) ?? '';
-  // The other door: the internship origin — an absolute URL, never the marketing host we are "on".
-  expect(href).toMatch(/^https?:\/\/[^/]+\/auth\/signin$/);
-  expect(new URL(href).hostname).not.toBe(MARKETING_HOST);
-  // The hint replaces the generic error and does not print the raw code.
+  const box = page.getByTestId('signin-error');
+  await expect(box).toHaveText('There is no SaleVali account with these details.', { timeout: 15_000 });
+  // The other product is neither named nor linked, and the raw code is not printed.
+  await expect(box).not.toContainText('Internship CRM');
+  await expect(box.locator('a')).toHaveCount(0);
+  await expect(page.getByTestId('wrong-world-link')).toHaveCount(0);
   await expect(page.getByText('WRONG_WORLD_INTERNSHIP')).toHaveCount(0);
-  await expect(page.getByText('Invalid email or password')).toHaveCount(0);
+});
+
+test('the marketing register page names only its own product', async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await gotoSettled(page, '/auth/register');
+  const hint = page.getByTestId('separate-account-hint');
+  await expect(hint).toBeVisible({ timeout: 15_000 });
+  await expect(hint).toContainText('SaleVali');
+  await expect(hint).not.toContainText('Internship CRM');
 });

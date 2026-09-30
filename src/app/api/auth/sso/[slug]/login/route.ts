@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { isSsoActive } from '@/lib/sso';
 import { samlForOrg } from '@/lib/ssoSaml';
 import { requestOrigin } from '@/lib/servedHosts';
+import { worldForHeaders } from '@/lib/hostWorld';
+import { worldOfOrg } from '@/lib/userWorld';
 
 // GET /api/auth/sso/[slug]/login — SP-initiated SSO. Resolve the tenant, and if
 // SSO is active build a SAML AuthnRequest and redirect the browser to the IdP.
@@ -16,6 +18,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const origin = requestOrigin((n) => req.headers.get(n));
   const org = await prisma.organization.findUnique({ where: { slug } });
   if (!org || !isSsoActive(org)) {
+    return NextResponse.redirect(`${origin}/auth/signin?error=sso_unavailable`);
+  }
+  // An org code of the OTHER product is refused exactly like an unknown one: an
+  // action stays in the world it was started in (docs/worlds.md), and the ACS
+  // lands on the org's own world — so starting here would end the sign-in in
+  // the other product. The same answer also keeps this host from confirming
+  // which codes exist over there. Guarding the entry is enough: every
+  // AuthnRequest now starts on a host of the org's world, which is where the
+  // ACS's landingOrigin(org.id) sends the browser back to.
+  if ((await worldOfOrg(org.id)) !== worldForHeaders((n) => req.headers.get(n))) {
     return NextResponse.redirect(`${origin}/auth/signin?error=sso_unavailable`);
   }
   try {
