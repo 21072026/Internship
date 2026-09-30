@@ -14,6 +14,7 @@ import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { orgAdminsWhere } from '@/lib/tenantFilter';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
 // "not right now" (acceptingMentees=false), or when a set mentorCapacity is
@@ -149,7 +150,8 @@ export async function POST(request: Request) {
       university,
     });
     if (matches.length === 0) return;
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+    // The org the check ran against, not every admin (a public route: no tenant context).
+    const admins = await prisma.user.findMany({ where: await orgAdminsWhere(mentor.orgId), select: { id: true } });
     await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
   })().catch((e) => console.error('Duplicate post-check failed:', e));
 

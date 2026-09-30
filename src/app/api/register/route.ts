@@ -23,6 +23,7 @@ import { stageTrialWindow } from '@/lib/trialWindow';
 import { logActivity } from '@/lib/activity';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { isOrgEnforcingSso, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
+import { orgAdminsWhere } from '@/lib/tenantFilter';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -320,7 +321,7 @@ export async function POST(request: Request) {
               detail: `already mentored by ${active.mentorId} (relation ${active.id})`,
             });
             const admins = await prisma.user.findMany({
-              where: { role: 'ADMIN', isActive: true },
+              where: await orgAdminsWhere(user.orgId),
               select: { id: true },
             });
             await Promise.all(
@@ -413,7 +414,9 @@ export async function POST(request: Request) {
       }
       // Let admins know someone signed up. Under 'manual' they have to act;
       // under 'auto' it is an FYI — the account admits itself once verified.
-      const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+      // Only the admins of the org the account landed in (this route binds no
+      // tenant context, so a bare ADMIN query is every tenant of both worlds).
+      const admins = await prisma.user.findMany({ where: await orgAdminsWhere(user.orgId), select: { id: true } });
       await Promise.all(
         admins.map((a) =>
           notify(a.id, pending ? 'signup.pendingApproval' : 'signup.new', { name: user.fullName }, '/admin/users')
@@ -433,7 +436,7 @@ export async function POST(request: Request) {
           email,
         });
         if (matches.length === 0) return;
-        const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+        const admins = await prisma.user.findMany({ where: await orgAdminsWhere(user.orgId), select: { id: true } });
         await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
       })().catch((e) => console.error('Duplicate post-check failed:', e));
     }

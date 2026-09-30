@@ -63,6 +63,18 @@ export async function orgWhere(orgId: string): Promise<Exclude<TenantWhere, Reco
 }
 
 /**
+ * The active admins of the org an event belongs to — the recipients of an
+ * admin fan-out (a bell entry, an admin mail). A bare `{ role: 'ADMIN' }` is
+ * every admin of every tenant in both worlds, because neither a sessionless
+ * route nor a dormant withTenantScope() scopes `User` (#2569 was the first of
+ * these). A NULL org is the default org's, by `orgWhere()`'s rule.
+ */
+export async function orgAdminsWhere(orgId: string | null | undefined) {
+  const org = await orgWhere(orgId ?? (await defaultOrgId()));
+  return { AND: [{ role: 'ADMIN' as const, isActive: true }, org] };
+}
+
+/**
  * `where` narrowed to the tenant, as a conjunct. `AND` rather than a spread so
  * the fragment's own `OR` can never replace — or be replaced by — a caller's
  * `OR` (the #2288 lesson, see `andScope` in src/lib/authzScope.ts).

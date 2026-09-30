@@ -10,6 +10,8 @@ import { sendMentorshipRequestEmail } from '@/services/emailService';
 import { getMenteeRequestGate } from '@/lib/requestGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { orgAdminsWhere } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Mentee-side mentorship requests (#590): a mentee asks for a mentor; an admin
@@ -66,6 +68,10 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // The portal that files these is closed to a product without mentorship; a
+  // direct POST must not put a request in front of that org's admins either.
+  const denied = await requireCapability(resolveOrgId(session), 'mentorship');
+  if (denied) return denied;
 
   return await withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => ({})));
@@ -130,8 +136,10 @@ export async function POST(request: Request) {
     });
 
     const menteeName = session.user.name;
+    // The mentee's own org only: withTenantScope() does not scope `User` while
+    // isolation is off, so a bare ADMIN query reached every tenant of both worlds.
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true },
+      where: await orgAdminsWhere(resolveOrgId(session)),
       select: { id: true, fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
     });
     await Promise.all(

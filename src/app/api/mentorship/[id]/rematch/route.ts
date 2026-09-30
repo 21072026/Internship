@@ -10,6 +10,9 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendRematchRequestedEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { orgAdminsWhere, orgWhere } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { isEndReasonCode } from '@/lib/relationLifecycle';
 
 // Mentee-initiated re-match (#1801): "this pairing isn't working, please match
@@ -54,6 +57,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Only a mentee files this. A mentor who wants out of a pairing goes through
   // the relation's own lifecycle, never on their mentee's behalf.
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Filed from the mentee portal, which a product without mentorship does not have.
+  const denied = await requireCapability(resolveOrgId(session), 'mentorship');
+  if (denied) return denied;
 
   return await withTenantScope(session, async () => {
     const relation = await prisma.mentorshipRelation.findUnique({
@@ -155,11 +161,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       select: { id: true, status: true, createdAt: true },
     });
 
-    // Any other re-match inside the window means a mail already went out.
+    // Any other re-match inside the window means a mail already went out — to
+    // THIS org's admins, so another tenant's re-match must not silence it.
+    const menteeOrgId = resolveOrgId(session);
     const recentlyMailed = await prisma.mentorshipRequest.findFirst({
       where: {
         id: { not: created.id },
         replacesRelationId: { not: null },
+        mentee: await orgWhere(menteeOrgId ?? (await defaultOrgId())),
         createdAt: { gte: new Date(Date.now() - ADMIN_EMAIL_THROTTLE_MS) },
       },
       select: { id: true },
@@ -167,7 +176,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const menteeName = session.user.name;
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true },
+      where: await orgAdminsWhere(menteeOrgId),
       select: {
         id: true,
         fullName: true,

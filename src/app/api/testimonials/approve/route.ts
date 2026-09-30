@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
+import { resolveOrgId } from '@/lib/orgScope';
+import { orgAdminsWhere } from '@/lib/tenantFilter';
 
 // The author's half of the two-person publish decision (#1098): the admin
 // drafts an excerpt, the AUTHOR approves that exact wording here (or declines,
@@ -59,7 +61,7 @@ export async function POST(request: Request) {
       where: { id: evaluation.id },
       data: { publicExcerpt: null, excerptApprovedAt: null, publishedAt: null, sharedPublicly: false },
     });
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+    const admins = await prisma.user.findMany({ where: await orgAdminsWhere(resolveOrgId(session)), select: { id: true } });
     await Promise.all(admins.map((a) => notify(a.id, 'testimonial.declined', {}, '/admin/testimonials')));
   }
   await logActivity({
