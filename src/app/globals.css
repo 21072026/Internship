@@ -135,6 +135,11 @@ html.dark .text-gray-800 { color: #e5e7eb; }
 html.dark .text-gray-700 { color: #d1d5db; }
 html.dark .text-gray-600 { color: #9ca3af; }
 html.dark .text-gray-500 { color: #9ca3af; }
+/* A gray-100 chip with gray-600 text (status pills, filter pills) remaps to
+   #9ca3af on #374151 — 4.05:1, just under AA. Lift the text on that one pair
+   to gray-300 (7.5:1); gray-600 on a gray-900 surface keeps the rule above
+   (#1412: /portal's "No response yet" pill, /portal/notes' filter pills). */
+html.dark .bg-gray-100.text-gray-600 { color: #d1d5db; }
 /* Dark keeps gray-400 at #9ca3af (7.0:1 on gray-900): the light-mode raise
    above would be a REGRESSION here, dark text on a dark surface.
    NOTE the same trap the "Variant utilities" block below describes, in the

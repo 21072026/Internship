@@ -235,7 +235,7 @@ export default async function PortalDashboard({
             </div>
             {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
             <div className="p-4 bg-blue-50 rounded-xl">
-              <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2">
+              <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2">
                 {t.portal.yourMentor}
               </p>
               <p className="font-semibold text-gray-900">
