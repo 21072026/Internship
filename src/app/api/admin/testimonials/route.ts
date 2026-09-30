@@ -7,6 +7,8 @@ import { notify } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
 import { hasConsent } from '@/lib/consent';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // Testimonial moderation (#1098). The pool NEVER shows an evaluation unless
 // BOTH the author and the subject hold an active TESTIMONIAL consent —
@@ -28,6 +30,13 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Testimonials are mentorship quotes: a vertical without mentors has none,
+  // so the whole surface is closed there, reads included (not only hidden).
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
+  // Hand-written tenant filter (#2542): withTenantScope() is a no-op while
+  // MT_ENFORCE_ISOLATION is off, so the relation is narrowed to the caller's org.
+  const tenant = await tenantWhere(session);
   return await withTenantScope(session, async () => {
     const rows = await prisma.evaluation.findMany({
       where: {
@@ -35,7 +44,7 @@ export async function GET() {
         // Both relation sides must hold the consent — this covers the author
         // when the author is a participant; admin-authored rows are filtered
         // out below (no participant author to attribute the quote to).
-        relation: { mentor: ACTIVE_CONSENT, mentee: ACTIVE_CONSENT },
+        relation: { is: withinTenant({ mentor: ACTIVE_CONSENT, mentee: ACTIVE_CONSENT }, tenant) },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -94,13 +103,21 @@ export async function PATCH(request: Request) {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Testimonials are mentorship quotes: a vertical without mentors has none,
+  // so the whole surface is closed there, reads included (not only hidden).
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
+  // Hand-written tenant filter (#2542): withTenantScope() is a no-op while
+  // MT_ENFORCE_ISOLATION is off, so the relation is narrowed to the caller's org.
+  const tenant = await tenantWhere(session);
   return await withTenantScope(session, async () => {
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     const { evaluationId, action, excerpt } = parsed.data;
 
-    const evaluation = await prisma.evaluation.findUnique({
-      where: { id: evaluationId },
+    // Another tenant's evaluation reads as not found — never as "exists".
+    const evaluation = await prisma.evaluation.findFirst({
+      where: { id: evaluationId, relation: { is: withinTenant({}, tenant) } },
       select: {
         id: true,
         authorId: true,

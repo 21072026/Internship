@@ -204,12 +204,99 @@ ederek:
    posta da gider, gitmediyse ekran bunu söyler. E-posta boş bırakılırsa
    yalnızca bağlantı üretilir. Kayıttan sonrası 1. maddeyle aynıdır.
 
-Süper-admin org ekranı ürünü de değiştirebilir (`PATCH` `vertical`) ve bu bir
-**taşımadır**: org'un bütün insanları tek `UPDATE`'te öbür dünyaya geçer. Hedef
-dünyada, taşınan org'un bir adresini zaten tutan hesap varsa `409
-vertical_move_email_conflict` ile reddedilir (`src/lib/verticalMove.ts`); yanıt
-yalnızca **sayıyı** verir, adres vermez — adresler iki farklı kiracının insanlarına
-ait.
+(2. maddedeki süper-admin, **o org'un dünyasının** süper-admin'idir — aşağıya bak.
+Bir INTERNSHIP süper-admin'i bir MARKETING org'una admin davet edemez: `404`.)
+
+Bir org'un ürününü (`PATCH` `vertical`) değiştirmek artık **hiçbir oturumdan
+yapılamaz**: dünya değiştirmek org'u, işlemi yapan süper-admin'in erişiminden
+çıkarıp öbür dünyanın operatörüne verir, yani tek bir oturumun işi değildir —
+`403 vertical_other_world` (no-op ve kayıtsız bir anahtarın zaten okunduğu dünyaya
+normalleşmesi geçer). Eski taşıma kontrolü (`409 vertical_move_email_conflict`,
+`src/lib/verticalMove.ts`) ikinci kilit olarak yerinde duruyor; bir operatör yolu
+bu reddi gevşetirse yine çalışır.
+
+## Süper-admin dünya başınadır
+
+Bakımcı kuralı: **INTERNSHIP süper-admin'i ile MARKETING süper-admin'i ayrı
+hesaplardır**; her biri yalnızca kendi ürününün org'larını görür ve yönetir, ve
+bir süper-admin oturumu öbür dünyanın host'unda **etkisizdir**. Aynı kişi ikisi de
+olabilir — her dünyadaki kendi hesabıyla, tıpkı sıradan iki hesap gibi.
+
+- **Kural tek yerde.** Saf yarısı [`src/lib/superAdminWorld.ts`](../src/lib/superAdminWorld.ts)
+  (`superAdminWorldFrom`, `superAdminReaches`, `creatableVertical`, `orgWorldWhere`;
+  birim testli: `scripts/test/super-admin-world.test.mjs`); canlı yarısı
+  [`src/lib/superAdmin.ts`](../src/lib/superAdmin.ts): `superAdminWorld(session)` bayrağı,
+  `isActive`'i ve **kullanıcının org'unu** her istekte veritabanından okur, dünyayı
+  `worldOfOrg` ile türetir ve isteğin host'unun dünyası (`worldForHeaders`) farklıysa
+  `null` döner. `isSuperAdminFor(session, targetOrgId)` = bu dünyanın süper-admin'i
+  **ve** hedef org aynı dünyada. `isSuperAdmin(session)` artık "kendi dünyasının
+  süper-admin'i, burada" demektir. İstek dışı bir bağlamda (host yok) cevap `null`'dır —
+  kapalı başarısızlık.
+- **Oturum callback'i zaten** öbür host'ta oturumu `null` yapıyor (#2590); host kontrolü
+  ikinci, bağımsız kilittir.
+- **Varsayılan dünya** = başka bir dikeyde olmayan her org (kayıtsız anahtar ve org'suz
+  kullanıcı dahil) — `worldUserWhere`'in org düzeyindeki aynası (`orgWorldWhere`).
+- **Tüketiciler:**
+  - `GET /api/admin/organizations` yalnızca çağıranın dünyasındaki org'ları listeler;
+    yanıt `world` ve `verticals` (= oluşturulabilir dikeyler, yani yalnızca kendi dünyası)
+    taşır.
+  - `POST /api/admin/organizations`: `vertical` **zorunlu** (`400 vertical_required`) ve
+    çağıranın dünyasında olmalı (`403 vertical_other_world`, `authz.scope_denied` yazar);
+    sütun varsayılanına asla düşmez. Ekranda seçim zorunlu ve yalnız kendi dünyası sunulur.
+  - `PATCH /api/admin/organizations`: öbür dünyanın org'u için süper-admin bir tenant
+    admin'i gibi okunur → `403`; dikey taşıma yukarıdaki gibi reddedilir.
+  - `…/[id]/invite-admin`: öbür dünyanın org'u **`404`** (olmayan id ile aynı yanıt,
+    yoklama yapılamaz); süper-admin olmayan `403`.
+  - `…/[id]/pipeline-stages`, `POST /api/admin/users/[id]/sso-exempt`,
+    `documentRequirementAccess.ts`: `isSuperAdminFor` (öbür dünya → `403`).
+  - `GET /api/admin/email-log`: yalnızca **bu dünyada hesabı olan adreslere** giden posta.
+    `EmailLog`'da `orgId` yok, tek bağ adres: iki dünyada hesabı olan bir adres iki logda da
+    görünür (aynı posta kutusu), henüz hesabı olmayan bir adrese giden posta (davet, demo
+    formu onayı) hiçbirinde görünmez. 24 saatlik SMTP kotası (`last24h`) iki dünyanın ortak
+    rölesidir, kurulum geneli kalır ve adres taşımaz.
+- **Açık kalan:** `publicHost` hâlâ yalnızca CLI ile atanır (`prisma/set-public-host.mjs`);
+  yeni bir dikeyin **ilk** org'unu o dünyanın süper-admin'i henüz olmadığı için bir operatör
+  açar (seed/CLI) — sonra aşağıdaki script ile o dünyaya bir süper-admin verilir.
+
+### Süper-admin atamak: `prisma/set-super-admin.mjs`
+
+```bash
+node prisma/set-super-admin.mjs --email ops@example.com --world MARKETING            # kuru çalışma (varsayılan)
+node prisma/set-super-admin.mjs --email ops@example.com --world MARKETING --confirm  # yazar
+node prisma/set-super-admin.mjs --email ops@example.com --world INTERNSHIP --revoke --confirm
+node prisma/set-super-admin.mjs --list
+```
+
+Adresin **yalnızca o dünyadaki** hesabına `isSuperAdmin` yazar; aynı adresin öbür
+dünyadaki hesabına dokunmaz. İdempotent (ikinci koşu `unchanged`), `--confirm` olmadan
+hiçbir şey yazmaz. Reddeder: o dünyada hesap yoksa (önce davet et), birden fazla hesap
+varsa (tahmin etmez) ve hesap aktif bir `ADMIN` değilse. Dünya kuralı `worldUserWhere`'in
+düz-ESM aynasıdır (sunucudaki Node 20 TS import edemez); birim testi ikisini karşılaştırır.
+
+## Yalnız-internship yüzeyleri (kapı: menü + URL + API)
+
+Bir yüzeyi menüden gizlemek erişim kontrolü değildir. `src/lib/navLinks.ts`'te bir
+`capability` etiketi taşıyan her hedef, o yeteneği olmayan bir dikey için:
+
+1. menüden ve komut paletinden düşer (`visibleNavLinks`, #2351);
+2. **URL'si `notFound()` verir**: kural `src/lib/navRouteCapability.ts`
+   (`capabilityForPath` — en uzun eşleşen link kazanır, segment bazlı), sunucu kapısı
+   `src/lib/pageCapabilityGate.ts` (`gatePage(href)`). Kapı kök `admin/layout.tsx`'te
+   **değil**, her kapılı segmentin tek satırlık `layout.tsx`'indedir: bir layout'un
+   pathname'i yoktur ve paylaşılan bir layout istemci tarafı gezinmede yeniden
+   render edilmez; segmentin kendi layout'u ise her girişte çalışır.
+   `scripts/test/nav-route-capability.test.mjs`, etiketli bir `/admin/*` linkinin
+   kapılı layout'u yoksa kırılır;
+3. **API'si `requireCapability()` ile `403 capability_unavailable`** döner (okumalar dahil).
+
+Bülten (`/admin/newsletters`, `/newsletters`, `api/admin/newsletters/**`,
+`api/newsletters`) **`mentorship`** ile etiketlendi, ayrı bir `newsletter` yeteneği
+açılmadı: kitlesi MENTEE/MENTOR'dur ve yalnızca mentorluğun olduğu yerde vardır; hep
+birlikte gezen ikinci bir anahtar yalnızca kayabilir. Aynı etiket: `/admin/email`
+(menti'lere e-posta), `/admin/re-engagement`, ve zaten etiketli olan
+`/admin/testimonials` (+ `api/admin/testimonials`), `api/admin/mentorship-requests`
+— son ikisi ayrıca elle tenant filtresiyle (`tenantWhere`/`withinTenant`) okur ve id ile
+yazmadan önce satırın çağıranın tenant'ında olduğunu doğrular (yabancı id → `404`).
 
 ## Parola sıfırlama ve doğrulama
 
@@ -328,9 +415,8 @@ sanır ve tip denetimi yanlış yerde susar. Yeni bir yapılandırma değişkeni
   verilmedikçe yalnızca internship dünyasını gösterirler. Marketing hesabıyla
   girmeye çalışan biri "yanlış kapı" mesajını alır, ama bağlantı varsayılan (üretim)
   marketing host'una gider, topic ortamına değil.
-- **Org'un ürününü değiştirmek insanlarını taşır** ve hedefte aynı adresli hesap
-  varsa reddedilir; reddedildiği için sayısı bilinir, adresleri bilinmez — çözüm
-  kiracının kendi admin'iyle adresi değiştirmek ya da eski kopyayı silmektir.
+- **Org'un ürününü değiştirmek oturumdan yapılamaz** (süper-admin dünya başına);
+  gerekirse bu bir operatör işidir ve taşıma kontrolü (aynı adresli hesap) yine geçerlidir.
 - **Yanlış kapı hesabın varlığını açık eder** (yalnızca parolanın sahibine); karar
   ve gerekçe `docs/security-exceptions.md`'de.
 

@@ -303,12 +303,35 @@ tenant ADMIN'i — hedef org'un **kendi** admin'i dahil — reddedilir ve ret
 
 | Uç | Süper-admin | Tenant ADMIN | MENTOR / MENTEE / COMPANY / SOURCE | Oturumsuz | Not |
 |---|---|---|---|---|---|
-| `POST /api/admin/organizations/[id]/invite-admin` | ✅ 201 (org yoksa 404) | **403** | **403** | 401 | Herhangi bir org'a `ADMIN` daveti — yeni bir MARKETING org'unun ilk admin'i ([`docs/worlds.md`](worlds.md) § İkinci dünyaya davet). Ret, org aranmadan önce gelir; yabancı bir org id'sinin varlığını doğrulamaz. Adres hedef org'un dünyasında kayıtlıysa `409 email_taken_in_world`, o org'da açık davet varsa `409 invitation_pending` |
+| `POST /api/admin/organizations/[id]/invite-admin` | ✅ 201 — yalnızca **kendi dünyasının** org'u; öbür dünyanın org'u ve olmayan id **404** | **403** | **403** | 401 | Kendi dünyasındaki herhangi bir org'a `ADMIN` daveti — yeni bir MARKETING org'unun ilk admin'i ([`docs/worlds.md`](worlds.md) § İkinci dünyaya davet). Ret, org aranmadan önce gelir; yabancı bir org id'sinin varlığını doğrulamaz. Adres hedef org'un dünyasında kayıtlıysa `409 email_taken_in_world`, o org'da açık davet varsa `409 invitation_pending` |
+
+| `GET /api/admin/organizations` | ✅ yalnızca kendi dünyasının org'ları (`world`, `verticals` = oluşturulabilir) | yalnızca kendi org'u | 401 | 401 | Süper-admin dünya başınadır ([`docs/worlds.md`](worlds.md) § Süper-admin dünya başınadır) |
+| `POST /api/admin/organizations` | ✅ 201 — `vertical` zorunlu (`400 vertical_required`), öbür dünya `403 vertical_other_world` | **403** | 401 | 401 | Yeni müşteri org'u doğuşta dikeyiyle tiplenir |
+| `PATCH /api/admin/organizations` | ✅ kendi dünyasının org'u; öbür dünyanın org'u **403**; dikey taşıma **403 `vertical_other_world`** | yalnızca kendi org'u (plan/dikey hariç) | 401 | 401 | |
+| `GET /api/admin/email-log` | ✅ yalnızca kendi dünyasında hesabı olan adreslere giden posta (24s kota kurulum geneli) | **403 `super_admin_only`** | 401 | 401 | |
+
+Her süper-admin kontrolü isteğin host'unun dünyasını da ister: öbür dünyanın host'unda
+süper-admin oturumu etkisizdir (zaten `null` olan oturumun yanında ikinci kilit).
 
 Çalıştırılabilir hali: `e2e/fixtures/authz-matrix.ts` → `SUPER_ADMIN_ONLY`
 (koşan spec `e2e/authz-matrix.spec.ts`, her rol için) ve
-`e2e/super-admin-invite-org-admin.spec.ts`. Bir satır eklerken ikisini birlikte
+`e2e/super-admin-invite-org-admin.spec.ts`, `e2e/tenant-isolation-worlds.spec.ts`. Bir satır eklerken ikisini birlikte
 güncelleyin.
+
+## Dikey yeteneği kapıları / Vertical capability gates
+
+`src/lib/navLinks.ts`'te `capability` etiketli bir hedef, o yeteneği olmayan bir
+dikeyde (bugün MARKETING) menüde yoktur, URL'si **404** (`gatePage`), API'si
+**`403 capability_unavailable`** verir — rolden bağımsız, okumalar dahil.
+Ayrıntı: [`docs/worlds.md`](worlds.md) § Yalnız-internship yüzeyleri.
+
+| Yüzey | Yetenek | MARKETING ADMIN |
+|---|---|---|
+| `/admin/newsletters`, `/newsletters`, `api/admin/newsletters/**`, `api/newsletters` | `mentorship` | 404 / 403 |
+| `/admin/email` | `mentorship` | 404 |
+| `/admin/re-engagement` | `mentorship` | 404 |
+| `/admin/testimonials`, `api/admin/testimonials` | `mentorship` | 404 / 403 |
+| `api/admin/mentorship-requests` | `mentorship` | 403 |
 
 ## MARKETING satış temsilcisi / The MARKETING sales rep (`/sales`)
 

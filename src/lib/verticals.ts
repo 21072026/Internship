@@ -41,7 +41,7 @@ export type VerticalCapability =
   | 'projects' // projects and project tasks
   | 'companies' // companies, needs, requisitions
   | 'pipeline' // the stage board itself — every vertical has one
-  | 'messaging' // threads, announcements, newsletter
+  | 'messaging' // threads, announcements (the newsletter is `mentorship`: its audiences are mentees/mentors)
   | 'documents'; // document requirements and uploads
 
 export interface VerticalDefinition {
