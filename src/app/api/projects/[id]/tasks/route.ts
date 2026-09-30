@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { notify } from '@/lib/notify';
@@ -83,7 +84,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         where: {
           id: { in: parsed.data.templateIds },
           archivedAt: null,
-          OR: [{ projectId: id }, { projectId: null }],
+          // The shared half is the caller's own tenant's pool only.
+          OR: [{ projectId: id }, withinTenant({ projectId: null }, await tenantWhere(session))],
         },
         select: { id: true, title: true, translations: true },
       });

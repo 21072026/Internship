@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere } from '@/lib/tenantFilter';
 
 // GET — the image attached to an announcement. Gated on any authenticated
 // session, matching GET /api/announcements: every admin broadcast targets all
@@ -11,7 +12,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const image = await prisma.announcementImage.findUnique({ where: { announcementId: id } });
+  // Only an image of the caller's own tenant (cross-world isolation): another
+  // org's is a 404, the same answer as an id that does not exist.
+  const image = await prisma.announcementImage.findFirst({
+    where: { announcementId: id, announcement: { is: await tenantWhere(session) } },
+  });
   if (!image) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   return new NextResponse(Buffer.from(image.data), {

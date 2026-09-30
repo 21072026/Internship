@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
-import { inCallerTenant } from '@/lib/tenantFilter';
+import { inCallerTenant, tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { notify } from '@/lib/notify';
 import { resolveTemplateTitle, serializeTaskTemplate, taskTemplateSelect } from '@/lib/goalTemplates';
 import { visibleToViewer } from '@/lib/todoVisibility';
@@ -328,7 +328,11 @@ export async function POST(request: Request) {
         // Only the shared pool is reachable here — a project's own templates are
         // handed out from that project, where the assignee is a member.
         const templates = await prisma.projectTaskTemplate.findMany({
-          where: { id: { in: parsed.data.templateIds }, projectId: null, archivedAt: null },
+          // …and only the caller's own tenant's pool (cross-world isolation).
+          where: withinTenant(
+            { id: { in: parsed.data.templateIds }, projectId: null, archivedAt: null },
+            await tenantWhere(session)
+          ),
           select: { id: true, title: true, translations: true },
         });
         for (const tpl of templates) {

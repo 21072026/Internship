@@ -213,6 +213,24 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // from) — the explicit stamp is what makes those two paths correct, and the
   // registration is what keeps every later reader inside its own tenant.
   'TwoFactorRecoveryCode',
+  // The audit trail (cross-world isolation). Who signed in from which IP and
+  // what they touched is tenant property: a MARKETING admin's activity feed
+  // listed every INTERNSHIP login. Every writer goes through logActivity()
+  // (src/lib/activity.ts), which stamps `orgId` itself — explicit, else the
+  // actor's org, else the target user's — because most entries are written
+  // with NO bound context (sign-in callbacks, crons). Only when none of those
+  // resolves is `orgId` left undefined, so the middleware can fill it from a
+  // bound scope. The one direct create (the 2FA reset transaction) stamps the
+  // target user's org too. System rows with no actor stay NULL and read as
+  // the default org's; the platform-level readers (retention health) run
+  // outside any scope and still see them.
+  'ActivityLog',
+  // The goal-template pool (cross-world isolation). The shared half
+  // (`projectId: null`) used to be one global pool offered to every tenant.
+  // Every create stamps `orgId` explicitly — the admin pool from the session,
+  // a project's own templates from the project — and the deploy-time starter
+  // seeder (prisma/seed-goal-templates.mjs, no context) stamps the default org.
+  'ProjectTaskTemplate',
   // Trial reminder claims (#2414, story #2392). One row per (funnel record,
   // threshold) already handled. It is written by a sessionless cron, which
   // stamps `orgId` from the relation it hangs off — the same pattern the

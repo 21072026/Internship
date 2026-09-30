@@ -6,6 +6,9 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/goalTemplates';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 
 // The shared goal-template pool (#51 follow-up).
 //
@@ -17,6 +20,10 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 // Shared templates are `projectId: null`. A project's own templates are managed
 // by whoever leads that project, through
 // /api/projects/[id]/task-templates — not here.
+//
+// "Shared" means shared within ONE tenant (cross-world isolation): each org has
+// its own pool, keyed by `orgId`, and never sees — let alone rewords — another
+// org's. A legacy NULL row is the default org's (src/lib/tenantFilter.ts).
 
 // ProjectTaskTemplate.title is VARCHAR(191): a wider cap here was a P2000 in
 // the driver, and neither handler catches, so it reached the admin as a 500
@@ -45,7 +52,7 @@ export async function GET() {
 
   return await withTenantScope(session, async () => {
     const templates = await prisma.projectTaskTemplate.findMany({
-      where: { projectId: null, archivedAt: null },
+      where: withinTenant({ projectId: null, archivedAt: null }, await tenantWhere(session)),
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: { id: true, title: true, translations: true, useCount: true },
     });
@@ -68,8 +75,9 @@ export async function POST(request: Request) {
 
     // MySQL does not enforce @@unique([projectId, title]) across NULL
     // projectIds, so the same wording twice has to be caught by hand.
+    const tenant = await tenantWhere(session);
     const existing = await prisma.projectTaskTemplate.findFirst({
-      where: { projectId: null, title },
+      where: withinTenant({ projectId: null, title }, tenant),
       select: { id: true, archivedAt: true },
     });
     if (existing?.archivedAt) {
@@ -85,7 +93,13 @@ export async function POST(request: Request) {
     if (existing) return NextResponse.json({ error: 'That goal is already in the pool' }, { status: 409 });
 
     const template = await prisma.projectTaskTemplate.create({
-      data: { projectId: null, title, translations, createdById: session.user.id },
+      data: {
+        projectId: null,
+        orgId: resolveOrgId(session) ?? (await defaultOrgId()),
+        title,
+        translations,
+        createdById: session.user.id,
+      },
       select: { id: true, title: true, translations: true, useCount: true },
     });
     return NextResponse.json({ template: serialize(template) }, { status: 201 });
@@ -101,8 +115,10 @@ export async function PATCH(request: Request) {
     const parsed = updateSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
+    const tenant = await tenantWhere(session);
+    // Another tenant's template answers like a missing one.
     const target = await prisma.projectTaskTemplate.findFirst({
-      where: { id: parsed.data.id, projectId: null, archivedAt: null },
+      where: withinTenant({ id: parsed.data.id, projectId: null, archivedAt: null }, tenant),
       select: { id: true },
     });
     if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -112,7 +128,7 @@ export async function PATCH(request: Request) {
     if (!title) return NextResponse.json({ error: 'Write the goal in at least one language' }, { status: 400 });
 
     const clash = await prisma.projectTaskTemplate.findFirst({
-      where: { projectId: null, title, id: { not: target.id } },
+      where: withinTenant({ projectId: null, title, id: { not: target.id } }, tenant),
       select: { id: true },
     });
     if (clash) return NextResponse.json({ error: 'That goal is already in the pool' }, { status: 409 });
@@ -140,7 +156,7 @@ export async function DELETE(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
     const archived = await prisma.projectTaskTemplate.updateMany({
-      where: { id: parsed.data.id, projectId: null, archivedAt: null },
+      where: withinTenant({ id: parsed.data.id, projectId: null, archivedAt: null }, await tenantWhere(session)),
       data: { archivedAt: new Date() },
     });
     if (archived.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });

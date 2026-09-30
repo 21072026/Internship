@@ -2216,6 +2216,13 @@ model ProjectTaskTemplate {
   // everyone who was ever given it. Archived means "don't offer this again";
   // adding the same wording back revives the row.
   archivedAt   DateTime?
+  // The tenant whose pool this template is in (cross-world isolation). The
+  // shared (`projectId: null`) half used to be ONE global pool offered to every
+  // organization, so a MARKETING admin saw — and could reword — the internship
+  // starter goals. Nullable for the expand step (#2298);
+  // prisma/backfill-task-template-org.mjs stamps legacy rows from their project,
+  // else their author, else the default org. NULL reads as the default org.
+  orgId        String?
 
   project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?         @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
@@ -2226,6 +2233,7 @@ model ProjectTaskTemplate {
   // pool is not constrained by it.
   @@unique([projectId, title])
   @@index([projectId])
+  @@index([orgId])
 }
 
 enum JoinRequestStatus {
@@ -3338,10 +3346,19 @@ model ActivityLog {
   ip         String?  @db.VarChar(64)
   userAgent  String?  @db.Text
   createdAt  DateTime @default(now())
+  // The tenant the entry belongs to (cross-world isolation). Nullable on
+  // purpose — the table is full of rows that predate it (#2298: a required
+  // column cannot be added to a populated table). Stamped by logActivity() from
+  // the explicit org, else the actor's, else the target user's org;
+  // prisma/backfill-activity-log-org.mjs fills the legacy rows the same way
+  // BEFORE backfill-organization.mjs assigns whatever is left (system rows with
+  // no actor) to the default org. NULL reads as the default org (tenantFilter).
+  orgId      String?
 
   @@index([actorId])
   @@index([action])
   @@index([createdAt])
+  @@index([orgId])
 }
 
 enum EmailStatus {
