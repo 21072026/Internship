@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
+import { isSuperAdmin } from '@/lib/superAdmin';
 
 // GET — the outbound mail delivery log (#1194).
 //
@@ -10,13 +11,20 @@ import { authOptions } from '@/lib/auth';
 // setup looked identical to a user who simply never replied, which is how a
 // batch of never-activated sign-ups stayed unexplained for days.
 //
-// Admin-only: recipient addresses are personal data.
+// Super-admin only (#2635): recipient addresses are personal data, and the log
+// is installation-wide — EmailLog carries no orgId, and since #2605 one address
+// can be a user in two tenants, so no recipient join can say whose mail a row
+// is. A tenant admin used to read every tenant's recipients and subjects here.
+// The relay figures below (7-day totals, 24h quota) are installation facts too.
 const STATUSES = ['SENT', 'FAILED', 'SKIPPED'] as const;
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!(await isSuperAdmin(session))) {
+    return NextResponse.json({ error: 'Forbidden', code: 'super_admin_only' }, { status: 403 });
   }
 
   const params = new URL(request.url).searchParams;
