@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { googleConsentUrl, isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { makeState } from '@/lib/googleOAuthState';
 import { requestOrigin } from '@/lib/servedHosts';
+import { worldForHeaders } from '@/lib/hostWorld';
 
 // GET — start the user-consented Google Calendar connect flow (#709).
 // A redirect, not JSON: the browser has to land on Google's consent screen.
@@ -22,7 +23,11 @@ export async function GET(request: Request) {
   }
 
   const state = makeState(session.user.id, randomBytes(12).toString('hex'));
-  const url = googleConsentUrl(state);
+  // Google must send the browser back to THIS host: its session cookie is not
+  // sent to the other product's host, whose callback would bounce the user to
+  // that product's sign-in page. The callback derives the same world from its
+  // own host, so both legs present the same redirect_uri.
+  const url = googleConsentUrl(state, worldForHeaders((n) => request.headers.get(n)));
   if (!url) return NextResponse.redirect(new URL('/account?google=unavailable', base));
   return NextResponse.redirect(url);
 }

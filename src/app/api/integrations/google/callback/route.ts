@@ -5,10 +5,17 @@ import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { verifyState } from '@/lib/googleOAuthState';
 import { emailFromIdToken, exchangeCode, saveConnection } from '@/lib/googleCalendarClient';
 import { logActivity } from '@/lib/activity';
+import { requestOrigin } from '@/lib/servedHosts';
+import { worldForHeaders } from '@/lib/hostWorld';
 
 // GET — Google redirects the user back here with `code` and `state` (#709).
 export async function GET(request: Request) {
-  const base = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  // Every exit stays on the host the browser is on (#2488). Google only ever
+  // calls back on the host named in the redirect_uri, which connect chose from
+  // its own world — so this host's world is the one the exchange must repeat.
+  const get = (n: string) => request.headers.get(n);
+  const base = requestOrigin(get);
+  const world = worldForHeaders(get);
   const back = (status: string) => NextResponse.redirect(new URL(`/account?google=${status}`, base));
 
   const session = await getServerSession(authOptions);
@@ -31,7 +38,7 @@ export async function GET(request: Request) {
   if (!verified || verified.userId !== session.user.id) return back('failed');
 
   try {
-    const tokens = await exchangeCode(code);
+    const tokens = await exchangeCode(code, world);
     const email = emailFromIdToken(tokens.id_token) ?? session.user.email ?? 'unknown';
     await saveConnection(session.user.id, tokens, email);
     await logActivity({

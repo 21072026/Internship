@@ -2,6 +2,8 @@ import webpush, { type PushSubscription as WebPushSubscription } from 'web-push'
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { notificationCategoryAllowed, type NotificationCategory } from '@/lib/notificationPrefs';
+import { worldOfOrg } from '@/lib/userWorld';
+import type { VerticalKey } from '@/lib/verticals';
 
 /**
  * Background Web Push (#1464, #675 Kademe 2).
@@ -43,7 +45,21 @@ export interface PushPayload {
   url?: string;
   /** Collapse key — a second message in the same thread replaces the first. */
   tag?: string;
+  /**
+   * Tray icon and badge, relative like `url`. Filled in by `sendPushToUser` from
+   * the RECIPIENT'S world: public/sw.js is one static file for every host and
+   * cannot read MARKETING_HOSTS, so it cannot pick the brand itself.
+   */
+  icon?: string;
+  badge?: string;
 }
+
+// The 192px tile of each product (the same files src/app/manifest.ts installs).
+// A Record over every vertical, so a new one cannot ship without its own icon.
+const PUSH_ICON: Record<VerticalKey, string> = {
+  INTERNSHIP: '/icon-192.png',
+  MARKETING: '/icon-salevali-192.png',
+};
 
 const MAX_FAILURES = 5;
 // A push service that is slow is not worth holding a request open for.
@@ -97,7 +113,7 @@ export async function sendPushToUser(
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { notificationPrefs: true },
+      select: { notificationPrefs: true, orgId: true },
     });
     // A category the user switched off on /account is off on every channel,
     // push included (#886).
@@ -109,7 +125,8 @@ export async function sendPushToUser(
     });
     if (subscriptions.length === 0) return 0;
 
-    const body = JSON.stringify(payload);
+    const icon = PUSH_ICON[await worldOfOrg(user?.orgId)];
+    const body = JSON.stringify({ icon, badge: icon, ...payload });
     const results = await Promise.all(
       subscriptions.map(async (subscription) => {
         const target: WebPushSubscription = {
