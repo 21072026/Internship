@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Invitation, password-reset and verification links open the recipient's own product, and the marketing host advertises only its own pages** (#2495). Every one of those links was built from `NEXT_PUBLIC_APP_URL`, which is the internship host. A SaleVali admin's invitation therefore read `https://interncrm.com/auth/register?token=…` and dropped the new sales rep into the other product. `appOriginForOrg(orgId)` (`src/lib/orgLinkOrigin.ts`) now returns the tenant's explicit `Organization.publicHost` (#2569) when this deployment serves it. Otherwise it returns exactly the old origin, so a production hostname copied into a topic env's database cannot send a mail to production. The pure rule, `appLinkOrigin()` in `src/lib/servedHosts.ts`, is unit-tested. It is used by the invitation, password-reset and verification mails, by the register links returned by `/api/invite` (create, list, resend), by the mentor-application approval and by the mentee activation links. `robots.txt`'s `Sitemap:` line and every sitemap `<loc>` follow the request host (`requestSiteUrl()`, validated by `requestOrigin()`). The sitemap lists only what that host's vertical serves: on the marketing host, no `/for-companies`, `/apply-as-mentor`, `/release-notes`, `/contributor-terms`, `/projects`, `/stories` or `/code-of-conduct`. Digest, reminder, newsletter and unsubscribe links still use the old origin and are listed on the issue as the next slice.",
-  "notes": {
-    "en": ["Invitations and password e-mails from a SaleVali workspace now open SaleVali, not the internship app."],
-    "tr": ["Bir SaleVali çalışma alanından gelen davet ve şifre e-postaları artık staj uygulamasını değil SaleVali'yi açıyor."],
-    "de": ["Einladungen und Passwort-E-Mails aus einem SaleVali-Arbeitsbereich öffnen jetzt SaleVali statt der Praktikums-App."]
-  }
-}
