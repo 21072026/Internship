@@ -7,6 +7,8 @@ import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
+import { inCallerTenant } from '@/lib/tenantFilter';
+import { meetingInCallerTenant } from '@/lib/meetingAccess';
 import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
 import { isValidTimeZone } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingRoom';
@@ -51,14 +53,18 @@ const updateSchema = recurrenceSchema.partial().extend({ id: z.string().min(1) }
 const deleteSchema = z.object({ id: z.string().min(1) });
 
 async function ensureProjectAccess(
-  user: { id: string; role: string; companyId?: string | null },
+  user: { id: string; role: string; companyId?: string | null; orgId?: string | null },
   projectId: string
 ) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true },
+    select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true, orgId: true },
   });
-  if (!project) return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) as NextResponse };
+  // Another tenant's project is a missing one — for an admin too, whose
+  // allowance below is "any project of my tenant" (#2542 follow-up).
+  if (!project || !(await inCallerTenant(project.orgId, user.orgId))) {
+    return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) as NextResponse };
+  }
   if (user.role !== 'ADMIN') {
     const member = await isProjectMember(user, projectId);
     if (!canManageProject(user, project) && !member) {
@@ -83,10 +89,15 @@ async function ensureProjectAccess(
  * here; the project branch is never loosened.
  */
 async function ensureSeriesAccess(
-  user: { id: string; role: string; companyId?: string | null },
+  user: { id: string; role: string; companyId?: string | null; orgId?: string | null },
   series: { projectId: string | null; createdById: string }
 ): Promise<{ error?: NextResponse }> {
   if (series.projectId) return ensureProjectAccess(user, series.projectId);
+  // An orphan's tenant is its author's (src/lib/meetingTenantRule.ts): another
+  // tenant's leftover is a missing row, not one an admin may cancel.
+  if (!(await meetingInCallerTenant({}, series.createdById, user.orgId))) {
+    return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
+  }
   if (user.role === 'ADMIN' || series.createdById === user.id) return {};
   return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
 }
@@ -205,9 +216,12 @@ export async function GET(request: Request) {
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true },
+      select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true, orgId: true },
     });
-    if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Another tenant's project answers like a missing one (#2542 follow-up).
+    if (!project || !(await inCallerTenant(project.orgId, session.user.orgId))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     if (
       session.user.role !== 'ADMIN' &&
       !canManageProject(session.user, project) &&

@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import {
   buildRelationTimeline,
   DEFAULT_TIMELINE_LIMIT,
@@ -26,9 +28,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return await withTenantScope(session, async () => {
       const relation = await prisma.mentorshipRelation.findUnique({
         where: { id },
-        select: { id: true, mentorId: true, menteeId: true },
+        select: { id: true, mentorId: true, menteeId: true, orgId: true },
       });
-      if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
+      // Another tenant's relation answers exactly like a missing one — the
+      // ADMIN branch below is "any relation of my tenant" (#2542 follow-up).
+      if (!relation || !(await inCallerTenant(relation.orgId, resolveOrgId(session)))) {
+        return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
+      }
 
       // The viewer's role *for this relation*, not their global role: an admin
       // sees everything, a mentor or mentee only their own pairing. Admin wins

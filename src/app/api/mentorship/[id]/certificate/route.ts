@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { canIssueCertificate } from '@/lib/certificateEligibility';
@@ -59,7 +61,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         mentee: { select: { id: true, fullName: true } },
       },
     });
-    if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
+    // Another tenant's relation answers exactly like a missing one (#2542
+    // follow-up): the admin allowance below is this tenant's relations only.
+    if (!relation || !(await inCallerTenant(relation.orgId, resolveOrgId(session)))) {
+      return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
+    }
 
     const isAuthorized = session.user.role === 'ADMIN' || relation.mentorId === session.user.id;
     if (!isAuthorized) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { mergeUsers, MergeError } from '@/lib/mergeUsers';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 const bodySchema = z.object({
   primaryId: z.string().min(1),
@@ -56,8 +57,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Your password is incorrect' }, { status: 400 });
   }
 
-  const duplicate = await prisma.user.findUnique({ where: { id: duplicateId }, select: { fullName: true } });
-  if (!duplicate) {
+  // Both records must be in the caller's tenant (#2542 follow-up). mergeUsers
+  // refuses two records of DIFFERENT orgs (`org_mismatch`), but not two of
+  // ANOTHER org — with MT_ENFORCE_ISOLATION off an admin could merge, and so
+  // delete, another tenant's candidate by id. A foreign id answers like a
+  // missing one.
+  const tenant = await tenantWhere(session);
+  const [duplicate, primary] = await Promise.all([
+    prisma.user.findFirst({ where: withinTenant({ id: duplicateId }, tenant), select: { fullName: true } }),
+    prisma.user.findFirst({ where: withinTenant({ id: primaryId }, tenant), select: { id: true } }),
+  ]);
+  if (!duplicate || !primary) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
   if (confirmName.trim() !== duplicate.fullName) {

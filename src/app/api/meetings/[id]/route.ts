@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
-import { canManageMeeting } from '@/lib/meetingAccess';
+import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { pushMeetingInBackground, removeMeeting } from '@/lib/googleCalendarSync';
 
@@ -158,7 +158,7 @@ async function resolveTargets(
  * meeting, so there is nothing left to hide, and "you may change your row, not
  * everyone's" is the only answer that says what to do instead.
  */
-function mayActOnBatch(user: { id: string; role: string }, row: Target): boolean {
+function mayActOnBatch(user: MeetingUser, row: Target): boolean {
   return user.role === 'ADMIN' || row.createdById === user.id;
 }
 
@@ -169,7 +169,7 @@ function mayActOnBatch(user: { id: string; role: string }, row: Target): boolean
  * unknown id and for a meeting that is not the caller's to touch.
  */
 async function loadTarget(
-  user: { id: string; role: string },
+  user: MeetingUser,
   id: string
 ): Promise<{ row: Target } | { refuse: NextResponse }> {
   // `<seriesId>:<ISO instant>` — the shape /api/meetings/upcoming hands out for

@@ -5,6 +5,8 @@ import { buildFeedIcs } from '@/lib/ics';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { pipelineLabel } from '@/lib/pipeline';
+import { orgWhere, withinTenant } from '@/lib/tenantFilter';
+import { defaultOrgId } from '@/lib/defaultOrg';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Overall event cap, kept from #915 and applied to the whole fan-out, not per query. */
@@ -26,8 +28,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   if (limited) return limited;
 
   const { token } = await params;
-  const user = await prisma.user.findUnique({ where: { icsFeedToken: token }, select: { id: true, role: true } });
+  const user = await prisma.user.findUnique({ where: { icsFeedToken: token }, select: { id: true, role: true, orgId: true } });
   if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // The feed owner's tenant, from their row — this route has no session. Every
+  // query below is narrowed to it (#2542 follow-up): an ADMIN's feed used to
+  // carry every tenant's meetings, deadlines and project calls.
+  const tenant = await orgWhere(user.orgId || (await defaultOrgId()));
 
   // A window from 30 days back (context) to everything scheduled ahead. A
   // recurring rule has no last occurrence, so its expansion needs a finite
@@ -39,12 +45,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   // mentee, and the feed before #2015 matched either side for everyone. Scoping
   // to `mentorId` alone would silently drop their own internship meetings and
   // deadline from a calendar they had already subscribed to.
-  const relWhere: Prisma.MentorshipRelationWhereInput =
+  const roleRelWhere: Prisma.MentorshipRelationWhereInput =
     user.role === 'ADMIN'
       ? {}
       : user.role === 'MENTOR'
         ? { OR: [{ mentorId: user.id }, { menteeId: user.id }] }
         : { menteeId: user.id };
+  const relWhere = withinTenant<Prisma.MentorshipRelationWhereInput>(roleRelWhere, tenant);
 
   const [meetings, teamMeetings, series, relations] = await Promise.all([
     // The user's own meetings, on either side of a relation. `seriesId: null`
@@ -89,16 +96,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       where: {
         active: true,
         projectId: { not: null },
-        ...(user.role === 'ADMIN'
-          ? {}
-          : {
-              project: {
-                OR: [
-                  { members: { some: { userId: user.id } } },
-                  { relations: { some: { ...relWhere, status: 'ACTIVE' } } },
-                ],
-              },
-            }),
+        project: {
+          is: withinTenant<Prisma.ProjectWhereInput>(
+            user.role === 'ADMIN'
+              ? {}
+              : {
+                  OR: [
+                    { members: { some: { userId: user.id } } },
+                    { relations: { some: { AND: [roleRelWhere, { status: 'ACTIVE' }] } } },
+                  ],
+                },
+            tenant,
+          ),
+        },
       },
       select: { id: true, title: true, daysOfWeek: true, timeOfDay: true, timeZone: true },
       // Deliberately uncapped: one rule expands into hundreds of occurrences, so
