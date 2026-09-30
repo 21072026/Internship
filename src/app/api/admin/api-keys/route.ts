@@ -6,6 +6,7 @@ import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { generateApiKey } from '@/lib/apiKey';
 import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import {
   API_SCOPES,
   apiKeyStatus,
@@ -26,6 +27,11 @@ import {
 //
 // Enforcement of expiry / revocation / scope when a key is PRESENTED is #1546.
 // This route stores and reports the facts; it does not police them.
+//
+// Tenant scope is explicit (#2645): the list and the revoke both go through
+// tenantWhere(), so they hold with MT_ENFORCE_ISOLATION off too. Relying on the
+// middleware alone let any tenant's admin read every tenant's keys (with the
+// creator's e-mail) and revoke them by id.
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -33,9 +39,11 @@ async function requireAdmin() {
 }
 
 export async function GET() {
-  if (!(await requireAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireAdmin();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // Never return the key/hash.
   const keys = await prisma.apiKey.findMany({
+    where: withinTenant({}, await tenantWhere(session)),
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -137,8 +145,10 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get('id') || '';
   // Soft revoke — never `delete`. Already-revoked keys keep their first
   // revocation timestamp (the `revokedAt: null` filter makes this idempotent).
+  // Another tenant's id matches no row here, so the key stays live and nothing
+  // is logged — the same answer as an id that does not exist.
   const { count } = await prisma.apiKey.updateMany({
-    where: { id, revokedAt: null },
+    where: withinTenant({ id, revokedAt: null }, await tenantWhere(session)),
     data: { revokedAt: new Date() },
   });
   if (count) {
