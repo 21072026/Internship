@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **An admin can forget a company contact who never had an account** (#2559, first slice). A web enquiry's sender or an imported account's named person exists only as an address on `CompanyInquiry` and `Company.contact*`, so the account erasure (which starts from a `User` row) could never reach them, and a DSGVO Art. 17 request had no answer. `POST /api/admin/company-contacts/forget` uses the #2434 rule: match by address, confine the match to the admin's own tenant (org-less rows count as the default org's), scrub the person, keep the Company. `contactScrubOps()` in `accountErasure.ts` is now the single scrub builder for both paths. The route mirrors the account erasure: ADMIN only, never while impersonating, the admin's own password as step-up, the address typed twice as the misclick guard. It writes one `company_contact.forget` ActivityLog row that carries counts, never the address. An address that belongs to an account in the org is refused with `has_account`. The action is on each row of `/admin/company-inquiries` (`ContactForgetForm`). Pinned by `e2e/forget-company-contact.spec.ts`.",
+  "notes": {
+    "en": ["Admins can now erase the personal data of a company contact who never signed up — from the enquiry list, within their own organisation only."],
+    "tr": ["Yöneticiler artık hiç kayıt olmamış bir firma muhatabının kişisel verisini talepler listesinden, yalnızca kendi kurumları içinde silebiliyor."],
+    "de": ["Admins können jetzt die personenbezogenen Daten eines Firmenkontakts ohne eigenes Konto löschen — direkt aus der Anfrageliste und nur innerhalb der eigenen Organisation."]
+  }
+}

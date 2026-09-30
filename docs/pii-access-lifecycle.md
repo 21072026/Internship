@@ -211,10 +211,20 @@ temizliyor; kural [`src/lib/companyContactErasure.ts`](../src/lib/companyContact
   (`prisma/backfill-organization.mjs`) onları varsayılan org'a atar — başka hiçbir
   org için NULL satıra dokunulmaz. Kanıt: [`e2e/erasure-company-contact.spec.ts`](../e2e/erasure-company-contact.spec.ts)
   (aynı adresi taşıyan iki kiracı, damgasız bir satır ve aynı kiracıda başka bir kişi).
+- **Hesabı hiç olmamış muhatap (#2559):** web talebinin göndereni ya da içe
+  aktarılan hesabın adı geçen kişisi bir `User` satırı olmadan yalnızca adres
+  olarak durur. `/admin/company-inquiries` satırındaki **Bu kişiyi unut**
+  (`POST /api/admin/company-contacts/forget`) onu adresle, yöneticinin kendi
+  kiracısında unutur: aynı kural, aynı scrub kurucusu (`contactScrubOps()`),
+  ikinci bir silme yolu yok. Kapılar hesap silmeyle aynı: yalnız ADMIN, taklit
+  sırasında asla, yöneticinin kendi parolası ve adresin yeniden yazılması.
+  Kurumda bu adrese ait bir hesap varsa istek `has_account` ile reddedilir —
+  o kişi hesabından silinir, çünkü mesajları ve notları da oradan erişilir.
+  ActivityLog satırı yalnızca sayıları taşır; unutulan adres loglanmaz.
+  Kanıt: [`e2e/forget-company-contact.spec.ts`](../e2e/forget-company-contact.spec.ts).
 - **Kalan boşluklar:** yöneticilere giden `signup.companyInquiry` bildirimi
-  kişinin adını adres olmadan taşır (#2106); hesabı hiç olmamış bir muhatap ve
-  başvuruların saklama süresi #2559 (bu fonksiyonu genişletir, ikinci bir silme
-  yolu yazmaz).
+  kişinin adını adres olmadan taşır (#2106); dönüştürülmemiş başvuruların saklama
+  süresi #2559'un ikinci dilimidir.
 
 ### Şema değişikliği yok
 
