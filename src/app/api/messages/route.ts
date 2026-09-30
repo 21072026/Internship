@@ -23,6 +23,8 @@ import { replyAddress } from '@/lib/replyToken';
 import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { sendEmail, appUrlFor } from '@/services/emailService';
 import { getOrgBranding } from '@/lib/orgBranding';
+import { verticalFor } from '@/lib/verticalContext';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { logger } from '@/lib/logger';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -388,7 +390,13 @@ async function handlePost(request: Request) {
           appUrlFor(rcpt.orgId).catch(() => undefined),
           getOrgBranding(rcpt.orgId).catch(() => null),
         ]);
-        const sender = session.user.name ?? 'Someone';
+        // Unreachable in practice (User.fullName is required); the org read
+        // runs only then, and INTERNSHIP keeps the fallback it always had.
+        const sender =
+          session.user.name ??
+          (rcpt.orgId && (await verticalFor(rcpt.orgId).catch(() => DEFAULT_VERTICAL)) !== DEFAULT_VERTICAL
+            ? 'Someone'
+            : 'Your mentor');
         const safe = body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
         const attachCount = fileBufs.length;
         // One-click actions straight from the inbox (#1204). Someone who reads
