@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Pencil, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -20,11 +20,48 @@ import { ProjectForm, type ProjectFormInitial } from '@/components/project/Proje
 
 const shared = { showOwnerPicker: false, showTermsPicker: false, showVisibility: false } as const;
 
+/** Longest the form waits for the refreshed list before closing anyway. */
+const REFRESH_WAIT_MS = 15_000;
+
+/**
+ * `onSaved` for a form whose result only exists in the server-rendered list
+ * (#2481). The list is in the RSC payload of a `router.refresh()`, and nothing
+ * on the client inserts the saved row, so closing the form and firing the
+ * refresh off left a window — seconds long on a loaded server — in which the
+ * form was gone and the list still showed the old state. The refresh now runs
+ * in a transition and the returned promise settles once it has committed:
+ * ProjectForm awaits it with its button still busy, so the form closes on the
+ * list that already carries the change, and a second click cannot re-submit.
+ */
+function useSaveThenRefresh(close: () => void) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const settle = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!pending && settle.current) {
+      settle.current();
+      settle.current = null;
+    }
+  }, [pending]);
+
+  return useCallback(
+    () =>
+      new Promise<void>((resolve) => {
+        // A refresh that never commits must not strand the form open.
+        const fallback = setTimeout(() => { settle.current = null; resolve(); }, REFRESH_WAIT_MS);
+        settle.current = () => { clearTimeout(fallback); resolve(); };
+        startTransition(() => router.refresh());
+      }).then(close),
+    [router, close]
+  );
+}
+
 /** "New project" — the entry point a mentee had nowhere before. */
 export function PortalProjectCreate({ variant = 'primary' }: { variant?: 'primary' | 'outline' }) {
   const t = useT();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const onSaved = useSaveThenRefresh(useCallback(() => setOpen(false), []));
 
   if (open) {
     return (
@@ -32,7 +69,7 @@ export function PortalProjectCreate({ variant = 'primary' }: { variant?: 'primar
         <ProjectForm
           {...shared}
           canEditProtected
-          onSaved={() => { setOpen(false); router.refresh(); }}
+          onSaved={onSaved}
           onCancel={() => setOpen(false)}
         />
       </div>
@@ -48,8 +85,8 @@ export function PortalProjectCreate({ variant = 'primary' }: { variant?: 'primar
 /** The pencil on a card the mentee owns. Hidden on projects they only work on. */
 export function PortalProjectEdit({ project }: { project: ProjectFormInitial }) {
   const t = useT();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const onSaved = useSaveThenRefresh(useCallback(() => setOpen(false), []));
 
   if (open) {
     return (
@@ -57,7 +94,7 @@ export function PortalProjectEdit({ project }: { project: ProjectFormInitial }) 
         {...shared}
         project={project}
         canEditProtected
-        onSaved={() => { setOpen(false); router.refresh(); }}
+        onSaved={onSaved}
         onCancel={() => setOpen(false)}
       />
     );
