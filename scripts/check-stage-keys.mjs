@@ -19,7 +19,8 @@
 //   scripts/stage-keys-baseline.json as a SHRINKING RATCHET: a baselined file
 //   may keep (or lower) its recorded count, but a file that is NOT listed — a
 //   newly reintroduced literal, the case this guard exists for — fails the
-//   build. The baseline file is deleted once it reaches `{}`.
+//   build. The baseline file is deleted once it reaches `{}` — which it did
+//   with #1880; a missing file reads as an empty ratchet.
 //
 // Comment lines are stripped before matching: this file, funnelKpi.ts and the
 // funnel route all *document* the keys in prose, and a guard that fires on its
@@ -28,7 +29,7 @@
 // Run: node scripts/check-stage-keys.mjs            (npm run check:stage-keys)
 //      node scripts/check-stage-keys.mjs --update    rewrite the baseline
 
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 const args = process.argv.slice(2);
@@ -95,10 +96,21 @@ for (const file of sourceFiles(ROOTS)) {
     });
 }
 
-const { _comment, ...recorded } = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));
+// The baseline reached `{}` with #1880 and was deleted, as planned: a missing
+// file is an empty ratchet, so every hit anywhere outside ALLOWED fails.
+const BASELINE_COMMENT =
+  'Hardcoded pipeline stage keys still on main, per file, with the issue that owns the cleanup (#1886). This list may only ever SHRINK: scripts/check-stage-keys.mjs fails on any file that is not listed here, and on a listed file whose count went up. When a cleanup PR lowers a count, run `node scripts/check-stage-keys.mjs --update`; the file is deleted again once it is empty.';
+const { _comment = BASELINE_COMMENT, ...recorded } = existsSync(BASELINE_FILE)
+  ? JSON.parse(readFileSync(BASELINE_FILE, 'utf8'))
+  : {};
 const byPath = [...hits].sort((a, b) => a[0].localeCompare(b[0]));
 
 if (UPDATE) {
+  if (byPath.length === 0) {
+    if (existsSync(BASELINE_FILE)) unlinkSync(BASELINE_FILE);
+    console.log('stage keys — nothing left to baseline; baseline file removed.');
+    process.exit(0);
+  }
   const next = { _comment };
   for (const [file, found] of byPath) {
     next[file] = { hits: found.length, issue: recorded[file]?.issue ?? DEFAULT_OWNER };
@@ -146,6 +158,10 @@ if (failures.length > 0) {
 }
 
 const remaining = byPath.reduce((n, [, found]) => n + found.length, 0);
+if (remaining === 0 && stale.length === 0) {
+  console.log('stage keys OK — no hardcoded stage key outside the allowlist.');
+  process.exit(0);
+}
 console.log(
   `stage keys OK — no new hardcoded key; ${remaining} known hit(s) in ` +
     `${byPath.length} baselined file(s) still to clean up.`

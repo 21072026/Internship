@@ -228,6 +228,25 @@ const DEFAULT_TERMINAL = new Set<string>([
   'INTERNSHIP_FOUND_ELSEWHERE_800',
 ]);
 
+// What each OFF-PATH stage of the canonical catalogue means for the person on
+// it (#830): leaving the path is not always bad news. FOUND_ELSEWHERE is a
+// success — the student found an internship — and communicated like the
+// rejection DROPPED is, the message lands badly. `isOffPath` alone cannot tell
+// the two apart, so the catalogue states it here, next to the stages it
+// describes, and `outcomeForStage()` (src/lib/outcomeComms.ts) asks instead of
+// naming the keys (#1880). A tenant's own off-path stage has no entry: nobody
+// told us it is good news, so it takes the neutral 'ended' wording.
+export type OffPathMeaning = 'success' | 'ended';
+
+const CANONICAL_OFF_PATH_MEANING: Record<string, OffPathMeaning> = {
+  INTERNSHIP_FOUND_ELSEWHERE_800: 'success',
+  INTERNSHIP_DROPPED_460: 'ended',
+};
+
+export function canonicalOffPathMeaning(key: string): OffPathMeaning | null {
+  return CANONICAL_OFF_PATH_MEANING[key] ?? null;
+}
+
 // The product's canonical stage set, derived from the enum (single source of
 // truth). Used whenever a tenant hasn't customized its pipeline.
 export function defaultPipelineStages(locale: Locale = 'en'): ResolvedStage[] {

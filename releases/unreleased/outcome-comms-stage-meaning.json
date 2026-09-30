@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The last hardcoded pipeline stage key is gone from `src/`** (#1880). `outcomeForStage()` (`src/lib/outcomeComms.ts`) no longer names `INTERNSHIP_FOUND_ELSEWHERE_800` / `INTERNSHIP_DROPPED_460`; it asks the canonical catalogue what its off-path stages *mean* — `canonicalOffPathMeaning()` in `src/lib/pipeline.ts` (`'success'` / `'ended'`), next to the stages it describes. Behaviour is unchanged: found-elsewhere still reads as a success, a tenant's own off-path stage still takes the neutral wording. `scripts/stage-keys-baseline.json` reached `{}` and is deleted, as #1886 planned; `check:stage-keys` reads a missing baseline as an empty ratchet (and `--update` removes the file when nothing is left), so every literal outside `pipeline.ts` / `offers.ts` now fails CI. Unit spec `e2e/outcome-for-stage.unit.spec.ts`."
+}
