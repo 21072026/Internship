@@ -119,6 +119,11 @@ model Organization {
   // active — a plan downgrade or a broken config falls back to password login
   // rather than locking the tenant out of its own data. See docs/sso-saml.md.
   ssoEnforced      Boolean  @default(false)
+  // IdP role mapping (#1940): when true, a RETURNING SSO user's role is
+  // re-resolved from their claims on every login (logged at warning level,
+  // old -> new). Off by default: a locally elevated user must not be demoted by
+  // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
+  ssoSyncRole      Boolean  @default(false)
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
@@ -176,6 +181,7 @@ model Organization {
   newsletters          Newsletter[]
   trialReminders       TrialReminder[]
   relationValues       RelationValue[]
+  ssoClaimMappings     SsoClaimMapping[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -3186,6 +3192,25 @@ model ImpersonationGrant {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
+}
+
+// One rule of a tenant's IdP role mapping (#1940): "a user whose `claim`
+// contains `matchValue` gets `role`". Resolved by src/lib/ssoRoleMapping.ts —
+// highest priority wins, a tie goes to the LESS privileged role, and no match
+// is MENTEE. `ADMIN` is refused at the write boundary until the platform gate
+// (#1575) lands. `matchValue` is compared case-insensitively.
+model SsoClaimMapping {
+  id         String       @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  claim      String       @db.VarChar(191)
+  matchValue String       @db.VarChar(191)
+  role       String       @db.VarChar(20)
+  priority   Int          @default(0)
+  createdAt  DateTime     @default(now())
+
+  @@unique([orgId, claim, matchValue])
+  @@index([orgId])
 }
 
 // Single-use bridge token minted by the SSO ACS route AFTER a signed SAML
