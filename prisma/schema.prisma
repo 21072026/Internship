@@ -2822,6 +2822,11 @@ model Meeting {
   // Optional: a meeting with a set time expects an RSVP and gets reminders; a
   // meeting with no time (null) is just a shared link — no RSVP, no reminder.
   scheduledAt         DateTime?
+  // How long it runs, in minutes (#1984). Null for rows written before the
+  // column existed: every reader goes through meetingDurationMinutes()
+  // (src/lib/meetingDuration.ts), which applies the one default — so the banner,
+  // the .ics and the Google event can no longer disagree about when it ends.
+  durationMinutes     Int?
   // The clock the organizer picked `scheduledAt` on (IANA zone), captured at
   // creation (#1210). `scheduledAt` is an instant and is enough to render the
   // time for anyone, but not to say *which* reading was the one agreed on — and
@@ -2929,22 +2934,25 @@ model MeetingGuest {
 // A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;
 // manually scheduled meetings leave seriesId null (backward-compatible).
 model MeetingSeries {
-  id          String   @id @default(cuid())
-  projectId   String?
-  title       String
+  id              String   @id @default(cuid())
+  projectId       String?
+  title           String
   // Days of week as a JSON array of integers (0=Sun … 6=Sat), e.g. [1,4] = Mon+Thu.
-  daysOfWeek  Json
+  daysOfWeek      Json
   // Wall-clock start time in "HH:mm" format (24-hour), e.g. "09:30".
-  timeOfDay   String
+  timeOfDay       String
   // Which clock `timeOfDay` is on (IANA zone, e.g. "Europe/Istanbul"). Null for
   // rules saved before #1110, which are read on the deployment default zone —
   // the clock the UI always showed them on. Without this the wall clock was
   // anchored to UTC, so a 09:00 rule was reminded as "12:00 (GMT+3)".
-  timeZone    String?
-  fixedLink   String?
-  active      Boolean  @default(true)
-  createdById String
-  createdAt   DateTime @default(now())
+  timeZone        String?
+  // Length of every occurrence, in minutes (#1984). Null reads as the default
+  // through meetingDurationMinutes(), exactly like Meeting.durationMinutes.
+  durationMinutes Int?
+  fixedLink       String?
+  active          Boolean  @default(true)
+  createdById     String
+  createdAt       DateTime @default(now())
 
   project   Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
   meetings  Meeting[]

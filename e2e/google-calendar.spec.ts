@@ -78,7 +78,9 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     // Scheduling a meeting mirrors it onto that calendar.
     const scheduledAt = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
     const created = await page.request.post('/api/meetings', {
-      data: { relationIds: [relation.id], title: 'GCal Sync Meeting', scheduledAt },
+      // A 45-minute meeting (#1984): the mirrored event must end 45 minutes in,
+      // not after the hour the sync used to assume.
+      data: { relationIds: [relation.id], title: 'GCal Sync Meeting', scheduledAt, durationMinutes: 45 },
     });
     expect(created.ok()).toBeTruthy();
 
@@ -89,6 +91,9 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     const mockState = await (await request.get(`${MOCK}/__state`)).json();
     const titles = (mockState.events as { summary: string }[]).map((e) => e.summary);
     expect(titles).toContain('GCal Sync Meeting');
+    type TimedEvent = { summary: string; start?: { dateTime?: string }; end?: { dateTime?: string } };
+    const mirrored = (mockState.events as TimedEvent[]).find((e) => e.summary === 'GCal Sync Meeting')!;
+    expect(Date.parse(mirrored.end!.dateTime!) - Date.parse(mirrored.start!.dateTime!)).toBe(45 * 60_000);
 
     // ── #1986: the rest of the loop ──────────────────────────────────────────
     type MockEvent = { id: string; summary: string; start?: { dateTime?: string } };

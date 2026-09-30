@@ -88,6 +88,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         scheduledAt: true,
         meetLink: true,
         timeZone: true,
+        durationMinutes: true,
         relation: { select: { mentor: { select: { email: true } }, mentee: { select: { email: true } } } },
       },
     });
@@ -123,6 +124,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       meetLink: meeting.meetLink,
       organizerTimeZone: meeting.timeZone,
       organizerName: session.user.name ?? null,
+      durationMinutes: meeting.durationMinutes,
     });
 
     return NextResponse.json({ invited: invited.length, guests: invited, rejectedAsMembers }, { status: 201 });

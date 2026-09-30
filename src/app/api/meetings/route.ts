@@ -16,6 +16,7 @@ import { resolveMeetingLink } from '@/lib/meetingContext';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
+import { durationMinutesField } from '@/lib/meetingDuration';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -28,6 +29,9 @@ const schema = z.object({
   // (#1210). Stored on the meeting so the invite can name the reading that was
   // actually agreed on. Invalid/absent falls back to the profile zone.
   timeZone: z.string().max(80).optional(),
+  // How long it runs (#1984). Omitted → the one default, stored as null so the
+  // row keeps following the default if it ever changes.
+  durationMinutes: durationMinutesField,
   // Outsiders with no account here (#1446). Each gets its own RSVP token and
   // the same emailed yes/no buttons; see src/lib/meetingGuests.ts for why the
   // whole batch is attached to ONE of the created rows.
@@ -129,7 +133,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
-    const { relationIds, title, scheduledAt, meetLink, guests } = parsed.data;
+    const { relationIds, title, scheduledAt, meetLink, guests, durationMinutes } = parsed.data;
 
     // `scheduledAt` normally arrives zone-qualified from the browser. A bare wall
     // clock ("2026-08-03T16:30") still has to be honoured for API clients and for
@@ -209,6 +213,7 @@ export async function POST(request: Request) {
           relationId: rel.id,
           title,
           scheduledAt: when,
+          durationMinutes: durationMinutes ?? null,
           timeZone: organizerZone,
           meetLink: link,
           rsvpToken,
@@ -250,6 +255,7 @@ export async function POST(request: Request) {
           // The Meeting row's own id, so the attachment, the public token route
           // and any later reschedule mail all address the same calendar event.
           icsUid: meeting.id,
+          durationMinutes: meeting.durationMinutes,
         });
       } catch (e) {
         console.error('Meeting invite email failed:', e);
@@ -285,6 +291,7 @@ export async function POST(request: Request) {
         meetLink: link,
         organizerTimeZone: organizerZone,
         organizerName: session.user.name ?? null,
+        durationMinutes: durationMinutes ?? null,
       });
     }
 

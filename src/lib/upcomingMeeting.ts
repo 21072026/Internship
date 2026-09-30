@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { parseDaysOfWeek, seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { parseJaasMeetingLink } from '@/lib/meetingLink';
+import { MAX_MEETING_MINUTES, meetingDurationMinutes } from '@/lib/meetingDuration';
 
 // "There is a meeting about to start / happening right now" (#51 follow-up).
 //
@@ -13,12 +14,11 @@ import { parseJaasMeetingLink } from '@/lib/meetingLink';
 //      every project member is expected at whether or not they have a relation
 //      carrying that project.
 //
-// A meeting has no end time in the schema, so "still going" is a fixed window
-// after the start (MEETING_DURATION_MINUTES) — unless a participant marked it
-// ended (Meeting.endedAt / MeetingOccurrenceEnd), which hides it for everyone.
-
-/** How long a meeting is assumed to run — the join link stays offered this long. */
-export const MEETING_DURATION_MINUTES = 60;
+// "Still going" is the meeting's own length after its start — the stored
+// `durationMinutes` of the row or series, or the one default for a row written
+// before it existed (src/lib/meetingDuration.ts, #1984) — unless a participant
+// marked it ended (Meeting.endedAt / MeetingOccurrenceEnd), which hides it for
+// everyone.
 /** How early the dashboard starts announcing the next meeting. */
 export const MEETING_LEAD_MINUTES = 30;
 
@@ -28,8 +28,10 @@ export interface UpcomingMeeting {
   startsAt: string;
   endsAt: string;
   meetLink: string | null;
-  /** True while the meeting is in its assumed duration window. */
+  /** True while the meeting is inside its own duration. */
   ongoing: boolean;
+  /** Its length in minutes — stored, or the default (#1984). */
+  durationMinutes: number;
   /** Whole minutes until it starts; 0 once it has started. */
   minutesUntilStart: number;
   projectId: string | null;
@@ -47,6 +49,7 @@ interface Candidate {
   id: string;
   title: string;
   startsAt: Date;
+  durationMinutes: number;
   meetLink: string | null;
   projectId: string | null;
   projectName: string | null;
@@ -59,7 +62,9 @@ interface Candidate {
 export async function getUpcomingMeeting(userId: string, now = new Date()): Promise<UpcomingMeeting | null> {
   if (!userId) return null;
 
-  const windowStart = new Date(now.getTime() - MEETING_DURATION_MINUTES * 60 * 1000);
+  // Wide enough for the longest meeting the API accepts; each candidate is then
+  // held to its OWN length below, so a 30-minute call is not offered for an hour.
+  const windowStart = new Date(now.getTime() - MAX_MEETING_MINUTES * 60 * 1000);
   const windowEnd = new Date(now.getTime() + MEETING_LEAD_MINUTES * 60 * 1000);
 
   const [meetings, memberships, relationProjects] = await Promise.all([
@@ -84,6 +89,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
         id: true,
         title: true,
         scheduledAt: true,
+        durationMinutes: true,
         meetLink: true,
         projectId: true,
         project: { select: { name: true } },
@@ -103,6 +109,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
       id: m.id,
       title: m.title,
       startsAt: m.scheduledAt!,
+      durationMinutes: meetingDurationMinutes(m),
       meetLink: m.meetLink,
       projectId: m.projectId ?? m.relation?.projectId ?? null,
       projectName: m.project?.name ?? m.relation?.project?.name ?? null,
@@ -124,6 +131,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
         daysOfWeek: true,
         timeOfDay: true,
         timeZone: true,
+        durationMinutes: true,
         fixedLink: true,
         projectId: true,
         project: { select: { name: true } },
@@ -146,6 +154,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
           id: `${s.id}:${when.toISOString()}`,
           title: s.title,
           startsAt: when,
+          durationMinutes: meetingDurationMinutes(s),
           meetLink: s.fixedLink,
           projectId: s.projectId,
           projectName: s.project?.name ?? null,
@@ -167,7 +176,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
   });
 
   const ongoing = unique
-    .filter((c) => c.startsAt <= now)
+    .filter((c) => c.startsAt <= now && c.startsAt.getTime() + c.durationMinutes * 60_000 > now.getTime())
     .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
   const upcoming = unique
     .filter((c) => c.startsAt > now)
@@ -178,7 +187,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
   if (!pick) return null;
 
   const startsAt = pick.startsAt;
-  const endsAt = new Date(startsAt.getTime() + MEETING_DURATION_MINUTES * 60 * 1000);
+  const endsAt = new Date(startsAt.getTime() + pick.durationMinutes * 60_000);
   return {
     id: pick.id,
     title: pick.title,
@@ -186,6 +195,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
     endsAt: endsAt.toISOString(),
     meetLink: pick.meetLink,
     ongoing: startsAt <= now,
+    durationMinutes: pick.durationMinutes,
     minutesUntilStart: Math.max(0, Math.ceil((startsAt.getTime() - now.getTime()) / 60000)),
     projectId: pick.projectId,
     projectName: pick.projectName,

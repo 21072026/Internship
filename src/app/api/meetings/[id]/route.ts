@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib/googleCalendarSync';
+import { durationMinutesField } from '@/lib/meetingDuration';
 
 // The three verbs a meeting never had (#1980).
 //
@@ -45,6 +46,8 @@ const patchSchema = z
     timeZone: z.string().max(80).optional(),
     title: z.string().min(1).optional(),
     meetLink: z.string().url().optional().or(z.literal('')),
+    // A new length (#1984); the mirror is re-pushed with the new end.
+    durationMinutes: durationMinutesField,
     // The only status this route writes. Un-cancelling is deliberately not a
     // verb: the invitees were told it is off, so "on again" is a new meeting.
     status: z.literal('CANCELLED').optional(),
@@ -71,6 +74,7 @@ type Target = {
   scheduledAt: Date | null;
   timeZone: string | null;
   meetLink: string | null;
+  durationMinutes: number | null;
   status: string;
   endedAt: Date | null;
   batchKey: string | null;
@@ -171,8 +175,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
-  const { scheduledAt, timeZone, title, meetLink, status, cancelReason, scope } = parsed.data;
-  if (!scheduledAt && title === undefined && meetLink === undefined && !status) {
+  const { scheduledAt, timeZone, title, meetLink, durationMinutes, status, cancelReason, scope } = parsed.data;
+  if (!scheduledAt && title === undefined && meetLink === undefined && durationMinutes === undefined && !status) {
     return NextResponse.json({ error: 'Validation failed', details: { body: 'Nothing to change' } }, { status: 400 });
   }
 
@@ -277,6 +281,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             : {}),
           ...(title !== undefined ? { title } : {}),
           ...(meetLink !== undefined ? { meetLink: meetLink || null } : {}),
+          ...(durationMinutes !== undefined ? { durationMinutes } : {}),
           ...(when && zone ? { timeZone: zone } : {}),
         },
         select: targetSelect,
@@ -301,6 +306,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         scheduledAt: head.scheduledAt,
         timeZone: head.timeZone,
         meetLink: head.meetLink,
+        durationMinutes: head.durationMinutes,
         status: head.status,
       },
     });
