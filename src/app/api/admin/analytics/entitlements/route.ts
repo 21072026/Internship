@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getSetting } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
 
 // GET — which analytics tier this tenant may see (#1442).
@@ -24,6 +25,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return withTenantScope(session, async () =>
-    NextResponse.json({ premiumAnalytics: (await getSetting('premiumAnalytics')) === 'true' }),
+    NextResponse.json({ premiumAnalytics: (await getSetting('premiumAnalytics', await settingsOrgOf(session))) === 'true' }),
   );
 }

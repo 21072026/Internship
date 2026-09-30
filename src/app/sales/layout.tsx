@@ -11,6 +11,7 @@ import { MentorNav } from '@/components/MentorNav';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
@@ -52,7 +53,7 @@ export default async function SalesLayout({ children }: { children: React.ReactN
   });
   // Same 2FA hold as every other authenticated shell; skipped while
   // impersonating (the admin behind it is already authenticated).
-  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role))) {
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
     redirect('/security-setup');
   }
 

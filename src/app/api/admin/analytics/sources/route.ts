@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { attributedLeadWhere, sourceAttributionRows } from '@/lib/leadAttribution';
@@ -46,7 +47,7 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if ((await getSetting('premiumAnalytics')) !== 'true') {
+  if ((await getSetting('premiumAnalytics', await settingsOrgOf(session))) !== 'true') {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 

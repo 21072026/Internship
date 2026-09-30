@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { TwoFactorSetupGate } from '@/components/TwoFactorSetupGate';
 
 const HOME: Record<string, string> = { ADMIN: '/admin', MENTOR: '/mentor', MENTEE: '/portal', COMPANY: '/company', SOURCE: '/source' };
@@ -21,7 +22,7 @@ export default async function SecuritySetupPage() {
   // Nor during impersonation (#1039): the role layouts already skip the gate
   // there, and `/api/account/2fa` refuses the enrolment behind it — reaching
   // this page by hand would otherwise present a form that cannot succeed.
-  if (me?.twoFactorEnabled || session.user.impersonatorId || !(await is2faRequiredFor(session.user.role))) {
+  if (me?.twoFactorEnabled || session.user.impersonatorId || !(await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
     redirect(home);
   }
 

@@ -15,6 +15,7 @@ import { availableModes } from '@/lib/dualRole';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
@@ -45,7 +46,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Auth hardening: when the org requires 2FA for this role, hold the user at a
   // setup gate until they enable it. Skipped while impersonating (the admin is
   // already authenticated; the impersonated identity's 2FA state is irrelevant).
-  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role))) {
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
     redirect('/security-setup');
   }
 

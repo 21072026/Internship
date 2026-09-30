@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { notifyIfAllowed } from '@/lib/notify';
 import { getSetting } from '@/lib/settings';
+import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendEmail } from '@/services/emailService';
@@ -57,6 +58,7 @@ export async function emitOutcomeComms(opts: {
       where: { id: relationId },
       select: {
         id: true,
+        orgId: true,
         mentorId: true,
         mentee: {
           select: {
@@ -83,7 +85,7 @@ export async function emitOutcomeComms(opts: {
       );
     }
 
-    if ((await getSetting('outcomeAutoSend')) !== 'true') return;
+    if ((await getSetting('outcomeAutoSend', await settingsOrgOfRow(relation.orgId))) !== 'true') return;
 
     // Auto-send is on: the same template the composer would have shown, in the
     // mentee's own language, with their opt-out respected.

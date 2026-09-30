@@ -11,6 +11,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { MATCH_RULESET_VERSION } from '@/lib/matchFeedback';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 const schema = z.object({ menteeId: z.string().min(1) });
 
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
   }));
 
   const gated = await runAiGated({
+    orgId: await settingsOrgOf(session),
     scope: 'mentor_match',
     userId: session.user.id,
     call: () =>

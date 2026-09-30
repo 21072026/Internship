@@ -18,6 +18,7 @@ import { GlobalSearch } from '@/components/GlobalSearch';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
@@ -52,7 +53,7 @@ export async function RoleShell({
   const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
 
-  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role))) {
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
     redirect('/security-setup');
   }
 

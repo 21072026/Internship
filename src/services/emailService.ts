@@ -14,10 +14,12 @@ import { capabilitiesMemo } from '@/lib/shellCapabilities';
 import { interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
+import { settingByOrg } from '@/lib/settingsOrg';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
-import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
+import { RETENTION_GRACE_DAYS } from '@/lib/retention';
 // The batched-sweep helper only; `retentionPrune` holds no Prisma import and
 // imports nothing of ours, so this stays a leaf dependency and cannot cycle.
 import { pruneInBatches } from '@/lib/retentionPrune';
@@ -2351,9 +2353,15 @@ export async function sendProjectJoinRequestEmail({
 }
 
 export async function checkMentorInteractionReminders() {
-  const days = parseInt(await getSetting('reminderDays'), 10) || 14;
-  const fourteenDaysAgo = new Date();
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - days);
+  // `reminderDays` is each relation's OWN org's (#2628): this job sweeps every
+  // tenant with none bound, and an unqualified read is the global row — not the
+  // number any tenant admin set on their settings form.
+  const reminderDaysOf = settingByOrg('reminderDays');
+  const staleCutoffFor = async (orgId: string | null) => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - (parseInt(await reminderDaysOf(orgId), 10) || 14));
+    return cutoff;
+  };
 
   const allActive = await prisma.mentorshipRelation.findMany({
     where: { status: 'ACTIVE' },
@@ -2398,7 +2406,7 @@ export async function checkMentorInteractionReminders() {
   for (const relation of activeRelations) {
     if (dormant.has(relation.id)) continue;
     const lastContact = lastContacts.get(relation.id);
-    const stale = !lastContact || lastContact.at < fourteenDaysAgo;
+    const stale = !lastContact || lastContact.at < (await staleCutoffFor(relation.orgId));
     if (stale) {
       remindersToSend.push(relation);
       // In-app notification once per staleness episode (#573): only when we
@@ -3685,18 +3693,34 @@ export async function sendDailyActivityDigests() {
 // within the grace period they surface in the admin retention review for manual
 // erasure — nothing is deleted automatically.
 export async function checkRetentionReminders() {
-  const months = await getRetentionMonths();
-  const dueCutoff = new Date();
-  dueCutoff.setMonth(dueCutoff.getMonth() - months);
+  // Each candidate is held to their OWN org's retention limit (#2628) — the
+  // job sweeps every tenant with none bound. The query takes the shortest limit
+  // any org has (the latest cutoff, so nobody due is missed) and each row is
+  // then checked against its own org's.
+  const monthsOf = settingByOrg('retentionMonths');
+  const retentionMonthsOf = async (orgId: string | null) => parseInt(await monthsOf(orgId), 10) || 12;
+  const cutoffFor = (m: number) => {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - m);
+    return cutoff;
+  };
+  const orgIds = (await prisma.organization.findMany({ select: { id: true } })).map((o) => o.id);
+  const months = Math.min(...(await Promise.all([null, ...orgIds].map(retentionMonthsOf))));
+  const dueCutoff = cutoffFor(months);
 
-  const users = await prisma.user.findMany({
+  const candidates = await prisma.user.findMany({
     where: {
       role: 'MENTEE',
       consentAt: { not: null, lt: dueCutoff },
       retentionReminderSentAt: null,
     },
-    select: { id: true, orgId: true, fullName: true, email: true },
+    select: { id: true, orgId: true, fullName: true, email: true, consentAt: true },
   });
+  const users: (typeof candidates[number] & { months: number })[] = [];
+  for (const u of candidates) {
+    const own = await retentionMonthsOf(u.orgId);
+    if (u.consentAt && u.consentAt < cutoffFor(own)) users.push({ ...u, months: own });
+  }
 
   // WORLDS (#2590): the renewal link opens the product the CANDIDATE's account
   // lives in — a legal notice that lands on a site where the person has no
@@ -3724,7 +3748,7 @@ export async function checkRetentionReminders() {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color:#2563eb;">Do you want to keep your data with us?</h2>
             <p>Hi ${u.fullName},</p>
-            <p>It has been more than ${months} months since you agreed to us storing your
+            <p>It has been more than ${u.months} months since you agreed to us storing your
             data (profile, CV and interaction history). To keep it, please confirm below.
             If you don't, an administrator will review your record for deletion.</p>
             <a href="${renewUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">Keep my data</a>
@@ -4068,7 +4092,11 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
 // pipeline summary — total relations, hired conversion, stage counts and the
 // last 7 days' activity — honoring the per-user digest email opt-out.
 export async function sendWeeklyAnalyticsReport() {
-  if ((await getSetting('premiumAnalytics')) !== 'true') return { locked: true, sent: 0 };
+  // Gated on the DEFAULT org's entitlement (#2628) — the report predates
+  // tenants and aggregates the whole book, so it is that org's report. Read
+  // unqualified, the job (no tenant bound) saw only the global row, which no
+  // tenant's settings form writes any more.
+  if ((await getSetting('premiumAnalytics', await defaultOrgId())) !== 'true') return { locked: true, sent: 0 };
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const [byStage, newRelations, interactions, admins] = await Promise.all([

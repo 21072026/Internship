@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **An admin's settings change only their own organisation** (#2628). `PUT /api/admin/settings` wrote the global `Setting` row (`orgId = NULL`) — with `MT_ENFORCE_ISOLATION` off, `withTenantScope` bound no org, so `setSetting` fell through to the layer every tenant inherits, and a MARKETING admin switching `premiumAnalytics` (or `require2fa`, `aiMonthlyQuota`, …) on switched it on for the INTERNSHIP tenant too. The route now writes and reads the caller's org row (`settingsOrgOf(session)` in `src/lib/settingsOrg.ts`: the session's org, the default org for an org-less session), `runWithOrg` binds the org even with the flag off (no query is scoped by it), and every reader that runs outside a tenant scope passes the org explicitly — the 2FA layout guards, the dashboards' reminder window, registration, the AI gate, outcome auto-send, the retention page, and the crons (per row, or the default org's value for the jobs that are still that org's alone). The retention windows, `viewLogWindowMinutes` and `orphanApplicantGraceDays` are deployment-global (`GLOBAL_SETTING_KEYS`): reads ignore tenant rows for them, `setSetting` refuses one, and the route lets only a super admin write them (403 otherwise). Existing global rows keep working as every tenant's fallback.",
+  "notes": {
+    "en": [
+      "Settings saved by an administrator now apply only to their own organisation."
+    ],
+    "tr": [
+      "Bir yöneticinin kaydettiği ayarlar artık yalnızca kendi kuruluşunda geçerli."
+    ],
+    "de": [
+      "Von einer Administratorin oder einem Administrator gespeicherte Einstellungen gelten jetzt nur noch für die eigene Organisation."
+    ]
+  }
+}

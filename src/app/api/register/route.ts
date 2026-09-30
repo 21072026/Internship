@@ -224,7 +224,7 @@ export async function POST(request: Request) {
     // lets the account in as soon as the emailed link is clicked — the front
     // door is open to anyone — while 'manual' parks it for an admin. Invited
     // users (proven email + chosen role) are active right away.
-    const pending = !token && (await getSetting('selfRegistration')) === 'manual';
+    const pending = !token && (await getSetting('selfRegistration', orgId)) === 'manual';
     const selfRegistered = !token;
 
     const timezone = isValidTimeZone(parsed.data.timezone) ? parsed.data.timezone : null;

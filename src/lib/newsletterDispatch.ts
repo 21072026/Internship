@@ -730,17 +730,19 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   templateKey?: string;
   scheduledAt?: Date;
 }> {
-  const cadence = await getSetting('newsletterSchedule');
-  const days = CADENCE_DAYS[cadence];
-  if (!days) return { queued: false, reason: 'disabled' };
-
   // The cadence is the default org's — its issues are stamped with it below
   // (#2357) — so every read that GATES it is scoped to that org too (#2335).
   // Unscoped, any other tenant's issue counted as "the previous cycle": one held
   // by its own tenant's spent band stopped this cadence until that tenant's
   // month rolled over, and another tenant's send reset "too soon" for an
-  // audience that never received it.
+  // audience that never received it. The three settings are that org's as well:
+  // /admin/newsletters writes them into the admin's own org row (#2628), and
+  // this job runs with no tenant bound, so an unqualified read is the global row.
   const orgId = await defaultOrgId();
+
+  const cadence = await getSetting('newsletterSchedule', orgId);
+  const days = CADENCE_DAYS[cadence];
+  if (!days) return { queued: false, reason: 'disabled' };
 
   // Anything already waiting means the previous cycle has not gone out yet.
   const pending = await prisma.newsletter.count({ where: { orgId, status: { in: ['SCHEDULED', 'SENDING'] } } });
@@ -755,7 +757,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
     return { queued: false, reason: 'too_soon' };
   }
 
-  const audience = (await getSetting('newsletterAudience')) as NewsletterAudience;
+  const audience = (await getSetting('newsletterAudience', orgId)) as NewsletterAudience;
   // Which library entries have been used before — so the cadence walks the
   // library instead of re-sending its first issue forever.
   const used = await prisma.newsletter.findMany({
@@ -771,7 +773,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // than sending nothing.
   if (!template) return { queued: false, reason: 'library_exhausted' };
 
-  const hour = Math.min(23, Math.max(0, parseInt(await getSetting('newsletterSendHour'), 10) || 9));
+  const hour = Math.min(23, Math.max(0, parseInt(await getSetting('newsletterSendHour', orgId), 10) || 9));
   const scheduledAt = new Date(now);
   scheduledAt.setHours(hour, 0, 0, 0);
   // Past that hour already (the job ran late, or the hour is set early): go

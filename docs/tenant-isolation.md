@@ -57,10 +57,13 @@ Since #1559 the rule holds without exception: **every** model in
 `npm run check:tenant-models` fails the build in both directions if that ever
 stops being true.
 
-This engine is **entirely dormant unless `MT_ENFORCE_ISOLATION=true`**:
-`runWithOrg` is a straight passthrough when the flag is off (no context is
-established, the middleware early-returns), so single-tenant production is byte
--for-byte unchanged. It lives in `orgContext.ts` (server-only — it imports
+This engine is **dormant unless `MT_ENFORCE_ISOLATION=true`**: with the flag
+off the middleware is never installed (and early-returns if it was), so no query
+is scoped. `runWithOrg` still **binds** the org when the flag is off (#2628) —
+`currentOrgId()` is how `src/lib/settings.ts` knows whose settings a request
+reads and writes, and without it every tenant admin's settings form wrote the
+global row. The settings module and the logger's `orgId` field are the only
+readers of the bound org while the flag is off. It lives in `orgContext.ts` (server-only — it imports
 `node:async_hooks`) and is deliberately kept out of the widely-imported
 `prisma.ts` so it never enters a client bundle.
 
@@ -325,10 +328,37 @@ Resolution is **org row → global row → `SETTING_DEFAULTS`**, and that rule l
 in exactly one file, `src/lib/settings.ts`. Nothing else reads `prisma.setting`
 directly — `getSetting(key, orgId?)` / `getSettings(orgId?)` / `setSetting(key,
 value, orgId?)` are the whole surface. The org argument is optional: omitted, it
-resolves to the org bound by `withTenantScope()` (`currentOrgId()`), and to the
-global layer when no org is bound. That is what keeps the ~20 existing
-zero-argument call sites correct without changing any of them, and what makes a
-single-tenant deployment behave exactly as it did before.
+resolves to the org bound by `withTenantScope()` (`currentOrgId()`, bound whether
+or not the flag is on), and to the global layer when no org is bound.
+
+**A tenant's own setting is never written to, or read from, the global row by
+accident (#2628).** Until #2628 the org was bound only with the flag on, so on
+every real deployment `PUT /api/admin/settings` wrote the global row — and a
+MARKETING admin switching `premiumAnalytics` on switched it on for the
+INTERNSHIP tenant too. Now:
+
+- the settings route passes the org explicitly, `settingsOrgOf(session)`
+  (`src/lib/settingsOrg.ts`): the session's org, or the **default org** for an
+  org-less session (the `tenantFilter.ts` rule) — never `null`;
+- every reader that runs **outside** a tenant scope passes the org too: the
+  layout 2FA guards (`is2faRequiredFor(role, orgId)`), the dashboards'
+  `reminderDays`, the admin retention page, registration (the new account's
+  org), the AI gate (`runAiGated({ orgId })`), outcome auto-send (the
+  relation's org), and the crons — per row via `settingByOrg(key)`
+  (interaction reminders, retention reminders) or the default org's value for
+  the jobs that are still that org's alone (newsletter cadence, the weekly
+  analytics report);
+- **deployment-global keys** (`GLOBAL_SETTING_KEYS` in `settings.ts`: the
+  retention windows, `viewLogWindowMinutes`, `orphanApplicantGraceDays`) are read
+  by jobs that sweep every tenant with none bound, so a tenant row for one would
+  never be the number that fires. Reads ignore tenant rows for them,
+  `setSetting` refuses to write one, and the settings route lets only a super
+  admin (`isSuperAdmin`) write them — to the global row.
+
+The global row is therefore written only by a super admin (global keys), by
+deploy scripts, and by an explicit `setSetting(key, value, null)`. Existing
+global rows keep working as the fallback for every tenant that has not set its
+own value.
 
 **The auto-filter had to be opted out of, on purpose.** `Setting` *is* registered
 in `TENANT_MODELS`, so any code that reaches for `prisma.setting` outside this
@@ -339,8 +369,8 @@ step 2 of the chain into a silent "code default" for every tenant. So the querie
 in `settings.ts` run inside `runWithOrg(null, …)`, which clears the tenant context
 for the duration and lets the module see both layers. This is safe because the
 module computes the org itself, from the bound context, and never from request
-input: `PUT /api/admin/settings` passes no org at all, so a tenant admin can only
-ever write their own row.
+input: `PUT /api/admin/settings` passes the caller's org, derived from the
+session, so a tenant admin can only ever write their own row.
 
 It reaches both of those through `src/lib/tenantAmbient.ts` rather than importing
 `orgContext.ts` directly, and that indirection is load-bearing rather than
@@ -373,7 +403,7 @@ Handlers adopt the engine by wrapping their body in `withTenantScope(session, �
 **All authenticated API routes that query a tenant-anchored model are now
 wrapped** — every such handler binds the request's org, so with the flag on the
 central middleware scopes all of its queries. Wrapping is behavior-neutral while
-the flag is off (`withTenantScope` is a pure passthrough).
+the flag is off (`withTenantScope` binds the org but scopes nothing).
 
 Public / token-based routes (registration, apply, forgot-password, invite
 acceptance, the `/for-companies` enquiry) are intentionally not wrapped: they
