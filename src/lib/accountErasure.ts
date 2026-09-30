@@ -191,10 +191,10 @@ export async function forgetCompanyContact(
 //     One of those is company-side: the `signup.companyInquiry` notification
 //     every admin receives carries the contact's name in `Notification.params`
 //     and no address, so nothing here can tell it from a namesake's.
-//   - a company contact who never had an ACCOUNT: both erasure paths start from
-//     a `User` row, so an enquiry whose sender never signed up is unreachable
-//     from here. #2559 extends companyContactOps() for that case (and adds a
-//     retention period for enquiries) rather than writing a second path.
+//   - a company contact who never had an ACCOUNT is not reachable from a `User`
+//     row; `forgetCompanyContact()` below (#2559) forgets them by address
+//     through the SAME scrub builder, so there is still one rule, not two.
+//     A retention period for unconverted enquiries is #2559's second slice.
 //
 // Emptying rather than nulling is forced by the schema: `Message.body`,
 // `SupportMessage.body`, `PersonalNote.body`, `RelationNote.body` and

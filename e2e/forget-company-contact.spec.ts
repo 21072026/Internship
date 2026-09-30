@@ -128,3 +128,28 @@ test('an address with an account is sent to the account erasure, and a non-admin
     await s.cleanup();
   }
 });
+
+test('the enquiry list offers "Forget this contact" and the row reads as forgotten after it (#2559)', async ({ page }) => {
+  const s = await seed();
+  try {
+    await signInAndSettle(page, s.adminEmail, PW, '/admin');
+    await page.goto('/admin/company-inquiries');
+    // The list opens on "New"; the seeded enquiry has been contacted already.
+    await page.getByRole('button', { name: 'All', exact: true }).click();
+    const row = page.getByTestId(`inquiry-forget-${s.own.inquiry.id}`);
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await row.getByTestId('forget-contact-open').click();
+    await expect(row.getByTestId('forget-contact-submit')).toBeDisabled();
+    await row.getByTestId('forget-contact-confirm-email').fill(s.contact);
+    await row.getByTestId('forget-contact-admin-password').fill(PW);
+    const done = page.waitForResponse((r) => r.url().endsWith('/api/admin/company-contacts/forget'));
+    await row.getByTestId('forget-contact-submit').click();
+    expect((await done).status()).toBe(200);
+    // The list reloads: the row now carries the tombstone, so it offers nothing to forget.
+    await expect(page.getByTestId(`inquiry-forget-${s.own.inquiry.id}`)).toHaveCount(0, { timeout: 20_000 });
+    await expect(page.getByTestId('company-inquiries-list')).not.toContainText(s.contact);
+    expect((await prisma.companyInquiry.findUniqueOrThrow({ where: { id: s.other.inquiry.id } })).email).toBe(s.contact);
+  } finally {
+    await s.cleanup();
+  }
+});

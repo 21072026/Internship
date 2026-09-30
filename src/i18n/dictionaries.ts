@@ -188,6 +188,12 @@ const en = {
     adminPasswordHint: 'Confirm with your own password — not the account holder\u2019s.',
     yesAnonymize: 'Yes, anonymize',
     yesDelete: 'Yes, delete permanently',
+    // A contact with no account (#2559): an enquiry's sender, an imported account's named person.
+    forgetContact: 'Forget this contact',
+    forgetContactConfirm: 'This scrubs the person\u2019s name, address, phone and messages from every enquiry and company contact with this address in your organisation. The companies stay. This cannot be undone.',
+    forgetContactTypeEmail: 'Type "{email}" to confirm',
+    forgetContactYes: 'Yes, forget this contact',
+    forgetContactHasAccount: 'This address belongs to an account — erase the account from its profile instead.',
     failed: 'Could not complete the request.',
   },
   company: {
@@ -5756,6 +5762,11 @@ const tr: Dict = {
     adminPasswordHint: 'Kendi parolanla onayla — hesap sahibinin parolası değil.',
     yesAnonymize: 'Evet, anonimleştir',
     yesDelete: 'Evet, kalıcı olarak sil',
+    forgetContact: 'Bu kişiyi unut',
+    forgetContactConfirm: 'Bu işlem, kurumundaki bu adrese sahip tüm taleplerden ve firma iletişim bilgilerinden kişinin adını, adresini, telefonunu ve mesajlarını siler. Firmalar kalır. Geri alınamaz.',
+    forgetContactTypeEmail: 'Onaylamak için "{email}" yaz',
+    forgetContactYes: 'Evet, bu kişiyi unut',
+    forgetContactHasAccount: 'Bu adres bir hesaba ait — hesabı profilinden sil.',
     failed: 'İstek tamamlanamadı.',
   },
   company: {
@@ -11169,6 +11180,11 @@ const de: Dict = {
     adminPasswordHint: 'Bestätige mit deinem eigenen Passwort — nicht mit dem des Kontoinhabers.',
     yesAnonymize: 'Ja, anonymisieren',
     yesDelete: 'Ja, endgültig löschen',
+    forgetContact: 'Diesen Kontakt vergessen',
+    forgetContactConfirm: 'Damit werden Name, Adresse, Telefonnummer und Nachrichten der Person aus allen Anfragen und Firmenkontakten mit dieser Adresse in deiner Organisation entfernt. Die Unternehmen bleiben bestehen. Das lässt sich nicht rückgängig machen.',
+    forgetContactTypeEmail: 'Zur Bestätigung "{email}" eingeben',
+    forgetContactYes: 'Ja, diesen Kontakt vergessen',
+    forgetContactHasAccount: 'Diese Adresse gehört zu einem Konto — lösche stattdessen das Konto über sein Profil.',
     failed: 'Anfrage konnte nicht abgeschlossen werden.',
   },
   company: {
