@@ -8,6 +8,7 @@ import { runAiGated } from '@/lib/aiGate';
 import { aiRankMentors, type MatchCandidate } from '@/lib/aiMentorMatch';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { MATCH_RULESET_VERSION } from '@/lib/matchFeedback';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
@@ -50,8 +51,12 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
 
-  const mentee = await prisma.user.findUnique({
-    where: { id: parsed.data.menteeId },
+  // The mentee and the mentor pool are both the caller's tenant's (#2542
+  // follow-up): with MT_ENFORCE_ISOLATION off this suggested every tenant's
+  // mentors, names and skills included, and scored another tenant's mentee.
+  const tenant = await tenantWhere(session);
+  const mentee = await prisma.user.findFirst({
+    where: withinTenant({ id: parsed.data.menteeId }, tenant),
     select: { id: true, role: true, skills: true, targetPosition: true, interests: true },
   });
   if (!mentee || mentee.role !== 'MENTEE') return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -87,7 +92,7 @@ export async function POST(request: Request) {
   };
 
   const mentors = await prisma.user.findMany({
-    where: { role: { in: ['MENTOR', 'ADMIN'] }, isActive: true },
+    where: withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant),
     select: {
       id: true,
       fullName: true,

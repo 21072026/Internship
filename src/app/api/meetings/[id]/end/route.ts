@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
-import { loadAccessibleMeeting } from '@/lib/meetingAccess';
+import { loadAccessibleMeeting, meetingInCallerTenant, type MeetingUser } from '@/lib/meetingAccess';
 import { logEndedMeetingInteractions } from '@/lib/meetingAutoLog';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 
@@ -45,7 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
 }
 
-async function endMeetingRow(user: { id: string; role: string }, meetingId: string, now: Date) {
+async function endMeetingRow(user: MeetingUser, meetingId: string, now: Date) {
   // Same participation rule as notes and call tokens; missing and not-yours
   // answer the same, so the id space stays opaque.
   const accessible = await loadAccessibleMeeting(user, meetingId);
@@ -100,7 +100,7 @@ async function endMeetingRow(user: { id: string; role: string }, meetingId: stri
   return NextResponse.json({ ok: true });
 }
 
-async function endSeriesOccurrence(user: { id: string; role: string }, seriesId: string, iso: string, now: Date) {
+async function endSeriesOccurrence(user: MeetingUser, seriesId: string, iso: string, now: Date) {
   const occurrenceAt = new Date(iso);
   if (Number.isNaN(occurrenceAt.getTime())) {
     return NextResponse.json({ error: 'Invalid occurrence' }, { status: 400 });
@@ -108,9 +108,22 @@ async function endSeriesOccurrence(user: { id: string; role: string }, seriesId:
 
   const series = await prisma.meetingSeries.findUnique({
     where: { id: seriesId },
-    select: { id: true, projectId: true, createdById: true, daysOfWeek: true, timeOfDay: true, timeZone: true },
+    select: {
+      id: true,
+      projectId: true,
+      project: { select: { orgId: true } },
+      createdById: true,
+      daysOfWeek: true,
+      timeOfDay: true,
+      timeZone: true,
+    },
   });
   if (!series) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // Another tenant's rule is a missing one — the admin allowance below is
+  // "any series of my tenant", not of the database (#2542 follow-up).
+  if (!(await meetingInCallerTenant(series, series.createdById, user.orgId))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
   // Who counts as a participant mirrors who the banner shows it to
   // (src/lib/upcomingMeeting.ts): project members, people whose active

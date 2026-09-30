@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
-import { loadAccessibleMeeting } from '@/lib/meetingAccess';
+import { loadAccessibleMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { logActivity } from '@/lib/activity';
 import {
   MAX_GUESTS_PER_MEETING,
@@ -22,7 +22,7 @@ import {
 // token forever with no way to take it back.
 //
 // Who may do it: see authorize() below.
-async function authorize(meetingId: string, user: { id: string; role: string }) {
+async function authorize(meetingId: string, user: MeetingUser) {
   // Participation first — and "not yours" is indistinguishable from "no such
   // meeting", so the id space stays opaque.
   const accessible = await loadAccessibleMeeting(user, meetingId);

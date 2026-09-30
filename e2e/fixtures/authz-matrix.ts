@@ -245,6 +245,15 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
   { path: '/api/admin/analytics/aging', kind: 'list' },
   { path: '/api/invite', kind: 'list' },
   { path: '/api/admin/invitations', kind: 'list' },
+  // Relations, meetings and the calendar (#2542 follow-up): the ADMIN relation
+  // scope and the meeting/calendar ADMIN branches were `{}`. The seeded foreign
+  // mentee has no relation here, so these are regression tripwires on the
+  // payload; e2e/tenant-isolation-relations.spec.ts seeds the rows and pins
+  // them in both directions.
+  { path: '/api/mentorship', kind: 'list' },
+  { path: '/api/meetings', kind: 'list' },
+  { path: '/api/calendar-events', kind: 'list' },
+  { path: `/api/people/${FOREIGN_USER_ID_PARAM}/card`, kind: 'detail' },
 ];
 
 /**

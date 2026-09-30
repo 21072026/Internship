@@ -8,6 +8,8 @@ import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import type { Prisma } from '@prisma/client';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingContext';
@@ -47,12 +49,16 @@ export async function GET() {
     // the column nullable: every consumer (MeetingsManager, MeetingSchedulerPanel)
     // reads `m.relation.mentee.fullName`, and an admin's unfiltered query would
     // otherwise start returning project/conversation rows with a null relation.
-    const where =
-      role === 'ADMIN'
-        ? { relationId: { not: null } }
-        : role === 'MENTOR'
-          ? { relationId: { not: null }, relation: { mentorId: session.user.id } }
-          : { relationId: { not: null }, relation: { menteeId: session.user.id } };
+    //
+    // The relation is also where the tenant lives (Meeting has no orgId): an
+    // ADMIN's list used to be every tenant's meetings, since the middleware
+    // scopes nothing with MT_ENFORCE_ISOLATION off (#2542 follow-up). Every
+    // role's relation filter is narrowed to the caller's tenant.
+    const relationWhere: Prisma.MentorshipRelationWhereInput = withinTenant<Prisma.MentorshipRelationWhereInput>(
+      role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: session.user.id } : { menteeId: session.user.id },
+      await tenantWhere(session),
+    );
+    const where: Prisma.MeetingWhereInput = { relationId: { not: null }, relation: { is: relationWhere } };
     // An explicit allowlist, never `include` (#1548). A bare `include` serialises
     // every column of the row, and one of them — `rsvpToken` — is a bearer
     // credential: /rsvp/<token> is on the middleware's public allowlist and
@@ -146,10 +152,15 @@ export async function POST(request: Request) {
       organizerZone = isValidTimeZone(picked) ? picked : isValidTimeZone(saved) ? saved : null;
     }
 
-    const where =
+    // Relation ids come from the client: an admin may schedule on any relation
+    // OF THEIR TENANT, a mentor on their own. A foreign id is dropped exactly
+    // like a missing one (#2542 follow-up).
+    const where = withinTenant(
       session.user.role === 'ADMIN'
         ? { id: { in: relationIds } }
-        : { id: { in: relationIds }, mentorId: session.user.id };
+        : { id: { in: relationIds }, mentorId: session.user.id },
+      await tenantWhere(session),
+    );
     const relations = await prisma.mentorshipRelation.findMany({
       where,
       // `preferredLanguage` for #1720, next to `timezone` for the same reason:
