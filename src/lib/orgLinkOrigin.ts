@@ -57,36 +57,3 @@ export async function appOriginsForOrgs(orgIds: string[]): Promise<Map<string, s
   });
   return new Map(rows.map((r) => [r.id, linkOriginForOrgRow(r)]));
 }
-
-/**
- * The same answer for a recipient known only by User.id — the generic footer
- * `sendEmail()` adds, whose caller passes a userId and nothing else. One round
- * trip (the org through the relation), with the same fail-open fallback.
- */
-export async function appOriginForUser(userId: string | null | undefined): Promise<string> {
-  if (!userId) return appLinkOrigin(null);
-  const user = await prisma.user
-    .findUnique({ where: { id: userId }, select: { org: { select: { publicHost: true } } } })
-    .catch(() => null);
-  return appLinkOrigin(user?.org?.publicHost ?? null);
-}
-
-/**
- * A per-run memo of appOriginForOrg, for a job that mails many people of few
- * tenants (a digest, a newsletter): one lookup per org, not per recipient. It
- * caches the promise, so recipients in flight together share one query. Make a
- * new one per run — never at module scope, or a mapping changed between two
- * runs would not be seen by the second.
- */
-export function appOriginMemo(): (orgId: string | null | undefined) => Promise<string> {
-  const cache = new Map<string, Promise<string>>();
-  return (orgId) => {
-    const key = orgId ?? '';
-    let hit = cache.get(key);
-    if (!hit) {
-      hit = appOriginForOrg(orgId);
-      cache.set(key, hit);
-    }
-    return hit;
-  };
-}
