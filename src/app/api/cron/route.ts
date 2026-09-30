@@ -111,6 +111,13 @@ export async function GET(request: Request) {
       const trialReminders = await runTrialReminders(orgId ? { orgIds: [orgId] } : {});
       return NextResponse.json({ message: 'Trial reminders ran', trialReminders });
     }
+    // Recurring-meeting reminders alone (#2013) — the same function the batch
+    // runs, and as safe to click twice: every occurrence is claimed in
+    // MeetingSeriesReminder before anything is sent. Named so an operator (and
+    // e2e/relation-series-reach.spec.ts) can run it without the whole batch.
+    if (job === 'meeting-series-reminders') {
+      return NextResponse.json({ message: 'Meeting series reminders ran', projectMeetings: await sendProjectMeetingSeriesReminders() });
+    }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();
       return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });

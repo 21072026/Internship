@@ -3401,14 +3401,28 @@ function leadFor(minutesAway: number): 'DAY_BEFORE' | 'HOUR_BEFORE' | null {
 export async function sendProjectMeetingSeriesReminders() {
   const now = new Date();
   const seriesList = await prisma.meetingSeries.findMany({
-    where: { active: true, projectId: { not: null } },
+    // A project's recurring call, and a standing 1:1 on a live relation (#2013).
+    where: {
+      active: true,
+      OR: [{ projectId: { not: null } }, { relationId: { not: null }, relation: { is: { status: 'ACTIVE' } } }],
+    },
     select: {
       id: true,
       title: true,
       ...SERIES_RULE_SELECT,
       fixedLink: true,
       projectId: true,
+      relationId: true,
       project: { select: { id: true, name: true, orgId: true } },
+      relation: {
+        select: {
+          orgId: true,
+          mentorId: true,
+          menteeId: true,
+          mentor: { select: { fullName: true } },
+          mentee: { select: { fullName: true } },
+        },
+      },
     },
   });
 
@@ -3421,7 +3435,8 @@ export async function sendProjectMeetingSeriesReminders() {
   const origins = createOriginBook();
 
   for (const series of seriesList) {
-    if (!series.projectId) continue;
+    const oneToOne = !series.projectId ? series.relation : null;
+    if (!series.projectId && !oneToOne) continue;
 
     const occurrences = upcomingSeriesOccurrences(series, now, SERIES_LOOKAHEAD_MINUTES);
     if (occurrences.length === 0) continue;
@@ -3430,7 +3445,10 @@ export async function sendProjectMeetingSeriesReminders() {
     // project the legacy way (MentorshipRelation.projectId) is expected at the
     // same call, and since series meetings are now excluded from the
     // per-relation reminder they would otherwise be reminded by nobody.
-    const team = await loadProjectTeam(series.projectId);
+    // A standing 1:1 (#2013) is its two people.
+    const team = oneToOne
+      ? [{ id: oneToOne.mentorId }, { id: oneToOne.menteeId }]
+      : await loadProjectTeam(series.projectId!);
     if (team.length === 0) continue;
     const recipients = await prisma.user.findMany({
       where: { id: { in: team.map((m) => m.id) }, isActive: true },
@@ -3466,9 +3484,13 @@ export async function sendProjectMeetingSeriesReminders() {
       }
       reminded++;
 
-      const projectName = series.project?.name ?? '';
       for (const user of recipients) {
-        const link = `/projects/${series.projectId}`;
+        // For a standing 1:1 the context line is the OTHER person, where a
+        // project's call names the project; each lands on their own calendar.
+        const projectName = oneToOne
+          ? (user.id === oneToOne.mentorId ? oneToOne.mentee.fullName : oneToOne.mentor.fullName) ?? ''
+          : series.project?.name ?? '';
+        const link = oneToOne ? (user.role === 'MENTEE' ? '/portal/calendar' : '/mentor/calendar') : `/projects/${series.projectId}`;
         // LOCALE (#1720): a project team member is a signed-up User, so their
         // own stored preference decides — for the occurrence's date as much as
         // for the sentence around it, and for the in-app copy of the same line.
@@ -3484,7 +3506,7 @@ export async function sendProjectMeetingSeriesReminders() {
 
         if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-series-reminder')) continue;
         try {
-          const brand = await emailBrand(series.project?.orgId ?? null);
+          const brand = await emailBrand(series.project?.orgId ?? oneToOne?.orgId ?? null);
           const base = await origins.urlFor(user.orgId);
           const S = getDictionary(uLocale).notifications.meetingSeriesReminderEmail;
           // Two sentences, because the project name is only appended when there
@@ -3507,7 +3529,7 @@ export async function sendProjectMeetingSeriesReminders() {
                 ? S.subjectSoon.replace('{title}', series.title)
                 : S.subjectTomorrow.replace('{title}', series.title).replace('{project}', projectName),
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              ${brandHeader(brand, esc(S.heading))}
+              ${brandHeader(brand, esc(oneToOne ? S.headingOneToOne : S.heading))}
               <p>${esc(S.greeting.replace('{name}', user.fullName ?? ''))}</p>
               <p>${esc(bodyBefore)}<strong>${esc(series.title)}</strong>${esc(bodyMiddle)}${projectName ? esc(projectName) : ''}${esc(bodyAfter)}</p>
               <p><strong>${esc(S.when)}</strong> ${whenLocal}</p>
@@ -3518,7 +3540,7 @@ export async function sendProjectMeetingSeriesReminders() {
                 uLocale
               )}
               ${series.fixedLink ? `<p><strong>${esc(S.link)}</strong> <a href="${series.fixedLink}">${esc(series.fixedLink)}</a></p>` : ''}
-              ${ctaBlock(brand, `${base}${link}`, esc(S.cta))}
+              ${ctaBlock(brand, `${base}${link}`, esc(oneToOne ? S.ctaOneToOne : S.cta))}
               ${timeZoneNote(user.timezone, uLocale, base)}
             </div>`,
           });

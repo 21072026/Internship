@@ -20,6 +20,7 @@ import { RelationTimeline } from '@/components/RelationTimeline';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
+import { RelationRecurringMeeting } from '@/components/meeting/RelationRecurringMeeting';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
@@ -624,6 +625,10 @@ export default function MenteeDetailPage() {
           {/* Everything on this mentee's list — what came from a project and what a
               mentor handed them directly — plus the box to add to it (#1113). */}
           <PersonTodos userId={relation.mentee.id} fullName={relation.mentee.fullName} />
+
+          {/* A standing 1:1 (#2013): the recurring slot next to the one-off requests.
+              Only a live pairing takes a new rule; a completed one still shows it. */}
+          <RelationRecurringMeeting relationId={id} canManage={relation.status === 'ACTIVE'} />
 
           <MeetingRequestsPanel relationId={id} mode="manage" />
 

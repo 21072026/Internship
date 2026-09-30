@@ -118,3 +118,51 @@ test('a series is ONE recurring event per connected member: created, moved in pl
     await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });
+
+test('a standing 1:1 is on both of its people’s calendars with its interval, and leaves them when the pairing ends', async ({ request }) => {
+  // #2013: the audience of a relation series is the relation's mentor and
+  // mentee — not project members, which a 1:1 has none of.
+  const stamp = `${Date.now()}${crypto.randomBytes(3).toString('hex')}`;
+  const title = `GCal 1:1 ${stamp}`;
+  const eventsNamed = async (summary: string): Promise<MockEvent[]> =>
+    ((await (await request.get(`${MOCK}/__state`)).json()).events as MockEvent[]).filter((e) => e.summary.startsWith(summary));
+
+  const org = await prisma.organization.create({ data: { name: `GCal 1:1 ${stamp}`, slug: `gcal-121-${stamp}` } });
+  const mentorEmail = uniqueEmail('gcal-121-mentor');
+  const menteeEmail = uniqueEmail('gcal-121-mentee');
+  const mentor = await seedUser(mentorEmail, PASSWORD, 'MENTOR', 'OneToOne Mentor', org.id);
+  const mentee = await seedUser(menteeEmail, PASSWORD, 'MENTEE', 'OneToOne Mentee', org.id);
+  const relation = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, orgId: org.id } });
+
+  const menteeCtx = await playwrightRequest.newContext({ baseURL: test.info().project.use.baseURL });
+  let seriesId: string | undefined;
+  try {
+    expect((await signInViaApi(menteeCtx, menteeEmail, PASSWORD)).ok).toBe(true);
+    await connectCalendar(menteeCtx);
+    expect((await signInViaApi(request, mentorEmail, PASSWORD)).ok).toBe(true);
+    await connectCalendar(request);
+
+    const created = await request.post('/api/meeting-series', {
+      data: { relationId: relation.id, title, daysOfWeek: [3], timeOfDay: '16:00', timeZone: 'Europe/Berlin', intervalWeeks: 2 },
+    });
+    expect(created.status()).toBe(201);
+    seriesId = (await created.json()).series.id as string;
+
+    await expect.poll(async () => (await eventsNamed(title)).length, { timeout: 15_000 }).toBe(2);
+    for (const e of await eventsNamed(title)) expect(e.recurrence).toEqual(['RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=WE']);
+    expect(await prisma.googleCalendarEventLink.count({ where: { seriesId } })).toBe(2);
+
+    // The pairing completes: the next sync withdraws it from both calendars.
+    await prisma.mentorshipRelation.update({ where: { id: relation.id }, data: { status: 'COMPLETED' } });
+    expect((await request.put('/api/meeting-series', { data: { id: seriesId, title: `${title} renamed` } })).ok()).toBeTruthy();
+    await expect.poll(async () => (await eventsNamed(title)).length, { timeout: 15_000 }).toBe(0);
+    expect(await prisma.googleCalendarEventLink.count({ where: { seriesId } })).toBe(0);
+  } finally {
+    await menteeCtx.dispose();
+    await prisma.googleCalendarEventLink.deleteMany({ where: { seriesId } }).catch(() => {});
+    await prisma.meetingSeries.deleteMany({ where: { relationId: relation.id } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: relation.id } });
+    for (const e of [mentorEmail, menteeEmail]) await cleanupByEmail(e);
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
+  }
+});
