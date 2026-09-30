@@ -188,13 +188,21 @@ ederek:
    yaratır; internship hesabına dokunulmaz. Sonra iki host'ta da aynı adresle girilir;
    parolalar iki ayrı satırdır, aynı seçilse bile biri değişince öbürü değişmez.
 2. Marketing org'unun hiç admin'i yoksa (ilk kurulum): süper-admin
-   `/admin/organizations`'ta org'u açar ve `vertical = MARKETING` yapar, ama o ekran
-   **insan davet etmez**; `POST /api/invite` daveti her zaman *oturumun kendi
-   org'una* yazar (`resolveOrgId(session)`), yani bir internship admin'i bugün
-   marketing org'una davet gönderemez. Bu bir **açık boşluktur**: çare, yalnızca
-   süper-admin için `orgId` alan bir davet yolu ya da org ekranında "ilk admin'i
-   davet et" düğmesidir. O gelene kadar ilk admin satırını gözden geçirilmiş
-   tek seferlik bir betikle açmak gerekir (böyle bir betik henüz yok).
+   `/admin/organizations`'ta org'u açar (`vertical = MARKETING`) ve org
+   satırındaki **"Admin davet et"** ile bakımcının adresini davet eder
+   (`POST /api/admin/organizations/[id]/invite-admin`, yalnızca süper-admin;
+   düz bir tenant ADMIN'i — o org'un kendi admin'i dahil — 403 alır). Bu yol
+   `POST /api/invite`'ın aynısıdır, tek farkı daveti oturumun org'una değil
+   **hedef org'a** yazmasıdır: "zaten kayıtlı mı?" hedef org'un dünyasında
+   sorulur (`emailTakenInOrgWorld` → `409 email_taken_in_world`), açık davet
+   (adres, hedef org) çiftiyle aranır (`invitationOrgWhere` → `409
+   invitation_pending`), token tek yazardan çıkar (`createInvitation`, rol
+   `ADMIN`) ve kayıt bağlantısı hedef org'un kendi ürün host'undadır
+   (`appOriginForOrg`, #2495). Ekran telefondan kullanılabilir: davetten sonra
+   bağlantı bir salt-okunur alanda, **Kopyala** ve (tarayıcı destekliyorsa)
+   **Paylaş** (`navigator.share`) düğmeleriyle gösterilir; adres verildiyse
+   posta da gider, gitmediyse ekran bunu söyler. E-posta boş bırakılırsa
+   yalnızca bağlantı üretilir. Kayıttan sonrası 1. maddeyle aynıdır.
 
 Süper-admin org ekranı ürünü de değiştirebilir (`PATCH` `vertical`) ve bu bir
 **taşımadır**: org'un bütün insanları tek `UPDATE`'te öbür dünyaya geçer. Hedef
@@ -323,7 +331,6 @@ sanır ve tip denetimi yanlış yerde susar. Yeni bir yapılandırma değişkeni
 - **Org'un ürününü değiştirmek insanlarını taşır** ve hedefte aynı adresli hesap
   varsa reddedilir; reddedildiği için sayısı bilinir, adresleri bilinmez — çözüm
   kiracının kendi admin'iyle adresi değiştirmek ya da eski kopyayı silmektir.
-- **İlk marketing admin'ini davet edecek ekran yok** ([İkinci dünyaya davet](#ikinci-dünyaya-davet)).
 - **Yanlış kapı hesabın varlığını açık eder** (yalnızca parolanın sahibine); karar
   ve gerekçe `docs/security-exceptions.md`'de.
 

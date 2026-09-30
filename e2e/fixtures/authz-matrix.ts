@@ -241,6 +241,32 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
 ];
 
 /**
+ * Instance-level writes only a SUPER ADMIN may make (#1535). Every role in the
+ * matrix — the plain tenant ADMIN included, which is exactly the case this list
+ * exists for — must be refused (401/403), and the refusal must happen before
+ * anything is written. `:orgId` is the foreign MARKETING org the spec seeds: the
+ * realistic target, "a tenant admin minting an admin login for somebody else's
+ * tenant". Mirrored in docs/role-access-matrix.md.
+ */
+export const TARGET_ORG_ID_PARAM = ':orgId';
+
+export interface SuperAdminProbe {
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  path: string;
+  body: Record<string, unknown>;
+  why: string;
+}
+
+export const SUPER_ADMIN_ONLY: SuperAdminProbe[] = [
+  {
+    method: 'POST',
+    path: `/api/admin/organizations/${TARGET_ORG_ID_PARAM}/invite-admin`,
+    body: { email: '' },
+    why: 'invite an ADMIN into any organization (docs/worlds.md § İkinci dünyaya davet)',
+  },
+];
+
+/**
  * The MARKETING sales rep (#2580): a MENTOR of a MARKETING org, on the sales
  * surface. Everything above is an INTERNSHIP-shaped tenant; this block is the
  * same statement for the rep, consumed by `e2e/marketing-sales-surface.spec.ts`

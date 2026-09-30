@@ -293,6 +293,23 @@ no-store`, tek denetim satırı. **Yeni tablo yok.**
 
 Sabitleyen: `e2e/company-export.spec.ts` ve `e2e/fixtures/authz-matrix.ts`.
 
+## Süper-admin yalnız uçlar / Super-admin-only endpoints
+
+`role === 'ADMIN'` bir **tenant** admin'idir; kiracıların kendisini yönetmek
+ayrı bir yetkidir (`User.isSuperAdmin`, her istekte veritabanından okunur —
+[`superAdmin.ts`](../src/lib/superAdmin.ts), #1535). Aşağıdaki uçlarda düz bir
+tenant ADMIN'i — hedef org'un **kendi** admin'i dahil — reddedilir ve ret
+`authz.scope_denied` satırı yazar (`logCrossTenantDenial`).
+
+| Uç | Süper-admin | Tenant ADMIN | MENTOR / MENTEE / COMPANY / SOURCE | Oturumsuz | Not |
+|---|---|---|---|---|---|
+| `POST /api/admin/organizations/[id]/invite-admin` | ✅ 201 (org yoksa 404) | **403** | **403** | 401 | Herhangi bir org'a `ADMIN` daveti — yeni bir MARKETING org'unun ilk admin'i ([`docs/worlds.md`](worlds.md) § İkinci dünyaya davet). Ret, org aranmadan önce gelir; yabancı bir org id'sinin varlığını doğrulamaz. Adres hedef org'un dünyasında kayıtlıysa `409 email_taken_in_world`, o org'da açık davet varsa `409 invitation_pending` |
+
+Çalıştırılabilir hali: `e2e/fixtures/authz-matrix.ts` → `SUPER_ADMIN_ONLY`
+(koşan spec `e2e/authz-matrix.spec.ts`, her rol için) ve
+`e2e/super-admin-invite-org-admin.spec.ts`. Bir satır eklerken ikisini birlikte
+güncelleyin.
+
 ## MARKETING satış temsilcisi / The MARKETING sales rep (`/sales`)
 
 Karar: [#2580](https://github.com/21072026/Internship/issues/2580), seçenek (b),
