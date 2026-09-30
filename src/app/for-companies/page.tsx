@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { CheckCircle, Code2, ScrollText, Languages, ShieldCheck } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
@@ -6,6 +8,11 @@ import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { requireVerticalCapability } from '@/lib/verticalPage';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.landing.audCompanyTitle, description: t.landing.audCompanySubtitle }), '/for-companies/opengraph-image');
+}
+
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +50,7 @@ export default async function ForCompaniesPage() {
   // No register button in the chrome: companies have no self-service sign-up
   // (#1102/#1104), so the page ends in the enquiry form instead.
   return (
-    <PublicShell showRegister={false}>
+    <PublicShell showRegister={false} breadcrumb={{ name: L.audCompanyTitle, path: '/for-companies' }}>
       <div className="max-w-5xl mx-auto px-4 py-12 sm:py-16">
         {/* Hero */}
         <div className="text-center max-w-3xl mx-auto">

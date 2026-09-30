@@ -359,6 +359,7 @@ async function handlePost(request: Request) {
       sendNewMessagePush(recipient, { senderName, link, preview: body }),
     );
 
+
     for (const recipient of recipients) {
       // Read the recipient's preferences BEFORE either channel (#1426). The
       // "Messages" switch on /account is documented — in all three locales — as

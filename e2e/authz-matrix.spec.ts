@@ -7,6 +7,8 @@ import {
   FOREIGN_COMPANY_ID_PARAM,
   FOREIGN_USER_ID_PARAM,
   MATRIX,
+  SUPER_ADMIN_ONLY,
+  TARGET_ORG_ID_PARAM,
   type MatrixUser,
   type Role,
 } from './fixtures/authz-matrix';
@@ -279,6 +281,19 @@ for (const role of Object.keys(LANDING) as Role[]) {
         expect(res.status(), `ADMIN ${path}`).toBe(200);
       }
     }
+
+    // Super-admin-only writes: nobody in this matrix is a super admin — the
+    // ADMIN here is a plain tenant admin — so every role is refused, and no
+    // invitation reaches the target org.
+    for (const probe of SUPER_ADMIN_ONLY) {
+      const path = probe.path.replace(TARGET_ORG_ID_PARAM, foreignOrgId);
+      const res = await page.request.fetch(path, { method: probe.method, data: probe.body });
+      expect([401, 403], `${role} ${probe.method} ${path} must be refused (${probe.why})`).toContain(res.status());
+    }
+    expect(
+      await prisma.invitationToken.count({ where: { orgId: foreignOrgId } }),
+      `${role} minted an invitation into another org`
+    ).toBe(0);
   });
 }
 

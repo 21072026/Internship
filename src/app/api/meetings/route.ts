@@ -8,12 +8,15 @@ import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import type { Prisma } from '@prisma/client';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingContext';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
+import { durationMinutesField } from '@/lib/meetingDuration';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -26,6 +29,9 @@ const schema = z.object({
   // (#1210). Stored on the meeting so the invite can name the reading that was
   // actually agreed on. Invalid/absent falls back to the profile zone.
   timeZone: z.string().max(80).optional(),
+  // How long it runs (#1984). Omitted → the one default, stored as null so the
+  // row keeps following the default if it ever changes.
+  durationMinutes: durationMinutesField,
   // Outsiders with no account here (#1446). Each gets its own RSVP token and
   // the same emailed yes/no buttons; see src/lib/meetingGuests.ts for why the
   // whole batch is attached to ONE of the created rows.
@@ -47,12 +53,16 @@ export async function GET() {
     // the column nullable: every consumer (MeetingsManager, MeetingSchedulerPanel)
     // reads `m.relation.mentee.fullName`, and an admin's unfiltered query would
     // otherwise start returning project/conversation rows with a null relation.
-    const where =
-      role === 'ADMIN'
-        ? { relationId: { not: null } }
-        : role === 'MENTOR'
-          ? { relationId: { not: null }, relation: { mentorId: session.user.id } }
-          : { relationId: { not: null }, relation: { menteeId: session.user.id } };
+    //
+    // The relation is also where the tenant lives (Meeting has no orgId): an
+    // ADMIN's list used to be every tenant's meetings, since the middleware
+    // scopes nothing with MT_ENFORCE_ISOLATION off (#2542 follow-up). Every
+    // role's relation filter is narrowed to the caller's tenant.
+    const relationWhere: Prisma.MentorshipRelationWhereInput = withinTenant<Prisma.MentorshipRelationWhereInput>(
+      role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: session.user.id } : { menteeId: session.user.id },
+      await tenantWhere(session),
+    );
+    const where: Prisma.MeetingWhereInput = { relationId: { not: null }, relation: { is: relationWhere } };
     // An explicit allowlist, never `include` (#1548). A bare `include` serialises
     // every column of the row, and one of them — `rsvpToken` — is a bearer
     // credential: /rsvp/<token> is on the middleware's public allowlist and
@@ -123,7 +133,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
-    const { relationIds, title, scheduledAt, meetLink, guests } = parsed.data;
+    const { relationIds, title, scheduledAt, meetLink, guests, durationMinutes } = parsed.data;
 
     // `scheduledAt` normally arrives zone-qualified from the browser. A bare wall
     // clock ("2026-08-03T16:30") still has to be honoured for API clients and for
@@ -146,10 +156,15 @@ export async function POST(request: Request) {
       organizerZone = isValidTimeZone(picked) ? picked : isValidTimeZone(saved) ? saved : null;
     }
 
-    const where =
+    // Relation ids come from the client: an admin may schedule on any relation
+    // OF THEIR TENANT, a mentor on their own. A foreign id is dropped exactly
+    // like a missing one (#2542 follow-up).
+    const where = withinTenant(
       session.user.role === 'ADMIN'
         ? { id: { in: relationIds } }
-        : { id: { in: relationIds }, mentorId: session.user.id };
+        : { id: { in: relationIds }, mentorId: session.user.id },
+      await tenantWhere(session),
+    );
     const relations = await prisma.mentorshipRelation.findMany({
       where,
       // `preferredLanguage` for #1720, next to `timezone` for the same reason:
@@ -198,6 +213,7 @@ export async function POST(request: Request) {
           relationId: rel.id,
           title,
           scheduledAt: when,
+          durationMinutes: durationMinutes ?? null,
           timeZone: organizerZone,
           meetLink: link,
           rsvpToken,
@@ -234,9 +250,12 @@ export async function POST(request: Request) {
           // #1720: the invitee's stored language — they have an account, so
           // nothing has to be guessed.
           locale: rel.mentee.preferredLanguage,
+          // The links open this tenant's product host (#2495).
+          orgId: session.user.orgId,
           // The Meeting row's own id, so the attachment, the public token route
           // and any later reschedule mail all address the same calendar event.
           icsUid: meeting.id,
+          durationMinutes: meeting.durationMinutes,
         });
       } catch (e) {
         console.error('Meeting invite email failed:', e);
@@ -272,6 +291,7 @@ export async function POST(request: Request) {
         meetLink: link,
         organizerTimeZone: organizerZone,
         organizerName: session.user.name ?? null,
+        durationMinutes: durationMinutes ?? null,
       });
     }
 

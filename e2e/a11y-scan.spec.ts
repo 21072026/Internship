@@ -9,6 +9,7 @@ import {
   uniqueEmail,
   seedMenteeWithRelation,
   cleanupMenteeWithRelation,
+  acceptContributorTerms,
   type SeededRelation,
 } from './helpers/db';
 import { signInAsFreshUser, settleStreamedSuspense } from './helpers/auth';
@@ -240,6 +241,9 @@ test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async () => {
   related = await seedMenteeWithRelation(RELATION_PREFIX, PASSWORD);
+  // /portal/projects is otherwise the contributor-terms gate (#1025), which
+  // would be scanned in place of the page (#1412).
+  await acceptContributorTerms(related.menteeId);
   // /notifications renders an empty-state paragraph with no rows at all, so
   // without these the scan would look at a page that has none of the markup it
   // is supposed to be measuring. One unread and one read: the unread row carries
@@ -333,11 +337,84 @@ test('public pages: landing, sign-in, the statement and the application entry', 
 // the mentee view is the smallest: the mentor-only expertise card and the
 // admin-only impersonation notice are both absent, so nothing role-specific
 // can quietly widen the baseline from under a different context (#2041).
-test('mentee portal: dashboard, profile and account settings', async ({ page }) => {
+//
+// The portal itself runs on the shared relation fixture (#1412). A mentee with
+// no mentorship renders none of what the portal is FOR — the journey tracker,
+// the mentor card, goals, a filled calendar — so the old bare-user scan kept
+// `/portal#dark` at {} while a real mentee's dashboard had nine serious
+// findings in dark mode. Every relation-bearing route asserts the part that
+// only a relation produces before it is scanned, so a fixture that silently
+// stops producing it fails here instead of scanning clean.
+const portalReady = (probe: (p: Page) => Promise<void>) => async (p: Page) => {
+  // Most portal routes sit under /portal's loading.tsx: wait out the streamed
+  // Suspense copy (#2479) so the scan sees the page once, then the content.
+  await settleStreamedSuspense(p);
+  await probe(p);
+};
+
+test('mentee portal: dashboard, journey, goals, calendar and account settings', async ({ page }) => {
   test.slow();
-  const { email } = await seed('MENTEE', 'A11y Mentee');
-  await signInAsFreshUser(page, email, PASSWORD, '/portal');
-  await scanAll(page, ['/portal', '/portal/profile', '/account']);
+  await signInAsFreshUser(page, related.menteeEmail, PASSWORD, '/portal');
+  await scanAll(page, [
+    {
+      key: '/portal',
+      ready: portalReady(async (p) => {
+        await expect(p.getByTestId('journey-stage-label').first()).toBeVisible();
+        await expect(p.getByText(`${RELATION_PREFIX} Mentor`).first()).toBeVisible();
+      }),
+    },
+    {
+      key: '/portal/journey',
+      ready: portalReady(async (p) => {
+        await expect(p.getByTestId('journey-stage-label').first()).toBeVisible();
+      }),
+    },
+    {
+      key: '/portal/goals',
+      ready: portalReady(async (p) => {
+        await expect(p.getByText(`${RELATION_PREFIX} goal`).first()).toBeVisible();
+      }),
+    },
+    {
+      key: '/portal/calendar',
+      ready: portalReady(async (p) => {
+        // The fixture's meeting is two days out, which at a month's end is the
+        // NEXT month; the month grid opens on this one. Step forward when it
+        // has to, so the scan always sees a grid with the event on it.
+        const meetingDay = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+        if (meetingDay.getMonth() !== new Date().getMonth()) {
+          await p.getByRole('button', { name: 'Next', exact: true }).click();
+        }
+        // A month cell names the event by its person, not its title.
+        await expect(p.getByRole('button', { name: new RegExp(`${RELATION_PREFIX} Mentee`) }).first()).toBeVisible();
+      }),
+    },
+    '/account',
+  ]);
+});
+
+test('mentee portal: requests, profile, projects, interactions and notes', async ({ page }) => {
+  test.slow();
+  await signInAsFreshUser(page, related.menteeEmail, PASSWORD, '/portal');
+  await scanAll(page, [
+    { key: '/portal/requests', ready: portalReady(async () => {}) },
+    { key: '/portal/profile', ready: portalReady(async () => {}) },
+    {
+      key: '/portal/projects',
+      // The page itself, not the contributor-terms gate (#1025) — the fixture's
+      // mentee accepted the terms in beforeAll.
+      ready: portalReady(async (p) => {
+        await expect(p.getByTestId('portal-projects-empty')).toBeVisible();
+      }),
+    },
+    {
+      key: '/portal/interactions',
+      ready: portalReady(async (p) => {
+        await expect(p.getByText(`${RELATION_PREFIX} check-in`).first()).toBeVisible();
+      }),
+    },
+    { key: '/portal/notes', ready: portalReady(async () => {}) },
+  ]);
 });
 
 test('mentor: dashboard and mentee list', async ({ page }) => {
@@ -358,7 +435,7 @@ test('admin: dashboard and candidates', async ({ page }) => {
 // seeded user. Note that the four tests above are deliberately left on their
 // thin fixtures: re-seeding them would change what /portal, /mentor and /admin
 // render and silently widen baseline keys this task does not own (the mentee
-// portal belongs to #1412).
+// portal belongs to #1412, and now runs on this fixture above).
 
 test('mentee: inbox and notifications', async ({ page }) => {
   test.slow();

@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { menteeRelationWhere } from '@/lib/menteeRelation';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
+import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 
 // Detailed mentee activity report. Aggregates, for a time window, the signals
 // that answer "what has this mentee (and their mentor) been doing": login
@@ -130,16 +131,15 @@ export async function getMentorMenteeActivity(mentorId: string, since: Date): Pr
   return buildForRelations(relations, since);
 }
 
-// Every mentee that is part of at least one relation IN ONE TENANT — the admin's
-// daily report. `tenant` is required: the digest cron binds no tenant context,
-// and an unscoped read handed every admin of every org, in both worlds, the
-// other tenants' mentees (docs/worlds.md). Pass tenantWhere()/orgWhere().
-export async function getSystemMenteeActivity(
-  since: Date,
-  tenant: Prisma.MentorshipRelationWhereInput,
-): Promise<MenteeActivity[]> {
+// One ORGANIZATION's view: every mentee that is part of at least one relation
+// of that org — the admin's daily report. The org fragment is required, not
+// optional (#2542): with the tenant middleware dormant an unscoped read is every
+// tenant's mentees, and this report used to mail one product's mentee names to
+// the other product's admins. Pass `tenantWhere(session)` from a request, or
+// `orgWhere(orgId)` from a cron (both in src/lib/tenantFilter.ts).
+export async function getSystemMenteeActivity(since: Date, tenant: TenantWhere): Promise<MenteeActivity[]> {
   const relations = await prisma.mentorshipRelation.findMany({
-    where: tenant,
+    where: withinTenant({}, tenant),
     select: {
       id: true,
       menteeId: true,

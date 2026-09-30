@@ -5,8 +5,10 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
+import { requireCapability } from '@/lib/capabilityGate';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
-import { orgAdminsWhere } from '@/lib/tenantFilter';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 
 // The author's half of the two-person publish decision (#1098): the admin
 // drafts an excerpt, the AUTHOR approves that exact wording here (or declines,
@@ -17,6 +19,9 @@ import { orgAdminsWhere } from '@/lib/tenantFilter';
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Testimonials are a mentorship module (the nav tags /admin/testimonials so).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const pending = await prisma.evaluation.findMany({
     where: { authorId: session.user.id, publicExcerpt: { not: null }, excerptApprovedAt: null },
     orderBy: { createdAt: 'desc' },
@@ -33,16 +38,24 @@ const schema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
 
   const evaluation = await prisma.evaluation.findUnique({
     where: { id: parsed.data.evaluationId },
-    select: { id: true, authorId: true, publicExcerpt: true },
+    select: { id: true, authorId: true, publicExcerpt: true, relation: { select: { orgId: true } } },
   });
-  // Same shape for missing and foreign rows: probing ids learns nothing.
-  if (!evaluation || evaluation.authorId !== session.user.id) {
+  // Same shape for missing and foreign rows: probing ids learns nothing. A row
+  // hanging off another tenant's relation is foreign too (#2542), whoever
+  // the author column names.
+  if (
+    !evaluation ||
+    evaluation.authorId !== session.user.id ||
+    (evaluation.relation && !(await inCallerTenant(evaluation.relation.orgId, resolveOrgId(session))))
+  ) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   if (!evaluation.publicExcerpt?.trim()) {
@@ -61,8 +74,10 @@ export async function POST(request: Request) {
       where: { id: evaluation.id },
       data: { publicExcerpt: null, excerptApprovedAt: null, publishedAt: null, sharedPublicly: false },
     });
-    const admins = await prisma.user.findMany({ where: await orgAdminsWhere(resolveOrgId(session)), select: { id: true } });
-    await Promise.all(admins.map((a) => notify(a.id, 'testimonial.declined', {}, '/admin/testimonials')));
+    // The author's own org's admins only (#2542): the query used to have no
+    // org filter, so every tenant's admins heard of every decline.
+    const adminIds = await tenantAdminIds(resolveOrgId(session));
+    await Promise.all(adminIds.map((id) => notify(id, 'testimonial.declined', {}, '/admin/testimonials')));
   }
   await logActivity({
     action: parsed.data.approve ? 'testimonial.excerpt_approved' : 'testimonial.excerpt_declined',

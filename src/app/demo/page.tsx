@@ -1,9 +1,16 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { FlaskConical, RotateCcw, ShieldOff } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { IS_DEMO_MODE, DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/lib/demoMode';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.demo.title, description: t.demo.subtitle }), '/demo/opengraph-image');
+}
+
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +27,7 @@ export default async function DemoPage() {
   const roleLabel = (role: 'admin' | 'mentor' | 'mentee') => t.demo.roles[role];
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: t.demo.title, path: '/demo' }}>
       <div className="max-w-3xl mx-auto px-4 py-12">
         <div className="flex items-center gap-3 mb-2">
           <FlaskConical className="h-7 w-7 text-amber-600" aria-hidden="true" />

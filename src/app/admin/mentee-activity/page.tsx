@@ -16,6 +16,7 @@ export default async function AdminMenteeActivityPage({ searchParams }: { search
   const sp = await searchParams;
   const days = ALLOWED_DAYS.includes(Number(sp.days)) ? Number(sp.days) : 7;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  // The admin's own tenant only (#2542) — never every org's mentees.
   const items = await getSystemMenteeActivity(since, await tenantWhere(session));
 
   return (

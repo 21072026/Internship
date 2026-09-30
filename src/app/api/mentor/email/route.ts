@@ -8,6 +8,8 @@ import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { conversationForRelation } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -34,6 +36,11 @@ export async function POST(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Mailing mentees about their mentorship is a mentorship-module write: a
+  // vertical without the module (MARKETING) has no relations of this kind to
+  // write to, and the composer is not in its nav either.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json());
@@ -52,11 +59,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // A mentor may only email their own mentees; admins may email any.
-    const where =
+    // A mentor may only email their own mentees; admins any mentee OF THEIR
+    // TENANT. The relation ids come from the client, and with
+    // MT_ENFORCE_ISOLATION off the middleware scopes nothing, so an admin could
+    // mail another tenant's mentees by id (#2542 follow-up). A foreign id is
+    // silently dropped, exactly like an id that does not exist.
+    const where = withinTenant(
       session.user.role === 'ADMIN'
         ? { id: { in: relationIds } }
-        : { id: { in: relationIds }, mentorId: session.user.id };
+        : { id: { in: relationIds }, mentorId: session.user.id },
+      await tenantWhere(session),
+    );
     const relations = await prisma.mentorshipRelation.findMany({
       where,
       include: {

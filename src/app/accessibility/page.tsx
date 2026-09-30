@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
@@ -12,6 +14,11 @@ import {
   issueUrl,
   repoFileUrl,
 } from '@/lib/accessibility';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.accessibility.title, description: t.seo.accessibilityDescription }));
+}
+
 
 // Same reason as /privacy and /imprint: the operator identity comes from the
 // deployment's env, which only exists at runtime. Prerendering would freeze
@@ -45,7 +52,7 @@ export default async function AccessibilityPage() {
     : a.feedbackUnset;
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: a.title, path: '/accessibility' }}>
       <div className="max-w-2xl mx-auto my-12 px-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{a.title}</h1>

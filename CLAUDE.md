@@ -272,6 +272,14 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   "Pipeline tracking", TR "Fırsatla buluştur" in `e2e/landing-i18n.spec.ts`) — keep them or
   update the specs in the same PR. Keep the marketing claims in sync with shipped features
   (check `CHANGELOG.md` / `src/lib/releaseNotes.ts` when features land).
+  `check:i18n` also **pins the MARKETING leak count** (#2558): per locale, how many
+  overlay-resolved MARKETING strings still say mentor/mentee/internship, in `EXPECTED_LEAKS`
+  (`scripts/check-i18n.ts`). A new un-overlaid internship word is fixed with a MARKETING entry
+  in `src/i18n/verticalOverlays.ts` (or an argued `LEAK_EXEMPT` namespace MARKETING cannot
+  render), and removing leaks means lowering the literal in the same diff — the check fails
+  both ways. `npm run check:i18n -- --leaks[=locale]` lists the offending keys. E-mail copy
+  goes through `emailDictionary(locale, orgId)` (`src/i18n/emailDictionary.ts`), never a bare
+  `getDictionary()`, so the recipient org's vertical reaches the mail.
 - **Dark mode** is class-based (`html.dark`) with flat utility overrides in
   `src/app/globals.css`: `bg-*-50` boxes are retinted dark while `bg-*-100` chips stay
   light. Mid-tone text (`text-*-600/700`) sitting on a tinted `*-50` box goes dark-on-dark —
@@ -377,6 +385,19 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   admin'in okuduğu `ActivityLog` kaydına gider, çünkü birçok okuma yolu ilişkinin tüm
   skalerlerini mentöre/mentee'ye döndürüyor ve #1801 gerekçenin hakkında olan kişiye geri
   okunmamasını kural yapıyor.
+- **Contact permission is one rule and one writer** ([`docs/contact-permission.md`](docs/contact-permission.md),
+  #2577, UWG § 7): `ContactPermission` holds, per account × channel, the basis
+  (`DOI_CONFIRMED` / `EXISTING_CUSTOMER_7_3` / `INQUIRY_REPLY` / `NONE`) and its proof. Who may
+  write which basis is `src/lib/contactPermissionRule.ts` (pure, unit-tested); the only writer is
+  `src/lib/contactPermission.ts`, and a refused write **throws**. Three rules are load-bearing:
+  **machines (import, feeds, SaleVali's pre-ticked newsletter flag) write `NONE` only** and never
+  replace a row; **nobody but the address owner's own click produces `DOI_CONFIRMED`** (no admin
+  path); and **the owner's own withdrawal (`revokedVia = 'LINK'`) locks the row against every
+  admin write**, a neutral one included (NONE-then-§ 7(3) was a two-step re-grant) — only a
+  confirmation dated after it lifts it, and a replayed old confirm link never does. The demo
+  form's DOI mail is capped at one per address per UTC day (`ContactConfirmationMailCap`, a
+  primary-key insert). No advertising mail to account contacts exists yet — the first one must
+  call `canSendMarketingEmail()` per recipient.
 - **Single-owner background work** (`src/lib/jobs/lease.ts`, #1701): anything that
   must run **once per environment** rather than once per process takes a `JobLease`
   — one row per lease name, a TTL, and a takeover by conditional `UPDATE`. Today
@@ -545,8 +566,17 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   follow the request host by nature. An **e-mail link** cannot follow a request either, so it
   follows the recipient tenant (#2495): `appOriginForOrg(orgId)` (`src/lib/orgLinkOrigin.ts`)
   returns the org's `Organization.publicHost` when this deployment serves it, else the old
-  `NEXT_PUBLIC_APP_URL` — invites, password reset and verification use it; robots/sitemap
-  follow the request host and list only the pages that host's vertical serves. The rule is unit-tested
+  `NEXT_PUBLIC_APP_URL` — invites, password reset, verification, the unsubscribe footer and
+  List-Unsubscribe header (`sendEmail({ orgId })`, resolved from `userId` when omitted —
+  the `appUrlFor*` resolvers in `emailService.ts`, #2590), newsletters, digests, meeting
+  invites, message mails and the weekly analytics report use it. **One mail, one host:**
+  a sender whose body links come from a recipient's org passes that `orgId` to
+  `sendEmail()` so the footer resolves the same way; the one-click unsubscribe GET
+  answers with a **relative** Location. robots/sitemap
+  follow the request host and list only the pages that host's vertical serves. **SSO and
+  Google OAuth** (#2494) keep their ONE registered endpoint; the host a flow started on rides
+  along (SAML `RelayState`; signed into the OAuth `state`) and is honoured only through
+  `servedOrigin()` — a bare origin of a served host, nothing else. The rule is unit-tested
   (`npm run test:served-hosts`) and pinned end-to-end with forged proxy headers
   (`e2e/host-coherent-redirects.spec.ts`).
 - **Bir kişi, iki dünya** ([`docs/worlds.md`](docs/worlds.md), #2590): oturum açılan **URL** ürünü
@@ -568,6 +598,15 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   **adlandırmaz ve bağlamaz** — bir eylemin ürettiği her şey başladığı dünyada kalır
   (öbür dünyanın daveti ve SSO org kodu da bu host'ta bilinmeyen gibi reddedilir); oturum yalnızca kendi dünyasının host'unda geçerlidir (`session`
   callback'i yanlış host'ta `null` döner).
+  **Süper admin de dünya başınadır** (#2647): `isSuperAdmin(session)` yalnız kendi dünyasının
+  host'unda ve yalnız o dünyanın org'ları için doğrudur (`isSuperAdminFor(session, orgId)`,
+  kural `src/lib/superAdminWorld.ts`); org oluşturmak `vertical` ister ve çağıranın dünyasına
+  kilitlidir, dünyalar arası vertical taşıma yoktur. Bayrağı verme yolu
+  `prisma/set-super-admin.mjs --email … --world …` (varsayılan dry-run). Yalnız-internship
+  yüzeyler (`mentorship` capability) MARKETING'de hem menüden hem sunucudan kapalıdır: sayfa
+  kapısı segment `layout.tsx` + `gatePage()` (`src/lib/pageCapabilityGate.ts`), API kapısı
+  `requireCapability()`; hazır içerik (doküman şablonları, bülten sayıları) vertical başına
+  anahtarlıdır, yüklenen/yazılan her içerik org'unda kalır.
 - **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
   inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted
   verbatim), forwards it to the handler and echoes it on **every** response, error responses

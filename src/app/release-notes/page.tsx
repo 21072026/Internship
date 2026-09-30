@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { Rss, Sparkles } from 'lucide-react';
@@ -28,6 +29,11 @@ export async function generateMetadata(): Promise<Metadata> {
   const h = await headers();
   if (worldForHeaders((n) => h.get(n)) !== DEFAULT_VERTICAL) return {};
   return {
+    // Its own tab title in the reader's language (#1376).
+    ...(await pageMetadata(
+      (t) => ({ title: t.releaseNotes.title, description: t.releaseNotes.feedDescription }),
+      '/release-notes/opengraph-image'
+    )),
     alternates: {
       types: {
         'application/rss+xml': [
@@ -51,7 +57,7 @@ export default async function ReleaseNotesPage() {
   const feedUrl = releaseFeedUrl(publicOrigin((n) => h.get(n)), locale);
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: t.releaseNotes.title, path: '/release-notes' }}>
       <div className="max-w-2xl mx-auto my-12 px-4">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">

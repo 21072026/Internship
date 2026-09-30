@@ -104,6 +104,14 @@ test('admin creates and sends an offer via the wizard; mentee accepts it and see
 
     const auditActions = (await prisma.auditLog.findMany({ where: { targetId: offer.id }, orderBy: { createdAt: 'asc' } })).map((a) => a.action);
     expect(auditActions).toEqual(['offer.create', 'offer.send', 'offer.accept']);
+
+    // The acceptance took the requisition's only seat (#1411/#1854): counted
+    // once, FILLED, closed — in the same transaction as the offer itself.
+    const filled = await prisma.requisition.findUniqueOrThrow({ where: { id: open.id } });
+    expect(filled.filled).toBe(1);
+    expect(filled.status).toBe('FILLED');
+    expect(filled.closedAt).not.toBeNull();
+    expect(after.requisitionCountedAt).not.toBeNull();
   } finally {
     await s.cleanup();
   }
@@ -366,6 +374,73 @@ test('the expiry cron transitions a due offer exactly once across two runs', asy
 
     const notifications = await prisma.notification.findMany({ where: { userId: s.admin.id, type: 'offer_expired.admin' } });
     expect(notifications).toHaveLength(1);
+  } finally {
+    await s.cleanup();
+  }
+});
+
+// #1411/#1854 — an accepted offer fills its requisition. The counter is the
+// "how many roles are still open" number, so the properties that matter are
+// the ones a hand-kept counter got wrong: exactly one per acceptance, never
+// past `openings`, and never at the candidate's expense.
+test('accepted offers fill a requisition: once each, never past openings, and a full one never blocks the candidate', async ({ page }) => {
+  const s = await seedScenario('reqfill');
+  const sentOffer = (requisitionId: string | null, position: string) =>
+    prisma.offer.create({
+      data: {
+        orgId: s.org.id, relationId: s.relation.id, companyId: s.company.id, requisitionId,
+        position, status: 'SENT', sentAt: new Date(), createdById: s.admin.id,
+      },
+    });
+  try {
+    const req = await prisma.requisition.create({
+      data: { orgId: s.org.id, companyId: s.company.id, title: 'Three Seats', status: 'OPEN', openings: 3, requiredSkills: [] },
+    });
+    await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
+    const accept = (id: string) => page.request.patch(`/api/offers/${id}`, { data: { action: 'accept' } });
+
+    // One acceptance, one seat; the requisition stays open below capacity.
+    const first = await sentOffer(req.id, 'Seat one');
+    expect((await accept(first.id)).status()).toBe(200);
+    let row = await prisma.requisition.findUniqueOrThrow({ where: { id: req.id } });
+    expect(row.filled).toBe(1);
+    expect(row.status).toBe('OPEN');
+    expect(row.closedAt).toBeNull();
+
+    // A replayed accept is refused by the state machine and counts nothing.
+    expect((await accept(first.id)).status()).toBe(400);
+    expect((await prisma.requisition.findUniqueOrThrow({ where: { id: req.id } })).filled).toBe(1);
+
+    // An offer with no requisition touches no counter.
+    const unlinked = await sentOffer(null, 'No requisition');
+    expect((await accept(unlinked.id)).status()).toBe(200);
+    expect((await prisma.offer.findUniqueOrThrow({ where: { id: unlinked.id } })).requisitionCountedAt).toBeNull();
+
+    // Three offers race for the last two seats: exactly two count, the
+    // requisition flips to FILLED once, and all three candidates are ACCEPTED.
+    const racers = await Promise.all([sentOffer(req.id, 'Race A'), sentOffer(req.id, 'Race B'), sentOffer(req.id, 'Race C')]);
+    const statuses = await Promise.all(racers.map((o) => accept(o.id).then((r) => r.status())));
+    expect(statuses).toEqual([200, 200, 200]);
+    row = await prisma.requisition.findUniqueOrThrow({ where: { id: req.id } });
+    expect(row.filled).toBe(3);
+    expect(row.status).toBe('FILLED');
+    expect(row.closedAt).not.toBeNull();
+    const decided = await prisma.offer.findMany({ where: { id: { in: racers.map((o) => o.id) } } });
+    expect(decided.every((o) => o.status === 'ACCEPTED')).toBe(true);
+    expect(decided.filter((o) => o.requisitionCountedAt !== null)).toHaveLength(2);
+
+    // The refused count is on the record, where the admin reads the offer's history.
+    const refused = decided.find((o) => o.requisitionCountedAt === null)!;
+    const refusedAudit = await prisma.auditLog.findFirstOrThrow({ where: { targetId: refused.id, action: 'offer.accept' } });
+    expect(refusedAudit.detail).toContain('full — not counted');
+
+    // A cancelled requisition takes no seats either.
+    const cancelled = await prisma.requisition.create({
+      data: { orgId: s.org.id, companyId: s.company.id, title: 'Cancelled', status: 'CANCELLED', openings: 2, requiredSkills: [] },
+    });
+    const late = await sentOffer(cancelled.id, 'Too late');
+    expect((await accept(late.id)).status()).toBe(200);
+    expect((await prisma.requisition.findUniqueOrThrow({ where: { id: cancelled.id } })).filled).toBe(0);
   } finally {
     await s.cleanup();
   }

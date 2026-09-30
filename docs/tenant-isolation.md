@@ -265,9 +265,28 @@ Three things to know before copying it:
 `e2e/tenant-scope-users-companies.spec.ts` proves it on the default (flag-off)
 server with an INTERNSHIP and a MARKETING tenant, both directions; the
 `CROSS_TENANT` block of `e2e/fixtures/authz-matrix.ts` is where the next such
-route goes. Left for their own changes: `Source` (created without an `orgId` by
-`/api/sources` and `/api/admin/sources`, so its lookups are not narrowed yet) and
-the remaining tenant-held routes not named above.
+route goes. Left for their own changes: the remaining tenant-held routes not
+named above.
+
+**`Source` followed in #2570.** Its name is unique per org (`@@unique([orgId,
+name])`, no longer a global `@unique`), every create goes through
+`findOrCreateSource()` in `src/lib/leadSource.ts` with an explicit `orgId`
+(the caller's, or the default org for a session without one), and every source
+read — `/api/sources`, `/api/admin/sources` (+ `[id]` DELETE),
+`/api/admin/source-users`, the source check in `/api/mentor/mentees` and
+`PATCH /api/users/[id]`, and both halves of `/api/admin/analytics/sources`
+including its `unsourced` count — is narrowed with `tenantWhere`/`withinTenant`.
+The one subtlety: MySQL does not compare NULLs in a unique index, so the default
+org could otherwise create "X" next to a legacy NULL-org "X" and the deploy
+backfill (NULL → default) would then fail on the index; the create path reads
+the tenant, NULL rows included, before it inserts. Sources a MARKETING admin
+created before #2570 went to the default org at a backfill, like the users and
+companies above — and since the old pickers were unscoped, that tenant's own
+leads can point at such a row. Both `/admin/sources` (its per-source lead count)
+and the attribution report narrow the relation to the caller's tenant, and the
+report counts a lead whose source is outside its tenant as **unsourced** rather
+than dropping it from both halves; `check-tenant-misattribution.mjs` lists those
+sources (`source <id> org=… linkedPeople=<org>:<n>`) for the reviewed one-off.
 
 ### Users: one address, two tenants (#2590)
 
@@ -306,6 +325,13 @@ tenant isolation that changes four things:
   holds an account for any of the org's addresses (`src/lib/verticalMove.ts`, which
   reads the *other* tenants' rows through `runUnscoped` and reports a count, never an
   address).
+  Since super admin became per world (docs/worlds.md § Super admin), no session
+  may make that move at all — `403 vertical_other_world` — and the conflict check
+  stays as the second lock for an operator path.
+- **Super admin is per world.** `superAdminWorld()` / `isSuperAdminFor()`
+  (`src/lib/superAdmin.ts`, rule in `superAdminWorld.ts`): an operator lists,
+  creates and manages only its own world's organizations, and the power is inert on
+  the other world's host.
 
 Address-keyed side tables (`AccountLockout`, `EmailLog`, `NewsletterSend`, invitation
 lookups) were audited for the same reason: the lockout counter stays shared by

@@ -6,9 +6,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
+import { tenantAdminWhere } from '@/lib/tenantAdmins';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
-import { orgAdminsWhere } from '@/lib/tenantFilter';
 import { isProjectOwner, projectInCallerTenant } from '@/lib/projectAccess';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { sendProjectJoinRequestEmail } from '@/services/emailService';
@@ -109,16 +109,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
 
     // Tell the people who can act on it: OWNER members (+ the legacy owner
-    // pointer) and the active admins of the PROJECT'S org — withTenantScope()
-    // does not scope `User` while isolation is off, and the mail below is
-    // branded for the project's org, so any other admin got another product's mail.
+    // pointer) and every active admin OF THE PROJECT'S ORG (#2542) — the
+    // admin query used to have no org filter at all.
     const [owners, admins] = await Promise.all([
       prisma.projectMember.findMany({
         where: { projectId: id, role: 'OWNER' },
         select: { user: { select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true } } },
       }),
       prisma.user.findMany({
-        where: await orgAdminsWhere(project.orgId),
+        where: await tenantAdminWhere(project.orgId),
         select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
       }),
     ]);

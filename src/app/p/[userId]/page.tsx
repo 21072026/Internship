@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
@@ -15,6 +17,23 @@ import { PublicContactForm } from '@/components/PublicContactForm';
 
 // Public, PII-free profile. Only fields safe to share are selected — never
 // email, phone, whatsapp, or birth date.
+// Name and role only (#1376) — the same `where` as the page, so a profile that
+// is not public yields no name at all, and never anything the page itself
+// withholds (no e-mail, phone or birth date is even selected).
+export async function generateMetadata({ params }: { params: Promise<{ userId: string }> }): Promise<Metadata> {
+  const { userId } = await params;
+  const user = await prisma.user.findFirst({
+    where: { id: userId, publicProfile: true, role: { in: ['MENTEE', 'MENTOR'] } },
+    select: { fullName: true, displayName: true, role: true },
+  });
+  if (!user) return {};
+  const name = user.displayName?.trim() || user.fullName;
+  return pageMetadata((t) => ({
+    title: (user.role === 'MENTOR' ? t.seo.profileMentorTitle : t.seo.profileMenteeTitle).replace('{name}', name),
+    description: t.seo.profileDescription.replace('{name}', name),
+  }), `/p/${encodeURIComponent(userId)}/opengraph-image`);
+}
+
 export default async function PublicProfilePage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
   const { locale, t } = await getServerDictionary();

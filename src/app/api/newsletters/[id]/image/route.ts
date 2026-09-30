@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere } from '@/lib/tenantFilter';
 
 // GET — an issue's hero image.
 //
@@ -15,7 +16,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const image = await prisma.newsletterImage.findUnique({ where: { newsletterId: id } });
+  // Only an image of the caller's own tenant (cross-world isolation): another
+  // org's is a 404, the same answer as an id that does not exist.
+  const image = await prisma.newsletterImage.findFirst({
+    where: { newsletterId: id, newsletter: { is: await tenantWhere(session) } },
+  });
   if (!image) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   return new NextResponse(Buffer.from(image.data), {

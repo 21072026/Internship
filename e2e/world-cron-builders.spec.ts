@@ -10,6 +10,7 @@ import {
 } from '@/services/emailService';
 import { getSystemMenteeActivity } from '@/lib/activityReport';
 import { orgWhere } from '@/lib/tenantFilter';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { setSetting } from '@/lib/settings';
 import { prisma as appPrisma } from '@/lib/prisma';
 import { getDictionary } from '../src/i18n/dictionaries';
@@ -21,7 +22,7 @@ import { getDictionary } from '../src/i18n/dictionaries';
 // app server runs with SMTP blanked, and the EmailLog row a skipped send still
 // writes is what says who was mailed and under which subject.
 
-const { worldHeading, worldAccent, notifyOrgAdmins } = __testable;
+const { worldHeading, worldAccent } = __testable;
 
 const STAMP = `${Date.now()}-${Math.round(performance.now())}`;
 const BRAND = `Cron Sales ${STAMP}`;
@@ -160,11 +161,8 @@ test.describe('admin digests and summaries describe one org', () => {
   });
 
   test("a cron summary reaches only the admins of the org it counted", async () => {
-    const reached: string[] = [];
-    await notifyOrgAdmins(new Map([[mktOrgId, 1]]), async (a) => {
-      reached.push(a.id);
-    });
-    expect(reached).toEqual([ids.mktAdmin]);
+    // notifyAdminsPerOrg's recipients: that org's active admins, nobody else.
+    expect(await tenantAdminIds(mktOrgId)).toEqual([ids.mktAdmin]);
   });
 
   test('an org without mentorship gets no mentee-activity digest, only its overdue to-dos', async () => {

@@ -10,7 +10,8 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendRematchRequestedEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
-import { orgAdminsWhere, orgWhere } from '@/lib/tenantFilter';
+import { orgWhere, tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { tenantAdminWhere } from '@/lib/tenantAdmins';
 import { requireCapability } from '@/lib/capabilityGate';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { isEndReasonCode } from '@/lib/relationLifecycle';
@@ -64,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   return await withTenantScope(session, async () => {
     const relation = await prisma.mentorshipRelation.findUnique({
       where: { id },
-      select: { id: true, menteeId: true, mentorId: true, status: true },
+      select: { id: true, menteeId: true, mentorId: true, status: true, orgId: true },
     });
     if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (relation.menteeId !== session.user.id) {
@@ -129,15 +130,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (preferredMentorId === relation.mentorId) {
         return NextResponse.json({ error: 'invalid_preferred_mentor' }, { status: 400 });
       }
+      // The mentee's tenant by the tenantWhere() rule (#2542): an org-less
+      // session and a NULL-org mentor are both the default org's.
       const preferredMentor = await prisma.user.findFirst({
-        where: {
-          id: preferredMentorId,
-          role: 'MENTOR',
-          isActive: true,
-          publicProfile: true,
-          orgId: resolveOrgId(session),
-          consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
-        },
+        where: withinTenant(
+          {
+            id: preferredMentorId,
+            role: 'MENTOR' as const,
+            isActive: true,
+            publicProfile: true,
+            consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY' as const, grantedAt: { not: null }, revokedAt: null } },
+          },
+          await tenantWhere(session),
+        ),
         select: { id: true },
       });
       if (!preferredMentor) {
@@ -161,22 +166,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       select: { id: true, status: true, createdAt: true },
     });
 
-    // Any other re-match inside the window means a mail already went out — to
-    // THIS org's admins, so another tenant's re-match must not silence it.
-    const menteeOrgId = resolveOrgId(session);
+    // The org whose admin queue this lands in: the relation's own (#2542).
+    const relationOrgId = relation.orgId ?? resolveOrgId(session) ?? (await defaultOrgId());
+
+    // Any other re-match inside the window IN THIS ORG means a mail already
+    // went out to these admins — another tenant's re-match must not swallow
+    // this tenant's mail (#2542).
     const recentlyMailed = await prisma.mentorshipRequest.findFirst({
       where: {
         id: { not: created.id },
         replacesRelationId: { not: null },
-        mentee: await orgWhere(menteeOrgId ?? (await defaultOrgId())),
         createdAt: { gte: new Date(Date.now() - ADMIN_EMAIL_THROTTLE_MS) },
+        mentee: { is: await orgWhere(relationOrgId) },
       },
       select: { id: true },
     });
 
     const menteeName = session.user.name;
+    // That org's admins only (#2542) — the query used to have no org filter.
     const admins = await prisma.user.findMany({
-      where: await orgAdminsWhere(menteeOrgId),
+      where: await tenantAdminWhere(relationOrgId),
       select: {
         id: true,
         fullName: true,

@@ -1,4 +1,5 @@
 import { parseWallClockInZone } from '@/lib/timezone';
+import { dayNumber, lastMeetingDay, meetsOn, type SeriesCadence } from '@/lib/seriesRule';
 
 // Expanding a recurring meeting rule into the occurrences that fall inside a
 // window (#1110).
@@ -37,13 +38,16 @@ export function seriesOccurrences(
   timeOfDay: string,
   from: Date,
   to: Date,
-  timeZone?: string | null
+  timeZone?: string | null,
+  // Interval and end condition (#2013). Omitted = every week, until cancelled.
+  cadence?: SeriesCadence | null
 ): Date[] {
   const days = parseDaysOfWeek(daysOfWeek);
   if (days.length === 0 || to < from) return [];
   if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(String(timeOfDay))) return [];
 
   const allowed = new Set(days);
+  const last = cadence ? lastMeetingDay(days, cadence) : null;
   const out: Date[] = [];
   // The cursor counts *calendar dates*, not instants: a date's weekday is the
   // same in every zone, and each date is turned into an instant below. Padding
@@ -54,7 +58,7 @@ export function seriesOccurrences(
   lastDay.setUTCDate(lastDay.getUTCDate() + 1);
 
   for (let i = 0; i <= MAX_WINDOW_DAYS + 2 && cursor <= lastDay; i++) {
-    if (allowed.has(cursor.getUTCDay())) {
+    if (allowed.has(cursor.getUTCDay()) && (!cadence || meetsOn(dayNumber(cursor), days, cadence, last))) {
       const wall = `${cursor.getUTCFullYear()}-${pad(cursor.getUTCMonth() + 1)}-${pad(cursor.getUTCDate())}T${timeOfDay}`;
       const when = parseWallClockInZone(wall, timeZone);
       if (when && when >= from && when <= to) out.push(when);
@@ -70,8 +74,46 @@ export function nextOccurrence(
   timeOfDay: string,
   timeZone?: string | null,
   from: Date = new Date(),
-  days = 14
+  days = 14,
+  cadence?: SeriesCadence | null
 ): Date | null {
   const to = new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
-  return seriesOccurrences(daysOfWeek, timeOfDay, from, to, timeZone)[0] ?? null;
+  return seriesOccurrences(daysOfWeek, timeOfDay, from, to, timeZone, cadence)[0] ?? null;
+}
+
+/**
+ * A series row as the expansion needs it (#2013): the rule plus its cadence.
+ * Spread SERIES_RULE_SELECT into every query that expands a series, so a
+ * cadence field added later cannot be forgotten at one of them — the same
+ * discipline as `pushableSelect` in googleCalendarSync.ts.
+ */
+export interface SeriesRule extends SeriesCadence {
+  daysOfWeek: unknown;
+  timeOfDay: string;
+  timeZone?: string | null;
+}
+
+export const SERIES_RULE_SELECT = {
+  daysOfWeek: true,
+  timeOfDay: true,
+  timeZone: true,
+  intervalWeeks: true,
+  anchorDate: true,
+  untilDate: true,
+  maxOccurrences: true,
+  createdAt: true,
+} as const;
+
+/** `seriesOccurrences` for a series row, cadence included. */
+export function ruleOccurrences(rule: SeriesRule, from: Date, to: Date): Date[] {
+  return seriesOccurrences(rule.daysOfWeek, rule.timeOfDay, from, to, rule.timeZone, rule);
+}
+
+/**
+ * The next occurrence of a series row, cadence included. The window is wide
+ * enough for the longest interval to reach its next meeting week.
+ */
+export function nextRuleOccurrence(rule: SeriesRule, from: Date = new Date()): Date | null {
+  const weeks = Math.max(1, Math.trunc(Number(rule.intervalWeeks ?? 1)) || 1);
+  return nextOccurrence(rule.daysOfWeek, rule.timeOfDay, rule.timeZone, from, 7 * weeks + 7, rule);
 }

@@ -17,7 +17,7 @@ import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
 import { SalesLogInteraction } from '@/components/sales/SalesLogInteraction';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
-// its stage, the follow-up and trial-end editors, what happened last and a
+// its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
 // form to log the next call or meeting.
 //
 // Found only as `id AND mentorId = self AND the rep's tenant` — someone else's
@@ -55,6 +55,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       nextActionNote: true,
       trialStartedAt: true,
       trialEndsAt: true,
+      // The record's estimated monthly value (#2422) — its own row, read by
+      // name here and on the owner/ADMIN value route only.
+      value: { select: { valueMinor: true, currency: true, source: true } },
       mentee: { select: { id: true, fullName: true, email: true, phone: true } },
       // Through the tenant filter too: a record pointing at another tenant's
       // company (a bad import) shows no account rather than a foreign one.
@@ -120,6 +123,11 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         nextActionNote={relation.nextActionNote}
         trialStartedAt={iso(relation.trialStartedAt)}
         trialEndsAt={iso(relation.trialEndsAt)}
+        dealValue={{
+          valueMinor: relation.value?.valueMinor ?? null,
+          currency: relation.value?.currency ?? null,
+          source: relation.value?.source ?? null,
+        }}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

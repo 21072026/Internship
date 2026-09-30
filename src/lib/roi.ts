@@ -252,15 +252,17 @@ export function roundMinor(value: number): number {
   return value < 0 ? -Math.round(-value) : Math.round(value);
 }
 
-function isMoney(value: unknown): value is number {
+/** An amount this module will add: a safe integer (minor units). Shared with
+ *  src/lib/dealValue.ts so both money modules refuse the same inputs. */
+export function isMoney(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value);
 }
 
-function normaliseCurrency(code: string): string {
+export function normaliseCurrency(code: string): string {
   return code.trim().toUpperCase();
 }
 
-const CURRENCY_RE = /^[A-Z]{3}$/;
+export const CURRENCY_RE = /^[A-Z]{3}$/;
 
 // ── The calculation ──────────────────────────────────────────────────────────
 

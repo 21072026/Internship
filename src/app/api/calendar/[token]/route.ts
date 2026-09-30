@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { buildMeetingIcs } from '@/lib/ics';
+import { meetingDurationMinutes } from '@/lib/meetingDuration';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { worldOfOrg } from '@/lib/userWorld';
 import { productNameFor } from '@/lib/verticals';
@@ -43,6 +44,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     uid: meeting.id,
     title: meeting.title,
     start: meeting.scheduledAt,
+    // The stored length (#1984) — this file used to end every meeting after 30.
+    durationMinutes: meetingDurationMinutes(meeting),
     description: meeting.meetLink ? `Join: ${meeting.meetLink}` : null,
     location: meeting.meetLink ?? null,
   });

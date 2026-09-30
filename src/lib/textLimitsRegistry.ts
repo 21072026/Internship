@@ -114,6 +114,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     id: ID,
     projectId: ID,
     createdById: ID,
+    orgId: ID,
     // The same constant as ProjectTask.title, and not by coincidence: a
     // template's wording is written into a task's title unchanged.
     title: { limit: 'todoTitle', files: TEMPLATE_WRITERS },

@@ -4,7 +4,7 @@ import {
   Github, ShieldCheck, Languages, ScrollText, Code2, FlaskConical,
 } from 'lucide-react';
 import { IS_DEMO_MODE, demoUrl } from '@/lib/demoMode';
-import { getFeatures } from '@/lib/features';
+import { getFeatures, isFeatureShown } from '@/lib/features';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
@@ -12,6 +12,7 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import { verticalCapabilities } from '@/lib/verticals';
+import { JsonLd } from '@/components/JsonLd';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { DemoLink } from '@/components/landing/DemoLink';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
@@ -55,7 +56,7 @@ export default async function HomePage() {
   const vertical = await resolveRequestVertical();
   const isMarketing = vertical === 'MARKETING';
   const caps = verticalCapabilities(vertical);
-  const features = getFeatures(t).filter((f) => f.featured && (!f.capability || caps.includes(f.capability)));
+  const features = getFeatures(t).filter((f) => f.featured && isFeatureShown(f, caps));
 
   // The marketing landing's demo form (#2569). /for-companies is an internship
   // page (404 here since #2544), so the form lives on this page. It is only OPEN
@@ -638,6 +639,21 @@ export default async function HomePage() {
       )}
 
       {/* FAQ */}
+      {/* The same `faq` array as the list below (#1382): a copy of the text
+          would be the one place that silently went stale on the next edit. */}
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: faq.flatMap((g) =>
+            g.items.map((item) => ({
+              '@type': 'Question',
+              name: item.q,
+              acceptedAnswer: { '@type': 'Answer', text: item.a },
+            }))
+          ),
+        }}
+      />
       <section className="py-16 px-4">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.faqTitle}</h2>

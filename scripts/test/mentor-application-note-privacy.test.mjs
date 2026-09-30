@@ -118,7 +118,7 @@ test('the rejection e-mail is built from the decision alone, not from stored fre
 
 test('the decide route never loads adminNote into the branch that sends mail', () => {
   const route = read('src/app/api/mentor-applications/[id]/route.ts');
-  const start = route.indexOf('const application = await prisma.mentorApplication.findUnique({\n      where: { id },');
+  const start = route.indexOf('const application = await prisma.mentorApplication.findFirst({\n      // Inside the caller\'s tenant only');
   assert.notEqual(start, -1, 'the PATCH handler\'s application lookup was not found — did its shape change?');
   const select = route.slice(start, route.indexOf('});', start));
   for (const forbidden of ['adminNote', 'rejectReason']) {

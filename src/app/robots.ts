@@ -46,6 +46,7 @@ const PROTECTED_PATHS = [
   '/testimonials',
   '/re-engage',
   '/consent',
+  '/contact-permission',
   '/security-setup',
   '/source',
   '/offline',

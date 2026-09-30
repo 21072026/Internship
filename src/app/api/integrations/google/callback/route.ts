@@ -5,40 +5,56 @@ import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { verifyState } from '@/lib/googleOAuthState';
 import { emailFromIdToken, exchangeCode, saveConnection } from '@/lib/googleCalendarClient';
 import { logActivity } from '@/lib/activity';
-import { requestOrigin } from '@/lib/servedHosts';
-import { worldForHeaders } from '@/lib/hostWorld';
+import { requestOrigin, servedOrigin } from '@/lib/servedHosts';
 
 // GET — Google redirects the user back here with `code` and `state` (#709).
 export async function GET(request: Request) {
-  // Every exit stays on the host the browser is on (#2488). Google only ever
-  // calls back on the host named in the redirect_uri, which connect chose from
-  // its own world — so this host's world is the one the exchange must repeat.
-  const get = (n: string) => request.headers.get(n);
-  const base = requestOrigin(get);
-  const world = worldForHeaders(get);
-  const back = (status: string) => NextResponse.redirect(new URL(`/account?google=${status}`, base));
+  const url = new URL(request.url);
+  const state = url.searchParams.get('state');
+
+  // The host the browser is on (#2488). Google only ever sends it to the
+  // redirect_uri registered with it — NEXTAUTH_URL's host — but a connect that
+  // started on another served host (the marketing one) signed that origin into
+  // the state (#2494). There the user HAS a session; here, with host-only
+  // cookies, they have none, so finishing here could only ever bounce them to
+  // the wrong product's sign-in page. So: one hop back to the same callback on
+  // the originating host, query string untouched, and that request does
+  // everything below — the session binding included, which is what makes a
+  // forwarded code as safe as one Google delivered there directly. The token
+  // exchange sends the REGISTERED redirect_uri from config, not this request's
+  // host, so it succeeds from either host.
+  //
+  // Forwarded only for a state that verifies (we minted it, it has not
+  // expired) and only to servedOrigin(): the signature proves the origin is
+  // ours, the allowlist that this deployment still serves it. Never forwarded
+  // to the host it is already on, so the hop cannot loop.
+  const here = requestOrigin((n) => request.headers.get(n));
+  const verified = state ? verifyState(state) : null;
+  const origin = servedOrigin(verified?.origin ?? null);
+  if (origin && origin !== here) {
+    return NextResponse.redirect(`${origin}/api/integrations/google/callback${url.search}`);
+  }
+
+  const back = (status: string) => NextResponse.redirect(new URL(`/account?google=${status}`, here));
 
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.redirect(new URL('/auth/signin', base));
+  if (!session) return NextResponse.redirect(new URL('/auth/signin', here));
   if (!isGoogleCalendarEnabled()) return back('unavailable');
 
-  const url = new URL(request.url);
   // The user pressed "Cancel" on Google's screen. Not an error — say nothing
   // alarming, just take them back.
   if (url.searchParams.get('error')) return back('cancelled');
 
   const code = url.searchParams.get('code');
-  const state = url.searchParams.get('state');
   if (!code || !state) return back('failed');
 
-  const verified = verifyState(state);
   // The state must not merely be valid — it must belong to THIS session. Without
   // that check a callback could be replayed into someone else's browser and
   // attach one person's Google account to another person's profile.
   if (!verified || verified.userId !== session.user.id) return back('failed');
 
   try {
-    const tokens = await exchangeCode(code, world);
+    const tokens = await exchangeCode(code);
     const email = emailFromIdToken(tokens.id_token) ?? session.user.email ?? 'unknown';
     await saveConnection(session.user.id, tokens, email);
     await logActivity({

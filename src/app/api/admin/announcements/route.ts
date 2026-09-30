@@ -206,7 +206,7 @@ async function handlePost(request: Request) {
   // number mailed cannot disagree. A no-op for a single-tenant deployment.
   const users = await prisma.user.findMany({
     where: withinTenant({ isActive: true }, await tenantWhere(session)),
-    select: { id: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true, orgId: true },
+    select: { id: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
 
   // Who would actually be MAILED — computed here, before anything is written,

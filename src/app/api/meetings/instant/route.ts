@@ -93,7 +93,7 @@ export async function POST(request: Request) {
         )
       );
       meetingId = rows[0].id;
-      await inviteAll(ctx.invitees, rows, title, meetLink, session.user.name ?? null);
+      await inviteAll(ctx.invitees, rows, title, meetLink, session.user.name ?? null, session.user.orgId);
     } else {
       const row = await prisma.meeting.create({
         data: {
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
         });
       }
 
-      await inviteAll(ctx.invitees, [row], title, meetLink, session.user.name ?? null);
+      await inviteAll(ctx.invitees, [row], title, meetLink, session.user.name ?? null, session.user.orgId);
     }
 
     await dispatchWebhook('meeting.scheduled', {
@@ -148,7 +148,9 @@ async function inviteAll(
   rows: Row[],
   title: string,
   meetLink: string,
-  organizer: string | null
+  organizer: string | null,
+  // The organizer's tenant — the mail's links open its product host (#2495).
+  orgId: string | null | undefined,
 ) {
   await Promise.all(
     invitees.map(async (inv) => {
@@ -185,6 +187,7 @@ async function inviteAll(
           userId: inv.userId,
           // …and the same goes for the language it is written in (#1720).
           locale: inv.preferredLanguage,
+          orgId,
         });
       } catch (e) {
         console.error('Instant meeting invite email failed:', e);

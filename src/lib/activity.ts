@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { logger, type LogLevel } from '@/lib/logger';
 import { clientIp, type HeaderSource } from '@/lib/clientIp';
 import { getSetting } from '@/lib/settings';
+import { pickActivityOrg, USER_TARGET_TYPES } from '@/lib/activityOrgRule';
 import {
   attributeView,
   parseViewLogWindowMinutes,
@@ -33,6 +34,35 @@ export interface ActivityInput {
    * carry no origin.
    */
   request?: HeaderSource | null;
+  /**
+   * The tenant the entry belongs to, when the call site knows it better than
+   * the actor does (cross-world isolation). Omitted, it is resolved from the
+   * actor's org, then the target user's — see src/lib/activityOrgRule.ts.
+   */
+  orgId?: string | null;
+}
+
+// The org of one user id, or null. A failed lookup is null too: the entry is
+// still written, it just reads as the default org's.
+async function orgOfUser(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  try {
+    const row = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
+    return row?.orgId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The org logActivity() stamps on an entry — exported for the 2FA-reset transaction. */
+export async function resolveActivityOrg(input: Pick<ActivityInput, 'orgId' | 'actorId' | 'targetType' | 'targetId'>): Promise<string | null> {
+  if (input.orgId) return input.orgId;
+  const actorOrgId = await orgOfUser(input.actorId);
+  const targetUserOrgId =
+    !actorOrgId && input.targetType && USER_TARGET_TYPES.includes(input.targetType)
+      ? await orgOfUser(input.targetId)
+      : null;
+  return pickActivityOrg({ explicitOrgId: input.orgId, actorOrgId, targetType: input.targetType, targetUserOrgId });
 }
 
 // Record an activity entry (and mirror it to the structured logger). Never
@@ -47,8 +77,12 @@ export async function logActivity(input: ActivityInput): Promise<void> {
   });
   const req = input.request;
   try {
+    const orgId = await resolveActivityOrg(input);
     await prisma.activityLog.create({
       data: {
+        // Left undefined (not null) when nothing resolved, so a bound tenant
+        // scope can still fill it in once isolation is enforced.
+        ...(orgId ? { orgId } : {}),
         action: input.action,
         level: LEVEL_DB[level],
         actorId: input.actorId ?? null,

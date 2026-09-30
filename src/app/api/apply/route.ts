@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { dispatchWebhook } from '@/lib/webhooks';
@@ -14,7 +15,6 @@ import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
-import { orgAdminsWhere } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
@@ -155,9 +155,9 @@ export async function POST(request: Request) {
       university,
     });
     if (matches.length === 0) return;
-    // The org the check ran against, not every admin (a public route: no tenant context).
-    const admins = await prisma.user.findMany({ where: await orgAdminsWhere(mentor.orgId), select: { id: true } });
-    await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
+    // The mentor's org's admins only (#2542): the applicant lands in that org.
+    const adminIds = await tenantAdminIds(mentee.orgId ?? mentor.orgId);
+    await Promise.all(adminIds.map((id) => notify(id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
   })().catch((e) => console.error('Duplicate post-check failed:', e));
 
   // Let the applicant set a password so they can sign in to the portal.

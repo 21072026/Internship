@@ -17,6 +17,9 @@ import {
 } from '@/lib/offers';
 import { notifyOfferSent, notifyOfferDecided } from '@/lib/offerNotify';
 import { validateOfferRequisition } from '@/lib/requisitions';
+import { applyAcceptedOffer, requisitionCountDetail, type RequisitionCount } from '@/lib/hiringOutcome';
+import { advanceOnAcceptedOffer } from '@/lib/offerAutoAdvance';
+import { logger } from '@/lib/logger';
 
 const baseSelect = {
   id: true,
@@ -183,14 +186,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       if (actionStr === 'withdraw') data.decidedAt = now;
 
-      const updated = await prisma.offer.update({ where: { id }, data, select: baseSelect });
+      // One transaction: the guarded status flip, and — for an acceptance — the
+      // seat it takes in the requisition (#1411/#1854). The flip is conditional
+      // on the status the checks above saw, so two concurrent requests cannot
+      // both move the same offer; the loser gets a 409, not a second write.
+      const outcome = await prisma.$transaction(async (tx) => {
+        const flip = await tx.offer.updateMany({ where: { id, status: offer.status }, data });
+        if (flip.count === 0) return null;
+        const count: RequisitionCount =
+          actionStr === 'accept' ? await applyAcceptedOffer(tx, offer, now) : { outcome: 'none' };
+        return { count };
+      });
+      if (!outcome) {
+        return NextResponse.json({ error: 'Offer changed meanwhile', code: 'offer_changed' }, { status: 409 });
+      }
+      const updated = await prisma.offer.findUniqueOrThrow({ where: { id }, select: baseSelect });
 
       await prisma.auditLog.create({
         data: {
           actorId: session.user.id,
           action: `offer.${actionStr}`,
           targetId: id,
-          detail: actionStr === 'decline' ? `reason ${declineReasonCode}` : undefined,
+          detail:
+            actionStr === 'decline' ? `reason ${declineReasonCode}` : requisitionCountDetail(outcome.count),
         },
       });
       await logActivity({
@@ -203,7 +221,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
       if (actionStr === 'send') await notifyOfferSent(id);
       if (actionStr === 'accept') await notifyOfferDecided(id, 'ACCEPTED');
+      // Opt-in (#2658): move the relation to the hired stage through the shared
+      // stage write path. After the commit and never able to fail the
+      // acceptance; every skip is logged with its reason.
+      if (actionStr === 'accept') {
+        try {
+          await advanceOnAcceptedOffer(offer);
+        } catch (e) {
+          logger.error('offer.auto_advance_failed', { offerId: id, error: e instanceof Error ? e.name : 'unknown' });
+        }
+      }
       if (actionStr === 'decline') await notifyOfferDecided(id, 'DECLINED');
+
+      // `offer.accepted`, `offer.declined` and `requisition.filled` are
+      // REGISTERED in WEBHOOK_EVENTS (#1854) but deliberately not dispatched
+      // from here: `scripts/check-events.mjs` (#1697) caps direct callers of the
+      // webhook dispatcher at the ten that predate it, and an event has to leave
+      // through `emit()` (#1693), which is not in the tree yet. The same call as
+      // `meeting.cancelled` in /api/meetings/[id]. When the spine lands, raise
+      // them from here: `outcome.count` already says whether this acceptance
+      // took the requisition's last seat.
 
       return NextResponse.json({ offer: updated });
     }

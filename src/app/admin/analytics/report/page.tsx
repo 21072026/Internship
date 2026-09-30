@@ -10,6 +10,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
 import { formatDate } from '@/lib/relativeTime';
 import type { VerticalCapability } from '@/lib/verticals';
+import type { TrialConversionData } from '@/components/admin/TrialConversionCard';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -58,6 +59,7 @@ export default function AnalyticsReportPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
   const [sources, setSources] = useState<SourceRow[] | null>(null);
+  const [trial, setTrial] = useState<TrialConversionData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -67,11 +69,14 @@ export default function AnalyticsReportPage() {
       fetch('/api/admin/analytics').then((r) => (r.ok ? r.json() : null)),
       fetch('/api/admin/analytics/cohorts').then(async (r) => (r.ok ? (await r.json()).cohorts : null)),
       fetch('/api/admin/analytics/sources').then(async (r) => (r.ok ? (await r.json()).sources : null)),
+      // Trial → paid (#2556): null for a tenant with no trial stage.
+      fetch('/api/admin/analytics/funnel').then(async (r) => (r.ok ? (await r.json()).trialConversion ?? null : null)),
     ])
-      .then(([a, co, so]) => {
+      .then(([a, co, so, tr]) => {
         setData(a);
         setCohorts(co ?? []);
         setSources(so ?? []);
+        setTrial(tr);
       })
       .finally(() => setLoading(false));
   }, [premium]);
@@ -177,6 +182,38 @@ export default function AnalyticsReportPage() {
           </tbody></table>
         ) : <p className="text-sm text-gray-400">{c.sourceConversionEmpty}</p>}
       </Section>
+
+      {trial && (
+        <Section title={c.trialKpi.title}>
+          <div data-testid="report-trial-kpi">
+            <table className="w-full"><thead><tr>
+              <th className={th}>{c.trialKpi.month}</th><th className={th}>{c.trialKpi.started}</th>
+              <th className={th}>{c.trialKpi.paid}</th><th className={th}>{c.trialKpi.rate}</th>
+            </tr></thead><tbody>
+              {trial.months.map((m) => (
+                <tr key={m.month}>
+                  <td className={td}>{m.month}</td><td className={td}>{m.started}</td><td className={td}>{m.paid}</td>
+                  <td className={td}>{m.rate === null ? '—' : `${m.rate}%`}</td>
+                </tr>
+              ))}
+            </tbody></table>
+            {trial.bySource && trial.bySource.length > 0 && (
+              <table className="w-full mt-4"><thead><tr>
+                <th className={th}>{c.trialKpi.source}</th><th className={th}>{c.trialKpi.started}</th>
+                <th className={th}>{c.trialKpi.paid}</th><th className={th}>{c.trialKpi.rate}</th>
+              </tr></thead><tbody>
+                {trial.bySource.map((s) => (
+                  <tr key={s.sourceId ?? '__none'}>
+                    <td className={td}>{s.name ?? c.trialKpi.noSource}</td><td className={td}>{s.trials}</td><td className={td}>{s.paid}</td>
+                    <td className={td}>{s.rate === null ? '—' : `${s.rate}%`}</td>
+                  </tr>
+                ))}
+              </tbody></table>
+            )}
+            <p className="mt-2 text-xs text-gray-400">{c.trialKpi.historyNote}</p>
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

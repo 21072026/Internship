@@ -1,7 +1,14 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { requireVerticalCapability } from '@/lib/verticalPage';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.codeOfConduct.title, description: t.seo.codeOfConductDescription }));
+}
+
 
 const REPO_COC_URL = 'https://github.com/21072026/Internship/blob/main/CODE_OF_CONDUCT.md';
 
@@ -14,7 +21,7 @@ export default async function CodeOfConductPage() {
   const { t } = await getServerDictionary();
   const c = t.codeOfConduct;
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: c.title, path: '/code-of-conduct' }}>
       <div className="max-w-2xl mx-auto my-12 px-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">{c.title}</h1>

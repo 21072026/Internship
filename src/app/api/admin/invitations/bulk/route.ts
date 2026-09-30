@@ -6,7 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { sendInvitationEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
-import { orgScoped, resolveOrgId } from '@/lib/orgScope';
+import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
 import {
   deriveInvitationStatus,
@@ -23,8 +24,7 @@ import {
 // OWN invitations one at a time via /api/invite/[id]), the tenant filter written
 // by hand — InvitationToken is registered in TENANT_MODELS since #1559, so the
 // middleware scopes these queries as well when the flag is on, but the hand
-// filter is the only one with it OFF and both read `resolveOrgId(session)`, so
-// they cannot disagree — and the per-row eligibility taken from
+// filter (`tenantWhere()`, #2542) is the only one with it OFF — and the per-row eligibility taken from
 // src/lib/invitationStatus.ts rather than re-derived.
 //
 // Every row reports its own outcome. A bulk action over 50 rows where 3 were
@@ -96,10 +96,14 @@ export async function POST(request: Request) {
 
     return await withTenantScope(session, async () => {
       const orgId = resolveOrgId(session);
+      // `tenantWhere`, not `orgScoped`: the latter is UNSCOPED for an org-less
+      // session (a JWT minted before the backfill stamped its user) and misses
+      // the default org's NULL rows; this one reads both as the default org.
+      const tenant = await tenantWhere(session);
       // The tenant filter IS the authorization check here: an id from another
       // org simply does not come back, and is reported as notFound.
       const rows = await prisma.invitationToken.findMany({
-        where: orgScoped({ id: { in: ids } }, orgId),
+        where: withinTenant({ id: { in: ids } }, tenant),
         select: {
           id: true,
           token: true,
@@ -146,7 +150,7 @@ export async function POST(request: Request) {
           // One statement rather than a row-at-a-time loop: the org filter is
           // repeated here so the write can never widen what the read matched.
           await prisma.invitationToken.updateMany({
-            where: orgScoped({ id: { in: revocable.map((r) => r.id) } }, orgId),
+            where: withinTenant({ id: { in: revocable.map((r) => r.id) } }, tenant),
             data: { revokedAt: now },
           });
         }
@@ -167,7 +171,7 @@ export async function POST(request: Request) {
         }
         if (deletable.length > 0) {
           await prisma.invitationToken.deleteMany({
-            where: orgScoped({ id: { in: deletable.map((r) => r.id) } }, orgId),
+            where: withinTenant({ id: { in: deletable.map((r) => r.id) } }, tenant),
           });
         }
         for (const row of deletable) {

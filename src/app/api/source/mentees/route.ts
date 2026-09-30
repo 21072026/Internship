@@ -10,9 +10,9 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { notify } from '@/lib/notify';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
-import { orgAdminsWhere } from '@/lib/tenantFilter';
 
 // The source a SOURCE user represents (their own sourceId).
 async function ownSourceId(userId: string): Promise<string | null> {
@@ -117,8 +117,9 @@ export async function POST(request: Request) {
         university,
       });
       if (matches.length === 0) return;
-      const admins = await prisma.user.findMany({ where: await orgAdminsWhere(mentee.orgId), select: { id: true } });
-      await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
+      // The mentee's own org's admins only (#2542).
+      const adminIds = await tenantAdminIds(mentee.orgId);
+      await Promise.all(adminIds.map((id) => notify(id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
     })().catch((e) => console.error('Duplicate post-check failed:', e));
 
     return NextResponse.json({ mentee: { id: mentee.id, fullName: mentee.fullName, email: mentee.email } }, { status: 201 });

@@ -6,11 +6,14 @@ import { prisma } from '@/lib/prisma';
 import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
+import { requireCapability } from '@/lib/capabilityGate';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { sendMentorApplicationReceivedEmail } from '@/services/emailService';
-import { orgAdminsWhere } from '@/lib/tenantFilter';
 import { resolveRequestVertical } from '@/i18n/server';
 import { verticalHasCapability } from '@/lib/verticals';
 import type { Prisma } from '@prisma/client';
@@ -102,8 +105,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'You already have a pending application' }, { status: 409 });
   }
 
+  // The org this application belongs to, stamped by hand (#2542): the route is
+  // sessionless, so the dormant tenant middleware binds nothing, and it is
+  // filed in the default org (the INTERNSHIP world — see the account check
+  // above). The admin list below and the fan-out read this same org.
+  const orgId = await defaultOrgId();
   await prisma.mentorApplication.create({
     data: {
+      orgId,
       fullName,
       email,
       phone: phone || null,
@@ -119,15 +128,13 @@ export async function POST(request: Request) {
     },
   });
 
-  // The application is filed org-less, i.e. in the default org (see above), so
-  // only that org's admins — the ones whose queue lists it — are told.
-  const admins = await prisma.user.findMany({
-    where: await orgAdminsWhere(null),
-    select: { id: true },
-  });
+  // That org's admins only (#2542) — the query used to have no org filter, so
+  // a MARKETING tenant's admins were told about internship mentor applications
+  // they could not (and must not) open.
+  const adminIds = await tenantAdminIds(orgId);
   await Promise.all(
-    admins.map((a) =>
-      notify(a.id, 'mentor_application.new', { name: fullName }, '/admin/mentor-applications')
+    adminIds.map((id) =>
+      notify(id, 'mentor_application.new', { name: fullName }, '/admin/mentor-applications')
     )
   );
 
@@ -149,16 +156,24 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Mentor recruiting is a mentorship module (the nav tags it so): a vertical
+  // without it gets the same refusal a direct URL would on a write.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const sp = new URL(request.url).searchParams;
     const statusParam = sp.get('status');
     const page = Math.max(1, Number(sp.get('page')) || 1);
 
-    const where: Prisma.MentorApplicationWhereInput = {};
+    const filter: Prisma.MentorApplicationWhereInput = {};
     if (statusParam && (STATUSES as readonly string[]).includes(statusParam)) {
-      where.status = statusParam as (typeof STATUSES)[number];
+      filter.status = statusParam as (typeof STATUSES)[number];
     }
+    // The caller's own tenant, by hand (#2542): withTenantScope alone does
+    // nothing while MT_ENFORCE_ISOLATION is off, and this list carries the
+    // private `adminNote`. NULL-org rows are the default org's.
+    const where = withinTenant(filter, await tenantWhere(session));
 
     // Admin-only list: like the detail route, this returns every column, so
     // both `rejectReason` and the private `adminNote` (#1806) reach the review

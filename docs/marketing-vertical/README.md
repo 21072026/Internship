@@ -43,15 +43,22 @@ sürece tek bir PR sessizce farklı davranamaz.
 ## Dosyalar
 
 - `pipeline-record.md` — funnel kaydı nedir (bağlayıcı varsayılan karar)
+- `funnel-decision.md` — MARKETING_FUNNEL aşamaları ve DEAL_WON sonrası müşteri
+  durumu (#2572) — **taslak, maintainer onayı bekliyor**
 - `../worlds.md` — bir kişi, iki dünya: aynı e-posta iki üründe ayrı hesap, giriş
   yapılan host'a göre ürün seçimi (#2590); devralınan değil, bu repo'nun kararı
 - `CURATION.md` — görev görev karar listesi (asıl okunacak dosya)
 - `backlog/INDEX.md` — devralınan epic tablosu
 - `backlog/epic-01..09-*.md` — devralınan epic'ler, olduğu gibi
-- `salevali-domain.md` — SaleVali'nin ticari modeli (fiyatlandırma, kanallar)
+- `salevali-domain.md` — SaleVali'nin ticari modeli: fiyat V2, deneme 30 + 30, fesih, dil ve kanallar SaleVali koduna eşitlendi (kaynak satırlarıyla — #2574); yaşam döngüsü, SEPA ve müşteri kaynağı eski Marketing CRM tarihçesi
 - `salevali-usage-feed.md` — kullanım beslemesinin veri sözleşmesi (#2445),
   devralınan değil: bu repo'nun kararlarıyla yazıldı
+- `salevali-provider-contract.md` — SaleVali'den istenenler (#2565): `externalId`
+  anahtarı, kullanım ve lisans olayı uçları, alan eşlemesi, SaleVali karşı işleri
 - `old-server-teardown.md` — eski Marketing kutusunun sökümü
+- `outreach-compliance.md` — SaleVali satış iletişimi kanal kuralları (UWG § 7 /
+  DSGVO, #2576); CRM izin kodlarının (#2577) hukuki metni — hukuki danışmanlık değildir,
+  Fachanwalt incelemesi bekliyor
 
 ## Neden olduğu gibi saklandı
 

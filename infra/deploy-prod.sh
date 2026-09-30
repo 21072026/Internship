@@ -693,6 +693,12 @@ run_tool node prisma/backfill-project-members.mjs || true
 # MT_ENFORCE_ISOLATION. The warning describes the exit code, not the database:
 # the script also exits non-zero when the DB is unreachable or the run never
 # got as far as counting anything.
+# Attribute ActivityLog / ProjectTaskTemplate rows to their own tenant FIRST
+# (cross-world isolation): backfill-organization.mjs below fills every NULL
+# orgId with the default org, which would hand a MARKETING tenant's audit trail
+# and goal pool to the INTERNSHIP admin. Only fills NULLs — idempotent.
+run_tool node prisma/backfill-activity-log-org.mjs || true
+run_tool node prisma/backfill-task-template-org.mjs || true
 run_tool node prisma/backfill-organization.mjs \
   || log "WARNING: org backfill FAILED (exit non-zero) — see the output above. It may be incomplete; do NOT enable MT_ENFORCE_ISOLATION until it runs green (#1557)."
 run_tool node scripts/backfill-requisitions.mjs || true

@@ -1,5 +1,11 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import { IS_DEMO_MODE, DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/lib/demoMode';
 import { SignInClient } from './SignInClient';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.seo.signInTitle, description: t.seo.signInDescription }));
+}
 
 // Server wrapper: IS_DEMO_MODE is a server-only env flag (deliberately not
 // NEXT_PUBLIC_), so the demo quick-login accounts are resolved here and handed

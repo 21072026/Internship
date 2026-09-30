@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**SSO: map IdP claims to roles** (#1940). New tenant model `SsoClaimMapping` (`orgId`, `claim`, `matchValue`, `role`, `priority`; unique per `(orgId, claim, matchValue)`, registered in `TENANT_MODELS`) and `Organization.ssoSyncRole` (default off). The rule lives in `src/lib/ssoRoleMapping.ts` (pure, unit-tested in `scripts/test/sso-role-mapping.test.mjs`): no match → `MENTEE`, highest priority wins, a tie goes to the less privileged role, values compare case-insensitively, and `ADMIN` is neither writable (`admin_mapping_unavailable`) nor honoured until #1575. The SAML ACS extracts claims only from the verified profile and passes the resolved role to `provisionSsoUser`; with `ssoSyncRole` on, a returning sign-in whose mapped role differs updates the user (never an `ADMIN`, never on \"no match\") and logs a warning `sso.role_synced`. Admin API `/api/admin/organizations/[id]/sso-role-mappings` (GET/POST/PATCH/DELETE, own-org admin or super admin of its world) and a mappings table in the Enterprise SSO card. The e2e stub IdP now emits a multi-valued `groups` attribute; `e2e/sso-role-mapping.spec.ts` drives it through the real ACS. OIDC stays refused (#1929). Docs: `docs/sso-saml.md` § IdP role mapping.",
+  "notes": {
+    "en": ["Enterprise SSO: map a group from your identity provider to a role, so mentors and company contacts land in the right place on their first sign-in."],
+    "tr": ["Kurumsal SSO: kimlik sağlayıcınızdaki bir grubu bir role eşleyin — mentorlar ve şirket temsilcileri ilk girişte doğru yere düşsün."],
+    "de": ["Enterprise-SSO: Ordnen Sie eine Gruppe Ihres Identitätsanbieters einer Rolle zu, damit Mentoren und Firmenkontakte schon bei der ersten Anmeldung am richtigen Ort landen."]
+  }
+}

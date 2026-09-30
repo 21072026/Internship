@@ -1,3 +1,5 @@
+import { meetingEnd } from '@/lib/meetingDuration';
+
 // Build a minimal RFC-5545 VCALENDAR for a single meeting, or a subscribable
 // multi-event feed (#915).
 function toICSDate(d: Date): string {
@@ -42,7 +44,7 @@ export function buildMeetingIcs(opts: {
   uid: string;
   title: string;
   start: Date;
-  durationMinutes?: number;
+  durationMinutes?: number | null;
   description?: string | null;
   location?: string | null;
   // What the file is *for* (#2015). PUBLISH is a read-only "here is an event";
@@ -67,7 +69,9 @@ export function buildMeetingIcs(opts: {
   organizer?: IcsPerson | null;
   attendee?: IcsPerson | null;
 }): string {
-  const end = new Date(opts.start.getTime() + (opts.durationMinutes ?? 30) * 60000);
+  // The default lives in one place (src/lib/meetingDuration.ts, #1984) — it used
+  // to be a bare 30 here while the app said 60.
+  const end = meetingEnd(opts.start, opts);
   const method = opts.method ?? 'PUBLISH';
   const itip = method === 'REQUEST' || method === 'CANCEL';
   // RSVP is only meaningful while an answer is still wanted; a cancellation
@@ -111,7 +115,7 @@ export function buildMeetingIcs(opts: {
 // time only, no join links, no names — if the feed token leaks, this is all it
 // buys. X-WR-CALNAME labels the subscription in the calendar app, so it names
 // the feed owner's product (`productNameFor` of their world).
-export function buildFeedIcs(product: string, events: { uid: string; title: string; start: Date; durationMinutes?: number }[]): string {
+export function buildFeedIcs(product: string, events: { uid: string; title: string; start: Date; durationMinutes?: number | null }[]): string {
   const name = compactProduct(product);
   const lines = [
     'BEGIN:VCALENDAR',
@@ -121,7 +125,7 @@ export function buildFeedIcs(product: string, events: { uid: string; title: stri
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeText(name)}`,
     ...events.flatMap((e) => {
-      const end = new Date(e.start.getTime() + (e.durationMinutes ?? 30) * 60000);
+      const end = meetingEnd(e.start, e);
       return [
         'BEGIN:VEVENT',
         // Frozen domain — see the UID comment in buildMeetingIcs above.

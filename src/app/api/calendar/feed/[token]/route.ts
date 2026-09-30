@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { buildFeedIcs, feedFilename } from '@/lib/ics';
 import { enforceRateLimit } from '@/lib/rateLimit';
-import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { ruleOccurrences, SERIES_RULE_SELECT } from '@/lib/meetingSeriesOccurrences';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { defaultOrgId } from '@/lib/defaultOrg';
@@ -13,6 +13,8 @@ import { productNameFor } from '@/lib/verticals';
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Overall event cap, kept from #915 and applied to the whole fan-out, not per query. */
 const MAX_EVENTS = 500;
+/** How long a stage-deadline marker occupies in a subscribed calendar. */
+const DEADLINE_EVENT_MINUTES = 30;
 
 // GET — personal ICS subscription feed (#915). Public by design (calendar apps
 // can't log in); the unguessable per-user token from /api/account/ics-feed is
@@ -32,7 +34,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   const { token } = await params;
   const user = await prisma.user.findUnique({ where: { icsFeedToken: token }, select: { id: true, role: true, orgId: true } });
   if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
   // The feed owner's tenant, by hand. The route has no session, so no tenant
   // context is bound and the Prisma middleware scopes nothing — and Meeting /
   // MeetingSeries are not tenant-registered anyway. Without this an ADMIN's
@@ -52,12 +53,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   // mentee, and the feed before #2015 matched either side for everyone. Scoping
   // to `mentorId` alone would silently drop their own internship meetings and
   // deadline from a calendar they had already subscribed to.
-  const relWhere: Prisma.MentorshipRelationWhereInput =
+  const roleRelWhere: Prisma.MentorshipRelationWhereInput =
     user.role === 'ADMIN'
       ? {}
       : user.role === 'MENTOR'
         ? { OR: [{ mentorId: user.id }, { menteeId: user.id }] }
         : { menteeId: user.id };
+  const relWhere = withinTenant<Prisma.MentorshipRelationWhereInput>(roleRelWhere, tenant);
 
   const [meetings, teamMeetings, series, relations] = await Promise.all([
     // The user's own meetings, on either side of a relation. `seriesId: null`
@@ -75,7 +77,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
         scheduledAt: { not: null, gte: since },
         relation: withinTenant(relWhere, tenant),
       },
-      select: { id: true, title: true, scheduledAt: true },
+      select: { id: true, title: true, scheduledAt: true, durationMinutes: true },
       orderBy: { scheduledAt: 'asc' },
       take: MAX_EVENTS,
     }),
@@ -91,7 +93,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
           { conversation: { participants: { some: { userId: user.id } } } },
         ],
       },
-      select: { id: true, title: true, scheduledAt: true },
+      select: { id: true, title: true, scheduledAt: true, durationMinutes: true },
       orderBy: { scheduledAt: 'asc' },
       take: MAX_EVENTS,
     }),
@@ -101,20 +103,28 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     prisma.meetingSeries.findMany({
       where: {
         active: true,
-        projectId: { not: null },
-        project: withinTenant<Prisma.ProjectWhereInput>(
-          user.role === 'ADMIN'
-            ? {}
-            : {
-                OR: [
-                  { members: { some: { userId: user.id } } },
-                  { relations: { some: { ...relWhere, status: 'ACTIVE' } } },
-                ],
-              },
-          tenant,
-        ),
+        OR: [
+          {
+            projectId: { not: null },
+            project: {
+              is: withinTenant<Prisma.ProjectWhereInput>(
+                user.role === 'ADMIN'
+                  ? {}
+                  : {
+                      OR: [
+                        { members: { some: { userId: user.id } } },
+                        { relations: { some: { AND: [roleRelWhere, { status: 'ACTIVE' }] } } },
+                      ],
+                    },
+                tenant,
+              ),
+            },
+          },
+          // A standing 1:1 (#2013), scoped like the relation's own meetings.
+          { relationId: { not: null }, relation: { is: relWhere } },
+        ],
       },
-      select: { id: true, title: true, daysOfWeek: true, timeOfDay: true, timeZone: true },
+      select: { id: true, title: true, ...SERIES_RULE_SELECT, durationMinutes: true },
       // Deliberately uncapped: one rule expands into hundreds of occurrences, so
       // a cap here would drop whole recurring calls rather than trim the tail —
       // the MAX_EVENTS budget is applied once, to the merged event list below.
@@ -138,16 +148,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   const stages = relations.length ? await resolvePipelineStages(orgId) : [];
 
   const events = [
-    ...meetings.map((m) => ({ uid: m.id, title: m.title, start: m.scheduledAt! })),
-    ...teamMeetings.map((m) => ({ uid: m.id, title: m.title, start: m.scheduledAt! })),
+    ...meetings.map((m) => ({ uid: m.id, title: m.title, start: m.scheduledAt!, durationMinutes: m.durationMinutes })),
+    ...teamMeetings.map((m) => ({ uid: m.id, title: m.title, start: m.scheduledAt!, durationMinutes: m.durationMinutes })),
     // The same synthetic id /api/calendar-events (and the series invite mail)
     // uses, so a subscribed client and the app agree on which occurrence is
     // which instead of showing it twice.
     ...series.flatMap((s) =>
-      seriesOccurrences(s.daysOfWeek, s.timeOfDay, since, until, s.timeZone).map((when) => ({
+      ruleOccurrences(s, since, until).map((when) => ({
         uid: `series-${s.id}-${when.toISOString()}`,
         title: s.title,
         start: when,
+        durationMinutes: s.durationMinutes,
       }))
     ),
     // The feed has no locale to read, so the stage label falls back to English.
@@ -155,6 +166,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       uid: `deadline-${r.id}`,
       title: stageLabel(stages, r.pipelineStatus),
       start: r.stageDeadline!,
+      // A deadline is a moment, not a meeting: it keeps the half-hour marker it
+      // always had rather than inheriting the meeting default (#1984).
+      durationMinutes: DEADLINE_EVENT_MINUTES,
     })),
   ]
     .sort((a, b) => a.start.getTime() - b.start.getTime())

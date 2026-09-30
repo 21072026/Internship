@@ -10,6 +10,8 @@ import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEdito
 import { StageSlaEditor } from '@/components/StageSlaEditor';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 import { useVertical } from '@/lib/verticalClient';
+import { useSession } from 'next-auth/react';
+import { MarketingAccountImport } from '@/components/MarketingAccountImport';
 import { DEFAULT_TRIAL_LENGTH_DAYS, MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 import { verticalHasCapability } from '@/lib/verticals';
 
@@ -35,6 +37,7 @@ export default function AdminSettingsPage() {
   const [outcomeAutoSend, setOutcomeAutoSend] = useState(false);
   // Blind interview review (#819) — org-wide, off by default.
   const [blindReview, setBlindReview] = useState(false);
+  const [autoAdvanceOnOfferAccept, setAutoAdvanceOnOfferAccept] = useState(false);
   const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
   const [premiumAnalytics, setPremiumAnalytics] = useState(false);
   // Monthly AI call budget (#1625). A real, enforced setting — the AI gate
@@ -92,6 +95,12 @@ export default function AdminSettingsPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const { data: session } = useSession();
+  // Which importer the panel shows (#2552). Only a MARKETING org has a choice;
+  // it opens on its own product's import. `hasTrialStage` settles after the
+  // first render, so the effective mode is derived rather than stored.
+  const [chosenImportMode, setImportMode] = useState<'marketing' | 'mentees' | null>(null);
+  const importMode: 'marketing' | 'mentees' = hasTrialStage ? (chosenImportMode ?? 'marketing') : 'mentees';
   const [csv, setCsv] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
@@ -207,6 +216,7 @@ export default function AdminSettingsPage() {
     setLoadedWipLimit(wip);
     setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
     setBlindReview(settings.blindReview === 'true');
+    setAutoAdvanceOnOfferAccept(settings.autoAdvanceOnOfferAccept === 'true');
     const broadcast = settings.broadcastMonthlyRecipients ?? '';
     setBroadcastQuota(broadcast);
     setLoadedBroadcastQuota(broadcast);
@@ -273,7 +283,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
@@ -390,6 +400,21 @@ export default function AdminSettingsPage() {
               </label>
               <p className="text-xs text-gray-500 mt-1">{t.settings.blindReviewHint}</p>
             </div>
+            {verticalHasCapability(vertical, 'placements') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.autoAdvanceOnOfferAccept}</label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={autoAdvanceOnOfferAccept}
+                    onChange={(e) => setAutoAdvanceOnOfferAccept(e.target.checked)}
+                    data-testid="auto-advance-offer-accept"
+                  />
+                  {t.settings.autoAdvanceOnOfferAcceptLabel}
+                </label>
+                <p className="text-xs text-gray-500 mt-1">{t.settings.autoAdvanceOnOfferAcceptHint}</p>
+              </div>
+            )}
             <div>
               <label htmlFor="require-2fa" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.require2fa}</label>
               <select
@@ -464,7 +489,31 @@ export default function AdminSettingsPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>{t.settings.bulkImport}</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{importMode === 'marketing' ? t.settings.importModeMarketing : t.settings.bulkImport}</CardTitle></CardHeader>
+          {/* The marketing account import (#2552) is a second MODE of this
+              panel, offered to MARKETING orgs only (the route answers everyone
+              else 403 vertical_mismatch). It runs the marketing import engine;
+              nothing of the mentee importer below is shared with it. */}
+          {hasTrialStage && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-sm" role="group" aria-label={t.settings.importMode}>
+              <span className="text-gray-500 dark:text-gray-400">{t.settings.importMode}:</span>
+              {(['marketing', 'mentees'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={importMode === mode}
+                  data-testid={`import-mode-${mode}`}
+                  onClick={() => setImportMode(mode)}
+                  className={`rounded-lg border px-3 py-1 ${importMode === mode ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium' : 'border-gray-300 text-gray-700'}`}
+                >
+                  {mode === 'marketing' ? t.settings.importModeMarketing : t.settings.importModeMentees}
+                </button>
+              ))}
+            </div>
+          )}
+          {importMode === 'marketing' ? (
+            <MarketingAccountImport owners={leadOwners} selfId={session?.user?.id ?? null} />
+          ) : (
           <div className="space-y-3">
             <p className="text-xs text-gray-500">{t.settings.bulkImportHint}</p>
             <textarea
@@ -513,6 +562,7 @@ export default function AdminSettingsPage() {
               </div>
             )}
           </div>
+          )}
         </Card>
       </div>
 

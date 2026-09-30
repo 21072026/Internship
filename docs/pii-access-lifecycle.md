@@ -162,7 +162,7 @@ Serbest metnin sahibi kim olduğuna göre davranış değişir:
 |---|---|---|
 | Ne olur | **Mezar taşı**: gövde boşaltılır, ek satırları silinir, **satır kalır** | **Temizlenir**: serbest metin gider, satırın tarihi/türü/aşaması kalır |
 | Neden | Karşı tarafın konuşması anlamsızlaşmasın — mevcut `Message.deletedForEveryoneAt` maskesi zaten "mesaj silindi" yer tutucusunu gösteriyor | Tarih, tür ve aşama kurumun operasyonel geçmişi; metin gittikten sonra PII taşımıyorlar |
-| Kapsam | `Message.body` + `MessageAttachment`, `SupportMessage.body` + `SupportAttachment`, `SupportTicket.subject` (kişinin ilk mesajının ilk 80 karakterinin birebir kopyası), `MentorshipRequest.message`, kişinin kendi `PersonalNote` satırları (yalnızca kendisine ait → doğrudan silinir) | `InteractionLog.notes`/`subject`, `RelationNote.body`, kişinin toplantısında alınmış `PersonalNote.body` |
+| Kapsam | `Message.body` + `MessageAttachment`, `SupportMessage.body` + `SupportAttachment`, `SupportTicket.subject` (kişinin ilk mesajının ilk 80 karakterinin birebir kopyası), `MentorshipRequest.message`, `MentorQuestion.question`, `MeetingRequest.topic`, `ProjectJoinRequest.message`; **yazar olarak** yazdıkları (kimin hakkında olursa olsun): `Evaluation.comment`/`publicExcerpt`, mentörken verdiği `MentorQuestion.answer`, incelediği `WeeklyReport.mentorComment`; kişinin kendi `PersonalNote` satırları ve kendi **bildirimleri** (yalnızca kendisine ait → doğrudan silinir) | `InteractionLog.notes`/`subject`, `RelationNote.body`, kişinin toplantısında alınmış `PersonalNote.body`, `Evaluation.comment`/`publicExcerpt` (ilişkisi ya da panel öznesi), `WeeklyReport.summary`/`blockers`/`mentorComment`, `MentorQuestion`, `MeetingRequest.topic`, `Meeting.title`/`cancelReason` (ilişkisi ya da 1:1 konuşması), `Goal.description`, `Offer.compensationNote`/`declineNote`, `StatusChange.reasonNote`, `CompanyInterest.note`, `InterviewRequest.note`/`declineNote`, `ProjectJoinRequest.decisionNote` (#2106) |
 
 `User` satırında ayrıca gözden kaçmış üç alan temizleniyor: `country`,
 `referralSource`, `reEngageNote`.
@@ -222,9 +222,10 @@ temizliyor; kural [`src/lib/companyContactErasure.ts`](../src/lib/companyContact
   o kişi hesabından silinir, çünkü mesajları ve notları da oradan erişilir.
   ActivityLog satırı yalnızca sayıları taşır; unutulan adres loglanmaz.
   Kanıt: [`e2e/forget-company-contact.spec.ts`](../e2e/forget-company-contact.spec.ts).
-- **Kalan boşluklar:** yöneticilere giden `signup.companyInquiry` bildirimi
-  kişinin adını adres olmadan taşır (#2106); dönüştürülmemiş başvuruların saklama
-  süresi #2559'un ikinci dilimidir.
+- **Kalan boşluk:** yöneticilere giden `signup.companyInquiry` bildirimi kişinin
+  adını adres olmadan taşır; bildirim saklama süresiyle sınırlı (aşağıda,
+  "Ulaşılamayanlar"). Dönüştürülmemiş başvurular `companyInquiry` saklama
+  kaydıyla yaşlanıp gider (#2559).
 
 ### Şema değişikliği yok
 
@@ -241,18 +242,35 @@ Kanıt testi: [`e2e/erasure-free-text.spec.ts`](../e2e/erasure-free-text.spec.ts
 etkileşim kaydı serbest metinleriyle yazılır, **iki yol da** koşulur, sonra
 tohumlanan PII dizeleri doğrudan Prisma ile aranır.
 
-Kodda `KNOWN GAPS` bloğunda sayılan ve [#2106](https://github.com/21072026/Internship/issues/2106)
-ile takip edilen kalan yüzeyler:
+`scripts/sanitize-db.mjs` başlığındaki "Emptied" envanterinin **her** kişisel
+serbest metin kolonu artık iki yolda da temizleniyor (#2106). Kalanlar bir
+**karar**, gerekçesiyle birlikte `accountErasure.ts` başındaki `COVERAGE` bloğunda:
 
 - **Toplantısız `PersonalNote`** (`meetingId: null`): yazarına bağlı, özneye
   hiçbir bağı yok. Bu notun bu kişi hakkında mı yoksa bir başkası hakkında mı
   olduğunu ayırt eden bir sorgu yazılamaz — ürün kararı gerektiriyor.
 - Grup konuşması / proje toplantısında alınan notlar: not toplantı hakkındadır,
   kişi hakkında değil.
-- `scripts/sanitize-db.mjs` başlığındaki envanterin geri kalanı (değerlendirme
-  yorumları, haftalık raporlar, hedef açıklamaları, teklif/görüşme notları,
-  bildirim metinleri, denetim kaydı `detail` alanları). Bunların çoğu **tamamen
-  silmede** cascade ile gidiyor ama **anonimleştirmede** kalıyor.
+- **Başkasının metninde alıntılanan kişi** (#2098): başka bir kullanıcının açtığı
+  destek talebinde adminin yanıta kişinin telefonunu yapıştırması ya da bir
+  mentörün toplantısız notunda ondan söz etmesi. Buna yalnızca tam metin arama
+  ulaşır, arama da bir anahtar değildir: adaşları bulur, başka sözcüklerle
+  yazılmışı kaçırır ve özel notlarda arama yapmak, yazarından istenmemiş bir
+  metni okumak demektir. **Bilinçli olarak ulaşılmıyor**; gizlilik metni bunu
+  söylemeli (metnin ifadesi hak sahibinin kararıdır, kodun değil).
+- `Meeting.meetLink` (bir oda adresi, kişisel veri değil), `MenteeOnboarding.steps`
+  ve `Announcement` (kontrol listesi durumu ve kurum geneli duyuru metni).
+- **Başkalarının bildirimlerinde** kişinin adı ("Ayşe sana mesaj gönderdi"): ad
+  `params` JSON'unda, sabit bir kimlik olmadan duruyor; adaşından ayırt eden bir
+  sorgu yok. Bunun yerine `notification` saklama kaydıyla sınırlı
+  (`notificationRetentionDays`, varsayılan 180 gün). Kişinin **kendi** bildirimleri
+  silinir.
+- **Denetim kaydı bilinçli olarak korunur:** `ActivityLog` (`actorEmail`, `detail`,
+  `ip`, `userAgent`) ve `AuditLog.detail`. Silmenin yeniden yazdığı bir defter,
+  var olma nedeni olan güvenlik incelemesinde ya da hukuki talepte "kim ne yaptı"
+  sorusunu cevaplayamaz (GDPR md. 17(3)(b)/(e)). `activityLog` saklama kaydıyla
+  sınırlı (`activityLogRetentionDays`, varsayılan 365 gün). Bu kararı değiştirmeden
+  silme bu tabloları yeniden yazmaya başlamamalı.
 
 Aşağıdaki bölümdeki uyarı burada da geçerli ve iki yönlü: yeni bir serbest metin
 kolonu eklerken hem `scripts/sanitize-db.mjs` envanterine hem de

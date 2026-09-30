@@ -11,12 +11,14 @@ import { buildMeetingIcs, buildFeedIcs, feedFilename } from '@/lib/ics';
 const START = new Date('2026-09-10T09:00:00Z');
 const P = 'Internship CRM';
 
-test('defaults are unchanged: PUBLISH, sequence 0, 30 minutes', () => {
+// The default length is the app's one default (60, src/lib/meetingDuration.ts,
+// #1984) — it was a bare 30 here, so every downloaded meeting ended early.
+test('defaults: PUBLISH, sequence 0, and the app-wide 60 minutes', () => {
   const ics = buildMeetingIcs({ product: P, uid: 'm1', title: 'Weekly 1:1', start: START });
   expect(ics).toContain('METHOD:PUBLISH');
   expect(ics).toContain('SEQUENCE:0');
   expect(ics).toContain('DTSTART:20260910T090000Z');
-  expect(ics).toContain('DTEND:20260910T093000Z');
+  expect(ics).toContain('DTEND:20260910T100000Z');
   expect(ics).toContain('UID:m1@crm.ersah.in');
   expect(ics).not.toContain('STATUS:CANCELLED');
 });

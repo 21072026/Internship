@@ -9,7 +9,11 @@
 // The single distinction this module exists to protect: reaching
 // INTERNSHIP_FOUND_ELSEWHERE_800 is a SUCCESS — the student found an internship.
 // Communicated with the same template as a rejection, the message lands badly
-// and the product's tone breaks. It gets its own, celebratory outcome.
+// and the product's tone breaks. It gets its own, celebratory outcome. Which
+// stage means what is the catalogue's to say (`canonicalOffPathMeaning`,
+// src/lib/pipeline.ts) — this module names no stage key (#1880).
+
+import { canonicalOffPathMeaning } from '@/lib/pipeline';
 
 export type OutcomeKind = 'noMatch' | 'placedElsewhere' | 'poolInvite';
 
@@ -46,14 +50,9 @@ export function outcomeForStage(
   stageKey: string,
   opts?: { isOffPath?: boolean; reasonCode?: string | null }
 ): OutcomeKind | null {
+  const meaning = canonicalOffPathMeaning(stageKey);
   const base: OutcomeKind | null =
-    stageKey === 'INTERNSHIP_FOUND_ELSEWHERE_800'
-      ? 'placedElsewhere'
-      : stageKey === 'INTERNSHIP_DROPPED_460'
-        ? 'noMatch'
-        : opts?.isOffPath
-          ? 'noMatch'
-          : null;
+    meaning === 'success' ? 'placedElsewhere' : meaning === 'ended' || opts?.isOffPath ? 'noMatch' : null;
   if (!base) return null;
   return (opts?.reasonCode && REASON_OVERRIDE[opts.reasonCode]) || base;
 }

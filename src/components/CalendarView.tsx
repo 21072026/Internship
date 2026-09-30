@@ -188,6 +188,11 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
     new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
   const dayLong = (d: Date) =>
     new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+  // What a month-grid cell is called by assistive tech (#2153): the full date,
+  // year included, so "17" becomes "Thursday, 17 September 2026" and a day from
+  // the neighbouring month is no longer indistinguishable from this month's.
+  const dayFull = (d: Date) =>
+    new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
 
   const todayKey = dayKey(new Date());
   const step = (dir: 1 | -1) => {
@@ -346,6 +351,8 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
               type="button"
               key={k}
               onClick={() => setSelectedDay(selected ? null : k)}
+              // A toggle: it opens and closes the selected-day panel below (#2153).
+              aria-pressed={selected}
               data-testid={`calendar-cell-${k}`}
               className={`min-h-[54px] rounded-lg border p-1 text-left align-top sm:min-h-[68px] ${
                 selected
@@ -357,15 +364,26 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
                       : 'border-gray-100 dark:border-gray-800'
               }`}
             >
+              {/* The accessible name (#2153) is built from the cell's content, not
+                  an aria-label — a label would replace it and the event chips
+                  would stop being read. So: the full date for screen readers,
+                  and the bare visible number hidden from them. */}
+              <span className="sr-only" data-testid="calendar-cell-date">{dayFull(d)}</span>
               <div
+                aria-hidden="true"
                 className={`mb-0.5 text-[11px] ${outside ? 'text-gray-500 dark:text-gray-300' : 'text-gray-600 dark:text-gray-300'}`}
                 data-testid="calendar-day-number"
                 data-outside-month={outside ? 'true' : 'false'}
               >
                 {d.getDate()}
               </div>
+              {/* Phones get dots, which say nothing to a screen reader, so the
+                  count is spoken instead; from sm: up the chips are read. */}
+              {evs.length > 0 && (
+                <span className="sr-only sm:hidden">{t.calendar.eventCount.replace('{n}', String(evs.length))}</span>
+              )}
               {/* Phones get dots — three chips in a 45px-wide cell is noise. */}
-              <div className="flex flex-wrap gap-0.5 sm:hidden">
+              <div className="flex flex-wrap gap-0.5 sm:hidden" aria-hidden="true">
                 {evs.slice(0, 4).map((e) => (
                   <span key={e.id} className={`h-1.5 w-1.5 rounded-full ${DOT[e.type]}`} />
                 ))}
@@ -467,7 +485,7 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
         <div className="flex items-center gap-1">
           {view !== 'agenda' && (
             <>
-              <button onClick={() => step(-1)} aria-label="prev" className="rounded p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={() => step(-1)} aria-label={t.calendar.previous} className="rounded p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
@@ -479,7 +497,7 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
               >
                 {t.calendar.today}
               </button>
-              <button onClick={() => step(1)} aria-label="next" className="rounded p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={() => step(1)} aria-label={t.calendar.next} className="rounded p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
                 <ChevronRight className="h-4 w-4" />
               </button>
             </>
@@ -494,14 +512,21 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
           i.e. sideways scrolling inside a control that has no reason to need it.
           `flex-wrap` lets it fall onto a second row instead; `flex-1` still
           spreads the tabs across the full width on every row, so the control
-          looks unchanged from `sm:` upwards. */}
-      <div className="mb-3 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800" role="tablist">
+          looks unchanged from `sm:` upwards.
+          A group of toggle buttons, not a tablist (#2153): it used to claim the
+          tab pattern without its arrow keys, tabpanel or aria-controls, so a
+          screen reader announced "tab, 1 of 4" and the arrows did nothing. */}
+      <div
+        className="mb-3 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800"
+        role="group"
+        aria-label={t.calendar.viewSwitcher}
+        data-testid="calendar-view-switcher"
+      >
         {VIEWS.map((v) => (
           <button
             key={v}
             type="button"
-            role="tab"
-            aria-selected={view === v}
+            aria-pressed={view === v}
             onClick={() => pickView(v)}
             data-testid={`calendar-view-${v}`}
             className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition ${
