@@ -238,6 +238,14 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
   { path: `/api/users/${FOREIGN_USER_ID_PARAM}/activity`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}/delete-impact`, kind: 'detail' },
+  // Audit trail, support queue and content pools (cross-world isolation):
+  // each carries user ids (actorId / requester.id / createdById) a leak would
+  // expose. e2e/tenant-isolation-content.spec.ts covers them row by row.
+  { path: '/api/admin/activity', kind: 'list' },
+  { path: '/api/admin/support', kind: 'list' },
+  { path: '/api/admin/message-templates', kind: 'list' },
+  { path: '/api/admin/goal-templates', kind: 'list' },
+  { path: '/api/message-templates', kind: 'list' },
 ];
 
 /**
