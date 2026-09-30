@@ -56,6 +56,11 @@
  *   MenteeOnboarding.steps, Announcement (text/translations/link),
  *   StatusChange.reasonNote
  *
+ *   The per-person half of this list is ALSO what account erasure must reach:
+ *   src/lib/accountErasure.ts scrubs every one of them for a single person, and
+ *   its COVERAGE block names the few it deliberately leaves, with the reason
+ *   (#2106). A new free-text column about a person goes in both places.
+ *
  * Deleted outright (files and credentials — nothing to anonymise):
  *   CvFile, AvatarFile, Document, AnnouncementImage, MessageAttachment,
  *   SupportAttachment, InvitationToken, PasswordResetToken,
