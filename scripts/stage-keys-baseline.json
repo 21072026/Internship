@@ -8,10 +8,6 @@
     "hits": 2,
     "issue": "#1884"
   },
-  "src/app/api/calendar-events/route.ts": {
-    "hits": 3,
-    "issue": "#1884"
-  },
   "src/components/JourneyTracker.tsx": {
     "hits": 2,
     "issue": "#1884"
@@ -19,9 +15,5 @@
   "src/lib/outcomeComms.ts": {
     "hits": 2,
     "issue": "#1880"
-  },
-  "src/services/emailService.ts": {
-    "hits": 5,
-    "issue": "#1884"
   }
 }
