@@ -1,0 +1,17 @@
+{
+  "bump": "minor",
+  "changelog": "**The mentor board opens on your own mentees, not on empty columns** (#1366). On desktop, `MentorBoard` (`/mentor/board`, and `/sales/board` for a MARKETING rep) no longer draws all 13 stages at full width: each run of consecutive empty stages collapses into one narrow strip holding a small drop target per stage (`boardSegments()` in `src/components/board/MentorBoard.tsx`), so at 1280px three occupied stages sit on screen together where only the first card used to. Each target keeps a fixed size under a drag (no resize-under-the-pointer flicker) and takes the drop itself; a \"Show empty stages\" toggle brings every stage back at full width. On first load the board scrolls to the first occupied stage, the header counts the board (`{n} on the board` — no mentorship word, so the MARKETING leak ratchet is unchanged), and a zero count is faded. The overdue marker the issue asked for was already on every card (`StageClockChip`, #1724). Phone layout unchanged. e2e: new `e2e/board-empty-stages.spec.ts` (three stages in viewport at 1280px, collapsed strips, drop onto a strip moves the card, the toggle); `e2e/board-mobile.spec.ts`'s desktop scroll-hint test now turns the toggle on first, since a one-card board no longer overflows.",
+  "notes": {
+    "en": ["The board now opens on your own people: empty stages fold into a slim strip (you can still drop cards onto them), so everyone in three different stages is visible at once. \"Show empty stages\" brings the full width back."],
+    "tr": ["Pano artık doğrudan kendi kişilerinle açılıyor: boş aşamalar ince bir şeride katlanıyor (kartları yine üzerlerine bırakabilirsin), böylece üç farklı aşamadaki herkes aynı anda görünüyor. \"Boş aşamaları göster\" tam genişliği geri getirir."],
+    "de": ["Das Board öffnet jetzt direkt bei deinen Leuten: Leere Phasen klappen zu einem schmalen Streifen zusammen (Karten lassen sich weiterhin darauf ablegen), sodass alle in drei verschiedenen Phasen gleichzeitig sichtbar sind. \"Leere Phasen anzeigen\" stellt die volle Breite wieder her."]
+  },
+  "media": {
+    "poster": "release-media/board-empty-stages-collapsed.png",
+    "alt": {
+      "en": "The mentor board with three occupied stage columns side by side and the empty stages folded into slim strips between them",
+      "tr": "Yan yana üç dolu aşama sütunu ve aralarında ince şeritlere katlanmış boş aşamalarla mentor panosu",
+      "de": "Das Mentor-Board mit drei belegten Phasenspalten nebeneinander und den leeren Phasen als schmale Streifen dazwischen"
+    }
+  }
+}

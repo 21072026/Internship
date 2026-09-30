@@ -74,6 +74,13 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   // searches every mentee, not a visible page. The matching rule is shared with
   // /mentor/mentees — see src/lib/menteeFilter.ts.
   const [search, setSearch] = useState('');
+  // Desktop: a stage with no card on it collapses to a narrow strip (#1366).
+  // Thirteen full-width columns put a mentor's own mentees two screens to the
+  // right of a row of empty ones. Collapsed, not hidden: the strip stays a drop
+  // target, so an empty stage is still somewhere a card can be moved to.
+  const [showEmpty, setShowEmpty] = useState(false);
+  const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrolledToFirst = useRef(false);
 
   // A failed load is its own state, not an empty board (#1374).
   const [loadError, setLoadError] = useState(false);
@@ -98,6 +105,16 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   useEffect(() => {
     fetchRelations();
   }, [fetchRelations]);
+
+  // The desktop twin of the phone rule below: once, on first load, bring the
+  // first stage that holds a card into view.
+  useEffect(() => {
+    if (scrolledToFirst.current || loading || narrow || stages.length === 0) return;
+    const first = stages.find((s) => relations.some((r) => r.pipelineStatus === s.key));
+    if (!first) return;
+    scrolledToFirst.current = true;
+    columnRefs.current[first.key]?.scrollIntoView({ block: 'nearest', inline: 'start' });
+  }, [loading, narrow, stages, relations]);
 
   // Pin the phone filter to a real stage once data is in: deriving it on every
   // render made the view follow a card to its new stage, so you never saw it
@@ -185,6 +202,21 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   const itemsFor = (status: string) =>
     relations.filter((r) => r.pipelineStatus === status && matchesMenteeQuery(r, q));
 
+  // One drop contract for a full column and an empty-stage target alike.
+  const dropHandlersFor = (status: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(status);
+    },
+    onDragLeave: () => setDragOver((prev) => (prev === status ? null : prev)),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(null);
+      const id = e.dataTransfer.getData('relationId');
+      if (id) requestMove(id, status);
+    },
+  });
+
   const renderCard = (r: Relation) => (
     <div
       key={r.id}
@@ -240,7 +272,14 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.nav.board}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {t.nav.board}
+          {relations.length > 0 && (
+            <span data-testid="board-total" className="ml-3 align-middle text-sm font-normal text-gray-500 dark:text-gray-400">
+              {t.mentor.boardTotal.replace('{n}', String(relations.length))}
+            </span>
+          )}
+        </h1>
         <p className="text-gray-500 mt-1">
           {t.mentor.boardSubtitle}
         </p>
@@ -260,6 +299,17 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
               className="min-h-11 w-full rounded-lg border border-gray-300 pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
             />
           </div>
+          {!narrow && (
+            <label className="inline-flex min-h-11 items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+              <input
+                type="checkbox"
+                data-testid="board-show-empty"
+                checked={showEmpty}
+                onChange={(e) => setShowEmpty(e.target.checked)}
+              />
+              {t.mentor.boardShowEmpty}
+            </label>
+          )}
           {q && matchCount === 0 && (
             <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="mentor-board-no-match">
               {t.mentor.noMatchingMentees}
@@ -327,27 +377,56 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
         </div>
       ) : (
         <HorizontalScrollArea testId="board-columns" label={t.a11y.scrollableColumns} className="flex gap-4 pb-4">
-          {stages.map((s) => {
-            const status = s.key;
+          {boardSegments(stages, (key) => itemsFor(key).length === 0 && !showEmpty).map((segment) => {
+            if (segment.kind === 'empty-run') {
+              // A run of consecutive empty stages is ONE narrow strip holding a
+              // small drop target per stage. Ten separate strips did not fit
+              // beside three real columns at 1280px; one strip per run does, so
+              // every occupied stage is on screen at once. Each target keeps a
+              // fixed size while a card is dragged over it — resizing under the
+              // pointer fires dragleave on the new layout and flickers.
+              return (
+                <div
+                  key={`run-${segment.keys[0]}`}
+                  data-testid="board-empty-run"
+                  className="flex-shrink-0 w-9 flex flex-col gap-1"
+                >
+                  {segment.keys.map((status) => (
+                    <div
+                      key={status}
+                      ref={(el) => { columnRefs.current[status] = el; }}
+                      data-testid={`board-column-${status}`}
+                      data-collapsed="true"
+                      data-drop-active={dragOver === status ? 'true' : undefined}
+                      title={t.mentor.boardEmptyStage.replace('{stage}', label(status))}
+                      aria-label={t.mentor.boardEmptyStage.replace('{stage}', label(status))}
+                      {...dropHandlersFor(status)}
+                      className={`h-28 overflow-hidden rounded-lg border border-dashed py-2 flex flex-col items-center gap-1 transition-colors ${
+                        dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                      }`}
+                    >
+                      <span data-testid={`board-column-count-${status}`} className="text-[10px] text-gray-400 opacity-60">
+                        0
+                      </span>
+                      <span className="min-h-0 overflow-hidden text-ellipsis text-[10px] font-medium text-gray-500 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
+                        {label(status)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            const status = segment.key;
             const items = itemsFor(status);
             return (
               <div
                 key={status}
+                ref={(el) => { columnRefs.current[status] = el; }}
                 data-testid={`board-column-${status}`}
                 // See the admin board: forced-colors drops the bg-blue-50 drop
                 // target highlight, so mark the state for globals.css (#2045).
                 data-drop-active={dragOver === status ? 'true' : undefined}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(status);
-                }}
-                onDragLeave={() => setDragOver((prev) => (prev === status ? null : prev))}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOver(null);
-                  const id = e.dataTransfer.getData('relationId');
-                  if (id) requestMove(id, status);
-                }}
+                {...dropHandlersFor(status)}
                 className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${
                   dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
                 }`}
@@ -358,7 +437,9 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
                       so the badge never claims rows the search has hidden. */}
                   <span
                     data-testid={`board-column-count-${status}`}
-                    className="text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5"
+                    className={`text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5 ${
+                      items.length === 0 ? 'opacity-50' : ''
+                    }`}
                   >
                     {items.length}
                   </span>
@@ -384,4 +465,26 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
       />
     </div>
   );
+}
+
+/**
+ * The desktop board's layout, in stage order: every stage that shows cards (or
+ * every stage, with "show empty stages" on) is its own column, and each run of
+ * consecutive empty stages becomes one segment (#1366).
+ */
+export function boardSegments(
+  stages: { key: string }[],
+  isCollapsed: (key: string) => boolean,
+): ({ kind: 'column'; key: string } | { kind: 'empty-run'; keys: string[] })[] {
+  const out: ({ kind: 'column'; key: string } | { kind: 'empty-run'; keys: string[] })[] = [];
+  for (const { key } of stages) {
+    if (!isCollapsed(key)) {
+      out.push({ kind: 'column', key });
+      continue;
+    }
+    const last = out[out.length - 1];
+    if (last?.kind === 'empty-run') last.keys.push(key);
+    else out.push({ kind: 'empty-run', keys: [key] });
+  }
+  return out;
 }
