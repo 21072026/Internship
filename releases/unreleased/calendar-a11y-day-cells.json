@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Calendar: day cells say their full date, and the view switcher stops pretending to be tabs** (#2153, from the manual AT review in #2047). `src/components/CalendarView.tsx`: each month-grid cell carries an `sr-only` full date (weekday, day, month, year) with `aria-hidden` on the visible number — built from content rather than an `aria-label`, so the event chips are still part of the name — plus `aria-pressed` for its selected-day toggle and, on phones where chips are dots, an `sr-only` event count. The month/week/day/agenda switcher drops `role=\"tablist\"`/`\"tab\"` (no tabpanel, arrows or aria-controls existed) for a labelled `role=\"group\"` of `aria-pressed` buttons. The previous/next arrows' hard-coded English `aria-label`s (\"prev\"/\"next\") are translated. New i18n keys `calendar.viewSwitcher`, `eventCount`, `previous`, `next`. `e2e/contrast-1417.spec.ts` selects the switcher by `aria-pressed`; new `e2e/calendar-a11y-2153.spec.ts` asserts the cell name, the toggle state, no tab roles, and that axe still measures the aria-hidden number's contrast; `docs/a11y-audit.md` findings 5 and 6 marked fixed.",
+  "notes": {
+    "en": ["Calendar: screen readers now announce each day's full date and its events, and the view buttons say which one is active."],
+    "tr": ["Takvim: ekran okuyucular artık her günün tam tarihini ve etkinliklerini okuyor; görünüm düğmeleri de hangisinin seçili olduğunu söylüyor."],
+    "de": ["Kalender: Screenreader lesen jetzt das vollständige Datum jedes Tages samt Terminen vor, und die Ansichtsschalter sagen, welcher aktiv ist."]
+  }
+}
