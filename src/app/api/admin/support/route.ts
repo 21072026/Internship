@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { notificationLink } from '@/lib/notificationLink';
+import { tenantWhere } from '@/lib/tenantFilter';
 import {
   SUPPORT_ATTACHMENT_MAX_COUNT,
   validateSupportFile,
@@ -13,8 +14,13 @@ import {
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
 // Admin side of the support channel (#594): the queue at /admin/support.
-// Admins see every ticket, reply into the thread, move tickets through
-// OPEN → IN_PROGRESS → CLOSED (and back), and take assignment.
+// Admins see every ticket OF THEIR OWN TENANT, reply into the thread, move
+// tickets through OPEN → IN_PROGRESS → CLOSED (and back), and take assignment.
+//
+// A ticket has no orgId of its own; it belongs to its requester's org, so every
+// handler narrows by `requester: { is: tenant }` (cross-world isolation — the
+// middleware is dormant while MT_ENFORCE_ISOLATION is off). Another tenant's
+// ticket id answers 404, the same as an id that does not exist.
 
 const replySchema = z.object({
   ticketId: z.string().min(1),
@@ -44,7 +50,7 @@ export async function GET(request: Request) {
     : undefined;
 
   const tickets = await prisma.supportTicket.findMany({
-    where: status ? { status } : undefined,
+    where: { ...(status ? { status } : {}), requester: { is: await tenantWhere(session) } },
     orderBy: { updatedAt: 'desc' },
     take: 100,
     select: {
@@ -130,8 +136,8 @@ export async function POST(request: Request) {
     })),
   );
 
-  const ticket = await prisma.supportTicket.findUnique({
-    where: { id: parsed.data.ticketId },
+  const ticket = await prisma.supportTicket.findFirst({
+    where: { id: parsed.data.ticketId, requester: { is: await tenantWhere(session) } },
     select: { id: true, status: true, requesterId: true, assignedAdminId: true, requester: { select: { role: true } } },
   });
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -173,8 +179,8 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 
-  const ticket = await prisma.supportTicket.findUnique({
-    where: { id: parsed.data.ticketId },
+  const ticket = await prisma.supportTicket.findFirst({
+    where: { id: parsed.data.ticketId, requester: { is: await tenantWhere(session) } },
     select: { id: true, status: true, requesterId: true, requester: { select: { role: true } } },
   });
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 });

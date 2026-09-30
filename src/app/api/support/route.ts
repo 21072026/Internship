@@ -10,6 +10,9 @@ import {
   readSupportMessageRequest,
 } from '@/lib/supportMessageRequest';
 import { withTenantScope } from '@/lib/orgContext';
+import { orgWhere } from '@/lib/tenantFilter';
+import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { enforceRateLimit } from '@/lib/rateLimit';
 
 // User side of the support channel (#593): every role has a pinned "Support"
@@ -174,10 +177,16 @@ export async function POST(request: Request) {
       };
     });
 
+    // Only the admins of the ticket's org — the requester's own (cross-world
+    // isolation). Every org's admins used to be told about every ticket. The
+    // org is read from the requester's row (a JWT minted before a backfill can
+    // still say null), and a NULL org is the default one's, by tenantFilter's
+    // rule.
+    const requester = await prisma.user.findUnique({ where: { id: session.user.id }, select: { orgId: true } });
+    const ticketOrgId = requester?.orgId ?? resolveOrgId(session) ?? (await defaultOrgId());
     const admins = await prisma.user.findMany({
       where: {
-        role: 'ADMIN',
-        isActive: true,
+        AND: [{ role: 'ADMIN', isActive: true }, await orgWhere(ticketOrgId)],
       },
       select: {
         id: true,

@@ -3946,7 +3946,7 @@ const en = {
   },
   adminSupport: {
     title: 'Support queue',
-    subtitle: 'Every support ticket across the platform — reply, triage, close.',
+    subtitle: 'Every support ticket in your organization — reply, triage, close.',
     filterAll: 'All',
     empty: 'No tickets match this filter.',
     replyPlaceholder: 'Write a reply…',
@@ -9587,7 +9587,7 @@ const tr: Dict = {
   },
   adminSupport: {
     title: 'Destek kuyruğu',
-    subtitle: 'Platformdaki tüm destek talepleri — yanıtla, önceliklendir, kapat.',
+    subtitle: 'Kurumunuzdaki tüm destek talepleri — yanıtla, önceliklendir, kapat.',
     filterAll: 'Tümü',
     empty: 'Bu filtreye uyan talep yok.',
     replyPlaceholder: 'Bir yanıt yaz…',
@@ -15206,7 +15206,7 @@ const de: Dict = {
   },
   adminSupport: {
     title: 'Support-Warteschlange',
-    subtitle: 'Alle Support-Tickets der Plattform — antworten, priorisieren, schließen.',
+    subtitle: 'Alle Support-Tickets Ihrer Organisation — antworten, priorisieren, schließen.',
     filterAll: 'Alle',
     empty: 'Keine Tickets für diesen Filter.',
     replyPlaceholder: 'Antwort schreiben…',

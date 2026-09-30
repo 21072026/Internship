@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import {
   validateAnnouncementImage,
   announcementImageUrl,
@@ -84,7 +85,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const existing = await prisma.announcement.findUnique({ where: { id }, select: { id: true } });
+    // Another tenant's announcement answers like a missing one (cross-world
+    // isolation): the middleware is dormant, so the tenant is narrowed by hand.
+    const existing = await prisma.announcement.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
+      select: { id: true },
+    });
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const { fields, image } = await readBody(request);
@@ -174,7 +180,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const existing = await prisma.announcement.findUnique({ where: { id }, select: { id: true } });
+    // Another tenant's announcement answers like a missing one (cross-world
+    // isolation): the middleware is dormant, so the tenant is narrowed by hand.
+    const existing = await prisma.announcement.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
+      select: { id: true },
+    });
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // The bell rows go first: a notification whose announcement no longer exists
