@@ -251,6 +251,13 @@ serbest metin kolonu artık iki yolda da temizleniyor (#2106). Kalanlar bir
   olduğunu ayırt eden bir sorgu yazılamaz — ürün kararı gerektiriyor.
 - Grup konuşması / proje toplantısında alınan notlar: not toplantı hakkındadır,
   kişi hakkında değil.
+- **Başkasının metninde alıntılanan kişi** (#2098): başka bir kullanıcının açtığı
+  destek talebinde adminin yanıta kişinin telefonunu yapıştırması ya da bir
+  mentörün toplantısız notunda ondan söz etmesi. Buna yalnızca tam metin arama
+  ulaşır, arama da bir anahtar değildir: adaşları bulur, başka sözcüklerle
+  yazılmışı kaçırır ve özel notlarda arama yapmak, yazarından istenmemiş bir
+  metni okumak demektir. **Bilinçli olarak ulaşılmıyor**; gizlilik metni bunu
+  söylemeli (metnin ifadesi hak sahibinin kararıdır, kodun değil).
 - `Meeting.meetLink` (bir oda adresi, kişisel veri değil), `MenteeOnboarding.steps`
   ve `Announcement` (kontrol listesi durumu ve kurum geneli duyuru metni).
 - **Başkalarının bildirimlerinde** kişinin adı ("Ayşe sana mesaj gönderdi"): ad

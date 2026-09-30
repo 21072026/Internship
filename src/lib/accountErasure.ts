@@ -184,6 +184,13 @@ export async function forgetCompanyContact(
 //     context), not a query.
 //   - notes and titles of a GROUP-conversation or project meeting the person
 //     attended: they are about the meeting, not about them.
+//   - the person QUOTED in someone else's text: an admin pasting their phone
+//     number into a reply on a ticket another user opened, or a mentor naming
+//     them in a free-standing note (#2098). Reachable only by full-text search,
+//     and a search is not a key: it finds namesakes and misses a paraphrase,
+//     and running one across private notes would itself read text nobody
+//     asked the author to share. Not reached, by decision — the privacy notice
+//     must say so (the wording is the rights holder's, not code's).
 //   - `Meeting.meetLink`: a room URL, not personal data; sanitize-db drops it
 //     only so a preview link cannot open a live room.
 //   - `MenteeOnboarding.steps` and `Announcement`: checklist state and org-wide
