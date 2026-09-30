@@ -62,6 +62,8 @@ export function currentOrgId(): string | null | undefined {
 // scoped parents and stay out.
 const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'User',
+  // IdP role mapping rules (#1940) — one tenant's SSO config, never another's.
+  'SsoClaimMapping',
   'Source',
   'Company',
   'Project',

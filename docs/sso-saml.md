@@ -23,11 +23,48 @@ tenant's own IdP instead of email+password.
   `ssoCertificateSet` and `active`.
 - **JIT provisioning** (`src/lib/ssoProvisioning.ts`): `provisionSsoUser()` maps a
   verified IdP identity to a `User` in the tenant org — creating one on first
-  login (default least-privilege `MENTEE`, or an IdP-mapped role), adopting a
+  login (default least-privilege `MENTEE`, or an IdP-mapped role — see
+  [IdP role mapping](#idp-role-mapping-1940)), adopting a
   not-yet-tenanted user into the org, and refusing to relocate an email that
   already belongs to a different tenant. Idempotent per email; unit-tested in
   `e2e/sso-provisioning.spec.ts`. It trusts its inputs, so the callback must only
   call it AFTER verifying the signed assertion.
+
+## IdP role mapping (#1940)
+
+A tenant maps an IdP claim value to a role, so programme staff who sign in
+through their own IdP stop landing in the mentee portal. Admin UI: the
+Enterprise SSO card on `/admin/organizations`; API:
+`/api/admin/organizations/[id]/sso-role-mappings` (GET list, POST add, PATCH
+`{ syncRole }`, DELETE `?mappingId=`), writable by exactly who may write the
+org's SSO config (its own ADMIN, or a super admin of its world).
+
+- **Storage** — `SsoClaimMapping` (`orgId`, `claim`, `matchValue`, `role`,
+  `priority`; unique per `(orgId, claim, matchValue)`), a registered tenant model.
+- **The rule** — `src/lib/ssoRoleMapping.ts`, pure and unit-tested
+  (`scripts/test/sso-role-mapping.test.mjs`):
+  1. no matching mapping → `null` → the user is provisioned `MENTEE`;
+  2. highest `priority` wins, a **tie goes to the less privileged role**;
+  3. **`ADMIN` is not mappable** — refused at the write boundary
+     (`admin_mapping_unavailable`) and ignored by the rule — until the platform
+     gate #1575 lands, because mapping a claim to ADMIN turns any gap in who may
+     edit an org's SSO config into remote privilege escalation;
+  4. claim values compare case-insensitively and trimmed; claim **names** match
+     exactly (IdPs use URIs — `http://schemas.microsoft.com/ws/2008/06/identity/claims/role`
+     and `groups` are two different claims).
+- **Only verified claims** — the ACS extracts claims from the profile node-saml
+  returned *after* signature verification; single-valued and multi-valued
+  attributes are normalised alike.
+- **Re-evaluation is opt-in** (`Organization.ssoSyncRole`, default off). With it
+  off, the role is decided once, on first login, and an admin's later change
+  sticks. With it on, a returning sign-in whose mapped role differs updates the
+  user and writes a **warning** `sso.role_synced` activity entry. Two limits:
+  an existing `ADMIN` is never touched, and "no match" is never a demotion — a
+  missing group claim (an IdP misconfiguration) must not strip everyone's role.
+- **SAML only** — OIDC is refused at the write boundary (#1929); when it lands,
+  its claims go through the same `extractClaims` → `resolveRole`.
+- **CI** — `e2e/sso-role-mapping.spec.ts` drives the stub IdP with a
+  multi-valued `groups` attribute through the real ACS.
 
 ## The live round-trip (now wired)
 

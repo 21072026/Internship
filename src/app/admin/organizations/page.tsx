@@ -11,6 +11,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPlans';
+import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
 
 interface Organization {
   id: string;
@@ -740,6 +741,8 @@ export default function AdminOrganizationsPage() {
             )}
           </form>
           {ssoMsg && <p className="text-sm text-gray-600 mt-2">{ssoMsg}</p>}
+          {/* Keyed by org so switching the selector reloads its own mapping (#1940). */}
+          {ssoOrgId && <SsoRoleMappings key={ssoOrgId} orgId={ssoOrgId} locked={ssoLocked} />}
         </Card>
       )}
 

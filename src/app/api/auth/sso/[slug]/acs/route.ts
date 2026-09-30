@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { isSsoActive } from '@/lib/sso';
 import { samlForOrg, mapSamlProfile } from '@/lib/ssoSaml';
 import { provisionSsoUser } from '@/lib/ssoProvisioning';
+import { extractClaims, resolveRole, type SsoClaims } from '@/lib/ssoRoleMapping';
 import { worldOfOrg } from '@/lib/userWorld';
 import { originForWorld, worldForHostHeader } from '@/lib/hostWorld';
 import { servedOrigin } from '@/lib/servedHosts';
@@ -64,19 +65,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   let email: string;
   let fullName: string | null;
+  let claims: SsoClaims;
   try {
     const saml = samlForOrg(slug, org);
     const { profile } = await saml.validatePostResponseAsync({ SAMLResponse, RelayState });
     const identity = mapSamlProfile(profile as Record<string, unknown> | null);
     email = identity.email;
     fullName = identity.fullName;
+    // Only from a VERIFIED profile: the claims decide a role (#1940).
+    claims = extractClaims(profile as Record<string, unknown> | null);
   } catch (e) {
     console.error('SSO assertion validation failed:', e);
     return fail('sso_failed', origin);
   }
 
   try {
-    const { user } = await provisionSsoUser({ orgId: org.id, email, fullName });
+    // The tenant's IdP role mapping (#1940). Explicitly this org's rows — the
+    // ACS is sessionless, so no tenant scope is bound to do it for us. No
+    // match is null, and provisioning falls back to MENTEE.
+    const mappings = await prisma.ssoClaimMapping.findMany({
+      where: { orgId: org.id },
+      select: { claim: true, matchValue: true, role: true, priority: true },
+    });
+    const role = resolveRole(mappings, claims);
+    const { user } = await provisionSsoUser({ orgId: org.id, email, fullName, role, syncRole: org.ssoSyncRole });
     // Mint a short-lived single-use grant the `sso` provider will consume.
     const token = crypto.randomBytes(32).toString('hex');
     await prisma.ssoLoginGrant.create({
