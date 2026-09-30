@@ -7838,3 +7838,33 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   locale — TS1117 only after the merge. Check `git log origin/main --grep '#<sibling>'` first.
 - **Since #2590 a MARKETING-org account signs in only on the marketing host**: an e2e test for
   a MARKETING user needs `setExtraHTTPHeaders(asHost(MARKETING_HOST))` before `signInAndSettle`.
+
+## 2026-09-30 — queue run: e2e-full triage, CSRF gate, erasure inventory, tenant scope, dup scan
+
+- **A red e2e-full after a tenant-scoping wave is mostly stale fixtures, not app bugs — but check
+  each.** #2625: one real bug (the consent list showed mentor-only items to a MARKETING rep, who
+  holds the MENTOR role), one spec asserting pre-scoping visibility, and one fixture that seeded
+  a default-org mentor beside a relation in another org, a shape prod cannot produce. Put every
+  fixture row in ONE org; a mixed-org fixture now reads as a cross-tenant request and 404s.
+- **A `cmd | tail` inside an `&&` chain hides `cmd`'s exit code.** `check:release-fragments | tail`
+  "passed" a broken fragment, and the commit and push ran. Also: fragment `notes.*` are string
+  ARRAYS. Run checks bare, or use `set -o pipefail`.
+- **Manual release compaction needs full history**: `git fetch --unshallow origin main` took 3 s
+  here. Then `node scripts/release-compact.mjs` and a normal PR, no secret needed (#2637).
+- **`check:capability-writers` flags erasure writes to gated models** (`offer`, `interviewRequest`).
+  The fix is an `EXEMPT` entry with its reason (data-subject right, prose-only, must work
+  whatever the vertical is), the same shape as `mergeUsers`/`offerNotify`. It is not a gate.
+- **Playwright's request context sends no `Origin`/`Sec-Fetch-*`**, so the #1467 write gate treats
+  it as a non-browser caller and the whole suite keeps working. A CSRF test forges the headers
+  explicitly on `page.request.post`, and a real same-origin write goes through `page.evaluate(fetch)`.
+- **`clearCookies()` then sign in again can race an in-flight request from the old page** and the
+  old session cookie comes back (seen once in #2646). Use `signInAsFreshUser`, which leaves the
+  page first.
+- **Proving an optimisation lossless**: keep the old O(n²) scan inside the unit spec as the oracle
+  and compare on many seeded random populations built to collide on every signal (#1436). Build
+  the population realistically: 80 names and 6 universities made the buckets pathological and the
+  timing meaningless.
+- **Testing a workflow script that shells out to `gh`**: put a tiny fake `gh` (a node script
+  keeping issues in a JSON file) first in `PATH`, then run the red/red/new-sha/green sequence
+  locally. `actionlint` downloads from GitHub releases through the proxy and runs without
+  shellcheck (`-shellcheck=`).

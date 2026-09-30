@@ -7,7 +7,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
 import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
-import { pushMeetingInBackground, removeMeeting } from '@/lib/googleCalendarSync';
+import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib/googleCalendarSync';
 
 // The three verbs a meeting never had (#1980).
 //
@@ -34,18 +34,8 @@ import { pushMeetingInBackground, removeMeeting } from '@/lib/googleCalendarSync
 /** How long a bulk schedule may be, so one `scope: 'batch'` can't walk a table. */
 const MAX_BATCH_ROWS = 100;
 
-/**
- * Ceiling on the calendar withdrawal before the request answers anyway.
- *
- * `removeMeeting` has to run BEFORE the rows are deleted — `GoogleCalendarEventLink`
- * cascades away with the meeting, and a withdrawal with no links left to read is
- * a no-op that leaves a ghost event on someone's real calendar. So this one is
- * awaited rather than fired and forgotten, and bounded instead: a third party's
- * API may not make cancelling or deleting a meeting hang. It is a no-op (and
- * returns immediately) unless the integration is switched on and the person
- * connected their own account.
- */
-const CALENDAR_WITHDRAW_MS = 5_000;
+// The calendar withdrawal (#1986) runs BEFORE the rows are deleted and is
+// bounded — see `withdrawMeetings()` in src/lib/googleCalendarSync.ts.
 
 const patchSchema = z
   .object({
@@ -66,11 +56,7 @@ const patchSchema = z
 
 // Everything the route needs about a row, in one shape both verbs read.
 const targetSelect = {
-  id: true,
-  title: true,
-  scheduledAt: true,
-  timeZone: true,
-  meetLink: true,
+  ...pushableSelect,
   status: true,
   endedAt: true,
   batchKey: true,
@@ -107,17 +93,6 @@ function readId(raw: string): string {
 /** Everyone whose own calendar may hold a mirror of this row. */
 function mirrorAudience(t: Target): string[] {
   return [t.createdById, t.relation?.mentorId, t.relation?.menteeId].filter((x): x is string => Boolean(x));
-}
-
-/**
- * Drop the meeting from every calendar it was mirrored to, bounded by
- * CALENDAR_WITHDRAW_MS. Never rejects: the meeting is being cancelled or
- * deleted here either way, and a calendar that would not answer must not turn
- * that into a 500.
- */
-async function withdrawFromCalendars(ids: string[]): Promise<void> {
-  const work = Promise.allSettled(ids.map((id) => removeMeeting(id)));
-  await Promise.race([work, new Promise<void>((resolve) => setTimeout(resolve, CALENDAR_WITHDRAW_MS))]);
 }
 
 /**
@@ -229,7 +204,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       });
       // Off the invitees' real calendars too — through the helper, never by
       // deleting GoogleCalendarEventLink rows from here (#1986 owns that file).
-      await withdrawFromCalendars(ids);
+      await withdrawMeetings(ids);
       await prisma.auditLog.create({
         data: {
           actorId: session.user.id,
@@ -366,7 +341,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
     // Before the delete, not after: the link rows cascade away with the meeting,
     // and a withdrawal with nothing left to read leaves a ghost event behind.
-    await withdrawFromCalendars(ids);
+    await withdrawMeetings(ids);
     const removed = await prisma.meeting.deleteMany({ where: { id: { in: ids } } });
     await prisma.auditLog.create({
       data: {

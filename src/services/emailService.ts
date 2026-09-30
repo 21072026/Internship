@@ -22,7 +22,7 @@ import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 // imports nothing of ours, so this stays a leaf dependency and cannot cycle.
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
-import { orgWhere, withinTenant } from '@/lib/tenantFilter';
+import { orgWhere } from '@/lib/tenantFilter';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
@@ -60,6 +60,8 @@ import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/l
 import { originForWorld, type World } from '@/lib/hostWorld';
 import { DEFAULT_VERTICAL, toVerticalKey } from '@/lib/verticals';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
+import { resolvePipelineStages, outcomeStageKeysFrom, stageLabel, type ResolvedStage } from '@/lib/pipelineStages';
+import { isStageOverdue } from '@/lib/stageClock';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -2653,7 +2655,22 @@ export async function checkMentorInteractionReminders() {
 // not a per-person cap — a cap would silently drop deadlines.
 export async function checkStageDeadlineReminders() {
   const now = new Date();
-  const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'] as const;
+  // Whether a deadline is still actionable is the ONE stage-clock rule every
+  // surface reads (`isStageOverdue`, src/lib/stageClock.ts, #1724), fed the
+  // tenant's own stages (#1884) — not a list of three default keys that a
+  // renamed pipeline does not have, so every placed candidate on it was nagged
+  // forever. Stages are resolved once per org per run; the job has no session,
+  // so the relation's own orgId decides.
+  const stagesByOrg = new Map<string, Promise<ResolvedStage[]>>();
+  const stagesOf = (orgId: string | null) => {
+    const key = orgId ?? '';
+    let hit = stagesByOrg.get(key);
+    if (!hit) {
+      hit = resolvePipelineStages(orgId);
+      stagesByOrg.set(key, hit);
+    }
+    return hit;
+  };
   const capabilitiesOf = capabilitiesMemo();
   const dictionaryOf = emailDictionaryMemo();
 
@@ -2662,7 +2679,6 @@ export async function checkStageDeadlineReminders() {
       status: 'ACTIVE',
       stageDeadline: { lt: now },
       deadlineReminderSentAt: null,
-      pipelineStatus: { notIn: [...TERMINAL] },
     },
     include: {
       mentor: {
@@ -2679,6 +2695,7 @@ export async function checkStageDeadlineReminders() {
   });
 
   for (const rel of overdue) {
+    if (!isStageOverdue({ stageDeadline: rel.stageDeadline, pipelineStatus: rel.pipelineStatus }, await stagesOf(rel.orgId), now.getTime())) continue;
     // The in-app half respects the same 'deadlines' preference the e-mail half
     // does (#817) — opting out of deadline mail and still being pinged in-app
     // for the identical event is not a preference anyone chose.
@@ -4239,6 +4256,39 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
   return { organizations: orgs.length, claims, notified, emailed, weekStart };
 }
 
+export interface WeeklyAnalyticsStats {
+  total: number;
+  conversion: number;
+  newRelations: number;
+  interactions: number;
+  stageRows: string;
+}
+
+/**
+ * One tenant's figures for the weekly report (#1884): relations, "hired"
+ * conversion read from that tenant's own `finished` stages, the last week's
+ * activity, and a stage table labelled in the tenant's own words. `orgId` is a
+ * resolved org (the caller maps a NULL org to the default one); `orgWhere`
+ * includes the not-yet-stamped NULL rows for the default org, as everywhere.
+ */
+export async function weeklyAnalyticsStats(orgId: string, weekAgo: Date): Promise<WeeklyAnalyticsStats> {
+  const tenant = await orgWhere(orgId);
+  const [byStage, newRelations, interactions, stages] = await Promise.all([
+    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: tenant, _count: { _all: true } }),
+    prisma.mentorshipRelation.count({ where: { AND: [tenant, { startDate: { gte: weekAgo } }] } }),
+    prisma.interactionLog.count({ where: { date: { gte: weekAgo }, relation: tenant } }),
+    resolvePipelineStages(orgId, 'en'),
+  ]);
+  const { finished } = outcomeStageKeysFrom(stages);
+  const total = byStage.reduce((n, s) => n + s._count._all, 0);
+  const hired = byStage.filter((s) => finished.includes(s.pipelineStatus)).reduce((n, s) => n + s._count._all, 0);
+  const stageRows = byStage
+    .sort((a, b) => b._count._all - a._count._all)
+    .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${esc(stageLabel(stages, s.pipelineStatus, 'en'))}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
+    .join('');
+  return { total, conversion: total ? Math.round((hired / total) * 100) : 0, newRelations, interactions, stageRows };
+}
+
 // Weekly scheduled analytics report email (Faz 2, #541). Premium: only runs
 // when the premiumAnalytics setting is on. Sends every active admin a compact
 // pipeline summary — total relations, hired conversion, stage counts and the
@@ -4247,62 +4297,60 @@ export async function sendWeeklyAnalyticsReport() {
   if ((await getSetting('premiumAnalytics')) !== 'true') return { locked: true, sent: 0 };
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const adminsByOrg = await activeAdminsByOrg({
-    id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true,
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
   });
-  const allAdmins = [...adminsByOrg.values()].flat();
+
+  // Per TENANT (#1884). The figures used to be one installation-wide groupBy
+  // mailed to every admin of every tenant, and "hired" was the two default
+  // keys, so a renamed pipeline reported 0% and its stage table printed raw
+  // enum keys. Each admin now gets their own org's numbers (a NULL org is the
+  // default org's, as everywhere), "hired" is that org's `finished` set, and
+  // the table shows the org's own stage labels.
+  const fallbackOrg = await defaultOrgId();
+  const statsByOrg = new Map<string, Promise<WeeklyAnalyticsStats>>();
+  const statsFor = (orgId: string | null) => {
+    const key = orgId ?? fallbackOrg;
+    let hit = statsByOrg.get(key);
+    if (!hit) {
+      hit = weeklyAnalyticsStats(key, weekAgo);
+      statsByOrg.set(key, hit);
+    }
+    return hit;
+  };
   // WORLDS (#2590): the dashboard link is resolved per ADMIN from that admin's
   // own organization.
   const origins = createOriginBook();
-  await origins.prefetch(allAdmins.map((a) => a.orgId));
+  await origins.prefetch(admins.map((a) => a.orgId));
 
   let sent = 0;
-  // Each org's figures to that org's admins (#2542). The counts used to be one
-  // platform-wide groupBy mailed to every admin of every tenant.
-  for (const [orgId, admins] of adminsByOrg) {
-    const orgFilter = await orgWhere(orgId);
-    const [byStage, newRelations, interactions] = await Promise.all([
-      prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({}, orgFilter), _count: { _all: true } }),
-      prisma.mentorshipRelation.count({ where: withinTenant({ startDate: { gte: weekAgo } }, orgFilter) }),
-      prisma.interactionLog.count({ where: { date: { gte: weekAgo }, relation: { is: orgFilter } } }),
-    ]);
-
-    const total = byStage.reduce((n, s) => n + s._count._all, 0);
-    const hired = byStage
-      .filter((s) => s.pipelineStatus === 'HIRED_660' || s.pipelineStatus === 'EMPLOYED_700')
-      .reduce((n, s) => n + s._count._all, 0);
-    const conversion = total ? Math.round((hired / total) * 100) : 0;
-    const stageRows = byStage
-      .sort((a, b) => b._count._all - a._count._all)
-      .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${s.pipelineStatus}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
-      .join('');
-
-    for (const a of admins) {
-      // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
-      // that used to stand here belonged to `digests` and killed the report while
-      // the preference surfaces showed it as ON. 'digest' is in
-      // reports_analytics.legacy now, so the old opt-out still holds visibly.
-      if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
-      const base = await origins.urlFor(a.orgId);
-      await sendEmail({
-        category: 'analytics-report',
-        userId: a.id,
-        orgId: a.orgId,
-        to: a.email,
-        subject: 'Weekly analytics report — Internship CRM',
-        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">Weekly analytics report</h2>
-          <p>Hi ${a.fullName},</p>
-          <p><strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
-          last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.</p>
-          <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
-          <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
-        </div>`,
-      }).catch((error) => {
-        console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, error });
-      });
-      sent++;
-    }
+  for (const a of admins) {
+    // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
+    // that used to stand here belonged to `digests` and killed the report while
+    // the preference surfaces showed it as ON. 'digest' is in
+    // reports_analytics.legacy now, so the old opt-out still holds visibly.
+    if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
+    const base = await origins.urlFor(a.orgId);
+    const { total, conversion, newRelations, interactions, stageRows } = await statsFor(a.orgId);
+    await sendEmail({
+      category: 'analytics-report',
+      userId: a.id,
+      orgId: a.orgId,
+      to: a.email,
+      subject: 'Weekly analytics report — Internship CRM',
+      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color:#2563eb;">Weekly analytics report</h2>
+        <p>Hi ${a.fullName},</p>
+        <p><strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
+        last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.</p>
+        <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
+        <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
+      </div>`,
+    }).catch((error) => {
+      console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, error });
+    });
+    sent++;
   }
   return { locked: false, sent };
 }

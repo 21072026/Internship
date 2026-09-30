@@ -7,9 +7,9 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
-
-// Stages that are terminal — an overdue deadline on these is not actionable.
-const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'];
+import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { resolveOrgId } from '@/lib/orgScope';
+import { isStageOverdue } from '@/lib/stageClock';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Widest window a single request may ask for, so month-hopping can't pull a decade. */
@@ -62,6 +62,10 @@ export async function GET(request: Request) {
   );
   const roleRelWhere: Prisma.MentorshipRelationWhereInput =
     role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id };
+
+  // "Overdue" is the one stage-clock rule (#1724) fed the caller's tenant's own
+  // stages (#1884), not three default keys a renamed pipeline does not have.
+  const stages = await resolvePipelineStages(resolveOrgId(session));
 
   const [meetings, relations, loggedMeetings, series] = await Promise.all([
     prisma.meeting.findMany({
@@ -183,7 +187,7 @@ export async function GET(request: Request) {
       title: r.pipelineStatus,
       who: r.mentee.fullName,
       date: r.stageDeadline!.toISOString(),
-      overdue: r.stageDeadline! < new Date() && !TERMINAL.includes(r.pipelineStatus),
+      overdue: isStageOverdue({ stageDeadline: r.stageDeadline, pipelineStatus: r.pipelineStatus }, stages),
       // A mentee sees their own deadline but has no admin page to land on
       // (#915) — a dead /admin link would 403/redirect.
       link: role === 'MENTEE' ? '/portal/journey' : `/admin/candidates/${r.menteeId}`,

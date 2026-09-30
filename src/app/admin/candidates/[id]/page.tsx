@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { ArrowLeft, KeyRound, Trash2, Plus } from 'lucide-react';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { isStageOverdue } from '@/lib/stageClock';
 import { UserQuickActions } from '@/components/UserQuickActions';
 import { CvManager } from '@/components/CvManager';
 import { nextAction } from '@/lib/matching';
@@ -466,7 +467,7 @@ export default function AdminMenteeDetailPage() {
                     onChange={(e) => changeRelField(rel.id, { stageDeadline: e.target.value || null })}
                     className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
                   />
-                  {rel.stageDeadline && new Date(rel.stageDeadline) < new Date() && ![ 'HIRED_660', 'EMPLOYED_700' ].includes(rel.pipelineStatus) && (
+                  {isStageOverdue({ stageDeadline: rel.stageDeadline, pipelineStatus: rel.pipelineStatus }, stages) && (
                     <p className="text-xs text-red-600 mt-1">{t.candidateDetail.overdue}</p>
                   )}
                 </div>
