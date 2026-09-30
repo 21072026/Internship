@@ -10,6 +10,8 @@ import { sendMentorshipRequestEmail } from '@/services/emailService';
 import { getMenteeRequestGate } from '@/lib/requestGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { tenantAdminWhere } from '@/lib/tenantAdmins';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Mentee-side mentorship requests (#590): a mentee asks for a mentor; an admin
@@ -108,15 +110,20 @@ export async function POST(request: Request) {
     // GET /api/mentors (story #900). Anything else is rejected, so a mentee
     // can never point the admin at a mentor who has not opted in.
     if (preferredMentorId) {
+      // The mentee's own tenant by the tenantWhere() rule (#2542): an org-less
+      // session is the default org's, and the default org also owns NULL-org
+      // mentors — a bare `orgId: resolveOrgId(session)` read both wrong.
       const preferredMentor = await prisma.user.findFirst({
-        where: {
-          id: preferredMentorId,
-          role: 'MENTOR',
-          isActive: true,
-          publicProfile: true,
-          orgId: resolveOrgId(session),
-          consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
-        },
+        where: withinTenant(
+          {
+            id: preferredMentorId,
+            role: 'MENTOR' as const,
+            isActive: true,
+            publicProfile: true,
+            consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY' as const, grantedAt: { not: null }, revokedAt: null } },
+          },
+          await tenantWhere(session),
+        ),
         select: { id: true },
       });
       if (!preferredMentor) {
@@ -130,8 +137,12 @@ export async function POST(request: Request) {
     });
 
     const menteeName = session.user.name;
+    // The mentee's own org's admins only (#2542): this request is theirs to
+    // decide, and the queue that lists it is scoped by the mentee's org. The
+    // query used to have no org filter, so every tenant's admins got the bell
+    // AND the mail for every other tenant's requests.
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true },
+      where: await tenantAdminWhere(resolveOrgId(session)),
       select: { id: true, fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
     });
     await Promise.all(

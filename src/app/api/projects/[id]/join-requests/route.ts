@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
+import { tenantAdminWhere } from '@/lib/tenantAdmins';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { isProjectOwner, projectInCallerTenant } from '@/lib/projectAccess';
@@ -108,14 +109,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
 
     // Tell the people who can act on it: OWNER members (+ the legacy owner
-    // pointer) and every active admin.
+    // pointer) and every active admin OF THE PROJECT'S ORG (#2542) — the
+    // admin query used to have no org filter at all.
     const [owners, admins] = await Promise.all([
       prisma.projectMember.findMany({
         where: { projectId: id, role: 'OWNER' },
         select: { user: { select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true } } },
       }),
       prisma.user.findMany({
-        where: { role: 'ADMIN', isActive: true },
+        where: await tenantAdminWhere(project.orgId),
         select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
       }),
     ]);

@@ -9,6 +9,8 @@ import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import {
   sendMentorApplicationUnderReviewEmail,
@@ -32,6 +34,9 @@ async function requireAdmin(): Promise<{ session: Session } | { error: NextRespo
   const session = await getServerSession(authOptions);
   if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   if (session.user.role !== 'ADMIN') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  // A mentorship module (#2352): refused for a vertical that does not carry it.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return { error: capGate };
   return { session };
 }
 
@@ -45,7 +50,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // free-text fields — `rejectReason` (why the decision went the way it did)
     // and `adminNote` (private review commentary, #1806). This route is
     // admin-gated above; neither field is reachable by an applicant.
-    const application = await prisma.mentorApplication.findUnique({ where: { id } });
+    // By id AND inside the caller's tenant (#2542) — another tenant's
+    // application answers 404, never its private note.
+    const application = await prisma.mentorApplication.findFirst({ where: withinTenant({ id }, await tenantWhere(auth.session)) });
     if (!application) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ application });
   });
@@ -75,8 +82,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   return await withTenantScope(session, async () => {
-    const application = await prisma.mentorApplication.findUnique({
-      where: { id },
+    const application = await prisma.mentorApplication.findFirst({
+      // Inside the caller's tenant only (#2542): 404 for another tenant's row.
+      where: withinTenant({ id }, await tenantWhere(session)),
       select: { id: true, status: true, fullName: true, email: true, locale: true, orgId: true, capacity: true, expertise: true },
     });
     if (!application) return NextResponse.json({ error: 'Not found' }, { status: 404 });
