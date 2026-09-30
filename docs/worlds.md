@@ -65,7 +65,7 @@ Kural `src/lib/hostWorld.ts`'te (saf; yalnızca iki bağımlılıksız modülü 
   vermez. Aynı küme yönlendirme allowlist'ini de besler (`servedHosts.ts`, #2488);
   runbook `infra/README.md` § The marketing hosts.
 - **API:** `worldForHeaders(get)`, `worldForHeaderBag(bag)` (NextAuth
-  `authorize()`'a düz bir nesne verir), `originForWorld(world)`, `worldOrigins()`.
+  `authorize()`'a düz bir nesne verir), `originForWorld(world)`.
 
 **Güven notu.** Host, bir kişinin **kendi** hesaplarından hangisine gireceğini
 seçebilir ve bir isteği **reddettirebilir**; erişimi asla **genişletmez**. Sahte
@@ -84,7 +84,12 @@ oturumun org'undan gelir, host'tan değil.
 3. O dünyada hesap yoksa, adresin başka dünyadaki hesapları yalnızca **parola
    kontrolüne katılır** (`findUsersByEmail`) — yanlış parola bugünkü gibi
    sayılır ve kilitler — ama bununla oturum **açılamaz**.
-4. Zorunlu-SSO kapısı, tek hesaplı yoldaki gibi bcrypt'ten önce durur (#1950).
+4. Zorunlu-SSO kapısı, tek hesaplı yoldaki gibi bcrypt'ten önce durur (#1950) —
+   ama `SSO_REQUIRED` yalnızca **bu dünyadaki** hesaba söylenir. Öbür dünyanın
+   SSO zorunlu bir tenant'ına ait hesap bilinmeyen adres gibi cevaplanır
+   (`Invalid email or password`): hash'i yine karşılaştırılmaz, başarısızlık
+   kullanıcı/org'suz kaydedilir; sayfa öbür ürünün tenant'ından söz etmez ve
+   bu host'ta zaten reddedilecek bir `/auth/sso` bağlantısı sunmaz.
 5. Parola yanlışsa cevap hep aynı `Invalid email or password`. Parola **doğru**
    ama hesap öbür dünyadaysa: `WRONG_WORLD_<VERTICAL>` (`authWrongWorld` /
    `parseWrongWorld`, `src/lib/authErrors.ts`; `<VERTICAL>` hesabın **gerçek**
@@ -99,13 +104,14 @@ org'un ürününü değiştirmek de bu çakışmada reddedilir (bkz.
 müdahalesi üretebilir ve `pickAccount` bu durumda tahmin yürütmek yerine parolaya
 bakar.
 
-**Giriş sayfası** (`src/app/auth/signin`). Sunucu sayfası `worldOrigins()`'i hesaplar
-ve istemciye prop olarak verir — istemci env okuyamaz, `MARKETING_HOSTS` çalışma
-zamanı değişkenidir ve sayfa bu yüzden `force-dynamic`. `WRONG_WORLD_*` gelince
-form ham kodu göstermez; "e-posta ve parolan doğru ama bu hesap {ürün} içinde"
-der (`t.auth.wrongWorld`, EN/TR/DE; ürün adı `productNameFor()`'dan) ve
-`<öbür origin>/auth/signin` bağlantısını verir (`data-testid="wrong-world-link"`).
-`callbackUrl` taşınmaz: o bir yol, öbür üründe anlamı yok.
+**Giriş sayfası** (`src/app/auth/signin`). Ürün kuralı: bir eylem hangi dünyada
+başladıysa ürettiği her şey — sayfa metni, bağlantı, posta — o dünyada kalır.
+`WRONG_WORLD_*` gelince form ham kodu göstermez ve öbür ürünü **ne adlandırır ne
+bağlar**; yalnızca bulunduğu ürünün adıyla "bu bilgilerle bir {ürün} hesabı yok"
+der (`t.auth.wrongWorld`, EN/TR/DE; ürün adı sayfanın kendi dikeyinden,
+`productNameFor(useVertical())`). Sunucunun kodu değişmedi; öbür kapıya giden
+bağlantı, onu besleyen `worldOrigins` prop'u ve `hostWorld.ts`'teki `worldOrigins()`
+yardımcısı kaldırıldı — sayfa metni öbür dünyaya asla bağlantı vermez.
 
 **Grant sağlayıcıları** (`impersonate`, `sso`, `remember`) kullanıcıyı host değil
 grant seçtiği için tersinden korunur: `assertAccountMatchesHost` hesabın dünyası
@@ -115,6 +121,14 @@ wrong_world`): yoksa grant basılır, `IMPERSONATE_START` yazılır ve hedefe "h
 erişildi" bildirimi gider — sonra girişi reddedilen, hiç olmamış bir erişim için.
 `POST /api/auth/remember/refresh` cihaz sırrını **döndürmeden önce** reddeder ve
 çerezleri temizler.
+
+**SP başlatımlı SSO** (`GET /api/auth/sso/[slug]/login`) öbür dünyanın org kodunu
+**bilinmeyen bir kod gibi** reddeder (aynı host'ta `/auth/signin?error=sso_unavailable`),
+AuthnRequest kurmadan. ACS tarayıcıyı org'un kendi dünyasına indirir
+(`landingOrigin(org.id)`), yani buradan başlayan akış öbür üründe biterdi; aynı
+cevap bu host'un öbür üründe hangi kodların var olduğunu doğrulamasını da önler.
+Giriş kapısı korunduğu için her AuthnRequest org'un dünyasının bir host'unda
+başlar ve ACS'nin başarı yolu değişmeden doğru yere döner.
 
 ## Oturum bağlama
 
@@ -173,11 +187,18 @@ açabilir — davet, posta kutusunun kontrolünü zaten kanıtlar.
 - `POST /api/register` daveti token'dan okur, org'u davetten alır ve aynı kontrolü
   **o org'un dünyasında** yapar. Token'sız kayıt varsayılan org'a düşer, yani
   internship dünyasında kontrol edilir.
-- Kayıt sayfası, marketing host'unda (`isMarketing`) formun altında şunu söyler:
-  "Bu adresle zaten Internship CRM kullanıyor musun? Bu ayrı bir SaleVali hesabı
-  oluşturur…" (`t.auth.separateAccountHint`). Adresin öbür üründe gerçekten hesabı
-  olup olmadığını **söylemez** — söyleyemez, söylerse yoklama aracı olurdu.
-  Internship host'undaki açık kayıt olduğu gibi bırakıldı.
+- Davetin org'u **isteğin host'unun dünyasında değilse** token bilinmeyen bir token
+  gibi reddedilir (`400 Invalid invitation token`, kullanılmış / süresi dolmuş
+  durumu okunmadan önce): buradan kabul etmek öbür ürünün hesabını — bildirimleri
+  ve postalarıyla — bu host'tan açardı. `POST /api/invite/opened` da böyle bir
+  daveti "açıldı" saymaz. Davet postasının bağlantısı zaten davetin kendi ürününü
+  açar (`invitationRegisterUrl`), yani meşru bir davetli bu kapıya takılmaz.
+- Kayıt sayfası, marketing host'unda (`isMarketing`) formun altında yalnızca kendi
+  ürününü adlandırır: "Bu işlem, kendi parolası ve kendi verisi olan bir SaleVali
+  hesabı oluşturur." (`t.auth.separateAccountHint`). Öbür ürünün adı geçmez.
+  Veri paylaşımı kutusu (`dataSharingTitle` / `dataSharingBody`) MARKETING
+  katmanında lead / temsilci diliyle konuşur. Internship host'undaki açık kayıt
+  olduğu gibi bırakıldı.
 
 **Bakımcı marketing hesabını nasıl alır?** Kendi adresini marketing org'una davet
 ederek:
@@ -211,12 +232,13 @@ silme, e-posta değiştirme, kilit temizleme, bildirim, abonelikten çıkma) yal
 Token'lar `userId` ile anahtarlıdır ve öyle kalmalıdır.
 
 - **`POST /api/auth/forgot`** oturumsuzdur; dünyayı **form'un sunulduğu host**
-  söyler. O dünyada hesap yoksa ve adresin başka dünyada **tam bir** hesabı varsa
-  sıfırlama o hesap için yollanır ve postadaki bağlantı **o hesabın kendi ürününü**
-  açar (yanlış kapıda kalmış kişiyi doğru kapıya götürür). Birden çok aday varsa
-  tahmin edilmez, hiçbir şey yollanmaz. Yanıt her durumda aynıdır — "bulundu",
-  "öbür dünyada bulundu", "belirsiz", "yok" dışarıdan ayırt edilemez
-  (`findAccountsForMailedLink`, `src/lib/passwordReset.ts`).
+  söyler ve yalnızca **o dünyadaki** hesap(lar) için posta yollanır. O dünyada hesap
+  yoksa hiçbir şey yollanmaz — adresin öbür dünyadaki hesabına "kurtarma" postası
+  da gitmez: SaleVali'de istenen sıfırlama bir Internship CRM postası ve
+  interncrm.com bağlantısı üretmemeli. Yanıt her durumda aynıdır — "bulundu" ile
+  "bu dünyada yok" dışarıdan ayırt edilemez (`findAccountsForMailedLink`,
+  `src/lib/passwordReset.ts`). `POST /api/auth/verify-email/resend`'in oturumsuz
+  yolu aynı yardımcıyı kullanır.
 - **`POST /api/auth/reset`** yalnızca token'ın basıldığı `record.userId`'nin
   parolasını değiştirir, oturumlarını iptal eder, cihazlarını temizler. Öbür
   dünyadaki hesap aynı parolayla **kalır**: parolalar ayrıdır.
@@ -258,7 +280,7 @@ söyler:
 |---|---|
 | Akışın bir org'u var (davetin, oturumun, kurulan org) | `worldOfOrg(orgId)` → `findUserInWorld` / `emailTakenInOrgWorld` |
 | Oturumsuz, herkese açık akış | `worldForHeaders(...)` / `worldForHeaderBag(...)` → `findUserInWorld` |
-| Akışın işi zaten dünyalar arası (giriş sayfasının "öbür kapı"sı, hesap silme, "yanlış kapı" kurtarma postası) | `findUsersByEmail`, **neden** olduğunu söyleyen bir yorumla |
+| Akışın işi zaten dünyalar arası (girişin `WRONG_WORLD_*` parola kontrolü, hesap silme) | `findUsersByEmail`, **neden** olduğunu söyleyen bir yorumla |
 
 E-postadan kullanıcı arayan tek kod `src/lib/userWorld.ts`'tir. `select`
 **zorunludur** (`Json` sütunları okurken patlayabilir, #1150 —
@@ -277,8 +299,7 @@ başlat:
   marketing dünyası. Chrome ve Firefox `*.localhost`'u hosts dosyası olmadan
   `127.0.0.1`'e çözer; iki host'un çerezleri ayrıdır, yani aynı kişi ikisinde birden
   açık olabilir.
-- Sunucunun kurduğu **mutlak** marketing bağlantıları (posta, giriş sayfasının "öbür
-  site" bağlantısı) portsuz çıkar (`http://marketing.localhost`), çünkü port yalnızca
+- Sunucunun kurduğu **mutlak** marketing bağlantıları (posta) portsuz çıkar (`http://marketing.localhost`), çünkü port yalnızca
   yapılandırılmış host'un kendisi için geri konur. `:3000`'i elle ekle.
 - `MARKETING_HOSTS=localhost` bütün dev sunucusunu marketing ürünü yapar (port o
   zaman korunur); iki dünyayı yan yana denemek için işe yaramaz.
@@ -318,14 +339,15 @@ sanır ve tip denetimi yanlış yerde susar. Yeni bir yapılandırma değişkeni
   iki org'a aynı ürün içinde üye olmak bu modelde yok.
 - **Topic ortamları tek host sunar** (`pr<N>.interncrm.com`): `MARKETING_HOSTS`
   verilmedikçe yalnızca internship dünyasını gösterirler. Marketing hesabıyla
-  girmeye çalışan biri "yanlış kapı" mesajını alır, ama bağlantı varsayılan (üretim)
-  marketing host'una gider, topic ortamına değil.
+  girmeye çalışan biri yalnızca "bu bilgilerle bir Internship CRM hesabı yok"
+  mesajını alır.
 - **Org'un ürününü değiştirmek insanlarını taşır** ve hedefte aynı adresli hesap
   varsa reddedilir; reddedildiği için sayısı bilinir, adresleri bilinmez — çözüm
   kiracının kendi admin'iyle adresi değiştirmek ya da eski kopyayı silmektir.
 - **İlk marketing admin'ini davet edecek ekran yok** ([İkinci dünyaya davet](#ikinci-dünyaya-davet)).
-- **Yanlış kapı hesabın varlığını açık eder** (yalnızca parolanın sahibine); karar
-  ve gerekçe `docs/security-exceptions.md`'de.
+- **Yanlış kapı hesabın varlığını açık eder** (yalnızca parolanın sahibine: cevap
+  "e-posta veya parola hatalı"dan farklıdır, ama sayfa öbür ürünü adlandırmaz);
+  karar ve gerekçe `docs/security-exceptions.md`'de.
 
 ## Değiştirirken
 

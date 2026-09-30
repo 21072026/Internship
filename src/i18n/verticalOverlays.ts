@@ -154,6 +154,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         signinSubtitle: 'Sign in to your SaleVali account',
         registerSubtitle: 'Register with your invitation',
         tokenHint: 'Paste the invitation token from your e-mail. Accounts on this product are created by invitation.',
+        dataSharingTitle: 'How your data is shared',
+        dataSharingBody: 'Depending on your role, the details you add may be visible to others: a lead’s details and activity history are seen by the assigned rep and by admins. Reps see only their own leads and accounts. See the privacy notice for details.',
       },
       // The admin dashboard (#2498). People = leads, the pipeline relation = a
       // deal — so "mentee/mentor/mentorship" become "lead/rep/deal" and nothing
@@ -544,6 +546,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         signinSubtitle: 'SaleVali hesabınıza giriş yapın',
         registerSubtitle: 'Davetinizle kaydolun',
         tokenHint: 'E-postanızdaki davet kodunu yapıştırın. Bu üründe hesaplar davetle açılır.',
+        dataSharingTitle: 'Verileriniz nasıl paylaşılır',
+        dataSharingBody: 'Rolünüze göre eklediğiniz bilgiler başkalarınca görülebilir: bir müşteri adayının bilgileri ve etkinlik geçmişi atanan temsilci ve yöneticiler tarafından görülür. Temsilciler yalnızca kendi müşteri adaylarını ve hesaplarını görür. Ayrıntılar için gizlilik bildirimine bakın.',
       },
       dashboard: {
         subtitle: 'Pazarlama hattınıza genel bakış',
@@ -832,6 +836,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         signinSubtitle: 'Melden Sie sich bei Ihrem SaleVali-Konto an',
         registerSubtitle: 'Mit Ihrer Einladung registrieren',
         tokenHint: 'Fügen Sie den Einladungscode aus Ihrer E-Mail ein. Konten in diesem Produkt werden per Einladung angelegt.',
+        dataSharingTitle: 'Wie Ihre Daten geteilt werden',
+        dataSharingBody: 'Je nach Rolle können die von Ihnen hinzugefügten Angaben für andere sichtbar sein: Angaben und Aktivitätsverlauf eines Leads sehen der zuständige Vertriebsmitarbeiter und Administratoren. Vertriebsmitarbeiter sehen nur ihre eigenen Leads und Accounts. Einzelheiten im Datenschutzhinweis.',
       },
       dashboard: {
         subtitle: 'Überblick über Ihre Marketing-Pipeline',

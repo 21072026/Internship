@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Suspense } from 'react';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { browserTimeZone } from '@/lib/timezone';
-import { DEFAULT_VERTICAL, productNameFor } from '@/lib/verticals';
+import { productNameFor } from '@/lib/verticals';
 
 const registerSchema = z
   .object({
@@ -183,20 +183,13 @@ function RegisterForm() {
               {...register('email')}
               error={errors.email?.message}
             />
-            {/* One person, two products (#2590, docs/worlds.md). An invitation
-                into THIS product for a mailbox that already has an account in
-                the other one creates a second, independent account — so the
-                invitee who arrives thinking "but I already have a login" is told
-                that this is not a duplicate. It says nothing about whether the
-                address really holds an account over there (it cannot: the form
-                has no way to know without becoming a probe). Shown on the
-                invitation-only host alone: the open internship sign-up is unchanged
-                for everyone, and announcing another product there would only be noise. */}
+            {/* One person, two products (#2590, docs/worlds.md): an invitation
+                here creates an account of THIS product with its own password, even
+                for a mailbox that has a login elsewhere. A page stays in its own
+                world, so the hint names only this product, never the other one. */}
             {isMarketing && (
               <p data-testid="separate-account-hint" className="-mt-2 text-xs text-gray-500">
-                {t.auth.separateAccountHint
-                  .replace('{other}', productNameFor(DEFAULT_VERTICAL))
-                  .replace('{product}', productNameFor(vertical))}
+                {t.auth.separateAccountHint.replace('{product}', productNameFor(vertical))}
               </p>
             )}
             <Input
