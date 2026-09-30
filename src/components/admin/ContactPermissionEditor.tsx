@@ -82,7 +82,7 @@ export function ContactPermissionEditor({ companyId, labels }: { companyId: stri
         <label className="text-xs text-gray-500">
           {labels.channel}
           <select
-            className="mt-1 block rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+            className="mt-1 block rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
             value={channel}
             data-testid="contact-permission-channel"
             onChange={(e) => setChannel(e.target.value as ContactChannel)}
@@ -97,7 +97,7 @@ export function ContactPermissionEditor({ companyId, labels }: { companyId: stri
         <label className="text-xs text-gray-500">
           {labels.basis}
           <select
-            className="mt-1 block rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+            className="mt-1 block rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
             value={effectiveBasis}
             data-testid="contact-permission-basis"
             onChange={(e) => setBasis(e.target.value as ContactBasis)}
@@ -114,7 +114,7 @@ export function ContactPermissionEditor({ companyId, labels }: { companyId: stri
         <label className="block text-xs text-gray-500">
           {labels.reason}
           <textarea
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+            className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
             rows={2}
             maxLength={1000}
             value={reason}
