@@ -1,4 +1,3 @@
-import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { menteeRelationWhere } from '@/lib/menteeRelation';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
