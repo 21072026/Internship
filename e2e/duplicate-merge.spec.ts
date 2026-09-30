@@ -262,6 +262,14 @@ test('scan page lists the pair and typed-name gate blocks a wrong name', async (
   // Other specs may seed their own look-alike mentees into the shared scan —
   // scope to the card that carries OUR pair.
   const card = page.getByTestId('duplicate-pair').filter({ hasText: 'Öykü Demir' }).filter({ hasText: 'Oyku Demir' });
+  // The page draws 25 pairs at a time, strongest first (#1436); in a shared
+  // database ours may sit further down, behind "Show more".
+  await expect(page.getByTestId('duplicates-showing')).toBeVisible({ timeout: 15_000 });
+  for (let i = 0; i < 10 && !(await card.isVisible()); i++) {
+    const more = page.getByTestId('duplicates-show-more');
+    if (!(await more.isVisible())) break;
+    await more.click();
+  }
   await expect(card).toBeVisible({ timeout: 15_000 });
 
   await card.getByRole('button', { name: 'Compare & merge' }).click();
@@ -304,4 +312,26 @@ test('mentor create pre-flight returns 409 possible_duplicate and confirmDuplica
   const created = await confirmed.json();
   expect(created.menteeId).toBeTruthy();
   createdMenteeIds.push(created.menteeId);
+});
+
+// #1436: the scan can return up to 200 pairs, and drawing them all made a page
+// 54 000 px tall. It now draws 25, strongest first, and "Show more" adds 25.
+test('the scan page draws 25 pairs at a time (#1436)', async ({ page }) => {
+  const admin = await seedUser(trackEmail('dupscan-page-admin'), ADMIN_PASSWORD, 'ADMIN', 'DupPage Admin');
+  adminIds.push(admin.id);
+  // 30 look-alike pairs: each pair shares a phone, which alone qualifies.
+  for (let k = 0; k < 30; k++) {
+    const phone = `0555 77${String(k).padStart(5, '0')}`;
+    for (const side of ['a', 'b']) {
+      const m = await seedUser(trackEmail(`dupscan-page-${k}-${side}`), 'MenteePass123!', 'MENTEE', `Paged ${side} ${k}`);
+      await prisma.user.update({ where: { id: m.id }, data: { phone } });
+    }
+  }
+
+  await signIn(page, admin.email, ADMIN_PASSWORD, '/admin');
+  await page.goto('/admin/duplicates');
+  await expect(page.getByTestId('duplicates-showing')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('duplicate-pair')).toHaveCount(25);
+  await page.getByTestId('duplicates-show-more').click();
+  await expect.poll(() => page.getByTestId('duplicate-pair').count()).toBeGreaterThan(25);
 });
