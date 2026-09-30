@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
-import { buildFeedIcs } from '@/lib/ics';
+import { buildFeedIcs, feedFilename } from '@/lib/ics';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
-import { pipelineLabel } from '@/lib/pipeline';
+import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
+import { orgWhere, withinTenant } from '@/lib/tenantFilter';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { worldOfOrg } from '@/lib/userWorld';
+import { productNameFor } from '@/lib/verticals';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Overall event cap, kept from #915 and applied to the whole fan-out, not per query. */
@@ -26,8 +30,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   if (limited) return limited;
 
   const { token } = await params;
-  const user = await prisma.user.findUnique({ where: { icsFeedToken: token }, select: { id: true, role: true } });
+  const user = await prisma.user.findUnique({ where: { icsFeedToken: token }, select: { id: true, role: true, orgId: true } });
   if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // The feed owner's tenant, by hand. The route has no session, so no tenant
+  // context is bound and the Prisma middleware scopes nothing — and Meeting /
+  // MeetingSeries are not tenant-registered anyway. Without this an ADMIN's
+  // `relWhere = {}` subscribed them to every organization's meetings and
+  // deadlines, the other product's included. A user whose `orgId` is still NULL
+  // is the default org's (orgWhere's own rule), never unscoped.
+  const orgId = user.orgId ?? (await defaultOrgId());
+  const tenant = await orgWhere(orgId);
 
   // A window from 30 days back (context) to everything scheduled ahead. A
   // recurring rule has no last occurrence, so its expansion needs a finite
@@ -60,7 +73,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
         seriesId: null,
         status: 'SCHEDULED',
         scheduledAt: { not: null, gte: since },
-        relation: relWhere,
+        relation: withinTenant(relWhere, tenant),
       },
       select: { id: true, title: true, scheduledAt: true },
       orderBy: { scheduledAt: 'asc' },
@@ -89,16 +102,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       where: {
         active: true,
         projectId: { not: null },
-        ...(user.role === 'ADMIN'
-          ? {}
-          : {
-              project: {
+        project: withinTenant<Prisma.ProjectWhereInput>(
+          user.role === 'ADMIN'
+            ? {}
+            : {
                 OR: [
                   { members: { some: { userId: user.id } } },
                   { relations: { some: { ...relWhere, status: 'ACTIVE' } } },
                 ],
               },
-            }),
+          tenant,
+        ),
       },
       select: { id: true, title: true, daysOfWeek: true, timeOfDay: true, timeZone: true },
       // Deliberately uncapped: one rule expands into hundreds of occurrences, so
@@ -109,7 +123,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     // Stage deadlines. No mentee relation is selected at all, so a participant
     // name cannot leak into the title by accident.
     prisma.mentorshipRelation.findMany({
-      where: { ...relWhere, stageDeadline: { not: null, gte: since } },
+      where: withinTenant({ ...relWhere, stageDeadline: { not: null, gte: since } }, tenant),
       select: { id: true, pipelineStatus: true, stageDeadline: true },
       // Soonest first, so a cap that bites keeps the deadlines that matter. An
       // ADMIN's `relWhere` is `{}`, so without an order MySQL would hand back an
@@ -119,6 +133,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       take: MAX_EVENTS,
     }),
   ]);
+  // The tenant's own stage names — a MARKETING org's funnel stages, not the
+  // internship catalogue's.
+  const stages = relations.length ? await resolvePipelineStages(orgId) : [];
 
   const events = [
     ...meetings.map((m) => ({ uid: m.id, title: m.title, start: m.scheduledAt! })),
@@ -136,18 +153,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     // The feed has no locale to read, so the stage label falls back to English.
     ...relations.map((r) => ({
       uid: `deadline-${r.id}`,
-      title: pipelineLabel(r.pipelineStatus),
+      title: stageLabel(stages, r.pipelineStatus),
       start: r.stageDeadline!,
     })),
   ]
     .sort((a, b) => a.start.getTime() - b.start.getTime())
     .slice(0, MAX_EVENTS);
 
-  const ics = buildFeedIcs('InternshipCRM', events);
+  // Named after the owner's product, read from the user row: a subscription is
+  // fetched by a calendar app, so there is no host or session to ask.
+  const product = productNameFor(await worldOfOrg(user.orgId));
+  const ics = buildFeedIcs(product, events);
   return new NextResponse(ics, {
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': 'inline; filename="internship-crm.ics"',
+      'Content-Disposition': `inline; filename="${feedFilename(product)}"`,
       'Cache-Control': 'private, max-age=300',
     },
   });

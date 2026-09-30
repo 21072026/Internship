@@ -7,6 +7,7 @@ import {
   googleRevokeUrl,
   googleTokenUrl,
 } from '@/lib/googleCalendar';
+import type { World } from '@/lib/hostWorld';
 
 /**
  * Talking to Google on a user's behalf (#709).
@@ -32,11 +33,15 @@ function clientSecret(): string | null {
   return process.env.GOOGLE_CLIENT_SECRET || null;
 }
 
-/** Exchange an authorization code for tokens. Throws with Google's message. */
-export async function exchangeCode(code: string): Promise<TokenResponse> {
+/**
+ * Exchange an authorization code for tokens. Throws with Google's message.
+ * `world` must be the one the consent URL was built for: Google rejects an
+ * exchange whose redirect_uri differs from the consent request's.
+ */
+export async function exchangeCode(code: string, world?: World): Promise<TokenResponse> {
   const id = googleClientId();
   const secret = clientSecret();
-  const redirect = googleRedirectUri();
+  const redirect = googleRedirectUri(world);
   if (!id || !secret || !redirect) throw new Error('Google Calendar is not configured');
 
   const res = await fetch(googleTokenUrl(), {

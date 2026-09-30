@@ -119,18 +119,6 @@ const SEARCH_OPERATORS = new Set(['contains', 'startsWith', 'endsWith', 'search'
 // not a reason, it is a red build.
 export const EXEMPT = new Map([
   [
-    'src/app/api/account/2fa/route.ts',
-    {
-      calls: 1,
-      // `id: { not: self }` is deliberately NOT a pin (it admits every other row),
-      // which is exactly what this call wants: the twin lives in the other world.
-      reason:
-        'the "does this address have a twin account in the OTHER world?" yes/no that labels the ' +
-        'authenticator issuer (#2590) — it counts every other row holding the mailbox, on purpose ' +
-        'across worlds, and returns a number, never a row',
-    },
-  ],
-  [
     'src/lib/accountErasure.ts',
     {
       calls: 1,

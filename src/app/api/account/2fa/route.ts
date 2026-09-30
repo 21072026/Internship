@@ -7,7 +7,6 @@ import { generateSecret, verifyTotp, otpauthUrl } from '@/lib/totp';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { worldOfOrg } from '@/lib/userWorld';
-import { runUnscoped } from '@/lib/tenantAmbient';
 import { productNameFor } from '@/lib/verticals';
 import {
   clearRecoveryCodes,
@@ -71,19 +70,13 @@ export async function POST(request: Request) {
     // Generate (or regenerate while still disabled) a pending secret.
     const secret = generateSecret();
     await prisma.user.update({ where: { id: session.user.id }, data: { twoFactorSecret: secret, twoFactorEnabled: false } });
-    // One person, two worlds (#2590): the same address can hold an account in
-    // each product, each with its OWN second factor. Both would land in the
-    // person's one authenticator app as "Internship CRM: <address>" — two
-    // entries with the same label and different secrets, and a wrong pick is a
-    // failed code charged to the address's (shared) TOTP lockout bucket. So an
-    // account that has a twin in another world is labelled with ITS product's
-    // name. Everyone else keeps the default issuer, byte-identical to before.
-    // The twin lives in ANOTHER organization, so the count runs outside the
-    // tenant filter (with isolation enforced it would otherwise only ever see
-    // this org); it returns a yes/no, never a row.
-    const hasTwin =
-      (await runUnscoped(() => prisma.user.count({ where: { email: user.email, id: { not: session.user.id } } }))) > 0;
-    const issuer = hasTwin ? productNameFor(await worldOfOrg(user.orgId)) : undefined;
+    // The authenticator entry is filed under the account's OWN product
+    // (docs/worlds.md): a SaleVali factor must never sit in the phone as
+    // "Internship CRM: <address>", and one address holding an account in each
+    // world (#2590) gets two distinguishable entries instead of two with the
+    // same label and different secrets. INTERNSHIP (and a null org) resolves to
+    // 'Internship CRM', so those URIs are byte-identical to before.
+    const issuer = productNameFor(await worldOfOrg(user.orgId));
     return NextResponse.json({ secret, otpauth: otpauthUrl(secret, user.email, issuer) });
   }
 

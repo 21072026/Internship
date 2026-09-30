@@ -57,7 +57,8 @@ import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/l
 // lives in. The pure host/world rule and the org → world read are the two
 // foundation modules; this file only ever asks them, it keeps no second copy.
 import { originForWorld, type World } from '@/lib/hostWorld';
-import { DEFAULT_VERTICAL, toVerticalKey } from '@/lib/verticals';
+import { DEFAULT_VERTICAL, productNameFor, toVerticalKey } from '@/lib/verticals';
+import { worldOfOrg } from '@/lib/userWorld';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere } from '@/lib/tenantFilter';
@@ -1141,6 +1142,7 @@ export async function sendMeetingInviteEmail({
   const ics =
     scheduledAt && icsUid
       ? meetingIcsAttachment({
+          product: await productNameForRecipient(orgId, userId),
           uid: icsUid,
           title,
           start: scheduledAt,
@@ -1247,6 +1249,7 @@ export async function sendMeetingGuestInviteEmail({
   const ics =
     scheduledAt && icsUid
       ? meetingIcsAttachment({
+          product: productNameFor(await worldOfOrg(orgId)),
           uid: icsUid,
           title,
           start: scheduledAt,
@@ -1322,6 +1325,8 @@ function bareAddress(header: string): string {
 // body, not by iTIP. Both sides are optional: with no SMTP identity configured
 // there is nothing to send anyway, and the file degrades to what it was before.
 function meetingIcsAttachment(opts: {
+  // The product of the world the mail is sent in (`productNameFor`).
+  product: string;
   uid: string;
   title: string;
   start: Date;
@@ -1336,6 +1341,7 @@ function meetingIcsAttachment(opts: {
 }) {
   const organizerEmail = bareAddress(fromHeader(null, 'primary'));
   const ics = buildMeetingIcs({
+    product: opts.product,
     uid: opts.uid,
     title: opts.title,
     start: opts.start,
@@ -1471,6 +1477,15 @@ async function appUrlForUser(userId: string | null | undefined): Promise<string>
 async function appUrlForRecipient(orgId?: string | null, userId?: string | null): Promise<string> {
   if (orgId !== undefined) return appUrlFor(orgId);
   return appUrlForUser(userId);
+}
+
+// The product name for the same recipient `appUrlForRecipient` resolves.
+async function productNameForRecipient(orgId?: string | null, userId?: string | null): Promise<string> {
+  if (orgId === undefined && userId) {
+    const row = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
+    orgId = row?.orgId ?? null;
+  }
+  return productNameFor(await worldOfOrg(orgId));
 }
 
 /**
