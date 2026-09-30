@@ -11,6 +11,7 @@ import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
 import { isValidTimeZone } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingRoom';
 import { requireCapability } from '@/lib/capabilityGate';
+import { withdrawMeetings } from '@/lib/googleCalendarSync';
 
 // A recurring project meeting is a *rule*, not a pile of rows (#1110).
 //
@@ -98,6 +99,11 @@ async function ensureSeriesAccess(
  * `PersonalNote.meetingId` FK is `SetNull`.
  */
 async function purgeGeneratedMeetings(seriesId: string) {
+  // Each of these rows may still be mirrored on someone's real calendar, and
+  // the link rows cascade away with the meeting — so withdraw FIRST (#1986).
+  // Bounded; a calendar that does not answer never blocks the save.
+  const rows = await prisma.meeting.findMany({ where: { seriesId }, select: { id: true } });
+  await withdrawMeetings(rows.map((r) => r.id));
   const { count } = await prisma.meeting.deleteMany({ where: { seriesId } });
   return count;
 }
