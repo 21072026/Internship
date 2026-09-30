@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Reply-by-email no longer falls back to the retired `crm.ersah.in` domain (#2217). `INBOUND_EMAIL_DOMAIN` has no default any more (`inboundEmailDomain()` in `src/lib/inboundDomain.ts`, unit-tested). When it is unset, `replyAddress()` returns `undefined`, message and mentor-direct notifications go out without a `reply+token` Reply-To, and the message notification asks the reader to reply in the app instead of \"reply to this email\". `/api/admin/email-test` reports `inboundDomain: null` instead of the stale name. `.env.example` is updated. The ICS UID keeps `crm.ersah.in` on purpose (#2197, commented in `src/lib/ics.ts`).",
+  "notes": {
+    "en": ["Message notification e-mails no longer invite you to reply by e-mail when replies can't be received; they point you to the app instead."],
+    "tr": ["Mesaj bildirimi e-postaları, yanıtlar alınamadığında artık \"bu e-postayı yanıtla\" demiyor; bunun yerine uygulamaya yönlendiriyor."],
+    "de": ["Benachrichtigungs-Mails zu Nachrichten fordern nicht mehr zum Antworten per E-Mail auf, wenn Antworten nicht ankommen können, sondern verweisen auf die App."]
+  }
+}

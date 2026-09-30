@@ -1,5 +1,8 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { requireServerSecret } from '@/lib/serverSecret';
+import { inboundEmailDomain } from '@/lib/inboundDomain';
+
+export { inboundEmailDomain };
 
 // Per-thread reply token used in email Reply-To addresses
 // (reply+<payload>.<sig>@domain). The signature is an HMAC of the payload with
@@ -59,9 +62,12 @@ export function verifyReplyToken(token: string): ReplyTokenPayload | null {
 
 // Build the Reply-To for a notification about `relationId` being sent to
 // `recipientUserId`. Always pass the recipient — without it, the reply only works
-// when they answer from their account address.
-export function replyAddress(relationId: string, recipientUserId?: string): string {
-  const domain = process.env.INBOUND_EMAIL_DOMAIN || 'crm.ersah.in';
+// when they answer from their account address. `undefined` when reply-by-email
+// is not configured: the mail then goes out without a Reply-To, and the copy
+// that invites a reply must check first (see `/api/messages`).
+export function replyAddress(relationId: string, recipientUserId?: string): string | undefined {
+  const domain = inboundEmailDomain();
+  if (!domain) return undefined;
   return `reply+${makeReplyToken(relationId, recipientUserId)}@${domain}`;
 }
 

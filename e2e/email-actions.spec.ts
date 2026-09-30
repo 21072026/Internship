@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { replyAddress } from '../src/lib/replyToken';
+import { makeReplyToken } from '../src/lib/replyToken';
 import { makeEmailActionToken, EMAIL_REACTION_EMOJIS } from '../src/lib/emailActionToken';
 import { E2E_INBOUND_SECRET } from '../playwright.config';
 
@@ -51,7 +51,8 @@ test('replying by email marks that conversation — and everything before it —
     const res = await request.post('/api/inbound-email', {
       headers: authed,
       data: {
-        to: replyAddress(relation.id, mentee.id),
+        // Only the token routes; the domain is whatever INBOUND_EMAIL_DOMAIN says.
+        to: `reply+${makeReplyToken(relation.id, mentee.id)}@inbound.example.test`,
         from: mentee.email,
         text: 'tamam abi, hallederim',
         messageId: `<ea-reply-${Date.now()}@test.local>`,

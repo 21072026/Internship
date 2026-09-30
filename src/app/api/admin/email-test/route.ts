@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { sendEmail, verifySmtpConnection, verifyBulkSmtpConnection, mailChannelInfo } from '@/services/emailService';
 import { logActivity } from '@/lib/activity';
+import { inboundEmailDomain } from '@/lib/replyToken';
 
 const schema = z.object({ to: z.string().email() });
 
@@ -23,7 +24,8 @@ export async function GET() {
     channels: mailChannelInfo(),
     from: process.env.SMTP_FROM || process.env.SMTP_USER || null,
     host: process.env.SMTP_HOST || null,
-    inboundDomain: process.env.INBOUND_EMAIL_DOMAIN || 'crm.ersah.in',
+    // null = reply-by-email is off (#2217); never a guessed default.
+    inboundDomain: inboundEmailDomain(),
   });
 }
 
