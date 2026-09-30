@@ -8,7 +8,7 @@ import { listPublishedStories } from '@/lib/testimonials';
 import { PublicShell } from '@/components/landing/PublicShell';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return pageMetadata((t) => ({ title: t.landing.stories.pageTitle, description: t.landing.stories.pageSubtitle }));
+  return pageMetadata((t) => ({ title: t.landing.stories.pageTitle, description: t.landing.stories.pageSubtitle }), '/stories/opengraph-image');
 }
 
 
