@@ -2478,6 +2478,8 @@ model MentorshipRelation {
   // At most one successor in practice (a closed relation is transferred once),
   // but the FK cannot express that, so Prisma types it as a list.
   nextRelations         MentorshipRelation[]   @relation("RelationChain")
+  // Standing 1:1 rules on this pairing (#2013).
+  meetingSeries         MeetingSeries[]
 
   @@index([status])
   @@index([lifecycleState])
@@ -2940,7 +2942,7 @@ model MeetingGuest {
 // A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;
 // manually scheduled meetings leave seriesId null (backward-compatible).
 model MeetingSeries {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   projectId       String?
   title           String
   // Days of week as a JSON array of integers (0=Sun … 6=Sat), e.g. [1,4] = Mon+Thu.
@@ -2956,11 +2958,27 @@ model MeetingSeries {
   // through meetingDurationMinutes(), exactly like Meeting.durationMinutes.
   durationMinutes Int?
   fixedLink       String?
-  active          Boolean  @default(true)
+  active          Boolean   @default(true)
   createdById     String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
+  // A standing 1:1 (#2013): the series hangs off a mentorship relation instead
+  // of a project. Exactly one of projectId / relationId is set — MySQL cannot
+  // CHECK that, so every write path enforces it (countContexts in
+  // src/lib/meetingContext.ts). SetNull like the project side: a series whose
+  // relation is gone is an orphan its author (or an admin) can still cancel.
+  relationId      String?
+  // Cadence (#2013). intervalWeeks counts WHOLE weeks from anchorDate's week, so
+  // a biweekly rule cannot drift across a DST change; anchorDate is a calendar
+  // date (UTC midnight), null reads as the creation date. untilDate (inclusive,
+  // a calendar date) and maxOccurrences are the end condition — both null means
+  // "until cancelled", the pre-#2013 behaviour. The rule: src/lib/seriesRule.ts.
+  intervalWeeks   Int       @default(1)
+  anchorDate      DateTime?
+  untilDate       DateTime?
+  maxOccurrences  Int?
 
   project       Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  relation      MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: SetNull)
   meetings      Meeting[]
   reminders     MeetingSeriesReminder[]
   ends          MeetingOccurrenceEnd[]
@@ -2968,6 +2986,7 @@ model MeetingSeries {
   calendarLinks GoogleCalendarEventLink[]
 
   @@index([projectId])
+  @@index([relationId])
 }
 
 // One row per (series, occurrence, lead time) that has been reminded (#51).

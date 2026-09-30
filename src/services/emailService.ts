@@ -32,7 +32,7 @@ import { visibleToViewer } from '@/lib/todoVisibility';
 import { formatDate } from '@/lib/relativeTime';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
-import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { ruleOccurrences, SERIES_RULE_SELECT, type SeriesRule } from '@/lib/meetingSeriesOccurrences';
 import { buildMeetingIcs } from '@/lib/ics';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary, type Dictionary } from '@/i18n/dictionaries';
@@ -3385,15 +3385,11 @@ const SERIES_LOOKAHEAD_MINUTES = 25 * 60;
 // Occurrences strictly after `from` and within the lookahead. The expansion
 // itself lives in lib/meetingSeriesOccurrences so the reminder can never
 // disagree with the calendar about what time the meeting is (#1110).
-function upcomingSeriesOccurrences(
-  series: { daysOfWeek: unknown; timeOfDay: string; timeZone: string | null },
-  from: Date,
-  withinMinutes: number
-): Date[] {
+function upcomingSeriesOccurrences(series: SeriesRule, from: Date, withinMinutes: number): Date[] {
   const horizon = new Date(from.getTime() + withinMinutes * 60 * 1000);
-  return seriesOccurrences(series.daysOfWeek, series.timeOfDay, from, horizon, series.timeZone).filter(
-    (when) => when > from
-  );
+  // Cadence included (#2013): a biweekly rule is not reminded on its off weeks,
+  // and a rule past its end condition is not reminded at all.
+  return ruleOccurrences(series, from, horizon).filter((when) => when > from);
 }
 
 function leadFor(minutesAway: number): 'DAY_BEFORE' | 'HOUR_BEFORE' | null {
@@ -3409,9 +3405,7 @@ export async function sendProjectMeetingSeriesReminders() {
     select: {
       id: true,
       title: true,
-      daysOfWeek: true,
-      timeOfDay: true,
-      timeZone: true,
+      ...SERIES_RULE_SELECT,
       fixedLink: true,
       projectId: true,
       project: { select: { id: true, name: true, orgId: true } },

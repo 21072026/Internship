@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { buildFeedIcs } from '@/lib/ics';
 import { enforceRateLimit } from '@/lib/rateLimit';
-import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { ruleOccurrences, SERIES_RULE_SELECT } from '@/lib/meetingSeriesOccurrences';
 import { pipelineLabel } from '@/lib/pipeline';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { defaultOrgId } from '@/lib/defaultOrg';
@@ -97,22 +97,28 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     prisma.meetingSeries.findMany({
       where: {
         active: true,
-        projectId: { not: null },
-        project: {
-          is: withinTenant<Prisma.ProjectWhereInput>(
-            user.role === 'ADMIN'
-              ? {}
-              : {
-                  OR: [
-                    { members: { some: { userId: user.id } } },
-                    { relations: { some: { AND: [roleRelWhere, { status: 'ACTIVE' }] } } },
-                  ],
-                },
-            tenant,
-          ),
-        },
+        OR: [
+          {
+            projectId: { not: null },
+            project: {
+              is: withinTenant<Prisma.ProjectWhereInput>(
+                user.role === 'ADMIN'
+                  ? {}
+                  : {
+                      OR: [
+                        { members: { some: { userId: user.id } } },
+                        { relations: { some: { AND: [roleRelWhere, { status: 'ACTIVE' }] } } },
+                      ],
+                    },
+                tenant,
+              ),
+            },
+          },
+          // A standing 1:1 (#2013), scoped like the relation's own meetings.
+          { relationId: { not: null }, relation: { is: relWhere } },
+        ],
       },
-      select: { id: true, title: true, daysOfWeek: true, timeOfDay: true, timeZone: true, durationMinutes: true },
+      select: { id: true, title: true, ...SERIES_RULE_SELECT, durationMinutes: true },
       // Deliberately uncapped: one rule expands into hundreds of occurrences, so
       // a cap here would drop whole recurring calls rather than trim the tail —
       // the MAX_EVENTS budget is applied once, to the merged event list below.
@@ -139,7 +145,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     // uses, so a subscribed client and the app agree on which occurrence is
     // which instead of showing it twice.
     ...series.flatMap((s) =>
-      seriesOccurrences(s.daysOfWeek, s.timeOfDay, since, until, s.timeZone).map((when) => ({
+      ruleOccurrences(s, since, until).map((when) => ({
         uid: `series-${s.id}-${when.toISOString()}`,
         title: s.title,
         start: when,

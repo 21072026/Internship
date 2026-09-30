@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { ruleOccurrences, SERIES_RULE_SELECT } from '@/lib/meetingSeriesOccurrences';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -113,33 +113,40 @@ export async function GET(request: Request) {
     }),
     // The recurring project meetings this user is expected at: every active rule
     // on a project they are a member of, or that one of their relations carries.
+    // A standing 1:1 (#2013) hangs off a relation instead: both of its
+    // participants see it, scoped exactly like the relation's own meetings.
     prisma.meetingSeries.findMany({
       where: {
         active: true,
-        projectId: { not: null },
-        project: {
-          is: withinTenant<Prisma.ProjectWhereInput>(
-            role === 'ADMIN'
-              ? {}
-              : {
-                  OR: [
-                    { members: { some: { userId: id } } },
-                    { relations: { some: { ...roleRelWhere, status: 'ACTIVE' } } },
-                  ],
-                },
-            tenant,
-          ),
-        },
+        OR: [
+          {
+            projectId: { not: null },
+            project: {
+              is: withinTenant<Prisma.ProjectWhereInput>(
+                role === 'ADMIN'
+                  ? {}
+                  : {
+                      OR: [
+                        { members: { some: { userId: id } } },
+                        { relations: { some: { ...roleRelWhere, status: 'ACTIVE' } } },
+                      ],
+                    },
+                tenant,
+              ),
+            },
+          },
+          { relationId: { not: null }, relation: { is: relWhere } },
+        ],
       },
       select: {
         id: true,
         title: true,
-        daysOfWeek: true,
-        timeOfDay: true,
-        timeZone: true,
+        ...SERIES_RULE_SELECT,
         fixedLink: true,
         projectId: true,
+        relationId: true,
         project: { select: { name: true } },
+        relation: { select: { mentee: { select: { fullName: true } }, mentor: { select: { fullName: true } } } },
       },
     }),
   ]);
@@ -158,11 +165,15 @@ export async function GET(request: Request) {
     // project call is a single event and shows its own title; the project name
     // is the context line, where a one-to-one meeting shows the mentee's name.
     ...series.flatMap((s) =>
-      seriesOccurrences(s.daysOfWeek, s.timeOfDay, seriesFrom, seriesTo, s.timeZone).map((when) => ({
+      ruleOccurrences(s, seriesFrom, seriesTo).map((when) => ({
         id: `series-${s.id}-${when.toISOString()}`,
         type: 'series' as const,
         title: s.title,
-        who: s.project?.name ?? s.title,
+        // A standing 1:1 names the other participant, like a one-off meeting.
+        who:
+          s.project?.name ??
+          (s.relation ? (role === 'MENTEE' ? s.relation.mentor.fullName : s.relation.mentee.fullName) : null) ??
+          s.title,
         date: when.toISOString(),
         link: s.fixedLink ?? null,
         projectId: s.projectId,

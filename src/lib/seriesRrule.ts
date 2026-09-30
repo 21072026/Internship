@@ -27,8 +27,25 @@ export function weekdays(raw: unknown): number[] {
  * with none (a malformed row pushes nothing rather than an event that recurs
  * every week on no day, which Google rejects).
  */
-export function weeklyRrule(daysOfWeek: unknown): string | null {
+export function weeklyRrule(
+  daysOfWeek: unknown,
+  // The cadence (#2013), already resolved by src/lib/seriesRule.ts: the interval
+  // in weeks and the last meeting day (days since 1970-01-01, inclusive) or null
+  // for "until cancelled". INTERVAL counts from DTSTART's week, which the caller
+  // sets to the next real occurrence, so it lines up with the app's own weeks.
+  // UNTIL, not COUNT: COUNT would recount from DTSTART and grow the series back
+  // every time the event is re-pushed.
+  cadence: { intervalWeeks?: number | null; lastDay?: number | null } = {},
+): string | null {
   const days = weekdays(daysOfWeek);
   if (days.length === 0) return null;
-  return `RRULE:FREQ=WEEKLY;BYDAY=${days.map((d) => BYDAY[d]).join(',')}`;
+  const parts = [`FREQ=WEEKLY`];
+  const interval = Math.trunc(Number(cadence.intervalWeeks ?? 1));
+  if (interval > 1) parts.push(`INTERVAL=${interval}`);
+  if (cadence.lastDay != null) {
+    const d = new Date(cadence.lastDay * 86_400_000).toISOString().slice(0, 10).replace(/-/g, '');
+    parts.push(`UNTIL=${d}T235959Z`);
+  }
+  parts.push(`BYDAY=${days.map((d) => BYDAY[d]).join(',')}`);
+  return `RRULE:${parts.join(';')}`;
 }

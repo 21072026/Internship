@@ -3,7 +3,8 @@ import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
 import { CALENDAR_WITHDRAW_MS } from '@/lib/googleCalendarSync';
 import { meetingEnd } from '@/lib/meetingDuration';
-import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
+import { nextRuleOccurrence, parseDaysOfWeek } from '@/lib/meetingSeriesOccurrences';
+import { lastMeetingDay, type SeriesCadence } from '@/lib/seriesRule';
 import { resolveTimeZone } from '@/lib/timezone';
 import { weeklyRrule } from '@/lib/seriesRrule';
 
@@ -28,7 +29,7 @@ import { weeklyRrule } from '@/lib/seriesRrule';
  * recorded on the connection and never surfaces to whoever saved the series.
  */
 
-export interface SyncableSeries {
+export interface SyncableSeries extends SeriesCadence {
   id: string;
   projectId: string | null;
   title: string;
@@ -85,8 +86,13 @@ async function deleteLink(link: { id: string; googleEventId: string; connection:
 export async function syncSeries(series: SyncableSeries): Promise<number> {
   if (!isGoogleCalendarEnabled()) return 0;
 
-  const rrule = weeklyRrule(series.daysOfWeek);
-  const first = series.active && rrule ? nextOccurrence(series.daysOfWeek, series.timeOfDay, series.timeZone) : null;
+  const rrule = weeklyRrule(series.daysOfWeek, {
+    intervalWeeks: series.intervalWeeks,
+    lastDay: lastMeetingDay(parseDaysOfWeek(series.daysOfWeek), series),
+  });
+  // The next REAL occurrence (#2013): a meeting week of the cadence, before its
+  // end — or none, and the calendars are withdrawn below.
+  const first = series.active && rrule ? nextRuleOccurrence(series) : null;
   const audience = first ? await audienceOf(series) : [];
 
   let pushed = 0;

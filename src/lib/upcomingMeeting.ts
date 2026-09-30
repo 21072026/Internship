@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { parseDaysOfWeek, seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { parseDaysOfWeek, ruleOccurrences, SERIES_RULE_SELECT } from '@/lib/meetingSeriesOccurrences';
 import { parseJaasMeetingLink } from '@/lib/meetingLink';
 import { MAX_MEETING_MINUTES, meetingDurationMinutes } from '@/lib/meetingDuration';
 
@@ -128,9 +128,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
       select: {
         id: true,
         title: true,
-        daysOfWeek: true,
-        timeOfDay: true,
-        timeZone: true,
+        ...SERIES_RULE_SELECT,
         durationMinutes: true,
         fixedLink: true,
         projectId: true,
@@ -148,7 +146,7 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
     const endedOccurrences = new Set(ends.map((e) => `${e.seriesId}:${e.occurrenceAt.toISOString()}`));
     for (const s of series) {
       if (parseDaysOfWeek(s.daysOfWeek).length === 0) continue;
-      for (const when of seriesOccurrences(s.daysOfWeek, s.timeOfDay, windowStart, windowEnd, s.timeZone)) {
+      for (const when of ruleOccurrences(s, windowStart, windowEnd)) {
         if (endedOccurrences.has(`${s.id}:${when.toISOString()}`)) continue;
         candidates.push({
           id: `${s.id}:${when.toISOString()}`,
