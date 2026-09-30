@@ -10,6 +10,24 @@ Newest entries on top.
 
 ---
 
+## 2026-10-01 — Per-org weekly analytics gate (#2680)
+
+- **A task that names a helper from an open PR may be written against a stale `main`.** The brief
+  pointed at `settingsOrg.ts` from #2629 (unmerged and conflicting), and #2629's branch was older
+  than `main`, where #1884 had already made the report's figures per tenant. Diff the target
+  function on `origin/main` before stacking onto someone else's branch. If you need a helper from
+  an unmerged PR, carry a byte-identical copy of it: an identical add/add merges cleanly in either
+  order.
+- **Playwright's `reuseExistingServer` will quietly test another worktree's code.** Port 3000 was
+  a `next dev` from a parallel session (`lsof -p <pid> | grep cwd` shows whose it is). Start your
+  own with the webServer env (`TRUSTED_PROXY_COUNT=1 SMTP_USER= SMTP_BULK_USER=`) on another port
+  and pass `BASE_URL=http://localhost:<port>`. Do not kill the other session's server.
+- **`EmailLog` is the e2e oracle for "who got a mail"**: `sendEmail` records a row (SKIPPED or
+  FAILED) even without SMTP, so recipient routing can be asserted by address. Remember that a
+  cron run by *any* admin mails *every* enabled org, so count per recipient across runs.
+- **`/api/cron` is open to any tenant's admin**: a job result that carries per-org data must be
+  reduced to the caller's own entry before it is returned.
+
 ## 2026-09-29 — Bir kişi, iki dünya (#2590): paralel `main`, container yeniden başlaması, e2e ortamı
 
 **Aynı konuda `main` de ilerliyor olabilir: tasarlamadan önce `git log origin/main -20`.** Bu iş
