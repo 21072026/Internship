@@ -100,6 +100,12 @@ test('mentor board keeps its columns and per-card stage select on desktop', { ta
     await expect(page.getByTestId('board-columns')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('board-mobile')).toHaveCount(0);
 
+    // Empty stages collapse (#1366), so a board with one card fits on screen
+    // and there is nothing to scroll to. The scroll hints are about an
+    // overflowing board: show every stage at full width to get one.
+    await expect(page.getByTestId('board-columns-right-hint')).toHaveCount(0);
+    await page.getByTestId('board-show-empty').check();
+
     await expect(page.getByTestId('board-columns-right-hint')).toBeVisible();
     await expect(page.getByTestId('board-columns-left-hint')).toHaveCount(0);
     await page.getByTestId('board-columns').evaluate((element) => {
