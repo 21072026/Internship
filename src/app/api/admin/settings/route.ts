@@ -27,6 +27,7 @@ const schema = z.object({
   selfRegistration: z.enum(['auto', 'manual']).optional(),
   outcomeAutoSend: z.enum(['true', 'false']).optional(),
   blindReview: z.enum(['true', 'false']).optional(),
+  autoAdvanceOnOfferAccept: z.enum(['true', 'false']).optional(),
   earlyAccessWindowDays: z.string().regex(/^\d{1,3}$/).optional(),
   premiumAnalytics: z.enum(['true', 'false']).optional(),
   aiMonthlyQuota: z.string().regex(/^\d{1,6}$/).optional(),
