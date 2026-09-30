@@ -324,6 +324,13 @@ tenant isolation that changes four things:
   holds an account for any of the org's addresses (`src/lib/verticalMove.ts`, which
   reads the *other* tenants' rows through `runUnscoped` and reports a count, never an
   address).
+  Since super admin became per world (docs/worlds.md § Super admin), no session
+  may make that move at all — `403 vertical_other_world` — and the conflict check
+  stays as the second lock for an operator path.
+- **Super admin is per world.** `superAdminWorld()` / `isSuperAdminFor()`
+  (`src/lib/superAdmin.ts`, rule in `superAdminWorld.ts`): an operator lists,
+  creates and manages only its own world's organizations, and the power is inert on
+  the other world's host.
 
 Address-keyed side tables (`AccountLockout`, `EmailLog`, `NewsletterSend`, invitation
 lookups) were audited for the same reason: the lockout counter stays shared by

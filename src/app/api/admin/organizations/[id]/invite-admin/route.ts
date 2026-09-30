@@ -5,7 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { createInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
-import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
+import { logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
+import { superAdminReaches } from '@/lib/superAdminWorld';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { withRequestScope } from '@/lib/requestContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -56,12 +57,20 @@ async function handlePost(request: Request, params: Promise<{ id: string }>) {
     // foreign org id exists. The role test is implied by isSuperAdmin() (which
     // already requires ADMIN) but spelled out so the guard reads as ADMIN-only
     // to scripts/openapi-generate.cjs, like the sibling routes.
-    const superAdmin = await isSuperAdmin(session);
-    if (!superAdmin) await logCrossTenantDenial(session, ROUTE, id);
-    if (session.user.role !== 'ADMIN' || !superAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    //
+    // Per world (docs/worlds.md § Super admin): a super admin reaches only the
+    // organizations of its own world. For one of the OTHER world the answer is
+    // the same 404 a missing id gets, so it cannot probe which ids exist there.
+    const world = await superAdminWorld(session);
+    if (!world) await logCrossTenantDenial(session, ROUTE, id);
+    if (session.user.role !== 'ADMIN' || !world) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const org = await prisma.organization.findUnique({ where: { id }, select: { id: true } });
-    if (!org) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    const org = await prisma.organization.findUnique({ where: { id }, select: { id: true, vertical: true } });
+    if (!org || !superAdminReaches(world, org.vertical)) {
+      if (org) await logCrossTenantDenial(session, ROUTE, id);
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+
 
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
