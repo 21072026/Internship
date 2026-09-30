@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "MARKETING view switch offers **Admin ↔ Sales** instead of Admin ↔ Mentor (an admin may also work their own book on `/sales`); the invite form hides “add to project” where the vertical has no projects module; new operator CLI `prisma/purge-cross-tenant-notifications.mjs` removes pre-#2653 cross-tenant bell entries (dry run by default).",
+  "notes": {
+    "en": [
+      "In the marketing product, admins switch between the admin view and their own sales view; the mentor view and the project field on invites are gone there."
+    ],
+    "tr": [
+      "Pazarlama ürününde yöneticiler yönetici görünümü ile kendi satış görünümü arasında geçiş yapar; mentor görünümü ve davetteki proje alanı orada artık yok."
+    ],
+    "de": [
+      "Im Marketing-Produkt wechseln Admins zwischen Admin-Ansicht und ihrer eigenen Vertriebsansicht; die Mentor-Ansicht und das Projektfeld in Einladungen entfallen dort."
+    ]
+  }
+}

@@ -32,9 +32,10 @@ test('MARKETING does not carry mentorship — the surface is opened by pipeline'
   assert.ok(MARKETING.includes('pipeline'));
 });
 
-test('only a MARKETING MENTOR has the sales surface', () => {
+test('a MARKETING MENTOR — and an ADMIN who also sells — has the sales surface', () => {
   assert.equal(hasSalesSurface('MENTOR', MARKETING), true);
-  for (const role of ['ADMIN', 'MENTEE', 'COMPANY', 'SOURCE', undefined, null]) {
+  assert.equal(hasSalesSurface('ADMIN', MARKETING), true);
+  for (const role of ['MENTEE', 'COMPANY', 'SOURCE', undefined, null]) {
     assert.equal(hasSalesSurface(role, MARKETING), false, `${role} in MARKETING`);
   }
   for (const role of ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE']) {
@@ -46,9 +47,9 @@ test('a vertical without a pipeline has no sales surface either', () => {
   assert.equal(hasSalesSurface('MENTOR', ['companies', 'messaging']), false);
 });
 
-test('the mentor shell sends a MARKETING MENTOR to /sales and everyone else to /account', () => {
+test('the mentor shell sends a MARKETING MENTOR or ADMIN to /sales and everyone else to /account', () => {
   assert.equal(mentorlessShellTarget('MENTOR', MARKETING), SALES_HOME);
-  assert.equal(mentorlessShellTarget('ADMIN', MARKETING), NEUTRAL_HOME);
+  assert.equal(mentorlessShellTarget('ADMIN', MARKETING), SALES_HOME);
   assert.equal(mentorlessShellTarget('MENTEE', MARKETING), NEUTRAL_HOME);
   assert.equal(SALES_HOME, '/sales');
   assert.equal(NEUTRAL_HOME, '/account');

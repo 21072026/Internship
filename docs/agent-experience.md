@@ -7926,3 +7926,22 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   stamper and pin both callers to it, never an `EXEMPT` entry.
 - **Local MariaDB can be gone after a container pause** (the socket file is there, the process is
   not). `mysqladmin ping || service mariadb start` before any e2e run.
+
+## 2026-09-30 — cross-world isolation sweep (#2647 / #2653)
+
+- **`MT_ENFORCE_ISOLATION` is off in prod, so `withTenantScope()` alone scopes nothing.** A leak
+  audit found ~40 routes wrapped in it with no hand filter; `authzScope`'s ADMIN builders returned
+  `{}`. When a new route reads tenant data, add `tenantWhere`/`withinTenant` — the wrapper is not
+  enough, and a two-org e2e spec (both directions) is the only thing that proves it.
+- **Fixing a fan-out does not clean the rows it already wrote.** Notification rows carry no
+  subject id, so historical cross-tenant bell entries needed a separate, name-based purge script
+  (`prisma/purge-cross-tenant-notifications.mjs`). Deleting prod data from a deploy script is
+  refused by the auto-mode classifier — ship it as an operator CLI with a dry-run default.
+- **Five parallel implementers on disjoint file sets merged with only `e2e/fixtures/authz-matrix.ts`
+  conflicting** (append-only arrays; keep both sides). Give every package its own DB, port and
+  worktree, and let exactly one package own `prisma/schema.prisma`.
+- **`--project` e2e runs from a scratchpad config need `webServer[].cwd` set to the repo**, or the
+  mock servers (`e2e/support/*.mjs`) resolve against the scratchpad and the run never starts.
+- **A fresh local DB must be seeded (`node prisma/seed.mjs`) before the first e2e run**; running
+  specs first leaves rows that make the seed's org backfill hit a unique key (`Source_orgId_name`).
+
