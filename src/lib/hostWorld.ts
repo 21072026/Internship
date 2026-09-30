@@ -92,8 +92,3 @@ export function originForWorld(world: World): string {
   const port = base.hostname === host && base.port ? `:${base.port}` : '';
   return `${base.protocol}//${host}${port}`;
 }
-
-/** Every world with the origin its links use — for a sign-in page that must point at "the other door". */
-export function worldOrigins(): Record<World, string> {
-  return { INTERNSHIP: originForWorld('INTERNSHIP'), MARKETING: originForWorld('MARKETING') };
-}

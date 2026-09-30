@@ -65,7 +65,7 @@ Kural `src/lib/hostWorld.ts`'te (saf; yalnızca iki bağımlılıksız modülü 
   vermez. Aynı küme yönlendirme allowlist'ini de besler (`servedHosts.ts`, #2488);
   runbook `infra/README.md` § The marketing hosts.
 - **API:** `worldForHeaders(get)`, `worldForHeaderBag(bag)` (NextAuth
-  `authorize()`'a düz bir nesne verir), `originForWorld(world)`, `worldOrigins()`.
+  `authorize()`'a düz bir nesne verir), `originForWorld(world)`.
 
 **Güven notu.** Host, bir kişinin **kendi** hesaplarından hangisine gireceğini
 seçebilir ve bir isteği **reddettirebilir**; erişimi asla **genişletmez**. Sahte
@@ -84,7 +84,12 @@ oturumun org'undan gelir, host'tan değil.
 3. O dünyada hesap yoksa, adresin başka dünyadaki hesapları yalnızca **parola
    kontrolüne katılır** (`findUsersByEmail`) — yanlış parola bugünkü gibi
    sayılır ve kilitler — ama bununla oturum **açılamaz**.
-4. Zorunlu-SSO kapısı, tek hesaplı yoldaki gibi bcrypt'ten önce durur (#1950).
+4. Zorunlu-SSO kapısı, tek hesaplı yoldaki gibi bcrypt'ten önce durur (#1950) —
+   ama `SSO_REQUIRED` yalnızca **bu dünyadaki** hesaba söylenir. Öbür dünyanın
+   SSO zorunlu bir tenant'ına ait hesap bilinmeyen adres gibi cevaplanır
+   (`Invalid email or password`): hash'i yine karşılaştırılmaz, başarısızlık
+   kullanıcı/org'suz kaydedilir; sayfa öbür ürünün tenant'ından söz etmez ve
+   bu host'ta zaten reddedilecek bir `/auth/sso` bağlantısı sunmaz.
 5. Parola yanlışsa cevap hep aynı `Invalid email or password`. Parola **doğru**
    ama hesap öbür dünyadaysa: `WRONG_WORLD_<VERTICAL>` (`authWrongWorld` /
    `parseWrongWorld`, `src/lib/authErrors.ts`; `<VERTICAL>` hesabın **gerçek**
@@ -105,7 +110,8 @@ başladıysa ürettiği her şey — sayfa metni, bağlantı, posta — o dünya
 bağlar**; yalnızca bulunduğu ürünün adıyla "bu bilgilerle bir {ürün} hesabı yok"
 der (`t.auth.wrongWorld`, EN/TR/DE; ürün adı sayfanın kendi dikeyinden,
 `productNameFor(useVertical())`). Sunucunun kodu değişmedi; öbür kapıya giden
-bağlantı ve onu besleyen `worldOrigins` prop'u kaldırıldı.
+bağlantı, onu besleyen `worldOrigins` prop'u ve `hostWorld.ts`'teki `worldOrigins()`
+yardımcısı kaldırıldı — sayfa metni öbür dünyaya asla bağlantı vermez.
 
 **Grant sağlayıcıları** (`impersonate`, `sso`, `remember`) kullanıcıyı host değil
 grant seçtiği için tersinden korunur: `assertAccountMatchesHost` hesabın dünyası

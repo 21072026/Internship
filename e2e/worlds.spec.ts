@@ -364,6 +364,52 @@ test('an SSO org code of the other world is refused on this host like an unknown
   expect((await login(marketing.slug, asHost(MARKETING_HOST))).search).not.toContain('sso_unavailable');
 });
 
+test('an SSO-enforced member of the other world is answered like an unknown address, never SSO_REQUIRED', async ({ request }) => {
+  const enforcedMember = async (vertical: 'INTERNSHIP' | 'MARKETING') => {
+    const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const org = await prisma.organization.create({
+      data: {
+        name: `Worlds Enforced ${vertical} ${stamp}`,
+        slug: `worlds-enforced-${vertical.toLowerCase()}-${stamp}`,
+        vertical,
+        plan: 'ENTERPRISE',
+        ssoEnabled: true,
+        ssoProvider: 'saml',
+        ssoIssuer: 'https://idp.worlds.example/issuer',
+        ssoEntryPoint: 'https://idp.worlds.example/sso',
+        ssoCertificate: 'MIIC-not-a-real-certificate',
+        ssoEnforced: true,
+      },
+    });
+    orgIds.push(org.id);
+    const email = uniqueEmail(`worlds-enforced-${vertical.toLowerCase()}`);
+    emails.push(email);
+    await seedUser(email, INTERNSHIP_PW, 'MENTOR', `Worlds Enforced ${vertical}`, org.id);
+    return email;
+  };
+  const marketing = await enforcedMember('MARKETING');
+  const internship = await enforcedMember('INTERNSHIP');
+
+  // The other world's host, the account's correct password: generic, no SSO hint.
+  const mktOnDefault = await signInViaApi(request, marketing, INTERNSHIP_PW, { headers: freshIp('worlds-enf-m-d') });
+  expect(mktOnDefault.error).toBe('Invalid email or password');
+  const intOnMarketing = await signInViaApi(request, internship, INTERNSHIP_PW, {
+    host: MARKETING_HOST,
+    headers: freshIp('worlds-enf-i-m'),
+  });
+  expect(intOnMarketing.error).toBe('Invalid email or password');
+
+  // On its own host the enforcement is real — the case above is not a
+  // misconfigured tenant that simply let the password through.
+  const mktOnMarketing = await signInViaApi(request, marketing, INTERNSHIP_PW, {
+    host: MARKETING_HOST,
+    headers: freshIp('worlds-enf-m-m'),
+  });
+  expect(mktOnMarketing.error).toBe('SSO_REQUIRED');
+  const intOnDefault = await signInViaApi(request, internship, INTERNSHIP_PW, { headers: freshIp('worlds-enf-i-d') });
+  expect(intOnDefault.error).toBe('SSO_REQUIRED');
+});
+
 test('the sign-in page on the marketing host answers an internship-only person in its own world, naming nothing else', async ({ page }) => {
   const email = uniqueEmail('worlds-ui');
   emails.push(email);

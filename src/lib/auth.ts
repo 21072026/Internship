@@ -175,7 +175,8 @@ export const authOptions: NextAuthOptions = {
         // charged and locked out exactly as before) but can never sign in —
         // a right password answers "wrong door", not a session.
         const pool = inWorld.length ? inWorld : await findUsersByEmail(email, AUTH_USER_SELECT);
-        const user = await pickAccount(pool, credentials.password);
+        const candidate = await pickAccount(pool, credentials.password);
+        const blocked = candidate ? await isPasswordLoginBlocked(candidate) : false;
 
         // Enforced SSO (#1950), checked BEFORE the bcrypt compare and before
         // any other account state. Two reasons for that placement: the promise
@@ -189,18 +190,26 @@ export const authOptions: NextAuthOptions = {
         // everyone else. Narrow, deliberate, and written down in
         // docs/security-exceptions.md; the alternative is telling a user with a
         // perfectly correct password that it is wrong.
-        if (user && (await isPasswordLoginBlocked(user))) {
+        //
+        // Only for an account of THIS world. An enforced tenant of the other
+        // world is none of this page's business: naming its SSO would describe
+        // the other product, and the /auth/sso link it offers is refused on
+        // this host anyway. It is answered like an unknown address instead:
+        // its hash is still never compared, and the failure is recorded with no
+        // user or org, so nothing lands on that tenant's account.
+        if (candidate && blocked && inWorld.length > 0) {
           await logActivity({
             action: 'auth.login_sso_required',
             level: 'warning',
-            actorEmail: user.email,
-            actorId: user.id,
+            actorEmail: candidate.email,
+            actorId: candidate.id,
             detail: 'password sign-in refused: the organization enforces SSO',
             request: origin,
           });
           throw new Error(AUTH_SSO_REQUIRED);
         }
 
+        const user = blocked ? null : candidate;
         const isPasswordValid = user
           ? await bcrypt.compare(credentials.password, user.password)
           : false;
