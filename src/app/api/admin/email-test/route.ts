@@ -12,6 +12,7 @@ import {
 } from '@/services/emailService';
 import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 
 const schema = z.object({ to: z.string().email() });
 
@@ -59,19 +60,22 @@ export async function POST(request: Request) {
   const stamp = new Date().toISOString();
   try {
     // The probe speaks for the admin's own product (docs/worlds.md): a SaleVali
-    // admin's test must not arrive as an Internship CRM mail. Inside the try, so
-    // a failed brand read is reported like any other probe failure.
-    const brand = await emailBrand(resolveOrgId(session));
-    const productName = esc(brand.name);
+    // admin's test must not arrive as an Internship CRM mail. The default world
+    // keeps the probe it always had. Inside the try, so a failed brand read is
+    // reported like any other probe failure.
+    const orgId = resolveOrgId(session);
+    const brand = await emailBrand(orgId);
+    const ownWorld = brand.vertical !== DEFAULT_VERTICAL;
+    const productName = ownWorld ? brand.name : 'Internship CRM';
     await sendEmail({
       to: parsed.data.to,
       category: 'test',
-      subject: `${brand.name} deliverability test — ${stamp}`,
-      fromName: brand.name,
-      orgId: resolveOrgId(session),
+      subject: `${productName} deliverability test — ${stamp}`,
+      // Names the sender after the org outside the default world (sendEmail).
+      orgId,
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, 'Deliverability test')}
-        <p>This is an automated test email from ${productName} to verify outbound delivery
+        ${ownWorld ? brandHeader(brand, 'Deliverability test') : '<h2 style="color:#2563eb;">Deliverability test</h2>'}
+        <p>This is an automated test email from ${esc(productName)} to verify outbound delivery
         and sender authentication (SPF / DKIM / DMARC).</p>
         <p style="color:#6b7280;font-size:13px;">Sent at ${stamp} from
         ${process.env.SMTP_FROM || process.env.SMTP_USER} via ${process.env.SMTP_HOST || 'the configured SMTP host'}.</p>

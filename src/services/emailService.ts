@@ -75,6 +75,7 @@ export async function emailBrand(orgId?: string | null) {
     accent: b.color || mailAccentFor(b.vertical),
     logoUrl: b.logoUrl,
     supportEmail: b.supportEmail,
+    vertical: b.vertical,
     // The origin every link in this org's mail points at (#2495): its own
     // product host when one is mapped and served, else NEXT_PUBLIC_APP_URL.
     // Carried on the brand because the brand is already "who is this mail
@@ -454,6 +455,7 @@ export const __testable = {
   withUnsubscribeFooter,
   unsubscribeHeaders,
   fromIdentity,
+  recipientSenderName,
   htmlToText,
   // #1720 — the localisable fragments shared by the system mails. Exported for
   // the same reason as the footer builders above: SMTP never runs in a test

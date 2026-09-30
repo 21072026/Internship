@@ -205,7 +205,7 @@ export async function renderNewsletterFor(options: {
   orgId?: string | null;
   /** Per-run memo, so a fan-out over one tenant reads its branding once. */
   brandCache?: NewsletterBrandCache;
-}): Promise<{ subject: string; html: string; locale: Locale; brandName: string }> {
+}): Promise<{ subject: string; html: string; locale: Locale }> {
   const { variants, canonical, audience, role, preferredLanguage, imageSrc, userId, orgId, brandCache } = options;
   const locale = resolveNewsletterLocale(variants, preferredLanguage);
   const content = resolveNewsletterContent(variants, canonical, preferredLanguage);
@@ -215,9 +215,6 @@ export async function renderNewsletterFor(options: {
   return {
     subject: content.subject,
     locale,
-    // The sender's display name: the same brand the body wears, so a SaleVali
-    // copy is not delivered "from Internship CRM" (docs/worlds.md).
-    brandName: brand.name,
     html: renderNewsletterHtml({
       content,
       // A tenant that set no brand colour takes its world's mail accent, so a
@@ -459,7 +456,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       return;
     }
 
-    const { subject, html, locale, brandName } = await renderNewsletterFor({
+    const { subject, html, locale } = await renderNewsletterFor({
       variants,
       canonical,
       audience: issue.audience as NewsletterAudience,
@@ -492,9 +489,9 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
         userId: user.id,
         prefs: user,
         // Handed over for the same reason as `prefs`: this fan-out already knows
-        // it, and the From name must match the brand the body was rendered in.
+        // it. It also names the sender after the reader's org outside the
+        // default world (sendEmail), matching the brand the body wears.
         orgId: user.orgId,
-        fromName: brandName,
         attachments,
         headers: {
           // Both halves matter: the URL alone gets a "click to unsubscribe"

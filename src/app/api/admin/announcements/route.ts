@@ -9,6 +9,7 @@ import { brandHeader, emailBrand, sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -281,9 +282,11 @@ async function handlePost(request: Request) {
     const attachments = imageData && image
       ? [{ filename: emailImageFilename(image.type), content: imageData, contentType: image.type, cid: IMAGE_CID }]
       : undefined;
-    // Each reader's copy wears their own org's brand — sender name, logo,
-    // accent — so a SaleVali broadcast never arrives "from Internship CRM"
-    // (docs/worlds.md). The audience is one tenant, so this is one lookup.
+    // A reader outside the default world gets their own org's header — logo,
+    // accent — so a SaleVali broadcast does not look like an internship one
+    // (docs/worlds.md); the default world keeps the bare heading it always had.
+    // The sender name is sendEmail's job (it has `orgId`). The audience is one
+    // tenant, so this is one lookup.
     const brands = new Map<string, ReturnType<typeof emailBrand>>();
     const brandOf = (orgId: string | null) => {
       const key = orgId ?? '';
@@ -314,7 +317,11 @@ async function handlePost(request: Request) {
             to: u.email,
             category: 'announcement',
             subject: t.announcements.emailSubject,
-            html: `${brandHeader(brand, t.announcements.emailSubject)}${bodyHtml}`,
+            html: `${
+              brand.vertical === DEFAULT_VERTICAL
+                ? `<h2>${t.announcements.emailSubject}</h2>`
+                : brandHeader(brand, t.announcements.emailSubject)
+            }${bodyHtml}`,
             attachments,
             // One mail per recipient in the broadcast, each with its own
             // unsubscribe token — this is the highest-volume mail the product
@@ -336,7 +343,6 @@ async function handlePost(request: Request) {
             // Handed over with `prefs`, which skips the read that would have
             // learned it.
             orgId: u.orgId,
-            fromName: brand.name,
           })).then(
             () => { emailed++; },
             (e) => logger.error('Failed to send announcement email', { error: String(e) })

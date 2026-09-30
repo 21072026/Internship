@@ -77,7 +77,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     if (!me?.email) return NextResponse.json({ error: 'Your account has no e-mail address' }, { status: 400 });
 
-    const { subject, html, brandName } = await renderNewsletterFor({
+    const { subject, html } = await renderNewsletterFor({
       variants,
       canonical,
       audience: issue.audience as NewsletterAudience,
@@ -102,7 +102,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         html,
         category: NEWSLETTER_EMAIL_CATEGORY,
         // The test copy must arrive exactly as a reader's would, sender included.
-        fromName: brandName,
         orgId: me.orgId,
         // no-opt-out: a test copy an admin sends to themselves to check their own
         // formatting, not a subscription. The admin has a User row, so this is not
