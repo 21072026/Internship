@@ -1,6 +1,6 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 
 // A Source name is unique PER ORG, not globally (#2570).
 //
@@ -22,8 +22,9 @@ test.afterAll(async () => {
 
 const PW = 'SourceOrg123!';
 
-async function adminPage(browser: Browser, email: string): Promise<Page> {
-  const context = await browser.newContext();
+async function adminPage(browser: Browser, email: string, host?: string): Promise<Page> {
+  // A MARKETING-org account signs in on the marketing host only (#2590).
+  const context = await browser.newContext(host ? { extraHTTPHeaders: asHost(host) } : {});
   const page = await context.newPage();
   await signInAndSettle(page, email, PW, '/admin');
   return page;
@@ -44,7 +45,7 @@ test('two orgs may both have a Source called X; the same org a second time is a 
   await prisma.user.update({ where: { id: b.id }, data: { orgId: org.id } });
 
   const pageA = await adminPage(browser, aEmail);
-  const pageB = await adminPage(browser, bEmail);
+  const pageB = await adminPage(browser, bEmail, MARKETING_HOST);
   try {
     const createdA = await pageA.request.post('/api/admin/sources', { data: { name } });
     expect(createdA.status()).toBe(201);

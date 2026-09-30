@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // Two edges of lead-source attribution (#2570) the first cut missed (review):
@@ -144,6 +144,7 @@ test("a lead pointing at another tenant's source: not counted there, unsourced i
   const mktPage = await mktCtx.newPage();
   try {
     await signInAndSettle(defPage, defaultAdminEmail, PW, '/admin');
+    await mktPage.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(mktPage, mktAdminEmail, PW, '/admin');
 
     const listed = ((await (await defPage.request.get('/api/admin/sources')).json()) as {

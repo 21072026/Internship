@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '@/lib/programTemplates';
 
 /**
@@ -67,6 +67,7 @@ test('a handover mid-trial is one trial and one paid customer, and the source sp
   const trialWindow = { trialStartedAt: trialStart, trialEndsAt: trialEnd };
   const ids: string[] = [];
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, adminEmail, PASSWORD, '/admin');
     const read = async (): Promise<TrialPayload> =>
       (await (await page.request.get('/api/admin/analytics/funnel')).json()).trialConversion;

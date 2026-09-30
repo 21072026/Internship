@@ -410,7 +410,8 @@ test('a ticked box mails ONE confirmation a day; the click makes the account DOI
   expect(permission.address).toBe(email.toLowerCase());
   expect(permission.revokedAt).toBeNull();
 
-  const context = await browser.newContext();
+  // MARKETING-org accounts sign in on the marketing host only (#2590).
+  const context = await browser.newContext({ extraHTTPHeaders: { 'x-forwarded-host': MARKETING_HOST } });
   const admin = await context.newPage();
   try {
     await signInAndSettle(admin, mktAdminEmail, PW, '/admin');
@@ -426,7 +427,7 @@ test('a ticked box mails ONE confirmation a day; the click makes the account DOI
     await admin.getByTestId('companies-search').fill(companyName);
     await expect(admin.getByTestId(`company-email-permission-${companyId}`)).toBeVisible({ timeout: 15_000 });
     // …and the owning rep's own account list.
-    const repContext = await browser.newContext();
+    const repContext = await browser.newContext({ extraHTTPHeaders: { 'x-forwarded-host': MARKETING_HOST } });
     try {
       const rep = await repContext.newPage();
       await signInAndSettle(rep, mktRepEmail, PW, '/sales');

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // The marketing account import, run from the admin panel (#2552, with the
@@ -80,6 +80,7 @@ test('the sample file: preview writes nothing, apply lands it, a second apply is
   await prisma.user.update({ where: { id: admin.id }, data: { orgId: org.id } });
 
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, adminEmail, PW, '/admin');
     await gotoSettled(page, '/admin/settings');
 
@@ -188,6 +189,7 @@ test('INTERNSHIP never sees the mode and gets 403 vertical_mismatch; a MARKETING
     expect((await intRes.json()).code).toBe('vertical_mismatch');
 
     // A MARKETING MENTOR lands on /sales (#2580).
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAsFreshUser(page, repEmail, PW, '/sales');
     const repRes = await page.request.post(ROUTE, { data: { ...body, apply: true } });
     expect(repRes.status()).toBe(403);
@@ -217,6 +219,7 @@ test('review fixes: the org default lead owner, one apply at a time, and an over
   const text = readFileSync(FIXTURE, 'utf8');
 
   try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
     await signInAndSettle(page, adminEmail, PW, '/admin');
 
     // No ownerId: the org default, not the signed-in admin — and the answer says so.

@@ -36,13 +36,15 @@ import {
 
 type Client = Prisma.TransactionClient | typeof prisma;
 
+// No constructor parameter property (`readonly code` in the signature): this
+// module is loaded by the marketing import CLI under
+// `node --experimental-strip-types`, which refuses that syntax outright.
 export class ContactPermissionRuleError extends Error {
-  constructor(
-    readonly code: RuleRefusal,
-    writer: ContactPermissionWriter,
-    basis: ContactBasis,
-  ) {
+  readonly code: RuleRefusal;
+
+  constructor(code: RuleRefusal, writer: ContactPermissionWriter, basis: ContactBasis) {
     super(`contact permission: writer "${writer}" may not write ${basis} (${code})`);
+    this.code = code;
     this.name = 'ContactPermissionRuleError';
   }
 }

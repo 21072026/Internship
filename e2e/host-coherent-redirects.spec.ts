@@ -179,9 +179,22 @@ test('the SAML ACS finishes on the RelayState origin only when it is a bare serv
 test('a Google connect started on the marketing host is handed back there by the registered callback', async ({ page }) => {
   const email = uniqueEmail('host-gcal');
   const password = 'HostGcal123!';
+  // A session is only valid on its own world's host (#2590): a connect sent
+  // "from" the marketing host must come from a MARKETING-org account signed in
+  // there. An internship session would read as signed-out on that host, the
+  // connect would bounce to the sign-in page, and the skip below would fire on
+  // every run.
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const org = await prisma.organization.create({
+    data: { name: `Host Gcal ${stamp}`, slug: `host-gcal-${stamp}`, vertical: 'MARKETING' },
+  });
   const user = await seedUser(email, password, 'MENTOR', 'Host Gcal');
+  await prisma.user.update({ where: { id: user.id }, data: { orgId: org.id } });
   try {
-    await signInAndSettle(page, email, password, '/mentor');
+    await page.context().setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING });
+    await signInAndSettle(page, email, password, '/sales');
+    // From here each request names its host itself.
+    await page.context().setExtraHTTPHeaders({});
 
     // The session cookie is keyed on the real host (localhost); the forged
     // header is what the proxy would say about the host the browser is on.
@@ -220,10 +233,13 @@ test('a Google connect started on the marketing host is handed back there by the
     );
     const tamperedLoc = new URL(tampered.headers()['location']);
     expect(tamperedLoc.hostname).not.toBe(MARKETING);
-    expect(tamperedLoc.searchParams.get('google')).toBe('failed');
+    // Not a hop, and it finishes nothing: on the default host this marketing
+    // session reads as signed out (#2590), so the callback stops at sign-in.
+    expect(tamperedLoc.pathname).toBe('/auth/signin');
   } finally {
     await prisma.googleCalendarConnection.deleteMany({ where: { userId: user.id } });
     await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });
 
