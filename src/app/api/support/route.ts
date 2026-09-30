@@ -10,6 +10,8 @@ import {
   readSupportMessageRequest,
 } from '@/lib/supportMessageRequest';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { orgAdminsWhere } from '@/lib/tenantFilter';
 import { enforceRateLimit } from '@/lib/rateLimit';
 
 // User side of the support channel (#593): every role has a pinned "Support"
@@ -175,10 +177,7 @@ export async function POST(request: Request) {
     });
 
     const admins = await prisma.user.findMany({
-      where: {
-        role: 'ADMIN',
-        isActive: true,
-      },
+      where: await orgAdminsWhere(resolveOrgId(session)),
       select: {
         id: true,
       },

@@ -60,10 +60,25 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         invitationEmail: {
           roles: { MENTOR: 'a sales rep', MENTEE: 'a lead' },
         },
+        // The bell's event rows a sales org can trigger — rep assignment
+        // (one, bulk, transfer), the registration/duplicate checks and a role
+        // convert. Anything else is either world-neutral or never fires there.
         // No draft is prepared for a rep: the outcome templates are placement
         // wording, so their link opens the lead's record (outcomeComms.server.ts).
         events: {
           'outcome.needsMessage': '{name} reached an outcome stage. Write them a message.',
+          'mentorship_request.mentorAssigned': 'A sales rep has been assigned to you: {mentorName}.',
+          'mentorship_request.menteeAssigned': 'A new lead was assigned to you: {menteeName}.',
+          'mentorship.mentorChanged': 'Your sales rep has changed — {mentorName} is now your rep.',
+          'mentorship.reassignedAway': '{menteeName} has been handed to another rep.',
+          'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your lead.',
+          'mentorship.bulkAssigned': 'New leads assigned to you: {count}.',
+          'mentorship.bulkReassignedAway': 'Leads handed to another rep: {count}.',
+          'mentorship.autoLinkSkipped':
+            '{name} registered through an invitation, but the pre-linked lead already has a rep — no assignment was created.',
+          'duplicate.suspected': 'A new record may duplicate an existing lead: {name}.',
+          'role_changed.toMentor': 'An administrator converted your account to a sales rep account.',
+          'role_changed.toMentee': 'An administrator converted your account to a lead account.',
         },
       },
       usersAdmin: {
@@ -456,6 +471,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
         events: {
           'outcome.needsMessage': '{name} bir sonuç aşamasına geldi. Ona bir mesaj yaz.',
+          'mentorship_request.mentorAssigned': 'Sana bir satış temsilcisi atandı: {mentorName}.',
+          'mentorship_request.menteeAssigned': 'Sana yeni bir müşteri adayı atandı: {menteeName}.',
+          'mentorship.mentorChanged': 'Temsilcin değişti — artık temsilcin {mentorName}.',
+          'mentorship.reassignedAway': '{menteeName} başka bir temsilciye devredildi.',
+          'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin müşteri adayın değil.',
+          'mentorship.bulkAssigned': 'Sana atanan yeni müşteri adayı sayısı: {count}.',
+          'mentorship.bulkReassignedAway': 'Başka bir temsilciye devredilen müşteri adayı sayısı: {count}.',
+          'mentorship.autoLinkSkipped':
+            '{name} bir davetle kayıt oldu, ancak ön-eşleştirilen müşteri adayının zaten bir temsilcisi var — atama oluşturulmadı.',
+          'duplicate.suspected': 'Yeni bir kayıt mevcut bir müşteri adayıyla aynı kişi olabilir: {name}.',
+          'role_changed.toMentor': 'Bir yönetici hesabını satış temsilcisi hesabına dönüştürdü.',
+          'role_changed.toMentee': 'Bir yönetici hesabını müşteri adayı hesabına dönüştürdü.',
         },
       },
       usersAdmin: {
@@ -732,6 +759,18 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
         events: {
           'outcome.needsMessage': '{name} hat eine Ergebnisphase erreicht. Schreib eine Nachricht.',
+          'mentorship_request.mentorAssigned': 'Dir wurde ein Vertriebsmitarbeiter zugewiesen: {mentorName}.',
+          'mentorship_request.menteeAssigned': 'Dir wurde ein neuer Lead zugewiesen: {menteeName}.',
+          'mentorship.mentorChanged': 'Dein Vertriebsmitarbeiter hat gewechselt — {mentorName} betreut dich jetzt.',
+          'mentorship.reassignedAway': '{menteeName} wurde an einen anderen Vertriebsmitarbeiter übergeben.',
+          'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Lead.',
+          'mentorship.bulkAssigned': 'Neu zugewiesene Leads: {count}.',
+          'mentorship.bulkReassignedAway': 'An einen anderen Vertriebsmitarbeiter übergebene Leads: {count}.',
+          'mentorship.autoLinkSkipped':
+            '{name} hat sich über eine Einladung registriert, aber der vorverknüpfte Lead hat bereits einen Vertriebsmitarbeiter — es wurde keine Zuweisung angelegt.',
+          'duplicate.suspected': 'Ein neuer Eintrag könnte ein Duplikat eines vorhandenen Leads sein: {name}.',
+          'role_changed.toMentor': 'Ein Administrator hat dein Konto in ein Vertriebsmitarbeiter-Konto umgewandelt.',
+          'role_changed.toMentee': 'Ein Administrator hat dein Konto in ein Lead-Konto umgewandelt.',
         },
       },
       usersAdmin: {

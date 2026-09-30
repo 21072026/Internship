@@ -12,6 +12,7 @@ import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { notify } from '@/lib/notify';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { orgAdminsWhere } from '@/lib/tenantFilter';
 
 // The source a SOURCE user represents (their own sourceId).
 async function ownSourceId(userId: string): Promise<string | null> {
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
         university,
       });
       if (matches.length === 0) return;
-      const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+      const admins = await prisma.user.findMany({ where: await orgAdminsWhere(mentee.orgId), select: { id: true } });
       await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
     })().catch((e) => console.error('Duplicate post-check failed:', e));
 

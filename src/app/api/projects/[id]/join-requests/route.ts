@@ -8,6 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
+import { orgAdminsWhere } from '@/lib/tenantFilter';
 import { isProjectOwner } from '@/lib/projectAccess';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { sendProjectJoinRequestEmail } from '@/services/emailService';
@@ -104,14 +105,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
 
     // Tell the people who can act on it: OWNER members (+ the legacy owner
-    // pointer) and every active admin.
+    // pointer) and the active admins of the PROJECT'S org — withTenantScope()
+    // does not scope `User` while isolation is off, and the mail below is
+    // branded for the project's org, so any other admin got another product's mail.
     const [owners, admins] = await Promise.all([
       prisma.projectMember.findMany({
         where: { projectId: id, role: 'OWNER' },
         select: { user: { select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true } } },
       }),
       prisma.user.findMany({
-        where: { role: 'ADMIN', isActive: true },
+        where: await orgAdminsWhere(project.orgId),
         select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
       }),
     ]);

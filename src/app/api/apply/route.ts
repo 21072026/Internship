@@ -14,6 +14,8 @@ import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { orgAdminsWhere } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
 // "not right now" (acceptingMentees=false), or when a set mentorCapacity is
@@ -25,6 +27,10 @@ async function mentorApplyState(mentorId: string) {
     where: { id: mentorId, role: { in: ['MENTOR', 'ADMIN'] }, isActive: true },
   });
   if (!mentor) return null;
+  // The host gate on /apply (apply/layout.tsx) says nothing about whose link it
+  // is: a sales rep's id on interncrm.com would file a mentee request into an
+  // org without mentorship and notify the rep about it. Such a link is unknown.
+  if (await requireCapability(mentor.orgId, 'mentorship')) return null;
   const [active, pending] = await Promise.all([
     prisma.mentorshipRelation.count({ where: { mentorId: mentor.id, status: 'ACTIVE' } }),
     prisma.mentorshipRequest.count({ where: { preferredMentorId: mentor.id, status: 'PENDING' } }),
@@ -149,7 +155,8 @@ export async function POST(request: Request) {
       university,
     });
     if (matches.length === 0) return;
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+    // The org the check ran against, not every admin (a public route: no tenant context).
+    const admins = await prisma.user.findMany({ where: await orgAdminsWhere(mentor.orgId), select: { id: true } });
     await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
   })().catch((e) => console.error('Duplicate post-check failed:', e));
 

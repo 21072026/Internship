@@ -101,3 +101,33 @@ test('each locale that carries a MARKETING override localizes it, not a copy of 
   // "Müşteri Adayları", not a literal translation of the English "Leads" override.
   expect((tr.candidates as { title: string }).title).toBe('Müşteri Adayları');
 });
+
+// The bell rows a sales org produces (a rep assignment, bulk or single, a rep
+// change, the registration/duplicate checks, a role convert) are rendered from
+// `notifications.events` — they must speak sales there too. `{mentorName}` /
+// `{menteeName}` are the template's parameter NAMES, not words a reader sees,
+// so they are stripped before the check.
+const MARKETING_EVENTS = [
+  'mentorship_request.mentorAssigned',
+  'mentorship_request.menteeAssigned',
+  'mentorship.mentorChanged',
+  'mentorship.reassignedAway',
+  'mentorship.assignmentCorrected',
+  'mentorship.bulkAssigned',
+  'mentorship.bulkReassignedAway',
+  'mentorship.autoLinkSkipped',
+  'duplicate.suspected',
+  'role_changed.toMentor',
+  'role_changed.toMentee',
+];
+
+test('the notification rows a MARKETING org triggers do not read like the internship product', () => {
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    const merged = applyVerticalOverlay(dictionaries[locale], locale, 'MARKETING');
+    const events = (merged.notifications as { events: Record<string, string> }).events;
+    for (const key of MARKETING_EVENTS) {
+      const text = events[key].replace(/\{\w+\}/g, '');
+      expect(MENTORSHIP_WORDS.test(text), `${locale}: notifications.events.${key} = "${events[key]}"`).toBe(false);
+    }
+  }
+});
