@@ -19,7 +19,7 @@ import { weeklyRrule } from '@/lib/seriesRrule';
  * make this work, because that is the ghost-row bug #1110 removed.
  *
  * `syncSeries()` reconciles, it does not just push. The audience is the
- * project's members, and a series can change project, lose members or be
+ * project's members (or, for a standing 1:1, #2013, the relation's two people), and a series can change project, lose members or be
  * cancelled, so every call brings the calendars to the series' current state:
  * an active series is POSTed (or PATCHed on the event it already made) for
  * every connected member, and every other link is withdrawn.
@@ -32,6 +32,8 @@ import { weeklyRrule } from '@/lib/seriesRrule';
 export interface SyncableSeries extends SeriesCadence {
   id: string;
   projectId: string | null;
+  /** A standing 1:1 (#2013): the audience is the relation's two people. */
+  relationId?: string | null;
   title: string;
   daysOfWeek: unknown;
   timeOfDay: string;
@@ -57,6 +59,15 @@ function eventBody(series: SyncableSeries, first: Date, rrule: string) {
 }
 
 async function audienceOf(series: SyncableSeries): Promise<string[]> {
+  if (series.relationId) {
+    // Only while the pairing is live: a completed relation's 1:1 is withdrawn
+    // from both calendars by the reconcile below, like a cancelled series.
+    const relation = await prisma.mentorshipRelation.findFirst({
+      where: { id: series.relationId, status: 'ACTIVE' },
+      select: { mentorId: true, menteeId: true },
+    });
+    return relation ? [...new Set([relation.mentorId, relation.menteeId])] : [];
+  }
   if (!series.projectId) return [];
   const members = await prisma.projectMember.findMany({
     where: { projectId: series.projectId },

@@ -223,33 +223,42 @@ function scheduleFingerprint(s: {
  * (`sendProjectMeetingSeriesReminders`). No RSVP — there is no row to RSVP to.
  */
 async function announceNextOccurrence(
-  series: SeriesRule & { id: string; projectId: string | null; title: string; timeZone: string | null; durationMinutes: number | null; fixedLink: string | null; active: boolean },
+  series: SeriesRule & { id: string; projectId: string | null; relationId?: string | null; title: string; timeZone: string | null; durationMinutes: number | null; fixedLink: string | null; active: boolean },
   role: string,
   sessionUserId: string,
   orgId: string | null | undefined,
 ) {
-  // A standing 1:1 (#2013) is announced to its mentee in the follow-up slice;
-  // today only a project's call is mailed.
-  if (!series.active || !series.projectId) {
-    return { invited: 0, nextOccurrence: series.active ? nextRuleOccurrence(series)?.toISOString() ?? null : null };
+  if (!series.active || (!series.projectId && !series.relationId)) {
+    return { invited: 0, nextOccurrence: null as string | null };
   }
 
   const next = nextRuleOccurrence(series);
   if (!next) return { invited: 0, nextOccurrence: null };
 
-  const memberMentees = await prisma.projectMember.findMany({
-    where: { projectId: series.projectId, role: 'MENTEE' },
-    select: { userId: true },
-  });
-  const menteeIds = [...new Set(memberMentees.map((m) => m.userId))];
+  // Who is told: a project's call goes to its mentees; a standing 1:1 (#2013)
+  // to the one mentee of its relation — the mentor set it up and is not mailed.
+  const menteeIds = series.projectId
+    ? [
+        ...new Set(
+          (
+            await prisma.projectMember.findMany({
+              where: { projectId: series.projectId, role: 'MENTEE' },
+              select: { userId: true },
+            })
+          ).map((m) => m.userId)
+        ),
+      ]
+    : [];
 
   const relations = await prisma.mentorshipRelation.findMany({
-    where: {
-      projectId: series.projectId,
-      status: 'ACTIVE',
-      ...(role === 'MENTOR' ? { mentorId: sessionUserId } : {}),
-      ...(menteeIds.length > 0 ? { menteeId: { in: menteeIds } } : {}),
-    },
+    where: series.relationId
+      ? { id: series.relationId, status: 'ACTIVE' }
+      : {
+          projectId: series.projectId,
+          status: 'ACTIVE',
+          ...(role === 'MENTOR' ? { mentorId: sessionUserId } : {}),
+          ...(menteeIds.length > 0 ? { menteeId: { in: menteeIds } } : {}),
+        },
     // `id` is here for the invite's `userId` below — without it this mail ships
     // with no unsubscribe footer and no List-Unsubscribe header. It is the one
     // select this change had to widen; every other send site already had the

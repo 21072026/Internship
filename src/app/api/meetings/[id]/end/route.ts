@@ -111,6 +111,7 @@ async function endSeriesOccurrence(user: MeetingUser, seriesId: string, iso: str
     select: {
       id: true,
       projectId: true,
+      relationId: true,
       project: { select: { orgId: true } },
       createdById: true,
       ...SERIES_RULE_SELECT,
@@ -144,6 +145,14 @@ async function endSeriesOccurrence(user: MeetingUser, seriesId: string, iso: str
       });
       allowed = relation !== null;
     }
+  }
+  // A standing 1:1 (#2013): its two people, as the banner shows it to them.
+  if (!allowed && series.relationId) {
+    const relation = await prisma.mentorshipRelation.findFirst({
+      where: { id: series.relationId, OR: [{ mentorId: user.id }, { menteeId: user.id }] },
+      select: { id: true },
+    });
+    allowed = relation !== null;
   }
   if (!allowed) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

@@ -122,9 +122,17 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
     ]),
   ];
 
-  if (projectIds.length > 0) {
+  {
+    // A project's recurring call for its team, and a standing 1:1 (#2013) for
+    // the two people of its relation.
     const series = await prisma.meetingSeries.findMany({
-      where: { active: true, projectId: { in: projectIds } },
+      where: {
+        active: true,
+        OR: [
+          ...(projectIds.length > 0 ? [{ projectId: { in: projectIds } }] : []),
+          { relation: { is: { status: 'ACTIVE', OR: [{ mentorId: userId }, { menteeId: userId }] } } },
+        ],
+      },
       select: {
         id: true,
         title: true,
