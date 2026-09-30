@@ -8,7 +8,7 @@ import { verticalCapabilities } from '@/lib/verticals';
 import { PublicShell } from '@/components/landing/PublicShell';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return pageMetadata((t) => ({ title: t.featureCatalog.title, description: t.featureCatalog.subtitle }));
+  return pageMetadata((t) => ({ title: t.featureCatalog.title, description: t.featureCatalog.subtitle }), '/features/opengraph-image');
 }
 
 

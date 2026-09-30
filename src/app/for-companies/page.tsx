@@ -10,7 +10,7 @@ import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { requireVerticalCapability } from '@/lib/verticalPage';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return pageMetadata((t) => ({ title: t.landing.audCompanyTitle, description: t.landing.audCompanySubtitle }));
+  return pageMetadata((t) => ({ title: t.landing.audCompanyTitle, description: t.landing.audCompanySubtitle }), '/for-companies/opengraph-image');
 }
 
 

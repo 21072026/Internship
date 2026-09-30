@@ -5,6 +5,7 @@ import './globals.css';
 import { Providers } from './providers';
 import { getLocale, getServerDictionary } from '@/i18n/server';
 import { requestSiteUrl } from '@/lib/siteUrl';
+import { socialMetadata } from '@/lib/pageMetadata';
 import { getDictionary, toClientDictionary } from '@/i18n/dictionaries';
 import { resolveRequestVertical } from '@/i18n/server';
 import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
@@ -43,6 +44,14 @@ export async function generateMetadata(): Promise<Metadata> {
   description: isMarketing
     ? 'A CRM for tracking customers through a marketing pipeline — from first contact to close.'
     : t.seo.homeDescription,
+  // The landing's share card (#1378); a page with its own copy replaces it
+  // through pageMetadata(). The image is src/app/opengraph-image.tsx.
+  ...(await socialMetadata({
+    title: isMarketing ? `${productName} — Marketing CRM` : t.seo.homeTitle,
+    description: isMarketing
+      ? 'A CRM for tracking customers through a marketing pipeline — from first contact to close.'
+      : t.seo.homeDescription,
+  })),
   applicationName: productName,
   appleWebApp: { capable: true, statusBarStyle: 'default', title: productName },
   // The favicon / home-screen icon follow the vertical too (#2492). Both SVGs

@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: { params: Promise<{ userId: s
   return pageMetadata((t) => ({
     title: (user.role === 'MENTOR' ? t.seo.profileMentorTitle : t.seo.profileMenteeTitle).replace('{name}', name),
     description: t.seo.profileDescription.replace('{name}', name),
-  }));
+  }), `/p/${encodeURIComponent(userId)}/opengraph-image`);
 }
 
 export default async function PublicProfilePage({ params }: { params: Promise<{ userId: string }> }) {

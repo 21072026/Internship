@@ -8,7 +8,7 @@ import { PublicShell } from '@/components/landing/PublicShell';
 import { IS_DEMO_MODE, DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/lib/demoMode';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return pageMetadata((t) => ({ title: t.demo.title, description: t.demo.subtitle }));
+  return pageMetadata((t) => ({ title: t.demo.title, description: t.demo.subtitle }), '/demo/opengraph-image');
 }
 
 

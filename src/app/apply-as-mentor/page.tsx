@@ -5,7 +5,7 @@ import { ApplyMentorForm } from '@/components/forms/ApplyMentorForm';
 import { requireVerticalCapability } from '@/lib/verticalPage';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return pageMetadata((t) => ({ title: t.seo.applyAsMentorTitle, description: t.seo.applyAsMentorDescription }));
+  return pageMetadata((t) => ({ title: t.seo.applyAsMentorTitle, description: t.seo.applyAsMentorDescription }), '/apply-as-mentor/opengraph-image');
 }
 
 

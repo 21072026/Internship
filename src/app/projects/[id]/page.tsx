@@ -49,7 +49,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return pageMetadata((t) =>
     project
       ? { title: project.name, description: t.seo.projectDescription.replace('{name}', project.name) }
-      : { title: t.projects.showcaseTitle }
+      : { title: t.projects.showcaseTitle },
+    // Its own card; for a private or unknown id that route answers with the
+    // generic brand card (#1378), so the URL itself reveals nothing.
+    `/projects/${encodeURIComponent(id)}/opengraph-image`
   );
 }
 
