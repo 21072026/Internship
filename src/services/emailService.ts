@@ -59,6 +59,10 @@ import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/l
 import { originForWorld, type World } from '@/lib/hostWorld';
 import { DEFAULT_VERTICAL, toVerticalKey } from '@/lib/verticals';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { orgWhere } from '@/lib/tenantFilter';
+import { outcomeStageKeys, resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
+import { sameTenant } from '@/lib/orgScope';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -467,6 +471,10 @@ export const __testable = {
   organizerTimeLine,
   participantClocks,
   activityDigestTable,
+  // Worlds (docs/worlds.md) — e2e/world-cron-builders.spec.ts.
+  worldHeading,
+  worldAccent,
+  notifyOrgAdmins,
 };
 // What actually happened to a message, mirroring the EmailLog row this call
 // writes (#1431). Returned rather than only recorded, because "did not throw"
@@ -1105,8 +1113,16 @@ export async function sendMeetingInviteEmail({
   // WORLDS (#2590): an RSVP button must open the product the invitee's account
   // lives in. The token in the URL is the credential, but the page it opens is
   // that product's, and a marketing invitee sent to the internship host lands in
-  // a product they have no account in.
-  const base = await appUrlForRecipient(orgId, userId);
+  // a product they have no account in. The same org names the sender and
+  // paints the header (docs/worlds.md) — none of the callers pass `orgId`.
+  const recipientOrg =
+    orgId !== undefined
+      ? orgId
+      : userId
+        ? ((await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } }))?.orgId ?? null)
+        : null;
+  const brand = await emailBrand(recipientOrg);
+  const base = recipientOrg ? brand.appUrl : appUrl();
   const yes = `${base}/rsvp/${rsvpToken}?r=yes`;
   const no = `${base}/rsvp/${rsvpToken}?r=no`;
   const resolved = resolveLocale(locale);
@@ -1139,13 +1155,14 @@ export async function sendMeetingInviteEmail({
   await sendEmail({
     to,
     userId,
+    orgId: recipientOrg,
     category: 'meeting-invite',
     locale: resolved,
     ...(ics ? { attachments: [ics] } : {}),
     subject: M.subject.replace('{title}', title),
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">${title}</h2>
+        ${worldHeading(brand, esc(title), `<h2 style="color: #2563eb;">${esc(title)}</h2>`)}
         ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
         <p>${esc(M.body)}</p>
         ${when ? `<p><strong>${esc(M.when)}</strong> ${when}</p>` : ''}
@@ -1339,6 +1356,30 @@ function esc(s: string): string {
 // A branded button + wrapper shared by the notification templates below.
 function ctaBlock(brand: { accent: string }, url: string, label: string): string {
   return `<a href="${url}" style="display:inline-block;background-color:${brand.accent};color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">${label}</a>`;
+}
+
+// For the builders that predate per-org branding (#546): a default-world reader
+// keeps the markup that mail always had, byte for byte (the same line the
+// sender name draws, recipientSenderName); a reader of another world gets their
+// own org's header and accent, never the internship blue (docs/worlds.md).
+function worldHeading(brand: Awaited<ReturnType<typeof emailBrand>>, heading: string, legacy: string): string {
+  return brand.vertical === DEFAULT_VERTICAL ? legacy : brandHeader(brand, heading);
+}
+function worldAccent(brand: Awaited<ReturnType<typeof emailBrand>>): string {
+  return brand.vertical === DEFAULT_VERTICAL ? '#2563eb' : esc(brand.accent);
+}
+
+// Per-org brands for a cron pass over many organizations — one lookup per
+// distinct org per run, never one brand for the whole batch (createOriginBook's
+// rule, below).
+function createBrandBook() {
+  const brands = new Map<string, ReturnType<typeof emailBrand>>();
+  return (orgId: string | null | undefined) => {
+    const key = orgId ?? '';
+    let hit = brands.get(key);
+    if (!hit) brands.set(key, (hit = emailBrand(orgId ?? null)));
+    return hit;
+  };
 }
 
 // ── Which product does this mail's link open? (#2590) ───────────────────────
@@ -2621,6 +2662,7 @@ export async function checkStageDeadlineReminders() {
   const now = new Date();
   const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'] as const;
   const capabilitiesOf = capabilitiesMemo();
+  const brandOf = createBrandBook();
 
   const overdue = await prisma.mentorshipRelation.findMany({
     where: {
@@ -2658,14 +2700,16 @@ export async function checkStageDeadlineReminders() {
       const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
       const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
       const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
-      await sendEmail({
+      await brandOf(rel.orgId).then((brand) => sendEmail({
         category: 'stage-deadline',
         userId: rel.mentorId,
+        // The record's org — the same one that picks the bell's link above.
+        orgId: rel.orgId,
         locale: rel.mentor.preferredLanguage,
         to: rel.mentor.email,
         subject,
-        html: `<p>${greeting}</p><p>${body}</p>`,
-      }).catch((error) => {
+        html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+      })).catch((error) => {
         console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
       });
     }
@@ -2741,6 +2785,7 @@ export async function checkNextActionReminders(now = new Date()) {
   let reminded = 0;
   let failures = 0;
   const capabilitiesOf = capabilitiesMemo();
+  const brandOf = createBrandBook();
   for (const rel of due) {
     if (!isNextActionReminderDue(rel, now)) continue;
     const claim = await prisma.mentorshipRelation.updateMany({
@@ -2789,13 +2834,20 @@ export async function checkNextActionReminders(now = new Date()) {
           ? `<p><strong>${esc(text.noteLabel)}</strong> ${esc(rel.nextActionNote)}</p>`
           : '';
         const base = await origins.urlFor(owner.orgId);
+        const brand = await brandOf(owner.orgId);
+        const subject = text.subject.replace('{name}', name);
         await sendEmail({
           category: 'stage-deadline',
           userId: owner.id,
+          orgId: owner.orgId,
           locale: owner.preferredLanguage,
           to: owner.email,
-          subject: text.subject.replace('{name}', name),
-          html: `<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}<p><a href="${base}${link}">${esc(text.cta)}</a></p>`,
+          subject,
+          html: `${worldHeading(brand, esc(subject), '')}<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}${
+            brand.vertical === DEFAULT_VERTICAL
+              ? `<p><a href="${base}${link}">${esc(text.cta)}</a></p>`
+              : ctaBlock(brand, `${base}${link}`, esc(text.cta))
+          }`,
         });
       } catch (error) {
         failures += 1;
@@ -3242,6 +3294,8 @@ export async function sendMeetingReminders() {
           // scheduled this and typed the address in, so their language is the
           // best evidence there is — the same rule the guest INVITE follows.
           locale: m.relation.mentor?.preferredLanguage,
+          // …and whose product this is: the organizer's world, as for the invite.
+          orgId: m.relation.orgId ?? m.relation.mentor?.orgId ?? null,
         });
         emailed++;
       } catch (e) {
@@ -3265,6 +3319,7 @@ async function sendMeetingGuestReminderEmail({
   organizerTimeZone,
   minutes,
   locale,
+  orgId,
 }: {
   to: string;
   name?: string | null;
@@ -3275,14 +3330,19 @@ async function sendMeetingGuestReminderEmail({
   minutes: number;
   /** The organizer's language — a guest has none of their own (#1720). */
   locale?: string | null;
+  /** The organizer's organization — a guest has no world of their own either. */
+  orgId?: string | null;
 }) {
   const zone = resolveTimeZone(organizerTimeZone);
   const resolved = resolveLocale(locale);
   const when = `${formatInTimeZone(scheduledAt, zone, undefined, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`;
   const R = getDictionary(resolved).notifications.meetingReminderEmail;
   const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
+  const brand = await emailBrand(orgId);
   await sendEmail({
     to,
+    // Names the sender after the organizer's org outside the default world.
+    orgId: orgId ?? null,
     // no-user-row: the reminder half of the guest invite, addressed to the same
     // account-less MeetingGuest — and it already stops on its own when the guest
     // declines, which is the only "opt out" that address can express.
@@ -3290,6 +3350,7 @@ async function sendMeetingGuestReminderEmail({
     locale: resolved,
     subject: R.subject.replace('{title}', title),
     html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      ${worldHeading(brand, esc(R.heading), '')}
       ${name ? `<p>${esc(R.greeting.replace('{name}', name))}</p>` : ''}
       <p>${esc(bodyBefore)}<strong>${esc(title)}</strong>${esc(bodyAfter)}</p>
       <p><strong>${esc(R.when)}</strong> ${esc(when)} (${esc(inMinutesText(minutes, resolved))})</p>
@@ -3514,11 +3575,17 @@ export async function sendWeeklyMentorDigests() {
   // marketing-world mentor's digest must not send them to the internship host.
   const origins = createOriginBook();
   await origins.prefetch(mentors.map((m) => m.orgId));
+  const capabilitiesOf = capabilitiesMemo();
+  const brandOf = createBrandBook();
 
   let sent = 0;
   for (const m of mentors) {
     if (m.mentorRelations.length === 0) continue;
     if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'mentor-digest')) continue;
+    // Mentorship work (stale mentees, /mentor): a sales rep is a MENTOR row
+    // with a book of leads, and gets no mentoring summary — skipped, not
+    // re-branded, as checkMentorInteractionReminders does.
+    if (!interactionReminderApplies(await capabilitiesOf(m.orgId))) continue;
     const stale = m.mentorRelations.filter((r) => {
       const contact = lastContacts.get(r.id);
       return !contact || contact.at < fourteenDaysAgo;
@@ -3538,21 +3605,23 @@ export async function sendWeeklyMentorDigests() {
     };
     try {
       const base = await origins.urlFor(m.orgId);
+      const brand = await brandOf(m.orgId);
       await sendEmail({
         category: 'mentor-digest',
         userId: m.id,
+        orgId: m.orgId,
         to: m.email,
         locale: mLocale,
         subject: D.subject,
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">${esc(D.heading)}</h2>
+          ${worldHeading(brand, esc(D.heading), `<h2 style="color:#2563eb;">${esc(D.heading)}</h2>`)}
           <p>${esc(D.greeting.replace('{name}', m.fullName))}</p>
           <ul>
             ${countLine(D.stale, stale)}
             ${countLine(D.upcoming, upcoming)}
             ${countLine(D.newApplications, newApplications)}
           </ul>
-          <a href="${base}/mentor" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
+          <a href="${base}/mentor" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
         </div>`,
       });
       sent++;
@@ -3676,7 +3745,7 @@ async function overdueTodoBlock(
 }
 
 // Daily mentee-activity digest. Each mentor gets a summary of THEIR mentees'
-// activity in the last 24h; each admin gets a system-wide summary. Respects the
+// activity in the last 24h; each admin gets their own org's summary. Respects the
 // 'digest' email preference. Recipients with no mentees / no data are skipped.
 export async function sendDailyActivityDigests() {
   const now = new Date();
@@ -3694,8 +3763,13 @@ export async function sendDailyActivityDigests() {
   // never one origin for the batch.
   const origins = createOriginBook();
   await origins.prefetch(mentors.map((m) => m.orgId));
+  // Mentee activity is mentorship work: an org without the module (a MARKETING
+  // sales book) gets neither half of this digest — skipped, not re-branded.
+  const capabilitiesOf = capabilitiesMemo();
+  const brandOf = createBrandBook();
   for (const m of mentors) {
     if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'activity-digest')) continue;
+    if (!interactionReminderApplies(await capabilitiesOf(m.orgId))) continue;
     const items = await getMentorMenteeActivity(m.id, since);
     if (items.length === 0) continue;
     const mLocale = resolveLocale(m.preferredLanguage);
@@ -3708,18 +3782,20 @@ export async function sendDailyActivityDigests() {
     );
     try {
       const base = await origins.urlFor(m.orgId);
+      const brand = await brandOf(m.orgId);
       await sendEmail({
         category: 'activity-digest',
         userId: m.id,
+        orgId: m.orgId,
         to: m.email,
         locale: mLocale,
         subject: A.subject,
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
+          ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
           <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
           ${activityDigestTable(items, mLocale)}
           ${overdue}
-          <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+          <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
         </div>`,
       });
@@ -3733,42 +3809,72 @@ export async function sendDailyActivityDigests() {
     where: { role: 'ADMIN', isActive: true },
     select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
-  const adminItems = await getSystemMenteeActivity(since);
-  if (adminItems.length > 0) {
-    await origins.prefetch(admins.map((a) => a.orgId));
-    for (const a of admins) {
-      if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
-      const aLocale = resolveLocale(a.preferredLanguage);
-      const A = getDictionary(aLocale).notifications.activityDigestEmail;
-      // Their own organisation. An admin with no org reads nobody's to-dos here
-      // rather than everybody's: this job binds no tenant context.
-      const overdue = a.orgId
-        ? await overdueTodoBlock({ assignee: { is: { orgId: a.orgId } } }, aLocale, a.id)
-        : '';
-      try {
-        const base = await origins.urlFor(a.orgId);
-        await sendEmail({
-          category: 'activity-digest',
-          userId: a.id,
-          to: a.email,
-          locale: aLocale,
-          subject: A.subjectAll,
-          html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-            <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
-            <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
-            ${activityDigestTable(adminItems, aLocale)}
-            ${overdue}
-            <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
-          </div>`,
-        });
-        sent++;
-      } catch (e) {
-        console.error('Admin activity digest failed:', e);
-      }
+  // One table PER ORG, never one for the installation: this cron binds no
+  // tenant context, and the unscoped read listed every tenant's mentees, both
+  // worlds, in every admin's mail. A NULL-org admin is the default org's.
+  const itemsByOrg = new Map<string, Promise<MenteeActivity[]>>();
+  const fallbackOrg = admins.some((a) => !a.orgId) ? await defaultOrgId() : null;
+  const orgItems = (orgId: string) => {
+    let hit = itemsByOrg.get(orgId);
+    if (!hit) itemsByOrg.set(orgId, (hit = orgWhere(orgId).then((tenant) => getSystemMenteeActivity(since, tenant))));
+    return hit;
+  };
+  await origins.prefetch(admins.map((a) => a.orgId));
+  for (const a of admins) {
+    if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
+    if (!interactionReminderApplies(await capabilitiesOf(a.orgId))) continue;
+    const adminItems = await orgItems(a.orgId ?? fallbackOrg!);
+    if (adminItems.length === 0) continue;
+    const aLocale = resolveLocale(a.preferredLanguage);
+    const A = getDictionary(aLocale).notifications.activityDigestEmail;
+    // Their own organisation. An admin with no org reads nobody's to-dos here
+    // rather than everybody's: this job binds no tenant context.
+    const overdue = a.orgId
+      ? await overdueTodoBlock({ assignee: { is: { orgId: a.orgId } } }, aLocale, a.id)
+      : '';
+    try {
+      const base = await origins.urlFor(a.orgId);
+      const brand = await brandOf(a.orgId);
+      await sendEmail({
+        category: 'activity-digest',
+        userId: a.id,
+        orgId: a.orgId,
+        to: a.email,
+        locale: aLocale,
+        subject: A.subjectAll,
+        html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+          ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
+          <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
+          ${activityDigestTable(adminItems, aLocale)}
+          ${overdue}
+          <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+        </div>`,
+      });
+      sent++;
+    } catch (e) {
+      console.error('Admin activity digest failed:', e);
     }
   }
 
   return { mentors: mentors.length, admins: admins.length, sent };
+}
+
+// A cron's admin summary, per org: `counts` maps an org id to what happened in
+// it, and only that org's active admins hear its number. A bare
+// `{ role: 'ADMIN' }` is every admin of every tenant in both worlds, with the
+// installation-wide count (docs/worlds.md). NULL-org rows are the caller's to
+// fold into the default org.
+async function notifyOrgAdmins(
+  counts: Map<string, number>,
+  send: (admin: { id: string }, count: number) => Promise<unknown>,
+): Promise<void> {
+  for (const [orgId, count] of counts) {
+    const admins = await prisma.user.findMany({
+      where: { AND: [{ role: 'ADMIN', isActive: true }, await orgWhere(orgId)] },
+      select: { id: true },
+    });
+    await Promise.all(admins.map((a) => send(a, count)));
+  }
 }
 
 // Retention re-consent (GDPR Art. 5(1)(e) + 7): when a candidate's consent is
@@ -3797,29 +3903,32 @@ export async function checkRetentionReminders() {
   // `retentionReminderSentAt` stamp so a failed read stamps nobody.
   const origins = createOriginBook();
   await origins.prefetch(users.map((u) => u.orgId));
-
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  });
+  const brandOf = createBrandBook();
+  // Per org: each tenant's admins hear about their own candidates only.
+  const remindedByOrg = new Map<string, number>();
+  const fallbackOrg = users.some((u) => !u.orgId) ? await defaultOrgId() : null;
 
   let reminded = 0;
   for (const u of users) {
     const renewUrl = `${await origins.urlFor(u.orgId)}/consent/renew?token=${makeConsentRenewToken(u.id)}`;
     // Legal/retention notice — always sent (not gated by marketing opt-out).
     try {
+      const brand = await brandOf(u.orgId);
+      const heading = 'Do you want to keep your data with us?';
       await sendEmail({
         category: 'retention-reminder',
         to: u.email,
+        // No userId (essential mail, no footer), so the org names the sender.
+        orgId: u.orgId,
         subject: 'Please confirm you still want us to keep your data',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color:#2563eb;">Do you want to keep your data with us?</h2>
+            ${worldHeading(brand, heading, `<h2 style="color:#2563eb;">${heading}</h2>`)}
             <p>Hi ${u.fullName},</p>
             <p>It has been more than ${months} months since you agreed to us storing your
-            data (profile, CV and interaction history). To keep it, please confirm below.
+            data (${brand.vertical === DEFAULT_VERTICAL ? 'profile, CV and interaction history' : 'profile and activity history'}). To keep it, please confirm below.
             If you don't, an administrator will review your record for deletion.</p>
-            <a href="${renewUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">Keep my data</a>
+            <a href="${renewUrl}" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">Keep my data</a>
             <p style="color:#6b7280;font-size:12px;">You can also download or delete your data anytime from Account settings.</p>
           </div>`,
       });
@@ -3829,14 +3938,14 @@ export async function checkRetentionReminders() {
     await notify(u.id, 'retention.confirm', {}, `/consent/renew?token=${makeConsentRenewToken(u.id)}`);
     await prisma.user.update({ where: { id: u.id }, data: { retentionReminderSentAt: new Date() } });
     reminded += 1;
+    const org = u.orgId ?? fallbackOrg!;
+    remindedByOrg.set(org, (remindedByOrg.get(org) ?? 0) + 1);
   }
 
-  // Let admins know how many candidates are up for retention review.
-  if (reminded > 0) {
-    await Promise.all(
-      admins.map((a) => notify(a.id, 'retention.adminSummary', { count: reminded }, '/admin/retention'))
-    );
-  }
+  // Let each org's admins know how many of THEIR candidates are up for review.
+  await notifyOrgAdmins(remindedByOrg, (a, count) =>
+    notify(a.id, 'retention.adminSummary', { count }, '/admin/retention'),
+  );
 
   return { checked: users.length, reminded, retentionMonths: months, graceDays: RETENTION_GRACE_DAYS };
 }
@@ -3874,12 +3983,16 @@ export async function checkReEngagementReminders() {
   const origins = createOriginBook();
   await origins.prefetch(orgOf.values());
 
+  const remindedByOrg = new Map<string, number>();
+  const fallbackOrg = people.some((p) => !orgOf.get(p.id)) ? await defaultOrgId() : null;
+
   let reminded = 0;
   for (const p of people) {
     const leaveUrl = `${await origins.urlFor(orgOf.get(p.id))}/re-engage?token=${makeLeaveToken(p.id)}`;
     try {
       await sendEmail({
         to: p.email,
+        orgId: orgOf.get(p.id) ?? null,
         // The bespoke leave link in the body stays: it revokes the
         // RE_ENGAGEMENT_POOL *consent*, which is a stronger and different action
         // than "stop this group of mail". The group footer is additive.
@@ -3897,12 +4010,13 @@ ${p.reEngageNote ? `<p><em>${p.reEngageNote}</em></p>` : ''}
     await notify(p.id, 're_engagement.due', {}, '/portal');
     await prisma.user.update({ where: { id: p.id }, data: { reEngageNotifiedAt: new Date() } });
     reminded += 1;
+    const org = orgOf.get(p.id) ?? fallbackOrg!;
+    remindedByOrg.set(org, (remindedByOrg.get(org) ?? 0) + 1);
   }
 
-  if (reminded > 0) {
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
-    await Promise.all(admins.map((a) => notify(a.id, 're_engagement.adminSummary', { count: reminded }, '/admin/candidates?view=pool')));
-  }
+  await notifyOrgAdmins(remindedByOrg, (a, count) =>
+    notify(a.id, 're_engagement.adminSummary', { count }, '/admin/candidates?view=pool'),
+  );
   return { checked: people.length, reminded };
 }
 
@@ -3952,6 +4066,7 @@ export async function checkCompanyNeedMatches() {
     },
     select: {
       id: true,
+      orgId: true,
       name: true,
       needs: { select: { position: true } },
       requisitions: {
@@ -3980,9 +4095,14 @@ export async function checkCompanyNeedMatches() {
       publicProfile: true,
       consents: { some: { type: 'TALENT_POOL_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
     },
-    select: { id: true, fullName: true, targetPosition: true, skills: true },
+    select: { id: true, orgId: true, fullName: true, targetPosition: true, skills: true },
   });
   if (pool.length === 0) return { companies: companies.length, alerts: 0 };
+  // A company is matched against ITS OWN tenant's pool only: this cron binds no
+  // tenant context, and an alert naming another tenant's (or world's) candidate
+  // is a leak with a /p/<id> link attached. NULL is the default org either side.
+  const defaultId = await defaultOrgId();
+  const brandOf = createBrandBook();
 
   // WORLDS (#2590): the "view profile" link opens the product the COMPANY USER's
   // account lives in, resolved per user from their own organization. Read for
@@ -4011,6 +4131,7 @@ export async function checkCompanyNeedMatches() {
     const terms = [...new Set(positions)];
 
     for (const cand of pool) {
+      if (!sameTenant(cand.orgId, company.orgId, defaultId)) continue;
       if (!candidateMatchesNeeds(terms, cand)) continue;
 
       // Atomic dedupe: the insert succeeds only the first time; count 0 means
@@ -4031,18 +4152,19 @@ export async function checkCompanyNeedMatches() {
         // lives in opportunities.legacy.
         if (emailGroupAllowedForCategory(u, 'company-need-alert')) {
           const base = await origins.urlFor(u.orgId);
-          await sendEmail({
+          await brandOf(u.orgId).then((brand) => sendEmail({
             category: 'company-need-alert',
             userId: u.id,
+            orgId: u.orgId,
             to: u.email,
             subject: 'A candidate matches your open position',
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color:#2563eb;">New matching candidate</h2>
+              ${worldHeading(brand, 'New matching candidate', '<h2 style="color:#2563eb;">New matching candidate</h2>')}
               <p>Hi ${u.fullName},</p>
               <p><strong>${cand.fullName}</strong> matches one of ${company.name}'s open positions${cand.targetPosition ? ` (${cand.targetPosition})` : ''}.</p>
               <p><a href="${base}${link}">View profile</a></p>
             </div>`,
-          }).catch((error) => {
+          })).catch((error) => {
             console.error('checkCompanyNeedMatches email failed:', { companyId: company.id, userId: u.id, error });
           });
         }
@@ -4069,6 +4191,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
   // lives in — the mentee and the mentors on their relations are resolved
   // separately from their own `orgId`, one batched read per page below.
   const origins = createOriginBook();
+  const capabilitiesOf = capabilitiesMemo();
   let claims = 0;
   let notified = 0;
   let emailed = 0;
@@ -4115,7 +4238,16 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             const t = getDictionary(locale).documentRequirements;
             const label = requirement.labels[locale] || requirement.labels.en || requirement.key;
             const isMentee = recipient.id === mentee.id;
-            const link = isMentee ? '/portal/profile#documents' : `/mentor/mentees/${recipient.relationId}`;
+            // A MARKETING rep's record is /sales/leads/<id>, never the mentor
+            // module their shell would bounce them out of (notificationLink).
+            const link = isMentee
+              ? '/portal/profile#documents'
+              : notificationLink(
+                  'MENTOR',
+                  'relation',
+                  { relationId: recipient.relationId ?? undefined },
+                  { capabilities: await capabilitiesOf(org.id) },
+                );
             await notify(
               recipient.id,
               isMentee ? 'missing_document.self' : 'missing_document.mentor',
@@ -4156,64 +4288,92 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
 }
 
 // Weekly scheduled analytics report email (Faz 2, #541). Premium: only runs
-// when the premiumAnalytics setting is on. Sends every active admin a compact
-// pipeline summary — total relations, hired conversion, stage counts and the
-// last 7 days' activity — honoring the per-user digest email opt-out.
+// for an org whose premiumAnalytics setting is on (tenant row, then the global
+// row: the settings rule). Sends each active admin a compact summary OF THEIR
+// OWN ORG — total relations, conversion, stage counts and the last 7 days'
+// activity — honoring the per-user digest email opt-out.
+//
+// Per org, never per installation: this cron binds no tenant context, and the
+// counts used to add up every tenant of both worlds under an "Internship CRM"
+// subject in every admin's mail (docs/worlds.md).
 export async function sendWeeklyAnalyticsReport() {
-  if ((await getSetting('premiumAnalytics')) !== 'true') return { locked: true, sent: 0 };
-
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const [byStage, newRelations, interactions, admins] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], _count: { _all: true } }),
-    prisma.mentorshipRelation.count({ where: { startDate: { gte: weekAgo } } }),
-    prisma.interactionLog.count({ where: { date: { gte: weekAgo } } }),
-    prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true },
-      select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
-    }),
-  ]);
-
-  const total = byStage.reduce((n, s) => n + s._count._all, 0);
-  const hired = byStage
-    .filter((s) => s.pipelineStatus === 'HIRED_660' || s.pipelineStatus === 'EMPLOYED_700')
-    .reduce((n, s) => n + s._count._all, 0);
-  const conversion = total ? Math.round((hired / total) * 100) : 0;
-  const stageRows = byStage
-    .sort((a, b) => b._count._all - a._count._all)
-    .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${s.pipelineStatus}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
-    .join('');
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+  });
+  // A NULL-org admin is the default org's (tenantFilter's rule).
+  const fallbackOrg = admins.some((a) => !a.orgId) ? await defaultOrgId() : null;
+  const byOrg = new Map<string, typeof admins>();
+  for (const a of admins) {
+    const org = a.orgId ?? fallbackOrg!;
+    byOrg.set(org, [...(byOrg.get(org) ?? []), a]);
+  }
   // WORLDS (#2590): the dashboard link is resolved per ADMIN from that admin's
-  // own organization (the report goes to every active admin of every tenant).
+  // own organization.
   const origins = createOriginBook();
   await origins.prefetch(admins.map((a) => a.orgId));
 
+  let locked = true;
   let sent = 0;
-  for (const a of admins) {
-    // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
-    // that used to stand here belonged to `digests` and killed the report while
-    // the preference surfaces showed it as ON. 'digest' is in
-    // reports_analytics.legacy now, so the old opt-out still holds visibly.
-    if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
-    const base = await origins.urlFor(a.orgId);
-    await sendEmail({
-      category: 'analytics-report',
-      userId: a.id,
-      to: a.email,
-      subject: 'Weekly analytics report — Internship CRM',
-      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color:#2563eb;">Weekly analytics report</h2>
+  for (const [orgId, orgAdmins] of byOrg) {
+    if ((await getSetting('premiumAnalytics', orgId)) !== 'true') continue;
+    locked = false;
+    const tenant = await orgWhere(orgId);
+    const [byStage, newRelations, interactions, outcome, brand] = await Promise.all([
+      prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: tenant, _count: { _all: true } }),
+      prisma.mentorshipRelation.count({ where: { AND: [tenant, { startDate: { gte: weekAgo } }] } }),
+      prisma.interactionLog.count({ where: { date: { gte: weekAgo }, relation: { is: tenant } } }),
+      // The tenant's own finished stages (#1882), as /admin/analytics counts them.
+      outcomeStageKeys(orgId),
+      emailBrand(orgId),
+    ]);
+    const ownWorld = brand.vertical !== DEFAULT_VERTICAL;
+    const stages = ownWorld ? await resolvePipelineStages(orgId) : null;
+
+    const total = byStage.reduce((n, s) => n + s._count._all, 0);
+    const finished = new Set(outcome.finished);
+    const hired = byStage.filter((s) => finished.has(s.pipelineStatus)).reduce((n, s) => n + s._count._all, 0);
+    const conversion = total ? Math.round((hired / total) * 100) : 0;
+    const stageRows = byStage
+      .sort((a, b) => b._count._all - a._count._all)
+      .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${stages ? esc(stageLabel(stages, s.pipelineStatus)) : s.pipelineStatus}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
+      .join('');
+    // The default world keeps its report as it always read; another world's
+    // admin gets its own product name and funnel words, not "mentorship" ones.
+    const summary = ownWorld
+      ? `<strong>${total}</strong> records · <strong>${conversion}%</strong> reached ${esc(outcome.finishedLabel || 'the final stage')} ·
+        last 7 days: <strong>${newRelations}</strong> new records, <strong>${interactions}</strong> interactions.`
+      : `<strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
+        last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.`;
+
+    for (const a of orgAdmins) {
+      // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
+      // that used to stand here belonged to `digests` and killed the report while
+      // the preference surfaces showed it as ON. 'digest' is in
+      // reports_analytics.legacy now, so the old opt-out still holds visibly.
+      if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
+      const base = await origins.urlFor(a.orgId);
+      await sendEmail({
+        category: 'analytics-report',
+        userId: a.id,
+        orgId: a.orgId,
+        to: a.email,
+        subject: `Weekly analytics report — ${ownWorld ? brand.name : 'Internship CRM'}`,
+        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${worldHeading(brand, 'Weekly analytics report', '<h2 style="color:#2563eb;">Weekly analytics report</h2>')}
         <p>Hi ${a.fullName},</p>
-        <p><strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
-        last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.</p>
+        <p>${summary}</p>
         <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
         <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
       </div>`,
-    }).catch((error) => {
-      console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, error });
-    });
-    sent++;
+      }).catch((error) => {
+        console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, error });
+      });
+      sent++;
+    }
   }
-  return { locked: false, sent };
+  return { locked, sent };
 }
 
 // Unread-message digest (#667): once an hour, gather messages that have been
@@ -4276,6 +4436,7 @@ export async function sendUnreadMessageDigests() {
   // `orgId`. Read for the whole batch before anything is marked digested.
   const origins = createOriginBook();
   await origins.prefetch([...byRecipient.values()].map((entry) => entry.recipient.orgId));
+  const brandOf = createBrandBook();
 
   let sent = 0;
   for (const { recipient, items } of byRecipient.values()) {
@@ -4313,16 +4474,18 @@ export async function sendUnreadMessageDigests() {
       )
       .join(' · ');
     try {
+      const brand = await brandOf(recipient.orgId);
       await sendEmail({
         to: recipient.email!,
         userId: recipient.id,
+        orgId: recipient.orgId,
         category: 'unread-digest',
         locale: rLocale,
         // One and many are separate keys, not an appended "s": Turkish puts the
         // count before an uninflected noun and German inflects the noun itself.
         subject: one ? U.subjectOne : U.subjectMany.replace('{n}', String(items.length)),
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">${esc(U.heading)}</h2>
+          ${worldHeading(brand, esc(U.heading), `<h2 style="color:#2563eb;">${esc(U.heading)}</h2>`)}
           <p>${esc(
             (one ? U.greetingOne : U.greetingMany.replace('{n}', String(items.length))).replace(
               '{name}',

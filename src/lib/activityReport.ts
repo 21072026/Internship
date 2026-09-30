@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { menteeRelationWhere } from '@/lib/menteeRelation';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
@@ -129,10 +130,16 @@ export async function getMentorMenteeActivity(mentorId: string, since: Date): Pr
   return buildForRelations(relations, since);
 }
 
-// System-wide: every mentee that is part of at least one relation — the admin's
-// daily report.
-export async function getSystemMenteeActivity(since: Date): Promise<MenteeActivity[]> {
+// Every mentee that is part of at least one relation IN ONE TENANT — the admin's
+// daily report. `tenant` is required: the digest cron binds no tenant context,
+// and an unscoped read handed every admin of every org, in both worlds, the
+// other tenants' mentees (docs/worlds.md). Pass tenantWhere()/orgWhere().
+export async function getSystemMenteeActivity(
+  since: Date,
+  tenant: Prisma.MentorshipRelationWhereInput,
+): Promise<MenteeActivity[]> {
   const relations = await prisma.mentorshipRelation.findMany({
+    where: tenant,
     select: {
       id: true,
       menteeId: true,

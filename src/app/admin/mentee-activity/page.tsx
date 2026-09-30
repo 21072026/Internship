@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getServerDictionary } from '@/i18n/server';
 import { getSystemMenteeActivity } from '@/lib/activityReport';
+import { tenantWhere } from '@/lib/tenantFilter';
 import { ActivityReportView } from '@/components/ActivityReportView';
 
 const ALLOWED_DAYS = [1, 7, 30];
@@ -15,7 +16,7 @@ export default async function AdminMenteeActivityPage({ searchParams }: { search
   const sp = await searchParams;
   const days = ALLOWED_DAYS.includes(Number(sp.days)) ? Number(sp.days) : 7;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const items = await getSystemMenteeActivity(since);
+  const items = await getSystemMenteeActivity(since, await tenantWhere(session));
 
   return (
     <ActivityReportView
