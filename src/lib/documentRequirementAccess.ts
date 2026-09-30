@@ -20,7 +20,7 @@
 import type { Session } from 'next-auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
-import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
+import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 
 export async function mayManageOrgRequirements(
   session: Session,
@@ -28,7 +28,8 @@ export async function mayManageOrgRequirements(
   route: string,
 ): Promise<boolean> {
   if (await inCallerTenant(targetOrgId, resolveOrgId(session))) return true;
-  if (await isSuperAdmin(session)) return true;
+  // Per world: a super admin reaches only its own world's organizations.
+  if (await isSuperAdminFor(session, targetOrgId)) return true;
   await logCrossTenantDenial(session, route, targetOrgId);
   return false;
 }

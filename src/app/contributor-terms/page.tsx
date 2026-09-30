@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -10,6 +12,11 @@ import { formatDate } from '@/lib/relativeTime';
 import { ContributorTermsDownload } from '@/components/ContributorTermsDownload';
 import { ContributorTermsAccept } from '@/components/ContributorTermsAccept';
 import { requireDefaultVertical } from '@/lib/verticalPage';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.contributorTerms.title, description: t.seo.contributorTermsDescription }));
+}
+
 
 export const dynamic = 'force-dynamic';
 

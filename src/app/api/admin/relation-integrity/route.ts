@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere } from '@/lib/tenantFilter';
 import { findMenteesWithMultipleActiveMentors } from '@/lib/activeMentorship';
 
 // GET — READ-ONLY integrity report for "one mentee, at most one ACTIVE mentor"
@@ -27,11 +28,13 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Scoped by the tenant middleware, same as every other admin read: an admin
-  // sees their own org's violations. The future index is global, so the
+  // An admin sees their own org's violations. That used to be left to the
+  // tenant middleware, which is dormant with MT_ENFORCE_ISOLATION off, so the
+  // report listed every tenant's mentees and mentors (#2542 follow-up); the
+  // tenant is now passed by hand. The future index is global, so the
   // deploy-time script (which runs unscoped) is the cross-tenant view.
   return await withTenantScope(session, async () => {
-    const report = await findMenteesWithMultipleActiveMentors(prisma);
+    const report = await findMenteesWithMultipleActiveMentors(prisma, await tenantWhere(session));
     return NextResponse.json(report);
   });
 }

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "The Google Calendar loop now covers the paths it missed (#1986). An **accepted meeting request** is mirrored to both participants' connected calendars; it used to be the one scheduling path that never reached a calendar. The **meeting-series purge** of old generated rows now withdraws them from every calendar *before* deleting them, because the link rows cascade away with the meeting. The bounded withdrawal from `/api/meetings/[id]` (awaited but capped at 5 s, so it never rejects and a third-party API cannot hang a cancel) is now `withdrawMeetings()` in `src/lib/googleCalendarSync.ts` and is shared by both callers. There is also one `pushableSelect` for every push site. Instant rooms have no time, so there is nothing to mirror: `pushMeeting` skips them by design, and no dead call was added. Recurring series occurrences are deliberately not materialised (#1110); mirroring a series as one recurring Google event is #2654. `e2e/google-calendar.spec.ts` now drives push → reschedule (a PATCH on the same event) → accepted request → delete against the local stub.",
+  "notes": {
+    "en": ["If you connected Google Calendar, meetings accepted from a request now appear there too, and meetings that are removed disappear from it."],
+    "tr": ["Google Takvim'i bağladıysanız, bir talepten kabul edilen toplantılar artık orada da görünüyor; kaldırılan toplantılar takvimden siliniyor."],
+    "de": ["Wenn Sie Google Kalender verbunden haben, erscheinen aus einer Anfrage angenommene Termine jetzt auch dort, und entfernte Termine verschwinden daraus."]
+  }
+}

@@ -119,6 +119,11 @@ model Organization {
   // active — a plan downgrade or a broken config falls back to password login
   // rather than locking the tenant out of its own data. See docs/sso-saml.md.
   ssoEnforced      Boolean  @default(false)
+  // IdP role mapping (#1940): when true, a RETURNING SSO user's role is
+  // re-resolved from their claims on every login (logged at warning level,
+  // old -> new). Off by default: a locally elevated user must not be demoted by
+  // a misconfigured claim. The mappings themselves are SsoClaimMapping rows.
+  ssoSyncRole      Boolean  @default(false)
   // Billing identity (#1731, epic #1727). All optional and additive: the
   // Organization is the ONE billing subject (a Company is a role inside it),
   // and this is where the invoice is addressed. Nothing here talks to Stripe
@@ -170,10 +175,13 @@ model Organization {
   orgEntitlements      OrgEntitlement[]
   usageRollups         UsageRollup[]
   companyUsage         CompanyUsage[]
+  contactPermissions   ContactPermission[]
   webhooks             Webhook[]
   announcements        Announcement[]
   newsletters          Newsletter[]
   trialReminders       TrialReminder[]
+  relationValues       RelationValue[]
+  ssoClaimMappings     SsoClaimMapping[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -690,19 +698,32 @@ model ContributorTermsAcceptance {
   @@index([termsKey, version])
 }
 
-// A referral source — the education/agency a mentee came from. Admin-managed
-// so reporting can group mentees by where they were sourced.
+// A referral source — the education/agency a mentee came from, or (#2421/#2570)
+// the channel a marketing lead came in through: `affiliate:<code>`,
+// `utm:<source>/<medium>/<campaign>`, `channel:<acquisition_source>` — the
+// naming rule is src/lib/leadSourceName.ts. Admin-managed so reporting can
+// group people by where they were sourced.
+//
+// The name is unique PER ORG (#2570), not globally: two tenants may both have a
+// "Google Ads". It was a global `@unique`, which made a second tenant's create
+// a 409 about a row it cannot see. The tenant is never encoded into the name
+// (an "<orgId>:Google" prefix was rejected — a second scoping mechanism living
+// in the data). A NULL orgId is a legacy row of the default org
+// (src/lib/tenantFilter.ts); MySQL does not compare NULLs in a unique index, so
+// the create paths read the tenant (NULL rows included) before they insert —
+// src/lib/leadSource.ts `findOrCreateSource()`.
 model Source {
   orgId        String?
   org          Organization? @relation(fields: [orgId], references: [id])
   id           String        @id @default(cuid())
-  name         String        @unique
+  name         String
   contactName  String?
   contactEmail String?
   createdAt    DateTime      @default(now())
 
   users User[]
 
+  @@unique([orgId, name])
   @@index([name])
 }
 
@@ -1366,22 +1387,25 @@ model Company {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  needs             CompanyNeed[]
-  mentorships       MentorshipRelation[]
-  users             User[]               @relation("CompanyUsers")
-  projects          Project[]            @relation("CompanyProjects")
-  interests         CompanyInterest[]
-  entitlements      CompanyEntitlement[]
-  needAlerts        CompanyNeedAlert[]
-  offers            Offer[]
-  requisitions      Requisition[]
-  interviewRequests InterviewRequest[]
-  placements        Placement[]
+  needs              CompanyNeed[]
+  mentorships        MentorshipRelation[]
+  users              User[]               @relation("CompanyUsers")
+  projects           Project[]            @relation("CompanyProjects")
+  interests          CompanyInterest[]
+  entitlements       CompanyEntitlement[]
+  needAlerts         CompanyNeedAlert[]
+  offers             Offer[]
+  requisitions       Requisition[]
+  interviewRequests  InterviewRequest[]
+  placements         Placement[]
   // The enquiries this company was created from (#1863). A list rather than a
   // single row because nothing stops a second enquiry from the same company
   // later being linked to the account it already has.
-  fromInquiries     CompanyInquiry[]     @relation("ConvertedFromInquiry")
-  usage             CompanyUsage[]
+  fromInquiries      CompanyInquiry[]     @relation("ConvertedFromInquiry")
+  usage              CompanyUsage[]
+  // May we write to / call this account, and on what basis (#2577)? One row
+  // per channel; docs/contact-permission.md.
+  contactPermissions ContactPermission[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -1618,10 +1642,20 @@ model CompanyInquiry {
   // src/lib/privacy.ts), stamped by the server — separate from the privacy text
   // version above; the language it was shown in is `locale`. NULL when unticked.
   marketingOptInTextVersion String?
-  // When the address owner CONFIRMED it (double opt-in). No confirmation mail
-  // exists yet, so this is NULL on every row — and while it is NULL, nothing
-  // may be mailed on the strength of the request (docs/marketing-vertical/demo-form.md).
+  // When the address owner CONFIRMED it (double opt-in, #2577): the moment
+  // they pressed the button behind the link in the confirmation mail. While it
+  // is NULL nothing may be mailed on the strength of the request; once set it
+  // becomes the account's DOI_CONFIRMED `ContactPermission`
+  // (docs/contact-permission.md).
   marketingOptInConfirmedAt DateTime?
+  // When the confirmation mail for this request went out (#2577). NULL = none
+  // was sent: the box was not ticked, or the per-recipient cap (one per address
+  // per day, `ContactConfirmationMailCap`) had already been spent.
+  marketingOptInMailSentAt  DateTime?
+  // When the address owner said "no" through the opt-out link (#2577). After
+  // this the request can no longer be confirmed, and the account's e-mail
+  // permission is revoked.
+  marketingOptOutAt         DateTime?
   // Marketplaces they sell on (MARKETING form), free text.
   marketplaces              String?              @db.Text
   // Where the request came from (#2569): the host that received it and the
@@ -1664,6 +1698,105 @@ model CompanyInquiry {
   @@index([email])
   @@index([orgId])
   @@index([convertedCompanyId])
+}
+
+// ── Contact permission (#2577, story #2575) ─────────────────────────────────
+//
+// "May we write to this account, and can we prove it?" — UWG §7 / DSGVO. One
+// row per account × channel holds the CURRENT basis plus its evidence. The rule
+// of who may write which basis is ONE file, src/lib/contactPermissionRule.ts
+// (dependency-free, unit-tested), and the only writer is
+// src/lib/contactPermission.ts. Full design: docs/contact-permission.md.
+//
+// Company-level, not a `ConsentType` on the lead User: the person we write to
+// is the account's contact (`Company.contactEmail`), who is not a User — the
+// stand-in lead User has a synthetic address nobody reads.
+enum ContactChannel {
+  EMAIL
+  PHONE
+  POST
+}
+
+// The legal basis. The same four terms as the channel-rules document (#2576).
+//   DOI_CONFIRMED          — the address owner clicked the confirmation link.
+//   EXISTING_CUSTOMER_7_3  — §7(3) UWG: a PAYING customer's address, set by an
+//                            admin by hand, with a written reason.
+//   INQUIRY_REPLY          — they asked us (demo form): we may answer THAT
+//                            request, which is not advertising permission.
+//   NONE                   — no basis. What every machine path writes.
+enum ContactPermissionBasis {
+  DOI_CONFIRMED
+  EXISTING_CUSTOMER_7_3
+  INQUIRY_REPLY
+  NONE
+}
+
+// Who wrote the current basis — part of the evidence.
+enum ContactPermissionSource {
+  DOI_LINK
+  INQUIRY
+  ADMIN
+  IMPORT
+  INGEST
+}
+
+model ContactPermission {
+  // Nullable like Company's own orgId. Registered in TENANT_MODELS; every
+  // sessionless writer (the DOI click, an inquiry placed by the form, the
+  // import) passes orgId itself — src/lib/contactPermission.ts.
+  orgId       String?
+  org         Organization?           @relation(fields: [orgId], references: [id])
+  id          String                  @id @default(cuid())
+  // Cascade: erasing the account erases its permission rows (#2559). The
+  // opt-out stays provable where it matters — on the enquiry row, which keeps
+  // its own `marketingOptOutAt` for as long as enquiries are retained.
+  companyId   String
+  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  channel     ContactChannel
+  basis       ContactPermissionBasis  @default(NONE)
+  source      ContactPermissionSource
+  // The address (EMAIL) the basis was established for. A permission is for an
+  // address, not for whatever `contactEmail` says later: if the contact
+  // changes, the old confirmation does not cover the new person.
+  address     String?                 @db.VarChar(320)
+  // Evidence of a DOI: the opt-in wording version and language shown, when the
+  // box was ticked and when the link was confirmed. No IP address (data
+  // minimisation — the demo form promises none; the signed link bound to the
+  // address plus the two timestamps is the proof).
+  textVersion String?
+  textLocale  String?                 @db.VarChar(5)
+  requestedAt DateTime?
+  confirmedAt DateTime?
+  // The enquiry the evidence came from. No foreign key: enquiries have their
+  // own retention, and the copy above is what must survive them.
+  inquiryId   String?
+  // EXISTING_CUSTOMER_7_3 / manual changes: who and why. Plain id, no FK — the
+  // ActivityLog carries the actor too.
+  grantedById String?
+  reason      String?                 @db.Text
+  // Revocation (opt-out link, or an admin). The basis is kept so the history
+  // still says what was revoked; an effective permission needs this NULL.
+  revokedAt   DateTime?
+  revokedVia  String?                 @db.VarChar(16)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@unique([companyId, channel])
+  @@index([orgId, channel, basis])
+}
+
+// The per-recipient cap on confirmation mails (#2577, #2569 § 9): at most ONE
+// double-opt-in mail per address per UTC day, whichever tenant's form asked.
+// The key is HMAC-SHA256(server secret, normalised address) + ':' + day, so this table holds no
+// address, and the cap is enforced by the primary key — two concurrent
+// submits cannot both insert it. Deliberately no orgId: the cap protects the
+// RECIPIENT, whose inbox is not per tenant. Rows older than a day are swept on
+// the next insert.
+model ContactConfirmationMailCap {
+  key       String   @id @db.VarChar(80)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 enum MentorApplicationStatus {
@@ -1723,33 +1856,40 @@ model MentorApplication {
 // ever have it selected server-side (enforced in the API layer, not just hidden
 // in the UI).
 model Offer {
-  id                String             @id @default(cuid())
-  orgId             String?
-  org               Organization?      @relation(fields: [orgId], references: [id])
-  relationId        String
-  relation          MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  id                   String             @id @default(cuid())
+  orgId                String?
+  org                  Organization?      @relation(fields: [orgId], references: [id])
+  relationId           String
+  relation             MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   // Optional link to the company's staffing need this offer fills. Plain id,
   // not a FK — CompanyNeed rows aren't guaranteed to persist for the life of
   // the offer, and the offer must remain readable even if the need is edited.
-  requisitionId     String?
-  companyId         String?
-  company           Company?           @relation(fields: [companyId], references: [id])
-  status            String             @default("DRAFT")
-  position          String
-  startDate         DateTime?
-  compensationNote  String?            @db.Text
-  expiresAt         DateTime?
-  sentAt            DateTime?
-  decidedAt         DateTime?
-  declineReasonCode String?
+  requisitionId        String?
+  // When this offer's acceptance was counted into its requisition's `filled`
+  // (#1411/#1854). Stamped in the same transaction as the increment, and only
+  // when the increment happened — so it is both the idempotency guard (a
+  // replayed accept cannot count twice) and the record of which offers `filled`
+  // is made of. Null for an offer that was never accepted, has no requisition,
+  // or was accepted into a requisition that was already full.
+  requisitionCountedAt DateTime?
+  companyId            String?
+  company              Company?           @relation(fields: [companyId], references: [id])
+  status               String             @default("DRAFT")
+  position             String
+  startDate            DateTime?
+  compensationNote     String?            @db.Text
+  expiresAt            DateTime?
+  sentAt               DateTime?
+  decidedAt            DateTime?
+  declineReasonCode    String?
   // Optional free-text elaboration on the decline reason (never required).
-  declineNote       String?            @db.Text
-  createdById       String
-  createdBy         User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
-  decidedById       String?
-  decidedBy         User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  declineNote          String?            @db.Text
+  createdById          String
+  createdBy            User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
+  decidedById          String?
+  decidedBy            User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@index([orgId, status])
   @@index([relationId])
@@ -2089,6 +2229,13 @@ model ProjectTaskTemplate {
   // everyone who was ever given it. Archived means "don't offer this again";
   // adding the same wording back revives the row.
   archivedAt   DateTime?
+  // The tenant whose pool this template is in (cross-world isolation). The
+  // shared (`projectId: null`) half used to be ONE global pool offered to every
+  // organization, so a MARKETING admin saw — and could reword — the internship
+  // starter goals. Nullable for the expand step (#2298);
+  // prisma/backfill-task-template-org.mjs stamps legacy rows from their project,
+  // else their author, else the default org. NULL reads as the default org.
+  orgId        String?
 
   project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?         @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
@@ -2099,6 +2246,7 @@ model ProjectTaskTemplate {
   // pool is not constrained by it.
   @@unique([projectId, title])
   @@index([projectId])
+  @@index([orgId])
 }
 
 enum JoinRequestStatus {
@@ -2322,11 +2470,16 @@ model MentorshipRelation {
   weeklyReportReminders WeeklyReportReminder[]
   trialReminders        TrialReminder[]
   placement             Placement?
+  // The record's ESTIMATED monthly value (#2422) — its own row, never a scalar
+  // here; see model RelationValue for why.
+  value                 RelationValue?
   rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
   previousRelation      MentorshipRelation?    @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
   // At most one successor in practice (a closed relation is transferred once),
   // but the FK cannot express that, so Prisma types it as a list.
   nextRelations         MentorshipRelation[]   @relation("RelationChain")
+  // Standing 1:1 rules on this pairing (#2013).
+  meetingSeries         MeetingSeries[]
 
   @@index([status])
   @@index([lifecycleState])
@@ -2677,6 +2830,11 @@ model Meeting {
   // Optional: a meeting with a set time expects an RSVP and gets reminders; a
   // meeting with no time (null) is just a shared link — no RSVP, no reminder.
   scheduledAt         DateTime?
+  // How long it runs, in minutes (#1984). Null for rows written before the
+  // column existed: every reader goes through meetingDurationMinutes()
+  // (src/lib/meetingDuration.ts), which applies the one default — so the banner,
+  // the .ics and the Google event can no longer disagree about when it ends.
+  durationMinutes     Int?
   // The clock the organizer picked `scheduledAt` on (IANA zone), captured at
   // creation (#1210). `scheduledAt` is an instant and is enough to render the
   // time for anyone, but not to say *which* reading was the one agreed on — and
@@ -2784,29 +2942,51 @@ model MeetingGuest {
 // A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;
 // manually scheduled meetings leave seriesId null (backward-compatible).
 model MeetingSeries {
-  id          String   @id @default(cuid())
-  projectId   String?
-  title       String
+  id              String    @id @default(cuid())
+  projectId       String?
+  title           String
   // Days of week as a JSON array of integers (0=Sun … 6=Sat), e.g. [1,4] = Mon+Thu.
-  daysOfWeek  Json
+  daysOfWeek      Json
   // Wall-clock start time in "HH:mm" format (24-hour), e.g. "09:30".
-  timeOfDay   String
+  timeOfDay       String
   // Which clock `timeOfDay` is on (IANA zone, e.g. "Europe/Istanbul"). Null for
   // rules saved before #1110, which are read on the deployment default zone —
   // the clock the UI always showed them on. Without this the wall clock was
   // anchored to UTC, so a 09:00 rule was reminded as "12:00 (GMT+3)".
-  timeZone    String?
-  fixedLink   String?
-  active      Boolean  @default(true)
-  createdById String
-  createdAt   DateTime @default(now())
+  timeZone        String?
+  // Length of every occurrence, in minutes (#1984). Null reads as the default
+  // through meetingDurationMinutes(), exactly like Meeting.durationMinutes.
+  durationMinutes Int?
+  fixedLink       String?
+  active          Boolean   @default(true)
+  createdById     String
+  createdAt       DateTime  @default(now())
+  // A standing 1:1 (#2013): the series hangs off a mentorship relation instead
+  // of a project. Exactly one of projectId / relationId is set — MySQL cannot
+  // CHECK that, so every write path enforces it (countContexts in
+  // src/lib/meetingContext.ts). SetNull like the project side: a series whose
+  // relation is gone is an orphan its author (or an admin) can still cancel.
+  relationId      String?
+  // Cadence (#2013). intervalWeeks counts WHOLE weeks from anchorDate's week, so
+  // a biweekly rule cannot drift across a DST change; anchorDate is a calendar
+  // date (UTC midnight), null reads as the creation date. untilDate (inclusive,
+  // a calendar date) and maxOccurrences are the end condition — both null means
+  // "until cancelled", the pre-#2013 behaviour. The rule: src/lib/seriesRule.ts.
+  intervalWeeks   Int       @default(1)
+  anchorDate      DateTime?
+  untilDate       DateTime?
+  maxOccurrences  Int?
 
-  project   Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  meetings  Meeting[]
-  reminders MeetingSeriesReminder[]
-  ends      MeetingOccurrenceEnd[]
+  project       Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  relation      MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: SetNull)
+  meetings      Meeting[]
+  reminders     MeetingSeriesReminder[]
+  ends          MeetingOccurrenceEnd[]
+  // The one recurring Google event per connected member (#2654).
+  calendarLinks GoogleCalendarEventLink[]
 
   @@index([projectId])
+  @@index([relationId])
 }
 
 // One row per (series, occurrence, lead time) that has been reminded (#51).
@@ -3035,6 +3215,25 @@ model ImpersonationGrant {
   expiresAt DateTime
 }
 
+// One rule of a tenant's IdP role mapping (#1940): "a user whose `claim`
+// contains `matchValue` gets `role`". Resolved by src/lib/ssoRoleMapping.ts —
+// highest priority wins, a tie goes to the LESS privileged role, and no match
+// is MENTEE. `ADMIN` is refused at the write boundary until the platform gate
+// (#1575) lands. `matchValue` is compared case-insensitively.
+model SsoClaimMapping {
+  id         String       @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  claim      String       @db.VarChar(191)
+  matchValue String       @db.VarChar(191)
+  role       String       @db.VarChar(20)
+  priority   Int          @default(0)
+  createdAt  DateTime     @default(now())
+
+  @@unique([orgId, claim, matchValue])
+  @@index([orgId])
+}
+
 // Single-use bridge token minted by the SSO ACS route AFTER a signed SAML
 // assertion is verified, then consumed by the `sso` NextAuth provider to issue a
 // session (#545). Mirrors ImpersonationGrant: short-lived + single-use, so a
@@ -3208,10 +3407,19 @@ model ActivityLog {
   ip         String?  @db.VarChar(64)
   userAgent  String?  @db.Text
   createdAt  DateTime @default(now())
+  // The tenant the entry belongs to (cross-world isolation). Nullable on
+  // purpose — the table is full of rows that predate it (#2298: a required
+  // column cannot be added to a populated table). Stamped by logActivity() from
+  // the explicit org, else the actor's, else the target user's org;
+  // prisma/backfill-activity-log-org.mjs fills the legacy rows the same way
+  // BEFORE backfill-organization.mjs assigns whatever is left (system rows with
+  // no actor) to the default org. NULL reads as the default org (tenantFilter).
+  orgId      String?
 
   @@index([actorId])
   @@index([action])
   @@index([createdAt])
+  @@index([orgId])
 }
 
 enum EmailStatus {
@@ -3400,6 +3608,45 @@ model TrialReminder {
   @@index([sentAt])
 }
 
+// The ESTIMATED monthly value of a funnel record (#2422, story #2393): what the
+// account is thought to be worth per month once won. An ESTIMATE, and every
+// label that shows it says so — the MARKETING vertical sells usage-based
+// pricing (a base fee plus transaction tiers), so an account's real monthly
+// revenue moves every month and lives in the billing system, not here. This
+// table only stores the figure somebody typed or imported, and
+// src/lib/dealValue.ts adds those figures up month by month.
+//
+// ITS OWN TABLE, NOT TWO COLUMNS ON MentorshipRelation — the one deliberate
+// deviation from the issue text. Dozens of read paths return every scalar of a
+// relation (`include:` without a top-level `select`) to its mentee, its
+// company user and its source, and #1801 makes "the person a record is about
+// does not read the operator's view of them back" a rule. A column would leak
+// on every one of those paths until each was found and stripped; a row nobody
+// `include`s leaks on none. Same shape as Placement.valueMinor next door.
+//
+// MONEY, the src/lib/roi.ts rules: an integer in MINOR units (cents) plus an
+// ISO 4217 code, never a float. No row means "no estimate", which is not 0.
+model RelationValue {
+  // Nullable orgId, like the relation it hangs off; every writer stamps the
+  // relation's own orgId explicitly (the importer and the transfer run where
+  // the middleware may bind none).
+  orgId       String?
+  org         Organization?      @relation(fields: [orgId], references: [id])
+  relationId  String             @id
+  relation    MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  valueMinor  Int
+  currency    String             @default("EUR") @db.VarChar(3)
+  // MANUAL (the record's owner or an ADMIN typed it) | IMPORT (the marketing
+  // account import's `mrr` column). A transfer copies the predecessor's.
+  source      String             @default("MANUAL") @db.VarChar(20)
+  // Plain id, no FK: erasing a person must not be blocked by, or cascade into,
+  // a commercial figure they once typed (same reasoning as Placement.offerId).
+  updatedById String?
+  updatedAt   DateTime           @updatedAt
+
+  @@index([orgId])
+}
+
 // Structured hiring demand (#806). CompanyNeed remains in place during the
 // compatibility window; legacyCompanyNeedId makes the manual backfill safe to
 // rerun without coupling the two live write paths.
@@ -3504,17 +3751,25 @@ model GoogleCalendarConnection {
 /// Per (meeting, user) rather than per meeting: the same meeting is pushed to
 /// every connected participant's own calendar, and each gets a different event
 /// id — one column on Meeting could only ever remember one of them.
+/// One mirrored Google event per (meeting OR series) × connection. Exactly one of
+/// `meetingId` / `seriesId` is set (#2654): a recurring series is mirrored as ONE
+/// recurring event with an RRULE, never as one event per occurrence, because its
+/// occurrences have no `Meeting` row (#1110). `meetingId` became nullable for
+/// that — a relaxation, so existing rows are untouched.
 model GoogleCalendarEventLink {
   id            String   @id @default(cuid())
-  meetingId     String
+  meetingId     String?
+  seriesId      String?
   connectionId  String
   googleEventId String
   pushedAt      DateTime @default(now())
 
-  meeting    Meeting                  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting    Meeting?                 @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  series     MeetingSeries?           @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   connection GoogleCalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, connectionId])
+  @@unique([seriesId, connectionId])
   @@index([connectionId])
 }
 

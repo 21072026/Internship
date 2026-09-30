@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Announcement composer: the image preview is built from the sniffed bytes and a checked `blob:` URL** (#2149, CodeQL #28 `js/xss-through-dom`). A pasted clipboard file carried its sender-declared type straight into `URL.createObjectURL()` → `<img src>`. New `announcementImagePreview()` in `src/lib/announcementImage.ts` re-reads the signature via the shared `sniffFamily()` (#888), rebuilds the `File` with the SNIFFED type (a `Map` lookup, no object-literal keys), and hands the `<img>` a URL only after a `blob:` scheme check; the same clean file is what is uploaded. `validateAnnouncementImage()` already refused non-images, so behaviour is unchanged — this puts the guarantee at the sink, where the analysis (and a reader) can see it. `e2e/announcement-image.spec.ts`'s paste test now asserts the preview is a `blob:` URL that decodes as the 1×1 PNG."
+}

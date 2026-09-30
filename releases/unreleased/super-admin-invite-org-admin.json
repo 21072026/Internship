@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **A super admin can invite an ADMIN into any organization from `/admin/organizations`** — closes the gap `docs/worlds.md` listed under *Bilinen sınırlar* (\"İlk marketing admin'ini davet edecek ekran yok\"). `POST /api/invite` always writes into the caller's own org, so a brand-new MARKETING tenant had no door for its first administrator. New `POST /api/admin/organizations/[id]/invite-admin` (super-admin only; every other role, a plain tenant ADMIN of the target org included, gets 403 and an `authz.scope_denied` row; unknown org → 404) mirrors `/api/invite` against the TARGET org: the \"already registered\" 409 is asked in that org's world (`emailTakenInOrgWorld`, `code: email_taken_in_world`), the pending-invitation 409 is keyed by (address, org) (`invitationOrgWhere`, `code: invitation_pending`), and the token comes from the one writer, `createInvitation({ role: 'ADMIN' })`, whose register URL is already on the target org's product host (`appOriginForOrg`, #2495). An `organization.admin_invited` activity row records the act without the address. Each org row on the screen gets an *Invite admin* action with an inline form (email optional, note, invitation language) that answers with the link in a read-only field plus Copy and — where the browser has it — the native share sheet (`navigator.share`), and says whether the mail went out. Pinned by `e2e/super-admin-invite-org-admin.spec.ts` and a new `SUPER_ADMIN_ONLY` block in the authz matrix.",
+  "notes": {
+    "en": [
+      "Super admins can now invite the first administrator of any organization straight from the Organizations screen — including from a phone: the registration link appears with Copy and Share buttons, and the invitation is emailed too."
+    ],
+    "tr": [
+      "Süper adminler artık herhangi bir organizasyonun ilk yöneticisini doğrudan Organizasyonlar ekranından davet edebiliyor — telefondan da: kayıt bağlantısı Kopyala ve Paylaş düğmeleriyle görünür, davet ayrıca e-postayla gönderilir."
+    ],
+    "de": [
+      "Super-Admins können den ersten Administrator jeder Organisation jetzt direkt in der Organisationsübersicht einladen — auch vom Handy: Der Registrierungslink erscheint mit Kopieren- und Teilen-Schaltfläche, und die Einladung wird zusätzlich per E-Mail verschickt."
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 // The little card behind a person's name (#1166).
 //
@@ -6,7 +7,10 @@ import { prisma } from '@/lib/prisma';
 // can look up anyone whose name the app already shows you**. Concretely, that is
 // a mentorship counterpart, someone on a project with you, someone in a
 // conversation with you, or the other side of a request still waiting for a
-// decision — plus everyone, for an admin. Anything else is denied,
+// decision — plus everyone IN THEIR TENANT, for an admin (#2542 follow-up:
+// "everyone" was the whole database while MT_ENFORCE_ISOLATION is off, so a
+// MARKETING admin could open an INTERNSHIP mentee's card, e-mail included).
+// Anything else is denied,
 // so a role added later (COMPANY, SOURCE, whatever comes next) gets nothing
 // until it is named here rather than inheriting a view it was never granted.
 
@@ -17,7 +21,7 @@ export interface CardViewer {
 
 /** Whether `viewer` is allowed to see a summary card for `personId`. */
 export async function canViewPersonCard(viewer: CardViewer, personId: string): Promise<boolean> {
-  if (viewer.role === 'ADMIN') return true;
+  if (viewer.role === 'ADMIN') return adminSharesTenant(viewer.id, personId);
   // Your own card is always yours.
   if (viewer.id === personId) return true;
   if (viewer.role !== 'MENTOR' && viewer.role !== 'MENTEE') return false;
@@ -90,6 +94,22 @@ export async function canViewPersonCard(viewer: CardViewer, personId: string): P
     select: { id: true },
   });
   return !!application;
+}
+
+/**
+ * Is `personId` in the same tenant as the admin `viewerId`? Both orgs are read
+ * from the rows, not from the session, so the rule needs nothing from the
+ * caller and a stale JWT cannot widen it. A missing person is false (→ 404).
+ */
+async function adminSharesTenant(viewerId: string, personId: string): Promise<boolean> {
+  const rows = await prisma.user.findMany({
+    where: { id: { in: [viewerId, personId] } },
+    select: { id: true, orgId: true },
+  });
+  const viewer = rows.find((r) => r.id === viewerId);
+  const person = rows.find((r) => r.id === personId);
+  if (!viewer || !person) return false;
+  return inCallerTenant(person.orgId, viewer.orgId);
 }
 
 /** Who may decide a project's join requests — the isProjectOwner rule as a where-filter. */

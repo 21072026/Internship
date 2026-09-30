@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Analytics, settings and a rep's account page speak sales in a MARKETING tenant** (#2558, second slice). MARKETING en/tr/de overlays now cover `analytics.subtitle`, the `settings.*` hints that named mentors (`reminderDaysHint`, `weeklyDigest`, `outcomeAutoSendHint`, `require2faAdminsMentors`, `aiMonthlyQuotaHint`, `bulkImport`), the e-mail preference groups on `/account` (`emailGroups.direct_messages/mentorship_lifecycle/digests/inbound_requests`; their keys are storage and unchanged), `account.notifCategories.mentorship` and the activity-tracking consent text. The evaluation-framework editor on `/admin/settings` now renders only where the vertical has the `evaluations` capability. MARKETING has none, and its admins were offered criteria for \"what a mentor scores a mentee on\". `e2e/vertical-terminology.spec.ts` scans `/admin/analytics` and `/admin/settings` for a MARKETING admin and `/account` for a MARKETING rep.",
-  "notes": {
-    "en": ["In SaleVali, the analytics, settings and account pages no longer mention mentors or mentees."],
-    "tr": ["SaleVali'de analiz, ayarlar ve hesap sayfaları artık mentor ya da mentee'den söz etmiyor."],
-    "de": ["In SaleVali erwähnen die Analyse-, Einstellungs- und Kontoseiten keine Mentoren oder Mentees mehr."]
-  }
-}

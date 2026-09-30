@@ -3,6 +3,8 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
+import { doiMailCapKey, makeContactPermissionToken } from '../src/lib/contactPermissionTokens';
+import { __testable as emailInternals } from '@/services/emailService';
 
 // The demo form on the MARKETING landing (#2569) and the default lead owner
 // (#2580 item 3).
@@ -101,6 +103,7 @@ test.afterAll(async () => {
   await prisma.company.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.activityLog.deleteMany({ where: { targetId: { in: companyIds } } }).catch(() => {});
   await prisma.pipelineStage.deleteMany({ where: { orgId } }).catch(() => {});
+  await prisma.source.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.setting.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
   // Give the host back only once the test org (and its claim) is gone.
@@ -221,7 +224,9 @@ test('a request on the marketing host lands in the mapped MARKETING org, unowned
     expect(company.contactEmail).toBe(email);
     const relation = await prisma.mentorshipRelation.findFirstOrThrow({
       where: { companyId: company.id },
-      include: { mentee: { select: { email: true, role: true, referralSource: true } } },
+      include: {
+        mentee: { select: { email: true, role: true, referralSource: true, source: { select: { name: true, orgId: true } } } },
+      },
     });
     // The admin who pressed the button owns it (no default owner is set), at
     // the org's first stage, with a stand-in lead — never a login on their mailbox.
@@ -230,6 +235,9 @@ test('a request on the marketing host lands in the mapped MARKETING org, unowned
     expect(relation.mentee.role).toBe('MENTEE');
     expect(relation.mentee.email).not.toBe(email);
     expect(relation.mentee.referralSource).toBe('linkedin');
+    // …and it is ATTRIBUTED (#2570): bound to this org's Source by the one
+    // mapping rule, utm:<source>/<medium>/<campaign>.
+    expect(relation.mentee.source).toEqual({ name: 'utm:linkedin/social/autumn-2026', orgId });
     // No COMPANY login and no invitation: marketing sells to the company.
     expect(await prisma.invitationToken.count({ where: { email } })).toBe(0);
 
@@ -269,9 +277,15 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
   expect(row.marketingOptInTextVersion).toBe(MARKETING_OPT_IN_TEXT_VERSION);
   expect(row.marketingOptInConfirmedAt).toBeNull();
   expect(row.convertedCompanyId).not.toBeNull();
-  const relation = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: row.convertedCompanyId! } });
+  const relation = await prisma.mentorshipRelation.findFirstOrThrow({
+    where: { companyId: row.convertedCompanyId! },
+    include: { mentee: { select: { sourceId: true } } },
+  });
   expect(relation.mentorId).toBe(mktRepId);
   expect(relation.pipelineStatus).toBe(firstStage);
+  // No utm_source ⇒ unknown channel ⇒ NO Source row: the lead is counted in the
+  // report's explicit `unsourced` bucket instead (#2570).
+  expect(relation.mentee.sourceId).toBeNull();
 
   // The hand-typed lead (#2562) with no owner in the body goes to the same rep;
   // the admin typing it stays the actor.
@@ -281,13 +295,25 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
     await page.context().setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST }); // MARKETING-org admin => marketing host (#2590)
     await signInAndSettle(page, mktAdminEmail, PW, '/admin');
     const manual = await page.request.post('/api/admin/marketing-accounts', {
-      data: { name: `Typed Handel ${stamp}`, contactName: 'Tia Typed', contactEmail: uniqueEmail('demo-form-typed') },
+      data: {
+        name: `Typed Handel ${stamp}`,
+        contactName: 'Tia Typed',
+        contactEmail: uniqueEmail('demo-form-typed'),
+        source: `Messe ${stamp}`,
+      },
     });
     expect(manual.status()).toBe(201);
     const body = await manual.json();
     expect(body.ownerId).toBe(mktRepId);
-    const typed = await prisma.mentorshipRelation.findFirstOrThrow({ where: { companyId: body.companyId } });
+    const typed = await prisma.mentorshipRelation.findFirstOrThrow({
+      where: { companyId: body.companyId },
+      include: { mentee: { select: { referralSource: true, source: { select: { name: true, orgId: true } } } } },
+    });
     expect(typed.mentorId).toBe(mktRepId);
+    // A typed source is the Source a person named (#2570): kept as written,
+    // bound to (and created in) THIS org.
+    expect(typed.mentee.referralSource).toBe(`Messe ${stamp}`);
+    expect(typed.mentee.source).toEqual({ name: `Messe ${stamp}`, orgId });
 
     // An owner from another tenant is refused, both in the body and as the setting.
     const foreign = await page.request.post('/api/admin/marketing-accounts', {
@@ -300,6 +326,229 @@ test('with a default lead owner, a request lands on that rep’s funnel by itsel
     const cleared = await page.request.put('/api/admin/settings', { data: { defaultLeadOwnerId: '' } });
     expect(cleared.ok()).toBeTruthy();
     expect((await cleared.json()).settings.defaultLeadOwnerId).toBe('');
+  } finally {
+    await context.close();
+  }
+});
+
+// The double opt-in and the account's contact permission (#2577). Runs after
+// the default-owner test, so the request lands on the rep's funnel by itself
+// and the account exists before the click — the path where the click has to
+// reach an existing account. (The other path — confirm first, convert later —
+// is `applyInquiryPermission` at conversion.)
+test('a ticked box mails ONE confirmation a day; the click makes the account DOI_CONFIRMED and the link takes it back', async ({ request, page, browser }) => {
+  test.setTimeout(150_000);
+  await prisma.setting.updateMany({ where: { orgId, key: 'defaultLeadOwnerId' }, data: { value: mktRepId } });
+  const companyName = `Opt In Handel ${stamp}`;
+  const email = newInquiryEmail('demo-form-doi');
+  const confirmMails = () => prisma.emailLog.count({ where: { to: email, category: 'consent' } });
+
+  const res = await postInquiry(request, MARKETING_HOST, {
+    companyName,
+    contactName: 'Dora Double',
+    email,
+    marketingOptIn: true,
+    locale: 'de',
+  });
+  expect(res.ok()).toBeTruthy();
+  // Same body whether or not a mail went out.
+  expect(await res.json()).toEqual({ ok: true });
+  const first = await prisma.companyInquiry.findFirstOrThrow({ where: { email, companyName } });
+  expect(first.marketingOptInConfirmedAt).toBeNull();
+  // SMTP is blank under e2e, so the mail is attempted (one SKIPPED consent
+  // row) but not SENT — and a mail that was not sent neither stamps the
+  // evidence column nor spends the address's daily slot.
+  expect(await confirmMails()).toBe(1);
+  expect(first.marketingOptInMailSentAt).toBeNull();
+  const capKey = doiMailCapKey(email, new Date());
+  expect(await prisma.contactConfirmationMailCap.count({ where: { key: capKey } })).toBe(0);
+
+  // Converted by the default owner: the account exists and may be ANSWERED,
+  // which is not advertising permission.
+  expect(first.convertedCompanyId).not.toBeNull();
+  const companyId = first.convertedCompanyId!;
+  const beforeClick = await prisma.contactPermission.findUniqueOrThrow({
+    where: { companyId_channel: { companyId, channel: 'EMAIL' } },
+  });
+  expect(beforeClick.basis).toBe('INQUIRY_REPLY');
+  expect(beforeClick.orgId).toBe(orgId);
+
+  // A second request for the same address the same day sends no second mail
+  // once the day's slot IS spent (as a SENT mail would have spent it).
+  await prisma.contactConfirmationMailCap.create({ data: { key: capKey } });
+  const again = await postInquiry(request, MARKETING_HOST, {
+    companyName: `${companyName} Zwei`,
+    contactName: 'Dora Double',
+    email,
+    marketingOptIn: true,
+  });
+  expect(again.ok()).toBeTruthy();
+  const second = await prisma.companyInquiry.findFirstOrThrow({ where: { email, companyName: `${companyName} Zwei` } });
+  expect(second.marketingOptInRequested).toBe(true);
+  expect(second.marketingOptInMailSentAt).toBeNull();
+  expect(await confirmMails()).toBe(1);
+
+  // The address owner opens the link and presses the button (the page POSTs;
+  // opening the link alone confirms nothing).
+  const confirmToken = makeContactPermissionToken('confirm', first.id);
+  await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST, 'x-forwarded-for': clientIp() });
+  await page.goto(`/contact-permission/confirm?token=${encodeURIComponent(confirmToken)}`);
+  expect((await prisma.companyInquiry.findUniqueOrThrow({ where: { id: first.id } })).marketingOptInConfirmedAt).toBeNull();
+  await page.getByTestId('contact-permission-button').click();
+  await expect(page.getByTestId('contact-permission-done')).toBeVisible({ timeout: 15_000 });
+
+  const confirmed = await prisma.companyInquiry.findUniqueOrThrow({ where: { id: first.id } });
+  expect(confirmed.marketingOptInConfirmedAt).not.toBeNull();
+  const permission = await prisma.contactPermission.findUniqueOrThrow({
+    where: { companyId_channel: { companyId, channel: 'EMAIL' } },
+  });
+  expect(permission.basis).toBe('DOI_CONFIRMED');
+  expect(permission.source).toBe('DOI_LINK');
+  expect(permission.confirmedAt).not.toBeNull();
+  expect(permission.textVersion).toBe(MARKETING_OPT_IN_TEXT_VERSION);
+  expect(permission.textLocale).toBe('de');
+  expect(permission.address).toBe(email.toLowerCase());
+  expect(permission.revokedAt).toBeNull();
+
+  // MARKETING-org accounts sign in on the marketing host only (#2590).
+  const context = await browser.newContext({ extraHTTPHeaders: { 'x-forwarded-host': MARKETING_HOST } });
+  const admin = await context.newPage();
+  try {
+    await signInAndSettle(admin, mktAdminEmail, PW, '/admin');
+    const listed = async () => {
+      const r = await admin.request.get(`/api/companies?permission=email&search=${encodeURIComponent(companyName)}`);
+      expect(r.ok()).toBeTruthy();
+      return ((await r.json()).companies as { id: string }[]).map((c) => c.id);
+    };
+    expect(await listed()).toContain(companyId);
+    // The list filter on screen, and its badge.
+    await gotoSettled(admin, '/admin/companies');
+    await admin.getByTestId('companies-permission-filter').selectOption('email');
+    await admin.getByTestId('companies-search').fill(companyName);
+    await expect(admin.getByTestId(`company-email-permission-${companyId}`)).toBeVisible({ timeout: 15_000 });
+    // …and the owning rep's own account list.
+    const repContext = await browser.newContext({ extraHTTPHeaders: { 'x-forwarded-host': MARKETING_HOST } });
+    try {
+      const rep = await repContext.newPage();
+      await signInAndSettle(rep, mktRepEmail, PW, '/sales');
+      await gotoSettled(rep, '/sales/accounts?permission=email');
+      await expect(rep.getByTestId(`sales-account-permission-${companyId}`)).toHaveText('Yes');
+    } finally {
+      await repContext.close();
+    }
+    await gotoSettled(admin, `/admin/companies/${companyId}`);
+    await expect(admin.getByTestId('company-detail-permission-basis-EMAIL')).toHaveAttribute('data-basis', 'DOI_CONFIRMED');
+    await expect(admin.getByTestId('company-detail-email-permission')).toHaveAttribute('data-permitted', 'true');
+
+    // An admin cannot type a double opt-in in, nor a §7(3) record without its reason.
+    const forged = await admin.request.put(`/api/admin/companies/${companyId}/contact-permission`, {
+      data: { action: 'set', channel: 'EMAIL', basis: 'DOI_CONFIRMED' },
+    });
+    expect(forged.status()).toBe(400);
+    const bare = await admin.request.put(`/api/admin/companies/${companyId}/contact-permission`, {
+      data: { action: 'set', channel: 'EMAIL', basis: 'EXISTING_CUSTOMER_7_3' },
+    });
+    expect((await bare.json()).code).toBe('reason_required');
+
+    // The opt-out link takes it back — and a confirmation after it is refused.
+    const optOut = await request.post('/api/contact-permission/opt-out', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: makeContactPermissionToken('optout', first.id) },
+    });
+    expect(optOut.ok()).toBeTruthy();
+    const revoked = await prisma.contactPermission.findUniqueOrThrow({
+      where: { companyId_channel: { companyId, channel: 'EMAIL' } },
+    });
+    expect(revoked.revokedAt).not.toBeNull();
+    expect(revoked.revokedVia).toBe('LINK');
+    expect(revoked.basis).toBe('DOI_CONFIRMED');
+    expect(await listed()).not.toContain(companyId);
+    const reconfirm = await request.post('/api/contact-permission/confirm', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: confirmToken },
+    });
+    expect(reconfirm.status()).toBe(409);
+    // A confirm token is not an opt-out token, and the reverse.
+    const crossed = await request.post('/api/contact-permission/confirm', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: makeContactPermissionToken('optout', first.id) },
+    });
+    expect(crossed.status()).toBe(400);
+    // Nobody here re-grants what the person withdrew.
+    const regrant = await admin.request.put(`/api/admin/companies/${companyId}/contact-permission`, {
+      data: { action: 'set', channel: 'EMAIL', basis: 'EXISTING_CUSTOMER_7_3', reason: 'Paid invoice 2026-0042 in March' },
+    });
+    expect(regrant.status()).toBe(400);
+    expect((await regrant.json()).code).toBe('owner_objected');
+    // …not in two steps either: a neutral basis would clear the objection and
+    // let § 7(3) through on the next request, so the row is locked to it too.
+    for (const basis of ['NONE', 'INQUIRY_REPLY'] as const) {
+      const neutral = await admin.request.put(`/api/admin/companies/${companyId}/contact-permission`, {
+        data: { action: 'set', channel: 'EMAIL', basis },
+      });
+      expect(neutral.status()).toBe(400);
+      expect((await neutral.json()).code).toBe('owner_objected');
+    }
+    const stillLocked = await prisma.contactPermission.findUniqueOrThrow({
+      where: { companyId_channel: { companyId, channel: 'EMAIL' } },
+    });
+    expect(stillLocked.revokedVia).toBe('LINK');
+    expect(stillLocked.revokedAt).not.toBeNull();
+
+    // Another request's account: confirmed, then revoked by an admin (the
+    // person objected by phone). Replaying the old confirm link is not a new
+    // consent and must not revive it; the person's own opt-out afterwards
+    // still records itself, and locks the row.
+    const replayEmail = newInquiryEmail('demo-form-doi-replay');
+    const replayName = `Opt In Replay ${stamp}`;
+    const placed = await postInquiry(request, MARKETING_HOST, {
+      companyName: replayName,
+      contactName: 'Rita Replay',
+      email: replayEmail,
+      marketingOptIn: true,
+      locale: 'de',
+    });
+    expect(placed.ok()).toBeTruthy();
+    const third = await prisma.companyInquiry.findFirstOrThrow({ where: { email: replayEmail, companyName: replayName } });
+    const secondCompanyId = third.convertedCompanyId;
+    expect(secondCompanyId).not.toBeNull();
+    expect(secondCompanyId).not.toBe(companyId);
+    const secondToken = makeContactPermissionToken('confirm', third.id);
+    const confirmSecond = await request.post('/api/contact-permission/confirm', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: secondToken },
+    });
+    expect(confirmSecond.ok()).toBeTruthy();
+    const secondKey = { companyId_channel: { companyId: secondCompanyId!, channel: 'EMAIL' as const } };
+    expect((await prisma.contactPermission.findUniqueOrThrow({ where: secondKey })).basis).toBe('DOI_CONFIRMED');
+    const adminRevoke = await admin.request.put(`/api/admin/companies/${secondCompanyId}/contact-permission`, {
+      data: { action: 'revoke', channel: 'EMAIL' },
+    });
+    expect(adminRevoke.ok()).toBeTruthy();
+    const replay = await request.post('/api/contact-permission/confirm', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: secondToken },
+    });
+    expect(replay.ok()).toBeTruthy();
+    const afterReplay = await prisma.contactPermission.findUniqueOrThrow({ where: secondKey });
+    expect(afterReplay.revokedAt).not.toBeNull();
+    expect(afterReplay.revokedVia).toBe('ADMIN');
+    const optOutSecond = await request.post('/api/contact-permission/opt-out', {
+      headers: { 'x-forwarded-for': clientIp() },
+      data: { token: makeContactPermissionToken('optout', third.id) },
+    });
+    expect(optOutSecond.ok()).toBeTruthy();
+    const afterOptOut = await prisma.contactPermission.findUniqueOrThrow({ where: secondKey });
+    expect(afterOptOut.revokedVia).toBe('LINK');
+    expect(afterOptOut.revokedAt!.getTime()).toBe(afterReplay.revokedAt!.getTime());
+    const overObjection = await admin.request.put(`/api/admin/companies/${secondCompanyId}/contact-permission`, {
+      data: { action: 'set', channel: 'EMAIL', basis: 'EXISTING_CUSTOMER_7_3', reason: 'Paid invoice 2026-0043 in April' },
+    });
+    expect(overObjection.status()).toBe(400);
+    expect((await overObjection.json()).code).toBe('owner_objected');
+    await gotoSettled(admin, `/admin/companies/${companyId}`);
+    await expect(admin.getByTestId('company-detail-permission-basis-EMAIL')).toHaveAttribute('data-revoked', 'true');
+    await expect(admin.getByTestId('company-detail-email-permission')).toHaveAttribute('data-permitted', 'false');
   } finally {
     await context.close();
   }
@@ -345,6 +594,34 @@ test('an invitation link opens the invited tenant’s own product host', async (
     await mkt.close();
     await int.close();
   }
+});
+
+test('a gated mail that passes only userId gets its footer and List-Unsubscribe on the recipient tenant host (#2495)', async () => {
+  // sendEmail()'s IMPLICIT origin path — the caller passes a userId and no
+  // orgId, which is what most gated mails do — resolved through
+  // the account's org (appUrlForUser). SMTP is blanked under Playwright, so the send itself
+  // short-circuits; optOutParts() is the exact step sendEmail() runs for the
+  // footer. It lives in this serial spec because it needs MARKETING_HOST mapped.
+  process.env.NEXTAUTH_SECRET ||= 'unit-test-secret';
+  const hostsOf = async (userId: string) => {
+    const { body, headers } = await emailInternals.optOutParts('<p>hi</p>', userId, 'digests');
+    const hrefs = [...body.matchAll(/href="([^"]+)"/g)].map((m) => new URL(m[1]).host);
+    const one = /<([^>]+)>/.exec(headers['List-Unsubscribe'])![1];
+    return { hrefs, one: new URL(one).host };
+  };
+
+  const mkt = await hostsOf(mktRepId);
+  expect(mkt.hrefs.length, 'the footer carries links').toBeGreaterThan(0);
+  for (const h of mkt.hrefs) expect(h, 'marketing footer link').toBe(MARKETING_HOST);
+  expect(mkt.one, 'marketing List-Unsubscribe').toBe(MARKETING_HOST);
+
+  // The default (internship) org maps no host: the configured origin, unchanged.
+  const int = await hostsOf(intAdminId);
+  for (const h of int.hrefs) expect(h, 'internship footer link').not.toBe(MARKETING_HOST);
+  expect(int.one, 'internship List-Unsubscribe').not.toBe(MARKETING_HOST);
+  // An origin sendEmail() already resolved (from `orgId`) still wins over the lookup.
+  const pinned = await emailInternals.optOutParts('<p>hi</p>', mktRepId, 'digests', null, 'https://pinned.example');
+  expect(new URL(/<([^>]+)>/.exec(pinned.headers['List-Unsubscribe'])![1]).host).toBe('pinned.example');
 });
 
 test('an unmapped marketing host is a closed form — it never writes into the internship org', { tag: '@smoke' }, async ({ page, request }) => {

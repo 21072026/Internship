@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The mentorship request queue fits a 360px phone in German; the layout audit's calendar check follows #2153** (#2165). The mentor `<select>` in `/admin/mentorship`'s request queue is as wide as its longest option, and a mentor's option carries a translated availability note, so in German each row spilled ~200px past the viewport (`e2e/mobile-layout-audit.spec.ts` \"admin screens … in German\" red on `main`). `min-w-0 max-w-full` on the select and its action row let it shrink to the row. The reflow test located the calendar view switcher by `[role=\"tablist\"]`, which #2153 removed — it now targets the new `data-testid=\"calendar-view-switcher\"`. The mentor-screens case #2165 was filed for no longer reproduces on `main`; the whole audit spec is green again (8/8)."
+}

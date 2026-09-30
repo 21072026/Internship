@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
@@ -37,6 +39,23 @@ const STATUS_VARIANT: Record<string, 'success' | 'info' | 'default' | 'warning'>
 // three links and "2 interns" — even though they sit in the project's group chat
 // with everyone on it. They now see the roster, the recurring meeting, their own
 // goals, and shortcuts to the owner and the group chat.
+// The project's own name (#1376) — but only a PUBLIC project's: a private one
+// must never leak even its name (the rule /p/[userId]'s showcase follows), and
+// metadata is resolved for whoever requests the URL, before the page decides
+// they may not see it. Everything else gets the showcase's title.
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const project = await prisma.project.findFirst({ where: { id, isPublic: true }, select: { name: true } });
+  return pageMetadata((t) =>
+    project
+      ? { title: project.name, description: t.seo.projectDescription.replace('{name}', project.name) }
+      : { title: t.projects.showcaseTitle },
+    // Its own card; for a private or unknown id that route answers with the
+    // generic brand card (#1378), so the URL itself reveals nothing.
+    `/projects/${encodeURIComponent(id)}/opengraph-image`
+  );
+}
+
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { locale, t } = await getServerDictionary();

@@ -162,7 +162,7 @@ Serbest metnin sahibi kim olduğuna göre davranış değişir:
 |---|---|---|
 | Ne olur | **Mezar taşı**: gövde boşaltılır, ek satırları silinir, **satır kalır** | **Temizlenir**: serbest metin gider, satırın tarihi/türü/aşaması kalır |
 | Neden | Karşı tarafın konuşması anlamsızlaşmasın — mevcut `Message.deletedForEveryoneAt` maskesi zaten "mesaj silindi" yer tutucusunu gösteriyor | Tarih, tür ve aşama kurumun operasyonel geçmişi; metin gittikten sonra PII taşımıyorlar |
-| Kapsam | `Message.body` + `MessageAttachment`, `SupportMessage.body` + `SupportAttachment`, `SupportTicket.subject` (kişinin ilk mesajının ilk 80 karakterinin birebir kopyası), `MentorshipRequest.message`, kişinin kendi `PersonalNote` satırları (yalnızca kendisine ait → doğrudan silinir) | `InteractionLog.notes`/`subject`, `RelationNote.body`, kişinin toplantısında alınmış `PersonalNote.body` |
+| Kapsam | `Message.body` + `MessageAttachment`, `SupportMessage.body` + `SupportAttachment`, `SupportTicket.subject` (kişinin ilk mesajının ilk 80 karakterinin birebir kopyası), `MentorshipRequest.message`, `MentorQuestion.question`, `MeetingRequest.topic`, `ProjectJoinRequest.message`; **yazar olarak** yazdıkları (kimin hakkında olursa olsun): `Evaluation.comment`/`publicExcerpt`, mentörken verdiği `MentorQuestion.answer`, incelediği `WeeklyReport.mentorComment`; kişinin kendi `PersonalNote` satırları ve kendi **bildirimleri** (yalnızca kendisine ait → doğrudan silinir) | `InteractionLog.notes`/`subject`, `RelationNote.body`, kişinin toplantısında alınmış `PersonalNote.body`, `Evaluation.comment`/`publicExcerpt` (ilişkisi ya da panel öznesi), `WeeklyReport.summary`/`blockers`/`mentorComment`, `MentorQuestion`, `MeetingRequest.topic`, `Meeting.title`/`cancelReason` (ilişkisi ya da 1:1 konuşması), `Goal.description`, `Offer.compensationNote`/`declineNote`, `StatusChange.reasonNote`, `CompanyInterest.note`, `InterviewRequest.note`/`declineNote`, `ProjectJoinRequest.decisionNote` (#2106) |
 
 `User` satırında ayrıca gözden kaçmış üç alan temizleniyor: `country`,
 `referralSource`, `reEngageNote`.
@@ -211,10 +211,21 @@ temizliyor; kural [`src/lib/companyContactErasure.ts`](../src/lib/companyContact
   (`prisma/backfill-organization.mjs`) onları varsayılan org'a atar — başka hiçbir
   org için NULL satıra dokunulmaz. Kanıt: [`e2e/erasure-company-contact.spec.ts`](../e2e/erasure-company-contact.spec.ts)
   (aynı adresi taşıyan iki kiracı, damgasız bir satır ve aynı kiracıda başka bir kişi).
-- **Kalan boşluklar:** yöneticilere giden `signup.companyInquiry` bildirimi
-  kişinin adını adres olmadan taşır (#2106); hesabı hiç olmamış bir muhatap ve
-  başvuruların saklama süresi #2559 (bu fonksiyonu genişletir, ikinci bir silme
-  yolu yazmaz).
+- **Hesabı hiç olmamış muhatap (#2559):** web talebinin göndereni ya da içe
+  aktarılan hesabın adı geçen kişisi bir `User` satırı olmadan yalnızca adres
+  olarak durur. `/admin/company-inquiries` satırındaki **Bu kişiyi unut**
+  (`POST /api/admin/company-contacts/forget`) onu adresle, yöneticinin kendi
+  kiracısında unutur: aynı kural, aynı scrub kurucusu (`contactScrubOps()`),
+  ikinci bir silme yolu yok. Kapılar hesap silmeyle aynı: yalnız ADMIN, taklit
+  sırasında asla, yöneticinin kendi parolası ve adresin yeniden yazılması.
+  Kurumda bu adrese ait bir hesap varsa istek `has_account` ile reddedilir —
+  o kişi hesabından silinir, çünkü mesajları ve notları da oradan erişilir.
+  ActivityLog satırı yalnızca sayıları taşır; unutulan adres loglanmaz.
+  Kanıt: [`e2e/forget-company-contact.spec.ts`](../e2e/forget-company-contact.spec.ts).
+- **Kalan boşluk:** yöneticilere giden `signup.companyInquiry` bildirimi kişinin
+  adını adres olmadan taşır; bildirim saklama süresiyle sınırlı (aşağıda,
+  "Ulaşılamayanlar"). Dönüştürülmemiş başvurular `companyInquiry` saklama
+  kaydıyla yaşlanıp gider (#2559).
 
 ### Şema değişikliği yok
 
@@ -231,18 +242,35 @@ Kanıt testi: [`e2e/erasure-free-text.spec.ts`](../e2e/erasure-free-text.spec.ts
 etkileşim kaydı serbest metinleriyle yazılır, **iki yol da** koşulur, sonra
 tohumlanan PII dizeleri doğrudan Prisma ile aranır.
 
-Kodda `KNOWN GAPS` bloğunda sayılan ve [#2106](https://github.com/21072026/Internship/issues/2106)
-ile takip edilen kalan yüzeyler:
+`scripts/sanitize-db.mjs` başlığındaki "Emptied" envanterinin **her** kişisel
+serbest metin kolonu artık iki yolda da temizleniyor (#2106). Kalanlar bir
+**karar**, gerekçesiyle birlikte `accountErasure.ts` başındaki `COVERAGE` bloğunda:
 
 - **Toplantısız `PersonalNote`** (`meetingId: null`): yazarına bağlı, özneye
   hiçbir bağı yok. Bu notun bu kişi hakkında mı yoksa bir başkası hakkında mı
   olduğunu ayırt eden bir sorgu yazılamaz — ürün kararı gerektiriyor.
 - Grup konuşması / proje toplantısında alınan notlar: not toplantı hakkındadır,
   kişi hakkında değil.
-- `scripts/sanitize-db.mjs` başlığındaki envanterin geri kalanı (değerlendirme
-  yorumları, haftalık raporlar, hedef açıklamaları, teklif/görüşme notları,
-  bildirim metinleri, denetim kaydı `detail` alanları). Bunların çoğu **tamamen
-  silmede** cascade ile gidiyor ama **anonimleştirmede** kalıyor.
+- **Başkasının metninde alıntılanan kişi** (#2098): başka bir kullanıcının açtığı
+  destek talebinde adminin yanıta kişinin telefonunu yapıştırması ya da bir
+  mentörün toplantısız notunda ondan söz etmesi. Buna yalnızca tam metin arama
+  ulaşır, arama da bir anahtar değildir: adaşları bulur, başka sözcüklerle
+  yazılmışı kaçırır ve özel notlarda arama yapmak, yazarından istenmemiş bir
+  metni okumak demektir. **Bilinçli olarak ulaşılmıyor**; gizlilik metni bunu
+  söylemeli (metnin ifadesi hak sahibinin kararıdır, kodun değil).
+- `Meeting.meetLink` (bir oda adresi, kişisel veri değil), `MenteeOnboarding.steps`
+  ve `Announcement` (kontrol listesi durumu ve kurum geneli duyuru metni).
+- **Başkalarının bildirimlerinde** kişinin adı ("Ayşe sana mesaj gönderdi"): ad
+  `params` JSON'unda, sabit bir kimlik olmadan duruyor; adaşından ayırt eden bir
+  sorgu yok. Bunun yerine `notification` saklama kaydıyla sınırlı
+  (`notificationRetentionDays`, varsayılan 180 gün). Kişinin **kendi** bildirimleri
+  silinir.
+- **Denetim kaydı bilinçli olarak korunur:** `ActivityLog` (`actorEmail`, `detail`,
+  `ip`, `userAgent`) ve `AuditLog.detail`. Silmenin yeniden yazdığı bir defter,
+  var olma nedeni olan güvenlik incelemesinde ya da hukuki talepte "kim ne yaptı"
+  sorusunu cevaplayamaz (GDPR md. 17(3)(b)/(e)). `activityLog` saklama kaydıyla
+  sınırlı (`activityLogRetentionDays`, varsayılan 365 gün). Bu kararı değiştirmeden
+  silme bu tabloları yeniden yazmaya başlamamalı.
 
 Aşağıdaki bölümdeki uyarı burada da geçerli ve iki yönlü: yeni bir serbest metin
 kolonu eklerken hem `scripts/sanitize-db.mjs` envanterine hem de
@@ -319,6 +347,7 @@ ile değiştirilir.
 | `PageView` | `pageViewRetentionDays` | 180 gün | En kısası, çünkü en müdahaleci ve eskidikçe en işe yaramaz olan bu. Onu okuyan **tek** yüzey (mentee aktivite raporu) en fazla 30 gün geriye bakabiliyor; 180 gün bunun altı katı ve yukarıdaki 6 aylık mentorluk sonrası penceresiyle aynı. |
 | `PushSubscription` | `pushSubscriptionStaleDays` | 180 gün | Şema yorumunun kendi deyimiyle "ölü ağırlık". Asıl temizlik push sağlayıcısının reddinde oluyor (`src/lib/webPush.ts`: 404/410 anında siler, 5 ardışık hatadan sonra da siler); bu girdi yalnızca hiç push gönderilmemiş satırı yakalar. |
 | `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
+| `CompanyInquiry` | `companyInquiryRetentionDays` | 730 gün | Her talep bir kişinin adı, adresi, telefonu ve kendi yazdıklarıdır ve bu girdiden önce hiçbiri silinmiyordu (#2559). Hiç hesaba dönüştürülmemiş talep **silinir**; dönüştürülmüş olan satır kalır (hesap oradan geldi) ve yalnızca kişisel kolonlarını kaybeder — hesap silmenin temizlediği kolonların aynısı (`inquiryErasureData()`). İki yıl: sessizleşen bir müşteri adayının geri dönmesine ve talep kaynaklarının yıldan yıla karşılaştırılmasına yeter, cevapsız kalmış bir talebi sonsuza dek tutmaz. Talepteki pazarlama izni kaydı da satırla birlikte gider; kalıcı bir opt-out kanıtı gerekiyorsa o #2577'nin kararıdır. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
 | `Notification` | `notificationRetentionDays` | 180 gün | Bir bildirim satırı, biri hakkında yazılmış bir cümle ve kaydına giden bir link — `EmailLog`'un budanma gerekçesiyle aynı türden kişisel veri, ama #1646'ya kadar hiç silinmeyen tek tablo. 180 gün, diğer kullanıcı bazlı geçmiş tablosu olan `PageView` ile aynı; ürün iki sayı yerine bir sayı savunuyor. **Okunmamış satır silinmez**, 30 günden yeni satır silinmez, onay ve hesaba erişim bildirimleri hiç silinmez (aşağıya bakın). `0` = sonsuza kadar sakla. |
 | `TrialReminder` | *(ayar yok)* | 365 gün | Kayıt defterindeki, kişisel veri taşımayan iki girdiden biri (#2414; diğeri `CompanyUsage`): satır yalnızca "bu deneme için bu eşik zaten işlendi" diyor — bir ilişki kimliği, bir tam sayı ve bir zaman damgası. Bu soru ancak deneme geri sayarken sorulur; bir yıl sonra deneme çoktan sonuçlanmıştır ve satır kimsenin okumadığı bir bastırma defteridir. Silmek güvenli, çünkü seçim **tam takvim günü** eşleşmesi yapıyor (`src/lib/trialReminderRule.ts`): süresi geçmiş bir denemenin farkı negatiftir ve bir daha hiçbir eşiğe eşit olamaz, dolayısıyla eski bir claim satırını silmek çoktan biten bir deneme için hatırlatmayı diriltemez. Kural "en fazla" karşılaştırmasına dönerse bu pencere de yeniden düşünülmelidir. Operatör düğmesi yok: kişisel veri içermeyen bir tablonun ayarını kimse okumaz. |

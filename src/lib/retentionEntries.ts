@@ -10,6 +10,8 @@ import {
 } from '@/lib/notificationRetention';
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
 import { anonymizeUser } from '@/lib/accountErasure';
+import { inquiryErasureData } from '@/lib/companyContactErasure';
+import { ERASED_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 import {
   ORPHAN_ANONYMIZE_PER_RUN,
   ORPHAN_APPLICANT_GRACE_DAYS,
@@ -306,6 +308,73 @@ async function pruneCompanyUsage(ctx: RetentionContext) {
   return { deleted: processed, capped };
 }
 
+/**
+ * Company enquiries (#2559, DSGVO Art. 5(1)(e)). Every row is one person's name,
+ * address, telephone number and own words, from a web form or an import — and
+ * until this entry nothing ever deleted one.
+ *
+ * Two rules, because the rows mean two different things once they are old:
+ *   - NEVER CONVERTED (`convertedCompanyId` null): a request nobody turned into
+ *     an account. Past the window it is deleted outright; nothing else points
+ *     at it.
+ *   - CONVERTED: the row is where the account came from, which the company's
+ *     history still reads. It stays, and loses exactly the columns the account
+ *     erasure scrubs (`inquiryErasureData()`, #2434) — one definition of "the
+ *     personal fields of an enquiry", not a second list here.
+ * Dated by `createdAt`: the window runs from the day the person wrote to us.
+ * A row already tombstoned (its address on the erased domain) is not selected
+ * again, so the scrub is idempotent and does not eat the per-run budget.
+ */
+async function pruneCompanyInquiries(ctx: RetentionContext) {
+  const removal = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: ctx.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.companyInquiry.findMany({
+          where: { createdAt: { lt: ctx.cutoff }, convertedCompanyId: null },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.companyInquiry.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  const scrub = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: Math.max(0, ctx.budget - removal.processed),
+    selectIds: async (take) =>
+      (
+        await prisma.companyInquiry.findMany({
+          where: {
+            createdAt: { lt: ctx.cutoff },
+            convertedCompanyId: { not: null },
+            NOT: { email: { endsWith: `@${ERASED_EMAIL_DOMAIN}` } },
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    // One statement per row: each tombstone address carries the row's own id,
+    // so the scrubbed rows stay distinguishable (and this can never collide
+    // with an erased account's `erased-<userId>@…`).
+    handleBatch: async (ids) => {
+      let count = 0;
+      for (const id of ids) {
+        const res = await prisma.companyInquiry.updateMany({
+          where: { id, NOT: { email: { endsWith: `@${ERASED_EMAIL_DOMAIN}` } } },
+          data: inquiryErasureData(`inquiry-${id}`),
+        });
+        count += res.count;
+      }
+      return count;
+    },
+  });
+  return { deleted: removal.processed, masked: scrub.processed, capped: removal.capped || scrub.capped };
+}
+
 /** The configured window for one org, falling back to the code default. */
 async function notificationWindowFor(orgId: string | null): Promise<number> {
   const fallback = Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10);
@@ -595,6 +664,16 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'A bell entry is a rendered sentence about a person plus a link to their record — the same category of personal data EmailLog is pruned for, and until #1646 the one table nobody ever deleted from. 180 days matches PageView, the other per-user history table, so the product defends one number rather than two. An unread row, and anything younger than 30 days, is never touched whatever the setting says; the consent and impersonation notices (RETAINED_NOTIFICATION_TYPES) are never touched at all.',
     run: pruneNotifications,
+  },
+  {
+    key: 'companyInquiry',
+    // Resolved from the GLOBAL settings row, like orphanApplicant: the sweep has
+    // no org bound and takes every tenant's rows in one pass.
+    settingKey: 'companyInquiryRetentionDays',
+    defaultDays: Number.parseInt(SETTING_DEFAULTS.companyInquiryRetentionDays, 10),
+    reason:
+      'Every enquiry is one person\'s name, address, phone number and own words, and nothing ever deleted one (GDPR Art. 5(1)(e), #2559). Two years is long enough for a lead that went quiet to come back and for a year-on-year look at where requests came from, and short enough that a request nobody answered is not kept for ever. An enquiry never converted into an account is deleted; a converted one stays, because it is where the account came from, and loses only its personal columns — the same ones the account erasure scrubs (src/lib/companyContactErasure.ts).',
+    run: pruneCompanyInquiries,
   },
   {
     key: 'trialReminder',

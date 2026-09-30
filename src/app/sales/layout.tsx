@@ -1,3 +1,4 @@
+import { NO_INDEX } from '@/lib/pageMetadata';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
@@ -16,6 +17,9 @@ import { resolveCustomStages } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { roleHome } from '@/lib/roleHome';
 import { hasSalesSurface, NEUTRAL_HOME } from '@/lib/salesSurface';
+
+// Signed-in area: never in a search result (#1376).
+export const metadata = NO_INDEX;
 
 // The sales surface shell (#2580): a MARKETING sales rep — a MENTOR of a
 // vertical without the `mentorship` module — works here on their OWN records.

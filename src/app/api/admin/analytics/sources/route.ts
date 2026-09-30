@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -7,6 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { attributedLeadWhere, sourceAttributionRows } from '@/lib/leadAttribution';
 import { getLocale } from '@/i18n/server';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // GET — lead attribution: per referral source, how many people came in and what
 // share of them reached the tenant's finished stage (Faz 2, #539; generalised to
@@ -46,7 +48,9 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if ((await getSetting('premiumAnalytics')) !== 'true') {
+  // The CALLER's tier, org passed explicitly: this runs before the tenant
+  // scope binds, so a bare call read only the global row.
+  if ((await getSetting('premiumAnalytics', (session.user as { orgId?: string | null }).orgId ?? null)) !== 'true') {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 
@@ -55,14 +59,19 @@ export async function GET() {
   return await withTenantScope(session, async () => {
     const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
     const outcome = await outcomeStageKeys(orgId, locale);
+    // The caller's tenant, by hand (#2570) — the middleware is dormant, and
+    // both halves of this report are tenant data: another tenant's sources and
+    // (worse) its count of unsourced leads were returned here until now.
+    const tenant = await tenantWhere(session);
 
     const sources = await prisma.source.findMany({
+      where: withinTenant({}, tenant),
       orderBy: { name: 'asc' },
       select: {
         id: true,
         name: true,
         users: {
-          where: attributedLeadWhere(),
+          where: withinTenant(attributedLeadWhere(), tenant),
           select: { menteeRelations: { select: { pipelineStatus: true } } },
         },
       },
@@ -80,7 +89,32 @@ export async function GET() {
     // People with no source at all, so the report accounts for everyone — the
     // untracked share is itself the answer to "how much of this do we know?",
     // and it is the reason no separate "no campaign" bucket is needed.
-    const unsourced = await prisma.user.count({ where: { ...attributedLeadWhere(), sourceId: null } });
+    //
+    // A lead whose channel is not known is counted HERE and nowhere else: the
+    // attribution writers (src/lib/leadSource.ts) leave `sourceId` NULL for an
+    // unknown channel rather than creating an "unknown" Source (#2570).
+    //
+    // "No source" means no source OF THIS TENANT: a lead whose `sourceId`
+    // points at another tenant's row (a source the deploy backfill gave to the
+    // default org, attached through the pre-#2570 unscoped picker) is filtered
+    // out of the list above, so it is counted here instead of vanishing from
+    // both halves. `prisma/check-tenant-misattribution.mjs` sizes those rows.
+    // An `AND` of conjuncts, so neither `OR` can replace the tenant fragment's.
+    // The "outside" half is spelled per case because SQL's NOT over a NULL is
+    // NULL: `NOT (orgId = 'm')` would silently skip a NULL-org source, which
+    // for a non-default tenant is exactly the outside row to count.
+    const outsideTenant: Prisma.SourceWhereInput | null =
+      'orgId' in tenant
+        ? { OR: [{ orgId: null }, { orgId: { not: tenant.orgId } }] }
+        : 'OR' in tenant
+          ? { AND: [{ orgId: { not: null } }, { orgId: { not: tenant.OR[0].orgId } }] }
+          : null;
+    const noSourceHere: Prisma.UserWhereInput = outsideTenant
+      ? { OR: [{ sourceId: null }, { source: { is: outsideTenant } }] }
+      : { sourceId: null };
+    const unsourced = await prisma.user.count({
+      where: withinTenant({ AND: [attributedLeadWhere(), noSourceHere] }, tenant),
+    });
 
     return NextResponse.json({
       sources: rows,

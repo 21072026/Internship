@@ -221,6 +221,17 @@ export interface EntryMonthConversion {
   rate: number | null;
 }
 
+export interface EntryMonthOptions<J extends Journey> {
+  /**
+   * Override WHEN (and whether) a journey entered the cohort. Default: the
+   * first moment it was at or past `fromKey` (`firstReachedAt`). The trial
+   * cohort (#2556) anchors on the recorded trial start instead, and returns
+   * null for a journey that never had a trial — skipping the trial stage is
+   * "passing" it for the funnel, but it is not a trial that could convert.
+   */
+  enteredAt?: (journey: J) => number | null;
+}
+
 /**
  * Conversion from one stage to a later one, cohorted by the month of ENTRY.
  *
@@ -239,12 +250,13 @@ export interface EntryMonthConversion {
  * left out rather than folded into an edge bucket, which would overstate that
  * bucket by everything that came before it.
  */
-export function conversionByEntryMonth(
+export function conversionByEntryMonth<J extends Journey>(
   order: string[],
-  journeys: Journey[],
+  journeys: J[],
   fromKey: string,
   toKey: string,
   months: CohortMonth[],
+  options: EntryMonthOptions<J> = {},
 ): EntryMonthConversion[] {
   const index = stageIndex(order);
   const fromIndex = index.get(fromKey);
@@ -257,8 +269,15 @@ export function conversionByEntryMonth(
   if (fromIndex !== undefined && toIndex !== undefined && toIndex > fromIndex) {
     for (const j of journeys) {
       const reach = furthestIndex(order, j);
-      if (reach < fromIndex) continue;
-      const enteredAt = firstReachedAt(order, j, fromIndex);
+      // A caller-supplied anchor (the trial cohort, #2556) decides on its own
+      // who belongs to the cohort; the reach check is the default rule's.
+      let enteredAt: number | null;
+      if (options.enteredAt) {
+        enteredAt = options.enteredAt(j);
+      } else {
+        if (reach < fromIndex) continue;
+        enteredAt = firstReachedAt(order, j, fromIndex);
+      }
       if (enteredAt === null) continue;
       const bucket = buckets.get(periodOf(new Date(enteredAt)));
       if (!bucket) continue;
@@ -451,4 +470,214 @@ export function cohortMonths(from: Date, to: Date, max = 36): CohortMonth[] {
     cursor = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
   }
   return out.filter((m) => isPeriod(m)).slice(-max);
+}
+
+// ── Transfer chains: one journey, however many owners (#2556) ────────────────
+//
+// A handover (src/lib/mentorTransfer.ts, 'transferred') closes the relation and
+// opens a successor ON THE SAME STAGE, linked by `previousRelationId`. Read as
+// two relations, that is two journeys: the successor "started" on the day of
+// the transfer, already at (say) the won stage, so it counts as a second entry
+// and a second win in the transfer month — while the closed predecessor,
+// parked on the won stage with nothing after it, never churns. The customer
+// did not change; only the owner did. So every KPI that counts journeys first
+// folds each chain into one.
+
+/** The two fields a relation needs to be placed in its chain. */
+export interface ChainLink {
+  id: string;
+  previousRelationId: string | null;
+}
+
+/**
+ * Group relations into transfer chains, each ordered root first.
+ *
+ * The root is the link whose predecessor is absent — null, or not in the list
+ * (a predecessor the caller did not load; the funnel route loads whole chains,
+ * but a missing link degrades to "this is where the chain begins" rather than
+ * dropping a journey). A transfer creates exactly one successor, but nothing
+ * in the schema forbids two, so a branch stays in the same chain rather than
+ * becoming a phantom second journey.
+ *
+ * Every input link lands in exactly one chain, cycles included: a link left
+ * unvisited after the root walk (only possible if `previousRelationId` loops,
+ * which no write path produces) starts a chain of its own.
+ */
+export function relationChains<T extends ChainLink>(links: T[]): T[][] {
+  const byId = new Map(links.map((l) => [l.id, l]));
+  const children = new Map<string, T[]>();
+  for (const l of links) {
+    if (l.previousRelationId && byId.has(l.previousRelationId)) {
+      const list = children.get(l.previousRelationId) ?? [];
+      list.push(l);
+      children.set(l.previousRelationId, list);
+    }
+  }
+  const visited = new Set<string>();
+  const walk = (root: T): T[] => {
+    const chain: T[] = [];
+    const queue = [root];
+    while (queue.length > 0) {
+      const l = queue.shift()!;
+      if (visited.has(l.id)) continue;
+      visited.add(l.id);
+      chain.push(l);
+      queue.push(...(children.get(l.id) ?? []));
+    }
+    return chain;
+  };
+  const chains: T[][] = [];
+  for (const l of links) {
+    const isRoot = !l.previousRelationId || !byId.has(l.previousRelationId);
+    if (isRoot && !visited.has(l.id)) chains.push(walk(l));
+  }
+  for (const l of links) if (!visited.has(l.id)) chains.push(walk(l));
+  return chains;
+}
+
+/**
+ * One journey out of a chain's per-relation journeys (root first).
+ *
+ * The start is the ROOT's — where and when the customer actually began; the
+ * changes are every link's, in time order. The sort is stable and the input is
+ * in chain order, so two moves in the same millisecond keep the order the
+ * chain recorded them in. A transfer writes no StatusChange (the stage is
+ * carried over, not moved), so the merge adds no phantom arrival.
+ */
+export function mergeChainJourney(chain: Journey[]): Journey {
+  if (chain.length === 0) throw new Error('mergeChainJourney: empty chain');
+  const [root] = chain;
+  const changes = chain.flatMap((j) => j.changes).sort((a, b) => a.at - b.at);
+  return { startStatus: root.startStatus, startedAt: root.startedAt, changes };
+}
+
+// ── Trial → paid conversion (#2556) ──────────────────────────────────────────
+
+/** A journey plus what the trial cohort needs to know about it. */
+export interface TrialJourney extends Journey {
+  /** `MentorshipRelation.trialStartedAt` (ms), when recorded. */
+  trialStartedAt: number | null;
+  /** `MentorshipRelation.trialEndsAt` (ms), when recorded — decides maturity. */
+  trialEndsAt: number | null;
+  /** The lead's referral source, or null for "no source". */
+  sourceId: string | null;
+}
+
+export interface TrialCohortMonth {
+  month: CohortMonth;
+  /** Trials that started in this month. */
+  started: number;
+  /** ... of which reached the paid stage, at any time so far. */
+  paid: number;
+  /** Percentage — null for an empty month AND for an immature one. */
+  rate: number | null;
+  /** The month has closed and every trial started in it has run out. */
+  mature: boolean;
+}
+
+export interface TrialSourceRow {
+  sourceId: string | null;
+  trials: number;
+  paid: number;
+  rate: number | null;
+}
+
+export interface TrialConversionResult {
+  months: TrialCohortMonth[];
+  /** Mature cohorts only, largest source first; `sourceId: null` is "no source". */
+  bySource: TrialSourceRow[];
+}
+
+export interface TrialConversionOptions {
+  now?: Date;
+  /**
+   * The tenant's default trial length, used as the end of a trial whose
+   * `trialEndsAt` was never recorded (one known only from its stage history).
+   */
+  trialDays: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When a journey's trial started, or null if it never had one: the recorded
+ * `trialStartedAt`, else its first ARRIVAL at the trial stage (a record created
+ * in it counts from its start). Merely passing the trial stage by skipping it
+ * is not a trial — nothing was trialled, so nothing can be said to convert.
+ */
+export function trialStartOf(journey: TrialJourney, trialKey: string): number | null {
+  if (journey.trialStartedAt !== null) return journey.trialStartedAt;
+  if (journey.startStatus === trialKey) return journey.startedAt;
+  return journey.changes.find((c) => c.toStatus === trialKey)?.at ?? null;
+}
+
+/**
+ * Trial → paid, cohorted by the month the trial STARTED, plus the same ratio by
+ * referral source.
+ *
+ * Not a new engine: the month table IS `conversionByEntryMonth` with the trial
+ * start as the anchor, so the no-month-above-100% guarantee and the "paid at
+ * any time, however late" rule are the ones the cohort card already has. What
+ * this adds is MATURITY. A trial that is still running has not had its chance
+ * to convert, so a month whose trials have not all run out prints no rate —
+ * null, rendered "—" — exactly as the retention triangle does for an open
+ * window. A month is mature once it has closed and every trial started in it
+ * has ended (`trialEndsAt`, else start + `trialDays`). A deal that closes after
+ * the trial ended still raises a mature month's rate later; that is the cohort
+ * doing its job, not the number being wrong.
+ *
+ * The source table reads mature cohorts only, for the same reason: counting
+ * running trials would rank a source low merely for being recent.
+ *
+ * `trialKey` and `paidKey` come from the tenant's resolved stages — nothing
+ * here knows a key.
+ */
+export function trialConversion(
+  order: string[],
+  journeys: TrialJourney[],
+  trialKey: string,
+  paidKey: string,
+  months: CohortMonth[],
+  options: TrialConversionOptions,
+): TrialConversionResult {
+  const now = (options.now ?? new Date()).getTime();
+  const enteredAt = (j: TrialJourney) => trialStartOf(j, trialKey);
+  const monthSet = new Set(months);
+
+  // Latest trial end per cohort month — the moment the cohort is complete.
+  const lastEnd = new Map<CohortMonth, number>();
+  for (const j of journeys) {
+    const start = enteredAt(j);
+    if (start === null) continue;
+    const month = periodOf(new Date(start));
+    if (!monthSet.has(month)) continue;
+    const end = j.trialEndsAt ?? start + options.trialDays * DAY_MS;
+    lastEnd.set(month, Math.max(lastEnd.get(month) ?? 0, end));
+  }
+  const isMature = (month: CohortMonth) =>
+    now >= periodRange(month).lt.getTime() && now >= (lastEnd.get(month) ?? 0);
+
+  const table = conversionByEntryMonth(order, journeys, trialKey, paidKey, months, { enteredAt });
+  const out: TrialCohortMonth[] = table.map((m) => {
+    const mature = isMature(m.month);
+    return { month: m.month, started: m.entered, paid: m.converted, rate: mature ? m.rate : null, mature };
+  });
+
+  const matureMonths = months.filter(isMature);
+  const groups = new Map<string | null, TrialJourney[]>();
+  for (const j of journeys) {
+    const list = groups.get(j.sourceId) ?? [];
+    list.push(j);
+    groups.set(j.sourceId, list);
+  }
+  const bySource: TrialSourceRow[] = [];
+  for (const [sourceId, group] of groups) {
+    const rows = conversionByEntryMonth(order, group, trialKey, paidKey, matureMonths, { enteredAt });
+    const trials = rows.reduce((s, r) => s + r.entered, 0);
+    if (trials === 0) continue;
+    const paid = rows.reduce((s, r) => s + r.converted, 0);
+    bySource.push({ sourceId, trials, paid, rate: Math.round((paid / trials) * 100) });
+  }
+  bySource.sort((a, b) => b.trials - a.trials || (a.sourceId ?? '').localeCompare(b.sourceId ?? ''));
+  return { months: out, bySource };
 }

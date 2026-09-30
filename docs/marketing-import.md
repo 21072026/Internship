@@ -14,7 +14,9 @@ differently on every run.
 - **The CLI** is `npm run import:marketing-accounts`.
 - **What a row becomes** is [`marketing-vertical/pipeline-record.md`](marketing-vertical/pipeline-record.md):
   account = `Company`, funnel record = `MentorshipRelation`, lead person = a `MENTEE` `User`.
-- **A sample file with all four edge cases**: `scripts/fixtures/marketing-accounts-sample.csv`.
+- **A sample file with the edge cases** (VAT id, a Turkish name, a stage without a contact,
+  `ß`, a trial with its dates and one without — #2554): `scripts/fixtures/marketing-accounts-sample.csv`.
+  A unit test runs it twice and expects six `CREATE`s, then six `UNCHANGED`.
   A lower-case `.csv` or `.tsv` directly in `scripts/fixtures/` is the one exception
   `.gitignore` lets through — a synthetic fixture goes there, a real export goes nowhere
   near the checkout.
@@ -69,6 +71,45 @@ checked per field: a value past its cap is a row-level `ERROR`, never a silent t
 | `contact_name` (`ansprechpartner`) | no | free text, ≤ 191 | `Company.contactName` **and** the lead's `User.fullName` |
 | `contact_email` (`email`, `e-mail`) | no | an address; `@import.local` / `@erased.local` refused | `Company.contactEmail`. It is also the lead person's **identity** for matching — but a lead this importer *creates* is stored under a generated stand-in address, never this one (see "What it writes") |
 | `contact_phone` (`telefon`, `phone`) | no | free text, ≤ 40; compared by normalised digits, so a re-spelling is not a change | `Company.contactPhone` **and** the lead's `User.phone` |
+| `external_id` (`external id`, `externalid`, `salevali_id`, `salevali id`, `externe_id`, `externe id`, `harici_id`, `harici id`) | no | the account's id in the product the tenant sells, ≤ 191, stored as written; matched trimmed and case-insensitively. For SaleVali: the merchant's `User._id` (24 hex characters) — the key [#2565](https://github.com/21072026/Internship/issues/2565) proposes; `user_number` is a display number and is **not** accepted as this column | `Company.externalId` — what the usage feed matches on ([`salevali-usage-feed.md`](marketing-vertical/salevali-usage-feed.md)) |
+| `trial_started_at` (`trial_start`, `trial start`, `testbeginn`, `test_beginn`, `deneme_baslangic`, `deneme başlangıç`) | no | ISO date — see [Dates](#dates-2554) | the funnel record's `trialStartedAt` |
+| `trial_ends_at` (`trial_end`, `trial end`, `testende`, `test_ende`, `deneme_bitis`, `deneme bitiş`) | no | ISO date; not before `trial_started_at` | the funnel record's `trialEndsAt` — what the trial reminders and the expiry sweep read |
+| `customer_since` (`customer since`, `kunde_seit`, `kunde seit`, `musteri_tarihi`, `müşteri tarihi`) | no | ISO date | the funnel record's `startDate` — what the cohort, retention and aging reports read |
+
+### Dates (#2554)
+
+`trial_started_at`, `trial_ends_at` and `customer_since` take exactly two ISO 8601 shapes:
+
+- `2026-05-04` — a calendar **day**, stored as midnight UTC (the same reading as a trial end
+  typed into the app, so the reminder ladder, which compares UTC days, sees the same day);
+- `2026-05-04T10:30:00Z` or `2026-05-04T12:30+02:00` — a date-time **with** a zone, what a
+  system export writes.
+
+Anything else is a row `ERROR` naming the column: `04.05.2026` (day-first and month-first
+cannot be told apart, and a wrong guess moves a trial end by months without a single error),
+a time without a zone (it would mean the importing machine's timezone), an impossible date
+(`2026-02-30` is refused, not rolled into March), or a year out of range. The range is
+**2000–2100 for the two trial dates** (the bound a trial end typed into the app has) and
+**1900–2100 for `customer_since`** — a merchant can have been a customer since 1998. The
+error names the range: `customer_since must be an ISO date (…) between 1900-01-01 and
+2100-12-31, got "…"`.
+`trial_ends_at` before `trial_started_at` is an `ERROR` too — and the check is on the pair
+the record **ends up with**, not only on the file's pair: a file that gives only
+`trial_started_at` for a record whose stored `trial_ends_at` is earlier would, filling the
+gap, leave a trial that ends before it began, so that row is an `ERROR` (`trial_ends_at
+would be before trial_started_at (the record keeps its trial_ends_at; …)`). Give both dates,
+or run with overwrite.
+
+A row placed in `TRIAL_ACTIVE` whose trial end — from the file, the record, or the default
+window counted from `trial_started_at` — is **already in the past** imports, and the preview
+warns: `trial_ends_at is in the past (YYYY-MM-DD): the record will move to TRIAL_EXPIRED on
+the next sweep`. If that is not what the source system says, the date is wrong, not the
+stage.
+
+The dates live on the **funnel record**, so they are written only when the row places one
+(a `stage` and a `contact_email`). A row that carries dates but places no record says so in
+its reason — `trial_ends_at, customer_since not stored: the row places no funnel record` —
+and the account itself still lands.
 
 ### The `stage` column takes MARKETING funnel keys only
 
@@ -77,8 +118,15 @@ marketing tenant those come from the `MARKETING_FUNNEL` preset
 (`src/lib/programTemplates.ts`):
 
 ```
-LEAD_NEW · LEAD_CONTACTED · LEAD_QUALIFIED · DEAL_PROPOSAL · DEAL_NEGOTIATION · DEAL_WON · DEAL_LOST
+LEAD_NEW · LEAD_CONTACTED · LEAD_QUALIFIED · TRIAL_ACTIVE · TRIAL_EXPIRED · DEAL_PROPOSAL · DEAL_NEGOTIATION · DEAL_WON · DEAL_LOST
 ```
+
+(`src/lib/programTemplates.ts:551-570`; the two trial keys since #2518.) `DEAL_LOST` is the
+one off-path stage. A row placed at `TRIAL_ACTIVE` is stamped with a trial window — see
+"What it writes" below. An organisation provisioned before #2518 may not have the trial
+rows yet (nothing backfills them); the error message lists the keys it really has, and
+`infra/README.md` § "Go-live checklist for the MARKETING org" (#2579) is how an operator
+adds them.
 
 An unknown value is a row-level `ERROR` that names the keys the organisation does have.
 Nothing is hardcoded: a tenant that renamed or extended its stages is validated against
@@ -103,6 +151,25 @@ designed yet.
 
 ## Matching: which existing account is this row? (#2405)
 
+The order is **`external_id` > `vat_id` > name + country** (#2554).
+
+0. **`external_id`**, trimmed and compared case-insensitively (MySQL's collation compares
+   the column that way when the usage feed looks it up, so two spellings the database
+   calls equal must not be two accounts here). The product's own id for the merchant can
+   only **confirm** what the weaker keys say — it is never overruled by them and never
+   guessed around. Each of these is a row-level `ERROR`, in the dry run as well as the
+   apply, and nothing on the row is written:
+   - two accounts of the organisation already carry the id (`Company.externalId` is
+     deliberately not unique — see its schema comment): merge them in the app first;
+   - the id names one account and the `vat_id` names another;
+   - the id is new, and the `vat_id` / name finds an account that carries a **different**
+     external id;
+   - an earlier row of the same file gives the id to a different account (or to the same
+     merchant under a different `vat_id`).
+
+   An id no account carries yet falls through to the keys below, and the account they find
+   has it filled in as a gap — which is how the first run over an account master that
+   predates the column gives every account its id.
 1. **`vat_id`**, normalised (upper case, separators stripped). The strongest identity a
    merchant has across systems, and the reason `Company` now carries
    `@@unique([orgId, vatId])` — org-scoped, never global, because two tenants may each hold
@@ -142,6 +209,13 @@ Two rows for the same account **in one file**: the first wins, the second is rep
 on the identity it claims — one merchant listed twice with the VAT filled in on only one of
 the two lines holds two different claimed keys and is still one account.
 
+A duplicate line that gives the account a **different `external_id`** than the line that
+won is not a harmless duplicate, it is the file contradicting itself about who the id
+belongs to: an `ERROR` (`external_id "Y2" differs from the external_id row 1 gives the same
+account`), in the preview too. That holds whether the account is new or already in the CRM
+— including the cutover case, where every row matches an account whose id is still empty.
+The same id again (any spelling) or no id at all stays the plain `SKIP`.
+
 ## Row outcomes
 
 The engine's own vocabulary, no new states:
@@ -180,18 +254,29 @@ else's work ([`mentor-transfer.md`](mentor-transfer.md), #419).
 - The **funnel record** — a `MentorshipRelation` (owner, lead, account, stage), created
   through `src/lib/activeMentorship.ts` so "one mentee, at most one active mentor" (#419)
   holds.
+- The **funnel record's dates** (#2554) — `trial_started_at`, `trial_ends_at` and
+  `customer_since` (→ `startDate`). A record the row **creates** takes every date the row
+  carries. On an **existing** record they go through the one overwrite policy
+  (`planFieldUpdates`): an empty date is filled, a stored one that disagrees is left alone
+  and named in the reason (`left alone: funnelRecord.trialEndsAt`), and only
+  `--authoritative` overwrites it. `startDate` is never empty on a stored record (it
+  defaults to the insert), so `customer_since` corrects an existing record only under
+  `--authoritative`.
 - The **trial window** (#2551) — when a row lands in `TRIAL_ACTIVE` (a create at that
-  stage, or an update that *moves* a record into it), `funnelRelationCreateData` /
-  `funnelRelationUpdateData` stamp `trialStartedAt` = the run time and `trialEndsAt` =
-  run time + the organisation's `trialLengthDays` (default 30), through the same rule
-  every other write into the stage uses (`trialWindowFor`, `src/lib/trialReminderRule.ts`).
-  A re-run that does not move a record stamps nothing, and an existing window is never
-  overwritten.
+  stage, or an update that *moves* a record into it) and **neither the file nor the record
+  gives an end**, `funnelRelationCreateData` / `funnelRelationUpdateData` stamp one through
+  the same rule every other write into the stage uses (`trialWindowFor`,
+  `src/lib/trialReminderRule.ts`): `trialEndsAt` = `trial_started_at` + the organisation's
+  `trialLengthDays` (default 30) when the file gives a start, else the run time + that
+  length (and `trialStartedAt` = the run time). **A date from the file always wins over the
+  stamp**, a re-run that does not move a record stamps nothing, and an existing window is
+  never overwritten.
 
-  > **Warning:** the dates count from the **import day**, not from when the customer's
-  > trial actually began. A file of customers whose trials are already running gives
-  > every one of them a fresh `trialLengthDays` window. If that matters, correct the
-  > dates in the app after the run.
+  The dry run says it on the row before it happens:
+  `trial_ends_at is blank: the default trial window applies (30 days from the import day)`.
+  A record that already sits in `TRIAL_ACTIVE` with **no** end, and a file that gives none,
+  is reported as `… no trial reminder will be sent until one is set` — fill `trial_ends_at`
+  for it (a gap, so no `--authoritative` needed) rather than accepting a silent trial.
 - **Stage history** — a `StatusChange` on the relation when an existing record *moves*
   (`src/lib/stageChange.ts`, which refuses a no-op row by construction). A relation
   **created** at a stage gets no `StatusChange`: `stageEnteredAt()` already answers from
@@ -204,7 +289,62 @@ half-written, and the rest of the file still lands.
 
 This is the runbook: what to do, in order, when you have the real customer file in hand.
 It does not restate a rule another page owns — each warning below links the page that
-does.
+does. For the one-off move of the real SaleVali table into production, follow the
+[cutover checklist](#cutover-checklist-2555) at the end; it points back into these steps.
+
+There are two doors to the **same** engine (`runMarketingAccountImport()` in
+`src/lib/marketingImportStore.ts`) — same parser, validator, match key, diff and writer,
+same row outcomes, same activity-log row:
+
+| | Where | Use it for |
+| --- | --- | --- |
+| **The admin panel** (#2552) | `/admin/settings` → import card → **Marketing accounts** | **production and the shared preview.** Runs inside the app, in the signed-in admin's own organisation; nobody connects to the database from outside |
+| **The CLI** | `npm run import:marketing-accounts` | a local database — rehearsals on synthetic data, development |
+
+### The admin panel (#2552)
+
+- **Who:** an `ADMIN` of a **MARKETING** organisation. The mode is not shown anywhere else,
+  and `POST /api/admin/import/marketing-accounts` answers an INTERNSHIP organisation
+  `403 vertical_mismatch` (a code of its own: INTERNSHIP carries every capability, so the
+  capability gate — `capability_unavailable` — could never be the one to refuse it) and a
+  `MENTOR` `403`.
+- **What it takes:** the file (picked, or pasted), the **default owner** — an active
+  admin/rep of the organisation picked in the list (the CLI's `--owner`; same rule: pick one
+  and keep it for every re-run), or, left on *Organization default (else me)*, the
+  organisation's **default lead owner** from the same settings page (#2562 — the fallback the
+  manual lead form and the demo-request conversion use), else the signed-in admin. The report
+  names the owner the run used; the preview and the apply resolve it the same way — and **Overwrite values the file disagrees with**
+  (the CLI's `--authoritative`, off by default). The organisation is always the admin's own;
+  there is nothing to choose.
+- **Preview (dry run)** is `--apply` left off; **Apply** is the same request with it on, and
+  is offered only after a preview of exactly that input (file, owner, overwrite flag). The
+  report shows the counts — New (`CREATE`), Update, Unchanged, Skipped, Error — and every row
+  needing attention (all `ERROR`/`SKIP` rows and every row carrying a reason); **All rows**
+  lists the rest. Row numbers and reasons are the CLI's, so steps 4 and 5 below read the
+  same.
+- **The numbers line** (#2555) — counts only, read off the run's own report by
+  `marketingImportMetrics()`: accounts that land (`CREATE` + `UPDATE` + `UNCHANGED`), how many
+  of them matched an existing account, how many carry an `external_id`, and for the rows placed
+  in `TRIAL_ACTIVE` where the trial end comes from — written from the file this run, `kept`
+  (the record already has one), the `default` window, or `missing` (a trial nobody will be
+  reminded about). These are the numbers the cutover posts; nothing in them can carry a name.
+- **Bounds:** at most `TEXT_LIMITS.marketingImportFile` characters (2 000 000) and
+  `MARKETING_IMPORT_MAX_ROWS` (5 000) data rows per run — split a larger table into files and
+  run them one after another (each is idempotent); 30 runs per admin per 10 minutes. The
+  request body is read through a byte-bounded reader, so an oversized upload is refused
+  (`413 file_too_large`) while it streams rather than after it was buffered.
+- **One apply at a time per organisation.** An apply takes the `JobLease`
+  `marketing-import:<orgId>` (`src/lib/jobs/lease.ts`, TTL 30 minutes, freed on completion
+  and by expiry after a crash) for its whole run; a second apply meanwhile — another admin,
+  another tab, the CLI — is refused with `409 import_running`. Without it two applies of one
+  file would each plan against a snapshot from before the other wrote and create every
+  account without a VAT id twice. A preview writes nothing and takes no lease.
+- **What the panel does not have:** the CLI's `--report` JSON and `--delimiter` (the
+  delimiter is sniffed; the API takes `delimiter` if a caller needs it). The report stays in
+  the browser tab — nothing about the rows is stored server-side; the activity log gets
+  `marketing.accounts.imported` with counts only, on apply.
+
+### The CLI
 
 ```bash
 # Dry run — the default. Nothing is written.
@@ -232,11 +372,15 @@ under `--apply`").
 
 ### Before the first run
 
-- **Where it runs.** From a checkout of the commit the target database is deployed at,
-  after `npm install` (which also runs `prisma generate`), on **Node ≥ 22.6** — the CLI
-  loads the TypeScript engine under `src/lib` through `--experimental-strip-types`. It
+- **Where it runs.** Against production or the shared preview: **the admin panel**, and
+  only the panel. The CLI runs from a checkout of the commit the target database is
+  deployed at, after `npm install` (which also runs `prisma generate`), on **Node ≥ 22.6** —
+  it loads the TypeScript engine under `src/lib` through `--experimental-strip-types`. It
   cannot run inside the app container: the runtime image is `node:20-slim` and ships
-  neither `scripts/` nor `src/` (`Dockerfile`).
+  neither `scripts/` nor `src/` (`Dockerfile`), and pointing a checkout at the production
+  database from outside is what [`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md) rules out.
+  The steps below name the CLI flags; the panel's controls are the same options (see the
+  table above).
 - **Which database.** The one `DATABASE_URL` names: the shell's value when it is set,
   otherwise the checkout's `.env`, which Prisma reads by itself. The CLI prints the
   organisation it writes to, but not the database host — know which one you are pointed at
@@ -418,6 +562,12 @@ remaining reason is one you accept.
 | `contact_email is not an address` · `owner_email is not an address` | a typo, or two addresses in one cell — keep one |
 | `contact_email is on a reserved stand-in domain` | `@import.local` / `@erased.local` are addresses the CRM generated, not mailboxes — usually the file was exported from the CRM itself. Use the real address or blank it |
 | `<field> is longer than <n> characters` | shorten it. Nothing is truncated for you |
+| `trial_started_at` / `trial_ends_at` / `customer_since must be an ISO date …` | write `YYYY-MM-DD` (or a date-time with `Z`/`±HH:MM`). In Excel: format the column as text `JJJJ-MM-TT` / `yyyy-mm-dd` before saving |
+| `trial_ends_at is before trial_started_at` · `trial_ends_at would be before trial_started_at (the record keeps its …)` | one of the two is wrong in the source; fix it there. The second form means the file's date clashes with the one the record already has — give both dates, or run with overwrite |
+| `external_id "…" differs from the external_id row N gives the same account` | two lines of the file are one merchant but carry two ids — one of them is wrong |
+| `external_id "…" is carried by N accounts of this organization` | the CRM already holds duplicates under that id: merge them in the app, then dry-run again |
+| `external_id "…" and vat_id name two different accounts` · `… differs from the external id "…" of the account this row matches` | the file and the CRM disagree about who this merchant is. Check the id against the source system; never "fix" it by blanking the CRM's value |
+| `external_id "…" is already given to a different account by row N` · `… is given to row N with a different vat_id` | the file itself hands one id to two merchants — one of the two lines has the wrong id |
 | `duplicate account in file (first seen at row N)` · `(matches N earlier rows by name; …)` | `SKIP`: one merchant, two lines. The first line won; move what the other one knows into it and delete it |
 | `ambiguous: N existing accounts are named "…" — add a country or vat_id column` | `SKIP`: the CRM holds several accounts of that name. If they carry different countries, fill `country` or `vat_id` on that row. If they carry **no** country and no VAT id — the state every account is in before its first import — the file cannot tell them apart, whatever the row says: fix it in the app (set their country/VAT id, or merge the duplicates), then dry-run again |
 
@@ -429,6 +579,10 @@ Reasons on a row that **still lands** — nothing is lost, but something was not
 | `stage "…" not placed: the row has no primary contact e-mail` | a funnel record needs a person. Add `contact_email`; the next run fills the account's gap and places the stage as an `UPDATE` |
 | `stage "…" not placed: owner_email "…" is not a user of this organization` | not an `ADMIN`/`MENTOR` of this organisation: correct it, or blank it to fall back to `--owner` |
 | `stage "…" not placed: contact … is already the lead of row N` | two accounts share one contact, and one person leads one funnel record. Give the second account its own contact |
+| `trial_ends_at is blank: the default trial window applies (N days from …)` | the trial end is being made up from `trialLengthDays`. For a customer whose trial is already running, put the real `trial_ends_at` in the file |
+| `the record is in TRIAL_ACTIVE with no trial end and trial_ends_at is blank …` | a trial nobody will be reminded about. Add `trial_ends_at` to the row |
+| `… not stored: the row places no funnel record` | the row has dates but no `stage` or no `contact_email`; the dates have nowhere to go until it does |
+| `left alone: funnelRecord.trialEndsAt` (or `.trialStartedAt`, `.startDate`) | the record already has a different date. Correct it in the app, or `--authoritative` |
 
 **Only under `--apply`.** Two kinds of refusal come from the write itself, so a dry run
 shows those rows as the `CREATE`/`UPDATE` they were planned as, and they turn into `ERROR`
@@ -471,6 +625,83 @@ back `UNCHANGED`.
   own schedule — [`disaster-recovery.md`](disaster-recovery.md) says how long, and it is
   not to be copied anywhere either.
 
+## Cutover checklist (#2555)
+
+The one-off move of the real SaleVali customer table into the production MARKETING
+organisation. **An operator action** — a contributor never runs it, never sees the file and
+never touches production ([`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md)). Everything
+below happens in the admin panel ([The admin panel](#the-admin-panel-2552)); the numbered
+steps of [Running it](#running-it) explain each reason and each fix. Tick every box, in
+order; stop at the first one that does not hold.
+
+**Before — preconditions (all must be true, none is done here)**
+
+- [ ] The production MARKETING organisation exists and its pipeline has the trial stages
+      (`TRIAL_ACTIVE`, `TRIAL_EXPIRED`) — verified by #2579.
+- [ ] #2542 (the cross-tenant fixes) is closed and deployed.
+- [ ] The **stage of the current paying customers** is decided (#2572, item 7), so every row's
+      `stage` cell holds a key from [the MARKETING funnel](#the-stage-column-takes-marketing-funnel-keys-only),
+      never a label.
+- [ ] The **external id** is the SaleVali `User._id` for every row (#2565's key; if #2565 decides
+      otherwise, use that — but one key for the whole file, and the same one the usage feed uses).
+- [ ] A **freeze date** for the source table is agreed and announced: nobody edits the SaleVali
+      side after the export is taken.
+- [ ] The **default owner** is chosen (the person who owns unassigned leads) — and written down,
+      because every re-run uses the same one.
+
+**The file**
+
+- [ ] Exported on the freeze date as **CSV UTF-8** ([step 1](#1-export-the-spreadsheet)), dates
+      as `YYYY-MM-DD`, and the UTF-8 check passes.
+- [ ] Stored **outside** any checkout, in a `0700` directory of your own. `.gitignore` refuses
+      `.csv`/`.tsv`/`.xls`/`.xlsx`/`.ods` in any letter case everywhere except
+      `scripts/fixtures/*.csv|tsv` (pinned by `scripts/test/gitignore-exports.test.mjs`), but the
+      safe place is still nowhere near a repository. Never attach it to an issue, a PR or a chat.
+
+**Backup**
+
+- [ ] A **fresh dump taken right before the first Apply** and its path written down — on the
+      app server, `infra/backup-db.sh --env prod` with the production `DATABASE_URL`, then
+      `cat /var/backups/internship-crm/.last-prod` ([`disaster-recovery.md`](disaster-recovery.md)).
+      There is no un-import; that dump is the way back. Dumps are pruned after `KEEP_DAYS`
+      (default 7), so if the cutover might need undoing later than that, say so to whoever owns
+      the server before starting.
+
+**Dry run, until clean**
+
+- [ ] Signed in as an ADMIN of the MARKETING organisation → `/admin/settings` → import card →
+      **Marketing accounts** → file → the chosen owner → overwrite **off** → **Preview**.
+- [ ] `ERROR` is **0**. Every `ERROR` and `SKIP` was fixed **in the source** (or in the app), a new
+      export taken, and the preview repeated ([step 5](#5-fix-the-file-not-the-database)) — never
+      by editing the database.
+- [ ] Every remaining reason on a row that lands was read and accepted, in particular every
+      `trial_ends_at is blank: the default trial window applies …` (a real running trial should
+      carry its real `trial_ends_at`) and any `… no trial reminder will be sent …`.
+- [ ] The numbers line reads as expected: `external id on` ≥ 95 % of the accounts; `missing` = 0
+      under trials.
+
+**Apply**
+
+- [ ] **Apply** (confirm once) with the same file, owner and overwrite flag as the last clean
+      preview. Any `ERROR` rows now come only from the write itself (step 5, "Only under
+      `--apply`"): fix them and apply the **whole** file again.
+- [ ] **Preview the same file again, then Apply it again: every row that landed reads
+      `Unchanged`** (`UPDATE: 0`, `CREATE: 0`). Anything else: stop and find out why
+      ([step 7](#7-check-then-clean-up)) before touching anything.
+- [ ] Spot-check a few accounts, their board card and stage, and one imported trial's end date.
+- [ ] No imported trial shows the "date missing" badge on its board card or an attention item
+      `trial_no_end_date` for its owner (#2553) — the numbers line's `missing` = 0 says the same.
+
+**Report and clean up**
+
+- [ ] Post the counts — and only counts — as a comment on story #2391: total rows, New, matched,
+      Error, external-id fill rate (`external id on` ÷ accounts), trial-end fill rate (trials
+      minus `missing`, ÷ trials). The panel's numbers line and count chips are those numbers; no
+      name, address or row goes in the comment.
+- [ ] Delete the export and every copy of it (downloads folder, mail attachment). The report
+      lives only in the browser tab — close it. The dump stays where it is, untouched, and
+      expires on its own schedule.
+
 ## One lead typed in by hand (#2562)
 
 The **"New lead / account"** dialog on `/admin/companies` (MARKETING orgs, ADMIN only) is
@@ -501,4 +732,8 @@ never see the dialog, and the route answers them `403 vertical_unavailable`.
 `scripts/test/marketing-import.test.mjs` (`npm run test:marketing-import`) pins the four
 properties that typecheck while being wrong: the match key (VAT beats name; İ/ı/ü/ß), a
 second run being all `UNCHANGED`, the dry run planning exactly what the apply plans, and a
-bad row being reported rather than thrown. Dependency-free, with an in-memory writer.
+bad row being reported rather than thrown. Dependency-free, with an in-memory writer whose
+funnel records are built by the same `funnelRelationCreateData` / `funnelRelationUpdateData`
+the Prisma writer spreads — so the #2554 cases (external-id conflicts, ISO dates, the file
+date winning over the default window, an imported trial showing up in
+`selectDueTrialReminders`) are asserted against the data production writes.

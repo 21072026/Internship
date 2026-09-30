@@ -1,3 +1,4 @@
+import { NO_INDEX } from '@/lib/pageMetadata';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -20,6 +21,9 @@ import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { availableModes, canUsePortal } from '@/lib/dualRole';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { PortalTabs } from '@/components/PortalTabs';
+
+// Signed-in area: never in a search result (#1376).
+export const metadata = NO_INDEX;
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);

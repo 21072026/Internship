@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { Rss, Sparkles } from 'lucide-react';
@@ -21,6 +22,11 @@ import { requireDefaultVertical } from '@/lib/verticalPage';
 export async function generateMetadata(): Promise<Metadata> {
   const h = await headers();
   return {
+    // Its own tab title in the reader's language (#1376).
+    ...(await pageMetadata(
+      (t) => ({ title: t.releaseNotes.title, description: t.releaseNotes.feedDescription }),
+      '/release-notes/opengraph-image'
+    )),
     alternates: {
       types: {
         'application/rss+xml': [

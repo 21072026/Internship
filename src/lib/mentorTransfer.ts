@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { logActivity } from '@/lib/activity';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -79,6 +80,13 @@ export async function transferMentorship(opts: {
   reasonNote?: string | null;
   actorId: string;
   actorEmail?: string | null;
+  /**
+   * The acting admin's org (the session's `orgId`) — REQUIRED, so no caller can
+   * forget it (#2542 follow-up). A relation outside this tenant answers 404
+   * exactly like a missing one, and the incoming mentor must be a member of
+   * the relation's tenant. Null is the default org's, never a wildcard.
+   */
+  callerOrgId: string | null | undefined;
   request?: Request;
   /**
    * This call is ONE ROW of a batch (#2439 — POST /api/admin/candidates/bulk).
@@ -163,7 +171,11 @@ export async function transferMentorship(opts: {
       },
     },
   });
-  if (!relation) return { status: 404, body: { error: 'Relation not found' } };
+  // Another tenant's relation does not exist for this caller: with
+  // MT_ENFORCE_ISOLATION off nothing else scopes the lookup above.
+  if (!relation || !(await inCallerTenant(relation.orgId, opts.callerOrgId))) {
+    return { status: 404, body: { error: 'Relation not found' } };
+  }
   // Only a live pairing can be handed over. A closed one is reopened (PUT
   // /api/mentorship/[id]) or replaced by a fresh assignment — this operation
   // must not be a second way to resurrect one.
@@ -192,7 +204,14 @@ export async function transferMentorship(opts: {
       acceptingMentees: true,
     },
   });
-  if (!incoming || !incoming.isActive || !PARTICIPANT_ROLES.includes(incoming.role)) {
+  // The incoming mentor must belong to the relation's tenant: handing one
+  // tenant's mentee to another tenant's mentor is the leak in write form.
+  if (
+    !incoming ||
+    !incoming.isActive ||
+    !PARTICIPANT_ROLES.includes(incoming.role) ||
+    !(await inCallerTenant(incoming.orgId, relation.orgId))
+  ) {
     return { status: 400, body: { error: 'Invalid mentor', code: 'invalid_mentor' } };
   }
 
@@ -276,6 +295,22 @@ export async function transferMentorship(opts: {
         },
         select: { id: true },
       });
+      // The account's estimated value follows the journey too (#2422): it is
+      // a property of the customer, not of the owner. Copied, not moved — the
+      // closed predecessor keeps its own row, and the monthly series folds the
+      // chain into one journey valued by its TIP (the newest link, even once
+      // its estimate is cleared), so nothing is counted twice and the old copy
+      // never comes back (src/lib/dealValue.ts). Same transaction, so a rolled
+      // back transfer leaves no orphan estimate behind.
+      const value = await tx.relationValue.findUnique({
+        where: { relationId: relation.id },
+        select: { valueMinor: true, currency: true, source: true },
+      });
+      if (value) {
+        await tx.relationValue.create({
+          data: { ...value, relationId: created.id, orgId: relation.orgId, updatedById: actorId },
+        });
+      }
       return created.id;
     });
   } catch (e) {

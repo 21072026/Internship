@@ -3,7 +3,9 @@ import { cookies } from 'next/headers';
 import { getServerSession } from 'next-auth';
 import './globals.css';
 import { Providers } from './providers';
-import { getLocale } from '@/i18n/server';
+import { getLocale, getServerDictionary } from '@/i18n/server';
+import { requestSiteUrl } from '@/lib/siteUrl';
+import { socialMetadata } from '@/lib/pageMetadata';
 import { getDictionary, toClientDictionary } from '@/i18n/dictionaries';
 import { resolveRequestVertical } from '@/i18n/server';
 import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
@@ -19,20 +21,37 @@ import { SystemThemeSync } from '@/components/SystemThemeSync';
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { appleSplashLinks } from '@/lib/appleSplash';
 
-// Vertical-aware tab title / app name (#2498). INTERNSHIP is byte-identical to
-// the previous static metadata (several landing e2e specs assert the exact
-// title), so only a marketing host/tenant reads its own product name instead of
-// "Internship CRM". resolveRequestVertical is session-first, host-second, so it
-// is right both signed-in (org vertical) and signed-out (host vertical).
+// Vertical-aware tab title / app name (#2498): a marketing host/tenant reads
+// its own product name instead of "Internship CRM". resolveRequestVertical is
+// session-first, host-second, so it is right both signed-in (org vertical) and
+// signed-out (host vertical).
 export async function generateMetadata(): Promise<Metadata> {
   const vertical = await resolveRequestVertical();
   const isMarketing = vertical === 'MARKETING';
   const productName = productNameFor(vertical);
+  const { t } = await getServerDictionary();
   return {
-  title: isMarketing ? `${productName} — Marketing CRM` : 'Internship CRM - Mentor-Mentee Management',
+  // Absolute URLs for file-convention images (OG) follow the host that served
+  // the page (#2488), never NEXTAUTH_URL.
+  metadataBase: new URL(await requestSiteUrl()),
+  // Each public page names itself and the template appends the product (#1376);
+  // the default is the home page's. MARKETING keeps its product-level copy —
+  // the marketing content probe (#2579) reads exactly that title.
+  title: {
+    default: isMarketing ? `${productName} — Marketing CRM` : t.seo.homeTitle,
+    template: `%s · ${productName}`,
+  },
   description: isMarketing
     ? 'A CRM for tracking customers through a marketing pipeline — from first contact to close.'
-    : 'A comprehensive CRM for managing mentor-mentee relationships and internship programs',
+    : t.seo.homeDescription,
+  // The landing's share card (#1378); a page with its own copy replaces it
+  // through pageMetadata(). The image is src/app/opengraph-image.tsx.
+  ...(await socialMetadata({
+    title: isMarketing ? `${productName} — Marketing CRM` : t.seo.homeTitle,
+    description: isMarketing
+      ? 'A CRM for tracking customers through a marketing pipeline — from first contact to close.'
+      : t.seo.homeDescription,
+  })),
   applicationName: productName,
   appleWebApp: { capable: true, statusBarStyle: 'default', title: productName },
   // The favicon / home-screen icon follow the vertical too (#2492). Both SVGs

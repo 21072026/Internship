@@ -12,6 +12,7 @@ import { resolveMeetingLink } from '@/lib/meetingRoom';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import { pushMeetingInBackground, pushableSelect } from '@/lib/googleCalendarSync';
 
 const schema = z.object({ action: z.enum(['accept', 'decline']) });
 
@@ -103,7 +104,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       rsvpToken: randomBytes(24).toString('hex'),
       createdById: session.user.id,
     },
+    select: pushableSelect,
   });
+  // Mirror it into both participants' own calendars (#1986) — the accepted
+  // request used to be the one scheduling path that never reached a calendar.
+  // Fire-and-forget: a third party's API may not make accepting fail or hang.
+  pushMeetingInBackground(meeting, [rel.mentorId, rel.menteeId]);
   await prisma.meetingRequest.update({ where: { id }, data: { status: 'ACCEPTED' } });
   await notify(req.requestedById, 'meeting_request.accepted', { topic: req.topic }, `/messages/${rel.id}`);
   await emailDecision(req.requestedById, {

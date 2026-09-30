@@ -38,6 +38,9 @@ const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const STAMPERS = {
   trialWindowFor: { file: 'src/lib/trialReminderRule.ts', proves: /export function trialWindowFor\(/ },
   stageTrialWindow: { file: 'src/lib/trialWindow.ts', proves: /\btrialWindowFor\(/ },
+  // The shared single-relation stage write (#2658): PUT /api/mentorship/[id]
+  // and the accepted-offer auto-advance take their stage columns from it.
+  stageMoveData: { file: 'src/lib/stageMove.ts', proves: /\bstageTrialWindow\(/ },
   funnelRelationCreateData: { file: 'src/lib/marketingImport.ts', proves: /\btrialWindowFor\(/ },
   funnelRelationUpdateData: { file: 'src/lib/marketingImport.ts', proves: /\btrialWindowFor\(/ },
   // A handover does not stamp a NEW window — it copies the one the closed
@@ -147,6 +150,8 @@ test('the known stage writers are recognised, and every one of them stamps', () 
     ['src/lib/marketingImportStore.ts', /\bfunnelRelationCreateData\(/],
     ['src/lib/marketingImportStore.ts', /\bfunnelRelationUpdateData\(/],
     ['src/lib/mentorTransfer.ts', /\.\.\.carriedOverFields\(relation\)/],
+    ['src/app/api/mentorship/[id]/route.ts', /\bstageMoveData\(relation, pipelineStatus!\)/],
+    ['src/lib/offerAutoAdvance.ts', /data: await stageMoveData\(relation, decision\.to\)/],
   ]) {
     const source = stripComments(readFileSync(join(ROOT, file), 'utf8'));
     assert.match(source, stamper, `${file} no longer builds its funnel write through ${stamper}`);

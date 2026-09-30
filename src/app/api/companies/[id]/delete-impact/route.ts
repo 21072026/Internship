@@ -31,6 +31,9 @@ const CASCADE_COUNTS = {
   interests: true,
   requisitions: true,
   interviewRequests: true,
+  // The account's contact permission rows (#2577) go with it; the opt-out
+  // itself stays provable on the enquiry row (docs/contact-permission.md).
+  contactPermissions: true,
 } as const;
 
 /** Relations that survive the delete with their `companyId` set to NULL. */

@@ -11,27 +11,6 @@ nothing. Every row below is a candidate for its own good-first-issue.
 
 **Totals** — critical: 0 · serious: 0 · moderate: 0 · minor: 0
 
-> ℹ️ **Hand-edited in #2131 — read how these numbers were obtained.** The
-> generated section above the manual marker was written by hand: the container
-> #2131 was authored in has no browser and no database, so
-> `A11Y_UPDATE_BASELINE=1` could not be run there. What each number rests on:
->
-> - **critical: 0 · serious: 0** — *measured*, by CI. The Playwright smoke job
->   runs this very spec on every push with `e2e/a11y-baseline.json` at `{}` for
->   all sixteen page/theme keys, so a green run **is** the assertion that no
->   critical or serious violation exists on any of them. The first attempt at
->   #2131 was red here on exactly one node the fix had missed
->   (`/admin/settings` · `.text-green-600`, #16a34a at 3.3:1, the e-mail-log
->   summary line) — that node and its amber sibling are now `-700` shades.
-> - **moderate: 0 · minor: 0**, and the empty findings table — *carried over*
->   from the last real regenerate, which reported the same. The gate ignores
->   these severities, so CI does not re-measure them; nothing in #2131 could
->   introduce one, but this half of the report is inherited, not observed.
->
-> Run `A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts` against
-> a real environment once and commit whatever it writes — that closes the gap
-> and this note goes with it.
-
 
 **The gate** (`e2e/a11y-baseline.json`): the counts of *critical* and *serious*
 violations that exist today are frozen per page. A new one fails the scan;
@@ -250,8 +229,8 @@ column means the finding comes from reading the markup, not from a screen reader
 | 2 | Board (admin) | Typing in the board search re-filtered every column with no focus move and no announcement — the result count was a visual-only change (WCAG 4.1.3). | moderate | **Fixed** in #2047 — announced through the app-wide live region, debounced and de-duplicated (`useFilterAnnouncement`). Source review. |
 | 3 | Account settings | The green/red save banner is mounted *together with* its text (`{msg && <div…>}`), and a live container that appears at the same instant as its content is not announced. Focus does not move on save either, so the outcome of every save was silent. | serious | **Fixed** in #2047 — `flash()` also announces. Source review. |
 | 4 | Forms (`Textarea`) | The character counter changes colour at 80% and at the limit and said nothing. | minor | **Fixed** in #2047 — the two threshold crossings are announced (never per keystroke). Source review. |
-| 5 | Calendar | The month grid's day cells are buttons named only by their day number plus whatever chips they contain: the 17th is announced as `"17"`, with no weekday, month or year, and outside-month days are indistinguishable. The cells are also toggles with no `aria-pressed`. | moderate | **Open** — filed as #2153. Source review. |
-| 6 | Calendar | The view switcher is `role="tablist"` with `role="tab"` buttons, but there is no `tabpanel`, no `aria-controls` and no arrow-key navigation: it announces itself as a tab set that does not behave like one. | moderate | **Open** — filed as #2153. Source review. |
+| 5 | Calendar | The month grid's day cells are buttons named only by their day number plus whatever chips they contain: the 17th is announced as `"17"`, with no weekday, month or year, and outside-month days are indistinguishable. The cells are also toggles with no `aria-pressed`. | moderate | **Fixed** — #2153: an `sr-only` full date (weekday, day, month, year) inside the cell and `aria-hidden` on the visible number, so the chips are still read; the cell carries `aria-pressed`; on phones, where the chips are dots, an `sr-only` event count. `e2e/calendar-a11y-2153.spec.ts` asserts the name and that axe still measures the hidden number's contrast. |
+| 6 | Calendar | The view switcher is `role="tablist"` with `role="tab"` buttons, but there is no `tabpanel`, no `aria-controls` and no arrow-key navigation: it announces itself as a tab set that does not behave like one. | moderate | **Fixed** — #2153: the tab roles are gone; the switcher is a `role="group"` named "Calendar view" of four `aria-pressed` toggle buttons, which is what it always behaved like. `contrast-1417` now selects them by `aria-pressed`. The previous/next arrows, labelled with the hard-coded English "prev"/"next", are translated in the same change. |
 | 7 | Calendar | The view switcher answered its own overflow with `overflow-x-auto`, i.e. a sideways scroll inside a control that has no reason to need one — the four labels do not fit on one 320px line once translated (`Aylık/Haftalık/Günlük/Yaklaşan`, `Monat/Woche/Tag/Demnächst`). | minor (1.4.10) | **Fixed** in #2047 — the strip wraps instead; asserted at 320px in `e2e/mobile-layout-audit.spec.ts`. Measured. |
 
 ### What was verified as already correct

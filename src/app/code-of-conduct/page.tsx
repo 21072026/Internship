@@ -1,6 +1,13 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.codeOfConduct.title, description: t.seo.codeOfConductDescription }));
+}
+
 
 const REPO_COC_URL = 'https://github.com/21072026/Internship/blob/main/CODE_OF_CONDUCT.md';
 

@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import type { Prisma } from '@prisma/client';
 import { daysInStage } from '@/lib/stageClock';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
@@ -30,11 +32,15 @@ export async function GET(request: Request) {
   const locale = await getLocale();
 
   return await withTenantScope(session, async () => {
-    // A MENTOR sees only their own mentees; an ADMIN sees all (no mentor filter),
-    // mirroring the company analytics route.
-    const relationWhere = session.user.role === 'ADMIN' ? {} : { mentorId: session.user.id };
-    const interactionWhere =
-      session.user.role === 'ADMIN' ? {} : { relation: { mentorId: session.user.id } };
+    // A MENTOR sees only their own mentees; an ADMIN all of THEIR TENANT's (no
+    // mentor filter). The ADMIN branch used to be `{}`, which with
+    // MT_ENFORCE_ISOLATION off was every tenant's relations (#2542 follow-up).
+    // Interactions and goals have no orgId: their tenant is the relation's.
+    const relationWhere = withinTenant<Prisma.MentorshipRelationWhereInput>(
+      session.user.role === 'ADMIN' ? {} : { mentorId: session.user.id },
+      await tenantWhere(session),
+    );
+    const interactionWhere = { relation: relationWhere };
 
     // Same parse-and-fall-back shape as the admin analytics route: a bad or
     // inverted range must report the default window, never a 500 and never an

@@ -5,9 +5,10 @@ import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
-import { canManageMeeting } from '@/lib/meetingAccess';
+import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
-import { pushMeetingInBackground, removeMeeting } from '@/lib/googleCalendarSync';
+import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib/googleCalendarSync';
+import { durationMinutesField } from '@/lib/meetingDuration';
 
 // The three verbs a meeting never had (#1980).
 //
@@ -34,18 +35,8 @@ import { pushMeetingInBackground, removeMeeting } from '@/lib/googleCalendarSync
 /** How long a bulk schedule may be, so one `scope: 'batch'` can't walk a table. */
 const MAX_BATCH_ROWS = 100;
 
-/**
- * Ceiling on the calendar withdrawal before the request answers anyway.
- *
- * `removeMeeting` has to run BEFORE the rows are deleted — `GoogleCalendarEventLink`
- * cascades away with the meeting, and a withdrawal with no links left to read is
- * a no-op that leaves a ghost event on someone's real calendar. So this one is
- * awaited rather than fired and forgotten, and bounded instead: a third party's
- * API may not make cancelling or deleting a meeting hang. It is a no-op (and
- * returns immediately) unless the integration is switched on and the person
- * connected their own account.
- */
-const CALENDAR_WITHDRAW_MS = 5_000;
+// The calendar withdrawal (#1986) runs BEFORE the rows are deleted and is
+// bounded — see `withdrawMeetings()` in src/lib/googleCalendarSync.ts.
 
 const patchSchema = z
   .object({
@@ -55,6 +46,8 @@ const patchSchema = z
     timeZone: z.string().max(80).optional(),
     title: z.string().min(1).optional(),
     meetLink: z.string().url().optional().or(z.literal('')),
+    // A new length (#1984); the mirror is re-pushed with the new end.
+    durationMinutes: durationMinutesField,
     // The only status this route writes. Un-cancelling is deliberately not a
     // verb: the invitees were told it is off, so "on again" is a new meeting.
     status: z.literal('CANCELLED').optional(),
@@ -66,11 +59,7 @@ const patchSchema = z
 
 // Everything the route needs about a row, in one shape both verbs read.
 const targetSelect = {
-  id: true,
-  title: true,
-  scheduledAt: true,
-  timeZone: true,
-  meetLink: true,
+  ...pushableSelect,
   status: true,
   endedAt: true,
   batchKey: true,
@@ -85,6 +74,7 @@ type Target = {
   scheduledAt: Date | null;
   timeZone: string | null;
   meetLink: string | null;
+  durationMinutes: number | null;
   status: string;
   endedAt: Date | null;
   batchKey: string | null;
@@ -107,17 +97,6 @@ function readId(raw: string): string {
 /** Everyone whose own calendar may hold a mirror of this row. */
 function mirrorAudience(t: Target): string[] {
   return [t.createdById, t.relation?.mentorId, t.relation?.menteeId].filter((x): x is string => Boolean(x));
-}
-
-/**
- * Drop the meeting from every calendar it was mirrored to, bounded by
- * CALENDAR_WITHDRAW_MS. Never rejects: the meeting is being cancelled or
- * deleted here either way, and a calendar that would not answer must not turn
- * that into a 500.
- */
-async function withdrawFromCalendars(ids: string[]): Promise<void> {
-  const work = Promise.allSettled(ids.map((id) => removeMeeting(id)));
-  await Promise.race([work, new Promise<void>((resolve) => setTimeout(resolve, CALENDAR_WITHDRAW_MS))]);
 }
 
 /**
@@ -158,7 +137,7 @@ async function resolveTargets(
  * meeting, so there is nothing left to hide, and "you may change your row, not
  * everyone's" is the only answer that says what to do instead.
  */
-function mayActOnBatch(user: { id: string; role: string }, row: Target): boolean {
+function mayActOnBatch(user: MeetingUser, row: Target): boolean {
   return user.role === 'ADMIN' || row.createdById === user.id;
 }
 
@@ -169,7 +148,7 @@ function mayActOnBatch(user: { id: string; role: string }, row: Target): boolean
  * unknown id and for a meeting that is not the caller's to touch.
  */
 async function loadTarget(
-  user: { id: string; role: string },
+  user: MeetingUser,
   id: string
 ): Promise<{ row: Target } | { refuse: NextResponse }> {
   // `<seriesId>:<ISO instant>` — the shape /api/meetings/upcoming hands out for
@@ -196,8 +175,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
-  const { scheduledAt, timeZone, title, meetLink, status, cancelReason, scope } = parsed.data;
-  if (!scheduledAt && title === undefined && meetLink === undefined && !status) {
+  const { scheduledAt, timeZone, title, meetLink, durationMinutes, status, cancelReason, scope } = parsed.data;
+  if (!scheduledAt && title === undefined && meetLink === undefined && durationMinutes === undefined && !status) {
     return NextResponse.json({ error: 'Validation failed', details: { body: 'Nothing to change' } }, { status: 400 });
   }
 
@@ -229,7 +208,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       });
       // Off the invitees' real calendars too — through the helper, never by
       // deleting GoogleCalendarEventLink rows from here (#1986 owns that file).
-      await withdrawFromCalendars(ids);
+      await withdrawMeetings(ids);
       await prisma.auditLog.create({
         data: {
           actorId: session.user.id,
@@ -302,6 +281,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             : {}),
           ...(title !== undefined ? { title } : {}),
           ...(meetLink !== undefined ? { meetLink: meetLink || null } : {}),
+          ...(durationMinutes !== undefined ? { durationMinutes } : {}),
           ...(when && zone ? { timeZone: zone } : {}),
         },
         select: targetSelect,
@@ -326,6 +306,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         scheduledAt: head.scheduledAt,
         timeZone: head.timeZone,
         meetLink: head.meetLink,
+        durationMinutes: head.durationMinutes,
         status: head.status,
       },
     });
@@ -366,7 +347,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
     // Before the delete, not after: the link rows cascade away with the meeting,
     // and a withdrawal with nothing left to read leaves a ghost event behind.
-    await withdrawFromCalendars(ids);
+    await withdrawMeetings(ids);
     const removed = await prisma.meeting.deleteMany({ where: { id: { in: ids } } });
     await prisma.auditLog.create({
       data: {

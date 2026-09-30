@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Every public page names itself, in the reader's language** (#1376). The whole site carried the root layout's one English title and description. `src/lib/pageMetadata.ts` now gives each public page its own title and description: `/features`, `/for-companies`, `/projects`, `/stories`, `/demo`, `/privacy`, `/terms`, `/code-of-conduct`, `/contributor-terms`, `/imprint`, `/accessibility`, `/trust`, `/release-notes`, `/apply-as-mentor`, `/auth/signin` and `/auth/register`. A page's title is its own H1 dictionary string, so tab and heading cannot drift. A new server-only `seo` namespace (EN/TR/DE) holds only what a page has nowhere else, and it has MARKETING overlays so the leak ratchet is unchanged. The root layout adds a title template (`%s · <product>`, per vertical, so a marketing page reads `… · SaleVali` and the #2579 content probe is unaffected), a localized home title, and a `metadataBase` built from the request host via `requestSiteUrl()` (#2488), not `NEXTAUTH_URL`. `/pricing` no longer appends the product name itself. Dynamic pages: `/projects/[id]` uses the project's name only when it is public, and `/p/[userId]` uses name + role under the page's own `where`, with no PII. The signed-in segments (`/admin`, `/portal`, `/mentor`, `/company`, `/account`, `/sales`, `/messages`, `/mentors`, `/auth/*`, `/onboarding`) carry `noindex`. e2e: `e2e/page-titles.spec.ts`.",
+  "notes": {
+    "en": ["Every public page now has its own title in your browser tab and in search results — in English, Turkish or German, matching the language you read it in."],
+    "tr": ["Her genel sayfanın artık tarayıcı sekmesinde ve arama sonuçlarında kendi başlığı var — okuduğunuz dile göre Türkçe, Almanca ya da İngilizce."],
+    "de": ["Jede öffentliche Seite hat jetzt ihren eigenen Titel im Browser-Tab und in Suchergebnissen – auf Deutsch, Türkisch oder Englisch, passend zur gewählten Sprache."]
+  }
+}

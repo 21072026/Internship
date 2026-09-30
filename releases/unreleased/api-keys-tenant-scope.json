@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "Security: the admin API-key list and revoke are tenant-scoped on their own (#2645). `GET /api/admin/api-keys` returned every tenant's keys to any tenant admin, including the creator's name and e-mail. `DELETE ?id=` soft-revoked any key by id, so one tenant could switch off another's integration. Both now go through `withinTenant(…, tenantWhere(session))` instead of relying on the tenant middleware, which is a no-op while `MT_ENFORCE_ISOLATION` is off. A NULL-org key belongs to the default org. Pinned by a two-tenant case in `e2e/api-key-lifecycle.spec.ts`, which fails against `main`."
+}

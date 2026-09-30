@@ -145,9 +145,24 @@ function hasTranslations(value) {
   return !!value && typeof value === 'object' && Object.keys(value).length > 0;
 }
 
+// The starter set is INTERNSHIP content (setting up a repo, the final
+// internship report), so it belongs to the default org's pool only — never to a
+// MARKETING tenant's (cross-world isolation). On the very first deploy the
+// default org may not exist yet (backfill-organization.mjs creates it later in
+// the same run); the rows then stay NULL and that script assigns them to it.
+async function defaultOrgId() {
+  const org = await prisma.organization.findUnique({
+    where: { slug: process.env.DEFAULT_ORG_SLUG || 'default' },
+    select: { id: true },
+  });
+  return org?.id ?? null;
+}
+
 async function main() {
+  const orgId = await defaultOrgId();
   const existing = await prisma.projectTaskTemplate.findMany({
-    where: { projectId: null },
+    // The default org's pool: its own rows plus the not-yet-backfilled NULLs.
+    where: { projectId: null, OR: orgId ? [{ orgId }, { orgId: null }] : [{ orgId: null }] },
     select: { id: true, title: true, translations: true },
   });
   const byTitle = new Map(existing.map((t) => [t.title, t]));
@@ -155,7 +170,7 @@ async function main() {
   const missing = GOALS.filter((g) => !byTitle.has(g.tr));
   if (missing.length > 0) {
     await prisma.projectTaskTemplate.createMany({
-      data: missing.map((g) => ({ projectId: null, title: g.tr, translations: g })),
+      data: missing.map((g) => ({ projectId: null, orgId, title: g.tr, translations: g })),
     });
   }
 

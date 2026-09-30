@@ -4,12 +4,14 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { serializeMessageTemplate } from '@/lib/messageTemplates';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // The canned responses one writer is offered (#1871) — read-only.
 //
 // "Available to me" is the org-wide pool plus my own personal templates, never
 // somebody else's: `ownerId: null` OR `ownerId: me`. Anything archived is gone
 // from the picker but still in the table (see the admin DELETE handler).
+// The org-wide pool is the caller's OWN org's (cross-world isolation).
 //
 // Free core: messaging and its conveniences are free, always — no plan gate here.
 
@@ -21,10 +23,10 @@ export async function GET() {
 
   return await withTenantScope(session, async () => {
     const templates = await prisma.messageTemplate.findMany({
-      where: {
-        archivedAt: null,
-        OR: [{ ownerId: null }, { ownerId: session.user.id }],
-      },
+      where: withinTenant(
+        { archivedAt: null, OR: [{ ownerId: null }, { ownerId: session.user.id }] },
+        await tenantWhere(session)
+      ),
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: { id: true, title: true, translations: true, useCount: true, ownerId: true },
     });

@@ -78,7 +78,9 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     // Scheduling a meeting mirrors it onto that calendar.
     const scheduledAt = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
     const created = await page.request.post('/api/meetings', {
-      data: { relationIds: [relation.id], title: 'GCal Sync Meeting', scheduledAt },
+      // A 45-minute meeting (#1984): the mirrored event must end 45 minutes in,
+      // not after the hour the sync used to assume.
+      data: { relationIds: [relation.id], title: 'GCal Sync Meeting', scheduledAt, durationMinutes: 45 },
     });
     expect(created.ok()).toBeTruthy();
 
@@ -89,6 +91,48 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     const mockState = await (await request.get(`${MOCK}/__state`)).json();
     const titles = (mockState.events as { summary: string }[]).map((e) => e.summary);
     expect(titles).toContain('GCal Sync Meeting');
+    type TimedEvent = { summary: string; start?: { dateTime?: string }; end?: { dateTime?: string } };
+    const mirrored = (mockState.events as TimedEvent[]).find((e) => e.summary === 'GCal Sync Meeting')!;
+    expect(Date.parse(mirrored.end!.dateTime!) - Date.parse(mirrored.start!.dateTime!)).toBe(45 * 60_000);
+
+    // ── #1986: the rest of the loop ──────────────────────────────────────────
+    type MockEvent = { id: string; summary: string; start?: { dateTime?: string } };
+    const eventsNamed = async (summary: string): Promise<MockEvent[]> =>
+      ((await (await request.get(`${MOCK}/__state`)).json()).events as MockEvent[]).filter((e) => e.summary === summary);
+    const meeting = await prisma.meeting.findFirstOrThrow({ where: { relationId: relation.id, title: 'GCal Sync Meeting' } });
+    const link = await prisma.googleCalendarEventLink.findFirstOrThrow({ where: { meetingId: meeting.id } });
+
+    // Rescheduling PATCHes the event it already made — the same Google id, one
+    // event, the new time — instead of creating a second one.
+    const movedTo = new Date(Date.now() + 5 * 24 * 3600 * 1000);
+    movedTo.setUTCSeconds(0, 0);
+    const moved = await page.request.patch(`/api/meetings/${meeting.id}`, { data: { scheduledAt: movedTo.toISOString() } });
+    expect(moved.ok()).toBeTruthy();
+    await expect
+      .poll(async () => (await eventsNamed('GCal Sync Meeting')).map((e) => e.start?.dateTime), { timeout: 15_000 })
+      .toEqual([movedTo.toISOString()]);
+    expect((await eventsNamed('GCal Sync Meeting'))[0].id).toBe(link.googleEventId);
+
+    // Accepting a meeting request mirrors the meeting too — it used to be the
+    // one scheduling path that never reached a calendar.
+    const topic = `GCal Accepted Request ${Date.now()}`;
+    const req = await prisma.meetingRequest.create({
+      data: {
+        relationId: relation.id,
+        requestedById: mentee.id,
+        topic,
+        proposedAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+      },
+    });
+    const accepted = await page.request.patch(`/api/meeting-requests/${req.id}`, { data: { action: 'accept' } });
+    expect(accepted.ok()).toBeTruthy();
+    await expect.poll(async () => (await eventsNamed(topic)).length, { timeout: 15_000 }).toBe(1);
+
+    // Deleting a meeting takes it off the calendar, and our link row with it.
+    const deleted = await page.request.delete(`/api/meetings/${meeting.id}`);
+    expect(deleted.ok()).toBeTruthy();
+    expect(await eventsNamed('GCal Sync Meeting')).toHaveLength(0);
+    expect(await prisma.googleCalendarEventLink.count({ where: { googleEventId: link.googleEventId } })).toBe(0);
 
     // Disconnecting revokes at Google and forgets the tokens here.
     const removed = await page.request.delete('/api/integrations/google/connection');
@@ -98,6 +142,8 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     const afterRevoke = await (await request.get(`${MOCK}/__state`)).json();
     expect((afterRevoke.revoked as string[]).length).toBeGreaterThan(0);
   } finally {
+    await prisma.meetingRequest.deleteMany({ where: { relationId: relation.id } });
+    await prisma.meeting.deleteMany({ where: { relationId: relation.id } });
     await prisma.mentorshipRelation.delete({ where: { id: relation.id } }).catch(() => {});
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);

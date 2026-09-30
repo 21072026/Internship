@@ -14,6 +14,8 @@ import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestI
 import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 import { copyToClipboard } from '@/lib/clipboard';
+import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
+import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
 
 interface Meeting {
   id: string;
@@ -45,6 +47,7 @@ export function MeetingSchedulerPanel({
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [meetLink, setMeetLink] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState<number>(DEFAULT_MEETING_MINUTES);
   const [guests, setGuests] = useState<PendingGuest[]>([]);
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -87,6 +90,7 @@ export function MeetingSchedulerPanel({
           title,
           scheduledAt,
           meetLink,
+          durationMinutes,
           timeZone: browserTimeZone() ?? undefined,
           guests: guests.length > 0 ? guests : undefined,
         }),
@@ -139,6 +143,9 @@ export function MeetingSchedulerPanel({
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.meetings.time}</label>
           <input type="time" aria-label={t.meetings.time} value={time} onChange={(e) => setTime(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm" />
+        </div>
+        <div>
+          <MeetingDurationSelect value={durationMinutes} onChange={setDurationMinutes} disabled={busy} />
         </div>
         {scheduledAt && (
           <div className="sm:col-span-2">

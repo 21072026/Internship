@@ -8,6 +8,8 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
+import { outcomeStageKeysFrom } from '@/lib/pipeline';
+import { useResolvedStages } from '@/lib/pipelineStagesClient';
 
 interface Cohort {
   id: string;
@@ -16,8 +18,6 @@ interface Cohort {
   interns: number;
   distribution: Record<string, number>;
 }
-
-const HIRED = ['HIRED_660', 'EMPLOYED_700'];
 
 export default function AdminCohortsPage() {
   const t = useT();
@@ -80,7 +80,10 @@ export default function AdminCohortsPage() {
     }
   };
 
-  const hiredOf = (d: Record<string, number>) => HIRED.reduce((n, s) => n + (d[s] || 0), 0);
+  // "Hired" is the tenant's own finished stages (#1884, rule #1882), not the two
+  // default keys a renamed pipeline does not have — it used to read 0 there.
+  const finished = outcomeStageKeysFrom(useResolvedStages()).finished;
+  const hiredOf = (d: Record<string, number>) => finished.reduce((n, s) => n + (d[s] || 0), 0);
 
   const q = search.trim().toLowerCase();
   const filtered = cohorts.filter((c) => !q || c.name.toLowerCase().includes(q));

@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
@@ -9,6 +11,11 @@ import { PublicShell } from '@/components/landing/PublicShell';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { DEFAULT_VERTICAL, VERTICAL_KEYS, verticalHasCapability } from '@/lib/verticals';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.projects.showcaseTitle, description: t.projects.showcaseSubtitle }));
+}
+
 
 export const dynamic = 'force-dynamic';
 

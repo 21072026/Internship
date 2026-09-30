@@ -7,6 +7,8 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { isErasedAccount, isPendingActivation, isUnusableEmail } from '@/lib/menteeAccount';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
@@ -56,7 +58,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         // the mentee's own language when they ever chose one.
         select: { id: true, email: true, fullName: true, role: true, password: true, isActive: true, orgId: true, preferredLanguage: true },
       });
-      if (!mentee || mentee.role !== 'MENTEE') {
+      // Another tenant's mentee answers exactly like a missing one (#2542
+      // follow-up): the admin branch below re-pointed ANY user's e-mail and
+      // mailed them a set-password link, whichever tenant they were in.
+      if (!mentee || mentee.role !== 'MENTEE' || !(await inCallerTenant(mentee.orgId, resolveOrgId(session)))) {
         return NextResponse.json({ error: 'Mentee not found' }, { status: 404 });
       }
 

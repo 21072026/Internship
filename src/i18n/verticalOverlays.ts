@@ -17,6 +17,13 @@
 // matches nothing is a silent no-op, so it is a build error instead). The set is
 // intentionally small and grows as real marketing surfaces are dressed; it does
 // not attempt to translate the whole 4800-key dictionary at once.
+//
+// How far it has got is measured, not guessed (#2558): scripts/check-i18n.ts
+// counts the MARKETING-resolved values that still contain an internship word
+// and pins that count, so a new un-overlaid "mentor" string fails the check —
+// and an overlay entry here that removes some means lowering the literal there.
+// E-mails read this same overlay through src/i18n/emailDictionary.ts, keyed on
+// the recipient's org; there is no second terminology layer for mail.
 
 import type { Locale } from './config';
 import type { Dictionary } from './dictionaries';
@@ -43,6 +50,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // #1376: the MARKETING home title comes from the root layout's own
+      // branch; these keep the internship copy out of the resolved dictionary.
+      seo: {
+        homeTitle: 'SaleVali — Marketing CRM',
+        homeDescription: 'A CRM for tracking customers through a marketing pipeline — from first contact to close.',
+        applyAsMentorTitle: 'Apply',
+        applyAsMentorDescription: 'Apply to join the programme.',
+        profileMentorTitle: '{name}',
+        profileMenteeTitle: '{name}',
+      },
       nav: { candidates: 'Leads', companyInquiries: 'Demo requests', myCompanies: 'My accounts' },
       // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
       // mentor yet / Mentor" on the screen a rep uses most.
@@ -55,10 +72,54 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         connectMentor: 'Assign to this rep (optional)',
         connectMentee: 'Give this lead to the new rep (optional)',
         connectHint: 'Chosen here, the lead is assigned the moment they register — no follow-up step.',
+        mentorTitle: 'Invite a lead',
+        mentorAutoAssign: 'Whoever registers through your link becomes your lead automatically — no assignment step. The link works once and expires after 7 days.',
       },
       notifications: {
         invitationEmail: {
           roles: { MENTOR: 'a sales rep', MENTEE: 'a lead' },
+        },
+        events: {
+          'interaction.logged': 'A new interaction note was added.',
+          'company_interest.mentee': 'A company showed interest in your profile. Your contact person will get in touch with you.',
+          'mentorship_request.mentorAssigned': 'You have been assigned a contact person: {mentorName}.',
+          'mentorship_request.menteeAssigned': 'A new lead was assigned to you: {menteeName}.',
+          'mentorship.mentorChanged': 'Your contact person has changed — {mentorName} is looking after you now.',
+          'mentorship.reassignedAway': '{menteeName} was handed over to another rep — your deal with them has ended.',
+          'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your lead.',
+          'mentorship.bulkAssigned': 'New leads assigned to you: {count}.',
+          'mentorship.bulkReassignedAway': 'Deals handed over to another rep: {count}.',
+          'mentorship.autoLinkSkipped': '{name} registered through an invitation, but the pre-linked lead already has a rep — no deal was created.',
+          'role_changed.toMentor': 'An administrator converted your account to a sales rep account.',
+          'role_changed.toMentee': 'An administrator converted your account to a lead account.',
+        },
+        // The assignment mails (#2558): the rep is asked to book a demo; the
+        // lead is a customer and gets a contact person, not a mentor.
+        menteeAssignedEmail: {
+          subject: 'New lead assigned: {mentee}',
+          heading: 'You have a new lead',
+          body: '{mentee} has been assigned to you as a lead. Reach out to them to set up a demo, and log your first interaction when you do.',
+          cta: 'Open your sales dashboard',
+        },
+        mentorAssignedEmail: {
+          subject: 'Your contact person: {mentor}',
+          heading: 'You have a personal contact person',
+          body: '{mentor} is now your personal contact person. Write to them any time — for a demo, your trial or any question about connecting your marketplaces.',
+          cta: 'Open your messages',
+        },
+        mentorDigestEmail: {
+          subject: 'Your weekly sales summary',
+          stale: '{n} lead(s) with no interaction in 14+ days',
+          newApplications: '{n} new lead(s) in the last 7 days',
+        },
+        activityDigestEmail: {
+          subject: 'Daily lead activity',
+          subjectAll: 'Daily lead activity (all leads)',
+          heading: 'Daily lead activity',
+          greetingMentor: 'Hi {name}, here is what your leads did in the last 24 hours:',
+          greetingAdmin: 'Hi {name}, system-wide lead activity in the last 24 hours:',
+          trackingNote: 'Time-on-site and page views are shown only for leads who enabled activity tracking.',
+          columns: { mentee: 'Lead' },
         },
       },
       usersAdmin: {
@@ -68,6 +129,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         makeMentee: 'Make lead',
         convertToMentorConfirm: '{name} will be signed out of every device and becomes a rep at their next sign-in. Their existing records are kept.',
         convertToMenteeConfirm: '{name} will be signed out of every device and becomes a lead at their next sign-in. Their existing records are kept.',
+        stateNoLoginHint: 'A record created by a rep or an import. It has no password, so nobody can sign in as it.',
       },
       candidateDetail: {
         mentorship: 'Owner',
@@ -97,6 +159,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
             text: 'Hi {name}, let me introduce our shop briefly: ',
           },
         },
+        listSubtitle: 'Your conversations',
       },
       // The demo form on the marketing landing and the list its requests land
       // in (#2569). The form is the internship enquiry form re-used; these are
@@ -175,12 +238,22 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       account: {
         notifCategories: { mentorship: 'Lead updates' },
+        expertiseHint: 'One per line or comma-separated — used to route leads to you',
+        capacity: 'Lead capacity',
+        capacityHint: 'Max leads you can own at once (blank = no limit)',
+        activeMentees: '{count} / {capacity} active leads',
+        acceptingMentees: 'I can take on a new lead',
       },
       consent: {
         items: {
           activityTracking: {
             desc: 'Allow recording which pages you visit and how long you spend, so your admins can see a detailed activity report. Off by default; only in-app navigation is recorded — never keystrokes or page content.',
           },
+          mentorDirectoryVisibility: {
+            title: 'Listing in the contact directory',
+            desc: 'Show my profile in the directory of contact people. Shown: name, expertise, languages, capacity status and bio — never your e-mail, phone or lead list. You can withdraw at any time; your card disappears immediately.',
+          },
+          aiInteractionSummary: { desc: 'Allow your rep to generate an AI summary of the interaction log they keep about your deal. Only the log text is sent to the AI provider — never files or contact details. Off by default.' },
         },
       },
       settings: {
@@ -189,7 +262,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         outcomeAutoSendHint: 'Off by default. When off, reaching an outcome stage notifies the rep and prefills a draft they read, edit and send. When on, the templated message goes to the lead without review — a rejection cannot be recalled.',
         require2faAdminsMentors: 'Required for admins and reps',
         aiMonthlyQuotaHint: 'How many calls to the AI provider may be made per calendar month. Every AI feature draws on the same pool; only a call that actually succeeded is counted, and the counter resets on the 1st. Usage is metered across the whole installation rather than per organisation, so on a shared installation every organisation spends from the same month’s pool. Once it is spent the AI gate refuses further calls until next month — nothing else in the app is affected. 0 switches AI off entirely.',
-        bulkImport: 'Bulk import leads',
+        // The import card (#2552 review): the second mode is the legacy people
+        // importer, shown next to the account import; it creates MENTEE rows — a
+        // MARKETING org's leads — so the card says people.
+        bulkImport: 'Bulk import people',
+        importModeMentees: 'People (leads)',
       },
       analytics: {
         subtitle: 'Funnel, rep workload and activity insights',
@@ -198,6 +275,25 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Conversion by source',
         sourceConversionEmpty: 'No sources yet — assign leads a source to see conversion per source.',
         sourceUnsourced: '{n} lead(s) have no source and are not shown above.',
+        // #2573: the drop-off card lists the MARKETING loss reasons (PRICE,
+        // COMPETITOR, …) — a sales admin reads lost deals, not drop-offs.
+        aging: {
+          dropReasonsTitle: 'Loss reasons',
+          dropReasonsEmpty: 'No lost deals recorded yet.',
+        },
+        funnelKpi: {
+          capacity: 'Rep capacity',
+          capacityHint: 'Active leads against the ceiling each rep set. Status comes from the same rule the assignment screen uses.',
+          mentor: 'Rep',
+        },
+        mentorWorkload: 'Rep workload & outcomes',
+        interns: 'members',
+        trendNewRelations: 'New deals',
+        cohortInteractions: 'Interactions / lead',
+      },
+      // #2573: the reason dialog shown before a deal moves off the funnel.
+      dropoff: {
+        dialogHint: 'This stage is off the normal path — a reason keeps the loss analytics meaningful.',
       },
       // The company list (#2426, story #2394). A marketing tenant's companies
       // are the ACCOUNTS it sells to: the relation counter is a deal, a
@@ -434,8 +530,45 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroSubtitle: 'The packaging for the marketing product has not been set yet, so there is no price list on this page — we would rather show you nothing than a number we would have to take back. What is already true, whatever the packaging turns out to be, is below.',
         discountsTitle: 'What is already true',
       },
+      bulkInvite: { roleMentee: 'Lead', roleMentor: 'Sales rep' },
+      assignMentor: {
+        label: 'Assign a rep',
+        chooseMentor: 'Choose a rep…',
+        alreadyAssigned: 'This lead already has a rep.',
+        suggestHint: 'Suggest the best rep (AI-assisted when available)',
+        noSuggestion: 'No available rep to suggest.',
+        confirmAtCapacity: 'This rep appears to be at capacity. Assign anyway?',
+        confirmNotAccepting: 'This rep has said they are not taking new leads. Assign anyway?',
+      },
+      roleChangeEmail: {
+        subjectMentor: 'Your account is now a sales rep account',
+        subjectMentee: 'Your account is now a lead account',
+        headingMentor: 'You are a sales rep now',
+        headingMentee: 'Your account is now a lead account',
+        bodyMentor: 'An administrator converted your account to a sales rep account. You were signed out of all devices; when you sign in again you will land in your sales workspace. Your existing deals and history are untouched.',
+        bodyMentee: 'An administrator converted your account to a lead account. You were signed out of all devices; when you sign in again you will land on your account page. Your existing deals and history are untouched.',
+      },
+      // /admin/settings renders two editors of its own (#2558): the evaluation
+      // criteria and the stage service levels. Named for a sales team, not
+      // hidden — hiding one is a capability decision, not a string.
+      evaluationFramework: {
+        subtitle: 'What a deal is scored on. Leave these as they are and the built-in criteria stay in force; define your own and they replace them everywhere evaluations are written and read.',
+        onMentee: 'What a rep scores a lead on',
+        onMentor: 'What a lead scores a rep on',
+      },
+      stageSla: {
+        subtitle: 'How long anyone may wait at a stage before the rep is warned. Leave a stage empty and it has no rule — an organisation that sets none keeps working exactly as before.',
+      },
     },
     tr: {
+      seo: {
+        homeTitle: 'SaleVali — Pazarlama CRM',
+        homeDescription: 'Müşterileri ilk temastan kapanışa kadar bir pazarlama hattında izleyen CRM.',
+        applyAsMentorTitle: 'Başvur',
+        applyAsMentorDescription: 'Programa katılmak için başvurun.',
+        profileMentorTitle: '{name}',
+        profileMenteeTitle: '{name}',
+      },
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
       nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
@@ -444,10 +577,53 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         connectMentor: 'Bu temsilciye ata (isteğe bağlı)',
         connectMentee: 'Bu müşteri adayını yeni temsilciye ver (isteğe bağlı)',
         connectHint: 'Burada seçilirse müşteri adayı, kayıt olduğu anda atanır — ayrıca bir adım gerekmez.',
+        mentorTitle: 'Müşteri adayı davet et',
+        mentorAutoAssign: 'Bağlantınla kaydolan kişi otomatik olarak senin müşteri adayın olur — ayrıca atama yapman gerekmez. Bağlantı tek kullanımlıktır ve 7 gün sonra geçersiz olur.',
       },
       notifications: {
         invitationEmail: {
           roles: { MENTOR: 'satış temsilcisi', MENTEE: 'müşteri adayı' },
+        },
+        events: {
+          'interaction.logged': 'Yeni bir etkileşim kaydı eklendi.',
+          'company_interest.mentee': 'Bir firma profilinle ilgilendi. Muhatabın seninle iletişime geçecek.',
+          'mentorship_request.mentorAssigned': 'Sana bir muhatap atandı: {mentorName}.',
+          'mentorship_request.menteeAssigned': 'Sana yeni bir müşteri adayı atandı: {menteeName}.',
+          'mentorship.mentorChanged': 'Muhatabın değişti — artık {mentorName} seninle ilgileniyor.',
+          'mentorship.reassignedAway': '{menteeName} başka bir temsilciye devredildi — onunla fırsatın sona erdi.',
+          'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin müşteri adayın değil.',
+          'mentorship.bulkAssigned': 'Sana atanan yeni müşteri adayı sayısı: {count}.',
+          'mentorship.bulkReassignedAway': 'Başka bir temsilciye devredilen fırsat sayısı: {count}.',
+          'mentorship.autoLinkSkipped': '{name} bir davetle kayıt oldu, ancak ön-eşleştirilen müşteri adayının zaten bir temsilcisi var — fırsat oluşturulmadı.',
+          'role_changed.toMentor': 'Bir yönetici hesabını satış temsilcisi hesabına dönüştürdü.',
+          'role_changed.toMentee': 'Bir yönetici hesabını müşteri adayı hesabına dönüştürdü.',
+        },
+        menteeAssignedEmail: {
+          subject: 'Yeni müşteri adayı atandı: {mentee}',
+          heading: 'Yeni bir müşteri adayınız var',
+          body: '{mentee} size müşteri adayı olarak atandı. Bir demo ayarlamak için iletişime geçin ve ilk etkileşiminizi kaydetmeyi unutmayın.',
+          cta: 'Satış panonuzu açın',
+        },
+        // Müşteri adayına gider: siz diliyle.
+        mentorAssignedEmail: {
+          subject: 'Muhatabınız: {mentor}',
+          heading: 'Size bir muhatap atandı',
+          body: '{mentor} artık sizin muhatabınız. Demo, deneme süreciniz ya da pazaryeri bağlantılarınızla ilgili her sorunuzda ona buradan yazabilirsiniz.',
+          cta: 'Mesajlarınızı açın',
+        },
+        mentorDigestEmail: {
+          subject: 'Haftalık satış özetiniz',
+          stale: '14+ gündür etkileşim olmayan {n} müşteri adayı',
+          newApplications: 'Son 7 günde {n} yeni müşteri adayı',
+        },
+        activityDigestEmail: {
+          subject: 'Günlük müşteri adayı etkinliği',
+          subjectAll: 'Günlük müşteri adayı etkinliği (tüm müşteri adayları)',
+          heading: 'Günlük müşteri adayı etkinliği',
+          greetingMentor: 'Merhaba {name}, müşteri adaylarınızın son 24 saatte yaptıkları:',
+          greetingAdmin: 'Merhaba {name}, son 24 saatteki sistem geneli müşteri adayı etkinliği:',
+          trackingNote: 'Sitede geçirilen süre ve sayfa görüntülemeleri yalnızca etkinlik takibini açan müşteri adayları için gösterilir.',
+          columns: { mentee: 'Müşteri adayı' },
         },
       },
       usersAdmin: {
@@ -457,6 +633,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         makeMentee: 'Müşteri adayı yap',
         convertToMentorConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde temsilci olur. Mevcut kayıtları korunur.',
         convertToMenteeConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde müşteri adayı olur. Mevcut kayıtları korunur.',
+        stateNoLoginHint: 'Bir temsilci veya içe aktarma tarafından oluşturulmuş kayıt. Parolası yok, kimse bu hesapla giriş yapamaz.',
       },
       candidateDetail: {
         mentorship: 'Sorumlu',
@@ -482,6 +659,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
             text: 'Merhaba {name}, mağazamızı kısaca tanıtmak isterim: ',
           },
         },
+        listSubtitle: 'Yazışmaların',
       },
       forCompanies: {
         submit: 'Demo isteyin',
@@ -539,12 +717,22 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       account: {
         notifCategories: { mentorship: 'Müşteri adayı güncellemeleri' },
+        expertiseHint: 'Her satıra bir tane ya da virgülle ayrılmış — müşteri adaylarının sana yönlendirilmesinde kullanılır',
+        capacity: 'Müşteri adayı kapasitesi',
+        capacityHint: 'Aynı anda sahip olabileceğin maksimum müşteri adayı (boş = limitsiz)',
+        activeMentees: '{count} / {capacity} aktif müşteri adayı',
+        acceptingMentees: 'Yeni müşteri adayı alabilirim',
       },
       consent: {
         items: {
           activityTracking: {
             desc: 'Hangi sayfaları ziyaret ettiğinin ve ne kadar kaldığının kaydedilmesine izin ver; yöneticilerin ayrıntılı bir etkinlik raporu görebilsin. Varsayılan olarak kapalı; yalnızca uygulama içi gezinme kaydedilir — tuş vuruşları ya da sayfa içeriği asla.',
           },
+          mentorDirectoryVisibility: {
+            title: 'Muhatap dizininde listelenme',
+            desc: 'Profilimi muhataplar dizininde göster. Gösterilenler: ad, uzmanlık, diller, kapasite durumu ve tanıtım — e-posta, telefon veya müşteri adayı listen asla gösterilmez. İstediğin an geri çekebilirsin; kartın anında kaybolur.',
+          },
+          aiInteractionSummary: { desc: 'Temsilcinin, fırsatınla ilgili tuttuğu etkileşim kayıtlarının AI özetini oluşturmasına izin ver. AI sağlayıcısına yalnızca kayıt metni gönderilir — dosyalar veya iletişim bilgileri asla. Varsayılan olarak kapalıdır.' },
         },
       },
       settings: {
@@ -553,7 +741,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         outcomeAutoSendHint: 'Varsayılan olarak kapalı. Kapalıyken sonuç aşamasına ulaşılınca temsilci bilgilendirilir ve okuyup düzenleyip göndereceği bir taslak hazırlanır. Açıkken şablon mesaj incelenmeden müşteri adayına gider — bir ret geri alınamaz.',
         require2faAdminsMentors: 'Yöneticiler ve temsilciler için zorunlu',
         aiMonthlyQuotaHint: 'Bir takvim ayında yapay zekâ sağlayıcısına kaç çağrı yapılabileceği. Tüm yapay zekâ özellikleri aynı havuzdan harcar; yalnızca başarılı olan çağrı sayılır ve sayaç ayın 1\'inde sıfırlanır. Kullanım kurum başına değil tüm kurulum genelinde ölçülür; paylaşılan bir kurulumda her kurum aynı ayın havuzundan harcar. Havuz bitince yapay zekâ kapısı bir sonraki aya kadar yeni çağrıları reddeder — uygulamanın geri kalanı etkilenmez. 0 yapay zekâyı tamamen kapatır.',
-        bulkImport: 'Müşteri adaylarını toplu içe aktar',
+        // The import card (#2552 review): the second mode is the legacy people
+        // importer, shown next to the account import; it creates MENTEE rows — a
+        // MARKETING org's leads — so the card says people.
+        bulkImport: 'Toplu kişi içe aktar',
+        importModeMentees: 'Kişiler (lead)',
       },
       analytics: {
         subtitle: 'Satış hunisi, temsilci iş yükü ve etkinlik içgörüleri',
@@ -562,7 +754,21 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Kaynağa göre dönüşüm',
         sourceConversionEmpty: 'Henüz kaynak yok — kaynak bazlı dönüşümü görmek için müşteri adaylarına kaynak ata.',
         sourceUnsourced: '{n} müşteri adayının kaynağı yok ve yukarıda gösterilmiyor.',
+        aging: {
+          dropReasonsTitle: 'Kayıp nedenleri',
+          dropReasonsEmpty: 'Henüz kaybedilen fırsat kaydı yok.',
+        },
+        funnelKpi: {
+          capacity: 'Temsilci kapasitesi',
+          capacityHint: 'Her temsilcinin belirlediği tavana karşı aktif müşteri adayı sayısı. Durum, atama ekranının kullandığı kuralın aynısından geliyor.',
+          mentor: 'Temsilci',
+        },
+        mentorWorkload: 'Temsilci yükü & çıktılar',
+        interns: 'üye',
+        trendNewRelations: 'Yeni fırsat',
+        cohortInteractions: 'Etkileşim / müşteri adayı',
       },
+      // No `dropoff.dialogHint` here: the base TR hint already says "kayıp analizi".
       companyDetail: {
         sections: { funnel: 'Fırsatlar', needs: 'Açık ihtiyaçlar' },
         funnel: {
@@ -709,18 +915,95 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroSubtitle: 'Pazarlama ürününün paketlemesi henüz belirlenmedi; bu yüzden bu sayfada fiyat listesi yok — geri almak zorunda kalacağımız bir rakam göstermektense hiçbir şey göstermemeyi tercih ederiz. Paketleme ne olursa olsun bugün de doğru olanlar aşağıda.',
         discountsTitle: 'Şimdiden doğru olanlar',
       },
+      bulkInvite: { roleMentee: 'Müşteri adayı', roleMentor: 'Satış temsilcisi' },
+      assignMentor: {
+        label: 'Temsilci ata',
+        chooseMentor: 'Bir temsilci seç…',
+        alreadyAssigned: 'Bu müşteri adayının zaten bir temsilcisi var.',
+        suggestHint: 'En uygun temsilciyi öner (mümkünse yapay zekâ destekli)',
+        noSuggestion: 'Önerilecek uygun temsilci yok.',
+        confirmAtCapacity: 'Bu temsilcinin kapasitesi dolmuş görünüyor. Yine de atansın mı?',
+        confirmNotAccepting: 'Bu temsilci yeni müşteri adayı almadığını belirtti. Yine de atansın mı?',
+      },
+      roleChangeEmail: {
+        subjectMentor: 'Hesabın artık bir satış temsilcisi hesabı',
+        subjectMentee: 'Hesabın artık bir müşteri adayı hesabı',
+        headingMentor: 'Artık satış temsilcisisin',
+        headingMentee: 'Hesabın artık bir müşteri adayı hesabı',
+        bodyMentor: 'Bir yönetici hesabını satış temsilcisi hesabına dönüştürdü. Tüm cihazlardan çıkış yapıldı; tekrar giriş yaptığında satış çalışma alanına ineceksin. Mevcut fırsatların ve geçmişin aynen duruyor.',
+        bodyMentee: 'Bir yönetici hesabını müşteri adayı hesabına dönüştürdü. Tüm cihazlardan çıkış yapıldı; tekrar giriş yaptığında hesap sayfana ineceksin. Mevcut fırsatların ve geçmişin aynen duruyor.',
+      },
+      evaluationFramework: {
+        subtitle: 'Bir fırsatın neye göre puanlandığı. Dokunmazsan yerleşik kriterler geçerli kalır; kendi kriterlerini tanımlarsan değerlendirmelerin yazıldığı ve okunduğu her yerde onların yerini alır.',
+        onMentee: 'Temsilcinin müşteri adayını puanladığı kriterler',
+        onMentor: 'Müşteri adayının temsilciyi puanladığı kriterler',
+      },
+      stageSla: {
+        subtitle: 'Bir aşamada en fazla ne kadar beklenebileceği; aşıldığında temsilciye uyarı gider. Boş bıraktığın aşamanın kuralı yoktur — hiç kural tanımlamayan bir kurum eskisi gibi çalışmaya devam eder.',
+      },
     },
     de: {
+      seo: {
+        homeTitle: 'SaleVali — Marketing-CRM',
+        homeDescription: 'Ein CRM, das Kunden durch eine Marketing-Pipeline begleitet – vom ersten Kontakt bis zum Abschluss.',
+        applyAsMentorTitle: 'Bewerben',
+        applyAsMentorDescription: 'Bewerben Sie sich für das Programm.',
+        profileMentorTitle: '{name}',
+        profileMenteeTitle: '{name}',
+      },
       nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
       invite: {
         subtitle: 'Vertriebsmitarbeiter und Leads einladen',
         connectMentor: 'Diesem Vertriebsmitarbeiter zuordnen (optional)',
         connectMentee: 'Diesen Lead dem neuen Vertriebsmitarbeiter geben (optional)',
         connectHint: 'Hier gewählt, wird der Lead bei der Registrierung sofort zugeordnet — kein weiterer Schritt.',
+        mentorTitle: 'Lead einladen',
+        mentorAutoAssign: 'Wer sich über deinen Link registriert, wird automatisch dein Lead — kein Zuweisungsschritt. Der Link gilt einmalig und verfällt nach 7 Tagen.',
       },
       notifications: {
         invitationEmail: {
           roles: { MENTOR: 'Vertriebsmitarbeiter', MENTEE: 'Lead' },
+        },
+        events: {
+          'interaction.logged': 'Ein neuer Interaktionseintrag wurde hinzugefügt.',
+          'company_interest.mentee': 'Ein Unternehmen hat Interesse an deinem Profil gezeigt. Deine Ansprechperson meldet sich bei dir.',
+          'mentorship_request.mentorAssigned': 'Dir wurde eine Ansprechperson zugewiesen: {mentorName}.',
+          'mentorship_request.menteeAssigned': 'Dir wurde ein neuer Lead zugewiesen: {menteeName}.',
+          'mentorship.mentorChanged': 'Deine Ansprechperson hat sich geändert — {mentorName} betreut dich jetzt.',
+          'mentorship.reassignedAway': '{menteeName} wurde an einen anderen Vertriebsmitarbeiter übergeben — dein Deal mit der Person ist beendet.',
+          'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Lead.',
+          'mentorship.bulkAssigned': 'Neu zugewiesene Leads: {count}.',
+          'mentorship.bulkReassignedAway': 'An einen anderen Vertriebsmitarbeiter übergebene Deals: {count}.',
+          'mentorship.autoLinkSkipped': '{name} hat sich über eine Einladung registriert, aber der vorverknüpfte Lead hat bereits einen Vertriebsmitarbeiter — es wurde kein Deal angelegt.',
+          'role_changed.toMentor': 'Ein Administrator hat dein Konto in ein Vertriebskonto umgewandelt.',
+          'role_changed.toMentee': 'Ein Administrator hat dein Konto in ein Lead-Konto umgewandelt.',
+        },
+        menteeAssignedEmail: {
+          subject: 'Neuer Lead zugewiesen: {mentee}',
+          heading: 'Du hast einen neuen Lead',
+          body: '{mentee} wurde dir als Lead zugewiesen. Melde dich, um eine Demo zu vereinbaren, und erfasse dabei deine erste Interaktion.',
+          cta: 'Vertriebs-Dashboard öffnen',
+        },
+        // Geht an einen Kunden: Sie-Form.
+        mentorAssignedEmail: {
+          subject: 'Ihre Ansprechperson: {mentor}',
+          heading: 'Sie haben eine persönliche Ansprechperson',
+          body: '{mentor} ist ab jetzt Ihre persönliche Ansprechperson. Schreiben Sie jederzeit — zu einer Demo, Ihrer Testphase oder zur Anbindung Ihrer Marktplätze.',
+          cta: 'Nachrichten öffnen',
+        },
+        mentorDigestEmail: {
+          subject: 'Deine wöchentliche Vertriebsübersicht',
+          stale: '{n} Lead(s) ohne Kontakt seit 14+ Tagen',
+          newApplications: '{n} neue(r) Lead(s) in den letzten 7 Tagen',
+        },
+        activityDigestEmail: {
+          subject: 'Tägliche Lead-Aktivität',
+          subjectAll: 'Tägliche Lead-Aktivität (alle Leads)',
+          heading: 'Tägliche Lead-Aktivität',
+          greetingMentor: 'Hallo {name}, das haben deine Leads in den letzten 24 Stunden gemacht:',
+          greetingAdmin: 'Hallo {name}, systemweite Lead-Aktivität der letzten 24 Stunden:',
+          trackingNote: 'Verweildauer und Seitenaufrufe werden nur für Leads angezeigt, die das Aktivitäts-Tracking aktiviert haben.',
+          columns: { mentee: 'Lead' },
         },
       },
       usersAdmin: {
@@ -730,6 +1013,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         makeMentee: 'Zum Lead machen',
         convertToMentorConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung Vertriebsmitarbeiter. Bestehende Datensätze bleiben erhalten.',
         convertToMenteeConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung ein Lead. Bestehende Datensätze bleiben erhalten.',
+        stateNoLoginHint: 'Ein von einem Vertriebsmitarbeiter oder Import angelegter Datensatz. Ohne Passwort kann sich niemand damit anmelden.',
       },
       candidateDetail: {
         mentorship: 'Zuständig',
@@ -755,6 +1039,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
             text: 'Hallo {name}, ich stelle unseren Shop kurz vor: ',
           },
         },
+        listSubtitle: 'Deine Unterhaltungen',
       },
       forCompanies: {
         submit: 'Demo anfragen',
@@ -812,12 +1097,22 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       account: {
         notifCategories: { mentorship: 'Lead-Updates' },
+        expertiseHint: 'Einer pro Zeile oder kommagetrennt — damit dir passende Leads zugewiesen werden',
+        capacity: 'Lead-Kapazität',
+        capacityHint: 'Maximale Leads gleichzeitig (leer = kein Limit)',
+        activeMentees: '{count} / {capacity} aktive Leads',
+        acceptingMentees: 'Ich kann einen neuen Lead übernehmen',
       },
       consent: {
         items: {
           activityTracking: {
             desc: 'Erlaube die Aufzeichnung, welche Seiten du besuchst und wie lange, damit deine Admins einen detaillierten Aktivitätsbericht sehen. Standardmäßig aus; aufgezeichnet wird nur die Navigation in der App — nie Tastatureingaben oder Seiteninhalte.',
           },
+          mentorDirectoryVisibility: {
+            title: 'Eintrag im Ansprechpersonen-Verzeichnis',
+            desc: 'Mein Profil im Verzeichnis der Ansprechpersonen anzeigen. Sichtbar: Name, Fachgebiete, Sprachen, Kapazitätsstatus und Kurzprofil — niemals E-Mail, Telefon oder deine Lead-Liste. Jederzeit widerrufbar; die Karte verschwindet sofort.',
+          },
+          aiInteractionSummary: { desc: 'Erlaube deiner Ansprechperson, eine KI-Zusammenfassung des Interaktionsprotokolls zu deinem Deal zu erstellen. Nur der Protokolltext wird an den KI-Anbieter gesendet — nie Dateien oder Kontaktdaten. Standardmäßig aus.' },
         },
       },
       settings: {
@@ -826,7 +1121,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         outcomeAutoSendHint: 'Standardmäßig aus. Aus: Beim Erreichen einer Ergebnisphase wird der Vertriebsmitarbeiter benachrichtigt und erhält einen Entwurf zum Lesen, Bearbeiten und Senden. An: Die Vorlage geht ohne Prüfung an den Lead — eine Absage lässt sich nicht zurückholen.',
         require2faAdminsMentors: 'Pflicht für Admins und Vertriebsmitarbeiter',
         aiMonthlyQuotaHint: 'Wie viele Aufrufe an den KI-Anbieter pro Kalendermonat erlaubt sind. Alle KI-Funktionen nutzen dasselbe Kontingent; gezählt wird nur ein erfolgreicher Aufruf, und der Zähler wird am 1. zurückgesetzt. Die Nutzung wird für die gesamte Installation gemessen, nicht pro Organisation — auf einer geteilten Installation verbraucht jede Organisation aus demselben Monatskontingent. Ist es aufgebraucht, lehnt die KI-Schranke weitere Aufrufe bis zum nächsten Monat ab; der Rest der App ist nicht betroffen. 0 schaltet KI komplett ab.',
-        bulkImport: 'Leads per Massenimport hinzufügen',
+        // The import card (#2552 review): the second mode is the legacy people
+        // importer, shown next to the account import; it creates MENTEE rows — a
+        // MARKETING org's leads — so the card says people.
+        bulkImport: 'Personen im Stapel importieren',
+        importModeMentees: 'Personen (Leads)',
       },
       analytics: {
         subtitle: 'Funnel, Auslastung der Vertriebsmitarbeiter und Aktivitäts-Insights',
@@ -835,6 +1134,22 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         sourceConversionTitle: 'Konversion nach Quelle',
         sourceConversionEmpty: 'Noch keine Quellen — weise Leads eine Quelle zu, um die Konversion pro Quelle zu sehen.',
         sourceUnsourced: '{n} Lead(s) ohne Quelle werden oben nicht angezeigt.',
+        aging: {
+          dropReasonsTitle: 'Verlustgründe',
+          dropReasonsEmpty: 'Noch keine verlorenen Deals erfasst.',
+        },
+        funnelKpi: {
+          capacity: 'Vertriebskapazität',
+          capacityHint: 'Aktive Leads gegen die Obergrenze, die jeder Vertriebsmitarbeiter selbst gesetzt hat. Der Status kommt aus derselben Regel wie im Zuweisungsdialog.',
+          mentor: 'Vertriebsmitarbeiter',
+        },
+        mentorWorkload: 'Vertriebsauslastung & Ergebnisse',
+        interns: 'Mitglieder',
+        trendNewRelations: 'Neue Deals',
+        cohortInteractions: 'Interaktionen / Lead',
+      },
+      dropoff: {
+        dialogHint: 'Diese Phase liegt außerhalb des normalen Ablaufs — ein Grund hält die Verlust-Auswertung aussagekräftig.',
       },
       companyDetail: {
         sections: { funnel: 'Deals', needs: 'Offener Bedarf' },
@@ -977,6 +1292,32 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         heroTitle: 'Was wir heute über den Preis sagen können',
         heroSubtitle: 'Die Paketierung des Marketing-Produkts steht noch nicht fest, deshalb gibt es auf dieser Seite keine Preisliste — lieber zeigen wir nichts als eine Zahl, die wir zurücknehmen müssten. Was unabhängig von der Paketierung schon heute gilt, steht unten.',
         discountsTitle: 'Was schon heute gilt',
+      },
+      bulkInvite: { roleMentee: 'Lead', roleMentor: 'Vertriebsmitarbeiter' },
+      assignMentor: {
+        label: 'Vertriebsmitarbeiter zuweisen',
+        chooseMentor: 'Vertriebsmitarbeiter wählen…',
+        alreadyAssigned: 'Dieser Lead hat bereits einen Vertriebsmitarbeiter.',
+        suggestHint: 'Den passendsten Vertriebsmitarbeiter vorschlagen (KI-gestützt, wenn verfügbar)',
+        noSuggestion: 'Kein verfügbarer Vertriebsmitarbeiter zum Vorschlagen.',
+        confirmAtCapacity: 'Dieser Vertriebsmitarbeiter scheint ausgelastet zu sein. Trotzdem zuweisen?',
+        confirmNotAccepting: 'Dieser Vertriebsmitarbeiter nimmt laut eigener Angabe keine neuen Leads an. Trotzdem zuweisen?',
+      },
+      roleChangeEmail: {
+        subjectMentor: 'Dein Konto ist jetzt ein Vertriebskonto',
+        subjectMentee: 'Dein Konto ist jetzt ein Lead-Konto',
+        headingMentor: 'Du bist jetzt im Vertrieb',
+        headingMentee: 'Dein Konto ist jetzt ein Lead-Konto',
+        bodyMentor: 'Ein Administrator hat dein Konto in ein Vertriebskonto umgewandelt. Du wurdest auf allen Geräten abgemeldet; bei der nächsten Anmeldung landest du in deinem Vertriebsbereich. Deine bestehenden Deals und dein Verlauf bleiben unberührt.',
+        bodyMentee: 'Ein Administrator hat dein Konto in ein Lead-Konto umgewandelt. Du wurdest auf allen Geräten abgemeldet; bei der nächsten Anmeldung landest du auf deiner Kontoseite. Deine bestehenden Deals und dein Verlauf bleiben unberührt.',
+      },
+      evaluationFramework: {
+        subtitle: 'Wonach ein Deal bewertet wird. Rührst du nichts an, bleiben die eingebauten Kriterien in Kraft; definierst du eigene, ersetzen sie diese überall, wo Bewertungen geschrieben und gelesen werden.',
+        onMentee: 'Wonach ein Vertriebsmitarbeiter einen Lead bewertet',
+        onMentor: 'Wonach ein Lead einen Vertriebsmitarbeiter bewertet',
+      },
+      stageSla: {
+        subtitle: 'Wie lange jemand in einer Phase warten darf, bevor der zuständige Vertriebsmitarbeiter gewarnt wird. Eine leer gelassene Phase hat keine Regel — eine Organisation ohne Regeln arbeitet genau wie bisher weiter.',
       },
     },
   },

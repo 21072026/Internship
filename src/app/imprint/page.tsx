@@ -1,9 +1,16 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { Building2, Mail, MapPin, Phone, ScrollText, ShieldCheck, Github, UserRound } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { operatorIdentity } from '@/lib/imprint';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.imprint.title, description: t.imprint.intro }));
+}
+
 
 // The identity comes from the deployment's environment, which only exists at
 // RUNTIME: the image is built on a GitHub runner that has none of these

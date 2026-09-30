@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **`/admin/settings` no longer accepts edits before it has loaded the stored values** (#2342). Every field started on its code default (the AI quota on `200`) and filled itself from `GET /api/admin/settings` afterwards. A value typed in that window was put back by the late load, so the save carried no quota (the `e2e-full` failure: the form said 37, the API kept 200), and a save made in that window posted the defaults over every stored setting. The form now sits in a disabled `<fieldset>` until the load has answered, and a failed load shows an error with a retry instead of an editable form full of defaults. `e2e/settings-ai-quota-and-stage-editor-i18n.spec.ts` holds the page's GET for 3s to make the slow runner deterministic, and checks that a failed load stays locked.",
-  "notes": {
-    "en": ["The system settings form waits until your saved values have loaded before it lets you edit or save, so a quick change is no longer lost and cannot reset other settings to their defaults."],
-    "tr": ["Sistem ayarları formu, kayıtlı değerler yüklenmeden düzenlemeye ya da kaydetmeye izin vermiyor: hızlı yapılan bir değişiklik artık kaybolmuyor ve diğer ayarları varsayılana döndüremiyor."],
-    "de": ["Das Formular für die Systemeinstellungen lässt Bearbeiten und Speichern erst zu, wenn Ihre gespeicherten Werte geladen sind. Eine schnelle Änderung geht so nicht mehr verloren und kann andere Einstellungen nicht auf die Standardwerte zurücksetzen."]
-  }
-}

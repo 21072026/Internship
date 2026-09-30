@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -45,6 +46,8 @@ const patchSchema = z.object({
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
 
   const { id } = await params;
   // The caller's own tenant's issue only (#2542, #2590): another product's issue
@@ -89,6 +92,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
 
   const { id } = await params;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
@@ -169,6 +174,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
 
   const { id } = await params;
   const existing = await prisma.newsletter.findFirst({

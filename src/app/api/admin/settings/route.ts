@@ -27,6 +27,7 @@ const schema = z.object({
   selfRegistration: z.enum(['auto', 'manual']).optional(),
   outcomeAutoSend: z.enum(['true', 'false']).optional(),
   blindReview: z.enum(['true', 'false']).optional(),
+  autoAdvanceOnOfferAccept: z.enum(['true', 'false']).optional(),
   earlyAccessWindowDays: z.string().regex(/^\d{1,3}$/).optional(),
   premiumAnalytics: z.enum(['true', 'false']).optional(),
   aiMonthlyQuota: z.string().regex(/^\d{1,6}$/).optional(),
@@ -50,6 +51,7 @@ const schema = z.object({
   pageViewRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   pushSubscriptionStaleDays: z.string().regex(/^\d{1,4}$/).optional(),
   jobRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  companyInquiryRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   // Repeat-read suppression window for the access log, in minutes (#2433).
   // Same reasoning as the retention windows above: writable, not on the form.
   // `0` logs every read; the rule clamps anything above a day to a day.

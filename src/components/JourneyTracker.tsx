@@ -3,21 +3,21 @@
 import Link from 'next/link';
 import { ArrowRight, Check, Clock, Compass, Trophy } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { pipelineGuidance, onPathKeys } from '@/lib/pipeline';
+import { pipelineGuidance, onPathKeys, outcomeStageKeysFrom } from '@/lib/pipeline';
 import { OUTCOME_ACTIONS, isCelebratory, outcomeForStage } from '@/lib/outcomeComms';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 
 // Key achievement stages that warrant a milestone banner
-// (EPIC: achievements / milestone recognition, roadmap #370). Canonical keys +
-// any tenant stage flagged terminal (handled below).
+// (EPIC: achievements / milestone recognition, roadmap #370): the internship
+// milestones on the default path, plus the tenant's own OUTCOME stages (#1884 —
+// read from the #1882 rule, not the two default keys a renamed pipeline does
+// not have) and any tenant stage flagged terminal (handled below).
 const MILESTONE_STAGES = new Set([
   'INTERNSHIP_STARTING_300',
   'INTERNSHIP_IN_PROGRESS_450',
   'INTERNSHIP_COMPLETED_490',
-  'HIRED_660',
-  'EMPLOYED_700',
 ]);
 
 export function JourneyTracker({
@@ -62,7 +62,9 @@ export function JourneyTracker({
   // reached!" banner directly above a rejection — the trophy only belongs over
   // an outcome that is actually good news (#830).
   const isMilestone =
-    (MILESTONE_STAGES.has(status) || (stages.find((s) => s.key === status)?.isTerminal ?? false)) &&
+    (MILESTONE_STAGES.has(status) ||
+      outcomeStageKeysFrom(stages).finished.includes(status) ||
+      (stages.find((s) => s.key === status)?.isTerminal ?? false)) &&
     (!outcome || isCelebratory(outcome));
 
   return (

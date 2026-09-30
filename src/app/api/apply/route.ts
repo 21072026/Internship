@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { dispatchWebhook } from '@/lib/webhooks';
@@ -149,8 +150,9 @@ export async function POST(request: Request) {
       university,
     });
     if (matches.length === 0) return;
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
-    await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
+    // The mentor's org's admins only (#2542): the applicant lands in that org.
+    const adminIds = await tenantAdminIds(mentee.orgId ?? mentor.orgId);
+    await Promise.all(adminIds.map((id) => notify(id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
   })().catch((e) => console.error('Duplicate post-check failed:', e));
 
   // Let the applicant set a password so they can sign in to the portal.

@@ -21,10 +21,13 @@ import { anonymizeUser, hardDeleteUser } from '../src/lib/accountErasure';
  * Not `@smoke`: it seeds ~a dozen rows across eight tables and is not a
  * runtime-critical path.
  *
- * NOT covered here because the code cannot reach it (see the KNOWN GAPS block
- * in src/lib/accountErasure.ts, tracked in #2106): a free-standing
- * `PersonalNote` with `meetingId: null` has no link to any subject, and the
- * remaining per-person free text inventoried in scripts/sanitize-db.mjs.
+ * #2106 extended the paper trail to the rest of the per-person inventory in
+ * scripts/sanitize-db.mjs (evaluations, weekly reports, questions, meeting
+ * requests and titles, goals, join requests, company notes, offers, stage
+ * reasons, the person's own bell). NOT covered because the code deliberately
+ * does not reach it — see the COVERAGE block in src/lib/accountErasure.ts: a
+ * free-standing `PersonalNote` with `meetingId: null`, group/project meeting
+ * notes, other people's notifications naming the person, and the audit trail.
  */
 
 const PASSWORD = 'ErasurePass123';
@@ -45,6 +48,26 @@ interface Seeded {
     interactionSubject: string;
     request: string;
     reEngage: string;
+    evalComment: string;
+    evalExcerpt: string;
+    weeklySummary: string;
+    weeklyBlockers: string;
+    weeklyMentorComment: string;
+    question: string;
+    answer: string;
+    meetingTopic: string;
+    meetingTitle: string;
+    cancelReason: string;
+    goal: string;
+    joinMessage: string;
+    joinDecision: string;
+    interestNote: string;
+    interviewNote: string;
+    interviewDecline: string;
+    offerComp: string;
+    offerDecline: string;
+    statusNote: string;
+    notification: string;
   };
   mentorEmail: string;
   menteeEmail: string;
@@ -58,6 +81,11 @@ interface Seeded {
   interactionLogId: string;
   meetingNoteId: string;
   conversationNoteId: string;
+  companyId: string;
+  projectId: string;
+  evaluationId: string;
+  weeklyReportId: string;
+  questionId: string;
 }
 
 async function seedPaperTrail(prefix: string): Promise<Seeded> {
@@ -77,6 +105,26 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
     interactionSubject: `first call ${tag}`,
     request: `please match me, I am ${tag}`,
     reEngage: `call back in September ${tag}`,
+    evalComment: `anxious in interviews ${tag}`,
+    evalExcerpt: `she changed my life ${tag}`,
+    weeklySummary: `this week my father was ill ${tag}`,
+    weeklyBlockers: `no laptop at home ${tag}`,
+    weeklyMentorComment: `seems burnt out ${tag}`,
+    question: `can I tell HR about my ADHD ${tag}`,
+    answer: `yes, and here is how ${tag}`,
+    meetingTopic: `talk about my visa ${tag}`,
+    meetingTitle: `Mock interview with them ${tag}`,
+    cancelReason: `they were in hospital ${tag}`,
+    goal: `move out of my parents' flat ${tag}`,
+    joinMessage: `I have time after my shifts ${tag}`,
+    joinDecision: `too junior for this ${tag}`,
+    interestNote: `strong but asked for relocation help ${tag}`,
+    interviewNote: `bring your passport ${tag}`,
+    interviewDecline: `it clashes with my exam ${tag}`,
+    offerComp: `2 400 net, as they asked ${tag}`,
+    offerDecline: `family reasons ${tag}`,
+    statusNote: `paused while they recover ${tag}`,
+    notification: `Erasure Mentor replied to you ${tag}`,
   };
 
   const mentorEmail = uniqueEmail(`${prefix}-mentor`);
@@ -197,6 +245,84 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
   });
   await prisma.mentorshipRequest.create({ data: { menteeId: mentee.id, message: pii.request } });
 
+  // ── The rest of the sanitize-db inventory (#2106) ─────────────────────────
+  const org = await prisma.organization.upsert({
+    where: { slug: 'default' },
+    update: {},
+    create: { slug: 'default', name: 'Default Organization' },
+  });
+  // Written by the MENTOR about the mentee: the "about" rule, and — for the
+  // mentor-erasure test below — the "as author" rule.
+  const evaluation = await prisma.evaluation.create({
+    data: { relationId: relation.id, authorId: mentor.id, comment: pii.evalComment, publicExcerpt: pii.evalExcerpt },
+  });
+  const weeklyReport = await prisma.weeklyReport.create({
+    data: {
+      orgId: org.id,
+      relationId: relation.id,
+      weekStart: new Date(),
+      summary: pii.weeklySummary,
+      blockers: pii.weeklyBlockers,
+      mentorComment: pii.weeklyMentorComment,
+      reviewedById: mentor.id,
+    },
+  });
+  const question = await prisma.mentorQuestion.create({
+    data: { relationId: relation.id, askedById: mentee.id, question: pii.question, answer: pii.answer },
+  });
+  await prisma.meetingRequest.create({
+    data: { relationId: relation.id, requestedById: mentee.id, topic: pii.meetingTopic, proposedAt: new Date() },
+  });
+  // A meeting title that names the person, on the 1:1 conversation meeting —
+  // the one a hard delete does not cascade.
+  await prisma.meeting.update({
+    where: { id: conversationMeeting.id },
+    data: { title: pii.meetingTitle, cancelReason: pii.cancelReason },
+  });
+  await prisma.goal.create({ data: { relationId: relation.id, title: 'Goal', description: pii.goal } });
+  const project = await prisma.project.create({
+    data: { name: `Erasure project ${tag}`, ownerType: 'MENTOR', ownerUserId: mentor.id },
+  });
+  await prisma.projectJoinRequest.create({
+    data: { projectId: project.id, userId: mentee.id, message: pii.joinMessage, decisionNote: pii.joinDecision },
+  });
+  const company = await prisma.company.create({ data: { name: `Erasure Co ${tag}`, orgId: org.id } });
+  await prisma.companyInterest.create({
+    data: { companyId: company.id, menteeId: mentee.id, status: 'INTERESTED', note: pii.interestNote },
+  });
+  const requisition = await prisma.requisition.create({
+    data: { orgId: org.id, companyId: company.id, title: 'Junior developer', openings: 1 },
+  });
+  await prisma.interviewRequest.create({
+    data: {
+      requisitionId: requisition.id,
+      menteeId: mentee.id,
+      companyId: company.id,
+      orgId: org.id,
+      note: pii.interviewNote,
+      declineNote: pii.interviewDecline,
+    },
+  });
+  await prisma.offer.create({
+    data: {
+      relationId: relation.id,
+      position: 'Junior developer',
+      createdById: mentor.id,
+      compensationNote: pii.offerComp,
+      declineNote: pii.offerDecline,
+    },
+  });
+  await prisma.statusChange.create({
+    data: {
+      relationId: relation.id,
+      fromStatus: 'APPLICATION_100',
+      toStatus: 'APPROVAL_PENDING_220',
+      changedById: mentor.id,
+      reasonNote: pii.statusNote,
+    },
+  });
+  await prisma.notification.create({ data: { userId: mentee.id, type: 'message.new', text: pii.notification } });
+
   return {
     tag,
     pii,
@@ -212,6 +338,11 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
     interactionLogId: interactionLog.id,
     meetingNoteId: meetingNote.id,
     conversationNoteId: conversationNote.id,
+    companyId: company.id,
+    projectId: project.id,
+    evaluationId: evaluation.id,
+    weeklyReportId: weeklyReport.id,
+    questionId: question.id,
   };
 }
 
@@ -232,6 +363,17 @@ async function cleanup(s: Seeded) {
   // the run. e2e/candidate-erasure.spec.ts deletes by id after the same call
   // for the same reason. Relations first: `MentorshipRelation.mentor/mentee`
   // are FK-restrict, so the user rows cannot go while a relation points at them.
+  // Company-side and project rows first: they hang off the users and the
+  // company, and an interview request / offer blocks its parents otherwise.
+  await prisma.interviewRequest.deleteMany({ where: { companyId: s.companyId } });
+  await prisma.companyInterest.deleteMany({ where: { companyId: s.companyId } });
+  await prisma.requisition.deleteMany({ where: { companyId: s.companyId } });
+  await prisma.offer.deleteMany({ where: { relation: { mentorId: s.mentorId } } });
+  await prisma.statusChange.deleteMany({ where: { relation: { mentorId: s.mentorId } } });
+  await prisma.company.deleteMany({ where: { id: s.companyId } });
+  await prisma.projectJoinRequest.deleteMany({ where: { projectId: s.projectId } });
+  await prisma.project.deleteMany({ where: { id: s.projectId } });
+  await prisma.meeting.deleteMany({ where: { conversationId: s.conversationId } });
   await prisma.mentorshipRelation.deleteMany({
     where: { OR: [{ menteeId: s.menteeId }, { mentorId: s.mentorId }] },
   });
@@ -263,6 +405,27 @@ async function expectNoFreeTextLeft(s: Seeded) {
   expect(await prisma.interactionLog.count({ where: { subject: { contains: p.interactionSubject } } })).toBe(0);
   expect(await prisma.mentorshipRequest.count({ where: { message: { contains: p.request } } })).toBe(0);
   expect(await prisma.user.count({ where: { reEngageNote: { contains: p.reEngage } } })).toBe(0);
+  // #2106 — the rest of the sanitize-db inventory.
+  expect(await prisma.evaluation.count({ where: { comment: { contains: p.evalComment } } })).toBe(0);
+  expect(await prisma.evaluation.count({ where: { publicExcerpt: { contains: p.evalExcerpt } } })).toBe(0);
+  expect(await prisma.weeklyReport.count({ where: { summary: { contains: p.weeklySummary } } })).toBe(0);
+  expect(await prisma.weeklyReport.count({ where: { blockers: { contains: p.weeklyBlockers } } })).toBe(0);
+  expect(await prisma.weeklyReport.count({ where: { mentorComment: { contains: p.weeklyMentorComment } } })).toBe(0);
+  expect(await prisma.mentorQuestion.count({ where: { question: { contains: p.question } } })).toBe(0);
+  expect(await prisma.mentorQuestion.count({ where: { answer: { contains: p.answer } } })).toBe(0);
+  expect(await prisma.meetingRequest.count({ where: { topic: { contains: p.meetingTopic } } })).toBe(0);
+  expect(await prisma.meeting.count({ where: { title: { contains: p.meetingTitle } } })).toBe(0);
+  expect(await prisma.meeting.count({ where: { cancelReason: { contains: p.cancelReason } } })).toBe(0);
+  expect(await prisma.goal.count({ where: { description: { contains: p.goal } } })).toBe(0);
+  expect(await prisma.projectJoinRequest.count({ where: { message: { contains: p.joinMessage } } })).toBe(0);
+  expect(await prisma.projectJoinRequest.count({ where: { decisionNote: { contains: p.joinDecision } } })).toBe(0);
+  expect(await prisma.companyInterest.count({ where: { note: { contains: p.interestNote } } })).toBe(0);
+  expect(await prisma.interviewRequest.count({ where: { note: { contains: p.interviewNote } } })).toBe(0);
+  expect(await prisma.interviewRequest.count({ where: { declineNote: { contains: p.interviewDecline } } })).toBe(0);
+  expect(await prisma.offer.count({ where: { compensationNote: { contains: p.offerComp } } })).toBe(0);
+  expect(await prisma.offer.count({ where: { declineNote: { contains: p.offerDecline } } })).toBe(0);
+  expect(await prisma.statusChange.count({ where: { reasonNote: { contains: p.statusNote } } })).toBe(0);
+  expect(await prisma.notification.count({ where: { text: { contains: p.notification } } })).toBe(0);
 }
 
 test.afterAll(async () => {
@@ -313,6 +476,16 @@ test('anonymizing an account scrubs its messages, attachments, support thread an
     const note = await prisma.personalNote.findUnique({ where: { id: s.meetingNoteId } });
     expect(note?.body).toBe('');
     expect(note?.category).toBe('MEETING');
+    // #2106: the operational rows stay, with only their prose gone.
+    const evaluation = await prisma.evaluation.findUnique({ where: { id: s.evaluationId } });
+    expect(evaluation).not.toBeNull();
+    expect(evaluation?.comment).toBeNull();
+    const report = await prisma.weeklyReport.findUnique({ where: { id: s.weeklyReportId } });
+    expect(report?.summary).toBe('');
+    expect(report?.weekStart).toBeInstanceOf(Date);
+    expect(await prisma.statusChange.count({ where: { relationId: s.relationId, toStatus: 'APPROVAL_PENDING_220' } })).toBe(1);
+    // Their own bell is theirs alone, so it is gone rather than emptied.
+    expect(await prisma.notification.count({ where: { userId: s.menteeId } })).toBe(0);
 
     // …and the conversation still renders for the other participant: the thread
     // comes back with a tombstone, not a crash and not a blank thread.
@@ -360,6 +533,32 @@ test('hard-deleting an account leaves none of its free text behind, including wh
     // with the user row. So this one, too, is only reachable before the delete.
     const convNote = await prisma.personalNote.findUnique({ where: { id: s.conversationNoteId } });
     expect(convNote?.body).toBe('');
+  } finally {
+    await cleanup(s);
+  }
+});
+
+test("erasing the MENTOR takes the prose they authored, and leaves the mentee's own words alone (#2106)", async () => {
+  const s = await seedPaperTrail('erase-mentor');
+  try {
+    await anonymizeUser(s.mentorId);
+
+    // Their words as an author, about somebody else: gone, rows kept.
+    const p = s.pii;
+    expect(await prisma.evaluation.count({ where: { comment: { contains: p.evalComment } } })).toBe(0);
+    expect(await prisma.evaluation.count({ where: { publicExcerpt: { contains: p.evalExcerpt } } })).toBe(0);
+    expect(await prisma.mentorQuestion.count({ where: { answer: { contains: p.answer } } })).toBe(0);
+    expect(await prisma.weeklyReport.count({ where: { mentorComment: { contains: p.weeklyMentorComment } } })).toBe(0);
+    expect(await prisma.evaluation.count({ where: { id: s.evaluationId } })).toBe(1);
+
+    // The mentee's own record is not the mentor's to erase.
+    const report = await prisma.weeklyReport.findUnique({ where: { id: s.weeklyReportId } });
+    expect(report?.summary).toBe(p.weeklySummary);
+    expect(report?.blockers).toBe(p.weeklyBlockers);
+    const question = await prisma.mentorQuestion.findUnique({ where: { id: s.questionId } });
+    expect(question?.question).toBe(p.question);
+    expect(await prisma.goal.count({ where: { description: { contains: p.goal } } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: s.menteeId } })).toBe(1);
   } finally {
     await cleanup(s);
   }

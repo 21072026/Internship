@@ -150,6 +150,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
       await tx.activityLog.create({
         data: {
+          // The tenant the entry belongs to — the reset user's, which is the
+          // admin's own (the lookup above is tenant-scoped).
+          ...(user.orgId ? { orgId: user.orgId } : {}),
           action: 'admin.reset_2fa',
           level: 'WARNING',
           actorId: session.user.id,
