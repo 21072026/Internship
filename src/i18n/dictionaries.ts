@@ -2405,6 +2405,23 @@ const en = {
       announcement: 'Announcement',
       mentor_application: 'Mentor application',
     },
+    // #2558 — the two mails an assignment sends (POST /api/mentorship, a
+    // hand-over, an approved request). Used to be hardcoded English in
+    // emailService.ts, which no vertical overlay could reach.
+    menteeAssignedEmail: {
+      subject: 'New mentee assigned: {mentee}',
+      heading: 'You have a new mentee',
+      greeting: 'Hi {mentor},',
+      body: '{mentee} has been assigned to you as a mentee. Reach out to them to get the mentorship started, and log your first interaction when you do.',
+      cta: 'Open your dashboard',
+    },
+    mentorAssignedEmail: {
+      subject: 'You have a mentor: {mentor}',
+      heading: 'You have been assigned a mentor',
+      greeting: 'Hi {mentee},',
+      body: '{mentor} is now your mentor. Open your portal to say hi and get the mentorship started.',
+      cta: 'Open your portal',
+    },
     deadlineEmail: {
       subject: "Overdue: {mentee}'s stage deadline",
       greeting: 'Hi {mentor},',
@@ -8049,6 +8066,20 @@ const tr: Dict = {
       announcement: 'Duyuru',
       mentor_application: 'Mentor başvurusu',
     },
+    menteeAssignedEmail: {
+      subject: 'Yeni mentee atandı: {mentee}',
+      heading: 'Yeni bir menteen var',
+      greeting: 'Merhaba {mentor},',
+      body: '{mentee} sana mentee olarak atandı. Mentorluğu başlatmak için onunla iletişime geç ve ilk etkileşimini kaydetmeyi unutma.',
+      cta: 'Panonu aç',
+    },
+    mentorAssignedEmail: {
+      subject: 'Bir mentorun var: {mentor}',
+      heading: 'Sana bir mentor atandı',
+      greeting: 'Merhaba {mentee},',
+      body: '{mentor} artık senin mentorun. Merhaba demek ve mentorluğu başlatmak için portalını aç.',
+      cta: 'Portalını aç',
+    },
     deadlineEmail: {
       subject: 'Gecikmiş: {mentee} için aşama son tarihi',
       greeting: 'Merhaba {mentor},',
@@ -13630,6 +13661,20 @@ const de: Dict = {
       meeting_request: 'Meeting-Anfrage',
       announcement: 'Ankündigung',
       mentor_application: 'Mentor-Bewerbung',
+    },
+    menteeAssignedEmail: {
+      subject: 'Neuer Mentee zugewiesen: {mentee}',
+      heading: 'Du hast einen neuen Mentee',
+      greeting: 'Hallo {mentor},',
+      body: '{mentee} wurde dir als Mentee zugewiesen. Melde dich bei der Person, um das Mentoring zu starten, und erfasse dabei deine erste Interaktion.',
+      cta: 'Dashboard öffnen',
+    },
+    mentorAssignedEmail: {
+      subject: 'Du hast einen Mentor: {mentor}',
+      heading: 'Dir wurde ein Mentor zugewiesen',
+      greeting: 'Hallo {mentee},',
+      body: '{mentor} ist jetzt dein Mentor. Öffne dein Portal, um Hallo zu sagen und das Mentoring zu starten.',
+      cta: 'Portal öffnen',
     },
     deadlineEmail: {
       subject: 'Überfällig: Phasenfrist für {mentee}',

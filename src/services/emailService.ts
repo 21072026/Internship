@@ -10,7 +10,7 @@ import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
-import { capabilitiesMemo } from '@/lib/shellCapabilities';
+import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
@@ -32,9 +32,8 @@ import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneL
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { buildMeetingIcs } from '@/lib/ics';
 import { loadProjectTeam } from '@/lib/projectTeam';
-import { getDictionary } from '@/i18n/dictionaries';
-import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
-import { verticalFor } from '@/lib/verticalContext';
+import { getDictionary, type Dictionary } from '@/i18n/dictionaries';
+import { emailDictionary, emailDictionaryMemo } from '@/i18n/emailDictionary';
 import { isNextActionReminderDue, nextActionDueBefore } from '@/lib/nextActionRule';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { bulkMissingRequirements } from '@/lib/documentRequirements';
@@ -471,6 +470,10 @@ export const __testable = {
   organizerTimeLine,
   participantClocks,
   activityDigestTable,
+  // #2558 — the invitation's role sentence, so a test can render it from a
+  // MARKETING dictionary without an SMTP server.
+  invitationBody,
+  assignedEmailParts,
 };
 // What actually happened to a message, mirroring the EmailLog row this call
 // writes (#1431). Returned rather than only recorded, because "did not throw"
@@ -765,6 +768,19 @@ export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: str
   }
 }
 
+type InvitationCopy = Dictionary['notifications']['invitationEmail'];
+
+// The sentence around the role, as three pieces so the role can be bolded
+// without HTML entering the dictionary — and so a locale that opens the
+// sentence with {role} (Turkish does) still renders correctly. An unknown role
+// string (nothing else can reach this today) prints as-is rather than as an
+// empty gap in the sentence.
+function invitationBody(I: InvitationCopy, role: string) {
+  const roleLabel = I.roles[role as keyof typeof I.roles] ?? role;
+  const [bodyBefore, bodyAfter = ''] = I.body.split('{role}');
+  return { roleLabel, bodyBefore, bodyAfter };
+}
+
 // LOCALE (#1720): `locale` is REQUIRED thinking, not an optional nicety — the
 // invitee is the one recipient in this whole file who provably has no stored
 // preference, because they have no account at all. Reading Accept-Language is
@@ -800,15 +816,8 @@ export async function sendInvitationEmail({
   const resolved = resolveLocale(locale);
   // In the inviting tenant's own vocabulary (#2558): a SaleVali invitation
   // asks a sales rep to join, not "a mentor". INTERNSHIP's overlay is empty.
-  const vertical = orgId ? await verticalFor(orgId) : DEFAULT_VERTICAL;
-  const I = applyVerticalOverlay(getDictionary(resolved), resolved, vertical).notifications.invitationEmail;
-  // An unknown role string (nothing else can reach this today) prints as-is
-  // rather than as an empty gap in the sentence.
-  const roleLabel = I.roles[role as keyof typeof I.roles] ?? role;
-  // Split rather than replace, so the role can be bolded without HTML entering
-  // the dictionary — and so a locale that opens the sentence with {role}
-  // (Turkish does) still renders correctly.
-  const [bodyBefore, bodyAfter = ''] = I.body.split('{role}');
+  const I = (await emailDictionary(resolved, orgId)).notifications.invitationEmail;
+  const { roleLabel, bodyBefore, bodyAfter } = invitationBody(I, role);
 
   return await sendEmail({
     to,
@@ -1510,35 +1519,71 @@ export async function sendMentorshipDecisionEmail({
   });
 }
 
+type AssignedCopy =
+  | Dictionary['notifications']['menteeAssignedEmail']
+  | Dictionary['notifications']['mentorAssignedEmail'];
+
+// The two assignment mails' html, pure (#2558) so a test can render them from
+// a MARKETING dictionary. `other` is the name the body is about (bolded),
+// `self` the recipient's own name for the greeting (omitted when unknown).
+function assignedEmailParts(
+  C: AssignedCopy,
+  names: { self?: string | null; other: string; selfKey: 'mentor' | 'mentee'; otherKey: 'mentor' | 'mentee' },
+) {
+  const fill = (template: string, key: string, value: string) => template.split(`{${key}}`).join(value);
+  return {
+    subject: fill(C.subject, names.otherKey, names.other),
+    heading: esc(C.heading),
+    greeting: names.self ? `<p>${esc(fill(C.greeting, names.selfKey, names.self))}</p>` : '',
+    body: `<p>${esc(C.body).split(`{${names.otherKey}}`).join(`<strong>${esc(names.other)}</strong>`)}</p>`,
+    cta: esc(C.cta),
+  };
+}
+
+// LOCALE (#1720): an explicit `locale` wins; otherwise the recipient's stored
+// preference (every caller passes `userId`), else the default.
+async function assignedEmailLocale(locale: string | null | undefined, userId: string | null | undefined): Promise<Locale> {
+  if (isLocale(locale ?? undefined)) return locale as Locale;
+  if (!userId) return defaultLocale;
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { preferredLanguage: true } }).catch(() => null);
+  return resolveLocale(u?.preferredLanguage);
+}
+
 export async function sendMenteeAssignedEmail({
   to,
   mentorName,
   menteeName,
   orgId,
   userId,
+  locale,
 }: {
   to: string;
   mentorName?: string | null;
   menteeName: string;
   orgId?: string | null;
   userId?: string | null;
+  locale?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
+  // The recipient's org decides the words (#2558): a MARKETING rep gets a new
+  // lead, not a mentee — and their dashboard is /sales, not /mentor.
+  const M = (await emailDictionary(await assignedEmailLocale(locale, userId), orgId)).notifications.menteeAssignedEmail;
+  const parts = assignedEmailParts(M, { self: mentorName, other: menteeName, selfKey: 'mentor', otherKey: 'mentee' });
+  const home = notificationLink('MENTOR', 'dashboard', {}, { capabilities: await shellCapabilities(orgId) });
   await sendEmail({
     to,
     userId,
     category: 'mentee-assigned',
     fromName: brand.name,
-    subject: `New mentee assigned: ${menteeName}`,
+    subject: parts.subject,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, 'You have a new mentee')}
-        ${mentorName ? `<p>Hi ${esc(mentorName)},</p>` : ''}
-        <p><strong>${esc(menteeName)}</strong> has been assigned to you as a mentee. Reach out to
-        them to get the mentorship started, and log your first interaction when you do.</p>
-        ${ctaBlock(brand, `${base}/mentor`, 'Open your dashboard')}
+        ${brandHeader(brand, parts.heading)}
+        ${parts.greeting}
+        ${parts.body}
+        ${ctaBlock(brand, `${base}${home}`, parts.cta)}
       </div>
     `,
   });
@@ -1552,29 +1597,37 @@ export async function sendMentorAssignedEmail({
   mentorName,
   orgId,
   userId,
+  locale,
 }: {
   to: string;
   menteeName?: string | null;
   mentorName: string;
   orgId?: string | null;
   userId?: string | null;
+  locale?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
+  const M = (await emailDictionary(await assignedEmailLocale(locale, userId), orgId)).notifications.mentorAssignedEmail;
+  const parts = assignedEmailParts(M, { self: menteeName, other: mentorName, selfKey: 'mentee', otherKey: 'mentor' });
+  // The portal is a mentorship-vertical shell (#2351): a lead in a vertical
+  // without it would be bounced to /account, so their CTA opens the one
+  // role-neutral place their contact person can be reached.
+  const capabilities = await shellCapabilities(orgId);
+  const home = capabilities.includes('mentorship') ? '/portal' : '/messages';
   await sendEmail({
     to,
     userId,
     category: 'mentor-assigned',
     fromName: brand.name,
-    subject: `You have a mentor: ${mentorName}`,
+    subject: parts.subject,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, 'You have been assigned a mentor')}
-        ${menteeName ? `<p>Hi ${esc(menteeName)},</p>` : ''}
-        <p><strong>${esc(mentorName)}</strong> is now your mentor. Open your portal to say hi
-        and get the mentorship started.</p>
-        ${ctaBlock(brand, `${base}/portal`, 'Open your portal')}
+        ${brandHeader(brand, parts.heading)}
+        ${parts.greeting}
+        ${parts.body}
+        ${ctaBlock(brand, `${base}${home}`, parts.cta)}
       </div>
     `,
   });
@@ -2057,7 +2110,7 @@ export async function sendRoleChangeEmail({
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in. No userId here, so `orgId` is the whole answer (none ⇒ the default product).
   const base = await appUrlFor(orgId);
-  const M = getDictionary(resolveLocale(locale)).roleChangeEmail;
+  const M = (await emailDictionary(resolveLocale(locale), orgId)).roleChangeEmail;
   const mentor = newRole === 'MENTOR';
   await sendEmail({
     to,
@@ -2599,6 +2652,7 @@ export async function checkStageDeadlineReminders() {
   const now = new Date();
   const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'] as const;
   const capabilitiesOf = capabilitiesMemo();
+  const dictionaryOf = emailDictionaryMemo();
 
   const overdue = await prisma.mentorshipRelation.findMany({
     where: {
@@ -2632,7 +2686,7 @@ export async function checkStageDeadlineReminders() {
     if (emailAllowed(rel.mentor, 'deadlines') && emailGroupAllowedForCategory(rel.mentor, 'stage-deadline')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
-      const emailText = getDictionary(locale).notifications.deadlineEmail;
+      const emailText = (await dictionaryOf(locale, rel.orgId)).notifications.deadlineEmail;
       const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
       const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
       const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
@@ -2719,6 +2773,7 @@ export async function checkNextActionReminders(now = new Date()) {
   let reminded = 0;
   let failures = 0;
   const capabilitiesOf = capabilitiesMemo();
+  const dictionaryOf = emailDictionaryMemo();
   for (const rel of due) {
     if (!isNextActionReminderDue(rel, now)) continue;
     const claim = await prisma.mentorshipRelation.updateMany({
@@ -2762,7 +2817,7 @@ export async function checkNextActionReminders(now = new Date()) {
     if (emailAllowed(owner, 'deadlines') && emailGroupAllowedForCategory(owner, 'stage-deadline')) {
       try {
         const locale = isLocale(owner.preferredLanguage ?? undefined) ? (owner.preferredLanguage as Locale) : defaultLocale;
-        const text = getDictionary(locale).notifications.nextActionEmail;
+        const text = (await dictionaryOf(locale, rel.orgId)).notifications.nextActionEmail;
         const noteHtml = rel.nextActionNote
           ? `<p><strong>${esc(text.noteLabel)}</strong> ${esc(rel.nextActionNote)}</p>`
           : '';
@@ -3498,6 +3553,7 @@ export async function sendWeeklyMentorDigests() {
   await origins.prefetch(mentors.map((m) => m.orgId));
 
   let sent = 0;
+  const dictionaryOf = emailDictionaryMemo();
   for (const m of mentors) {
     if (m.mentorRelations.length === 0) continue;
     if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'mentor-digest')) continue;
@@ -3511,7 +3567,7 @@ export async function sendWeeklyMentorDigests() {
     // LOCALE (#1720): the recipient is a registered mentor, so their stored
     // `preferredLanguage` decides — no other source is needed or wanted.
     const mLocale = resolveLocale(m.preferredLanguage);
-    const D = getDictionary(mLocale).notifications.mentorDigestEmail;
+    const D = (await dictionaryOf(mLocale, m.orgId)).notifications.mentorDigestEmail;
     // The count is bolded, so each line is split on its {n} rather than
     // replaced — the number is not at the same position in all three languages.
     const countLine = (template: string, n: number) => {
@@ -3548,8 +3604,14 @@ export async function sendWeeklyMentorDigests() {
 // Renders the per-mentee rows of the daily activity digest email. Page-view /
 // time-on-site columns are only meaningful for mentees who opted into activity
 // tracking; they simply read 0 for those who didn't.
-function activityDigestTable(items: MenteeActivity[], locale?: string | null): string {
-  const A = getDictionary(resolveLocale(locale)).notifications.activityDigestEmail;
+// `copy` is the digest block the caller already resolved for its recipient
+// (vertical included, #2558); without it the table reads the base dictionary.
+function activityDigestTable(
+  items: MenteeActivity[],
+  locale?: string | null,
+  copy?: Dictionary['notifications']['activityDigestEmail'],
+): string {
+  const A = copy ?? getDictionary(resolveLocale(locale)).notifications.activityDigestEmail;
   const rows = items
     .map((m) => {
       const login =
@@ -3616,7 +3678,8 @@ const OVERDUE_DIGEST_SCAN = 100;
 async function overdueTodoBlock(
   reach: Prisma.ProjectTaskWhereInput,
   locale: Locale,
-  recipientId: string
+  recipientId: string,
+  copy?: Dictionary['notifications']['activityDigestEmail'],
 ): Promise<string> {
   const rows = await prisma.projectTask.findMany({
     where: { ...reach, done: false, archivedAt: null, dueDate: { lt: overdueBefore() } },
@@ -3638,7 +3701,7 @@ async function overdueTodoBlock(
   // what no page will show. Same predicate as the team list, one copy (#2440).
   const visible = visibleToViewer(rows, recipientId);
   if (visible.length === 0) return '';
-  const A = getDictionary(locale).notifications.activityDigestEmail;
+  const A = copy ?? getDictionary(locale).notifications.activityDigestEmail;
   const items = visible
     .slice(0, OVERDUE_DIGEST_LIMIT)
     .map((row) => {
@@ -3676,17 +3739,19 @@ export async function sendDailyActivityDigests() {
   // never one origin for the batch.
   const origins = createOriginBook();
   await origins.prefetch(mentors.map((m) => m.orgId));
+  const dictionaryOf = emailDictionaryMemo();
   for (const m of mentors) {
     if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'activity-digest')) continue;
     const items = await getMentorMenteeActivity(m.id, since);
     if (items.length === 0) continue;
     const mLocale = resolveLocale(m.preferredLanguage);
-    const A = getDictionary(mLocale).notifications.activityDigestEmail;
+    const A = (await dictionaryOf(mLocale, m.orgId)).notifications.activityDigestEmail;
     // Their own mentees, the same people the table above is about.
     const overdue = await overdueTodoBlock(
       { assigneeId: { in: items.map((i) => i.menteeId) } },
       mLocale,
-      m.id
+      m.id,
+      A,
     );
     try {
       const base = await origins.urlFor(m.orgId);
@@ -3699,7 +3764,7 @@ export async function sendDailyActivityDigests() {
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
           <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
           <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
-          ${activityDigestTable(items, mLocale)}
+          ${activityDigestTable(items, mLocale, A)}
           ${overdue}
           <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
@@ -3721,11 +3786,11 @@ export async function sendDailyActivityDigests() {
     for (const a of admins) {
       if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
       const aLocale = resolveLocale(a.preferredLanguage);
-      const A = getDictionary(aLocale).notifications.activityDigestEmail;
+      const A = (await dictionaryOf(aLocale, a.orgId)).notifications.activityDigestEmail;
       // Their own organisation. An admin with no org reads nobody's to-dos here
       // rather than everybody's: this job binds no tenant context.
       const overdue = a.orgId
-        ? await overdueTodoBlock({ assignee: { is: { orgId: a.orgId } } }, aLocale, a.id)
+        ? await overdueTodoBlock({ assignee: { is: { orgId: a.orgId } } }, aLocale, a.id, A)
         : '';
       try {
         const base = await origins.urlFor(a.orgId);
@@ -3738,7 +3803,7 @@ export async function sendDailyActivityDigests() {
           html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
             <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
             <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
-            ${activityDigestTable(adminItems, aLocale)}
+            ${activityDigestTable(adminItems, aLocale, A)}
             ${overdue}
             <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           </div>`,

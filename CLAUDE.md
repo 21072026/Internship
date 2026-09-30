@@ -272,6 +272,14 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   "Pipeline tracking", TR "Fırsatla buluştur" in `e2e/landing-i18n.spec.ts`) — keep them or
   update the specs in the same PR. Keep the marketing claims in sync with shipped features
   (check `CHANGELOG.md` / `src/lib/releaseNotes.ts` when features land).
+  `check:i18n` also **pins the MARKETING leak count** (#2558): per locale, how many
+  overlay-resolved MARKETING strings still say mentor/mentee/internship, in `EXPECTED_LEAKS`
+  (`scripts/check-i18n.ts`). A new un-overlaid internship word is fixed with a MARKETING entry
+  in `src/i18n/verticalOverlays.ts` (or an argued `LEAK_EXEMPT` namespace MARKETING cannot
+  render), and removing leaks means lowering the literal in the same diff — the check fails
+  both ways. `npm run check:i18n -- --leaks[=locale]` lists the offending keys. E-mail copy
+  goes through `emailDictionary(locale, orgId)` (`src/i18n/emailDictionary.ts`), never a bare
+  `getDictionary()`, so the recipient org's vertical reaches the mail.
 - **Dark mode** is class-based (`html.dark`) with flat utility overrides in
   `src/app/globals.css`: `bg-*-50` boxes are retinted dark while `bg-*-100` chips stay
   light. Mid-tone text (`text-*-600/700`) sitting on a tinted `*-50` box goes dark-on-dark —

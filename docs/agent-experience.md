@@ -7811,3 +7811,30 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   be covered in `sso-roundtrip.spec.ts`, but no POST there sent `RelayState`. The stub IdP's
   `/saml/sso` page echoes RelayState in its auto-POST form, so a request-only test can drive
   login → IdP → ACS by parsing that form, without a browser.
+
+## 2026-09-29 — MARKETING overlays for team screens and mail (#2558)
+
+- **The scratchpad directory is shared by every agent of a workflow run.** Generic names
+  (`build.log`, `overlay.sh`, `pw.config.mjs`) get overwritten by a sibling mid-task. Put your
+  files in a subdirectory named after your issue from the first command on.
+- **The shared `node_modules/.prisma` client can be stale even when YOU changed no schema** —
+  another worktree regenerated it from its own branch, and `tsc` then fails on columns that
+  exist on `main` (`ProjectTask.dueDate`). Build the private overlay (symlinks + copied
+  `.prisma`/`@prisma`, `prisma generate`) whenever `tsc` reports Prisma fields that `main` has.
+- **`notifications.events` keys are FLAT dotted strings** (`'mentorship.bulkAssigned'`), not
+  nested objects. An overlay written as `mentorship: { bulkAssigned }` is a TS excess-property
+  error — quote the dotted key.
+- **`#main-content` is not unique on every page**: the messages frame nests a second one inside
+  the shell's (strict-mode violation), and `/account` has none at all (a standalone page).
+  `e2e/vertical-terminology.spec.ts § mainText` takes the first, else the body.
+- **`/admin/analytics`' `full-report-link` is not a load marker for a fresh org** — wait for the
+  "Funnel KPIs" heading plus `networkidle` (the cohort/source cards fetch after the aggregate).
+- **A word-count ratchet needs locale-aware words**: German "intern" means *internal* and English
+  "internal" is not the product, so `/intern/i` counts noise. Strip `{placeholders}` and the
+  capitalised role enum (`MENTOR`/`MENTEE`, a CSV import value) before matching.
+- **Rebase before review when a sibling issue of the same story is in flight.** #2557 shipped
+  on `main` (#2614) while this branch also implemented it; `git merge-tree` called the overlay
+  file "auto-merged" and the result had `candidateDetail`/`messages`/`usersAdmin` twice per
+  locale — TS1117 only after the merge. Check `git log origin/main --grep '#<sibling>'` first.
+- **Since #2590 a MARKETING-org account signs in only on the marketing host**: an e2e test for
+  a MARKETING user needs `setExtraHTTPHeaders(asHost(MARKETING_HOST))` before `signInAndSettle`.
