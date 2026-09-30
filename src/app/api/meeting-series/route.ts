@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageProject, isProjectMember } from '@/lib/projectAccess';
+import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
@@ -51,9 +51,14 @@ const updateSchema = recurrenceSchema.partial().extend({ id: z.string().min(1) }
 const deleteSchema = z.object({ id: z.string().min(1) });
 
 async function ensureProjectAccess(
-  user: { id: string; role: string; companyId?: string | null },
+  user: { id: string; role: string; companyId?: string | null; orgId?: string | null },
   projectId: string
 ) {
+  // Another tenant's project is a missing one (#2627): the admin bypass below
+  // would otherwise reach every tenant's, with the org middleware dormant.
+  if (!(await projectInCallerTenant({ user }, projectId))) {
+    return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) as NextResponse };
+  }
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true },
@@ -83,7 +88,7 @@ async function ensureProjectAccess(
  * here; the project branch is never loosened.
  */
 async function ensureSeriesAccess(
-  user: { id: string; role: string; companyId?: string | null },
+  user: { id: string; role: string; companyId?: string | null; orgId?: string | null },
   series: { projectId: string | null; createdById: string }
 ): Promise<{ error?: NextResponse }> {
   if (series.projectId) return ensureProjectAccess(user, series.projectId);
@@ -200,6 +205,9 @@ export async function GET(request: Request) {
   return await withTenantScope(session, async () => {
     const projectId = new URL(request.url).searchParams.get('projectId') || '';
     if (!projectId) return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
+    if (!(await projectInCallerTenant(session, projectId))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
