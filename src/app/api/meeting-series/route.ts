@@ -9,7 +9,11 @@ import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { meetingInCallerTenant } from '@/lib/meetingAccess';
-import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
+import { nextRuleOccurrence, type SeriesRule } from '@/lib/meetingSeriesOccurrences';
+import { countContexts } from '@/lib/meetingContext';
+import { MAX_INTERVAL_WEEKS, MAX_OCCURRENCES_LIMIT } from '@/lib/seriesRule';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import type { Session } from 'next-auth';
 import { isValidTimeZone } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingRoom';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -36,8 +40,19 @@ import { durationMinutesField } from '@/lib/meetingDuration';
 
 const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
 const recurrenceSchema = z.object({
-  projectId: z.string().min(1),
+  // Exactly ONE of the two contexts (#2013): a project's recurring call, or a
+  // standing 1:1 on a mentorship relation. Checked with countContexts() — the
+  // same rule Meeting follows — not by the schema, so the error is the shared one.
+  projectId: z.string().min(1).optional(),
+  relationId: z.string().min(1).optional(),
+  // Cadence (#2013): every n weeks, and an optional end — a last date
+  // (inclusive, YYYY-MM-DD) and/or a number of meetings. Null clears an end.
+  intervalWeeks: z.number().int().min(1).max(MAX_INTERVAL_WEEKS).optional(),
+  untilDate: z.string().regex(datePattern).nullable().optional(),
+  maxOccurrences: z.number().int().min(1).max(MAX_OCCURRENCES_LIMIT).nullable().optional(),
   title: z.string().min(1),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1),
   timeOfDay: z.string().regex(timePattern),
@@ -80,6 +95,68 @@ async function ensureProjectAccess(
 }
 
 /**
+ * The standing-1:1 side (#2013), beside ensureProjectAccess and never loosening
+ * it. The relation must be in the caller's tenant (another tenant's is a
+ * missing one). `write` — create, edit, cancel — is the relation's MENTOR or an
+ * ADMIN; `read` adds the MENTEE, who sees and is reminded of the series but
+ * cannot change it. Anyone else gets the 404 a missing relation gets.
+ */
+async function ensureRelationAccess(
+  user: { id: string; role: string; orgId?: string | null },
+  relationId: string,
+  mode: 'read' | 'write'
+): Promise<{ error?: NextResponse; relation?: { id: string; mentorId: string; menteeId: string } }> {
+  const relation = await prisma.mentorshipRelation.findFirst({
+    where: withinTenant({ id: relationId }, await tenantWhere({ user } as Session)),
+    select: { id: true, mentorId: true, menteeId: true },
+  });
+  const notFound = { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) as NextResponse };
+  if (!relation) return notFound;
+  const isAdmin = user.role === 'ADMIN';
+  const isMentor = relation.mentorId === user.id;
+  const isMentee = relation.menteeId === user.id;
+  if (!isAdmin && !isMentor && !isMentee) return notFound;
+  if (mode === 'write' && !isAdmin && !isMentor) {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) as NextResponse };
+  }
+  return { relation };
+}
+
+/** A calendar date as stored: UTC midnight of YYYY-MM-DD (src/lib/seriesRule.ts). */
+function calendarDate(key: string): Date {
+  return new Date(`${key}T00:00:00Z`);
+}
+
+/** Today's calendar date on the series' own clock — the default cadence anchor. */
+function todayIn(timeZone: string | null): Date {
+  const key = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timeZone ?? undefined,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  return calendarDate(key);
+}
+
+/**
+ * The gate for a write on an EXISTING series, before the row is read: an org
+ * with neither module (a MARKETING tenant) is refused up front, exactly as it
+ * was when every series was a projects-module write (#2502) — it never learns
+ * whether an id exists. The row's own module is checked again after access.
+ */
+async function eitherSeriesModule(orgId: string | null | undefined) {
+  const projects = await requireCapability(orgId, 'projects');
+  if (!projects) return null;
+  const mentorship = await requireCapability(orgId, 'mentorship');
+  return mentorship ? projects : null;
+}
+
+/** Which module a series write belongs to: a project's call, or core mentorship. */
+function capabilityFor(context: { relationId?: string | null }) {
+  return context.relationId ? ('mentorship' as const) : ('projects' as const);
+}
+
+/**
  * Who may change or cancel an *existing* series. With a project above it, the
  * project decides (`ensureProjectAccess`). Without one — the project was
  * deleted and the FK is `SetNull`, so the rule outlived it as an orphan — the
@@ -95,9 +172,10 @@ async function ensureProjectAccess(
  */
 async function ensureSeriesAccess(
   user: { id: string; role: string; companyId?: string | null; orgId?: string | null },
-  series: { projectId: string | null; createdById: string }
+  series: { projectId: string | null; relationId?: string | null; createdById: string }
 ): Promise<{ error?: NextResponse }> {
   if (series.projectId) return ensureProjectAccess(user, series.projectId);
+  if (series.relationId) return ensureRelationAccess(user, series.relationId, 'write');
   // An orphan's tenant is its author's (src/lib/meetingTenantRule.ts): another
   // tenant's leftover is a missing row, not one an admin may cancel.
   if (!(await meetingInCallerTenant({}, series.createdById, user.orgId))) {
@@ -124,9 +202,18 @@ async function purgeGeneratedMeetings(seriesId: string) {
 }
 
 /** Days/time/zone/link that decide *when and where* — a change to any of them moves the meeting. */
-function scheduleFingerprint(s: { daysOfWeek: unknown; timeOfDay: string; timeZone: string | null; fixedLink: string | null }) {
+function scheduleFingerprint(s: {
+  daysOfWeek: unknown;
+  timeOfDay: string;
+  timeZone: string | null;
+  fixedLink: string | null;
+  intervalWeeks?: number | null;
+  untilDate?: Date | null;
+  maxOccurrences?: number | null;
+}) {
   const days = Array.isArray(s.daysOfWeek) ? [...(s.daysOfWeek as unknown[])].map(Number).sort((a, b) => a - b) : [];
-  return `${days.join(',')}|${s.timeOfDay}|${s.timeZone ?? ''}|${s.fixedLink ?? ''}`;
+  // The cadence moves the meeting too (#2013): biweekly → weekly puts it on new dates.
+  return `${days.join(',')}|${s.timeOfDay}|${s.timeZone ?? ''}|${s.fixedLink ?? ''}|${s.intervalWeeks ?? 1}|${s.untilDate?.toISOString() ?? ''}|${s.maxOccurrences ?? ''}`;
 }
 
 /**
@@ -136,14 +223,18 @@ function scheduleFingerprint(s: { daysOfWeek: unknown; timeOfDay: string; timeZo
  * (`sendProjectMeetingSeriesReminders`). No RSVP — there is no row to RSVP to.
  */
 async function announceNextOccurrence(
-  series: { id: string; projectId: string | null; title: string; daysOfWeek: unknown; timeOfDay: string; timeZone: string | null; durationMinutes: number | null; fixedLink: string | null; active: boolean },
+  series: SeriesRule & { id: string; projectId: string | null; title: string; timeZone: string | null; durationMinutes: number | null; fixedLink: string | null; active: boolean },
   role: string,
   sessionUserId: string,
   orgId: string | null | undefined,
 ) {
-  if (!series.active || !series.projectId) return { invited: 0, nextOccurrence: null as string | null };
+  // A standing 1:1 (#2013) is announced to its mentee in the follow-up slice;
+  // today only a project's call is mailed.
+  if (!series.active || !series.projectId) {
+    return { invited: 0, nextOccurrence: series.active ? nextRuleOccurrence(series)?.toISOString() ?? null : null };
+  }
 
-  const next = nextOccurrence(series.daysOfWeek, series.timeOfDay, series.timeZone);
+  const next = nextRuleOccurrence(series);
   if (!next) return { invited: 0, nextOccurrence: null };
 
   const memberMentees = await prisma.projectMember.findMany({
@@ -213,17 +304,52 @@ async function announceNextOccurrence(
   return { invited, nextOccurrence: next.toISOString() };
 }
 
+const seriesListSelect = {
+  id: true,
+  title: true,
+  daysOfWeek: true,
+  timeOfDay: true,
+  timeZone: true,
+  fixedLink: true,
+  active: true,
+  projectId: true,
+  relationId: true,
+  intervalWeeks: true,
+  anchorDate: true,
+  untilDate: true,
+  maxOccurrences: true,
+  createdAt: true,
+} as const;
+
 // GET ?projectId= — the project's recurring meetings. Readable by anyone who can
 // see the project's internals, mentee members included (#51): "the weekly call is
 // Mon+Thu 09:30, here is the link" is exactly what a member needs, and it was
 // stored but never surfaced anywhere in the UI.
+// GET ?relationId= — a pairing's standing 1:1s (#2013): its mentor, its mentee
+// and an admin of its tenant; anyone else gets a 404.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   return await withTenantScope(session, async () => {
-    const projectId = new URL(request.url).searchParams.get('projectId') || '';
-    if (!projectId) return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
+    const params = new URL(request.url).searchParams;
+    const projectId = params.get('projectId') || '';
+    const relationId = params.get('relationId') || '';
+    if (countContexts({ projectId, relationIds: relationId ? [relationId] : [] }) !== 1) {
+      return NextResponse.json({ error: 'Exactly one of projectId or relationId is required' }, { status: 400 });
+    }
+    if (relationId) {
+      const access = await ensureRelationAccess(session.user, relationId, 'read');
+      if (access.error) return access.error;
+      const rows = await prisma.meetingSeries.findMany({
+        where: { relationId, active: true },
+        orderBy: { createdAt: 'asc' },
+        select: seriesListSelect,
+      });
+      return NextResponse.json({
+        series: rows.map((s) => ({ ...s, nextOccurrence: nextRuleOccurrence(s)?.toISOString() ?? null })),
+      });
+    }
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -244,7 +370,7 @@ export async function GET(request: Request) {
     const series = await prisma.meetingSeries.findMany({
       where: { projectId, active: true },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, title: true, daysOfWeek: true, timeOfDay: true, timeZone: true, fixedLink: true, active: true },
+      select: seriesListSelect,
     });
     return NextResponse.json({
       series: series.map((s) => ({
@@ -252,7 +378,7 @@ export async function GET(request: Request) {
         // The rule alone reads as a puzzle ("Mon, Thu · 09:00" — is that today?);
         // the resolved next occurrence is what people actually want to know, and
         // it is the only form that survives the reader being in another zone.
-        nextOccurrence: nextOccurrence(s.daysOfWeek, s.timeOfDay, s.timeZone)?.toISOString() ?? null,
+        nextOccurrence: nextRuleOccurrence(s)?.toISOString() ?? null,
       })),
     });
   });
@@ -263,18 +389,34 @@ export async function POST(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // A meeting series hangs off a project (#2502): a projects-module write.
-  const capGate = await requireCapability(session.user.orgId, 'projects');
+  const raw = await request.json().catch(() => null);
+  // The capability gate runs FIRST, before validation (e2e/vertical-write-gate):
+  // a vertical without the module never even reaches a 400. Which module is the
+  // body's to say — a project's call is a projects-module write (#2502), a
+  // standing 1:1 (#2013) core mentorship — so only that one field is read raw.
+  const rawRelationId =
+    raw && typeof raw === 'object' && typeof (raw as { relationId?: unknown }).relationId === 'string'
+      ? (raw as { relationId: string }).relationId
+      : null;
+  const capGate = await requireCapability(session.user.orgId, capabilityFor({ relationId: rawRelationId }));
   if (capGate) return capGate;
 
+  const parsed = recurrenceSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { projectId, relationId, title, daysOfWeek, timeOfDay, timeZone, meetLink, active, durationMinutes } = parsed.data;
+  // Exactly one context (#2013) — the rule Meeting follows (#1051), not a second one.
+  if (countContexts({ projectId, relationIds: relationId ? [relationId] : [] }) !== 1) {
+    return NextResponse.json({ error: 'Exactly one of projectId or relationId is required' }, { status: 400 });
+  }
+
   return await withTenantScope(session, async () => {
-    const parsed = recurrenceSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
-    }
-    const { projectId, title, daysOfWeek, timeOfDay, timeZone, meetLink, active, durationMinutes } = parsed.data;
-    const access = await ensureProjectAccess(session.user, projectId);
+    const access = relationId
+      ? await ensureRelationAccess(session.user, relationId, 'write')
+      : await ensureProjectAccess(session.user, projectId!);
     if (access.error) return access.error;
+    const zone = isValidTimeZone(timeZone) ? timeZone : null;
 
     // A series' audience is derived from project membership at announce time
     // and can grow over the series' life, so its head-count is genuinely
@@ -289,11 +431,18 @@ export async function POST(request: Request) {
     });
     const series = await prisma.meetingSeries.create({
       data: {
-        projectId,
+        projectId: projectId ?? null,
+        relationId: relationId ?? null,
         title,
         daysOfWeek,
         timeOfDay,
-        timeZone: isValidTimeZone(timeZone) ? timeZone : null,
+        timeZone: zone,
+        // The cadence (#2013). The anchor is today on the series' own clock, so
+        // "every 2 weeks" starts with this week.
+        intervalWeeks: parsed.data.intervalWeeks ?? 1,
+        anchorDate: todayIn(zone),
+        untilDate: parsed.data.untilDate ? calendarDate(parsed.data.untilDate) : null,
+        maxOccurrences: parsed.data.maxOccurrences ?? null,
         durationMinutes: durationMinutes ?? null,
         fixedLink,
         active: active ?? true,
@@ -317,9 +466,8 @@ export async function PUT(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // A meeting series hangs off a project (#2502): a projects-module write.
-  const capGate = await requireCapability(session.user.orgId, 'projects');
-  if (capGate) return capGate;
+  const earlyGate = await eitherSeriesModule(session.user.orgId);
+  if (earlyGate) return earlyGate;
 
   return await withTenantScope(session, async () => {
     const parsed = updateSchema.safeParse(await request.json().catch(() => null));
@@ -338,12 +486,27 @@ export async function PUT(request: Request) {
     // leaving.
     const currentAccess = await ensureSeriesAccess(session.user, current);
     if (currentAccess.error) return currentAccess.error;
+    // The row's own module decides (#2502, #2013): a project's call is a
+    // projects-module write, a standing 1:1 is core mentorship. After the access
+    // check, which answers another tenant's row with the 404 a missing one gets —
+    // so the gate's 403 can never tell a foreign caller the row exists.
+    const capGate = await requireCapability(session.user.orgId, capabilityFor(current));
+    if (capGate) return capGate;
+    // A series never changes context: a 1:1 does not become a project call.
+    if (
+      (incoming.relationId !== undefined && incoming.relationId !== current.relationId) ||
+      (current.relationId && incoming.projectId !== undefined)
+    ) {
+      return NextResponse.json({ error: 'A series cannot move between a relation and a project' }, { status: 400 });
+    }
 
-    const targetProjectId = incoming.projectId ?? current.projectId;
-    if (!targetProjectId) return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
-    if (targetProjectId !== current.projectId) {
-      const access = await ensureProjectAccess(session.user, targetProjectId);
-      if (access.error) return access.error;
+    if (!current.relationId) {
+      const targetProjectId = incoming.projectId ?? current.projectId;
+      if (!targetProjectId) return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
+      if (targetProjectId !== current.projectId) {
+        const access = await ensureProjectAccess(session.user, targetProjectId);
+        if (access.error) return access.error;
+      }
     }
 
     const data: {
@@ -355,6 +518,9 @@ export async function PUT(request: Request) {
       durationMinutes?: number;
       fixedLink?: string | null;
       active?: boolean;
+      intervalWeeks?: number;
+      untilDate?: Date | null;
+      maxOccurrences?: number | null;
     } = {};
     if (incoming.projectId !== undefined) data.projectId = incoming.projectId;
     if (incoming.title !== undefined) data.title = incoming.title;
@@ -364,6 +530,9 @@ export async function PUT(request: Request) {
     if (incoming.meetLink !== undefined) data.fixedLink = incoming.meetLink || null;
     if (incoming.durationMinutes !== undefined) data.durationMinutes = incoming.durationMinutes;
     if (incoming.active !== undefined) data.active = incoming.active;
+    if (incoming.intervalWeeks !== undefined) data.intervalWeeks = incoming.intervalWeeks;
+    if (incoming.untilDate !== undefined) data.untilDate = incoming.untilDate ? calendarDate(incoming.untilDate) : null;
+    if (incoming.maxOccurrences !== undefined) data.maxOccurrences = incoming.maxOccurrences;
 
     const updated = await prisma.meetingSeries.update({ where: { id }, data });
 
@@ -386,7 +555,7 @@ export async function PUT(request: Request) {
       : {
           invited: 0,
           nextOccurrence: updated.active
-            ? nextOccurrence(updated.daysOfWeek, updated.timeOfDay, updated.timeZone)?.toISOString() ?? null
+            ? nextRuleOccurrence(updated)?.toISOString() ?? null
             : null,
         };
 
@@ -408,12 +577,8 @@ export async function DELETE(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  // A meeting series hangs off a project (#2502): a projects-module write. At
-  // the top and unconditional, like POST and PUT — the gate is about the actor's
-  // org, not the row, and a series that lost its project is still a leftover of
-  // this module (#2487).
-  const capGate = await requireCapability(session.user.orgId, 'projects');
-  if (capGate) return capGate;
+  const earlyGate = await eitherSeriesModule(session.user.orgId);
+  if (earlyGate) return earlyGate;
 
   return await withTenantScope(session, async () => {
     const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
@@ -426,6 +591,12 @@ export async function DELETE(request: Request) {
     // straight to the purge (#2487).
     const access = await ensureSeriesAccess(session.user, current);
     if (access.error) return access.error;
+    // The gate is about the actor's org and the row's module (#2502, #2013): a
+    // series that lost its project is still a projects leftover (#2487), a
+    // standing 1:1 is core mentorship. After the access check, so a foreign
+    // tenant's row stays a 404.
+    const capGate = await requireCapability(session.user.orgId, capabilityFor(current));
+    if (capGate) return capGate;
 
     const removedMeetings = await purgeGeneratedMeetings(parsed.data.id);
     const series = await prisma.meetingSeries.update({

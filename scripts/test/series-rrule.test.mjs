@@ -20,3 +20,10 @@ test('a rule with no valid weekday has no RRULE', () => {
   assert.equal(weeklyRrule('1,4'), null);
   assert.equal(weeklyRrule([7, 8]), null);
 });
+
+test('the cadence adds INTERVAL and an inclusive UNTIL (never COUNT, which would regrow on re-push)', () => {
+  const day = Math.floor(Date.UTC(2026, 10, 30) / 86400000); // 2026-11-30
+  assert.equal(weeklyRrule([1], { intervalWeeks: 2 }), 'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO');
+  assert.equal(weeklyRrule([1, 4], { intervalWeeks: 1, lastDay: day }), 'RRULE:FREQ=WEEKLY;UNTIL=20261130T235959Z;BYDAY=MO,TH');
+  assert.equal(weeklyRrule([1], {}), 'RRULE:FREQ=WEEKLY;BYDAY=MO');
+});

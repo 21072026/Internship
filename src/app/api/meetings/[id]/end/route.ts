@@ -6,7 +6,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
 import { loadAccessibleMeeting, meetingInCallerTenant, type MeetingUser } from '@/lib/meetingAccess';
 import { logEndedMeetingInteractions } from '@/lib/meetingAutoLog';
-import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { ruleOccurrences, SERIES_RULE_SELECT } from '@/lib/meetingSeriesOccurrences';
 
 // POST — a participant says "this meeting is over" and the dashboard banner
 // disappears for everyone, instead of sitting on "in progress" until the
@@ -113,9 +113,7 @@ async function endSeriesOccurrence(user: MeetingUser, seriesId: string, iso: str
       projectId: true,
       project: { select: { orgId: true } },
       createdById: true,
-      daysOfWeek: true,
-      timeOfDay: true,
-      timeZone: true,
+      ...SERIES_RULE_SELECT,
     },
   });
   if (!series) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -156,7 +154,7 @@ async function endSeriesOccurrence(user: MeetingUser, seriesId: string, iso: str
   }
   const minuteBefore = new Date(occurrenceAt.getTime() - 60 * 1000);
   const minuteAfter = new Date(occurrenceAt.getTime() + 60 * 1000);
-  const real = seriesOccurrences(series.daysOfWeek, series.timeOfDay, minuteBefore, minuteAfter, series.timeZone).some(
+  const real = ruleOccurrences(series, minuteBefore, minuteAfter).some(
     (d) => d.getTime() === occurrenceAt.getTime()
   );
   if (!real) return NextResponse.json({ error: 'Not found' }, { status: 404 });
