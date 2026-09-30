@@ -75,6 +75,12 @@ const EXEMPT = {
     'creates no placement and changes no placement state; it is an admin identity operation whose ' +
     'own gate belongs to the merge endpoint. For a vertical without `placements` the loop has no ' +
     'rows to walk, so gating it would only fail merges over a module that tenant never used.',
+  'src/lib/accountErasure.ts':
+    'Erasure (#2106) nulls the free-text notes on Offer and InterviewRequest rows about the erased ' +
+    'person. It creates no placement and changes no placement state, only removes prose from rows a ' +
+    'gated handler already wrote. It is a data-subject right, so it must work whatever the tenant ' +
+    'vertical is now: a tenant that has since lost `placements` still has to be able to erase what ' +
+    'it holds. Its own gates (ADMIN, password step-up) belong to the erase endpoints.',
 };
 
 const WRITE_METHODS = ['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert'];
