@@ -62,7 +62,9 @@ export async function PublicFooter() {
       links: [
         ...(isMarketing ? [] : [{ href: '/apply-as-mentor', label: n.becomeMentor }]),
         { href: GITHUB_URL, label: n.github, external: true },
-        { href: '/code-of-conduct', label: t.codeOfConduct.title },
+        // The code of conduct is written for the mentor–mentee relationship,
+        // and the page 404s where there is no mentorship (sitemap.ts agrees).
+        ...(isMarketing ? [] : [{ href: '/code-of-conduct', label: t.codeOfConduct.title }]),
         ...(isMarketing ? [] : [{ href: '/contributor-terms', label: t.contributorTerms.title }]),
       ],
     },
