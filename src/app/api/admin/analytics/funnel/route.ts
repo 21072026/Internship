@@ -27,6 +27,7 @@ import { trialLengthDaysFor } from '@/lib/trialWindow';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
+import { tenantWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 
 // Hiring-funnel KPIs (#815): the two numbers HR reports upward — stage-to-stage
 // conversion and time-to-hire — plus mentor capacity, all from the StatusChange
@@ -42,10 +43,12 @@ import { rangeEnd, rangeStart } from '@/lib/dateRange';
 // and the admin assignment dialog use (#941/#942), so this report can never
 // contradict the badge shown next to a mentor's name. Lifted out of the handler
 // (#2423) so it is only *called* for a vertical that carries mentors at all; it
-// still runs inside the caller's tenant scope, which the async context carries.
-async function mentorCapacity() {
+// still runs inside the caller's tenant scope, which the async context carries —
+// and, because that scope is a passthrough with MT_ENFORCE_ISOLATION off, it
+// takes the caller's tenant fragment and filters by hand (leak audit WP3).
+async function mentorCapacity(tenant: TenantWhere) {
   const mentors = await prisma.user.findMany({
-    where: { role: { in: ['MENTOR', 'ADMIN'] }, isActive: true },
+    where: withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant),
     select: {
       id: true,
       fullName: true,
@@ -115,7 +118,7 @@ const MAX_CHAIN_ROUNDS = 20;
  * query already loaded every link, and the successor lookup would be an IN list
  * the size of the whole table.
  */
-async function loadWholeChains(relations: RelationRow[]): Promise<void> {
+async function loadWholeChains(relations: RelationRow[], tenant: TenantWhere): Promise<void> {
   const known = new Set(relations.map((r) => r.id));
   let frontier = relations;
   for (let round = 0; round < MAX_CHAIN_ROUNDS && frontier.length > 0; round++) {
@@ -126,10 +129,10 @@ async function loadWholeChains(relations: RelationRow[]): Promise<void> {
     ];
     const [parents, children] = await Promise.all([
       missingParents.length > 0
-        ? prisma.mentorshipRelation.findMany({ where: { id: { in: missingParents } }, select: RELATION_SELECT })
+        ? prisma.mentorshipRelation.findMany({ where: withinTenant({ id: { in: missingParents } }, tenant), select: RELATION_SELECT })
         : Promise.resolve([] as RelationRow[]),
       prisma.mentorshipRelation.findMany({
-        where: { previousRelationId: { in: frontier.map((r) => r.id) } },
+        where: withinTenant({ previousRelationId: { in: frontier.map((r) => r.id) } }, tenant),
         select: RELATION_SELECT,
       }),
     ]);
@@ -176,8 +179,12 @@ export async function GET(request: Request) {
     const to = rangeEnd(searchParams.get('to'));
     const rangeOk = from && to && from.getTime() <= to.getTime();
 
+    // The caller's tenant, by hand: `withTenantScope` does nothing with
+    // MT_ENFORCE_ISOLATION off, so this report used to fold every org's
+    // journeys into one funnel (leak audit WP3).
+    const tenant = await tenantWhere(session);
     const relations = await prisma.mentorshipRelation.findMany({
-      where: rangeOk
+      where: withinTenant(rangeOk
         ? {
             // Started in the window, OR started earlier and moved inside it —
             // a win IS a StatusChange, so this is exactly the superset the
@@ -194,7 +201,7 @@ export async function GET(request: Request) {
               { trialStartedAt: { gte: from!, lte: to! } },
             ],
           }
-        : {},
+        : {}, tenant),
       select: RELATION_SELECT,
     });
     // The rest of every transfer chain the window touched (#2556), so a chain
@@ -203,7 +210,7 @@ export async function GET(request: Request) {
     // opened after the window must not drop the win it recorded.
     // Unranged, the first query already loaded every relation of the tenant,
     // so the set is closed under both chain directions — skip the lookups.
-    if (rangeOk) await loadWholeChains(relations);
+    if (rangeOk) await loadWholeChains(relations, tenant);
 
     const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
     const [stages, capabilities] = await Promise.all([resolvePipelineStages(orgId), shellCapabilities(orgId)]);
@@ -314,7 +321,7 @@ export async function GET(request: Request) {
         const ids = result.bySource.map((r) => r.sourceId).filter((id): id is string => !!id);
         const names = new Map(
           (ids.length > 0
-            ? await prisma.source.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+            ? await prisma.source.findMany({ where: withinTenant({ id: { in: ids } }, tenant), select: { id: true, name: true } })
             : []
           ).map((s) => [s.id, s.name]),
         );
@@ -329,7 +336,7 @@ export async function GET(request: Request) {
     // never asked; the empty list is what the screen and the Excel export
     // already read as "no capacity section". INTERNSHIP carries the module, so
     // its report is unchanged.
-    const capacity = capabilities.includes('mentorship') ? await mentorCapacity() : [];
+    const capacity = capabilities.includes('mentorship') ? await mentorCapacity(tenant) : [];
 
     return NextResponse.json({
       order,

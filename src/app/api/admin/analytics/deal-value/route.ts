@@ -9,6 +9,7 @@ import { onPathKeys } from '@/lib/pipeline';
 import { cohortMonths } from '@/lib/funnelKpi';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { isDealValueEnabled, valueByMonth, type ValueJourney } from '@/lib/dealValue';
 
 // GET /api/admin/analytics/deal-value — the ESTIMATED value of won deals,
@@ -52,8 +53,12 @@ export async function GET(request: Request) {
           : new Date(Date.UTC(windowEnd.getUTCFullYear(), windowEnd.getUTCMonth() - 11, 1));
         const months = cohortMonths(windowStart, windowEnd);
 
+        // The caller's tenant, by hand (leak audit WP3): `withTenantScope` is a
+        // passthrough with MT_ENFORCE_ISOLATION off, so a MARKETING org's book
+        // was valued over every org's won relations.
+        const tenant = await tenantWhere(session);
         const relations = await prisma.mentorshipRelation.findMany({
-          where: { startDate: { lte: windowEnd } },
+          where: withinTenant({ startDate: { lte: windowEnd } }, tenant),
           select: {
             id: true,
             previousRelationId: true,

@@ -72,9 +72,15 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
   { href: '/admin/calendar', icon: CalendarDays, key: 'calendar' },
   { href: '/admin/announcements', icon: Megaphone, key: 'announcements' },
-  { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters' },
+  // The newsletter is career content for MENTEE/MENTOR audiences (#1469): an
+  // internship module. Tagged `mentorship` rather than a new `newsletter`
+  // capability — its audiences only exist where mentorship does, and a second
+  // key that always travels with the first is a key that can only drift.
+  // Tagging also closes the URL (pageCapabilityGate) and the APIs gate on it.
+  { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
   { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship' },
-  { href: '/admin/email', icon: Mail, key: 'email' },
+  // "E-mail your mentees" — addressed through mentorship relations.
+  { href: '/admin/email', icon: Mail, key: 'email', capability: 'mentorship' },
   { href: '/admin/documents', icon: FileText, key: 'documents' },
   { href: '/admin/support', icon: LifeBuoy, key: 'support' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
@@ -83,7 +89,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
-  { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement' },
+  // Re-engaging dormant applicants/mentees is the internship funnel's tail.
+  { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
   { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects' },
   { href: '/admin/organizations', icon: Network, key: 'organizations' },
   { href: '/admin/settings', icon: Settings, key: 'settings' },
@@ -114,7 +121,7 @@ export const MENTOR_NAV_LINKS: NavLink[] = [
   { href: '/mentor/feedback', icon: MessageSquareText, key: 'feedback' },
   // Mentors read the same archive; a shared issue shows them its coaching
   // block, exactly as the e-mail does (#1469).
-  { href: '/newsletters', icon: MailOpen, key: 'newsletters' },
+  { href: '/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
 ];
 
 export const PORTAL_NAV_LINKS: NavLink[] = [
@@ -135,7 +142,7 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   // The career-tips archive (#1469). Linked from the sidebar and not only
   // from the e-mail footer: the issues stay useful long after the mail is
   // gone, and someone who unsubscribed can still read them here.
-  { href: '/newsletters', icon: MailOpen, key: 'newsletters' },
+  { href: '/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
 ];
 
 /**

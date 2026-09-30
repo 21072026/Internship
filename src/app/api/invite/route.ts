@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
 import { requireCapability } from '@/lib/capabilityGate';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // Email invitations (#51).
 //
@@ -262,9 +263,13 @@ export async function GET() {
     }
 
     return await withTenantScope(session, async () => {
-      // Admins audit every invitation; everyone else sees the ones they sent.
+      // Admins audit every invitation OF THEIR ORG; everyone else sees the ones
+      // they sent. The tenant is ANDed in by hand: `withTenantScope` does
+      // nothing with MT_ENFORCE_ISOLATION off, so an admin's `{}` used to read
+      // every tenant's invitations — addresses and inviters included.
+      const tenant = await tenantWhere(session);
       const invitations = await prisma.invitationToken.findMany({
-        where: session.user.role === 'ADMIN' ? {} : { invitedById: session.user.id },
+        where: withinTenant(session.user.role === 'ADMIN' ? {} : { invitedById: session.user.id }, tenant),
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,

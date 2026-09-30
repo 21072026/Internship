@@ -310,8 +310,8 @@ export default function AdminOrganizationsPage() {
   const [superAdmin, setSuperAdmin] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  // Blank = let the server apply the column default, so the form creates
-  // exactly what it created before this field existed.
+  // Required (per-world super admins): the server offers only the verticals of
+  // this super admin's own world, and the form preselects the first of them.
   const [vertical, setVertical] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -327,7 +327,9 @@ export default function AdminOrganizationsPage() {
       const data = await res.json();
       setOrgs(data.organizations ?? []);
       setPlans(data.plans ?? []);
-      setVerticals(data.verticals ?? []);
+      const offered: string[] = data.verticals ?? [];
+      setVerticals(offered);
+      setVertical((v) => (v && offered.includes(v) ? v : offered[0] ?? ''));
       setSuperAdmin(!!data.superAdmin);
     }
     setLoading(false);
@@ -336,15 +338,15 @@ export default function AdminOrganizationsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !vertical) return;
     setSaving(true);
     setError(null);
     try {
       const res = await fetch('/api/admin/organizations', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, slug, ...(vertical ? { vertical } : {}) }),
+        body: JSON.stringify({ name, slug, vertical }),
       });
-      if (res.ok) { setName(''); setSlug(''); setVertical(''); await load(); }
+      if (res.ok) { setName(''); setSlug(''); await load(); }
       else setError((await res.json().catch(() => ({}))).error ?? t.common.error);
     } finally {
       setSaving(false);
@@ -592,9 +594,9 @@ export default function AdminOrganizationsPage() {
               data-testid="new-org-vertical"
               value={vertical}
               onChange={(e) => setVertical(e.target.value)}
+              required
               className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
             >
-              <option value="">—</option>
               {verticals.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
@@ -813,7 +815,10 @@ export default function AdminOrganizationsPage() {
                         aria-label={t.organizations.vertical}
                         data-testid={`org-vertical-${o.id}`}
                         value={o.vertical}
-                        disabled={saving || !superAdmin}
+                        // A super admin's world has one product today, and a
+                        // cross-world move is refused by the API (per-world
+                        // super admins), so there is nothing to pick.
+                        disabled={saving || !superAdmin || verticals.length < 2}
                         onChange={(e) => changeVertical(o.id, e.target.value)}
                         className="rounded-lg border border-gray-300 px-2 py-1 text-xs disabled:opacity-60"
                       >

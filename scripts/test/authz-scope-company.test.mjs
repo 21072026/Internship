@@ -18,7 +18,10 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
-const { scopeForRole, andScope, NO_MATCH } = await import('../../src/lib/authzScope.ts');
+// `roleScope` is the role half of `scopeForRole` — the tenant conjunct it adds
+// needs the default org's id (a database read), so the matrix is asserted on
+// the pure half and the tenant composition on `scopeInTenant` below.
+const { roleScope: scopeForRole, scopeInTenant, andScope, NO_MATCH } = await import('../../src/lib/authzScope.ts');
 
 // The Role enum is FROZEN (prisma/schema.prisma) — this list is the whole
 // universe the matrix has to decide, and a sixth entry here would be wrong.
@@ -26,7 +29,7 @@ const ROLES = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'];
 
 const user = (role, extra = {}) => ({ id: 'user-1', role, email: 'u@example.com', ...extra });
 
-test('ADMIN is deliberately unscoped: `{}`, so the admin screens are unchanged', async () => {
+test('ADMIN\'s role half is `{}` — the whole TENANT; the tenant itself is added by scopeForRole', async () => {
   assert.deepEqual(await scopeForRole(user('ADMIN'), 'company'), {});
 });
 
@@ -96,4 +99,27 @@ test('the list route hands ADMIN a copy of `{}`, not the builder\'s object', asy
   const where = andScope(scope);
   assert.deepEqual(where, {});
   assert.notEqual(where, scope);
+});
+
+// ── The tenant conjunct (#2542 follow-up) ───────────────────────────────────
+// `scopeForRole` = `scopeInTenant(roleScope(...), orgWhere(user.orgId))`. The
+// ADMIN `{}` used to be the whole answer, which with MT_ENFORCE_ISOLATION off
+// meant every tenant's rows.
+
+test('ADMIN\'s `{}` becomes exactly the tenant — never unscoped', () => {
+  assert.deepEqual(scopeInTenant({}, { orgId: 'org-b' }), { orgId: 'org-b' });
+  const def = { OR: [{ orgId: 'org-default' }, { orgId: null }] };
+  assert.deepEqual(scopeInTenant({}, def), def);
+});
+
+test('a role scope that is itself an OR is ANDed with the tenant, not merged into it', () => {
+  const mentor = { OR: [{ mentorId: 'u' }, { menteeId: 'u' }] };
+  const def = { OR: [{ orgId: 'org-default' }, { orgId: null }] };
+  assert.deepEqual(scopeInTenant(mentor, def), { AND: [mentor, def] });
+});
+
+test('the tenant conjunct survives a later request filter (#2288 shape)', () => {
+  const scoped = scopeInTenant({}, { orgId: 'org-b' });
+  const where = andScope(scoped, { OR: [{ name: { contains: 'x' } }] });
+  assert.deepEqual(where, { AND: [{ orgId: 'org-b' }, { OR: [{ name: { contains: 'x' } }] }] });
 });

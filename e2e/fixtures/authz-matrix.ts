@@ -238,6 +238,30 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
   { path: `/api/users/${FOREIGN_USER_ID_PARAM}/activity`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}/delete-impact`, kind: 'detail' },
+  // Analytics and invitations (leak audit WP3/WP5): the payloads carry mentor,
+  // mentee and inviter ids, so a foreign one in the body is the leak.
+  { path: '/api/admin/analytics', kind: 'list' },
+  { path: '/api/admin/analytics/funnel', kind: 'list' },
+  { path: '/api/admin/analytics/aging', kind: 'list' },
+  { path: '/api/invite', kind: 'list' },
+  { path: '/api/admin/invitations', kind: 'list' },
+  // Relations, meetings and the calendar (#2542 follow-up): the ADMIN relation
+  // scope and the meeting/calendar ADMIN branches were `{}`. The seeded foreign
+  // mentee has no relation here, so these are regression tripwires on the
+  // payload; e2e/tenant-isolation-relations.spec.ts seeds the rows and pins
+  // them in both directions.
+  { path: '/api/mentorship', kind: 'list' },
+  { path: '/api/meetings', kind: 'list' },
+  { path: '/api/calendar-events', kind: 'list' },
+  { path: `/api/people/${FOREIGN_USER_ID_PARAM}/card`, kind: 'detail' },
+  // Audit trail, support queue and content pools (cross-world isolation):
+  // each carries user ids (actorId / requester.id / createdById) a leak would
+  // expose. e2e/tenant-isolation-content.spec.ts covers them row by row.
+  { path: '/api/admin/activity', kind: 'list' },
+  { path: '/api/admin/support', kind: 'list' },
+  { path: '/api/admin/message-templates', kind: 'list' },
+  { path: '/api/admin/goal-templates', kind: 'list' },
+  { path: '/api/message-templates', kind: 'list' },
 ];
 
 /**

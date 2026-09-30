@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
@@ -48,7 +49,18 @@ export async function GET(request: Request) {
   const { from, to, seriesFrom, seriesTo } = parseRange(new URL(request.url));
   // An absent bound means "no bound" — see parseRange.
   const inWindow = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
-  const relWhere: Prisma.MentorshipRelationWhereInput =
+  // Every role's scope is narrowed to the caller's tenant (#2542 follow-up).
+  // An ADMIN's used to be `{}` — with MT_ENFORCE_ISOLATION off that was every
+  // tenant's meetings, deadlines and logged meetings, and every tenant's
+  // recurring project calls through the series query below. Meeting,
+  // InteractionLog and MeetingSeries carry no orgId: their tenant is the
+  // relation's or the project's, which is where the filter goes.
+  const tenant = await tenantWhere(session);
+  const relWhere: Prisma.MentorshipRelationWhereInput = withinTenant<Prisma.MentorshipRelationWhereInput>(
+    role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id },
+    tenant,
+  );
+  const roleRelWhere: Prisma.MentorshipRelationWhereInput =
     role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id };
 
   // "Overdue" is the one stage-clock rule (#1724) fed the caller's tenant's own
@@ -105,16 +117,19 @@ export async function GET(request: Request) {
       where: {
         active: true,
         projectId: { not: null },
-        ...(role === 'ADMIN'
-          ? {}
-          : {
-              project: {
-                OR: [
-                  { members: { some: { userId: id } } },
-                  { relations: { some: { ...relWhere, status: 'ACTIVE' } } },
-                ],
-              },
-            }),
+        project: {
+          is: withinTenant<Prisma.ProjectWhereInput>(
+            role === 'ADMIN'
+              ? {}
+              : {
+                  OR: [
+                    { members: { some: { userId: id } } },
+                    { relations: { some: { ...roleRelWhere, status: 'ACTIVE' } } },
+                  ],
+                },
+            tenant,
+          ),
+        },
       },
       select: {
         id: true,

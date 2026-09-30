@@ -22,6 +22,9 @@ import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 // imports nothing of ours, so this stays a leaf dependency and cannot cycle.
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
+import { orgWhere } from '@/lib/tenantFilter';
+import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
 import { overdueBefore } from '@/lib/taskDue';
@@ -59,8 +62,6 @@ import { DEFAULT_VERTICAL, toVerticalKey } from '@/lib/verticals';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, outcomeStageKeysFrom, stageLabel, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
-import { orgWhere } from '@/lib/tenantFilter';
-import { defaultOrgId } from '@/lib/defaultOrg';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -3795,22 +3796,26 @@ export async function sendDailyActivityDigests() {
     }
   }
 
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
+  // Each org's admins get THEIR org's mentees and nobody else's (#2542): this
+  // used to compute one platform-wide list and mail it to every admin of every
+  // tenant, i.e. one product's mentee names in the other product's inbox. A
+  // NULL-org admin is the default org's (orgWhere), the rule tenantWhere()
+  // applies on every screen.
+  const adminsByOrg = await activeAdminsByOrg({
+    id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true,
   });
-  const adminItems = await getSystemMenteeActivity(since);
-  if (adminItems.length > 0) {
-    await origins.prefetch(admins.map((a) => a.orgId));
-    for (const a of admins) {
+  const admins = [...adminsByOrg.values()].flat();
+  await origins.prefetch(admins.map((a) => a.orgId));
+  for (const [orgId, orgAdmins] of adminsByOrg) {
+    const orgFilter = await orgWhere(orgId);
+    const adminItems = await getSystemMenteeActivity(since, orgFilter);
+    if (adminItems.length === 0) continue;
+    for (const a of orgAdmins) {
       if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
       const aLocale = resolveLocale(a.preferredLanguage);
       const A = (await dictionaryOf(aLocale, a.orgId)).notifications.activityDigestEmail;
-      // Their own organisation. An admin with no org reads nobody's to-dos here
-      // rather than everybody's: this job binds no tenant context.
-      const overdue = a.orgId
-        ? await overdueTodoBlock({ assignee: { is: { orgId: a.orgId } } }, aLocale, a.id, A)
-        : '';
+      // Their own organisation's to-dos, by the same org rule as the table.
+      const overdue = await overdueTodoBlock({ assignee: { is: orgFilter } }, aLocale, a.id, A);
       try {
         const base = await origins.urlFor(a.orgId);
         await sendEmail({
@@ -3842,6 +3847,29 @@ export async function sendDailyActivityDigests() {
 // admins in-app, and stamp the send so it isn't repeated. If they don't renew
 // within the grace period they surface in the admin retention review for manual
 // erasure — nothing is deleted automatically.
+/**
+ * One in-app summary per org, to that org's admins only, carrying that org's
+ * own count (#2542). `counts` is keyed by the subject's org (NULL = the default
+ * org's, folded in by tenantAdminIds). Orgs with a zero count hear nothing.
+ */
+async function notifyAdminsPerOrg(
+  counts: Map<string | null, number>,
+  type: 'retention.adminSummary' | 're_engagement.adminSummary',
+  link: string,
+): Promise<void> {
+  const byOrg = new Map<string, number>();
+  const fallback = await defaultOrgId();
+  for (const [org, n] of counts) {
+    const key = org || fallback;
+    byOrg.set(key, (byOrg.get(key) ?? 0) + n);
+  }
+  for (const [org, count] of byOrg) {
+    if (count <= 0) continue;
+    const adminIds = await tenantAdminIds(org);
+    await Promise.all(adminIds.map((id) => notify(id, type, { count }, link)));
+  }
+}
+
 export async function checkRetentionReminders() {
   const months = await getRetentionMonths();
   const dueCutoff = new Date();
@@ -3864,10 +3892,10 @@ export async function checkRetentionReminders() {
   const origins = createOriginBook();
   await origins.prefetch(users.map((u) => u.orgId));
 
-  const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
-    select: { id: true },
-  });
+  // Counted per org (#2542): each org's admins hear how many of THEIR
+  // candidates are up for review — the summary used to be one platform-wide
+  // count sent to every tenant's admins.
+  const remindedByOrg = new Map<string | null, number>();
 
   let reminded = 0;
   for (const u of users) {
@@ -3895,14 +3923,11 @@ export async function checkRetentionReminders() {
     await notify(u.id, 'retention.confirm', {}, `/consent/renew?token=${makeConsentRenewToken(u.id)}`);
     await prisma.user.update({ where: { id: u.id }, data: { retentionReminderSentAt: new Date() } });
     reminded += 1;
+    remindedByOrg.set(u.orgId, (remindedByOrg.get(u.orgId) ?? 0) + 1);
   }
 
-  // Let admins know how many candidates are up for retention review.
-  if (reminded > 0) {
-    await Promise.all(
-      admins.map((a) => notify(a.id, 'retention.adminSummary', { count: reminded }, '/admin/retention'))
-    );
-  }
+  // Let each org's admins know how many of their candidates are up for review.
+  await notifyAdminsPerOrg(remindedByOrg, 'retention.adminSummary', '/admin/retention');
 
   return { checked: users.length, reminded, retentionMonths: months, graceDays: RETENTION_GRACE_DAYS };
 }
@@ -3968,10 +3993,14 @@ ${p.reEngageNote ? `<p><em>${p.reEngageNote}</em></p>` : ''}
     reminded += 1;
   }
 
-  if (reminded > 0) {
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
-    await Promise.all(admins.map((a) => notify(a.id, 're_engagement.adminSummary', { count: reminded }, '/admin/candidates?view=pool')));
+  // Per org (#2542): each org's admins get THEIR pool's count, not the
+  // platform's.
+  const remindedByOrg = new Map<string | null, number>();
+  for (const p of people) {
+    const org = orgOf.get(p.id) ?? null;
+    remindedByOrg.set(org, (remindedByOrg.get(org) ?? 0) + 1);
   }
+  await notifyAdminsPerOrg(remindedByOrg, 're_engagement.adminSummary', '/admin/candidates?view=pool');
   return { checked: people.length, reminded };
 }
 
@@ -4291,7 +4320,7 @@ export async function sendWeeklyAnalyticsReport() {
     return hit;
   };
   // WORLDS (#2590): the dashboard link is resolved per ADMIN from that admin's
-  // own organization (the report goes to every active admin of every tenant).
+  // own organization.
   const origins = createOriginBook();
   await origins.prefetch(admins.map((a) => a.orgId));
 

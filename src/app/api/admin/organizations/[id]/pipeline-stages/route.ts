@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isHexColor } from '@/lib/branding';
 import { resolvePipelineStages, defaultPipelineStages, replaceStages } from '@/lib/pipelineStages';
-import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
+import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
 import { getLocale } from '@/i18n/server';
 
@@ -25,10 +25,11 @@ import { getLocale } from '@/i18n/server';
 async function requireAdminOrg(id: string, route: string) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return { error: 'Unauthorized' as const, status: 401 };
-  // Same rule as the parent route (#1535): a super admin may manage any tenant,
-  // a plain ADMIN only their own — and the refusal comes before the lookup, so
-  // it cannot confirm whether a foreign org id exists.
-  if (!(await isSuperAdmin(session))) {
+  // Same rule as the parent route (#1535): a super admin may manage any tenant
+  // of its OWN WORLD (docs/worlds.md § Super admin), a plain ADMIN only their
+  // own — and the refusal comes before the lookup, so it cannot confirm whether
+  // a foreign org id exists.
+  if (!(await isSuperAdminFor(session, id))) {
     const ownOrgId = resolveOrgId(session);
     if (!ownOrgId || ownOrgId !== id) {
       await logCrossTenantDenial(session, route, id);

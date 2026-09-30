@@ -11,6 +11,11 @@ import { freshIp } from './helpers/rateLimit';
 // invites a person as ADMIN into any org from /admin/organizations; the link it
 // returns is on the target org's own product host, and registering through it
 // creates the ADMIN account in that org's world.
+//
+// Super admin is PER WORLD (docs/worlds.md § Super admin): only the MARKETING
+// world's super admin reaches a MARKETING org, so the operator here is an
+// account of a MARKETING org, signed in on the marketing host. The INTERNSHIP
+// super admin's refusal is pinned in tenant-isolation-worlds.spec.ts.
 
 const PASSWORD = 'SuperInvite123!';
 const emails: string[] = [];
@@ -19,7 +24,14 @@ const orgIds: string[] = [];
 async function seedSuperAdmin(label: string) {
   const email = uniqueEmail(`sa-invite-${label}`);
   emails.push(email);
-  const user = await seedUser(email, PASSWORD, 'ADMIN', 'Super Invite Admin');
+  // The operator's own MARKETING org: that is what makes it the MARKETING
+  // world's super admin. A SHORT name on purpose: the shell's wordmark shows the
+  // signed-in org's name unwrapped, and the phone test below measures the page.
+  const home = await prisma.organization.create({
+    data: { name: 'SA Ops', slug: `sa-ops-${label}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`, vertical: 'MARKETING' },
+  });
+  orgIds.push(home.id);
+  const user = await seedUser(email, PASSWORD, 'ADMIN', 'Super Invite Admin', home.id);
   await prisma.user.update({ where: { id: user.id }, data: { isSuperAdmin: true } });
   return { email, user };
 }
@@ -51,6 +63,7 @@ test(
     const invitee = uniqueEmail('sa-invitee');
     emails.push(invitee);
 
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
     await signInAndSettle(page, superEmail, PASSWORD, '/admin');
     await gotoSettled(page, '/admin/organizations');
 
@@ -127,7 +140,6 @@ test('a plain tenant ADMIN is refused; an address already in that world is a 409
 
   // The super admin.
   const { email: superEmail } = await seedSuperAdmin('guard');
-  await page.context().setExtraHTTPHeaders({});
   await signInAsFreshUser(page, superEmail, PASSWORD, '/admin');
   const post = (body: Record<string, unknown>, orgId = org.id) =>
     page.request.post(`/api/admin/organizations/${orgId}/invite-admin`, { data: body });
@@ -162,6 +174,7 @@ test('on a 360px phone the invite panel and its link stay inside the viewport', 
   const { email: superEmail } = await seedSuperAdmin('phone');
   const org = await seedMarketingOrg('phone');
 
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, superEmail, PASSWORD, '/admin');
   await gotoSettled(page, '/admin/organizations');
   // The action sits in the list's horizontally scrollable table on a phone.

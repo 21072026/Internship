@@ -48,7 +48,9 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if ((await getSetting('premiumAnalytics')) !== 'true') {
+  // The CALLER's tier, org passed explicitly: this runs before the tenant
+  // scope binds, so a bare call read only the global row.
+  if ((await getSetting('premiumAnalytics', (session.user as { orgId?: string | null }).orgId ?? null)) !== 'true') {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 

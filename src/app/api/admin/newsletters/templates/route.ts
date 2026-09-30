@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { NEWSLETTER_TEMPLATES } from '@/lib/newsletterContent';
 
 // GET — the curated library (src/lib/newsletterContent.ts), all three languages
@@ -13,6 +14,8 @@ import { NEWSLETTER_TEMPLATES } from '@/lib/newsletterContent';
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
 
   return NextResponse.json({ templates: NEWSLETTER_TEMPLATES });
 }

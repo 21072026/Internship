@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { readTranslations } from '@/lib/goalTemplates';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // The shared to-do pool, readable by whoever hands to-dos out (#1113).
 //
@@ -12,6 +13,8 @@ import { readTranslations } from '@/lib/goalTemplates';
 // a to-do whether or not there is a project between them. Retired (archived)
 // entries are left out: they exist only to keep the wording of the to-dos already
 // handed out from them.
+//
+// Only the caller's own tenant's pool (cross-world isolation).
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,7 +24,7 @@ export async function GET() {
 
   return await withTenantScope(session, async () => {
     const rows = await prisma.projectTaskTemplate.findMany({
-      where: { projectId: null, archivedAt: null },
+      where: withinTenant({ projectId: null, archivedAt: null }, await tenantWhere(session)),
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: { id: true, title: true, translations: true, useCount: true },
     });

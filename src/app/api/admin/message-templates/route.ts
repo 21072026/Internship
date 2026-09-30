@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import {
   MAX_TEMPLATE_BODY,
   canonicalMessageText,
@@ -19,6 +22,12 @@ import {
 // personal template belongs to its owner and is not managed from here.
 //
 // Retiring archives rather than deletes — see the DELETE handler.
+//
+// "Org-wide" is literal (cross-world isolation): every reader and writer here
+// is narrowed to the caller's tenant by hand, because the Prisma middleware is
+// dormant while MT_ENFORCE_ISOLATION is off — the model's registration alone
+// left one pool shared by INTERNSHIP and MARKETING. A new row is stamped with
+// the caller's org; a legacy NULL row is the default org's.
 
 const localeText = z.string().trim().max(MAX_TEMPLATE_BODY).optional();
 const translationsSchema = z.object({ en: localeText, tr: localeText, de: localeText });
@@ -48,7 +57,7 @@ export async function GET() {
 
   return await withTenantScope(session, async () => {
     const templates = await prisma.messageTemplate.findMany({
-      where: { ownerId: null, archivedAt: null },
+      where: withinTenant({ ownerId: null, archivedAt: null }, await tenantWhere(session)),
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: rowSelect,
     });
@@ -71,8 +80,9 @@ export async function POST(request: Request) {
 
     // Dedupe by hand: `title` is a Text column with no unique index (see the
     // schema comment), and a nullable ownerId would defeat one in MySQL anyway.
+    const tenant = await tenantWhere(session);
     const existing = await prisma.messageTemplate.findFirst({
-      where: { ownerId: null, title },
+      where: withinTenant({ ownerId: null, title }, tenant),
       select: { id: true, archivedAt: true },
     });
     if (existing?.archivedAt) {
@@ -88,7 +98,13 @@ export async function POST(request: Request) {
     if (existing) return NextResponse.json({ error: 'That reply is already in the pool' }, { status: 409 });
 
     const template = await prisma.messageTemplate.create({
-      data: { ownerId: null, title, translations, createdById: session.user.id },
+      data: {
+        ownerId: null,
+        orgId: resolveOrgId(session) ?? (await defaultOrgId()),
+        title,
+        translations,
+        createdById: session.user.id,
+      },
       select: rowSelect,
     });
     return NextResponse.json({ template: serializeMessageTemplate(template) }, { status: 201 });
@@ -104,8 +120,10 @@ export async function PATCH(request: Request) {
     const parsed = updateSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
+    const tenant = await tenantWhere(session);
+    // Another tenant's template answers like a missing one.
     const target = await prisma.messageTemplate.findFirst({
-      where: { id: parsed.data.id, ownerId: null, archivedAt: null },
+      where: withinTenant({ id: parsed.data.id, ownerId: null, archivedAt: null }, tenant),
       select: { id: true },
     });
     if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -115,7 +133,7 @@ export async function PATCH(request: Request) {
     if (!title) return NextResponse.json({ error: 'Write the reply in at least one language' }, { status: 400 });
 
     const clash = await prisma.messageTemplate.findFirst({
-      where: { ownerId: null, title, id: { not: target.id } },
+      where: withinTenant({ ownerId: null, title, id: { not: target.id } }, tenant),
       select: { id: true },
     });
     if (clash) return NextResponse.json({ error: 'That reply is already in the pool' }, { status: 409 });
@@ -143,7 +161,7 @@ export async function DELETE(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
     const archived = await prisma.messageTemplate.updateMany({
-      where: { id: parsed.data.id, ownerId: null, archivedAt: null },
+      where: withinTenant({ id: parsed.data.id, ownerId: null, archivedAt: null }, await tenantWhere(session)),
       data: { archivedAt: new Date() },
     });
     if (archived.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });

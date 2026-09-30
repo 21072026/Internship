@@ -8,6 +8,8 @@ import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { getLocale } from '@/i18n/server';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { interactionInTenant, meetingInTenant } from '@/lib/analyticsScope';
 
 // GET — aggregate analytics for the admin dashboard:
 // pipeline funnel, mentor workload/outcomes, engagement and RSVP rate.
@@ -51,22 +53,32 @@ export async function GET(request: Request) {
   }
   const inRange = { gte: from, lte: to };
 
+  // The caller's tenant, by hand: `withTenantScope` is a passthrough with
+  // MT_ENFORCE_ISOLATION off, so every count below used to sum every
+  // organization on the database — a MARKETING admin's funnel, meeting and
+  // signup numbers included the INTERNSHIP product's rows. Interactions and
+  // meetings carry no `orgId`; they belong to their relation's (or project's)
+  // tenant — src/lib/analyticsScope.ts.
+  const tenant = await tenantWhere(session);
+  const interactionWhere = { date: inRange, ...interactionInTenant(tenant) };
+  const meetingWhere = { scheduledAt: inRange, ...meetingInTenant(tenant) };
+
   const [byStage, mentors, interactions, meetings, rsvpGroups, projectRows, relDates, interactionDates] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], _count: { _all: true } }),
+    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({}, tenant), _count: { _all: true } }),
     prisma.user.findMany({
-      where: { role: 'MENTOR' },
+      where: withinTenant({ role: 'MENTOR' as const }, tenant),
       select: {
         id: true,
         fullName: true,
-        mentorRelations: { select: { pipelineStatus: true } },
+        mentorRelations: { where: withinTenant({}, tenant), select: { pipelineStatus: true } },
       },
     }),
-    prisma.interactionLog.count({ where: { date: inRange } }),
-    prisma.meeting.count({ where: { scheduledAt: inRange } }),
-    prisma.meeting.groupBy({ by: ['rsvp'], where: { scheduledAt: inRange }, _count: { _all: true } }),
-    prisma.project.findMany({ select: { name: true, _count: { select: { relations: true } } } }),
-    prisma.mentorshipRelation.findMany({ where: { startDate: inRange }, select: { startDate: true } }),
-    prisma.interactionLog.findMany({ where: { date: inRange }, select: { date: true } }),
+    prisma.interactionLog.count({ where: interactionWhere }),
+    prisma.meeting.count({ where: meetingWhere }),
+    prisma.meeting.groupBy({ by: ['rsvp'], where: meetingWhere, _count: { _all: true } }),
+    prisma.project.findMany({ where: withinTenant({}, tenant), select: { name: true, _count: { select: { relations: true } } } }),
+    prisma.mentorshipRelation.findMany({ where: withinTenant({ startDate: inRange }, tenant), select: { startDate: true } }),
+    prisma.interactionLog.findMany({ where: interactionWhere, select: { date: true } }),
   ]);
 
   // Signup funnel (#1191) — deliberately NOT tied to the date-range picker:
@@ -77,12 +89,13 @@ export async function GET(request: Request) {
     [7, 30].map(async (days) => {
       const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       const createdIn = { createdAt: { gte: since } };
+      const inTenant = <W extends object>(w: W) => withinTenant(w, tenant);
       const [registered, verified, active] = await Promise.all([
-        prisma.user.count({ where: createdIn }),
-        prisma.user.count({ where: { ...createdIn, emailVerified: true } }),
+        prisma.user.count({ where: inTenant(createdIn) }),
+        prisma.user.count({ where: inTenant({ ...createdIn, emailVerified: true }) }),
         // "Active" is the end of the door: verified, enabled, and past any
         // approval hold — the state in which the account can actually be used.
-        prisma.user.count({ where: { ...createdIn, emailVerified: true, isActive: true, pendingApproval: false } }),
+        prisma.user.count({ where: inTenant({ ...createdIn, emailVerified: true, isActive: true, pendingApproval: false }) }),
       ]);
       return buildSignupWindow(days, { registered, verified, active } satisfies SignupCounts);
     })

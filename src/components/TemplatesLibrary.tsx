@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { FileText, Mail, ClipboardList, CheckSquare, Eye, Download, Printer, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useT, useLocale } from '@/i18n/client';
-import { TEMPLATES, type DocTemplate, type TemplateLocale } from '@/lib/templates';
+import { templatesFor, type DocTemplate, type TemplateLocale } from '@/lib/templates';
+import { useVertical } from '@/lib/verticalClient';
 import { templateToHtml, templateToText } from '@/lib/renderTemplate';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 
@@ -55,7 +56,12 @@ function printPdf(title: string, bodyHtml: string) {
 
 // Multilingual document templates with in-app preview and PDF / TXT / Markdown
 // export. Replaces the old single-language, download-only template list.
+//
+// Only the built-ins of the request's own vertical (src/lib/templates.ts): an
+// INTERNSHIP tenant gets the career documents, a MARKETING tenant none — and a
+// vertical with nothing to offer renders no card at all rather than an empty one.
 export function TemplatesLibrary() {
+  const templates = templatesFor(useVertical());
   const t = useT();
   const locale = useLocale() as TemplateLocale;
   const base: TemplateLocale = (['en', 'tr', 'de'].includes(locale) ? locale : 'en') as TemplateLocale;
@@ -66,12 +72,14 @@ export function TemplatesLibrary() {
   const open = (tpl: DocTemplate) => { setLang(base); setActive(tpl); };
   const tl = t.templatesLib;
 
+  if (templates.length === 0) return null;
+
   return (
-    <Card>
+    <Card data-testid="templates-library">
       <CardHeader><CardTitle>{t.documents.curatedTitle}</CardTitle></CardHeader>
 
       <div className="divide-y divide-gray-50">
-        {TEMPLATES.map((tpl) => {
+        {templates.map((tpl) => {
           const Icon = ICONS[tpl.icon] ?? FileText;
           return (
             <div key={tpl.id} data-testid={`tpl-${tpl.id}`} className="flex items-center gap-3 py-2.5">

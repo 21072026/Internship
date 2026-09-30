@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId } from '@/lib/orgScope';
+import { requireCapability } from '@/lib/capabilityGate';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { hasPoolConsent, joinPool, leavePool } from '@/lib/reEngagement';
@@ -18,13 +20,15 @@ export async function GET() {
   if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Internship-only surface: closed for an org without mentorship (#2647).
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {
-    const orgId = resolveOrgId(session);
     const people = await prisma.user.findMany({
       where: {
         role: 'MENTEE',
         reEngageAt: { not: null },
-        ...(orgId ? { orgId } : {}),
+        ...(await tenantWhere(session)),
         ...(session.user.role === 'MENTOR'
           ? { menteeRelations: { some: { mentorId: session.user.id } } }
           : {}),
@@ -49,14 +53,16 @@ export async function POST(request: Request) {
   if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  // Internship-only surface: closed for an org without mentorship (#2647).
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json().catch(() => ({})));
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
-    const orgId = resolveOrgId(session);
     const person = await prisma.user.findFirst({
-      where: { id: parsed.data.userId, role: 'MENTEE', ...(orgId ? { orgId } : {}) },
+      where: withinTenant<Prisma.UserWhereInput>({ id: parsed.data.userId, role: 'MENTEE' }, await tenantWhere(session)),
       select: { id: true, fullName: true, consentAt: true },
     });
     if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
