@@ -122,6 +122,12 @@ test('an image pasted into the message box is attached to the broadcast', async 
     await expect(page.getByTestId('announcement-image-preview')).toBeVisible();
     // The paste must not also dump binary text into the message box.
     expect(await box.inputValue()).toBe(uniqueText);
+    // #2149: the preview is a checked blob: URL, rebuilt from the sniffed bytes,
+    // and it decodes as the image it claims to be. (The CSP's connect-src does
+    // not allow fetching a blob:, so the element itself is what is asserted.)
+    const preview = page.getByTestId('announcement-image-preview');
+    await expect.poll(() => preview.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBe(1);
+    expect(await preview.evaluate((img) => new URL((img as HTMLImageElement).src).protocol)).toBe('blob:');
 
     const postDone = page.waitForResponse(
       (r) => r.url().includes('/api/admin/announcements') && r.request().method() === 'POST'

@@ -6,7 +6,7 @@
  * turns into an unexplained 400 *after* the admin picked the file.
  */
 
-import { contentMatchesType, CONTENT_MISMATCH_ERROR } from './fileType';
+import { contentMatchesType, sniffFamily, CONTENT_MISMATCH_ERROR } from './fileType';
 
 export const ANNOUNCEMENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -56,4 +56,43 @@ export async function validateAnnouncementImage(file: File): Promise<Announcemen
     return 'unreadable';
   }
   return null;
+}
+
+// The MIME type each accepted signature family is previewed as — a Map, not an
+// object literal, so no key can reach the prototype.
+const PREVIEW_TYPE = new Map<string, string>([
+  ['png', 'image/png'],
+  ['jpeg', 'image/jpeg'],
+  ['gif', 'image/gif'],
+  ['webp', 'image/webp'],
+]);
+
+/**
+ * The composer's local preview of an ALREADY-VALIDATED image (#2149).
+ *
+ * The file may come from the clipboard, whose declared type is the sender's to
+ * choose. So the preview is rebuilt from the bytes: its type is the one the
+ * signature says (never the declared one), and the `<img>` only ever receives a
+ * `blob:` URL. `validateAnnouncementImage()` already refuses anything that is
+ * not PNG/JPEG/WebP/GIF, and an `<img>` does not parse HTML either way; this
+ * makes that guarantee local to the sink instead of three calls away, which is
+ * also what CodeQL's `js/xss-through-dom` needs to see. Browser-only (it calls
+ * `URL.createObjectURL`); returns null when the bytes are not an image we allow.
+ */
+export async function announcementImagePreview(file: File): Promise<{ file: File; url: string } | null> {
+  let family: string | null;
+  try {
+    family = sniffFamily(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
+  } catch {
+    return null;
+  }
+  const type = family ? PREVIEW_TYPE.get(family) : undefined;
+  if (!type) return null;
+  const clean = new File([file], file.name, { type });
+  const url = URL.createObjectURL(clean);
+  if (!url.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+    return null;
+  }
+  return { file: clean, url };
 }
