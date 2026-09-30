@@ -153,7 +153,7 @@ export function UpcomingMeetings({ canRequestMeeting }: { canRequestMeeting: boo
                     disabled={answering === m.id}
                     onClick={() => rsvp(m, 'yes')}
                     data-testid={`rsvp-yes-${m.id}`}
-                    className="inline-flex items-center gap-1 rounded-lg border border-green-200 px-3 py-1.5 text-sm text-green-700 hover:bg-green-50 disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded-lg border border-green-200 px-3 py-1.5 text-sm text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/30"
                   >
                     <Check className="h-4 w-4" />
                     {t.portal.meetings.accept}
@@ -165,7 +165,7 @@ export function UpcomingMeetings({ canRequestMeeting }: { canRequestMeeting: boo
                     disabled={answering === m.id}
                     onClick={() => rsvp(m, 'no')}
                     data-testid={`rsvp-no-${m.id}`}
-                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/30"
                   >
                     <X className="h-4 w-4" />
                     {t.portal.meetings.decline}
