@@ -12,6 +12,7 @@ import { isValidTimeZone } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingRoom';
 import { requireCapability } from '@/lib/capabilityGate';
 import { withdrawMeetings } from '@/lib/googleCalendarSync';
+import { durationMinutesField } from '@/lib/meetingDuration';
 
 // A recurring project meeting is a *rule*, not a pile of rows (#1110).
 //
@@ -41,6 +42,8 @@ const recurrenceSchema = z.object({
   // client may omit it, in which case the deployment default applies.
   timeZone: z.string().min(1).max(64).optional(),
   meetLink: z.string().url().optional().or(z.literal('')),
+  // Length of every occurrence (#1984); omitted → the one default.
+  durationMinutes: durationMinutesField,
   // Accepted for backwards compatibility with older clients; occurrences are no
   // longer generated ahead of time, so it no longer influences anything.
   weeksAhead: z.number().int().min(1).max(26).optional(),
@@ -121,7 +124,7 @@ function scheduleFingerprint(s: { daysOfWeek: unknown; timeOfDay: string; timeZo
  * (`sendProjectMeetingSeriesReminders`). No RSVP — there is no row to RSVP to.
  */
 async function announceNextOccurrence(
-  series: { id: string; projectId: string | null; title: string; daysOfWeek: unknown; timeOfDay: string; timeZone: string | null; fixedLink: string | null; active: boolean },
+  series: { id: string; projectId: string | null; title: string; daysOfWeek: unknown; timeOfDay: string; timeZone: string | null; durationMinutes: number | null; fixedLink: string | null; active: boolean },
   role: string,
   sessionUserId: string,
   orgId: string | null | undefined,
@@ -178,6 +181,7 @@ async function announceNextOccurrence(
         // synthetic id /api/calendar-events and the subscription feed emit for
         // it — the mailed occurrence and the subscribed one are one event.
         icsUid: `series-${series.id}-${next.toISOString()}`,
+        durationMinutes: series.durationMinutes,
       });
       invited++;
     } catch (e) {
@@ -253,7 +257,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
-    const { projectId, title, daysOfWeek, timeOfDay, timeZone, meetLink, active } = parsed.data;
+    const { projectId, title, daysOfWeek, timeOfDay, timeZone, meetLink, active, durationMinutes } = parsed.data;
     const access = await ensureProjectAccess(session.user, projectId);
     if (access.error) return access.error;
 
@@ -275,6 +279,7 @@ export async function POST(request: Request) {
         daysOfWeek,
         timeOfDay,
         timeZone: isValidTimeZone(timeZone) ? timeZone : null,
+        durationMinutes: durationMinutes ?? null,
         fixedLink,
         active: active ?? true,
         createdById: session.user.id,
@@ -329,6 +334,7 @@ export async function PUT(request: Request) {
       daysOfWeek?: number[];
       timeOfDay?: string;
       timeZone?: string | null;
+      durationMinutes?: number;
       fixedLink?: string | null;
       active?: boolean;
     } = {};
@@ -338,6 +344,7 @@ export async function PUT(request: Request) {
     if (incoming.timeOfDay !== undefined) data.timeOfDay = incoming.timeOfDay;
     if (incoming.timeZone !== undefined) data.timeZone = isValidTimeZone(incoming.timeZone) ? incoming.timeZone : null;
     if (incoming.meetLink !== undefined) data.fixedLink = incoming.meetLink || null;
+    if (incoming.durationMinutes !== undefined) data.durationMinutes = incoming.durationMinutes;
     if (incoming.active !== undefined) data.active = incoming.active;
 
     const updated = await prisma.meetingSeries.update({ where: { id }, data });

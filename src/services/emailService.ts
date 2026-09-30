@@ -1004,6 +1004,7 @@ export async function sendMeetingInviteEmail({
   userId,
   icsUid,
   sequence,
+  durationMinutes,
   locale,
   orgId,
 }: {
@@ -1034,6 +1035,9 @@ export async function sendMeetingInviteEmail({
   icsUid?: string | null;
   // Bumped by whoever mails a change to the same icsUid — see buildMeetingIcs.
   sequence?: number;
+  // The meeting's stored length (#1984), for the attachment's DTEND. Omitted or
+  // null reads as the one default — never the 30 the builder used to assume.
+  durationMinutes?: number | null;
   // LOCALE (#1720): the invitee is a User here (that is what `userId` means), so
   // this is their `User.preferredLanguage` — every caller selects the column
   // alongside `timezone`, which the mail already reads per recipient for exactly
@@ -1073,6 +1077,7 @@ export async function sendMeetingInviteEmail({
           start: scheduledAt,
           meetLink,
           sequence,
+          durationMinutes,
           attendeeEmail: to,
           attendeeName: fullName,
           organizerName,
@@ -1127,6 +1132,7 @@ export async function sendMeetingGuestInviteEmail({
   organizerName,
   icsUid,
   sequence,
+  durationMinutes,
   locale,
   orgId,
 }: {
@@ -1144,6 +1150,8 @@ export async function sendMeetingGuestInviteEmail({
   // so the attachment is their only route into a calendar (#2015).
   icsUid?: string | null;
   sequence?: number;
+  // See sendMeetingInviteEmail (#1984).
+  durationMinutes?: number | null;
   // LOCALE (#1720): the organizer's `User.preferredLanguage` — the same
   // reasoning as `organizerTimeZone` two fields up. A guest has no profile, so
   // there is no preference of their own to read; the only person who knows
@@ -1174,6 +1182,7 @@ export async function sendMeetingGuestInviteEmail({
           start: scheduledAt,
           meetLink,
           sequence,
+          durationMinutes,
           attendeeEmail: to,
           attendeeName: name,
           organizerName,
@@ -1230,8 +1239,8 @@ function bareAddress(header: string): string {
 // content type and not the body. `.ics` generation itself stays in @/lib/ics —
 // this only wraps it in the shape sendEmail's `attachments` takes.
 //
-// The length is buildMeetingIcs's 30-minute default: a Meeting has no stored
-// duration yet (#1984). When it gains one, thread it through here.
+// The length is the meeting's stored `durationMinutes` (#1984), threaded in by
+// the caller; absent, it is the one default in src/lib/meetingDuration.ts.
 //
 // A REQUEST is an iTIP message, so it needs an ORGANIZER and an ATTENDEE or the
 // clients ignore it (RFC 5546 §3.2.2): Gmail renders no invitation card without
@@ -1247,6 +1256,7 @@ function meetingIcsAttachment(opts: {
   start: Date;
   meetLink?: string | null;
   sequence?: number;
+  durationMinutes?: number | null;
   // The recipient of the mail this rides on — the person whose calendar the
   // event lands in.
   attendeeEmail: string;
@@ -1259,6 +1269,7 @@ function meetingIcsAttachment(opts: {
     uid: opts.uid,
     title: opts.title,
     start: opts.start,
+    durationMinutes: opts.durationMinutes,
     description: opts.meetLink ? `Join: ${opts.meetLink}` : null,
     location: opts.meetLink ?? null,
     method: 'REQUEST',

@@ -144,6 +144,7 @@ export async function inviteGuests({
   meetLink,
   organizerTimeZone,
   organizerName,
+  durationMinutes,
 }: {
   meetingId: string;
   guests: { email: string; name: string | null }[];
@@ -153,6 +154,9 @@ export async function inviteGuests({
   meetLink: string | null;
   organizerTimeZone: string | null;
   organizerName: string | null;
+  // The meeting's stored length, for the guest's .ics (#1984). Optional so a
+  // caller that has none gets the one default, never the old 30.
+  durationMinutes?: number | null;
 }): Promise<{ id: string; email: string; name: string | null; rsvp: string }[]> {
   const created: { id: string; email: string; name: string | null; rsvp: string }[] = [];
 
@@ -205,6 +209,7 @@ export async function inviteGuests({
         // Same UID as the account-holders' invite for this meeting, so a guest
         // who also has a calendar entry from elsewhere sees one event, not two.
         icsUid: meetingId,
+        durationMinutes,
       });
     } catch (e) {
       logger.error('Meeting guest invite email failed', { meetingId, error: String(e) });

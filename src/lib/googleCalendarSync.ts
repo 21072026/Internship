@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
+import { meetingEnd } from '@/lib/meetingDuration';
 
 /**
  * Pushing meetings into connected users' own Google Calendars (#709).
@@ -18,15 +19,14 @@ import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarCl
  * convenience.
  */
 
-/** An hour, the same assumption the dashboard's "meeting is on" banner makes. */
-const DEFAULT_DURATION_MS = 60 * 60 * 1000;
-
 export interface PushableMeeting {
   id: string;
   title: string;
   scheduledAt: Date | null;
   timeZone: string | null;
   meetLink: string | null;
+  // The stored length (#1984); null reads as the one default.
+  durationMinutes: number | null;
 }
 
 /**
@@ -40,13 +40,14 @@ export const pushableSelect = {
   scheduledAt: true,
   timeZone: true,
   meetLink: true,
+  durationMinutes: true,
 } as const satisfies Record<keyof PushableMeeting, true>;
 
 function eventBody(meeting: PushableMeeting) {
   // A meeting with no time is a shared link, not a calendar entry — there is
   // nothing to put in a slot. Those are skipped by the caller.
   const start = meeting.scheduledAt!;
-  const end = new Date(start.getTime() + DEFAULT_DURATION_MS);
+  const end = meetingEnd(start, meeting);
   return {
     summary: meeting.title,
     description: meeting.meetLink ? `Join: ${meeting.meetLink}` : undefined,
