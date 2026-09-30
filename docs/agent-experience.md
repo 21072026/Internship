@@ -7644,4 +7644,19 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - `marketing-sales-surface.spec.ts`'s stage-deadline test signs in as the seed admin
   (`admin@example.com`); a local e2e DB without `prisma db seed` fails it and skips the rest of the
   serial file — run the rest with `--grep`.
->>>>>>> origin/main
+
+## 2026-09-30 — settings write the caller's org (#2628)
+
+- **`withTenantScope` bound NOTHING with `MT_ENFORCE_ISOLATION` off** — every deployment. Any code
+  that reads `currentOrgId()`/`ambientOrgId()` (settings, logger) saw `undefined` and fell back to
+  the global layer. It now binds always; only the middleware is flag-gated. Before trusting "the
+  bound org", check whether the flag gates the binding, not only the scoping.
+- **Moving a write to a narrower layer breaks every reader that still reads the wider one.** Pages,
+  layouts and crons run outside `withTenantScope`, so after the write moved to the org row they would
+  have kept reading the global row: the default tenant's `require2fa` would have silently stopped
+  applying. Grep every `getSetting(` and pass the org explicitly (`settingsOrgOf(session)`,
+  `settingByOrg(key)` for crons) before moving a write.
+- **Specs that seed the global Setting row are shadowed by an org row** another spec wrote through
+  the API. Seed the default org's row with `setDefaultOrgSetting()` (`e2e/helpers/db.ts`). A spec that
+  posts `...current.settings` back now gets 403, because that object includes the super-admin-only keys.
+- Removed a stray `>>>>>>> origin/main` left at the end of this file by an earlier merge.
