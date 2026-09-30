@@ -80,6 +80,8 @@ test(
       page.request.get('/api/newsletters'),
       page.request.get('/api/admin/testimonials'),
       page.request.get('/api/admin/mentorship-requests'),
+      page.request.get('/api/admin/goal-templates'),
+      page.request.get('/api/re-engagement'),
     ];
     for (const res of await Promise.all(refusals)) {
       expect(res.status(), res.url()).toBe(403);

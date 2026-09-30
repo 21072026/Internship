@@ -173,31 +173,6 @@ for (const [label, pick] of DIRECTIONS) {
     expect(after).toEqual({ title: text, archivedAt: null, useCount: 0 });
   });
 
-  test(`a shared goal template lives only in the org that wrote it · ${label}`, async ({ page }) => {
-    const [own, other] = pick(tenants);
-    await signInAsTenantActor(page, other.admin);
-    const text = `iso shared goal ${other.label} ${stamp}`;
-    const res = await page.request.post('/api/admin/goal-templates', { data: { translations: { en: text } } });
-    expect(res.status()).toBe(201);
-    const id = (await res.json()).template.id as string;
-    created.goalTemplates.push(id);
-    const row = await prisma.projectTaskTemplate.findUniqueOrThrow({ where: { id }, select: { orgId: true } });
-    expect(row.orgId).toBe(other.org.id);
-
-    await signInAsTenantActor(page, own.admin);
-    for (const path of ['/api/admin/goal-templates', '/api/todos/templates']) {
-      const list = await page.request.get(path);
-      expect(list.status()).toBe(200);
-      const ids = ((await list.json()).templates as { id: string }[]).map((t) => t.id);
-      expect(ids, `${path} leaked another tenant's goal`).not.toContain(id);
-    }
-    const rename = await page.request.patch('/api/admin/goal-templates', { data: { id, translations: { en: 'hijacked' } } });
-    expect(rename.status()).toBe(404);
-    const retire = await page.request.delete('/api/admin/goal-templates', { data: { id } });
-    expect(retire.status()).toBe(404);
-    expect((await prisma.projectTaskTemplate.findUniqueOrThrow({ where: { id }, select: { archivedAt: true } })).archivedAt).toBeNull();
-  });
-
   test(`a foreign announcement cannot be edited, deleted or its image read · ${label}`, async ({ page }) => {
     const [own, other] = pick(tenants);
     await signInAsTenantActor(page, own.admin);
@@ -214,6 +189,50 @@ for (const [label, pick] of DIRECTIONS) {
     expect((await page.request.get(`/api/announcements/${announcements[own.label]}/image`)).status()).toBe(200);
   });
 }
+
+// Goal templates are an internship (mentorship) surface: a MARKETING org has no
+// goal pool at all (#2647), so the isolation is proven one way — the INTERNSHIP
+// org's pool never reaches MARKETING, and MARKETING's writes are refused rather
+// than landing anywhere.
+test('a shared goal template lives only in the INTERNSHIP org that wrote it; MARKETING has no pool', async ({ page }) => {
+  const { orgA, orgB } = tenants;
+  await signInAsTenantActor(page, orgA.admin);
+  const text = `iso shared goal ${orgA.label} ${stamp}`;
+  const res = await page.request.post('/api/admin/goal-templates', { data: { translations: { en: text } } });
+  expect(res.status()).toBe(201);
+  const id = (await res.json()).template.id as string;
+  created.goalTemplates.push(id);
+  const row = await prisma.projectTaskTemplate.findUniqueOrThrow({ where: { id }, select: { orgId: true } });
+  expect(row.orgId).toBe(orgA.org.id);
+  // A row planted in the MARKETING org by hand never shows up in A's pool.
+  const planted = await prisma.projectTaskTemplate.create({
+    data: { projectId: null, orgId: orgB.org.id, title: `iso planted ${stamp}` },
+    select: { id: true },
+  });
+  created.goalTemplates.push(planted.id);
+  for (const path of ['/api/admin/goal-templates', '/api/todos/templates']) {
+    const ids = ((await (await page.request.get(path)).json()).templates as { id: string }[]).map((t) => t.id);
+    expect(ids, `${path} lost the own goal`).toContain(id);
+    expect(ids, `${path} leaked another tenant's goal`).not.toContain(planted.id);
+  }
+
+  await signInAsTenantActor(page, orgB.admin);
+  for (const call of [
+    page.request.get('/api/admin/goal-templates'),
+    page.request.post('/api/admin/goal-templates', { data: { translations: { en: 'x' } } }),
+    page.request.patch('/api/admin/goal-templates', { data: { id, translations: { en: 'hijacked' } } }),
+    page.request.delete('/api/admin/goal-templates', { data: { id } }),
+  ]) {
+    const r = await call;
+    expect(r.status(), r.url()).toBe(403);
+    expect((await r.json()).code).toBe('capability_unavailable');
+  }
+  const pool = await page.request.get('/api/todos/templates');
+  expect(pool.status()).toBe(200);
+  expect(((await pool.json()).templates as { id: string }[]).map((t) => t.id)).not.toContain(id);
+  expect(await prisma.projectTaskTemplate.findUniqueOrThrow({ where: { id }, select: { title: true, archivedAt: true } }))
+    .toEqual({ title: text, archivedAt: null });
+});
 
 test('the MARKETING documents page offers none of the internship built-ins', { tag: '@smoke' }, async ({ page }) => {
   const { orgA, orgB } = tenants;

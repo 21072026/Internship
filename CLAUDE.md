@@ -597,6 +597,15 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   parola + yanlış dünya `WRONG_WORLD_<VERTICAL>` verir ve giriş sayfası öbür kapıya
   bağlantı gösterir; oturum yalnızca kendi dünyasının host'unda geçerlidir (`session`
   callback'i yanlış host'ta `null` döner).
+  **Süper admin de dünya başınadır** (#2647): `isSuperAdmin(session)` yalnız kendi dünyasının
+  host'unda ve yalnız o dünyanın org'ları için doğrudur (`isSuperAdminFor(session, orgId)`,
+  kural `src/lib/superAdminWorld.ts`); org oluşturmak `vertical` ister ve çağıranın dünyasına
+  kilitlidir, dünyalar arası vertical taşıma yoktur. Bayrağı verme yolu
+  `prisma/set-super-admin.mjs --email … --world …` (varsayılan dry-run). Yalnız-internship
+  yüzeyler (`mentorship` capability) MARKETING'de hem menüden hem sunucudan kapalıdır: sayfa
+  kapısı segment `layout.tsx` + `gatePage()` (`src/lib/pageCapabilityGate.ts`), API kapısı
+  `requireCapability()`; hazır içerik (doküman şablonları, bülten sayıları) vertical başına
+  anahtarlıdır, yüklenen/yazılan her içerik org'unda kalır.
 - **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
   inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted
   verbatim), forwards it to the handler and echoes it on **every** response, error responses

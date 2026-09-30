@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { runAiGated } from '@/lib/aiGate';
 import { aiRankMentors, type MatchCandidate } from '@/lib/aiMentorMatch';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { MATCH_RULESET_VERSION } from '@/lib/matchFeedback';
@@ -47,6 +48,9 @@ export async function POST(request: Request) {
     if (orgLimited) return orgLimited;
   }
 
+  // Internship-only surface: closed for an org without mentorship (#2647).
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
