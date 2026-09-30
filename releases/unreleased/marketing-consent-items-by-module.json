@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "Privacy & consent on `/account` only lists the consents whose module the org's vertical has: a MARKETING rep (MENTOR role) no longer sees the mentor-directory listing or the evaluation-based testimonial consent, and a MARKETING customer no longer sees talent-pool or AI mentorship-summary consents (#2625). Also brings three scheduled e2e specs in line with the tenant-scoped app (newsletter history, company shortlist fixture) and makes the sign-in helper survive an in-flight redirect.",
+  "notes": {
+    "en": [
+      "On a marketing workspace, the privacy settings on your account page no longer offer consents for mentorship features that workspace doesn't have."
+    ],
+    "tr": [
+      "Pazarlama çalışma alanında hesap sayfasındaki gizlilik ayarları artık o alanda bulunmayan mentorluk özellikleri için onay sormuyor."
+    ],
+    "de": [
+      "In einem Marketing-Arbeitsbereich bieten die Datenschutzeinstellungen auf deiner Kontoseite keine Einwilligungen mehr für Mentoring-Funktionen an, die es dort nicht gibt."
+    ]
+  }
+}

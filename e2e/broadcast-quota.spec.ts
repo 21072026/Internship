@@ -309,11 +309,13 @@ test('a tenant over its band holds only its own newsletter issues, visibly (#233
     await expect(page.getByTestId(`newsletter-quota-hold-${heldIds[0]}`)).toContainText('On hold');
 
     // ── 4. …and only to its own tenant ──────────────────────────────────────
-    // The history is not tenant-scoped yet: another tenant's admin still sees
-    // the row, but not the spent tenant's broadcast figures.
+    // The history is tenant-scoped (#2605): another tenant's admin does not
+    // get the row at all, so neither the issue nor its broadcast figures
+    // cross over. (This used to assert a visible row with a null hold, from
+    // before the list was scoped — #2625.)
     await page.context().clearCookies();
     await signIn(page, otherAdminEmail, pw, '/admin');
-    expect(await historyHold(heldIds[0])).toBeNull();
+    expect(await historyHold(heldIds[0])).toBe('not found');
   } finally {
     await prisma.activityLog.deleteMany({ where: { targetId: { in: allIds() } } });
     await prisma.newsletterSend.deleteMany({ where: { newsletterId: { in: allIds() } } });
