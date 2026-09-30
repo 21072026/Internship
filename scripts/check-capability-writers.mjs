@@ -64,6 +64,11 @@ const MODELS = {
 // promise that the path is sessionless and was reasoned about, with the reason
 // in the value — a reader should never have to go find out why.
 const EXEMPT = {
+  'src/lib/hiringOutcome.ts':
+    'applyAcceptedOffer() (#1411/#1854) is a helper with one caller: the accept branch of PATCH ' +
+    '/api/offers/[id], which calls requireCapability(..., \'placements\') before anything else and ' +
+    'hands it the transaction client. It exists as a lib only so the counting rule has one home; ' +
+    'it opens no request path of its own, so a vertical without `placements` cannot reach it.',
   'src/lib/offerNotify.ts':
     'expireOffers() is the scheduled expiry sweep. It runs from /api/cron with no session and ' +
     'no tenant context on purpose (see its header), so there is no actor whose vertical could be ' +

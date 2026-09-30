@@ -22,6 +22,13 @@ export const WEBHOOK_EVENTS = [
   // Every assigned interviewer has submitted (or an admin closed the panel):
   // the scores are now comparable (#824).
   'interview_panel.completed',
+  // An offer was decided by the candidate (#1854), and an acceptance took the
+  // last seat of its requisition. `requisition.filled` fires once, on the
+  // acceptance that made `filled` reach `openings`; a manual status edit on the
+  // requisition screen does not fire it.
+  'offer.accepted',
+  'offer.declined',
+  'requisition.filled',
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 

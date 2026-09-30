@@ -17,6 +17,8 @@ import {
 } from '@/lib/offers';
 import { notifyOfferSent, notifyOfferDecided } from '@/lib/offerNotify';
 import { validateOfferRequisition } from '@/lib/requisitions';
+import { applyAcceptedOffer, requisitionCountDetail, type RequisitionCount } from '@/lib/hiringOutcome';
+import { dispatchWebhook } from '@/lib/webhooks';
 
 const baseSelect = {
   id: true,
@@ -183,14 +185,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       if (actionStr === 'withdraw') data.decidedAt = now;
 
-      const updated = await prisma.offer.update({ where: { id }, data, select: baseSelect });
+      // One transaction: the guarded status flip, and — for an acceptance — the
+      // seat it takes in the requisition (#1411/#1854). The flip is conditional
+      // on the status the checks above saw, so two concurrent requests cannot
+      // both move the same offer; the loser gets a 409, not a second write.
+      const outcome = await prisma.$transaction(async (tx) => {
+        const flip = await tx.offer.updateMany({ where: { id, status: offer.status }, data });
+        if (flip.count === 0) return null;
+        const count: RequisitionCount =
+          actionStr === 'accept' ? await applyAcceptedOffer(tx, offer, now) : { outcome: 'none' };
+        return { count };
+      });
+      if (!outcome) {
+        return NextResponse.json({ error: 'Offer changed meanwhile', code: 'offer_changed' }, { status: 409 });
+      }
+      const updated = await prisma.offer.findUniqueOrThrow({ where: { id }, select: baseSelect });
 
       await prisma.auditLog.create({
         data: {
           actorId: session.user.id,
           action: `offer.${actionStr}`,
           targetId: id,
-          detail: actionStr === 'decline' ? `reason ${declineReasonCode}` : undefined,
+          detail:
+            actionStr === 'decline' ? `reason ${declineReasonCode}` : requisitionCountDetail(outcome.count),
         },
       });
       await logActivity({
@@ -204,6 +221,33 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (actionStr === 'send') await notifyOfferSent(id);
       if (actionStr === 'accept') await notifyOfferDecided(id, 'ACCEPTED');
       if (actionStr === 'decline') await notifyOfferDecided(id, 'DECLINED');
+
+      if (actionStr === 'accept' || actionStr === 'decline') {
+        await dispatchWebhook(
+          actionStr === 'accept' ? 'offer.accepted' : 'offer.declined',
+          {
+            offerId: id,
+            relationId: offer.relationId,
+            requisitionId: offer.requisitionId,
+            companyId: offer.companyId,
+            ...(actionStr === 'decline' ? { declineReasonCode } : {}),
+          },
+          offer.orgId,
+        );
+      }
+      if (outcome.count.outcome === 'counted' && outcome.count.nowFilled) {
+        await dispatchWebhook(
+          'requisition.filled',
+          {
+            requisitionId: outcome.count.requisitionId,
+            companyId: offer.companyId,
+            filled: outcome.count.filled,
+            openings: outcome.count.openings,
+            lastOfferId: id,
+          },
+          offer.orgId,
+        );
+      }
 
       return NextResponse.json({ offer: updated });
     }

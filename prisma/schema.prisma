@@ -1850,33 +1850,40 @@ model MentorApplication {
 // ever have it selected server-side (enforced in the API layer, not just hidden
 // in the UI).
 model Offer {
-  id                String             @id @default(cuid())
-  orgId             String?
-  org               Organization?      @relation(fields: [orgId], references: [id])
-  relationId        String
-  relation          MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  id                   String             @id @default(cuid())
+  orgId                String?
+  org                  Organization?      @relation(fields: [orgId], references: [id])
+  relationId           String
+  relation             MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   // Optional link to the company's staffing need this offer fills. Plain id,
   // not a FK — CompanyNeed rows aren't guaranteed to persist for the life of
   // the offer, and the offer must remain readable even if the need is edited.
-  requisitionId     String?
-  companyId         String?
-  company           Company?           @relation(fields: [companyId], references: [id])
-  status            String             @default("DRAFT")
-  position          String
-  startDate         DateTime?
-  compensationNote  String?            @db.Text
-  expiresAt         DateTime?
-  sentAt            DateTime?
-  decidedAt         DateTime?
-  declineReasonCode String?
+  requisitionId        String?
+  // When this offer's acceptance was counted into its requisition's `filled`
+  // (#1411/#1854). Stamped in the same transaction as the increment, and only
+  // when the increment happened — so it is both the idempotency guard (a
+  // replayed accept cannot count twice) and the record of which offers `filled`
+  // is made of. Null for an offer that was never accepted, has no requisition,
+  // or was accepted into a requisition that was already full.
+  requisitionCountedAt DateTime?
+  companyId            String?
+  company              Company?           @relation(fields: [companyId], references: [id])
+  status               String             @default("DRAFT")
+  position             String
+  startDate            DateTime?
+  compensationNote     String?            @db.Text
+  expiresAt            DateTime?
+  sentAt               DateTime?
+  decidedAt            DateTime?
+  declineReasonCode    String?
   // Optional free-text elaboration on the decline reason (never required).
-  declineNote       String?            @db.Text
-  createdById       String
-  createdBy         User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
-  decidedById       String?
-  decidedBy         User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  declineNote          String?            @db.Text
+  createdById          String
+  createdBy            User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
+  decidedById          String?
+  decidedBy            User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   @@index([orgId, status])
   @@index([relationId])
