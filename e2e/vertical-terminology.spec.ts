@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
+import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStages } from '../src/lib/programTemplates';
 
 // Vertical terminology overlay in the live UI (#2354, epic #2348). A MARKETING
@@ -21,9 +21,15 @@ import { defaultTemplateForVertical, templateStages } from '../src/lib/programTe
 /** The words #2394 says a MARKETING tenant must never read. */
 const MENTORSHIP_WORDS = /mentee|mentor|internship/i;
 
-/** The page's own content region — the sidebar and its nav are chrome (#2501). */
-function mainText(page: Page) {
-  return page.locator('#main-content').innerText();
+/**
+ * The page's own content region — the sidebar and its nav are chrome (#2501).
+ * The messages frame nests a second #main-content inside the shell's, so the
+ * outer one is taken; a standalone page with no shell at all (/account) has
+ * no chrome to leave out, so its whole body is the content.
+ */
+async function mainText(page: Page) {
+  const main = page.locator('#main-content');
+  return (await main.count()) > 0 ? main.first().innerText() : page.locator('body').innerText();
 }
 
 test.afterAll(async () => {
@@ -344,5 +350,83 @@ test('a MARKETING rep reads /account with no mentorship word (#2558)', async ({ 
     expect(await page.locator('body').innerText()).not.toMatch(MENTORSHIP_WORDS);
   } finally {
     await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
+  }
+});
+
+// #2557, the other half of the relation card: a lead nobody owns yet reads
+// "No rep owns this lead yet", not "Not assigned to a mentor yet".
+test('a MARKETING admin reads no mentorship word on an unowned lead (#2557)', async ({ page }) => {
+  const mkt = await adminIn('MARKETING');
+  const loneEmail = uniqueEmail('term-mkt-lone');
+  const lone = await seedUser(loneEmail, 'TermPass123', 'MENTEE', 'Lone Buyer');
+  await prisma.user.update({ where: { id: lone.id }, data: { orgId: mkt.org.id } });
+  try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, mkt.email, 'TermPass123', '/admin');
+    await gotoSettled(page, `/admin/candidates/${lone.id}`);
+    await expect(page.getByText('No rep owns this lead yet')).toBeVisible();
+    expect(await mainText(page)).not.toMatch(MENTORSHIP_WORDS);
+  } finally {
+    await teardown(mkt.org.id, [mkt.email, loneEmail]);
+  }
+});
+
+test('an INTERNSHIP admin still reads the mentorship strings on the lead detail page (#2557)', async ({ page }) => {
+  const intn = await adminIn('INTERNSHIP');
+  const loneEmail = uniqueEmail('term-int-lone');
+  const lone = await seedUser(loneEmail, 'TermPass123', 'MENTEE', 'Lone Intern');
+  await prisma.user.update({ where: { id: lone.id }, data: { orgId: intn.org.id } });
+  try {
+    await signInAndSettle(page, intn.email, 'TermPass123', '/admin');
+    await gotoSettled(page, `/admin/candidates/${lone.id}`);
+    await expect(page.getByText('Not assigned to a mentor yet')).toBeVisible();
+    await expect(page.getByText('Mentorship', { exact: true }).first()).toBeVisible();
+  } finally {
+    await teardown(intn.org.id, [intn.email, loneEmail]);
+  }
+});
+
+// The rep's own side: /account (capacity, expertise, notification categories)
+// and the /sales surface #2580 added.
+test('a MARKETING rep reads no mentorship word on /account or the sales surface (#2558)', async ({ page }) => {
+  const mkt = await adminIn('MARKETING');
+  const fixture = await seedFunnelFixture(mkt.org.id, 'MARKETING', 'term-mkt-rep');
+  try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, fixture.ownerEmail, 'TermPass123', '/sales');
+    await page.waitForLoadState('networkidle');
+    expect(await mainText(page), '/sales').not.toMatch(MENTORSHIP_WORDS);
+
+    for (const path of ['/sales/board', '/sales/accounts', `/sales/leads/${fixture.relationId}`]) {
+      await gotoSettled(page, path);
+      await page.waitForLoadState('networkidle');
+      expect(await mainText(page), path).not.toMatch(MENTORSHIP_WORDS);
+    }
+
+    await gotoSettled(page, '/account');
+    await expect(page.getByTestId('accepting-mentees-toggle')).toBeVisible();
+    await expect(page.getByText('Lead capacity')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    expect(await mainText(page), '/account').not.toMatch(MENTORSHIP_WORDS);
+  } finally {
+    await teardown(mkt.org.id, [mkt.email, ...fixture.emails], fixture.companyId);
+  }
+});
+
+test('an INTERNSHIP admin still reads the mentorship strings on invite and users (#2558)', async ({ page }) => {
+  const intn = await adminIn('INTERNSHIP');
+  const fixture = await seedFunnelFixture(intn.org.id, 'INTERNSHIP', 'term-int-team');
+  try {
+    await signInAndSettle(page, intn.email, 'TermPass123', '/admin');
+    await gotoSettled(page, '/admin/invite');
+    await expect(page.getByText('Invite mentors and mentees to join the platform')).toBeVisible();
+    const role = page.locator('select').filter({ has: page.locator('option[value="MENTOR"]') }).first();
+    await expect(role.locator('option[value="MENTOR"]')).toHaveText('Mentor');
+    await expect(role.locator('option[value="MENTEE"]')).toHaveText('Mentee');
+
+    await gotoSettled(page, '/admin/users');
+    await expect(page.getByTestId(`user-row-${fixture.ownerId}`)).toContainText('Mentor');
+  } finally {
+    await teardown(intn.org.id, [intn.email, ...fixture.emails], fixture.companyId);
   }
 });

@@ -38,6 +38,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
+import { DealValuePanel } from '@/components/DealValuePanel';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } | null }
@@ -488,6 +489,11 @@ export default function AdminMenteeDetailPage() {
                 canEdit={rel.status === 'ACTIVE'}
                 onSaved={load}
               />
+
+              {/* The estimated monthly value (#2422). The panel reads its own
+                  route, which answers 404 outside a vertical with deal values
+                  (MARKETING), so an INTERNSHIP record shows nothing here. */}
+              <DealValuePanel relationId={rel.id} />
 
               {(() => {
                 const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.lastContactAt ?? rel.interactions[0]?.date }, t.nextActions);

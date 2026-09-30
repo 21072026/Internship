@@ -234,6 +234,8 @@ export async function POST(request: Request) {
           // #1720: the invitee's stored language — they have an account, so
           // nothing has to be guessed.
           locale: rel.mentee.preferredLanguage,
+          // The links open this tenant's product host (#2495).
+          orgId: session.user.orgId,
           // The Meeting row's own id, so the attachment, the public token route
           // and any later reschedule mail all address the same calendar event.
           icsUid: meeting.id,

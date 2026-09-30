@@ -8,6 +8,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
+import { marketingEmailPermissionFilter } from '@/lib/contactPermission';
 import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import {
   companySortKeys,
@@ -123,6 +124,10 @@ export async function GET(request: Request) {
     const all = searchParams.get('all') === '1';
     const page = positiveInt(searchParams.get('page'), 1, MAX_PAGE);
     const pageSize = positiveInt(searchParams.get('pageSize'), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    // "Has provable e-mail permission" (#2577): the accounts whose EMAIL row
+    // permits advertising mail by the one rule (src/lib/contactPermission.ts).
+    // Any other value is no filter, never an error.
+    const permissionFilter = searchParams.get('permission') === 'email' ? marketingEmailPermissionFilter() : undefined;
 
     // The same two columns the client-side `filter()` used to match on, so the
     // move to the server is not also a change of what "search" means.
@@ -147,9 +152,15 @@ export async function GET(request: Request) {
         scope,
         (await tenantWhere(session)) as Prisma.CompanyWhereInput,
         searchFilter,
+        permissionFilter,
       );
       const include = {
         needs: true,
+        // The e-mail row only, for the list's permission badge (#2577).
+        contactPermissions: {
+          where: { channel: 'EMAIL' as const },
+          select: { channel: true, basis: true, revokedAt: true, confirmedAt: true, address: true },
+        },
         _count: { select: { mentorships: mentorshipCount } },
       };
 

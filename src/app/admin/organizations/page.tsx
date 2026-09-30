@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Share2, UserPlus, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { locales, type Locale } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPlans';
 
@@ -119,6 +120,184 @@ function LockedNote({ text, testId }: { text: string; testId: string }) {
   );
 }
 
+// Invite a person as ADMIN into one organization — typically the first admin of
+// a new MARKETING tenant (docs/worlds.md § İkinci dünyaya davet). Super-admin
+// only; the server is the control (POST /api/admin/organizations/[id]/invite-
+// admin), this panel is just the door. Built for a phone: an operator setting
+// up a tenant on the go gets the register link back with Copy and (where the
+// browser has it) the native share sheet, whether or not the mail went out.
+function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => void }) {
+  const t = useT();
+  const uiLocale = useLocale();
+  const [email, setEmail] = useState('');
+  const [label, setLabel] = useState('');
+  const [locale, setLocale] = useState<Locale>(uiLocale);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ registerUrl: string; emailSent: boolean; email: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
+  // Decided after mount: `navigator` does not exist during the server render,
+  // and a button that appears only on the client would be a hydration mismatch.
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => {
+    setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+  }, []);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/organizations/${org.id}/invite-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), label: label.trim() || null, locale }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(
+          data.code === 'email_taken_in_world'
+            ? t.organizations.inviteEmailTaken
+            : data.code === 'invitation_pending'
+              ? t.organizations.invitePending
+              : data.error || t.common.error
+        );
+        return;
+      }
+      setResult({ registerUrl: data.registerUrl, emailSent: !!data.emailSent, email: email.trim() || null });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const share = async () => {
+    if (!result) return;
+    try {
+      await navigator.share({ title: t.organizations.inviteShareTitle.replace('{org}', org.name), url: result.registerUrl });
+    } catch {
+      // Dismissing the share sheet rejects; nothing to report.
+    }
+  };
+
+  const reset = () => {
+    setResult(null);
+    setEmail('');
+    setLabel('');
+    setCopied(false);
+  };
+
+  return (
+    <Card className="mb-6 max-w-2xl" data-testid="invite-admin-panel">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <CardTitle className="min-w-0 break-words">{t.organizations.inviteAdminTitle.replace('{org}', org.name)}</CardTitle>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t.organizations.inviteClose}
+          data-testid="invite-admin-close"
+          className="shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      {!result ? (
+        <form onSubmit={submit} className="space-y-3" data-testid="invite-admin-form">
+          <p className="text-sm text-gray-500">{t.organizations.inviteAdminHint}</p>
+          <Input
+            label={t.organizations.inviteEmail}
+            id="invite-admin-email"
+            type="email"
+            autoComplete="off"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            data-testid="invite-admin-email"
+          />
+          <Input
+            label={t.organizations.inviteLabel}
+            id="invite-admin-label"
+            value={label}
+            maxLength={120}
+            onChange={(e) => setLabel(e.target.value)}
+            data-testid="invite-admin-label"
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5" htmlFor="invite-admin-locale">
+              {t.organizations.inviteLanguage}
+            </label>
+            <select
+              id="invite-admin-locale"
+              data-testid="invite-admin-locale"
+              value={locale}
+              onChange={(e) => setLocale(e.target.value as Locale)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+            >
+              {locales.map((l) => <option key={l} value={l}>{t.account.languages[l]}</option>)}
+            </select>
+          </div>
+          {error && <p className="text-sm text-red-600" data-testid="invite-admin-error">{error}</p>}
+          <Button type="submit" loading={busy} data-testid="invite-admin-submit" className="w-full sm:w-auto">
+            {t.organizations.inviteSubmit}
+          </Button>
+        </form>
+      ) : (
+        <div className="space-y-3" data-testid="invite-admin-result">
+          <p
+            data-testid="invite-admin-mail-status"
+            className={
+              result.emailSent
+                ? 'rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200'
+                : 'rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200'
+            }
+          >
+            {result.emailSent
+              ? t.organizations.inviteMailSent.replace('{email}', result.email ?? '')
+              : result.email
+                ? t.organizations.inviteMailNotSent
+                : t.organizations.inviteLinkOnly}
+          </p>
+          <div className="min-w-0">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5" htmlFor="invite-admin-link">
+              {t.organizations.inviteLink}
+            </label>
+            <input
+              id="invite-admin-link"
+              readOnly
+              value={result.registerUrl}
+              data-testid="invite-admin-link"
+              onFocus={(e) => e.currentTarget.select()}
+              className="block w-full min-w-0 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 font-mono text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="invite-admin-copy"
+              onClick={async () => {
+                if (!(await copyToClipboard(result.registerUrl))) return;
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+            >
+              {copied ? <Check className="h-4 w-4 mr-1.5" /> : <Copy className="h-4 w-4 mr-1.5" />}
+              {copied ? t.organizations.spCopied : t.organizations.spCopy}
+            </Button>
+            {canShare && (
+              <Button type="button" variant="outline" data-testid="invite-admin-share" onClick={share}>
+                <Share2 className="h-4 w-4 mr-1.5" />
+                {t.organizations.inviteShare}
+              </Button>
+            )}
+            <Button type="button" variant="ghost" data-testid="invite-admin-another" onClick={reset}>
+              {t.organizations.inviteAnother}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function AdminOrganizationsPage() {
   const t = useT();
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -138,6 +317,9 @@ export default function AdminOrganizationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  // Which org the "invite admin" panel is open for (super admin only).
+  const [inviteOrgId, setInviteOrgId] = useState<string | null>(null);
+  const inviteOrg = orgs.find((o) => o.id === inviteOrgId) ?? null;
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/organizations');
@@ -572,6 +754,12 @@ export default function AdminOrganizationsPage() {
         </div>
       )}
 
+      {superAdmin && inviteOrg && (
+        <div id="invite-admin-anchor">
+          <InviteAdminPanel key={inviteOrg.id} org={inviteOrg} onClose={() => setInviteOrgId(null)} />
+        </div>
+      )}
+
       <Card>
         <CardHeader><CardTitle>{t.organizations.title} ({filtered.length})</CardTitle></CardHeader>
         {loading ? (
@@ -596,6 +784,7 @@ export default function AdminOrganizationsPage() {
                   <th className="py-2 pr-4">{t.organizations.cohorts}</th>
                   <th className="py-2 pr-4">{t.organizations.sources}</th>
                   <th className="py-2 pr-4">{t.organizations.pipeline}</th>
+                  {superAdmin && <th className="py-2 pr-4">{t.organizations.admins}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -642,6 +831,26 @@ export default function AdminOrganizationsPage() {
                         {t.organizations.editPipeline}
                       </Link>
                     </td>
+                    {superAdmin && (
+                      <td className="py-2 pr-4">
+                        <button
+                          type="button"
+                          data-testid={`org-invite-admin-${o.id}`}
+                          onClick={() => {
+                            setInviteOrgId(o.id);
+                            // The panel renders above the list; on a phone the
+                            // row is far below it, so bring it into view.
+                            requestAnimationFrame(() =>
+                              document.getElementById('invite-admin-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-blue-600 hover:underline"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          {t.organizations.inviteAdmin}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

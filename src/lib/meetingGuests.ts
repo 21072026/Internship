@@ -164,7 +164,8 @@ export async function inviteGuests({
   // the two call sites so both can never drift apart.
   const organizer = await prisma.user.findUnique({
     where: { id: invitedById },
-    select: { preferredLanguage: true },
+    // orgId (#2495): the guest's RSVP page opens on the organizer's product host.
+    select: { preferredLanguage: true, orgId: true },
   });
   const locale = organizer?.preferredLanguage ?? null;
 
@@ -200,6 +201,7 @@ export async function inviteGuests({
         organizerTimeZone,
         organizerName,
         locale,
+        orgId: organizer?.orgId ?? null,
         // Same UID as the account-holders' invite for this meeting, so a guest
         // who also has a calendar entry from elsewhere sees one event, not two.
         icsUid: meetingId,

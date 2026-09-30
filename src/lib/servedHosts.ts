@@ -187,3 +187,44 @@ export function appLinkOrigin(publicHost: string | null | undefined): string {
   const proto = cfg.protocol === 'http:' ? 'http' : 'https';
   return `${proto}://${host}`;
 }
+
+// ── An origin that travelled through a third party: SSO / OAuth (#2494) ─────
+//
+// SAML's ACS and Google's OAuth callback are registered at the IdP / at Google
+// under ONE host (NEXTAUTH_URL's), so the browser comes back there whichever
+// host it left from. The originating origin rides along — as SAML RelayState,
+// inside the signed OAuth `state` — and is read back here.
+//
+// RelayState in particular is signed by nobody: an IdP-initiated login, or
+// anyone who can make a browser POST to the ACS, chooses it. So this is a
+// redirect sink fed by remote input, and it gets resolveRedirectTarget()'s
+// rule: the WHATWG parser, https or the configured origin's own protocol, a
+// hostname in servedHosts() by EXACT match, and a value re-assembled from its
+// parts. It must be a bare ORIGIN — a path, a query, a fragment or userinfo is
+// refused rather than stripped, because nothing we mint carries one, so a value
+// that does was not minted by us. The port follows requestOrigin(): only the
+// configured origin's own port, and only on its own host.
+//
+// Returns null, never a fallback, so each caller decides what "no usable
+// origin" means — for both flows today: the configured origin, as before.
+export function servedOrigin(value: string | null | undefined): string | null {
+  if (!value || typeof value !== 'string') return null;
+  let target: URL;
+  let cfg: URL;
+  try {
+    target = new URL(value);
+    cfg = new URL(configuredOrigin());
+  } catch {
+    return null;
+  }
+  if (target.protocol !== 'https:' && target.protocol !== cfg.protocol) return null;
+  if (target.username || target.password) return null;
+  // 'https://a.example' and 'https://a.example/' both parse to pathname '/'.
+  if (target.pathname !== '/' || target.search || target.hash) return null;
+  const host = target.hostname.toLowerCase();
+  if (!servedHosts().has(host)) return null;
+  const sameHost = cfg.hostname.toLowerCase() === host;
+  if (target.port && !(sameHost && target.port === cfg.port)) return null;
+  const port = sameHost && cfg.port ? `:${cfg.port}` : '';
+  return `${target.protocol}//${host}${port}`;
+}

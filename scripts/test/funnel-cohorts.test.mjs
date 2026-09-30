@@ -20,9 +20,16 @@ import { register } from 'node:module';
 // funnelKpi imports `./meteringRules` for the month boundary; the resolve hook
 // is what lets an extensionless relative import work under node --test.
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
-const { conversionByEntryMonth, retentionTriangle, cohortMonths, stageConversions } = await import(
-  '../../src/lib/funnelKpi.ts'
-);
+const {
+  conversionByEntryMonth,
+  retentionTriangle,
+  cohortMonths,
+  stageConversions,
+  relationChains,
+  mergeChainJourney,
+  trialConversion,
+  trialStartOf,
+} = await import('../../src/lib/funnelKpi.ts');
 
 // A marketing tenant's own stage order (src/lib/programTemplates.ts), on-path
 // only — exactly what `onPathKeys()` hands the functions. Written out here
@@ -290,4 +297,179 @@ test('cohortMonths keeps the newest months when a hand-typed range is absurdly w
   assert.equal(months.length, 36);
   assert.equal(months[35], '2026-03', 'the rows anyone is reading are the recent ones');
   assert.equal(months[0], '2023-04');
+});
+
+// ── #2556 · transfer chains and trial → paid ─────────────────────────────────
+
+// A relation as the funnel route hands it to the chain helper: its own
+// journey plus the two link fields.
+const link = (id, previousRelationId, j) => ({ id, previousRelationId, ...j });
+
+test('a two-link transfer chain is one journey and one win, not two', () => {
+  // The customer entered in January and was won in February; in March the
+  // owner changed, which closes the relation and opens a successor ON DEAL_WON
+  // (src/lib/mentorTransfer.ts) — no StatusChange, the stage is carried over.
+  const a = link('a', null, journey('LEAD_NEW', '2026-01-05', [['LEAD_QUALIFIED', '2026-01-10'], ['DEAL_WON', '2026-02-10']]));
+  const b = link('b', 'a', journey('DEAL_WON', '2026-03-03'));
+  const months = ['2026-01', '2026-02', '2026-03'];
+
+  // Unfolded — the bug: March gains an entry and a conversion out of nowhere,
+  // and retention gets a second "won" customer in March.
+  const naive = conversionByEntryMonth(ORDER, [a, b], 'LEAD_NEW', 'DEAL_WON', months);
+  assert.deepEqual(naive.map((m) => m.entered), [1, 0, 1], 'precondition: the unfolded read double counts');
+
+  const chains = relationChains([b, a]);
+  assert.equal(chains.length, 1, 'one journey');
+  assert.deepEqual(chains[0].map((l) => l.id), ['a', 'b'], 'root first, whatever the input order');
+  const merged = chains.map(mergeChainJourney);
+  assert.equal(merged[0].startStatus, 'LEAD_NEW');
+  assert.equal(merged[0].startedAt, ms('2026-01-05'), "the root's start, not the transfer date");
+
+  const folded = conversionByEntryMonth(ORDER, merged, 'LEAD_NEW', 'DEAL_WON', months);
+  assert.deepEqual(folded.map((m) => [m.entered, m.converted]), [[1, 1], [0, 0], [0, 0]]);
+  const retention = retentionTriangle(ORDER, merged, months, [1], { now: new Date('2026-09-01'), wonKeys: ['DEAL_WON'] });
+  assert.deepEqual(retention.map((c) => c.won), [0, 1, 0], 'won once, in the month it was won');
+});
+
+test('a chain whose successor keeps moving reads as one continuous journey', () => {
+  // Transferred while still in trial; the SUCCESSOR records the win.
+  const a = link('a', null, journey('LEAD_NEW', '2026-01-05', [['TRIAL_ACTIVE', '2026-01-20']]));
+  const b = link('b', 'a', journey('TRIAL_ACTIVE', '2026-02-01', [['DEAL_WON', '2026-02-25']]));
+  const c = link('c', null, journey('LEAD_NEW', '2026-01-07'));
+  const chains = relationChains([a, b, c]);
+  assert.equal(chains.length, 2);
+  const merged = chains.map(mergeChainJourney);
+  assert.deepEqual(merged[0].changes.map((x) => x.toStatus), ['TRIAL_ACTIVE', 'DEAL_WON']);
+  const [jan] = conversionByEntryMonth(ORDER, merged, 'LEAD_NEW', 'DEAL_WON', ['2026-01']);
+  assert.deepEqual([jan.entered, jan.converted], [2, 1]);
+});
+
+test('relationChains never drops a link: missing predecessor, branch, and a loop', () => {
+  const orphan = link('x', 'gone', journey('DEAL_WON', '2026-03-01'));
+  const root = link('r', null, journey('LEAD_NEW', '2026-01-01'));
+  const k1 = link('k1', 'r', journey('LEAD_NEW', '2026-02-01'));
+  const k2 = link('k2', 'r', journey('LEAD_NEW', '2026-02-02'));
+  const loopA = link('la', 'lb', journey('LEAD_NEW', '2026-01-01'));
+  const loopB = link('lb', 'la', journey('LEAD_NEW', '2026-01-01'));
+  const chains = relationChains([orphan, root, k1, k2, loopA, loopB]);
+  assert.deepEqual(
+    chains.map((c) => c.map((l) => l.id)),
+    [['x'], ['r', 'k1', 'k2'], ['la', 'lb']],
+  );
+  assert.equal(chains.flat().length, 6, 'every link exactly once');
+});
+
+const trialJourney = (startStatus, startedAt, changes, extra = {}) => ({
+  ...journey(startStatus, startedAt, changes),
+  trialStartedAt: extra.trialStartedAt ? ms(extra.trialStartedAt) : null,
+  trialEndsAt: extra.trialEndsAt ? ms(extra.trialEndsAt) : null,
+  sourceId: extra.sourceId ?? null,
+});
+
+test('trialStartOf: the recorded start wins, else the first ARRIVAL; skipping the stage is no trial', () => {
+  const recorded = trialJourney('LEAD_NEW', '2026-01-01', [['TRIAL_ACTIVE', '2026-01-09']], { trialStartedAt: '2026-01-08' });
+  assert.equal(trialStartOf(recorded, 'TRIAL_ACTIVE'), ms('2026-01-08'));
+  const historyOnly = trialJourney('LEAD_NEW', '2026-01-01', [['TRIAL_ACTIVE', '2026-01-09']]);
+  assert.equal(trialStartOf(historyOnly, 'TRIAL_ACTIVE'), ms('2026-01-09'));
+  const createdInTrial = trialJourney('TRIAL_ACTIVE', '2026-01-04', []);
+  assert.equal(trialStartOf(createdInTrial, 'TRIAL_ACTIVE'), ms('2026-01-04'));
+  const skipped = trialJourney('LEAD_NEW', '2026-01-01', [['DEAL_PROPOSAL', '2026-01-09'], ['DEAL_WON', '2026-01-20']]);
+  assert.equal(trialStartOf(skipped, 'TRIAL_ACTIVE'), null);
+});
+
+test('trial → paid is cohorted by trial start; a month is "—" until every trial in it has ended', () => {
+  const now = new Date('2026-04-10T00:00:00Z');
+  const journeys = [
+    // March cohort: two trials, 30 days, both over by 2026-04-10? The second
+    // runs to 2026-04-28 → March is immature.
+    trialJourney('LEAD_NEW', '2026-02-20', [['TRIAL_ACTIVE', '2026-03-02'], ['DEAL_WON', '2026-03-20']], {
+      trialStartedAt: '2026-03-02', trialEndsAt: '2026-04-01',
+    }),
+    trialJourney('LEAD_NEW', '2026-02-21', [['TRIAL_ACTIVE', '2026-03-29']], {
+      trialStartedAt: '2026-03-29', trialEndsAt: '2026-04-28',
+    }),
+    // February cohort: ended trials, one paid after it EXPIRED (on-path, late).
+    trialJourney('LEAD_NEW', '2026-01-10', [['TRIAL_ACTIVE', '2026-02-01'], ['TRIAL_EXPIRED', '2026-03-03'], ['DEAL_WON', '2026-03-15']], {
+      trialStartedAt: '2026-02-01', trialEndsAt: '2026-03-03',
+    }),
+    trialJourney('LEAD_NEW', '2026-01-11', [['TRIAL_ACTIVE', '2026-02-03'], ['TRIAL_EXPIRED', '2026-03-05']], {
+      trialStartedAt: '2026-02-03', trialEndsAt: '2026-03-05',
+    }),
+    trialJourney('LEAD_NEW', '2026-01-12', [['TRIAL_ACTIVE', '2026-02-05'], ['DEAL_LOST', '2026-02-20']], {
+      trialStartedAt: '2026-02-05', trialEndsAt: '2026-03-07',
+    }),
+    // A lead that skipped the trial and won: not in any trial cohort.
+    trialJourney('LEAD_NEW', '2026-02-01', [['DEAL_PROPOSAL', '2026-02-10'], ['DEAL_WON', '2026-02-20']]),
+  ];
+  const { months } = trialConversion(ORDER, journeys, 'TRIAL_ACTIVE', 'DEAL_WON', ['2026-02', '2026-03', '2026-04'], {
+    now,
+    trialDays: 30,
+  });
+  assert.deepEqual(months, [
+    { month: '2026-02', started: 3, paid: 1, rate: 33, mature: true },
+    { month: '2026-03', started: 2, paid: 1, rate: null, mature: false },
+    // The month has not closed yet: immature even though empty.
+    { month: '2026-04', started: 0, paid: 0, rate: null, mature: false },
+  ]);
+});
+
+test('a trial with no recorded end matures after the tenant trial length', () => {
+  const j = [trialJourney('LEAD_NEW', '2026-01-01', [['TRIAL_ACTIVE', '2026-01-31']])];
+  const at = (iso) =>
+    trialConversion(ORDER, j, 'TRIAL_ACTIVE', 'DEAL_WON', ['2026-01'], { now: new Date(iso), trialDays: 14 }).months[0].mature;
+  assert.equal(at('2026-02-13T00:00:00Z'), false, '31 Jan + 14 days is 14 Feb');
+  assert.equal(at('2026-02-14T00:00:00Z'), true);
+});
+
+test('trial → paid by source counts mature cohorts only, with an explicit "no source" row', () => {
+  const now = new Date('2026-06-01T00:00:00Z');
+  const t = (sourceId, start, won, extraMonths = 0) =>
+    trialJourney('LEAD_NEW', '2026-01-01', [['TRIAL_ACTIVE', start], ...(won ? [['DEAL_WON', won]] : [])], {
+      trialStartedAt: start,
+      trialEndsAt: new Date(ms(start) + (30 + extraMonths * 30) * 86400000).toISOString(),
+      sourceId,
+    });
+  const journeys = [
+    t('src-a', '2026-02-02', '2026-02-20'),
+    t('src-a', '2026-02-10', null),
+    t('src-a', '2026-03-01', '2026-03-10'),
+    t('src-b', '2026-03-04', null),
+    t(null, '2026-02-15', '2026-03-01'),
+    // Still running on `now` → its month (May) is immature and not counted.
+    t('src-b', '2026-05-20', '2026-05-25'),
+  ];
+  const { bySource } = trialConversion(ORDER, journeys, 'TRIAL_ACTIVE', 'DEAL_WON', ['2026-02', '2026-03', '2026-04', '2026-05'], {
+    now,
+    trialDays: 30,
+  });
+  assert.deepEqual(bySource, [
+    { sourceId: 'src-a', trials: 3, paid: 2, rate: 67 },
+    { sourceId: null, trials: 1, paid: 1, rate: 100 },
+    { sourceId: 'src-b', trials: 1, paid: 0, rate: 0 },
+  ]);
+});
+
+test('trial → paid for a chain: a handover mid-trial is one trial and one paid customer', () => {
+  const a = link('a', null, trialJourney('LEAD_NEW', '2026-01-05', [['TRIAL_ACTIVE', '2026-01-20']], {
+    trialStartedAt: '2026-01-20', trialEndsAt: '2026-02-19',
+  }));
+  const b = link('b', 'a', trialJourney('TRIAL_ACTIVE', '2026-02-01', [['DEAL_WON', '2026-02-10']], {
+    trialStartedAt: '2026-01-20', trialEndsAt: '2026-02-19',
+  }));
+  const opts = { now: new Date('2026-06-01T00:00:00Z'), trialDays: 30 };
+  const months = ['2026-01', '2026-02'];
+  // Unfolded: the successor's carried-over trial start AND its creation in
+  // TRIAL_ACTIVE would make January read two trials.
+  const naive = trialConversion(ORDER, [a, b], 'TRIAL_ACTIVE', 'DEAL_WON', months, opts);
+  assert.equal(naive.months[0].started, 2, 'precondition: the unfolded read double counts');
+  const merged = relationChains([a, b]).map((chain) => ({ ...mergeChainJourney(chain), trialStartedAt: chain[0].trialStartedAt, trialEndsAt: chain[0].trialEndsAt, sourceId: null }));
+  const folded = trialConversion(ORDER, merged, 'TRIAL_ACTIVE', 'DEAL_WON', months, opts);
+  assert.deepEqual(folded.months[0], { month: '2026-01', started: 1, paid: 1, rate: 100, mature: true });
+});
+
+test('trial → paid names no key: a tenant with renamed stages converts from its own keys', () => {
+  const order = ['PROSPECT', 'PILOT', 'CUSTOMER'];
+  const j = [trialJourney('PROSPECT', '2026-01-01', [['PILOT', '2026-01-05'], ['CUSTOMER', '2026-01-25']])];
+  const { months } = trialConversion(order, j, 'PILOT', 'CUSTOMER', ['2026-01'], { now: new Date('2026-06-01'), trialDays: 30 });
+  assert.deepEqual(months[0], { month: '2026-01', started: 1, paid: 1, rate: 100, mature: true });
 });

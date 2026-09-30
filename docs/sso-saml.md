@@ -77,6 +77,23 @@ For an IdP that cannot import metadata, register the values by hand:
 - **NameID format:** emailAddress; email in NameID or an `email` attribute;
   optional `name` / `firstName`+`lastName` for the display name.
 
+### One ACS, several hosts (#2494)
+`<BASE>` is always `NEXTAUTH_URL` — the one host registered at the IdP — even
+for a tenant whose people sign in on the marketing host. Nothing to register
+per host: the login route puts the host the sign-in **started** on into SAML
+`RelayState` (only when it is not `<BASE>` itself; ~30 bytes, inside the spec's
+80), the IdP echoes it back to the ACS, and the ACS finishes the sign-in
+(`/auth/sso/complete`, or the `/auth/signin?error=…` refusal) on that host.
+RelayState is **unsigned** — an IdP-initiated login or anyone who can make a
+browser POST to the ACS chooses it — so it is accepted only through
+`servedOrigin()` (`src/lib/servedHosts.ts`): a bare `https` origin whose
+hostname is in `servedHosts()` by exact match; a path, a query, userinfo, a
+foreign host or a port falls back to `<BASE>`. The single-use grant in the
+success URL is a database row and works on every host of the deployment alike.
+**Operator step:** an IdP that *rewrites* or *drops* RelayState (some do for
+IdP-initiated flows) still works — the user just finishes on `<BASE>`, which is
+the old behaviour. Nothing to configure either way.
+
 ## OIDC — refused at the write boundary (#1537)
 
 `'oidc'` stays in the `SsoProvider` type: it is a real roadmap item (Wave 4) and

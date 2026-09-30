@@ -75,7 +75,10 @@ açık kuralıdır (`CLAUDE.md` → *One import engine, one parser*).
 
 ## Kimlik anahtarı: kiracı kapsamlı, benzersiz **olmayan** dış id
 
-Anahtar `Company.externalId` — SaleVali'deki hesabın kendi kimliği.
+Anahtar `Company.externalId` — SaleVali'deki hesabın kendi kimliği. **Değeri
+SaleVali MAIN_DB `User._id`'sidir** (24 karakter küçük harf hex; `user_number`
+değil) — gerekçe ve SaleVali tarafının ne sağlaması gerektiği
+[`salevali-provider-contract.md`](salevali-provider-contract.md) § K-1'de (#2565).
 
 - Sütun `@unique` **değil**, `@@index([orgId, externalId])` var. Devralınan
   backlog `@unique` istiyordu; MySQL benzersiz indekste NULL'ları *farklı*
@@ -94,8 +97,11 @@ Anahtar `Company.externalId` — SaleVali'deki hesabın kendi kimliği.
   kuralı vardır.
 
 > **Hesap içe aktarımının anahtarıyla karıştırmayın.** Tablodaki hesapları
-> eşleştiren şey `vat_id`, yoksa normalize ad + ülke
-> ([`docs/marketing-import.md`](../marketing-import.md) § *Matching*, #2405).
+> eşleştiren şey önce `external_id`, sonra `vat_id`, yoksa normalize ad + ülke
+> ([`docs/marketing-import.md`](../marketing-import.md) § *Matching*, #2405/#2554).
+> İçe aktarım `external_id` sütunuyla `Company.externalId`'yi **doldurur** — bu
+> beslemenin eşleşeceği hesapları ilk günden hazırlayan yol budur (aynı anahtar:
+> SaleVali `User._id`, #2565'in önerisi).
 > Bu besleme o eşleştirmeyi yapmaz: yalnızca `externalId` üzerinden **zaten var
 > olan** bir hesabı bulur. Boş bir `externalId`'yi doldurmak (bir boşluğu
 > kapatmak) beslemenin `Company` üzerinde yaptığı tek yazmadır; başka hiçbir
@@ -109,6 +115,11 @@ Anahtar `Company.externalId` — SaleVali'deki hesabın kendi kimliği.
 | `date` | `YYYY-MM-DD`, **UTC günü** | evet | Kullanımın gerçekleştiği gün — an değil |
 | `transactions` | tam sayı ≥ 0 | evet | O günün **mutlak** işlem sayısı |
 | `orders` | tam sayı ≥ 0 | hayır | O günün sipariş sayısı; besleme taşımıyorsa boş |
+
+`transactions` SaleVali'nin **fatura kestiği** işlem sayısıdır (sipariş + manuel
+fatura + credit), SaleVali'nin kendi kullanım ekranındaki aynı adlı `LogEntry`
+sayacı değil — ayrım ve SaleVali'nin sağlayacağı export ucu
+[`salevali-provider-contract.md`](salevali-provider-contract.md) § Uç A'da.
 
 Tanecik **hesap × gün**, ve bu tabloyu `UsageRollup`'tan ayıran şey tam olarak
 bu: `UsageRollup` (org, metrik, **takvim ayı**) bazlı faturalama ölçümüdür ve

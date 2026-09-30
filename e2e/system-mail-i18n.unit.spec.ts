@@ -19,14 +19,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { __testable } from '@/services/emailService';
 import { getDictionary } from '@/i18n/dictionaries';
+import { dictionaryFor } from '@/i18n/emailDictionary';
 import { locales, type Locale } from '@/i18n/config';
 
 // unsubscribeFooterHtml (pulled in transitively) mints tokens with
 // requireServerSecret(), which throws when NEXTAUTH_SECRET is unset (#870).
 process.env.NEXTAUTH_SECRET ||= 'unit-test-secret';
 
-const { resolveLocale, timeZoneNote, inMinutesText, organizerTimeLine, participantClocks, activityDigestTable } =
-  __testable;
+const {
+  resolveLocale,
+  timeZoneNote,
+  inMinutesText,
+  organizerTimeLine,
+  participantClocks,
+  activityDigestTable,
+  invitationBody,
+  assignedEmailParts,
+} = __testable;
 
 const SERVICE = path.join(process.cwd(), 'src/services/emailService.ts');
 const source = fs.readFileSync(SERVICE, 'utf8');
@@ -336,5 +345,118 @@ test.describe('no localisable string is left hardcoded in these mails', () => {
     const schema = fs.readFileSync(path.join(process.cwd(), 'prisma/schema.prisma'), 'utf8');
     const model = schema.slice(schema.indexOf('model InvitationToken {'));
     expect(model.slice(0, model.indexOf('\n}'))).toMatch(/^\s*locale\s+String\?/m);
+  });
+});
+
+// #2558 — the vertical reaches the mail. A MARKETING admin's invitation, and the
+// mails a sales rep receives, are written from the recipient org's overlaid
+// dictionary (src/i18n/emailDictionary.ts), the same overlay the pages read.
+// INTERNSHIP is the no-op: its dictionary is the base object itself, so every
+// mail today's product sends is unchanged by construction.
+test.describe('a MARKETING recipient reads sales words, an INTERNSHIP one the same mail as before', () => {
+  /** The words a MARKETING mail must not contain, per locale — as in scripts/check-i18n.ts. */
+  const LEAK: Record<Locale, RegExp> = {
+    en: /mentor|mentee|intern(?!al)/i,
+    de: /mentor|mentee|praktik|internship/i,
+    tr: /mentor|mentör|mentee|staj|internship/i,
+  };
+  /** What a reader sees: placeholders are slots, not words. */
+  const visible = (s: string) => s.replace(/\{[a-zA-Z]+\}/g, '');
+
+  test('the MARKETING invitation says "sales rep" / "lead", never "mentor"', { tag: '@smoke' }, () => {
+    for (const locale of locales) {
+      const I = dictionaryFor(locale, 'MARKETING').notifications.invitationEmail;
+      for (const role of ['MENTOR', 'MENTEE', 'ADMIN', 'COMPANY']) {
+        const { roleLabel, bodyBefore, bodyAfter } = invitationBody(I, role);
+        const mail = [I.subject, I.heading, bodyBefore, roleLabel, bodyAfter, I.ctaIntro, I.cta, I.expiry, I.copyLink]
+          .map(visible)
+          .join(' ');
+        expect(mail, `${locale} invitation as ${role}`).not.toMatch(LEAK[locale]);
+      }
+    }
+    expect(invitationBody(dictionaryFor('en', 'MARKETING').notifications.invitationEmail, 'MENTOR').roleLabel).toBe('a sales rep');
+    expect(invitationBody(dictionaryFor('en', 'MARKETING').notifications.invitationEmail, 'MENTEE').roleLabel).toBe('a lead');
+  });
+
+  test('the mails a MARKETING rep receives carry no internship word', () => {
+    for (const locale of locales) {
+      const d = dictionaryFor(locale, 'MARKETING');
+      const blocks = {
+        roleChangeEmail: d.roleChangeEmail,
+        deadlineEmail: d.notifications.deadlineEmail,
+        nextActionEmail: d.notifications.nextActionEmail,
+        mentorDigestEmail: d.notifications.mentorDigestEmail,
+        activityDigestEmail: d.notifications.activityDigestEmail,
+        menteeAssignedEmail: d.notifications.menteeAssignedEmail,
+      };
+      for (const [name, block] of Object.entries(blocks)) {
+        for (const [key, value] of Object.entries(flatten(block))) {
+          expect(visible(value), `${locale}.${name}.${key}`).not.toMatch(LEAK[locale]);
+        }
+      }
+      // The table the digest builds from the block its caller resolved.
+      const html = activityDigestTable([], locale, d.notifications.activityDigestEmail);
+      expect(html).toContain(d.notifications.activityDigestEmail.columns.mentee);
+      expect(html).not.toMatch(LEAK[locale]);
+    }
+  });
+
+  test('the assignment mails: a rep gets a new lead, the lead a contact person', () => {
+    for (const locale of locales) {
+      const n = dictionaryFor(locale, 'MARKETING').notifications;
+      const rep = assignedEmailParts(n.menteeAssignedEmail, { self: 'Robin', other: 'Dana', selfKey: 'mentor', otherKey: 'mentee' });
+      const lead = assignedEmailParts(n.mentorAssignedEmail, { self: 'Dana', other: 'Robin', selfKey: 'mentee', otherKey: 'mentor' });
+      for (const [who, parts] of Object.entries({ rep, lead })) {
+        const mail = Object.values(parts).join(' ');
+        expect(mail, `${locale} ${who} assignment mail`).not.toMatch(LEAK[locale]);
+        expect(mail, `${locale} ${who}: no placeholder left`).not.toMatch(/\{[a-zA-Z]+\}/);
+      }
+      expect(rep.body).toContain('<strong>Dana</strong>');
+      expect(lead.body).toContain('<strong>Robin</strong>');
+    }
+    // INTERNSHIP English is what the hardcoded copy said before #2558.
+    const base = getDictionary('en').notifications;
+    const rep = assignedEmailParts(base.menteeAssignedEmail, { self: 'Robin', other: 'Dana', selfKey: 'mentor', otherKey: 'mentee' });
+    expect(rep.subject).toBe('New mentee assigned: Dana');
+    expect(rep.heading).toBe('You have a new mentee');
+    expect(rep.greeting).toBe('<p>Hi Robin,</p>');
+    const lead = assignedEmailParts(base.mentorAssignedEmail, { self: null, other: 'Robin', selfKey: 'mentee', otherKey: 'mentor' });
+    expect(lead.subject).toBe('You have a mentor: Robin');
+    expect(lead.greeting).toBe('');
+    expect(lead.body).toBe('<p><strong>Robin</strong> is now your mentor. Open your portal to say hi and get the mentorship started.</p>');
+  });
+
+  test('an INTERNSHIP (or org-less) mail is byte-identical to the base dictionary', () => {
+    for (const locale of locales) {
+      // Referentially the same object: nothing is merged, so nothing can drift.
+      expect(dictionaryFor(locale, 'INTERNSHIP')).toBe(getDictionary(locale));
+      expect(dictionaryFor(locale, null)).toBe(getDictionary(locale));
+    }
+    expect(invitationBody(getDictionary('en').notifications.invitationEmail, 'MENTOR').roleLabel).toBe('a mentor');
+  });
+
+  test('the senders that reach a MARKETING recipient read their copy through emailDictionary', { tag: '@smoke' }, () => {
+    // A bare getDictionary() in one of these is how the vertical silently
+    // stops reaching the mail again: every runtime test still passes, because
+    // SMTP never runs in a test env.
+    for (const fn of [
+      'sendInvitationEmail',
+      'sendRoleChangeEmail',
+      'checkStageDeadlineReminders',
+      'checkNextActionReminders',
+      'sendWeeklyMentorDigests',
+      'sendDailyActivityDigests',
+      'sendMenteeAssignedEmail',
+      'sendMentorAssignedEmail',
+    ]) {
+      const at = source.indexOf(`export async function ${fn}(`);
+      expect(at, `${fn} not found`).toBeGreaterThan(-1);
+      // The function itself, up to its closing brace at column 0 — not up to
+      // the next export, which would take in the helpers declared between.
+      const end = source.indexOf('\n}\n', at);
+      const body = source.slice(at, end === -1 ? undefined : end);
+      expect(body, `${fn} must resolve its copy with emailDictionary(Memo)`).toMatch(/\bemailDictionary\(|\bdictionaryOf\(/);
+      expect(body, `${fn} reads a bare getDictionary()`).not.toContain('getDictionary(');
+    }
   });
 });

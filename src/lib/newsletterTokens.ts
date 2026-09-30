@@ -47,8 +47,8 @@ export function verifyUnsubscribeToken(token: string): string | null {
 // open the product THIS reader's account lives in. The dispatcher, which knows
 // the recipient's organization, resolves it and hands it over; this module stays
 // free of any database read. Omitted, the URLs are byte-for-byte what they were.
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+function appUrl(origin?: string | null): string {
+  return origin || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 }
 
 /**
@@ -57,16 +57,16 @@ function appUrl(): string {
  * Links, antivirus gateways) prefetch every URL in a message, and a mutating
  * GET would unsubscribe people who never clicked. The page POSTs.
  */
-export function newsletterUnsubscribeUrl(userId: string, origin: string = appUrl()): string {
-  return `${origin}/newsletter/unsubscribe?token=${encodeURIComponent(makeUnsubscribeToken(userId))}`;
+export function newsletterUnsubscribeUrl(userId: string, origin?: string | null): string {
+  return `${appUrl(origin)}/newsletter/unsubscribe?token=${encodeURIComponent(makeUnsubscribeToken(userId))}`;
 }
 
 /** The signed-in archive of past issues, linked from every footer. */
-export function newsletterArchiveUrl(origin: string = appUrl()): string {
-  return `${origin}/newsletters`;
+export function newsletterArchiveUrl(origin?: string | null): string {
+  return `${appUrl(origin)}/newsletters`;
 }
 
 /** Where the footer's "which e-mails do I get" link goes. */
-export function newsletterPreferencesUrl(origin: string = appUrl()): string {
-  return `${origin}/account`;
+export function newsletterPreferencesUrl(origin?: string | null): string {
+  return `${appUrl(origin)}/account`;
 }

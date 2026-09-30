@@ -5,7 +5,8 @@ import { isSsoActive } from '@/lib/sso';
 import { samlForOrg, mapSamlProfile } from '@/lib/ssoSaml';
 import { provisionSsoUser } from '@/lib/ssoProvisioning';
 import { worldOfOrg } from '@/lib/userWorld';
-import { originForWorld } from '@/lib/hostWorld';
+import { originForWorld, worldForHostHeader } from '@/lib/hostWorld';
+import { servedOrigin } from '@/lib/servedHosts';
 
 const base = () => (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/$/, '');
 
@@ -17,8 +18,21 @@ const base = () => (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace
 // organization's grant to the internship host would waste it and sign nobody
 // in. An internship organization keeps `base()` exactly as before; only a
 // marketing organization is sent to the marketing host.
-async function landingOrigin(orgId: string | null | undefined): Promise<string> {
-  if (orgId && (await worldOfOrg(orgId)) === 'MARKETING') return originForWorld('MARKETING');
+//
+// Within that world, the host the sign-in STARTED on wins (#2494): the login
+// route puts that origin into RelayState, so a sign-in begun on another host
+// of the same product finishes there. RelayState is unsigned and chosen by
+// whoever makes the browser POST here, so it is honoured only through
+// servedOrigin() (a bare origin of a host this deployment serves, exact match —
+// no open redirect) AND only when that host belongs to the organization's own
+// world; anything else falls back to the world's origin as before. With no
+// organization at all (an unknown slug) there is only a refusal to show and no
+// grant to strand, so any served origin will do.
+async function landingOrigin(orgId: string | null | undefined, relayState: string | null): Promise<string> {
+  const world = await worldOfOrg(orgId);
+  const started = servedOrigin(relayState);
+  if (started && (!orgId || worldForHostHeader(new URL(started).host) === world)) return started;
+  if (world === 'MARKETING') return originForWorld('MARKETING');
   return base();
 }
 const fail = (reason: string, origin: string = base()) =>
@@ -30,10 +44,7 @@ const fail = (reason: string, origin: string = base()) =>
 // to the `sso` NextAuth provider via a single-use grant to issue the session.
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const org = await prisma.organization.findUnique({ where: { slug } });
-  if (!org || !isSsoActive(org)) return fail('sso_unavailable', await landingOrigin(org?.id));
-  const origin = await landingOrigin(org.id);
-
+  // The form is read first so that the refusals below can honour RelayState too.
   let SAMLResponse: string | null = null;
   let RelayState = '';
   try {
@@ -43,8 +54,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const rs = form.get('RelayState');
     RelayState = typeof rs === 'string' ? rs : '';
   } catch {
-    return fail('sso_failed', origin);
+    return fail('sso_failed');
   }
+
+  const org = await prisma.organization.findUnique({ where: { slug } });
+  if (!org || !isSsoActive(org)) return fail('sso_unavailable', await landingOrigin(org?.id, RelayState));
+  const origin = await landingOrigin(org.id, RelayState);
   if (!SAMLResponse) return fail('sso_failed', origin);
 
   let email: string;

@@ -5,6 +5,11 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { findOrCreateSource } from '@/lib/leadSource';
+import { SOURCE_NAME_MAX } from '@/lib/leadSourceName';
 
 // The referral-source list as a *picker* feeds, plus in-place creation (#1296).
 //
@@ -21,17 +26,23 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return await withTenantScope(session, async () => {
-    const sources = await prisma.source.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } });
+    // The caller's own tenant only (#2570) — the middleware is dormant.
+    const sources = await prisma.source.findMany({
+      where: withinTenant({}, await tenantWhere(session)),
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    });
     return NextResponse.json({ sources });
   });
 }
 
-const schema = z.object({ name: z.string().trim().min(1).max(120) });
+const schema = z.object({ name: z.string().trim().min(1).max(SOURCE_NAME_MAX) });
 
 // POST — create a source from a picker. An existing name is not an error here:
 // the caller wanted "a source called X selected", so the existing row is
-// returned and the picker selects it (the unique index is case-insensitive under
-// MySQL's default collation, hence the P2002 fallback rather than a pre-read).
+// returned and the picker selects it. "Existing" means in the caller's tenant
+// (#2570: the name is unique per org) — findOrCreateSource() stamps the org,
+// reads the tenant first and falls back on P2002 for a concurrent create.
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
@@ -43,14 +54,14 @@ export async function POST(request: Request) {
     const { name } = parsed.data;
 
     let source: { id: string; name: string };
-    let created = true;
+    let created: boolean;
     try {
-      source = await prisma.source.create({ data: { name }, select: { id: true, name: true } });
+      const orgId = resolveOrgId(session) ?? (await defaultOrgId());
+      const row = await findOrCreateSource(orgId, name);
+      source = { id: row.id, name: row.name };
+      created = row.created;
     } catch {
-      const existing = await prisma.source.findFirst({ where: { name }, select: { id: true, name: true } });
-      if (!existing) return NextResponse.json({ error: 'Could not create the source' }, { status: 500 });
-      source = existing;
-      created = false;
+      return NextResponse.json({ error: 'Could not create the source' }, { status: 500 });
     }
 
     if (created) {
