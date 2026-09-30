@@ -25,6 +25,10 @@ jobs:
   stress:
     name: Load & latency
     runs-on: ubuntu-latest
+    # issues: write is for the SMTP-free trail below (#2322).
+    permissions:
+      contents: read
+      issues: write
     env:
       # Prefer the manual override, then a dedicated secret, then production.
       BASE_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://interncrm.com' }}
@@ -51,6 +55,27 @@ jobs:
           name: stress-summary
           path: stress-summary.json
           retention-days: 14
+
+      # The trail that does not need SMTP (#2322): one `ci-alert` issue while
+      # red, closed by the next green run. Before the e-mail on purpose.
+      - name: Record a red run as an issue (no SMTP)
+        if: failure()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: stress
+          ALERT_TITLE: '🚨 stress (weekly) is red'
+          ALERT_SUMMARY: |
+            The flat GET hammer breached its thresholds (error rate or p95). Figures: the run's `stress-summary` artifact.
+        run: node scripts/ci-alert-issue.mjs red
+
+      - name: Close the alert on a green run
+        if: success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: stress
+        run: node scripts/ci-alert-issue.mjs green
 
       # Email the team only when the stress test failed. Reuses the app's SMTP_*
       # secrets. Recipient defaults to the maintainer; set an ALERT_EMAIL_TO

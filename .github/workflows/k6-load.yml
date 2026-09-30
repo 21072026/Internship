@@ -116,12 +116,31 @@ jobs:
     # A run the maintainer cancelled on purpose has no summary either, and
     # always() would mail them a "the load test crashed" alarm for it.
     if: ${{ !cancelled() }}
+    # issues: write is for the SMTP-free trail below (#2322).
+    permissions:
+      contents: read
+      actions: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+
+      # Same trail as e2e-full (#2322): one `ci-alert` issue while red, closed
+      # by the next green night. No signature: it defaults to the UTC day, so a
+      # red streak comments at most once a night. Runs before the e-mail.
+      - name: Record the result as an issue (no SMTP)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: k6-load
+          ALERT_TITLE: '🚨 k6-load (nightly) is red'
+          ALERT_SUMMARY: |
+            The k6 ramp against `${{ github.event.inputs.base_url || 'the default target' }}` ended **${{ needs.load.result }}**: a latency budget broke, or k6 never produced a summary.
+            The per-endpoint figures are in the run's `k6-summary` artifact.
+        run: node scripts/ci-alert-issue.mjs ${{ needs.load.result == 'success' && 'green' || 'red' }}
 
       - name: Download k6 summary
         uses: actions/download-artifact@v8

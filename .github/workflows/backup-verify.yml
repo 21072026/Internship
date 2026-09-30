@@ -136,6 +136,36 @@ jobs:
           echo "drill_ran=1" >> "$GITHUB_OUTPUT"
           ./infra/restore-drill.sh --env "$DRILL_ENV" --target internship_restore_test
 
+  # The trail that does not need SMTP (#2322): one `ci-alert` issue while the
+  # check is red, closed by the next green run. Its own job on a hosted runner
+  # (the verify job is self-hosted and must not `uses:`, #1239), and separate
+  # from `notify` so a hanging SMTP connect there cannot starve it.
+  alert-issue:
+    name: Record the result as an issue
+    needs: [verify]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Open, refresh or close the backup alert
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: backup-verify
+          ALERT_TITLE: ${{ needs.verify.outputs.drill_ran == '1' && '🛟 backup-verify — the restore DRILL is red (backups themselves are fine)' || '🛟 backup-verify — the backup freshness check is red' }}
+          ALERT_SUMMARY: |
+            ${{ needs.verify.outputs.drill_ran == '1'
+              && 'The restore drill failed. The freshness check passed, so the backups exist and look well-formed; what is unproven is that they restore.'
+              || 'The backup freshness check failed. Until this is fixed, assume there is NO usable backup.' }}
+            What to do: `docs/disaster-recovery.md` → "When the check fails".
+        run: node scripts/ci-alert-issue.mjs ${{ needs.verify.result == 'success' && 'green' || 'red' }}
+
   notify:
     name: Email alert on failure
     needs: [verify]
