@@ -88,6 +88,9 @@ interface Aging {
   overdue: AgingItem[];
   overdueCount: number;
   dropReasons: DropReason[];
+  // False when the org's vertical lacks `mentorship`: the per-candidate lists
+  // were withheld server-side, so the panel is not drawn (leak audit WP3).
+  candidateLists?: boolean;
 }
 
 function Stat({ label, value, testId }: { label: string; value: string | number; testId?: string }) {
@@ -203,7 +206,9 @@ export default function AdminAnalyticsPage() {
       .catch((e) => { console.error('[analytics]', e); setError(t.common.error); })
       .finally(() => setLoading(false));
     fetch(`/api/admin/analytics/aging${qs}`)
-      .then((r) => r.json())
+      // A refused or failed read leaves the cards out rather than rendering an
+      // error body as if it were the report.
+      .then((r) => (r.ok ? r.json() : null))
       .then((d) => setAging(d))
       .catch((e) => console.error('[analytics/aging]', e));
     fetch(`/api/admin/analytics/funnel${qs}`)
@@ -302,12 +307,14 @@ export default function AdminAnalyticsPage() {
   // mentor workload plus the premium cohort/source reports.
   const exportFullExcel = async () => {
     if (!data) return;
+    // Cohorts are only read for a vertical that has them — the route refuses
+    // every other one (leak audit WP3), and the workbook then has no such sheet.
     const [cohortsRes, sourcesRes] = await Promise.all([
-      fetch('/api/admin/analytics/cohorts'),
+      showMentorship ? fetch('/api/admin/analytics/cohorts') : Promise.resolve(null),
       fetch('/api/admin/analytics/sources'),
     ]);
-    if (!cohortsRes.ok || !sourcesRes.ok) return; // tier switched off mid-session
-    const cohorts = (await cohortsRes.json()).cohorts as { name: string; term?: string | null; total: number; inProgress: number; hired: number; conversionToHired: number; avgDaysToHired: number | null; interactionsPerRelation: number }[];
+    if ((cohortsRes && !cohortsRes.ok) || !sourcesRes.ok) return; // tier switched off mid-session
+    const cohorts = (cohortsRes ? (await cohortsRes.json()).cohorts : []) as { name: string; term?: string | null; total: number; inProgress: number; hired: number; conversionToHired: number; avgDaysToHired: number | null; interactionsPerRelation: number }[];
     const sources = (await sourcesRes.json()).sources as { name: string; mentees: number; inPipeline: number; hired: number; conversionToHired: number }[];
     const { exportXlsxSheets } = await import('@/lib/excel');
     const a = t.analytics;
@@ -322,7 +329,9 @@ export default function AdminAnalyticsPage() {
       ...(showMentorship
         ? [{ name: 'Mentors', columns: ['Mentor', a.active, outcomeWord], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) }]
         : []),
-      { name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, outcomeHeading, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) },
+      ...(showMentorship
+        ? [{ name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, outcomeHeading, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) }]
+        : []),
       { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, outcomeHeading, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
       ...(dropReasonRows.length > 0
         ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
@@ -812,7 +821,7 @@ export default function AdminAnalyticsPage() {
       })()}
 
       {aging && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <div className={`grid grid-cols-1 gap-6 mt-6${showMentorship && aging.candidateLists !== false ? ' lg:grid-cols-2' : ''}`}>
           <Card data-testid="stage-aging-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -859,6 +868,10 @@ export default function AdminAnalyticsPage() {
             )}
           </Card>
 
+          {/* "En uzun bekleyen adaylar" names candidates: the internship
+              product's panel, withheld server-side for a vertical without
+              `mentorship` (the stage numbers beside it stay for everyone). */}
+          {showMentorship && aging.candidateLists !== false && (
           <Card data-testid="oldest-stuck-card">
             <CardHeader><CardTitle>{t.analytics.aging.oldestStuck}</CardTitle></CardHeader>
             {aging.oldestStuck.length === 0 ? (
@@ -884,6 +897,7 @@ export default function AdminAnalyticsPage() {
               </div>
             )}
           </Card>
+          )}
         </div>
       )}
 
@@ -929,7 +943,9 @@ export default function AdminAnalyticsPage() {
           three sit behind one gate, so an unentitled tenant gets one panel that
           says so instead of three cards that each learned it from a 403. */}
       {premium === false && <PremiumAnalyticsLocked />}
-      {premium === true && <CohortComparison />}
+      {/* Programme cohorts are the internship product; the route refuses a
+          vertical without `mentorship` as well (leak audit WP3). */}
+      {premium === true && showMentorship && <CohortComparison />}
 
       {/* Match quality (#2040): how often the mentor suggestion is taken, and
           at which rank position. Not premium-gated — it is the answer to the

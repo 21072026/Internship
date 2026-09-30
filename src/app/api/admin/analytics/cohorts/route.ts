@@ -6,6 +6,8 @@ import { getSetting } from '@/lib/settings';
 import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // GET — premium cohort comparison (Faz 2, #538). Side-by-side pipeline
 // conversion, time-to-hire and engagement per cohort. Gated by the
@@ -23,7 +25,15 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if ((await getSetting('premiumAnalytics')) !== 'true') {
+  const callerOrgId = (session.user as { orgId?: string | null }).orgId ?? null;
+  // Programme cohorts are the internship product (the /admin/cohorts link is
+  // tagged `mentorship` in navLinks.ts); hiding the card is not access control,
+  // so a vertical without the module is refused here too.
+  const gated = await requireCapability(callerOrgId, 'mentorship');
+  if (gated) return gated;
+  // The tier is the CALLER's org's (org row, then the global one) — read with
+  // the org passed explicitly, since this runs before the tenant scope binds.
+  if ((await getSetting('premiumAnalytics', callerOrgId)) !== 'true') {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 
@@ -32,18 +42,22 @@ export async function GET() {
   const locale = await getLocale();
 
   return await withTenantScope(session, async () => {
-    const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
-    const outcome = await outcomeStageKeys(orgId, locale);
+    const outcome = await outcomeStageKeys(callerOrgId, locale);
     const finished = new Set(outcome.finished);
     const offPath = new Set(outcome.offPath);
 
+    // The caller's tenant, by hand (leak audit WP3): with MT_ENFORCE_ISOLATION
+    // off this listed every org's cohorts and their conversion numbers.
+    const tenant = await tenantWhere(session);
     const cohorts = await prisma.cohort.findMany({
+      where: withinTenant({}, tenant),
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         name: true,
         term: true,
         relations: {
+          where: withinTenant({}, tenant),
           select: {
             pipelineStatus: true,
             startDate: true,
