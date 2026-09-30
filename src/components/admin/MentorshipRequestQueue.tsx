@@ -294,12 +294,16 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+            {/* A <select> is as wide as its longest option, and a mentor's option
+                carries a translated availability note ("… · Pausiert bis …"), so
+                in German it pushed the row ~200px past a 360px phone (#2165).
+                `max-w-full` + `min-w-0` let it shrink to the row instead. */}
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 flex-shrink-0">
               <select
                 value={choices[r.id] ?? ''}
                 onChange={(e) => setChoices((c) => ({ ...c, [r.id]: e.target.value }))}
                 aria-label={q.chooseMentor}
-                className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2.5 py-1.5 text-sm"
+                className="min-w-0 max-w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2.5 py-1.5 text-sm"
               >
                 <option value="">{q.chooseMentor}</option>
                 {mentors.map((m) => (
