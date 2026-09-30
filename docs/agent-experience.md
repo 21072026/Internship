@@ -7645,3 +7645,21 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   (`admin@example.com`); a local e2e DB without `prisma db seed` fails it and skips the rest of the
   serial file — run the rest with `--grep`.
 >>>>>>> origin/main
+
+## 2026-09-30 — relation targets + projects tenant scope (#2618, #2622)
+
+- **Scoping a list by tenant can hide the rows its own creator just made.** With
+  `MT_ENFORCE_ISOLATION` off the middleware stamps nothing on create
+  (`orgContext.ts`: `if (!isIsolationEnforced()) return next(params)`), so a new row from a
+  non-default tenant is `orgId = NULL` — the default org's. Before adding `tenantWhere` to a
+  list, grep that model's `create(` paths and stamp `orgId: resolveOrgId(session)` by hand
+  (#2622 found `POST /api/projects` relying on the middleware; the e2e control showed `null`).
+- **An id field can be an access grant, not a label.** `MentorshipRelation.projectId` on an
+  ACTIVE relation IS project-team membership (`isProjectMember`), so an unchecked `projectId`
+  on a relation write let a mentor join any private project. Before calling a free-string id
+  "just a FK", grep what reads it for authorization.
+- **Negative control is cheap and caught a gap:** `git diff -- src > patch; git checkout
+  origin/main -- src/; run spec; git apply patch`. Re-run it after adding a test, not only once
+  at the start. It proved the fourth test (create stamps orgId) actually failed on the old code.
+- **Don't edit route files while a local Playwright run is going.** `next dev` recompiles and
+  unrelated specs time out (5 of 15 did); re-run them on settled code before calling it a regression.
