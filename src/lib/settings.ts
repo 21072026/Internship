@@ -118,6 +118,9 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // Company enquiries (#2559): an unconverted one is deleted after this many
+  // days, a converted one keeps its row and loses its personal columns.
+  companyInquiryRetentionDays: '730',
   // Read access log (#2433): a repeat of the same read (same reader, record,
   // IP) inside this many minutes writes no second `*.view` ActivityLog row.
   // `0` = log every read; capped at a day; a blank or broken value falls back
