@@ -19,6 +19,13 @@
 //   companies — POST /api/companies logs nothing, so the evidence is what hangs
 //               off the company: a COMPANY-role login or a mentorship of a
 //               non-default org linked to a default-org (or NULL) company.
+//   sources   — a default-org (or NULL) Source whose people belong to a
+//               non-default org (#2570). Before #2570 sources were created
+//               without an org and the source pickers were unscoped, so a
+//               MARKETING admin's source landed in the default org and its own
+//               leads point at it; the attribution report now counts those
+//               leads as unsourced for their tenant. This is the size of the
+//               one-off reassignment (or its "none").
 //
 // It NEVER writes and ALWAYS exits 0, like check-active-mentor-duplicates.mjs.
 // Run it where the database is: `node prisma/check-tenant-misattribution.mjs`
@@ -74,14 +81,33 @@ async function main() {
       linkedOrgs: [...new Set([...c.users, ...c.mentorships].map((r) => r.orgId))],
     }));
 
-  if (users.length === 0 && companies.length === 0) {
-    console.log(`${TAG}: OK — no default-org user or company points at another tenant (${logs.length} create logs checked).`);
+  // Sources.
+  const sourceCandidates = await prisma.source.findMany({
+    where: { OR: [{ orgId: null }, { orgId: defaultOrg.id }] },
+    select: {
+      id: true,
+      orgId: true,
+      users: { where: { NOT: [{ orgId: null }, { orgId: defaultOrg.id }] }, select: { orgId: true } },
+    },
+  });
+  const sources = sourceCandidates
+    .filter((s) => s.users.length > 0)
+    .map((s) => {
+      const byOrg = new Map();
+      for (const u of s.users) byOrg.set(u.orgId, (byOrg.get(u.orgId) ?? 0) + 1);
+      return { sourceId: s.id, sourceOrg: s.orgId, linked: [...byOrg].map(([org, n]) => `${org}:${n}`) };
+    });
+
+  if (users.length === 0 && companies.length === 0 && sources.length === 0) {
+    console.log(`${TAG}: OK — no default-org user, company or source points at another tenant (${logs.length} create logs checked).`);
     return;
   }
   // Ids and org ids only — no names or e-mail addresses in a deploy log.
-  console.log(`${TAG}: FOUND ${users.length} user(s) and ${companies.length} company(ies) stored under the default org but linked to another tenant.`);
+  console.log(`${TAG}: FOUND ${users.length} user(s), ${companies.length} company(ies) and ${sources.length} source(s) stored under the default org but linked to another tenant.`);
   for (const u of users) console.log(`${TAG}: user ${u.userId} org=${u.userOrg ?? 'NULL'} creatorOrg=${u.creatorOrg} via=${u.via}`);
   for (const c of companies) console.log(`${TAG}: company ${c.companyId} org=${c.companyOrg ?? 'NULL'} linkedOrgs=${c.linkedOrgs.join(',')}`);
+  // `linkedPeople` is org:count — how many of that tenant's people point here.
+  for (const s of sources) console.log(`${TAG}: source ${s.sourceId} org=${s.sourceOrg ?? 'NULL'} linkedPeople=${s.linked.join(',')}`);
 }
 
 main()

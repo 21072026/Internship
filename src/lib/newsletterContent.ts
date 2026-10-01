@@ -1,5 +1,6 @@
 import type { Locale } from '@/i18n/config';
 import type { NewsletterAudience, NewsletterIssueContent } from '@/lib/newsletter';
+import type { VerticalKey } from '@/lib/verticals';
 
 /**
  * The curated newsletter library (#1469) — ready-to-send issues in EN/TR/DE.
@@ -44,6 +45,11 @@ export interface NewsletterTemplate {
   content: Record<Locale, NewsletterIssueContent>;
 }
 
+/**
+ * The INTERNSHIP library: career content for mentees and mentors. Kept under
+ * its historical name for the readers that predate the per-vertical keying;
+ * new code reads `newsletterTemplatesFor(vertical)`.
+ */
 export const NEWSLETTER_TEMPLATES: NewsletterTemplate[] = [
   {
     key: 'cv-first-six-seconds',
@@ -469,9 +475,31 @@ export const NEWSLETTER_TEMPLATES: NewsletterTemplate[] = [
   },
 ];
 
-export function newsletterTemplate(key: string | null | undefined): NewsletterTemplate | null {
+/**
+ * The curated library of each vertical (cross-world isolation). Every issue
+ * above is internship career advice, so it belongs to INTERNSHIP alone; a
+ * MARKETING tenant has no curated issues yet and is offered none — never the
+ * internship set as a fallback.
+ */
+export const NEWSLETTER_TEMPLATES_BY_VERTICAL: Readonly<Record<VerticalKey, readonly NewsletterTemplate[]>> = {
+  INTERNSHIP: NEWSLETTER_TEMPLATES,
+  MARKETING: [],
+};
+
+/** The library one vertical offers; an unknown key gets an empty one. */
+export function newsletterTemplatesFor(
+  vertical: VerticalKey | string | null | undefined
+): readonly NewsletterTemplate[] {
+  if (vertical === 'INTERNSHIP' || vertical === 'MARKETING') return NEWSLETTER_TEMPLATES_BY_VERTICAL[vertical];
+  return [];
+}
+
+export function newsletterTemplate(
+  key: string | null | undefined,
+  vertical: VerticalKey | string | null | undefined = 'INTERNSHIP'
+): NewsletterTemplate | null {
   if (!key) return null;
-  return NEWSLETTER_TEMPLATES.find((t) => t.key === key) ?? null;
+  return newsletterTemplatesFor(vertical).find((t) => t.key === key) ?? null;
 }
 
 /**
@@ -484,11 +512,12 @@ export function newsletterTemplate(key: string | null | undefined): NewsletterTe
  */
 export function nextUnusedTemplate(
   usedKeys: Iterable<string>,
-  audience?: NewsletterAudience
+  audience?: NewsletterAudience,
+  vertical: VerticalKey | string | null | undefined = 'INTERNSHIP'
 ): NewsletterTemplate | null {
   const used = new Set(usedKeys);
   return (
-    NEWSLETTER_TEMPLATES.find(
+    newsletterTemplatesFor(vertical).find(
       (t) => !used.has(t.key) && (!audience || t.audience === audience)
     ) ?? null
   );

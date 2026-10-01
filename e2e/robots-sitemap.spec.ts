@@ -45,6 +45,7 @@ const PRIVATE_PREFIXES = [
   '/testimonials',
   '/re-engage',
   '/consent',
+  '/contact-permission',
   '/security-setup',
   '/source',
   '/offline',

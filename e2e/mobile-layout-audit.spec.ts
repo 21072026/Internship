@@ -316,10 +316,11 @@ test('reflow: the board and the calendar survive 320px and 400% zoom', async ({ 
     // The view switcher specifically: it used to answer the overflow with
     // `overflow-x-auto`, which is a sideways scroll inside a control that has no
     // reason to need one. It now wraps, so it must fit its own box.
-    const tablist = page.locator('[role="tablist"]').first();
-    await expect(tablist).toBeVisible();
+    // A labelled button group since #2153 (it used to claim role="tablist").
+    const switcher = page.getByTestId('calendar-view-switcher');
+    await expect(switcher).toBeVisible();
     expect(
-      await tablist.evaluate((el) => el.scrollWidth - el.clientWidth),
+      await switcher.evaluate((el) => el.scrollWidth - el.clientWidth),
       'the calendar view switcher scrolls sideways at 320px (de)'
     ).toBeLessThanOrEqual(1);
 

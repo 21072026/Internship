@@ -228,6 +228,27 @@ const DEFAULT_TERMINAL = new Set<string>([
   'INTERNSHIP_FOUND_ELSEWHERE_800',
 ]);
 
+// What each OFF-PATH stage of the canonical catalogue means for the person on
+// it (#830): leaving the path is not always bad news. FOUND_ELSEWHERE is a
+// success — the student found an internship — and communicated like the
+// rejection DROPPED is, the message lands badly. `isOffPath` alone cannot tell
+// the two apart, so the catalogue states it here, next to the stages it
+// describes, and `outcomeForStage()` (src/lib/outcomeComms.ts) asks instead of
+// naming the keys (#1880). A tenant's own off-path stage has no entry: nobody
+// told us it is good news, so it takes the neutral 'ended' wording.
+export type OffPathMeaning = 'success' | 'ended';
+
+// A Map, not an object literal: the key is a tenant-supplied stage key, and an
+// object lookup would answer `'__proto__'` or `'constructor'` with something.
+const CANONICAL_OFF_PATH_MEANING = new Map<string, OffPathMeaning>([
+  ['INTERNSHIP_FOUND_ELSEWHERE_800', 'success'],
+  ['INTERNSHIP_DROPPED_460', 'ended'],
+]);
+
+export function canonicalOffPathMeaning(key: string): OffPathMeaning | null {
+  return CANONICAL_OFF_PATH_MEANING.get(key) ?? null;
+}
+
 // The product's canonical stage set, derived from the enum (single source of
 // truth). Used whenever a tenant hasn't customized its pipeline.
 export function defaultPipelineStages(locale: Locale = 'en'): ResolvedStage[] {
@@ -310,4 +331,90 @@ export function localizeStageLabels(stages: ResolvedStage[], locale: Locale): Re
   return stages.map((s) =>
     isDefaultLabel(s.key, s.label) ? { ...s, label: pipelineLabel(s.key, locale) } : s
   );
+}
+
+// ── "Did this person finish?" — one definition (#1882) ───────────────────────
+//
+// Five paid reports (cohort comparison, source conversion, the cross-program
+// benchmark, the admin headline conversion and mentor analytics) each decided
+// that question with their own copy of `new Set(['HIRED_660','EMPLOYED_700'])`.
+// A tenant that renamed its stages (#747) holds neither key, so all five
+// reported zero — not an error, not an empty state, just a confident nought.
+//
+// THE RULE, and why it is not simply "the last on-path stage".
+//
+// The obvious generalisation — finished = the last on-path key — is WRONG for
+// the catalogue every live tenant is on today: the default set ends
+// … HIREABLE_600 → HIRED_660 → EMPLOYED_700, and "the last key" is EMPLOYED_700
+// alone. That would silently stop counting every relation parked on HIRED_660,
+// which is most of them. So the rule has an ANCHOR:
+//
+//   anchor   = the first on-path stage (by order) whose key is one of the
+//              canonical outcome keys, or — for a set that holds neither, i.e. a
+//              genuinely custom pipeline — the last on-path stage.
+//   finished = every on-path stage ordered at or beyond the anchor.
+//
+// Default catalogue → anchor HIRED_660 → { HIRED_660, EMPLOYED_700 }: byte-for-
+// byte the set the five routes hardcoded. Renamed catalogue (STAGE_A…STAGE_F)
+// → anchor STAGE_F → { STAGE_F }. A tenant that kept HIRED_660 and appended its
+// own "Probation passed" after it counts both, which is the point of "at or
+// beyond": reaching the outcome and then moving further along is still reaching
+// the outcome.
+//
+// `offPath` is the other hardcoded set the same routes carried
+// (`INTERNSHIP_DROPPED_460` / `INTERNSHIP_FOUND_ELSEWHERE_800`); for the default
+// catalogue `isOffPath` marks exactly those two, so that is byte-identical too.
+//
+// NOT a fork of #1504's placement definition: that issue's `src/lib/placement.ts`
+// does not exist on `main` (verified by `git grep`), and it is about WHICH
+// RELATIONS count (coaching vs placement, employment attribution). This is about
+// WHICH STAGES mean "finished" in a tenant's own vocabulary. When #1504 lands it
+// should read `finished` from here rather than re-listing stage keys.
+
+export interface OutcomeStageKeys {
+  /** Stage keys that mean "reached the outcome", in the tenant's own order. */
+  finished: string[];
+  /**
+   * What the tenant calls the anchor stage, in the caller's locale — so a
+   * screen can NAME the thing it counted instead of asserting a universal
+   * "Hired". Empty only for the degenerate set with no on-path stage at all.
+   */
+  finishedLabel: string;
+  /**
+   * False when `finishedLabel` is merely our own built-in label for a built-in
+   * key — i.e. the tenant never named this stage. A screen that already has a
+   * good word of its own ("Hired", "İşe alınan", "Eingestellt", translated in
+   * all three dictionaries) should keep using it in that case, so a tenant on
+   * the default catalogue sees exactly the text it saw before #1882. True means
+   * the tenant typed a name, and that name must win.
+   */
+  finishedLabelIsCustom: boolean;
+  /** Off-path stage keys ("dropped", "found elsewhere"), in tenant order. */
+  offPath: string[];
+  /** The stage a journey starts on — the single definition in `startStageKey`. */
+  first: string;
+}
+
+/**
+ * The synchronous core, for a caller that already holds resolved stages — the
+ * benchmark loop, which resolves many orgs at once and must not re-query per
+ * org. `stages` must already be localized (`resolvePipelineStages` does it).
+ */
+export function outcomeStageKeysFrom(stages: ResolvedStage[]): OutcomeStageKeys {
+  const byOrder = [...stages].sort((a, b) => a.order - b.order);
+  const onPath = byOrder.filter((s) => !s.isOffPath);
+  const anchor =
+    onPath.find((s) => (CANONICAL_OUTCOME_KEYS as readonly string[]).includes(s.key)) ??
+    onPath[onPath.length - 1];
+
+  return {
+    finished: anchor ? onPath.filter((s) => s.order >= anchor.order).map((s) => s.key) : [],
+    finishedLabel: anchor?.label ?? '',
+    // `isDefaultLabel` matches a built-in label in ANY locale, which is exactly
+    // right here: a stage nobody renamed resolves to one of our own strings, a
+    // renamed one does not, and a custom KEY has no built-in label at all.
+    finishedLabelIsCustom: anchor ? !isDefaultLabel(anchor.key, anchor.label) : false,
+    offPath: byOrder.filter((s) => s.isOffPath).map((s) => s.key),
+    first: startStageKey(stages),
+  };
 }

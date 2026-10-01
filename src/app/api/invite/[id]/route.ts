@@ -6,17 +6,19 @@ import { sendInvitationEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // Admins manage every invitation; everyone else only the ones they sent — the
 // same split the GET list uses, now that mentors can invite from their own page
 // (#670) and need to extend or cancel their own links.
 //
-// Both handlers run inside withTenantScope (#1559). `InvitationToken` is
-// registered in TENANT_MODELS, so with isolation on the lookups below — which
-// address the row by id, the id an admin of ANY tenant could guess or be handed
-// — are narrowed to the caller's own org and a foreign invitation reads as "not
-// found" instead of being resent or cancelled. Behaviour-neutral with the flag
-// off: `withTenantScope` is a passthrough, and `mayManage` is unchanged.
+// Both handlers address the row by id — an id an admin of ANY tenant could
+// guess or be handed — so the lookup is narrowed to the caller's own tenant BY
+// HAND (`tenantWhere`, src/lib/tenantFilter.ts): `withTenantScope` (#1559) is a
+// passthrough with MT_ENFORCE_ISOLATION off, which is every deployment, and
+// `mayManage` only looks at the role. A foreign invitation therefore reads as
+// "not found" (404) instead of being resent, extended or cancelled. A missing
+// one reads the same, so the answer says nothing about another tenant's ids.
 const mayManage = (
   session: { user: { id: string; role: string } },
   invite: { invitedById: string | null }
@@ -33,7 +35,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   return await withTenantScope(session, async () => {
     const { id } = await params;
 
-    const invite = await prisma.invitationToken.findUnique({ where: { id } });
+    const invite = await prisma.invitationToken.findFirst({ where: withinTenant({ id }, await tenantWhere(session)) });
     if (!invite) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!mayManage(session, invite)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     if (invite.used) return NextResponse.json({ error: 'This invitation was already accepted' }, { status: 409 });
@@ -77,8 +79,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const invite = await prisma.invitationToken.findUnique({ where: { id }, select: { invitedById: true } });
-    if (!invite) return NextResponse.json({ ok: true });
+    const invite = await prisma.invitationToken.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
+      select: { invitedById: true },
+    });
+    if (!invite) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!mayManage(session, invite)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     await prisma.invitationToken.delete({ where: { id } }).catch(() => null);
     return NextResponse.json({ ok: true });

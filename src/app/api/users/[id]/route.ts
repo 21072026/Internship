@@ -236,7 +236,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
       // Assign / clear the mentee's referral source.
       if ('sourceId' in body && (typeof body.sourceId === 'string' || body.sourceId === null)) {
-        data.sourceId = body.sourceId || null;
+        const sourceId = body.sourceId || null;
+        // Same tenant only (#2570): now that every Source is stamped with its
+        // org, another tenant's source is one this admin cannot see, so it is
+        // not one they can point a person at.
+        if (sourceId) {
+          const source = await prisma.source.findFirst({ where: withinTenant({ id: sourceId }, tenant), select: { id: true } });
+          if (!source) return NextResponse.json({ error: 'Source not found' }, { status: 400 });
+        }
+        data.sourceId = sourceId;
       }
 
       // Who brought this person in (#51). Any person — mentee, mentor or admin —

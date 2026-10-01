@@ -26,11 +26,13 @@
 import { prisma } from '@/lib/prisma';
 import { runWithOrg } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
+import { applyInquiryPermission } from '@/lib/contactPermissionDoi';
 import {
   createMarketingAccount,
   type ManualAccountOutcome,
   type MarketingImportOwner,
 } from '@/lib/marketingImportStore';
+import { leadSourceName } from '@/lib/leadSourceName';
 
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -65,6 +67,8 @@ export async function convertInquiryToMarketingLead(input: {
         email: true,
         phone: true,
         utmSource: true,
+        utmMedium: true,
+        utmCampaign: true,
         convertedCompanyId: true,
         convertedCompany: { select: { name: true } },
       },
@@ -122,10 +126,22 @@ export async function convertInquiryToMarketingLead(input: {
           contactEmail: inquiry.email,
           ...(inquiry.phone ? { contactPhone: inquiry.phone } : {}),
           // The campaign, when the visitor arrived with one; otherwise the form
-          // itself. Free text on the lead (`referralSource`) — binding it to a
-          // `Source` row is #2570's mapping, not this writer's.
+          // itself. Free text on the lead (`referralSource`), unchanged.
           source: inquiry.utmSource ?? WEB_FORM_SOURCE,
         },
+        // The `Source` row is decided by the ONE attribution rule (#2570,
+        // src/lib/leadSourceName.ts) — `utm:<source>/<medium>/<campaign>`, or
+        // unknown (no Source, the report's `unsourced` bucket) when the visitor
+        // carried no utm_source. "Website demo form" says HOW they reached us,
+        // not which channel sent them, so it is not a Source.
+        leadSourceName: (() => {
+          const r = leadSourceName({
+            utmSource: inquiry.utmSource,
+            utmMedium: inquiry.utmMedium,
+            utmCampaign: inquiry.utmCampaign,
+          });
+          return r.kind === 'unknown' ? null : r.name;
+        })(),
         request: input.request,
         origin: 'inquiry',
         actor: input.actor,
@@ -152,6 +168,15 @@ export async function convertInquiryToMarketingLead(input: {
         handledById: input.actor?.id ?? input.owner.id,
       },
     });
+    // What the enquiry proves about contacting them becomes the account's
+    // e-mail permission (#2577): INQUIRY_REPLY, or DOI_CONFIRMED if they have
+    // already confirmed the product-news box, or a revocation if they opted
+    // out. Never fatal — the account exists, and the enquiry keeps the proof.
+    try {
+      await applyInquiryPermission({ inquiryId, orgId, companyId: outcome.companyId });
+    } catch (error) {
+      console.error('Inquiry contact permission failed:', error);
+    }
     await logActivity({
       action: 'company.inquiry.converted',
       actorId: input.actor?.id ?? null,

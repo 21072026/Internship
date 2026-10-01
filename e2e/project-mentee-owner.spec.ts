@@ -43,6 +43,9 @@ test('a mentee creates a project from the portal and edits the one they own', { 
     const created = page.waitForResponse((r) => r.url().endsWith('/api/projects') && r.request().method() === 'POST');
     await page.getByRole('button', { name: 'Create' }).click();
     expect((await created).status()).toBe(201);
+    // The form closes only once the refreshed list has committed (#2481), so
+    // this is the wait — the list assertions below then hold at once.
+    await expect(page.getByTestId('project-form')).toHaveCount(0, { timeout: 20_000 });
 
     // Owned by the creator, with the OWNER member row — never an orphan.
     const project = await prisma.project.findFirst({
@@ -56,7 +59,7 @@ test('a mentee creates a project from the portal and edits the one they own', { 
 
     // …and it is listed for its owner even though it is private.
     const list = page.getByTestId('portal-projects-list');
-    await expect(list.getByText('MO Solar Tracker', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(list.getByText('MO Solar Tracker', { exact: true })).toBeVisible();
     await expect(page.getByTestId(`portal-project-owned-${project!.id}`)).toBeVisible();
 
     // Editing an owner-only field (name) through the same shared form.
@@ -67,8 +70,8 @@ test('a mentee creates a project from the portal and edits the one they own', { 
     );
     await page.getByRole('button', { name: 'Save' }).click();
     expect((await saved).status()).toBe(200);
-    await expect(page.getByTestId('project-form')).toHaveCount(0);
-    await expect(list.getByText('MO Solar Tracker v2', { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('project-form')).toHaveCount(0, { timeout: 20_000 });
+    await expect(list.getByText('MO Solar Tracker v2', { exact: true })).toBeVisible();
 
     // The scope must not depend on the OWNER member row surviving: a project
     // whose row is gone (seeder, backfill, member removal) is still the owner's.
@@ -89,7 +92,7 @@ test('a mentee creates a project from the portal and edits the one they own', { 
       data: { name: 'MO Ungated', isPublic: true, contributorTermsRequired: false, contributorTermsKey: 'zzz' },
     });
     expect(sneaky.status()).toBe(201);
-    const ungated = await prisma.project.findFirst({ where: { name: 'MO Ungated' } });
+    const ungated = await prisma.project.findFirst({ where: { name: 'MO Ungated', ownerUserId: mentee.id } });
     expect(ungated).toMatchObject({ isPublic: false, contributorTermsRequired: true, contributorTermsKey: null });
     const publish = await page.request.put(`/api/projects/${ungated!.id}`, { data: { isPublic: true } });
     expect(publish.status()).toBe(403);
@@ -221,5 +224,48 @@ test('removing a mentee owner repoints ownerType at the mentee successor', async
     await cleanupByEmail(bEmail);
     await cleanupByEmail(aEmail);
     await cleanupByEmail(adminEmail);
+  }
+});
+
+test('a slow refresh keeps the form open until the list carries the saved project (#2481)', async ({ page }) => {
+  // The scheduled suite once watched a created project stay missing for more
+  // than ten seconds: the form closed at once and the list lived only in the
+  // RSC payload of a fire-and-forget refresh, which a loaded server was slow
+  // to answer. Holding every refresh of the page back reproduces that window
+  // on demand — the form must now outlast it rather than the list lagging it.
+  const email = uniqueEmail('mo-slow');
+  const pw = 'MenteeOwn123';
+  const mentee = await seedUser(email, pw, 'MENTEE', 'MO Slow');
+  await acceptContributorTerms(mentee.id);
+
+  try {
+    await signIn(page, email, pw);
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+    await page.goto('/portal/projects');
+    await expect(page.getByTestId('portal-projects-empty')).toBeVisible({ timeout: 10_000 });
+
+    let delayed = 0;
+    await page.route('**/portal/projects**', async (route) => {
+      if (route.request().headers()['rsc'] === '1') {
+        delayed++;
+        await new Promise((r) => setTimeout(r, 3_000));
+      }
+      await route.continue();
+    });
+
+    await page.getByTestId('portal-add-project').first().click();
+    await page.getByLabel(/^Name/).fill('MO Slow Refresh');
+    await page.getByRole('button', { name: 'Create' }).click();
+    // Still open (and busy) while the refresh is held back…
+    await page.waitForTimeout(1_000);
+    await expect(page.getByTestId('project-form')).toHaveCount(1);
+    // …and the moment it closes, the list already has the project.
+    await expect(page.getByTestId('project-form')).toHaveCount(0, { timeout: 20_000 });
+    await expect(page.getByTestId('portal-projects-list').getByText('MO Slow Refresh', { exact: true })).toBeVisible({ timeout: 500 });
+    expect(delayed).toBeGreaterThan(0);
+  } finally {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await prisma.project.deleteMany({ where: { ownerUserId: mentee.id } });
+    await cleanupByEmail(email);
   }
 });

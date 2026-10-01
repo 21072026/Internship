@@ -11,6 +11,7 @@ import { sendVerificationEmail } from '@/services/emailService';
 import { isLocale, locales } from '@/i18n/config';
 import { passwordSchema } from '@/lib/password';
 import { notify } from '@/lib/notify';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { hostVertical } from '@/lib/hostVertical';
 import { resolveReferrer } from '@/lib/referral';
@@ -319,13 +320,12 @@ export async function POST(request: Request) {
               targetId: pair.menteeId,
               detail: `already mentored by ${active.mentorId} (relation ${active.id})`,
             });
-            const admins = await prisma.user.findMany({
-              where: { role: 'ADMIN', isActive: true },
-              select: { id: true },
-            });
+            // The registrant's own org's admins only (#2542): the refusal is
+            // about a relation in that tenant.
+            const adminIds = await tenantAdminIds(user.orgId);
             await Promise.all(
-              admins.map((a) =>
-                notify(a.id, 'mentorship.autoLinkSkipped', { name: user.fullName }, '/admin/mentorship')
+              adminIds.map((id) =>
+                notify(id, 'mentorship.autoLinkSkipped', { name: user.fullName }, '/admin/mentorship')
               )
             );
           } else if (!active) {
@@ -413,10 +413,13 @@ export async function POST(request: Request) {
       }
       // Let admins know someone signed up. Under 'manual' they have to act;
       // under 'auto' it is an FYI — the account admits itself once verified.
-      const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+      // Only the admins of the org the account landed in (#2542) — the
+      // query used to have no org filter, so every tenant's admins were told
+      // about every other tenant's sign-ups.
+      const adminIds = await tenantAdminIds(user.orgId);
       await Promise.all(
-        admins.map((a) =>
-          notify(a.id, pending ? 'signup.pendingApproval' : 'signup.new', { name: user.fullName }, '/admin/users')
+        adminIds.map((id) =>
+          notify(id, pending ? 'signup.pendingApproval' : 'signup.new', { name: user.fullName }, '/admin/users')
         )
       );
     }
@@ -433,8 +436,8 @@ export async function POST(request: Request) {
           email,
         });
         if (matches.length === 0) return;
-        const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
-        await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
+        const adminIds = await tenantAdminIds(user.orgId);
+        await Promise.all(adminIds.map((id) => notify(id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
       })().catch((e) => console.error('Duplicate post-check failed:', e));
     }
 

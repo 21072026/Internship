@@ -78,6 +78,8 @@ async function seedSsoOrg(
     name?: string;
     entryPoint?: string;
     certificate?: string | null;
+    /** Organization.vertical — a MARKETING org's sign-in lives on the marketing host (#2590). */
+    vertical?: string;
   } = {}
 ) {
   const slug = `${prefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
@@ -93,6 +95,7 @@ async function seedSsoOrg(
       slug,
       plan: 'ENTERPRISE',
       ssoEnabled: true,
+      ...(opts.vertical ? { vertical: opts.vertical } : {}),
       ssoProvider: provider,
       ssoIssuer: provider === 'saml' ? idp.samlIssuer : idp.oidcIssuer,
       ssoEntryPoint: query.toString() ? `${base}?${query}` : base,
@@ -188,6 +191,53 @@ test(
     }
   }
 );
+
+test('SAML: a sign-in started on the marketing host finishes there — login RelayState, IdP echo, ACS success (#2494)', async ({
+  request,
+}) => {
+  const MARKETING = 'marketing.bcsit-gmbh.de';
+  const AS_MARKETING = { 'x-forwarded-host': MARKETING, 'x-forwarded-proto': 'https' };
+  const email = uniqueEmail('sso-mkt').toLowerCase();
+  // A MARKETING org: under #2590 the ACS honours a started-on origin only when
+  // it is in the organization's own world (an internship grant handed to the
+  // marketing host would be burned and refused by the `sso` provider).
+  const { org, slug } = await seedSsoOrg('sso-mkt', { email, name: 'Sso Marketing', vertical: 'MARKETING' });
+  try {
+    // 1. The login route, as the marketing host: the redirect to the stub IdP
+    //    carries the starting origin as RelayState.
+    const login = await request.get(`/api/auth/sso/${slug}/login`, { headers: AS_MARKETING, maxRedirects: 0 });
+    expect(login.status()).toBeGreaterThanOrEqual(300);
+    expect(login.status()).toBeLessThan(400);
+    const toIdp = new URL(login.headers()['location']);
+    expect(toIdp.origin).toBe(MOCK);
+    expect(toIdp.searchParams.get('RelayState')).toBe(`https://${MARKETING}`);
+
+    // 2. The stub IdP's redirect binding — the real page a browser would get,
+    //    with the auto-POST form that echoes RelayState back.
+    const page = await (await request.get(toIdp.toString())).text();
+    const field = (name: string) => {
+      const m = new RegExp(`name="${name}" value="([^"]*)"`).exec(page);
+      return m ? m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&amp;/g, '&') : null;
+    };
+    const SAMLResponse = field('SAMLResponse');
+    const RelayState = field('RelayState');
+    expect(SAMLResponse, 'the IdP page should carry a SAMLResponse').toBeTruthy();
+    expect(RelayState, 'the IdP should echo RelayState').toBe(`https://${MARKETING}`);
+
+    // 3. The ACS (the registered host, no forged header — that is where the IdP
+    //    posts): a valid assertion, and the browser is sent back to the
+    //    marketing host to complete the sign-in.
+    const acs = await request.post(`/api/auth/sso/${slug}/acs`, { form: { SAMLResponse: SAMLResponse!, RelayState: RelayState! }, maxRedirects: 0 });
+    expect(acs.status()).toBe(303);
+    const done = new URL(acs.headers()['location']);
+    expect(done.origin).toBe(`https://${MARKETING}`);
+    expect(done.pathname).toBe('/auth/sso/complete');
+    expect(done.searchParams.get('token')).toBeTruthy();
+    expect(await prisma.user.count({ where: { email, orgId: org.id } })).toBe(1);
+  } finally {
+    await dropSsoOrg(org.id, [email]);
+  }
+});
 
 test('SAML: an assertion signed by an untrusted key lands on the sign-in error page, not a session', async ({
   page,

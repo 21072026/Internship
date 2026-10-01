@@ -146,6 +146,11 @@ export default defineConfig({
     // document-requirements pagination mock was the first casualty). No spec
     // needs a live SW (pwa.spec fetches /sw.js as a static asset), so block it.
     serviceWorkers: 'block',
+    // The app answers Accept-Language on a first visit (#1384), so the browser's
+    // language is now an input. Pinned, so a runner whose system locale is not
+    // English cannot turn every English-copy assertion red. A spec that tests
+    // negotiation sets its own header or `locale`.
+    locale: 'en-US',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     // Returning-visitor state: consent already given so the banner stays hidden

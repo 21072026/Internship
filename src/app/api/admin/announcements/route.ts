@@ -205,7 +205,7 @@ async function handlePost(request: Request) {
   // number mailed cannot disagree. A no-op for a single-tenant deployment.
   const users = await prisma.user.findMany({
     where: withinTenant({ isActive: true }, await tenantWhere(session)),
-    select: { id: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
+    select: { id: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
 
   // Who would actually be MAILED — computed here, before anything is written,
@@ -321,6 +321,9 @@ async function handlePost(request: Request) {
             // and the filter above uses the very same row, so the two cannot
             // disagree about what this person chose.
             prefs: u,
+            // …and its org, so the footer's links open the recipient's own
+            // product host without a second read per recipient (#2495, #2590).
+            orgId: u.orgId,
           }).then(
             () => { emailed++; },
             (e) => logger.error('Failed to send announcement email', { error: String(e) })

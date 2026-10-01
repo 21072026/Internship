@@ -17,16 +17,23 @@
 
 import { prisma } from './prisma';
 import { findUsersInWorld, worldOfOrg } from './userWorld';
+import { logActivity } from './activity';
+import type { SsoRole } from './ssoRoleMapping';
 
-// Roles an IdP attribute mapping may grant. Defaults to the least-privilege
-// MENTEE when the assertion carries no role — an admin can elevate later.
-export type SsoRole = 'MENTEE' | 'MENTOR' | 'ADMIN' | 'COMPANY' | 'SOURCE';
+// Roles an IdP attribute mapping may grant — the type and the rule that picks
+// one live in src/lib/ssoRoleMapping.ts (#1940). Defaults to the
+// least-privilege MENTEE when no mapping matches — an admin can elevate later.
+export type { SsoRole };
 
 export interface SsoIdentity {
   orgId: string; // the tenant the IdP config belongs to (resolved by the caller)
   email: string; // the IdP-verified email (subject / email claim)
   fullName?: string | null;
-  role?: SsoRole; // from IdP attribute mapping; default MENTEE
+  // From the tenant's IdP role mapping (resolveRole); absent → MENTEE on create.
+  role?: SsoRole | null;
+  // Organization.ssoSyncRole (#1940): re-apply `role` to a RETURNING user. Off
+  // by default — see syncReturningRole below.
+  syncRole?: boolean;
 }
 
 export interface ProvisionResult {
@@ -56,7 +63,7 @@ export async function provisionSsoUser(identity: SsoIdentity): Promise<Provision
 
   // 1. This org's own account for the address: the ordinary returning login.
   const own = await prisma.user.findFirst({ where: { email, orgId: identity.orgId }, select });
-  if (own) return { user: own, created: false };
+  if (own) return { user: await syncReturningRole(own, identity), created: false };
 
   // 2. Accounts for the address in this org's WORLD but not in this org. (The
   //    other world's rows are deliberately not looked at.)
@@ -94,4 +101,36 @@ export async function provisionSsoUser(identity: SsoIdentity): Promise<Provision
     select,
   });
   return { user, created: true };
+}
+
+// Re-evaluation of a returning user's role (#1940), opt-in per tenant. Three
+// guards, each on purpose:
+//   - off unless the tenant switched `ssoSyncRole` on: with it off, a user
+//     elevated locally is never touched by a login;
+//   - a login whose claims match NO mapping changes nothing (`role` absent):
+//     a missing claim is not evidence of a demotion;
+//   - an ADMIN row is never re-evaluated. ADMIN is not mappable yet (#1575),
+//     so every ADMIN is a locally granted one, and turning sync on must not
+//     lock a tenant's own administrators out.
+// Every change is written to the activity log at warning level, old -> new.
+async function syncReturningRole<U extends { id: string; email: string; role: string; orgId: string | null }>(
+  user: U,
+  identity: SsoIdentity,
+): Promise<U> {
+  const next = identity.role;
+  if (!identity.syncRole || !next || next === user.role || user.role === 'ADMIN') return user;
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { role: next },
+    select: { id: true, email: true, role: true, orgId: true },
+  });
+  await logActivity({
+    action: 'sso.role_synced',
+    level: 'warning',
+    actorId: null,
+    targetType: 'user',
+    targetId: user.id,
+    detail: `${user.role} -> ${next} (IdP role mapping, org ${identity.orgId})`,
+  });
+  return { ...user, ...updated };
 }

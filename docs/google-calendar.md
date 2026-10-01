@@ -51,6 +51,7 @@ All of it. The pieces the earlier note listed as "remaining" now exist:
 | Connect | `GET /api/integrations/google/connect` → signed state → Google |
 | Callback | `GET /api/integrations/google/callback` → state check → token exchange → sealed store |
 | Event push | `src/lib/googleCalendarSync.ts`, called from `POST /api/meetings` |
+| Recurring series push (#2654) | `src/lib/googleCalendarSeriesSync.ts`, called from `/api/meeting-series` (POST, PUT, DELETE) |
 | Disconnect | `DELETE /api/integrations/google/connection` — revokes at Google, then forgets |
 | User-facing control | "Google Calendar" card on `/account` |
 
@@ -60,6 +61,18 @@ Design notes worth knowing before changing any of it:
   is mirrored onto every connected participant's own calendar and each gets a
   different Google event id; one column on `Meeting` could only ever remember one
   of them.
+- **A recurring series is ONE recurring event per connected member (#2654)**,
+  keyed by `GoogleCalendarEventLink.seriesId` (exactly one of `meetingId` /
+  `seriesId` is set). Its occurrences have no `Meeting` row (#1110) and must
+  never get one for this: the event carries `recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=…']`
+  (`src/lib/seriesRrule.ts`, unit-tested) and the series' own `timeZone`, which
+  Google needs to read BYDAY and the wall clock across a DST change. The
+  audience is the project's members. `syncSeries()` *reconciles*: an active
+  series is POSTed or PATCHed (same Google id) for every connected member, and
+  every other link — a member who left, a series moved to another project, a
+  cancelled one — is withdrawn. Create and schedule changes sync in the
+  background; a cancel (DELETE, or PUT to inactive) awaits the same bounded
+  withdrawal as `withdrawMeetings()`. Covered by `e2e/google-calendar-series.spec.ts`.
 - **The refresh token is encrypted, not hashed.** Everything else sensitive here
   is one-way, because for passwords and evidence one-way is safer. A refresh
   token has to leave the database *usable*, so it needs encryption. The key is
@@ -77,6 +90,23 @@ Design notes worth knowing before changing any of it:
   returns null rather than throwing, so connections simply stop working and
   people are asked to reconnect — no 500s. Say so in the release notes if you
   ever rotate it.
+
+### Connecting from the marketing host (#2494)
+Only ONE redirect URI is registered with Google (`NEXTAUTH_URL`'s host), and
+sessions are host-only cookies, so a user who pressed "Connect" on the
+marketing host used to come back to a host where they had no session. The
+connect route now signs the originating origin into the OAuth `state`
+(`userId.nonce.expiry.origin64.sig`; the 4-part form without an origin still
+verifies, so a flow in flight across a deploy is not refused). The callback on
+the registered host, given a state that **verifies** and whose origin passes
+`servedOrigin()` and differs from its own, answers with one redirect to the
+same callback path on that host, query untouched; that request then does
+everything a callback always did — including the check that the state belongs
+to *this* session, which is what makes a forwarded code safe. The token
+exchange sends the registered `redirect_uri` from config, so it succeeds from
+either host. **No operator step:** do not register the marketing host as a
+second redirect URI — it is not needed, and a second URI is a second thing to
+keep in sync.
 
 ## Turning it on
 

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Mentor pages no longer spin forever when a request fails** (#1374). `/mentor/mentees`, `/mentor/interactions`, `/mentor/mentees/[id]` and the mentor board (`MentorBoard`, also `/sales/board`) read their data with a bare `res.json()` — a 500 or a dropped connection never reached `setLoading(false)`. Each now checks `res.ok`, clears loading in `finally`, and renders a shared `LoadErrorCard` (`src/components/ui/LoadErrorCard.tsx`: `t.common.error` + a retry that re-runs the load) — kept apart from the empty states, which are unchanged. The detail page still answers a 404 with its \"not found\" line, and a failed refresh after a save keeps the page it last showed. e2e: `e2e/mentor-load-error.spec.ts` fails each page's API with a 500, asserts the error card, restores the API and asserts the retry loads the page.",
+  "notes": {
+    "en": ["If a mentor page cannot load its data, it now says so and offers a retry, instead of showing \"Loading…\" forever."],
+    "tr": ["Bir mentor sayfası verisini yükleyemezse artık bunu söylüyor ve tekrar deneme sunuyor; sonsuza kadar \"Yükleniyor…\" göstermiyor."],
+    "de": ["Kann eine Mentor-Seite ihre Daten nicht laden, sagt sie das jetzt und bietet einen neuen Versuch an, statt endlos \"Wird geladen…\" anzuzeigen."]
+  }
+}

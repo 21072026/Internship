@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { ArrowLeft, KeyRound, Trash2, Plus } from 'lucide-react';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { isStageOverdue } from '@/lib/stageClock';
 import { UserQuickActions } from '@/components/UserQuickActions';
 import { CvManager } from '@/components/CvManager';
 import { nextAction } from '@/lib/matching';
@@ -38,6 +39,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
+import { DealValuePanel } from '@/components/DealValuePanel';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } | null }
@@ -465,7 +467,7 @@ export default function AdminMenteeDetailPage() {
                     onChange={(e) => changeRelField(rel.id, { stageDeadline: e.target.value || null })}
                     className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
                   />
-                  {rel.stageDeadline && new Date(rel.stageDeadline) < new Date() && ![ 'HIRED_660', 'EMPLOYED_700' ].includes(rel.pipelineStatus) && (
+                  {isStageOverdue({ stageDeadline: rel.stageDeadline, pipelineStatus: rel.pipelineStatus }, stages) && (
                     <p className="text-xs text-red-600 mt-1">{t.candidateDetail.overdue}</p>
                   )}
                 </div>
@@ -488,6 +490,11 @@ export default function AdminMenteeDetailPage() {
                 canEdit={rel.status === 'ACTIVE'}
                 onSaved={load}
               />
+
+              {/* The estimated monthly value (#2422). The panel reads its own
+                  route, which answers 404 outside a vertical with deal values
+                  (MARKETING), so an INTERNSHIP record shows nothing here. */}
+              <DealValuePanel relationId={rel.id} />
 
               {(() => {
                 const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.lastContactAt ?? rel.interactions[0]?.date }, t.nextActions);

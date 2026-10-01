@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { requireCapability } from '@/lib/capabilityGate';
 import { isLocale } from '@/i18n/config';
 import {
   canonicalNewsletterContent,
@@ -36,6 +37,8 @@ const schema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+  if (capabilityRefusal) return capabilityRefusal;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });

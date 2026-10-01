@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "The stage-deadline reminder, the calendar's overdue flag and the weekly analytics report read the tenant's own stages (#1884, slice 1). They decided \"is this relation finished?\" with the default keys (`HIRED_660`/`EMPLOYED_700`/`INTERNSHIP_FOUND_ELSEWHERE_800`), so on a renamed pipeline a placed candidate was reminded about forever, the calendar showed their deadline as overdue, and the report said 0% hired with raw keys in its stage table. `checkStageDeadlineReminders()` and `/api/calendar-events` now use the one stage-clock rule, `isStageOverdue(…, stages)` (#1724), fed the org's resolved stages (memoised per org for the cron run). This also brings the mail in line with the candidate page's chip: on the default catalogue an `INTERNSHIP_DROPPED_460` relation is no longer reminded, as it was already never shown as overdue. The weekly report is now computed **per tenant** by the new `weeklyAnalyticsStats(orgId, weekAgo)`: before, it was one installation-wide groupBy mailed to every admin of every tenant. Its \"hired\" is that org's `finished` set and its stage table shows the org's labels. Two hardcoded-key files leave the `check:stage-keys` baseline. Covered by `e2e/custom-pipeline-terminal-stages.spec.ts`.",
+  "notes": {
+    "en": ["On a customised pipeline, mentors no longer get deadline reminders for candidates on a final stage, and the weekly analytics mail shows your own organisation's figures and stage names."],
+    "tr": ["Özelleştirilmiş aşamalarda mentörlere son aşamadaki adaylar için artık süre hatırlatması gitmiyor; haftalık analiz maili yalnızca kendi kurumunuzun rakamlarını ve aşama adlarını gösteriyor."],
+    "de": ["Bei einer angepassten Pipeline erhalten Mentoren für Kandidaten in einer Endphase keine Fristerinnerungen mehr, und die wöchentliche Analyse-Mail zeigt die Zahlen und Phasennamen Ihrer eigenen Organisation."]
+  }
+}

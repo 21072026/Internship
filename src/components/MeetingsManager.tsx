@@ -18,6 +18,8 @@ import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestI
 import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 import { copyToClipboard } from '@/lib/clipboard';
+import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
+import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
 
 interface Relation {
   id: string;
@@ -62,6 +64,7 @@ export function MeetingsManager() {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [meetLink, setMeetLink] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState<number>(DEFAULT_MEETING_MINUTES);
   const [guests, setGuests] = useState<PendingGuest[]>([]);
   // Time is optional. With a date the meeting has a time (defaulting to
   // midnight if no clock time) and expects an RSVP; with no date it's a
@@ -139,6 +142,7 @@ export function MeetingsManager() {
           title,
           scheduledAt,
           meetLink,
+          durationMinutes,
           timeZone: browserTimeZone() ?? undefined,
           guests: guests.length > 0 ? guests : undefined,
         }),
@@ -286,6 +290,7 @@ export function MeetingsManager() {
                 />
               </div>
             </div>
+            <MeetingDurationSelect value={durationMinutes} onChange={setDurationMinutes} disabled={busy} />
             {scheduledAt && chosen.length > 0 && <AttendeeTimes instantISO={scheduledAt} people={attendees} />}
             <Input
               label={t.meetings.meetLink}

@@ -16,10 +16,16 @@
 // path only), the host, no IP, that the product-news box is only a request
 // until confirmed, and how long it is kept. The enquiry row stamps this version
 // as `consentTextVersion`, so the text it names must describe what it stores.
-export const PRIVACY_POLICY_VERSION = '2026-09-29';
+// 2026-09-29.2: the same section describes the double opt-in (#2577) — the one
+// confirmation mail, the one-day hash of the address that caps it, what a
+// confirmation records (two times, wording version and language, no IP) and
+// the withdrawal link. A second version on the same day, suffixed rather than
+// post-dated: nothing parses this as a date, it is only stamped and shown.
+export const PRIVACY_POLICY_VERSION = '2026-09-29.2';
 
 // Version of the product-news opt-in WORDING on the marketing demo form
 // (`companyInquiry.marketingOptIn` in the dictionaries, #2569). Separate from
 // the privacy version: that one is the notice, this one is the sentence the
 // person ticked. Bump it whenever that sentence changes in any language.
-export const MARKETING_OPT_IN_TEXT_VERSION = '2026-09-29';
+// 2026-09-29.2: the sentence says a confirmation link is mailed first (#2577).
+export const MARKETING_OPT_IN_TEXT_VERSION = '2026-09-29.2';

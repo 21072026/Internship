@@ -10,6 +10,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { CompanyExternalIdForm } from '@/components/admin/CompanyExternalIdForm';
+import { ContactPermissionEditor } from '@/components/admin/ContactPermissionEditor';
+import { CONTACT_CHANNELS, marketingEmailAllowed } from '@/lib/contactPermissionRule';
 
 // The account detail screen (#2560), rendered by the ADMIN page and — without
 // any of its editors — by the sales rep's own view (/sales/accounts/[id], #2580).
@@ -55,6 +57,14 @@ export function CompanyDetailView({
   const company = redactCompanyForReader(data.company, role) as typeof data.company;
   const { interactions } = data;
   const date = (value: Date) => formatDate(value, locale);
+  const p = d.permission;
+  const permissionFor = (channel: string) => company.contactPermissions.find((row) => row.channel === channel) ?? null;
+  // The same gate a marketing send asks (src/lib/contactPermissionRule.ts),
+  // against the address on file NOW: a confirmation is for the address that
+  // confirmed, not for whoever the contact is today.
+  const emailPermitted = company.contactEmail
+    ? marketingEmailAllowed(permissionFor('EMAIL'), company.contactEmail)
+    : false;
 
   return (
     <div data-testid="company-detail">
@@ -112,6 +122,19 @@ export function CompanyDetailView({
           <dl className="grid grid-cols-1 gap-4" data-testid="company-detail-contact">
             <Field label={d.fields.contactName} value={company.contactName} testId="company-detail-contact-name" />
             <Field label={d.fields.contactEmail} value={company.contactEmail} />
+            {company.contactEmail && (
+              <p
+                data-testid="company-detail-email-permission"
+                data-permitted={emailPermitted ? 'true' : 'false'}
+                className={
+                  emailPermitted
+                    ? 'rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800'
+                    : 'rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800'
+                }
+              >
+                {emailPermitted ? p.emailAllowed : p.emailWarning}
+              </p>
+            )}
             <Field label={d.fields.contactPhone} value={company.contactPhone} testId="company-detail-contact-phone" />
           </dl>
           {!company.contactName && !company.contactEmail && !company.contactPhone && (
@@ -119,6 +142,61 @@ export function CompanyDetailView({
           )}
         </Card>
       </div>
+
+      {/* Contact permission and its evidence (#2577, docs/contact-permission.md). */}
+      <Card className="mb-6" data-testid="company-detail-permission">
+        <CardHeader>
+          <CardTitle>{p.title}</CardTitle>
+        </CardHeader>
+        <p className="mb-4 text-sm text-gray-500">{p.intro}</p>
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {CONTACT_CHANNELS.map((channel) => {
+            const row = permissionFor(channel);
+            return (
+              <div key={channel} data-testid={`company-detail-permission-${channel}`}>
+                <dt className="text-xs text-gray-500">{p.channels[channel]}</dt>
+                <dd className="text-sm text-gray-900 dark:text-gray-100">
+                  {!row ? (
+                    <span className="text-gray-500">{p.notRecorded}</span>
+                  ) : (
+                    <>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant={row.revokedAt ? 'danger' : row.basis === 'NONE' || row.basis === 'INQUIRY_REPLY' ? 'default' : 'success'}
+                          data-testid={`company-detail-permission-basis-${channel}`}
+                          data-basis={row.basis}
+                          data-revoked={row.revokedAt ? 'true' : 'false'}
+                        >
+                          {p.bases[row.basis]}
+                        </Badge>
+                        {row.revokedAt && (
+                          <span className="text-xs text-red-700">{p.revoked.replace('{date}', date(row.revokedAt))}</span>
+                        )}
+                      </span>
+                      <ul className="mt-1 space-y-0.5 text-xs text-gray-500">
+                        {row.address && <li>{p.address.replace('{address}', row.address)}</li>}
+                        {row.requestedAt && <li>{p.requested.replace('{date}', date(row.requestedAt))}</li>}
+                        {row.confirmedAt && <li>{p.confirmed.replace('{date}', date(row.confirmedAt))}</li>}
+                        {row.textVersion && (
+                          <li>{p.textVersion.replace('{version}', row.textVersion).replace('{locale}', row.textLocale ?? '—')}</li>
+                        )}
+                        <li>{p.source.replace('{source}', p.sources[row.source])}</li>
+                        {role === 'ADMIN' && row.reason && <li>{p.reason.replace('{reason}', row.reason)}</li>}
+                      </ul>
+                    </>
+                  )}
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+        {showAdminEditors && (
+          <ContactPermissionEditor
+            companyId={company.id}
+            labels={{ ...p.editor, channels: p.channels, bases: p.bases }}
+          />
+        )}
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>

@@ -10,7 +10,8 @@ import { VERTICAL_KEYS, isVerticalKey, toVerticalKey } from '@/lib/verticals';
 import { countVerticalMoveConflicts, VERTICAL_MOVE_EMAIL_CONFLICT } from '@/lib/verticalMove';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
-import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
+import { isSuperAdminFor, logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
+import { creatableVertical, orgInWorld, orgWorldWhere } from '@/lib/superAdminWorld';
 import { resolveOrgId } from '@/lib/orgScope';
 import { provisionStagePreset } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
@@ -29,14 +30,17 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 // usage vs. the plan's (advisory) limits. Query isolation lands in a later slice.
 
 // GET — organizations with plan, limits and per-tenant usage.
-// A super admin sees every tenant; a plain tenant ADMIN sees exactly their own
-// organisation, and nothing at all when they belong to none (#1535).
+// A super admin sees every tenant OF ITS OWN WORLD (docs/worlds.md § Super
+// admin) — an INTERNSHIP super admin never lists a MARKETING organization and
+// vice versa; a plain tenant ADMIN sees exactly their own organisation, and
+// nothing at all when they belong to none (#1535).
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const superAdmin = await isSuperAdmin(session);
-  let where: { id: string } | undefined;
+  const world = await superAdminWorld(session);
+  const superAdmin = world !== null;
+  let where: ReturnType<typeof orgWorldWhere> | { id: string } = world ? orgWorldWhere(world) : {};
   if (!superAdmin) {
     const ownOrgId = resolveOrgId(session);
     if (!ownOrgId) {
@@ -88,8 +92,11 @@ export async function GET() {
   return NextResponse.json({
     plans: ORG_PLAN_KEYS,
     // The vertical catalogue (#2350). Sent with the list for the same reason
-    // `plans` is: the screen must not hard-code a key set the server owns.
-    verticals: VERTICAL_KEYS,
+    // `plans` is: the screen must not hard-code a key set the server owns. For
+    // a super admin it is the verticals it may CREATE — its own world's only.
+    verticals: world ? VERTICAL_KEYS.filter((k) => orgInWorld(k, world)) : VERTICAL_KEYS,
+    // The world this super admin manages (null for a tenant admin).
+    world,
     // Lets the admin screen hide what this account cannot use. Presentation
     // only — the checks above and below are the actual control.
     superAdmin,
@@ -163,7 +170,10 @@ const createSchema = z.object({
   // Validated against the catalogue rather than a second hand-written list:
   // a z.enum() copy here is exactly the drift that makes a new key type-check
   // everywhere and 400 at the only door that creates tenants.
-  vertical: z.string().refine(isVerticalKey, 'Unknown vertical').optional(),
+  // REQUIRED since per-world super admins: a new customer is typed by its
+  // product at birth, never by the column default, and only in the caller's
+  // own world (checked in the handler, where the world is known).
+  vertical: z.string().refine(isVerticalKey, 'Unknown vertical'),
 });
 
 // POST — create an organization. Creating tenants is an instance-level act, so
@@ -171,12 +181,30 @@ const createSchema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!(await isSuperAdmin(session))) {
+  const world = await superAdminWorld(session);
+  if (!world) {
     await logCrossTenantDenial(session, 'POST /api/admin/organizations', null);
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  const parsed = createSchema.safeParse(await request.json());
+  const body = await request.json().catch(() => null);
+  if (body && typeof body === 'object' && !('vertical' in body)) {
+    return NextResponse.json(
+      { error: 'Choose the product (vertical) for the new organization', code: 'vertical_required' },
+      { status: 400 }
+    );
+  }
+  const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  // A super admin creates organizations in its own world only: a MARKETING
+  // operator cannot mint an INTERNSHIP tenant, and the other way round.
+  const vertical = creatableVertical(world, parsed.data.vertical);
+  if (!vertical) {
+    await logCrossTenantDenial(session, 'POST /api/admin/organizations (vertical)', null);
+    return NextResponse.json(
+      { error: 'You can only create organizations of your own product', code: 'vertical_other_world' },
+      { status: 403 }
+    );
+  }
 
   const name = parsed.data.name.trim();
   const slug = slugify(parsed.data.slug || name);
@@ -186,14 +214,13 @@ export async function POST(request: Request) {
   if (existing) return NextResponse.json({ error: 'An organization with that slug already exists' }, { status: 409 });
 
   const organization = await prisma.organization.create({
-    // Omitted vertical falls to the column default (INTERNSHIP), so every
-    // existing caller — seed, registration, the admin form — keeps creating
-    // exactly what it created before this slice.
+    // The vertical is explicit and in the caller's world (checked above) —
+    // never the column default.
     data: {
       name,
       slug,
       plan: parsed.data.plan ?? 'FREE',
-      ...(parsed.data.vertical ? { vertical: parsed.data.vertical } : {}),
+      vertical,
     },
   });
   // Seed the vertical's starting stage set (#2353). A no-op for INTERNSHIP
@@ -278,8 +305,9 @@ function isPureClear(values: (string | boolean | undefined)[]): boolean {
 // PATCH — change an organization's plan, branding and/or SSO config.
 // The target org comes from the request body, so this is where a tenant ADMIN
 // could otherwise overwrite ANOTHER customer's SAML entry point and signing
-// certificate (#1535). A super admin may target any org; a tenant ADMIN only
-// their own.
+// certificate (#1535). A super admin may target any org OF ITS OWN WORLD; a
+// tenant ADMIN only their own. A super admin of the other world is, for this
+// org, a tenant admin of somewhere else — refused like one.
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -293,7 +321,7 @@ export async function PATCH(request: Request) {
 
   // Ownership is settled BEFORE the target row is touched: a 404-after-403
   // ordering would let a foreign admin probe which org ids exist.
-  const superAdmin = await isSuperAdmin(session);
+  const superAdmin = await isSuperAdminFor(session, id);
   if (!superAdmin) {
     const ownOrgId = resolveOrgId(session);
     if (!ownOrgId || ownOrgId !== id) {
@@ -333,6 +361,24 @@ export async function PATCH(request: Request) {
     );
   }
 
+  // A vertical change is a move into ANOTHER WORLD — out of the reach of the
+  // super admin making it, and into the other world's operator's. Per-world
+  // super admins make that a two-operator act, so no single session may do it:
+  // refused for everyone (docs/worlds.md § Super admin). A no-op, or a row with
+  // an unregistered key normalising to the world it already reads as, passes.
+  if (vertical !== undefined && toVerticalKey(existing.vertical) !== toVerticalKey(vertical)) {
+    await logCrossTenantDenial(session, 'PATCH /api/admin/organizations (cross-world vertical)', id);
+    return NextResponse.json(
+      {
+        code: 'vertical_other_world',
+        error: 'An organization cannot be moved to another product from here: each product has its own super admin.',
+      },
+      { status: 403 }
+    );
+  }
+
+  // (Unreachable from a session since the cross-world refusal above; kept as
+  // the second lock should that refusal ever be relaxed for an operator path.)
   // A vertical change MOVES every person of the organization into the other
   // world in one UPDATE (worlds, #2590 — src/lib/userWorld.ts: a world is
   // derived from the org, never stored on the user). One person may hold one

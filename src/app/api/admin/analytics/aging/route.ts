@@ -9,6 +9,8 @@ import { computeStageAging } from '@/lib/stageAging';
 import { daysInStage, isStageOverdue } from '@/lib/stageClock';
 import { isStageTransition } from '@/lib/stageChange';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 // GET — hiring-funnel aging & SLA.
 // - stageAging: average/median time actually SPENT in each stage, computed from
@@ -49,7 +51,20 @@ export async function GET(request: Request) {
     !rangeOk || (leftAt >= fromDate!.getTime() && leftAt <= toDate!.getTime());
 
   const now = Date.now();
+  const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
+  // The caller's tenant, by hand (leak audit WP3): with MT_ENFORCE_ISOLATION
+  // off this query had no `where` at all, so every org's candidates, stages
+  // and dwell times — names included — were in every admin's report.
+  const tenant = await tenantWhere(session);
+  // The per-CANDIDATE lists (oldestStuck / overdue: a mentee's name and how
+  // long they have waited) are the internship product's "En uzun bekleyen
+  // adaylar" panel, so they are only returned to an org whose vertical carries
+  // `mentorship`. The stage-level numbers (stageAging, dropReasons, the overdue
+  // COUNT) are pipeline-generic and stay for every vertical — the #2423 gate
+  // keeps the ageing and drop-off cards on a sales funnel on purpose.
+  const candidateLists = (await shellCapabilities(orgId)).includes('mentorship');
   const relations = await prisma.mentorshipRelation.findMany({
+    where: withinTenant({}, tenant),
     select: {
       id: true,
       status: true,
@@ -66,7 +81,7 @@ export async function GET(request: Request) {
 
   // The querying admin's own pipeline: which stages are off-path (for
   // dropReasons) and which have stopped the clock altogether (for `overdue`).
-  const stages = await resolvePipelineStages((session.user as { orgId?: string | null }).orgId ?? null);
+  const stages = await resolvePipelineStages(orgId);
   const negativeKeys = new Set(stages.filter((s) => s.isOffPath).map((s) => s.key));
   const dropCounts = new Map<string, Map<string, number>>();
   for (const r of relations) {
@@ -144,7 +159,13 @@ export async function GET(request: Request) {
   const overdue = items.filter((it) => it.overdue).sort((a, b) => b.daysInStage - a.daysInStage);
 
   return NextResponse.json({
-    stageAging, droppedNonPositive, oldestStuck, overdue, overdueCount: overdue.length,
+    stageAging, droppedNonPositive,
+    oldestStuck: candidateLists ? oldestStuck : [],
+    overdue: candidateLists ? overdue : [],
+    overdueCount: overdue.length,
+    // Tells the screen WHY the lists are empty, so it hides the panel rather
+    // than drawing an "everyone is on time" state that is not true.
+    candidateLists,
     pooledCount: relations.filter((r) => r.status === 'ACTIVE' && pooledIds.has(r.mentee.id)).length,
     dropReasons,
   });

@@ -1,5 +1,9 @@
-import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
+// Relative, not `@/lib/…`: `lease.ts` loads this module lazily with a dynamic
+// import(), and a loader that maps the alias only for static imports (the
+// Playwright spec runner) could not resolve it — the lease then read as held.
+// Same reason the rest of the jobs/ tree the CLIs load imports relatively.
+import { prisma } from '../prisma';
+import { logger } from '../logger';
 import { setLeaseLogger, type LeaseRow, type LeaseStore } from './lease';
 
 // The `JobLease` half of #1701: the three row operations `src/lib/jobs/lease.ts`

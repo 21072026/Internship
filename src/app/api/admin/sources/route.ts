@@ -8,6 +8,11 @@ import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { attributedLeadWhere } from '@/lib/leadAttribution';
 import { getLocale } from '@/i18n/server';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { findOrCreateSource } from '@/lib/leadSource';
+import { SOURCE_NAME_MAX } from '@/lib/leadSourceName';
 
 // GET — all sources with lead counts + conversion breakdown (admin).
 //
@@ -32,20 +37,31 @@ export async function GET() {
   return await withTenantScope(session, async () => {
   const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
   const outcome = await outcomeStageKeys(orgId, locale);
+  // The caller's tenant, by hand (#2570): the middleware is dormant, and a
+  // source list is tenant data like any other.
+  const tenant = await tenantWhere(session);
 
   const sources = await prisma.source.findMany({
+    where: withinTenant({}, tenant),
     orderBy: { name: 'asc' },
-    include: { _count: { select: { users: { where: attributedLeadWhere() } } } },
+    // The relation count is narrowed too: a source the backfill gave to the
+    // default org can carry another tenant's leads (the pre-#2570 picker was
+    // unscoped), and counting them would both leak that tenant's numbers and
+    // skew this row's conversion against a `hired` that only counts our own.
+    include: { _count: { select: { users: { where: withinTenant(attributedLeadWhere(), tenant) } } } },
   });
 
   // For each source, how many of its leads reached a finished stage.
   const hiredRows = await prisma.user.groupBy({
     by: ['sourceId'],
-    where: {
-      ...attributedLeadWhere(),
-      sourceId: { not: null },
-      menteeRelations: { some: { pipelineStatus: { in: outcome.finished } } },
-    },
+    where: withinTenant(
+      {
+        ...attributedLeadWhere(),
+        sourceId: { not: null },
+        menteeRelations: { some: { pipelineStatus: { in: outcome.finished } } },
+      },
+      tenant,
+    ),
     _count: { _all: true },
   });
   const hiredBySource: Record<string, number> = {};
@@ -70,7 +86,7 @@ export async function GET() {
 }
 
 const schema = z.object({
-  name: z.string().min(1).max(120),
+  name: z.string().trim().min(1).max(SOURCE_NAME_MAX),
   contactName: z.string().max(120).optional(),
   contactEmail: z.string().email().max(160).optional().or(z.literal('')),
 });
@@ -83,11 +99,21 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const { name, contactName, contactEmail } = parsed.data;
-  const existing = await prisma.source.findUnique({ where: { name } });
-  if (existing) return NextResponse.json({ error: 'A source with that name already exists' }, { status: 409 });
-  const source = await prisma.source.create({
-    data: { name, contactName: contactName || null, contactEmail: contactEmail || null },
+  // Unique PER TENANT (#2570): `(orgId, name)`. Created through the one
+  // writer, findOrCreateSource() — it stamps the caller's org (a session
+  // without one is the default org's, the rule tenantWhere() reads by) and
+  // reads that tenant first, legacy NULL-org rows included. An existing row —
+  // found by the pre-read or by a lost race — is this screen's 409; another
+  // tenant's "Google" is no conflict.
+  const orgId = resolveOrgId(session) ?? (await defaultOrgId());
+  const result = await findOrCreateSource(orgId, name, {
+    contactName: contactName || null,
+    contactEmail: contactEmail || null,
   });
+  if (!result.created) {
+    return NextResponse.json({ error: 'A source with that name already exists' }, { status: 409 });
+  }
+  const source = await prisma.source.findUniqueOrThrow({ where: { id: result.id } });
   await logActivity({
     action: 'source.created',
     actorId: session.user.id,

@@ -1,9 +1,16 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { Building2, Mail, MapPin, Phone, ScrollText, ShieldCheck, Github, UserRound } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { operatorIdentity } from '@/lib/imprint';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.imprint.title, description: t.imprint.intro }));
+}
+
 
 // The identity comes from the deployment's environment, which only exists at
 // RUNTIME: the image is built on a GitHub runner that has none of these
@@ -70,7 +77,7 @@ export default async function ImprintPage() {
   const [noteBefore, noteAfter] = m.controllerNote.split('{privacy}');
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: m.title, path: '/imprint' }}>
       <div className="max-w-2xl mx-auto my-12 px-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{m.title}</h1>

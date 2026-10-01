@@ -4,7 +4,6 @@ import {
   BadgeEuro, Building2, CheckCircle, GraduationCap, Info, Scale, Server, Sparkles, TrendingUp, UserPlus, Users,
 } from 'lucide-react';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
-import { productNameFor } from '@/lib/verticals';
 import { PublicShell } from '@/components/landing/PublicShell';
 import {
   ADDONS,
@@ -38,8 +37,9 @@ export async function generateMetadata(): Promise<Metadata> {
   // already moved to the vertical wordmark (#2498). `heroSubtitle` is overlaid
   // for MARKETING, so the search snippet says "not published yet" rather than
   // describing the matched-pair meter.
-  const productName = productNameFor(await resolveRequestVertical());
-  return { title: `${t.pricing.metaTitle} — ${productName}`, description: t.pricing.heroSubtitle };
+  // The root layout's title template appends it since #1376 — naming it here
+  // too read "Pricing — InternshipCRM · Internship CRM".
+  return { title: t.pricing.metaTitle, description: t.pricing.heroSubtitle };
 }
 
 /**
@@ -120,7 +120,7 @@ export default async function PricingPage() {
   const employerPlans = plansForAudience('EMPLOYER');
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: t.pricing.metaTitle, path: '/pricing' }}>
       <div className="max-w-6xl mx-auto px-4 py-12 sm:py-16">
         {/* Hero */}
         <div className="text-center max-w-3xl mx-auto">

@@ -9,6 +9,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
+import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 
 interface Interaction {
   id: string;
@@ -33,11 +34,21 @@ export default function MentorInteractionsPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<(typeof TYPES)[number]>('ALL');
 
+  // A failed load is its own state, not an empty log (#1374).
+  const [loadError, setLoadError] = useState(false);
   const fetchInteractions = useCallback(async () => {
-    const res = await fetch('/api/interactions');
-    const data = await res.json();
-    setInteractions(data.interactions || []);
-    setLoading(false);
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const res = await fetch('/api/interactions');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setInteractions(data.interactions || []);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -87,6 +98,8 @@ export default function MentorInteractionsPage() {
 
       {loading ? (
         <Card><SkeletonRows rows={6} /></Card>
+      ) : loadError ? (
+        <LoadErrorCard onRetry={fetchInteractions} testId="interactions-load-error" />
       ) : interactions.length === 0 ? (
         <Card className="text-center py-12">
           <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />

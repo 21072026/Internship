@@ -7,7 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
-import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
+import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { countExemptAdmins } from '@/lib/ssoEnforcement';
 
 // POST — grant or revoke the break-glass exemption from enforced SSO (#1950).
@@ -66,7 +66,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // (#1549). A control that hands out a password back door must not depend on
     // a flag that is switched off.
     const callerOrgId = resolveOrgId(session);
-    if (!(await isSuperAdmin(session)) && (!callerOrgId || callerOrgId !== user.orgId)) {
+    // A super admin reaches only its own world's users (docs/worlds.md § Super admin).
+    if (!(await isSuperAdminFor(session, user.orgId)) && (!callerOrgId || callerOrgId !== user.orgId)) {
       await logCrossTenantDenial(session, 'POST /api/admin/users/[id]/sso-exempt', user.orgId);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

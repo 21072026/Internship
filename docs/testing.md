@@ -580,6 +580,34 @@ before writing its report (`E2E_EXPECTED_REPORTS`). Recipients come from
 `ALERT_EMAIL_TO`; set the repository **variable** `E2E_REPORT_MODE=failures` to switch
 back to red-only alerts.
 
+## How a red scheduled net reaches a person (#2322)
+
+Every scheduled safety net is **silent when green**: `e2e-full`, `k6-load`, `stress`
+and `backup-verify`. So a broken alert channel looks exactly like a healthy repo.
+The e-mail alerts above cannot leave a GitHub-hosted runner at the moment. The SMTP
+connect dies on `ETIMEDOUT` at `CONN` after about two minutes. That is a network
+reachability failure, not an auth one, and not an empty secret either: an unset
+`SMTP_HOST` fails fast on localhost with `ECONNREFUSED`. So each net now also leaves a
+trail that needs no SMTP:
+
+- [`scripts/ci-alert-issue.mjs`](../scripts/ci-alert-issue.mjs) `red|green`, keyed by
+  `ALERT_KEY`. There is **one open issue per net**, labelled `ci-alert` and found by a
+  hidden `<!-- ci-alert: key=… -->` marker, never by its title. A red run opens it, or
+  refreshes it in place. It comments only when `ALERT_SIGNATURE` moved: e2e-full passes
+  the commit sha, and the others default to the UTC day. So a broken commit re-tested
+  4×/day pings once. The next green run closes it. A new issue `cc`s the maintainer,
+  which makes its creation a notification.
+- The issue step runs **before** the e-mail step, so a hanging SMTP connect cannot
+  starve it. It is `continue-on-error`, and the script itself never fails the job.
+- The only permission it needs is `issues: write` on the job's own `GITHUB_TOKEN`. No
+  secret, no port. `release-compact.yml` keeps its own, older version of the same idea
+  (`scripts/release-compact-alert.mjs`, #2323).
+
+**To test it:** the pure rules are unit-tested (`scripts/test/ci-alert-issue.test.mjs`).
+For the real thing, run `stress.yml` by hand (`workflow_dispatch`) with a `base_url`
+that cannot answer, e.g. `https://127.0.0.1:9`. That run must open a `ci-alert` issue
+keyed `stress`. The next normal run must close it.
+
 ## Demo-seed fidelity gate (#2063)
 
 The demo seed (`prisma/seed-demo.mjs`) is the only data most people ever see: the

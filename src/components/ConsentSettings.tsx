@@ -5,28 +5,40 @@ import { useSession } from 'next-auth/react';
 import { ShieldCheck } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useT } from '@/i18n/client';
+import { useVertical } from '@/lib/verticalClient';
+import { verticalHasCapability, type VerticalCapability } from '@/lib/verticals';
 
 // EPIC B2 — per-user consent toggles (GDPR). Reusable: each entry gates an
 // optional processing activity. menteeOnly entries only apply to (and only
 // render for) MENTEE accounts — e.g. talent-pool visibility (#527); mentorOnly
 // entries likewise only render for MENTOR accounts — e.g. the mentee-facing
-// mentor directory (#937).
-const CONSENTS = [
+// mentor directory (#937). `needs` names the vertical module the processing
+// belongs to: a MARKETING rep holds the MENTOR role, but has no mentor
+// directory to be listed in and no evaluation to be quoted from (#2625).
+const CONSENTS: {
+  type: string;
+  key: 'aiCvParsing' | 'activityTracking' | 'talentPoolVisibility' | 'aiInteractionSummary' | 'mentorDirectoryVisibility' | 'testimonial';
+  menteeOnly?: boolean;
+  mentorOnly?: boolean;
+  needs?: VerticalCapability;
+}[] = [
   { type: 'AI_CV_PARSING', key: 'aiCvParsing' as const },
   { type: 'ACTIVITY_TRACKING', key: 'activityTracking' as const },
-  { type: 'TALENT_POOL_VISIBILITY', key: 'talentPoolVisibility' as const, menteeOnly: true },
-  { type: 'AI_INTERACTION_SUMMARY', key: 'aiInteractionSummary' as const, menteeOnly: true },
-  { type: 'MENTOR_DIRECTORY_VISIBILITY', key: 'mentorDirectoryVisibility' as const, mentorOnly: true },
+  { type: 'TALENT_POOL_VISIBILITY', key: 'talentPoolVisibility' as const, menteeOnly: true, needs: 'placements' },
+  { type: 'AI_INTERACTION_SUMMARY', key: 'aiInteractionSummary' as const, menteeOnly: true, needs: 'mentorship' },
+  { type: 'MENTOR_DIRECTORY_VISIBILITY', key: 'mentorDirectoryVisibility' as const, mentorOnly: true, needs: 'mentorship' },
   // Both roles (#1096): the author consents to their words being quoted, the
   // subject consents to a story about them existing at all.
-  { type: 'TESTIMONIAL', key: 'testimonial' as const },
+  { type: 'TESTIMONIAL', key: 'testimonial' as const, needs: 'evaluations' },
 ];
 
 export function ConsentSettings() {
   const t = useT();
   const c = t.consent;
   const { data: session } = useSession();
+  const vertical = useVertical();
   const visibleConsents = CONSENTS
+    .filter((x) => !x.needs || verticalHasCapability(vertical, x.needs))
     .filter((x) => !x.menteeOnly || session?.user?.role === 'MENTEE')
     .filter((x) => !x.mentorOnly || session?.user?.role === 'MENTOR');
   const [state, setState] = useState<Record<string, boolean>>({});

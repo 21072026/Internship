@@ -101,6 +101,9 @@ const VERIFY_EXEMPT = [
   // two have to be wrong or right together.
   '/api/unsubscribe',
   '/api/unsubscribe/',
+  // The double opt-in's two buttons (#2577), exact paths in both files.
+  '/api/contact-permission/confirm',
+  '/api/contact-permission/opt-out',
 ];
 
 /**

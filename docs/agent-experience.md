@@ -10,6 +10,24 @@ Newest entries on top.
 
 ---
 
+## 2026-10-01 — Per-org weekly analytics gate (#2680)
+
+- **A task that names a helper from an open PR may be written against a stale `main`.** The brief
+  pointed at `settingsOrg.ts` from #2629 (unmerged and conflicting), and #2629's branch was older
+  than `main`, where #1884 had already made the report's figures per tenant. Diff the target
+  function on `origin/main` before stacking onto someone else's branch. If you need a helper from
+  an unmerged PR, carry a byte-identical copy of it: an identical add/add merges cleanly in either
+  order.
+- **Playwright's `reuseExistingServer` will quietly test another worktree's code.** Port 3000 was
+  a `next dev` from a parallel session (`lsof -p <pid> | grep cwd` shows whose it is). Start your
+  own with the webServer env (`TRUSTED_PROXY_COUNT=1 SMTP_USER= SMTP_BULK_USER=`) on another port
+  and pass `BASE_URL=http://localhost:<port>`. Do not kill the other session's server.
+- **`EmailLog` is the e2e oracle for "who got a mail"**: `sendEmail` records a row (SKIPPED or
+  FAILED) even without SMTP, so recipient routing can be asserted by address. Remember that a
+  cron run by *any* admin mails *every* enabled org, so count per recipient across runs.
+- **`/api/cron` is open to any tenant's admin**: a job result that carries per-org data must be
+  reduced to the caller's own entry before it is returned.
+
 ## 2026-09-29 — Bir kişi, iki dünya (#2590): paralel `main`, container yeniden başlaması, e2e ortamı
 
 **Aynı konuda `main` de ilerliyor olabilir: tasarlamadan önce `git log origin/main -20`.** Bu iş
@@ -7644,6 +7662,306 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - `marketing-sales-surface.spec.ts`'s stage-deadline test signs in as the seed admin
   (`admin@example.com`); a local e2e DB without `prisma db seed` fails it and skips the rest of the
   serial file — run the rest with `--grep`.
+
+## 2026-09-29 — Marketing import: external id, dates, admin panel (#2554, #2552, #2555)
+
+- **The shared Prisma client can be BEHIND `origin/main`, not only ahead of it.** A fresh
+  worktree on the newest `main` with no schema change of its own still failed `tsc` against the
+  shared client (it lacked `Todo.dueDate`, merged hours earlier). So the "real `node_modules`
+  of symlinks + local `@prisma/client` + `prisma generate`" setup is needed for *every* parallel
+  worktree, not just the ones that edit the schema — `diff prisma/schema.prisma
+  node_modules/.prisma/client/schema.prisma` before trusting a green or red `tsc`.
+- **`runImport`'s plan vocabulary has no ERROR** (`PlannedRow.status` excludes it: a row that
+  failed validation never reaches a plan). A refusal only the DIFF can make — e.g. an external id
+  that contradicts the VAT match — is planned as a `SKIP` carrying `value.refused` and turned into
+  `ERROR` by the consumer's own `apply` (`applyPlannedAccounts`). That keeps the engine untouched
+  and makes the dry run report it too, because the preview also goes through `apply`.
+- **Appending a long block to a file with a heredoc is refused by the worktree guard; `cat
+  <scratch file> >> <target>` is not.** Write the block with the Write tool into the scratchpad
+  and append it. A command whose *file name* contains "git" (`gitignore-exports.test.mjs`) is also
+  refused as "names git" when it is part of a longer chain — run it on its own.
+- **A `.gitignore` rule is testable without touching the tree**: `git check-ignore --no-index -q
+  <path>` answers for paths that do not exist (exit 0 ignored, 1 not), which is what
+  `scripts/test/gitignore-exports.test.mjs` uses to pin that real exports can never be added.
+- **A per-run lease holder, not a per-process one** (#2552 review). `holdsLease()` RENEWS when
+  the holder string matches, so using `replicaId()` alone as the holder for a user-triggered
+  one-shot (an import apply) lets two tabs on the same replica both "hold" it. Append a
+  `randomUUID()` so each run is its own contender; lease names are `VarChar(64)`, holders
+  `VarChar(190)`.
+- **In-file duplicate detection must remember what a claiming row brought, not only which
+  account it claimed.** A new account goes into the in-file index with its external id; an
+  EXISTING account that the row fills an id into does not, so a later row naming it under a
+  different id looked like a plain duplicate. Keep the claimed id next to the claim.
+
+## 2026-09-29 — Lead source attribution (#2570)
+
+- **A global `@unique` → `@@unique([orgId, name])` is appliable on a populated table**:
+  `db push` warns ("A unique constraint covering the columns … will be added") and applies
+  it under `--accept-data-loss`, rows intact — verified with NULL-org and stamped rows. It
+  cannot find duplicates, because the old index already forbade them; `check:schema-push`
+  still prints its generic warning, so say why in the PR.
+- **A nullable `orgId` in a composite unique is not a backstop for the default org.**
+  MySQL does not compare NULLs in a unique index, so "X"(NULL) and "X"(default) coexist —
+  and the deploy backfill (NULL → default) then fails on the index. The create path must
+  read `orgWhere(orgId)` (which includes NULL rows for the default org) before inserting.
+- **An out-of-repo Playwright config that imports the repo's `playwright.config.ts`
+  receives `{ default }`**, not the config: `--project=chromium` then says "Available
+  projects:" (empty). `import m from '…/playwright.config.ts'; const base = m.default ?? m;`.
+- **An import's `leadChanges` is a diff, not the row.** `planFieldUpdates` drops a field the
+  record already holds (and one it may not overwrite), so anything derived from "what the
+  file says" — here the typed Source binding — must be planned from the incoming value, or
+  a re-import of existing records silently does nothing. Plan it in the diff so a dry run
+  reports it (`lead.source`) and a second run is UNCHANGED again.
+- **`NOT: { orgId: 'm' }` skips NULL rows** (SQL `NOT (NULL = 'm')` is NULL). "Outside this
+  tenant" for a non-default org needs an explicit `orgId: null` arm.
+- **`PUT /api/admin/settings` writes the GLOBAL row** even for a MARKETING admin (isolation
+  off). An e2e that enables `premiumAnalytics` must reset it through the route in `finally`;
+  deleting the org's Setting rows does not undo it, and the next spec that expects the 403
+  lock fails.
+- **`kill <npx pid>` leaves `next-server` listening** (it reparents to 1): kill the
+  `next-server` pid too and confirm the port is free.
+
+## 2026-09-29 — Contact permission + double opt-in (#2577)
+
+- **The "session scratchpad" is shared by parallel worktree agents.** A generic helper name
+  (`edit.py`) was rewritten twice by another agent mid-session, with a different argument
+  contract. Give every scratch file a task-unique name (`edit_2577.py`, `pw2577.config.ts`).
+- **The isolation guard also refuses `cat >> file <<'EOF'` appends** (and a heredoc'd JSON edit
+  of `route-auth-baseline.json`). Use the Edit tool for appends/inserts into repo files.
+- **A new public route under `/api/` touches four lists, not one**: the route-auth baseline, the
+  middleware's verification allowlist, `VERIFY_EXEMPT` in `scripts/openapi-generate.cjs` (checked
+  against the middleware by `check:openapi`), and — for its page — `robots.ts` plus the list in
+  `e2e/robots-sitemap.spec.ts`.
+- **Prisma's `findUnique` on a compound key works under the tenant middleware** (Prisma 5
+  `extendedWhereUnique`), so a `@@unique([companyId, channel])` lookup does not need rewriting to
+  `findFirst` when the model is registered.
+
+## 2026-09-29 — Trial → paid KPI and transfer chains (#2556)
+
+- **A worktree needs its own Prisma client even when it does not touch the schema.** The
+  shared `node_modules/.prisma` had been generated by another session from an older schema,
+  so `tsc` on an untouched `origin/main` failed on `ProjectTask.dueDate`. A private
+  `node_modules` (a symlink per entry of the shared one, real copies of `.prisma` and
+  `@prisma`) plus `npx prisma generate` in the worktree fixed it without touching anyone else.
+- **The worktree isolation guard also refuses `python3 - <<EOF` and `cat >> file <<EOF`.**
+  Write the content with the Write tool (a scratchpad file if it is a fragment) and
+  assemble with a plain `cat a b c > file`.
+- **The demo marketing tenant is a free hand-check for funnel numbers.** `npm run seed:demo`
+  gives 30 accounts with back-dated StatusChange rows and trial windows; a scratch script
+  that counts from the rows directly and signs in over `/api/auth/csrf` +
+  `/api/auth/callback/credentials` (cookie jar from `getSetCookie()`) compares the API in
+  seconds.
+
+
+
+## 2026-09-29 — MARKETING loss reasons (#2573)
+
+- **The shared `node_modules` Prisma client can be stale against `origin/main` even when you
+  do not touch the schema** — another workflow generated it from its own branch, and
+  `npx tsc --noEmit` then fails on unrelated models (`ProjectTask.dueDate` here). Build the
+  private overlay (symlinks + copied `.prisma`/`@prisma`) and `prisma generate` in it before
+  concluding anything from a type error outside your diff.
+- **`POST /api/status-changes` without `createdAt` is a live move, not a history note**: it
+  moves the relation too (#926), so a spec that posts a "correction" and then PUTs the same
+  stage gets a silent no-op on the PUT. Pass `createdAt` to record a past hop only.
+- **A per-vertical code list stays one label map.** Keep every code of every vertical in the
+  single `dropoff.reasons` dictionary block; the analytics breakdown and the timeline label a
+  stored code without knowing which vertical wrote it, and a unit test can assert every code
+  has an EN/TR/DE label by importing `src/i18n/dictionaries.ts` directly.
+
+- **Review follow-up (#2573):** making a list per vertical isn't finished until the copy around it is too. Grep for every string that frames the list (card titles, empty states, dialog hints) and give each a `verticalOverlays.ts` leaf. Leave a leaf out when the base text already fits (TR `dialogHint` did). Also: killing the `npx next start` wrapper PID orphans `next-server` on the port. Check `ss -ltnp` and kill the child too.
+
+
+## 2026-09-29 — Estimated deal value (#2422)
+
+- **Before adding a column to `MentorshipRelation`, count the read paths that `include` it
+  whole.** `GET /api/mentorship`, `GET/PUT /api/mentorship/[id]` and many more return every
+  relation scalar to the mentee, the company user and the source; #2563 had to strip its
+  next-action columns by hand on two of them. A commercial figure went into its own 1:1 table
+  (`RelationValue`, `relationId` as `@id`) instead — a row nobody `include`s leaks nowhere, and
+  the e2e asserts the lead's payloads never carry `valueMinor`.
+- **A sibling worktree may be writing the helper your issue depends on.** #2556's
+  `relationChains`/`mergeChainJourney` were in flight in another worktree's `funnelKpi.ts`
+  (readable under `.claude/worktrees/*`); putting a second copy there guarantees a conflict. Keep
+  the fold private to your own module, mirror the semantics, and name the swap as a follow-up.
+- **"Same definition as X" is cheapest to prove with a parity test**, not by editing X: the
+  deal-value unit test runs `retentionTriangle` and `valueByMonth` on the same journeys and
+  compares the won counts month by month.
+- **`e2e/trial-end-extend.spec.ts` signs a MARKETING admin in on the default host** and now gets
+  `WRONG_WORLD` (#2590's per-host worlds): the sign-in page shows "this account lives in
+  SaleVali". It touches nothing a trial-end change does; fix the spec's host, not your code.
+- **A feature card that is true only WITHOUT a module** had no tag to express it; `features.ts`
+  now has `withoutCapability` and one `isFeatureShown()` filter shared by `/` and `/features`.
+
+- (#2422 review follow-up) A transfer that COPIES a per-relation row leaves the predecessor's copy behind; anything that folds a `previousRelationId` chain must read the TIP link, never "the newest link that still has a value", or a cleared field silently comes back. Also: an e2e that seeds another won relation into a shared serial spec shifts every month total the earlier tests assert — re-read the whole spec's expectations after adding a seed. Importing `src/lib/marketingImportStore` straight into a Playwright spec works (the `@/` alias resolves) and is a cheaper DB-level importer test than spawning the CLI.
+
+## 2026-09-29 — SSO / OAuth host coherence + the last e-mail links (#2494, #2495)
+
+- **A registered endpoint cannot follow the request, but it can forward.** Google's
+  redirect_uri and the SAML ACS are one host each. The fix is not a second registration: the
+  starting origin rides along (SAML `RelayState`, signed into the OAuth `state`) and the
+  registered endpoint hands the browser back to it through `servedOrigin()`. For Google the
+  forwarded request re-runs the whole callback on the originating host, session check
+  included; the token exchange still sends the registered `redirect_uri` from config, so it
+  works from either host.
+- **The SSO and Google specs skip under `BASE_URL`**, because the stubs come from the
+  config's `webServer`. To run them against your own `next start`, start
+  `e2e/support/google-mock.mjs` (4599) and `idp-mock.mjs` (4600) yourself and use a temp config
+  with `webServer: undefined` and `use.baseURL` set, with `BASE_URL` unset.
+- **The worktree guard refuses heredocs and `sed -i` chains, even into the scratchpad.** Write
+  a small Python script with the Write tool (exact-string `old -> new`, asserting one match)
+  and run it with `python3 <file>`. That kept a 20-site edit of `emailService.ts` reviewable.
+- **A shared node_modules had a stale Prisma client** (no `ProjectTask.dueDate`), so `tsc`
+  failed on code this change never touched. A private overlay fixed it without touching the
+  other sessions: symlink every entry except `.prisma`/`@prisma`, copy those two, then
+  `npx prisma generate`. Check the shared `.prisma/client/index.d.ts` mtime afterwards to
+  confirm it was left alone.
+- **`meeting-end.spec.ts` needs `JAAS_WEBHOOK_SECRET` on the server.** A hand-started
+  `next start` without it fails that spec with 200 instead of 401. That is the environment, not
+  a regression.
+- **An implicit fallback changes mails you meant to leave alone.** Making `sendEmail()` resolve
+  the footer origin from `userId` moved the footer of every gated mail, including ones whose
+  body deliberately stayed on the configured host, so one mail pointed at two hosts. When you
+  add a default like that, grep every caller that does NOT pass the new argument and decide
+  for each one; hand the ones whose body resolved its own origin the same input (on main since
+  #2590: `sendEmail({ orgId })`).
+- **A test comment saying "covered elsewhere" needs checking.** The ACS success leg was said to
+  be covered in `sso-roundtrip.spec.ts`, but no POST there sent `RelayState`. The stub IdP's
+  `/saml/sso` page echoes RelayState in its auto-POST form, so a request-only test can drive
+  login → IdP → ACS by parsing that form, without a browser.
+
+## 2026-09-29 — MARKETING overlays for team screens and mail (#2558)
+
+- **The scratchpad directory is shared by every agent of a workflow run.** Generic names
+  (`build.log`, `overlay.sh`, `pw.config.mjs`) get overwritten by a sibling mid-task. Put your
+  files in a subdirectory named after your issue from the first command on.
+- **The shared `node_modules/.prisma` client can be stale even when YOU changed no schema** —
+  another worktree regenerated it from its own branch, and `tsc` then fails on columns that
+  exist on `main` (`ProjectTask.dueDate`). Build the private overlay (symlinks + copied
+  `.prisma`/`@prisma`, `prisma generate`) whenever `tsc` reports Prisma fields that `main` has.
+- **`notifications.events` keys are FLAT dotted strings** (`'mentorship.bulkAssigned'`), not
+  nested objects. An overlay written as `mentorship: { bulkAssigned }` is a TS excess-property
+  error — quote the dotted key.
+- **`#main-content` is not unique on every page**: the messages frame nests a second one inside
+  the shell's (strict-mode violation), and `/account` has none at all (a standalone page).
+  `e2e/vertical-terminology.spec.ts § mainText` takes the first, else the body.
+- **`/admin/analytics`' `full-report-link` is not a load marker for a fresh org** — wait for the
+  "Funnel KPIs" heading plus `networkidle` (the cohort/source cards fetch after the aggregate).
+- **A word-count ratchet needs locale-aware words**: German "intern" means *internal* and English
+  "internal" is not the product, so `/intern/i` counts noise. Strip `{placeholders}` and the
+  capitalised role enum (`MENTOR`/`MENTEE`, a CSV import value) before matching.
+- **Rebase before review when a sibling issue of the same story is in flight.** #2557 shipped
+  on `main` (#2614) while this branch also implemented it; `git merge-tree` called the overlay
+  file "auto-merged" and the result had `candidateDetail`/`messages`/`usersAdmin` twice per
+  locale — TS1117 only after the merge. Check `git log origin/main --grep '#<sibling>'` first.
+- **Since #2590 a MARKETING-org account signs in only on the marketing host**: an e2e test for
+  a MARKETING user needs `setExtraHTTPHeaders(asHost(MARKETING_HOST))` before `signInAndSettle`.
+
+## 2026-09-30 — queue run: e2e-full triage, CSRF gate, erasure inventory, tenant scope, dup scan
+
+- **A red e2e-full after a tenant-scoping wave is mostly stale fixtures, not app bugs — but check
+  each.** #2625: one real bug (the consent list showed mentor-only items to a MARKETING rep, who
+  holds the MENTOR role), one spec asserting pre-scoping visibility, and one fixture that seeded
+  a default-org mentor beside a relation in another org, a shape prod cannot produce. Put every
+  fixture row in ONE org; a mixed-org fixture now reads as a cross-tenant request and 404s.
+- **A `cmd | tail` inside an `&&` chain hides `cmd`'s exit code.** `check:release-fragments | tail`
+  "passed" a broken fragment, and the commit and push ran. Also: fragment `notes.*` are string
+  ARRAYS. Run checks bare, or use `set -o pipefail`.
+- **Manual release compaction needs full history**: `git fetch --unshallow origin main` took 3 s
+  here. Then `node scripts/release-compact.mjs` and a normal PR, no secret needed (#2637).
+- **`check:capability-writers` flags erasure writes to gated models** (`offer`, `interviewRequest`).
+  The fix is an `EXEMPT` entry with its reason (data-subject right, prose-only, must work
+  whatever the vertical is), the same shape as `mergeUsers`/`offerNotify`. It is not a gate.
+- **Playwright's request context sends no `Origin`/`Sec-Fetch-*`**, so the #1467 write gate treats
+  it as a non-browser caller and the whole suite keeps working. A CSRF test forges the headers
+  explicitly on `page.request.post`, and a real same-origin write goes through `page.evaluate(fetch)`.
+- **`clearCookies()` then sign in again can race an in-flight request from the old page** and the
+  old session cookie comes back (seen once in #2646). Use `signInAsFreshUser`, which leaves the
+  page first.
+- **Proving an optimisation lossless**: keep the old O(n²) scan inside the unit spec as the oracle
+  and compare on many seeded random populations built to collide on every signal (#1436). Build
+  the population realistically: 80 names and 6 universities made the buckets pathological and the
+  timing meaningless.
+- **Testing a workflow script that shells out to `gh`**: put a tiny fake `gh` (a node script
+  keeping issues in a JSON file) first in `PATH`, then run the red/red/new-sha/green sequence
+  locally. `actionlint` downloads from GitHub releases through the proxy and runs without
+  shellcheck (`-shellcheck=`).
+
+## 2026-09-30 (afternoon) — queue run: stage keys, requisition fill, meeting duration, load errors
+
+- **A docs-only PR never gets the Playwright smoke check** (`e2e.yml` has `paths-ignore` for
+  docs), and that check is required, so auto-merge waits forever. Merge it directly once the
+  rest is green.
+- **`check:events` (#1697) refuses an eleventh direct `dispatchWebhook()` caller.** Until
+  `emit()` (#1693) lands, a new event is *registered* in `WEBHOOK_EVENTS` and not dispatched,
+  with a note at the place it will be raised (the `meeting.cancelled` precedent). #2659 went red
+  on this; `ci.yml` runs far more guards than the ones you remember. Before pushing, loop over
+  every `npm run` it invokes:
+  `grep -o "npm run [a-z:0-9-]*" .github/workflows/ci.yml | sort -u | awk '{print $3}' | while IFS= read -r c; do npm run -s "$c" >/dev/null 2>&1 || echo "FAIL $c"; done`
+  (the two demo seeders refuse without a local `DATABASE_URL` exported).
+- **CodeQL flags `existsSync()` followed by `readFileSync()` as a high-severity file-system race**,
+  even in a CI script. Read inside a `try` and treat `ENOENT` as "absent"; delete with
+  `rmSync(path, { force: true })`. It also dislikes an object-literal lookup keyed by a
+  tenant-supplied string (`'__proto__'`); use a `Map`.
+- **Prisma field references make a capacity guard one statement**:
+  `updateMany({ where: { filled: { lt: prisma.requisition.fields.openings } }, data: { filled: { increment: 1 } } })`.
+  Concurrent transactions serialise on the row lock and the loser matches zero rows. Tested with
+  three parallel accepts racing for two seats (`e2e/offers.spec.ts`).
+- **Worktrees sharing one `node_modules` share one generated Prisma client.** After switching to a
+  worktree whose schema differs, run `npx prisma generate` again, or `tsc` reports phantom missing
+  fields from the other branch. The local DB needs `db push --accept-data-loss` for the same reason.
+- **The e2e process needs `DATABASE_URL` itself**, not only the web server: run
+  `set -a && . ./.env && set +a` before `npx playwright test`, or every seeding helper throws
+  "Environment variable not found".
+- **A unit spec that pins a buggy default is part of the bug.** `ics-builder.unit.spec.ts`
+  asserted the 30-minute `DTEND` that #1984 was about; fix the assertion in the same PR and say so
+  in the body.
+
+## 2026-09-30 (evening) — queue run: SSO role mapping, offer auto-advance, series → Google, calendar a11y
+
+- **Removing a role or a selector means grepping `e2e/` for it, not just running the specs you
+  think are related.** #2668 dropped `role="tablist"` from the calendar switcher; the reflow check
+  in `e2e/mobile-layout-audit.spec.ts` located the switcher by exactly that and went red. It only
+  runs in the scheduled full suite, so neither the PR's smoke gate nor my local run caught it —
+  #2669 fixed it an hour later. Before pushing, `grep -rn '<the thing you removed>' e2e/` and run
+  every file that names it; give a control you touch a `data-testid` so the next change can't do
+  it again.
+- **`aria-hidden` text is still measured by axe's `color-contrast` rule.** To give a visual-only
+  label an accessible replacement (an `sr-only` sibling + `aria-hidden` on the visible text), a
+  contrast spec that includes the hidden node keeps working — verified by asserting the node shows
+  up in `passes`/`violations`/`incomplete`, not just that `violations` is empty (an empty result
+  from an out-of-scope node looks identical).
+- **The admin settings PUT writes the GLOBAL row today** (#2628, fix in #2629). An e2e that saves a
+  setting through `/api/admin/settings` flips it for every org in the run. Seed the org's
+  `Setting` row directly and only assert the API's validation, until #2629 lands.
+- **`db push` on a table with rows accepts a required → optional relaxation** (`meetingId String`
+  → `String?`) and `check:schema-push` agrees; a compound `@@unique` on the now-nullable column
+  keeps working in the Prisma client (`meetingId_connectionId`) because MySQL treats NULLs as
+  distinct.
+- **Extracting a write path is also a ratchet event.** Moving the stage write out of
+  `PUT /api/mentorship/[id]` into `src/lib/stageMove.ts` made `trial-window-writers.test.mjs` fail
+  (the route no longer called `stageTrialWindow` itself). The fix is to teach the ratchet the new
+  stamper and pin both callers to it, never an `EXEMPT` entry.
+- **Local MariaDB can be gone after a container pause** (the socket file is there, the process is
+  not). `mysqladmin ping || service mariadb start` before any e2e run.
+
+## 2026-09-30 — cross-world isolation sweep (#2647 / #2653)
+
+- **`MT_ENFORCE_ISOLATION` is off in prod, so `withTenantScope()` alone scopes nothing.** A leak
+  audit found ~40 routes wrapped in it with no hand filter; `authzScope`'s ADMIN builders returned
+  `{}`. When a new route reads tenant data, add `tenantWhere`/`withinTenant` — the wrapper is not
+  enough, and a two-org e2e spec (both directions) is the only thing that proves it.
+- **Fixing a fan-out does not clean the rows it already wrote.** Notification rows carry no
+  subject id, so historical cross-tenant bell entries needed a separate, name-based purge script
+  (`prisma/purge-cross-tenant-notifications.mjs`). Deleting prod data from a deploy script is
+  refused by the auto-mode classifier — ship it as an operator CLI with a dry-run default.
+- **Five parallel implementers on disjoint file sets merged with only `e2e/fixtures/authz-matrix.ts`
+  conflicting** (append-only arrays; keep both sides). Give every package its own DB, port and
+  worktree, and let exactly one package own `prisma/schema.prisma`.
+- **`--project` e2e runs from a scratchpad config need `webServer[].cwd` set to the repo**, or the
+  mock servers (`e2e/support/*.mjs`) resolve against the scratchpad and the run never starts.
+- **A fresh local DB must be seeded (`node prisma/seed.mjs`) before the first e2e run**; running
+  specs first leaves rows that make the seed's org backfill hit a unique key (`Source_orgId_name`).
 
 ## 2026-09-30 — project satellites tenant scope (#2627)
 

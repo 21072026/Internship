@@ -104,7 +104,7 @@ export default async function PortalJourneyPage() {
 
             {/* Mentor */}
             <div className="p-4 bg-blue-50 rounded-xl">
-              <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2">
+              <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2">
                 {t.portal.yourMentor}
               </p>
               <p className="font-semibold text-gray-900">
@@ -134,7 +134,7 @@ export default async function PortalJourneyPage() {
             {/* Company */}
             {relation.company && (
               <div className="p-4 bg-green-50 rounded-xl">
-                <p className="text-xs font-medium text-green-500 uppercase tracking-wide mb-2">
+                <p className="text-xs font-medium text-green-700 uppercase tracking-wide mb-2">
                   {t.portal.assignedCompany}
                 </p>
                 <p className="font-semibold text-gray-900">{relation.company.name}</p>
