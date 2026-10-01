@@ -51,13 +51,18 @@ test.describe('From display name', () => {
 });
 
 test.describe('List-Id follows the recipient world', () => {
-  test('the namespace is the host the List-Unsubscribe URL opens', () => {
-    const marketing = unsubscribeHeaders('user_1', 'digests', 'https://sales.example.test');
-    expect(marketing['List-Id']).toBe('<digests.sales.example.test>');
-    expect(marketing['List-Unsubscribe']).toContain('https://sales.example.test/');
+  test("the namespace is the recipient world's host, never a tenant's own host", () => {
+    // MARKETING_HOSTS is unset here, so the marketing world is its default host.
+    const marketing = unsubscribeHeaders('user_1', 'digests', 'https://marketing.bcsit-gmbh.de');
+    expect(marketing['List-Id']).toBe('<digests.marketing.bcsit-gmbh.de>');
+    expect(marketing['List-Unsubscribe']).toContain('https://marketing.bcsit-gmbh.de/');
 
-    const internship = unsubscribeHeaders('user_1', 'digests', 'https://interncrm.example.test');
-    expect(internship['List-Id']).toBe('<digests.interncrm.example.test>');
+    // Any other host reads as the default world: its configured host.
+    const configured = new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').host;
+    const tenant = unsubscribeHeaders('user_1', 'digests', 'https://crm.some-tenant.example');
+    expect(tenant['List-Id']).toBe(`<digests.${configured}>`);
+    // …while the opt-out link itself still opens the host it was given.
+    expect(tenant['List-Unsubscribe']).toContain('https://crm.some-tenant.example/');
   });
 });
 
