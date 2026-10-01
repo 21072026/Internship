@@ -18,6 +18,8 @@ import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { copyToClipboard } from '@/lib/clipboard';
 import { locales } from '@/i18n/config';
+import { useVertical } from '@/lib/verticalClient';
+import { verticalHasCapability } from '@/lib/verticals';
 
 const inviteSchema = z.object({
   // Optional since #670: an empty address mints a shareable link instead of
@@ -41,6 +43,7 @@ type InviteData = z.infer<typeof inviteSchema>;
 
 export default function InvitePage() {
   const t = useT();
+  const hasProjects = verticalHasCapability(useVertical(), 'projects');
   // From the dictionary, not literals (#2558): the same labels the users list
   // shows, so a vertical overlay can name MENTOR a rep and MENTEE a lead.
   const roleOptions = [
@@ -136,11 +139,14 @@ export default function InvitePage() {
         setMentees(users.filter((u) => u.role === 'MENTEE').map((u) => ({ id: u.id, fullName: u.fullName })));
       })
       .catch(() => {});
+    // Projects are an internship module: a vertical without it (MARKETING) has
+    // no project to add anyone to, so the field and its fetch are skipped.
+    if (!hasProjects) return;
     fetch('/api/projects')
       .then((r) => (r.ok ? r.json() : { projects: [] }))
       .then((d) => setProjects(d.projects ?? []))
       .catch(() => {});
-  }, []);
+  }, [hasProjects]);
 
   const {
     register,
@@ -340,7 +346,7 @@ export default function InvitePage() {
                 {...register('menteeId')}
               />
             )}
-            {watchedRole !== 'ADMIN' && (
+            {watchedRole !== 'ADMIN' && hasProjects && (
               <Select
                 label={t.invite.addToProject}
                 options={[{ value: '', label: '—' }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}

@@ -14,6 +14,7 @@ import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
+import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
@@ -4597,54 +4598,58 @@ export async function weeklyAnalyticsStats(orgId: string, weekAgo: Date): Promis
   return { total, conversion: total ? Math.round((hired / total) * 100) : 0, newRelations, interactions, stageRows };
 }
 
-// Weekly scheduled analytics report email (Faz 2, #541). Premium: only runs
-// for an org whose premiumAnalytics setting is on (tenant row, then the global
-// row: the settings rule). Sends each active admin a compact summary OF THEIR
-// OWN ORG — total relations, conversion, stage counts and the last 7 days'
-// activity — honoring the per-user digest email opt-out.
-//
-// Per org, never per installation: this cron binds no tenant context, and the
-// counts used to add up every tenant of both worlds under an "Internship CRM"
-// subject in every admin's mail (docs/worlds.md).
+// Weekly scheduled analytics report email (Faz 2, #541). Premium, PER ORG: an
+// org's admins get the report only when THAT org's premiumAnalytics setting is
+// on. Each gets a compact summary of their own org's pipeline — total relations,
+// hired conversion, stage counts and the last 7 days' activity — honoring the
+// per-user opt-out.
+export type AnalyticsReportOrgResult = { orgId: string; locked: boolean; sent: number; total: number };
+
 export async function sendWeeklyAnalyticsReport() {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
     select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
   });
-  // Per TENANT (#1884, docs/worlds.md): each admin gets their own org's numbers
-  // and stage labels, in their own product's words. A NULL-org admin is the
-  // default org's (tenantFilter's rule). Premium is decided per org too.
-  const fallbackOrg = await defaultOrgId();
-  const byOrg = new Map<string, typeof admins>();
+
+  // Per TENANT (#1884): each admin gets their own org's numbers, "hired" is
+  // that org's `finished` set and the table shows the org's own stage labels
+  // (`weeklyAnalyticsStats`). The GATE is per tenant too (#2680): it used to be
+  // one unscoped read, so one org's premium tier switched the report on for
+  // every tenant. Admins are grouped by the org their settings live in — a NULL
+  // org is the default org's (`settingsOrgOfRow`, the tenantFilter.ts rule) —
+  // and each group is read, counted and mailed on its own.
+  const premiumOf = settingByOrg('premiumAnalytics');
+  const adminsByOrg = new Map<string, typeof admins>();
   for (const a of admins) {
-    const org = a.orgId ?? fallbackOrg;
-    byOrg.set(org, [...(byOrg.get(org) ?? []), a]);
+    const org = await settingsOrgOfRow(a.orgId);
+    adminsByOrg.set(org, [...(adminsByOrg.get(org) ?? []), a]);
   }
   // WORLDS (#2590): the dashboard link is resolved per ADMIN from that admin's
   // own organization.
   const origins = createOriginBook();
   await origins.prefetch(admins.map((a) => a.orgId));
 
-  let locked = true;
-  let sent = 0;
-  for (const [orgId, orgAdmins] of byOrg) {
-    if ((await getSetting('premiumAnalytics', orgId)) !== 'true') continue;
-    locked = false;
+  const orgs: AnalyticsReportOrgResult[] = [];
+  for (const [orgId, recipients] of adminsByOrg) {
+    if ((await premiumOf(orgId)) !== 'true') {
+      orgs.push({ orgId, locked: true, sent: 0, total: 0 });
+      continue;
+    }
     const [{ total, conversion, newRelations, interactions, stageRows }, brand] = await Promise.all([
       weeklyAnalyticsStats(orgId, weekAgo),
       emailBrand(orgId),
     ]);
     // The default world keeps its report as it always read; another world's
-    // admin gets its own product name and funnel words, not "mentorship" ones.
+    // admin gets its own product name and funnel words (docs/worlds.md).
     const ownWorld = brand.vertical !== DEFAULT_VERTICAL;
     const summary = ownWorld
       ? `<strong>${total}</strong> records · <strong>${conversion}%</strong> reached the final stage ·
-        last 7 days: <strong>${newRelations}</strong> new records, <strong>${interactions}</strong> interactions.`
+          last 7 days: <strong>${newRelations}</strong> new records, <strong>${interactions}</strong> interactions.`
       : `<strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
-        last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.`;
-
-    for (const a of orgAdmins) {
+          last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.`;
+    let sent = 0;
+    for (const a of recipients) {
       // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
       // that used to stand here belonged to `digests` and killed the report while
       // the preference surfaces showed it as ON. 'digest' is in
@@ -4658,19 +4663,23 @@ export async function sendWeeklyAnalyticsReport() {
         to: a.email,
         subject: `Weekly analytics report — ${ownWorld ? brand.name : 'Internship CRM'}`,
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${worldHeading(brand, 'Weekly analytics report', '<h2 style="color:#2563eb;">Weekly analytics report</h2>')}
-        <p>Hi ${a.fullName},</p>
-        <p>${summary}</p>
-        <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
-        <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
-      </div>`,
+          ${worldHeading(brand, 'Weekly analytics report', '<h2 style="color:#2563eb;">Weekly analytics report</h2>')}
+          <p>Hi ${esc(a.fullName)},</p>
+          <p>${summary}</p>
+          <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
+          <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
+        </div>`,
       }).catch((error) => {
-        console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, error });
+        console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, orgId, error });
       });
       sent++;
     }
+    orgs.push({ orgId, locked: false, sent, total });
   }
-  return { locked, sent };
+
+  // `orgs` is every tenant's entry: a caller that answers one tenant's admin
+  // (GET /api/cron) must pick that tenant's own, never pass the list on.
+  return { locked: orgs.every((o) => o.locked), sent: orgs.reduce((n, o) => n + o.sent, 0), orgs };
 }
 
 // Unread-message digest (#667): once an hour, gather messages that have been

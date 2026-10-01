@@ -319,6 +319,32 @@ birlikte gezen ikinci bir anahtar yalnızca kayabilir. Aynı etiket: `/admin/ema
 — son ikisi ayrıca elle tenant filtresiyle (`tenantWhere`/`withinTenant`) okur ve id ile
 yazmadan önce satırın çağıranın tenant'ında olduğunu doğrular (yabancı id → `404`).
 
+### Görünüm geçişi: yönetici ↔ satış
+
+`mentorship` modülü olmayan bir dünyada (MARKETING) mentor kabuğu ve mentee portalı
+yoktur, dolayısıyla görünüm geçişinde "Mentor" segmenti de yoktur. Onun yerine bir
+ADMIN, kendi üzerine atanmış kayıtlarla çalışmak için **Satış** görünümüne (`/sales`)
+geçebilir: satış yüzeyi ADMIN'e de açıktır (`hasSalesSurface`), ama ADMIN'in evi yine
+`/admin`'dir ve hatırlatma e-postalarındaki bağlantılar admin kabuğuna gider
+(`salesRecordLink` yalnız MENTOR'a `/sales` bağlantısı verir). Bir MENTOR (temsilci)
+tek kabuğa sahiptir, geçiş görünmez. Modlar `availableModes()`'ta (`src/lib/dualRole.ts`)
+org'un capability'lerinden hesaplanır; INTERNSHIP'te davranış aynen kalır. Davet
+formundaki "projeye ekle" alanı da yalnız `projects` modülü olan dünyada görünür.
+
+### Eski bildirimlerin temizliği: `prisma/purge-cross-tenant-notifications.mjs`
+
+#2653'ten önce admin bildirimleri (yeni kayıt, mentorluk talebi, başvuru…) her
+org'un adminine gidiyordu; dağıtım artık düzgün, ama eski satırlar zillerde durur.
+Betik yalnız admin dağıtım tiplerine ve yalnız ADMIN alıcılara dokunur: adı geçen kişi
+alıcının org'unda yoksa ya da tip yalnız-internship ise ve alıcının org'u INTERNSHIP
+değilse satır silinir. Varsayılan **dry-run** (sayı basar); `--confirm` siler, tekrar
+çalıştırmak zararsızdır. Deploy'a bağlı **değildir** — operatör elle çalıştırır:
+
+```
+docker exec internship-crm node prisma/purge-cross-tenant-notifications.mjs            # dry run
+docker exec internship-crm node prisma/purge-cross-tenant-notifications.mjs --confirm
+```
+
 ## Parola sıfırlama ve doğrulama
 
 Bir akış bir hesaba **etki ediyorsa** (parola sıfırlama, e-posta doğrulama, hesap

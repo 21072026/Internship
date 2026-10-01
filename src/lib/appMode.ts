@@ -8,13 +8,16 @@
 // stale when a link (a notification, a bookmark) drops the user straight into
 // another mode.
 
-export type AppMode = 'admin' | 'mentor' | 'mentee';
+export type AppMode = 'admin' | 'mentor' | 'mentee' | 'sales';
 
 /** The shell each mode lives under. */
 export const MODE_ROOT: Record<AppMode, string> = {
   admin: '/admin',
   mentor: '/mentor',
   mentee: '/portal',
+  // The MARKETING sales surface (#2580): a rep's own book. An ADMIN who also
+  // sells reaches it through the switch (#2647 follow-up).
+  sales: '/sales',
 };
 
 /**
@@ -27,6 +30,7 @@ const SECTIONS: Record<AppMode, readonly string[]> = {
   admin: ['board', 'projects', 'meetings', 'calendar', 'email', 'mentee-activity', 'analytics'],
   mentor: ['board', 'projects', 'meetings', 'calendar', 'email', 'mentee-activity', 'analytics'],
   mentee: ['projects', 'messages', 'notes', 'interactions', 'profile'],
+  sales: ['board', 'leads', 'accounts'],
 };
 
 /**
@@ -38,10 +42,13 @@ const ALIASES: Record<AppMode, Partial<Record<AppMode, Record<string, string>>>>
   admin: {
     // Viewing candidates/mentorships as an admin → the mentees you personally mentor.
     mentor: { candidates: 'mentees', mentorship: 'mentees' },
+    // The whole book → the rep's own records of the same kind.
+    sales: { candidates: 'leads', companies: 'accounts' },
   },
   // Your own mentees → the full candidate list.
   mentor: { admin: { mentees: 'candidates' } },
   mentee: {},
+  sales: { admin: { leads: 'candidates', accounts: 'companies' } },
 };
 
 /** The mode a pathname belongs to, or null for pages outside every shell. */
@@ -49,6 +56,7 @@ export function modeOf(pathname: string): AppMode | null {
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
   if (pathname === '/mentor' || pathname.startsWith('/mentor/')) return 'mentor';
   if (pathname === '/portal' || pathname.startsWith('/portal/')) return 'mentee';
+  if (pathname === '/sales' || pathname.startsWith('/sales/')) return 'sales';
   return null;
 }
 
