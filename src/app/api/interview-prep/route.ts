@@ -9,6 +9,7 @@ import { runAiGated } from '@/lib/aiGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 // AI interview-prep assistant (Faz 2, #536) — mentee-facing and FREE for the
 // mentee: cost is metered on the org's AI quota; quota exhaustion surfaces as
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
     const skills = Array.isArray(me?.skills) ? (me!.skills as string[]) : [];
 
     const gated = await runAiGated({
+      orgId: await settingsOrgOf(session),
       scope: 'interview_prep',
       userId: session.user.id,
       call: () => aiInterviewPrep(position, skills, parsed.data.focus),

@@ -8,6 +8,7 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
 import { resolveStageSlas, resolveStageWipLimits } from '@/lib/stageSla';
 import { getSetting } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgWipLimit } from '@/lib/boardWip';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
@@ -56,7 +57,7 @@ export async function GET() {
     // own (#1439). Served here rather than read from /api/admin/settings by the
     // board: this is already the one request that answers "what applies to each
     // column", and two sources for one number is how the hardcoded 8 survived.
-    const defaultWipLimit = resolveOrgWipLimit(await getSetting('boardWipLimit'));
+    const defaultWipLimit = resolveOrgWipLimit(await getSetting('boardWipLimit', await settingsOrgOf(session)));
     // Every stage is listed, configured or not, so the form shows the whole
     // pipeline rather than only the rules that already exist.
     return NextResponse.json({

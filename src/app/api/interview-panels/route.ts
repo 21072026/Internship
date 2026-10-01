@@ -10,6 +10,7 @@ import { logActivity } from '@/lib/activity';
 import { notifyIfAllowed } from '@/lib/notify';
 import { resolveTemplateId } from '@/lib/evaluationTemplates';
 import { getSetting } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { isPanelComplete } from '@/lib/interviewPanel';
 import { blindLabel, isBlindFor } from '@/lib/blindReview';
 
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
     // Under blind review the assignment notification must not name the
     // candidate either — a push notification that says who it is undoes the
     // blinding before the interviewer even opens the panel (#819).
-    const blindEnabled = (await getSetting('blindReview')) === 'true';
+    const blindEnabled = (await getSetting('blindReview', await settingsOrgOf(session))) === 'true';
     await Promise.all(
       interviewers.map((i) =>
         blindEnabled
@@ -127,7 +128,7 @@ export async function GET(request: Request) {
     const nameOf = new Map(subjects.map((s) => [s.id, s.fullName]));
     // Blind review (#819) applies to the list too — a name withheld on the
     // detail page but printed in the list next to it is not withheld.
-    const blindEnabled = (await getSetting('blindReview')) === 'true';
+    const blindEnabled = (await getSetting('blindReview', await settingsOrgOf(session))) === 'true';
 
     return NextResponse.json({
       panels: panels.map((p) => {

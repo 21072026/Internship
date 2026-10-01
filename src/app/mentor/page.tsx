@@ -18,6 +18,7 @@ import { Users, BookOpen, MessageSquare, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 import { interactionTypeStyle } from '@/lib/interactionTypes';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 async function getMentorData(mentorId: string) {
   const relations = await prisma.mentorshipRelation.findMany({
@@ -97,7 +98,7 @@ export default async function MentorDashboard() {
 
   const { t, locale } = await getServerDictionary();
   const { relations, recentInteractions, lastContacts } = await getMentorData(session.user.id);
-  const attention = await getAttentionItems(session.user.id);
+  const attention = await getAttentionItems(session.user.id, { orgId: await settingsOrgOf(session) });
 
   const activeRelations = relations.filter((r) => r.status === 'ACTIVE');
 

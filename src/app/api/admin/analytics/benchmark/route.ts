@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { runUnscoped } from '@/lib/tenantAmbient';
@@ -44,7 +45,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   // The CALLER's tier, org passed explicitly (this runs before the scope binds).
-  if ((await getSetting('premiumAnalytics', resolveOrgId(session))) !== 'true') {
+  if ((await getSetting('premiumAnalytics', await settingsOrgOf(session))) !== 'true') {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 
