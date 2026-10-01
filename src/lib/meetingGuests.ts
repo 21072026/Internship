@@ -168,7 +168,8 @@ export async function inviteGuests({
   // the two call sites so both can never drift apart.
   const organizer = await prisma.user.findUnique({
     where: { id: invitedById },
-    // orgId (#2495): the guest's RSVP page opens on the organizer's product host.
+    // orgId: a guest has no world of their own, so the invite (RSVP links
+    // included) belongs to the organizer's product (docs/worlds.md).
     select: { preferredLanguage: true, orgId: true },
   });
   const locale = organizer?.preferredLanguage ?? null;

@@ -12,6 +12,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { orgWhere, tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { tenantAdminWhere } from '@/lib/tenantAdmins';
+import { requireCapability } from '@/lib/capabilityGate';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { isEndReasonCode } from '@/lib/relationLifecycle';
 
@@ -57,6 +58,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Only a mentee files this. A mentor who wants out of a pairing goes through
   // the relation's own lifecycle, never on their mentee's behalf.
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Filed from the mentee portal, which a product without mentorship does not have.
+  const denied = await requireCapability(resolveOrgId(session), 'mentorship');
+  if (denied) return denied;
 
   return await withTenantScope(session, async () => {
     const relation = await prisma.mentorshipRelation.findUnique({

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Security: the weekly analytics report is gated per organization** (#2680). Its figures were already per tenant (#1884), but the `premiumAnalytics` gate was one unscoped read, so one tenant's premium tier sent the report to every tenant's admins. Admins are now grouped by their settings org (`settingsOrgOfRow`, NULL = default org), each group is gated on its own org's value (`settingByOrg`), counted with `orgWhere` and mailed on its own. `GET /api/cron` answers with the caller's own org entry only, and `?job=analytics-report` runs the report alone. `src/lib/settingsOrg.ts` is byte-identical to #2629's copy, so the two PRs merge cleanly in either order.",
+  "notes": {
+    "en": ["The weekly analytics email now follows your own organization's premium analytics setting."],
+    "tr": ["Haftalık analiz e-postası artık kendi kuruluşunuzun premium analiz ayarına göre gönderiliyor."],
+    "de": ["Die wöchentliche Analyse-E-Mail richtet sich jetzt nach der Premium-Analyse-Einstellung Ihrer eigenen Organisation."]
+  }
+}

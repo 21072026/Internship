@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { getRetentionReview, getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getServerDictionary } from '@/i18n/server';
 import { formatDate } from '@/lib/relativeTime';
@@ -12,7 +15,8 @@ import { OrphanApplicantsPanel } from '@/components/admin/OrphanApplicantsPanel'
 export default async function AdminRetentionPage() {
   const { t, locale } = await getServerDictionary();
   const r = t.retentionAdmin;
-  const [items, months] = await Promise.all([getRetentionReview(), getRetentionMonths()]);
+  const orgId = await settingsOrgOf(await getServerSession(authOptions));
+  const [items, months] = await Promise.all([getRetentionReview(orgId), getRetentionMonths(orgId)]);
 
   return (
     <div>

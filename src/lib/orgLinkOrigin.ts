@@ -7,16 +7,19 @@
 //      if this deployment serves the host.
 //   2. Otherwise the org's WORLD (docs/worlds.md, `originForWorld`): a MARKETING
 //      tenant's people live on the marketing host, an INTERNSHIP tenant's on the
-//      origin every link used before — which is also what a missing org, a
-//      failed lookup and a vertical nobody registered fall back to, so nothing
-//      that worked can start pointing somewhere new.
+//      origin every link used before — which is also what a missing org and a
+//      vertical nobody registered fall back to, so nothing that worked can
+//      start pointing somewhere new.
 //
 // Without rule 2 a marketing tenant that nobody mapped by hand mails its people
 // into the internship host, where signing in is refused as "wrong door" — a
 // person's account lives on the host of its product, and so must its links.
 //
 // `Organization` is not a tenant model, so this lookup is never rewritten by the
-// middleware. A failed lookup is not an error for the mail.
+// middleware. A failed lookup THROWS: answering the default origin for it put a
+// marketing tenant's reset, invitation and unsubscribe links on the internship
+// host during a database error, and every caller already handles a throw from
+// the mail it is building (emailService.ts, "A LOOKUP THAT FAILS FAILS LOUD").
 
 import { prisma } from '@/lib/prisma';
 import { appLinkOrigin } from '@/lib/servedHosts';
@@ -37,9 +40,10 @@ export function linkOriginForOrgRow(org: OrgLinkRow): string {
 
 export async function appOriginForOrg(orgId: string | null | undefined): Promise<string> {
   if (!orgId) return appLinkOrigin(null);
-  const org = await prisma.organization
-    .findUnique({ where: { id: orgId }, select: { publicHost: true, vertical: true } })
-    .catch(() => null);
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { publicHost: true, vertical: true },
+  });
   return linkOriginForOrgRow(org);
 }
 

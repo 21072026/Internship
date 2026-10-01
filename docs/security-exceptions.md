@@ -129,12 +129,14 @@ kiracı eski genel hatayı almaya devam ediyor. Ayrıntılar:
 tutabiliyor ve hangisine gireceğini oturum açtığı host seçiyor
 ([`docs/worlds.md`](worlds.md)). `src/lib/auth.ts`, parola **doğrulandıktan
 sonra**, hesap host'un ürününde değil de öbüründeyse `WRONG_WORLD_INTERNSHIP` /
-`WRONG_WORLD_MARKETING` fırlatıyor; giriş sayfası "bu hesap SaleVali içinde"
-diyor ve o ürünün `/auth/signin` sayfasına bağlantı veriyor.
+`WRONG_WORLD_MARKETING` fırlatıyor. Giriş sayfası öbür ürünü **ne adlandırıyor ne
+bağlıyor** (bir eylem başladığı dünyada kalır): yalnızca "bu bilgilerle bir <bu
+ürün> hesabı yok" diyor.
 
 **Taviz:** Giriş uç noktası bilinmeyen e-posta ile yanlış parolayı aynı genel
 hatayla yanıtlıyordu. Bu yeni hata, tek bir durumda o özelliği bozuyor: cevabı alan
-kişi öbür üründe bir hesabı olduğunu **ve hangisi olduğunu** öğreniyor.
+kişi bu adres ve parolanın **başka bir yerde** geçerli olduğunu öğreniyor (sayfa
+hangisi olduğunu söylemez; ham kod, NextAuth yanıtında, söyler).
 
 **Neden kabul edildi:**
 - Alternatifi, parolası **doğru** olan bir kişiye "e-posta veya parola hatalı"
@@ -149,9 +151,9 @@ kişi öbür üründe bir hesabı olduğunu **ve hangisi olduğunu** öğreniyor
 - Açığa çıkan bilgi iki değerli: "bu adres ve parola öbür üründe". Parola, oturum,
   rol ya da veri hakkında hiçbir şey vermiyor; iki ürünün adı ve host'u zaten
   herkese açık.
-- Parola sıfırlama formu bu tavizin **dışında**: `/api/auth/forgot` bulundu /
-  öbür üründe bulundu / belirsiz / yok durumlarında aynı gövdeyi döndürüyor;
-  öbür üründeki hesap için yalnızca posta gidiyor, yani posta kutusunun sahibine.
+- Parola sıfırlama formu bu tavizin **dışında**: `/api/auth/forgot` her durumda
+  aynı gövdeyi döndürüyor ve yalnızca host'un dünyasındaki hesaba posta yolluyor;
+  öbür üründeki hesaba hiçbir şey gitmiyor.
 - Sahte bir `X-Forwarded-Host` hiçbir şeyi genişletmiyor: sahtekâr en fazla kendi
   parolasıyla kendi öbür hesabını seçtiriyor ya da kendi girişini başarısız kılıyor
   (`src/lib/hostWorld.ts`, TRUST NOTE).

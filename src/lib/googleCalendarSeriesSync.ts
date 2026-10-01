@@ -7,6 +7,8 @@ import { nextRuleOccurrence, parseDaysOfWeek } from '@/lib/meetingSeriesOccurren
 import { lastMeetingDay, type SeriesCadence } from '@/lib/seriesRule';
 import { resolveTimeZone } from '@/lib/timezone';
 import { weeklyRrule } from '@/lib/seriesRrule';
+import { worldOfOrg } from '@/lib/userWorld';
+import { productNameFor } from '@/lib/verticals';
 
 /**
  * A recurring project meeting on its members' own Google Calendars (#2654).
@@ -43,7 +45,7 @@ export interface SyncableSeries extends SeriesCadence {
   active: boolean;
 }
 
-function eventBody(series: SyncableSeries, first: Date, rrule: string) {
+function eventBody(series: SyncableSeries, first: Date, rrule: string, product: string) {
   // Google requires a zone on a recurring event: BYDAY and the wall clock are
   // read in it, which is what keeps 09:00 at 09:00 across a DST change.
   const timeZone = resolveTimeZone(series.timeZone);
@@ -54,7 +56,7 @@ function eventBody(series: SyncableSeries, first: Date, rrule: string) {
     start: { dateTime: first.toISOString(), timeZone },
     end: { dateTime: meetingEnd(first, series).toISOString(), timeZone },
     recurrence: [rrule],
-    source: { title: 'Internship CRM', url: series.fixedLink ?? undefined },
+    source: { title: product, url: series.fixedLink ?? undefined },
   };
 }
 
@@ -116,10 +118,14 @@ export async function syncSeries(series: SyncableSeries): Promise<number> {
     const link = await prisma.googleCalendarEventLink.findUnique({
       where: { seriesId_connectionId: { seriesId: series.id, connectionId: auth.connectionId } },
     });
+    // Named per RECIPIENT: the event lands in that person's calendar and must
+    // name the product their account lives in (docs/worlds.md).
+    const owner = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
+    const product = productNameFor(await worldOfOrg(owner?.orgId));
     const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.googleEventId)}` : ''}`;
     const res = await calendarFetch(auth.token, path, {
       method: link ? 'PATCH' : 'POST',
-      body: JSON.stringify(eventBody(series, first!, rrule!)),
+      body: JSON.stringify(eventBody(series, first!, rrule!, product)),
     }).catch(() => null);
 
     if (!res || !res.ok) {

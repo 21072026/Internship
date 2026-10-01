@@ -20,7 +20,7 @@ import type { ConsentType } from '@prisma/client';
 // every AiUsage row is stamped with the org whose budget it consumed. An
 // unscoped count let one tenant's calls exhaust another tenant's quota.
 //
-// The org is passed in by the caller (`resolveOrgId(session)`), not read from
+// The org is passed in by the caller (`settingsOrgOf(session)`), not read from
 // the bound tenant context alone: `withTenantScope` binds nothing while
 // MT_ENFORCE_ISOLATION is off, which is every deployment today. A missing org
 // falls back to the bound one, then to the default org — the same "no org is
@@ -58,7 +58,7 @@ export async function runAiGated<T>(opts: {
   // Whose consent gates the call (the person whose data is processed) — omit
   // only for features that process no personal data.
   consent?: { userId: string; type: ConsentType };
-  // The tenant whose quota the call consumes — `resolveOrgId(session)`. Required
+  // The tenant whose quota the call consumes — `settingsOrgOf(session)`. Required
   // so a new AI feature cannot silently meter against the default org.
   orgId: string | null;
   // Recorded for metering/attribution (companyId prepares per-company quotas).

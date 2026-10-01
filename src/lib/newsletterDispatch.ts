@@ -5,8 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { getOrgBranding } from '@/lib/orgBranding';
-import type { ResolvedBranding } from '@/lib/branding';
+import { getOrgBranding, type OrgBranding } from '@/lib/orgBranding';
+import { mailAccentFor } from '@/lib/accent';
 import { getSetting } from '@/lib/settings';
 import { broadcastMonth, checkBroadcastQuota, type BroadcastQuotaCheck } from '@/lib/broadcastQuota';
 import { buildNewsletterQuotaHoldAlert, runNewsletterTick } from '@/lib/newsletterQuotaHold';
@@ -134,13 +134,13 @@ interface Recipient {
  * Created per run and never at module scope: branding edited between two issues
  * must show up in the second one.
  */
-export type NewsletterBrandCache = Map<string, Promise<ResolvedBranding>>;
+export type NewsletterBrandCache = Map<string, Promise<OrgBranding>>;
 
 export function newNewsletterBrandCache(): NewsletterBrandCache {
   return new Map();
 }
 
-function brandFor(orgId: string | null | undefined, cache?: NewsletterBrandCache): Promise<ResolvedBranding> {
+function brandFor(orgId: string | null | undefined, cache?: NewsletterBrandCache): Promise<OrgBranding> {
   const key = orgId ?? '';
   const hit = cache?.get(key);
   if (hit) return hit;
@@ -218,9 +218,9 @@ export async function renderNewsletterFor(options: {
     locale,
     html: renderNewsletterHtml({
       content,
-      // A tenant that set no brand colour yields null here; the renderer's
-      // accentOf() turns anything that is not a hex value into the product blue.
-      brand: { name: brand.name, accent: brand.color ?? '', logoUrl: brand.logoUrl },
+      // A tenant that set no brand colour takes its world's mail accent, so a
+      // SaleVali copy is magenta rather than the internship blue.
+      brand: { name: brand.name, accent: brand.color ?? mailAccentFor(brand.vertical), logoUrl: brand.logoUrl },
       labels: labelsFor(locale),
       withMentorNote: showsMentorNote(audience, role),
       imageSrc: imageSrc ?? null,
@@ -489,6 +489,10 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
         // to sit outside the one check that cannot be forgotten.
         userId: user.id,
         prefs: user,
+        // Handed over for the same reason as `prefs`: this fan-out already knows
+        // it. It also names the sender after the reader's org outside the
+        // default world (sendEmail), matching the brand the body wears.
+        orgId: user.orgId,
         attachments,
         headers: {
           // Both halves matter: the URL alone gets a "click to unsubscribe"
@@ -731,17 +735,19 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   templateKey?: string;
   scheduledAt?: Date;
 }> {
-  const cadence = await getSetting('newsletterSchedule');
-  const days = CADENCE_DAYS[cadence];
-  if (!days) return { queued: false, reason: 'disabled' };
-
   // The cadence is the default org's — its issues are stamped with it below
   // (#2357) — so every read that GATES it is scoped to that org too (#2335).
   // Unscoped, any other tenant's issue counted as "the previous cycle": one held
   // by its own tenant's spent band stopped this cadence until that tenant's
   // month rolled over, and another tenant's send reset "too soon" for an
-  // audience that never received it.
+  // audience that never received it. The three settings are that org's as well:
+  // /admin/newsletters writes them into the admin's own org row (#2628), and
+  // this job runs with no tenant bound, so an unqualified read is the global row.
   const orgId = await defaultOrgId();
+
+  const cadence = await getSetting('newsletterSchedule', orgId);
+  const days = CADENCE_DAYS[cadence];
+  if (!days) return { queued: false, reason: 'disabled' };
 
   // Anything already waiting means the previous cycle has not gone out yet.
   const pending = await prisma.newsletter.count({ where: { orgId, status: { in: ['SCHEDULED', 'SENDING'] } } });
@@ -756,7 +762,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
     return { queued: false, reason: 'too_soon' };
   }
 
-  const audience = (await getSetting('newsletterAudience')) as NewsletterAudience;
+  const audience = (await getSetting('newsletterAudience', orgId)) as NewsletterAudience;
   // Which library entries have been used before — so the cadence walks the
   // library instead of re-sending its first issue forever.
   const used = await prisma.newsletter.findMany({
@@ -774,7 +780,7 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   // than sending nothing.
   if (!template) return { queued: false, reason: 'library_exhausted' };
 
-  const hour = Math.min(23, Math.max(0, parseInt(await getSetting('newsletterSendHour'), 10) || 9));
+  const hour = Math.min(23, Math.max(0, parseInt(await getSetting('newsletterSendHour', orgId), 10) || 9));
   const scheduledAt = new Date(now);
   scheduledAt.setHours(hour, 0, 0, 0);
   // Past that hour already (the job ran late, or the hour is set early): go

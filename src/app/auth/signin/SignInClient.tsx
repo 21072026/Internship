@@ -17,7 +17,7 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
 import { sameOriginPath } from '@/lib/safeRedirect';
 import { useVertical } from '@/lib/verticalClient';
-import { productNameFor, verticalHasCapability, type VerticalKey } from '@/lib/verticals';
+import { productNameFor, verticalHasCapability } from '@/lib/verticals';
 
 // Whether the "keep me signed in" box was ticked last time, per browser. A UI
 // preference only: the credential itself is the httpOnly cookie the server
@@ -38,23 +38,12 @@ export interface DemoQuickLogin {
   password: string;
 }
 
-export function SignInClient({
-  demo,
-  worldOrigins,
-}: {
-  demo: DemoQuickLogin | null;
-  /**
-   * The public origin of each product, computed by the server page (#2590).
-   * This component must not read env: MARKETING_HOSTS is a runtime variable the
-   * browser bundle does not have, and a value inlined at build time would name
-   * the wrong host on preview.
-   */
-  worldOrigins: Record<VerticalKey, string>;
-}) {
+export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   const t = useT();
+  const vertical = useVertical();
   // Mirrors the page's own gate (requireVerticalCapability('mentorship')), so
   // no vertical is ever offered a link that 404s for it.
-  const offersMentorApplication = verticalHasCapability(useVertical(), 'mentorship');
+  const offersMentorApplication = verticalHasCapability(vertical, 'mentorship');
   const locale = useLocale();
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -66,10 +55,6 @@ export function SignInClient({
   // The tenant enforces SSO (#1950): the error box grows a link to /auth/sso,
   // which is the only door still open for this account.
   const [ssoRequired, setSsoRequired] = useState(false);
-  // The address and password were right, but the account lives in the OTHER
-  // product (#2590, docs/worlds.md): the error box grows a link to that
-  // product's own sign-in, which is the only door this account can use.
-  const [wrongWorld, setWrongWorld] = useState<VerticalKey | null>(null);
   const [resending, setResending] = useState(false);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
   // Off by default — staying signed in for 30 days is a decision about the
@@ -151,7 +136,6 @@ export function SignInClient({
     setLoading(true);
     setError('');
     setSsoRequired(false);
-    setWrongWorld(null);
 
     const result = await signIn('credentials', {
       redirect: false,
@@ -164,7 +148,7 @@ export function SignInClient({
       // WRONG_WORLD_<VERTICAL> is in INTENTIONAL_AUTH_ERRORS (so the server lets
       // it through), which is exactly why it is picked out here: the generic
       // branch below would print the raw code.
-      const otherWorld = parseWrongWorld(result.error);
+      const wrongWorld = parseWrongWorld(result.error) !== null;
       // A 2FA-enabled account needs its code; reveal the field instead of an error.
       if (result.error === '2FA_REQUIRED') {
         setShow2fa(true);
@@ -186,13 +170,11 @@ export function SignInClient({
         // Infrastructure, not credentials — the database is down or overloaded.
         // Say "try again shortly" without naming what is broken.
         setError(t.auth.serviceUnavailable);
-      } else if (otherWorld) {
-        // One person, two products (#2590): the URL you sign in on decides which
-        // application you are in, and this address holds its account in the
-        // other one. The password is not wrong — say where the account is, in
-        // the product's own name, rather than "Invalid email or password".
-        setWrongWorld(otherWorld);
-        setError(t.auth.wrongWorld.replace('{product}', productNameFor(otherWorld)));
+      } else if (wrongWorld) {
+        // The account lives in the other product (#2590). Everything a page
+        // says stays in its own world (docs/worlds.md), so this names only the
+        // product we are in — never the other one, and never links there.
+        setError(t.auth.wrongWorld.replace('{product}', productNameFor(vertical)));
       } else if (INTENTIONAL_AUTH_ERRORS.has(result.error)) {
         setError(result.error);
       } else {
@@ -256,7 +238,6 @@ export function SignInClient({
     if (!demo) return;
     setDemoLoading(email);
     setError('');
-    setWrongWorld(null);
     const result = await signIn('credentials', {
       redirect: false,
       email,
@@ -318,7 +299,7 @@ export function SignInClient({
             </div>
           )}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div data-testid="signin-error" className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
               {needsVerify && (
                 <button
@@ -338,18 +319,6 @@ export function SignInClient({
                 >
                   {t.auth.ssoRequiredCta}
                 </Link>
-              )}
-              {wrongWorld && worldOrigins[wrongWorld] && (
-                // A plain anchor, not next/link: the other product is another
-                // origin, so this is a full navigation by nature. The origin
-                // comes from the server (worldOrigins), never from the URL.
-                <a
-                  href={`${worldOrigins[wrongWorld]}/auth/signin`}
-                  data-testid="wrong-world-link"
-                  className="mt-2 block font-medium text-blue-600 hover:underline"
-                >
-                  {t.auth.wrongWorldCta.replace('{product}', productNameFor(wrongWorld))}
-                </a>
               )}
             </div>
           )}

@@ -10,6 +10,7 @@ import { aiExtractFromText } from '@/lib/cvExtractAi';
 import { runAiGated } from '@/lib/aiGate';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 // POST — AI-assisted extraction of profile fields from the stored CV (EPIC B3).
 // Runs through the central AI gate (#537): CV-owner consent → configured
@@ -56,11 +57,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
 
   try {
     const gated = await runAiGated({
+      orgId: await settingsOrgOf(session),
       scope: 'cv_extract',
       // The consent belongs to the CV owner (the person whose data is processed).
       consent: { userId: target, type: 'AI_CV_PARSING' },
       userId: session.user.id,
-      orgId: resolveOrgId(session),
       call: () => aiExtractFromText(text),
     });
     if (!gated.ok) {

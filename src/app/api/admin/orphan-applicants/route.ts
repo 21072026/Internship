@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { getSetting } from '@/lib/settings';
+import { tenantWhere } from '@/lib/tenantFilter';
 import {
   ORPHAN_ANONYMIZE_PER_RUN,
   ORPHAN_APPLICANT_GRACE_DAYS,
@@ -51,12 +52,17 @@ export async function GET() {
     // The sweep's own cutoff, computed the same way the runner computes it —
     // so "due" here means precisely "the next run takes this one".
     const cutoff = new Date(Date.now() - graceDays * 24 * 60 * 60 * 1000);
+    // The caller's own tenant (#2542): the sweep erases for every org, but an
+    // admin reviews — and can erase from this panel — only their own org's
+    // applicants. Unscoped, this listed another product's people by name and
+    // address, with the erase control next to each.
+    const tenant = await tenantWhere(session);
     const [items, total, due] = await Promise.all([
-      listOrphanApplicants({ graceDays, take: MAX_ROWS }),
-      countOrphanApplicants(),
+      listOrphanApplicants({ graceDays, take: MAX_ROWS, tenant }),
+      countOrphanApplicants(undefined, tenant),
       // Counted in the database rather than over `items`, or a truncated list
       // would under-report the number that is about to be erased.
-      countOrphanApplicants(cutoff),
+      countOrphanApplicants(cutoff, tenant),
     ]);
 
     return NextResponse.json({

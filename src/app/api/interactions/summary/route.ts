@@ -11,6 +11,7 @@ import { runAiGated } from '@/lib/aiGate';
 import { aiSummarizeInteractions } from '@/lib/aiSummary';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 const schema = z.object({ relationId: z.string().min(1) });
 
@@ -60,11 +61,11 @@ export async function POST(request: Request) {
   if (interactions.length === 0) return NextResponse.json({ summary: null, empty: true });
 
   const gated = await runAiGated({
+    orgId: await settingsOrgOf(session),
     scope: 'interaction_summary',
     // The mentee's data is being processed — their consent gates the call.
     consent: { userId: rel.menteeId, type: 'AI_INTERACTION_SUMMARY' },
     userId: session.user.id,
-    orgId: resolveOrgId(session),
     call: () => aiSummarizeInteractions(rel.mentee.fullName, interactions),
   });
 

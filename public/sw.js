@@ -175,7 +175,11 @@ self.addEventListener('message', (event) => {
 // swallowing a malformed payload.
 // ---------------------------------------------------------------------------
 
-const DEFAULT_PUSH_TITLE = 'Internship CRM';
+// Only an empty or malformed payload falls back to these. The worker is one
+// static file on every host and cannot know which product it serves, so the
+// fallback title names nothing but the host itself, and the icon falls back to
+// the internship tile only when the server did not send one.
+const DEFAULT_PUSH_ICON = '/icon-192.png';
 
 // The VAPID key travels as base64url text; `pushManager.subscribe` wants bytes.
 // Chrome accepts the string form, others do not — so convert, always.
@@ -195,11 +199,11 @@ self.addEventListener('push', (event) => {
   } catch (e) {
     payload = {};
   }
-  const title = payload.title || DEFAULT_PUSH_TITLE;
+  const title = payload.title || self.location.hostname;
   const options = {
     body: payload.body || '',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: payload.icon || DEFAULT_PUSH_ICON,
+    badge: payload.badge || payload.icon || DEFAULT_PUSH_ICON,
     // Same tag = the newer notification replaces the older one, so ten messages
     // in one thread are one line in the tray instead of ten.
     tag: payload.tag || 'message',

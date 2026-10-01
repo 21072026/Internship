@@ -14,6 +14,8 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { sendMentorApplicationReceivedEmail } from '@/services/emailService';
+import { resolveRequestVertical } from '@/i18n/server';
+import { verticalHasCapability } from '@/lib/verticals';
 import type { Prisma } from '@prisma/client';
 
 // Public "become a mentor" applications (#904): anyone can apply without an
@@ -47,6 +49,12 @@ const applySchema = z.object({
 export async function POST(request: Request) {
   const limited = enforceRateLimit(request, 'mentor-application', { limit: 5, windowMs: 15 * 60 * 1000 });
   if (limited) return limited;
+  // The form's own gate (requireVerticalCapability on /apply-as-mentor), held
+  // on the write too: a direct POST on a product without mentorship would file
+  // an application in the internship world and tell its admins about it.
+  if (!verticalHasCapability(await resolveRequestVertical(), 'mentorship')) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
   const parsed = applySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

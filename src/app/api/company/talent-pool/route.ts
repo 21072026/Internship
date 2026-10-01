@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature } from '@/lib/entitlements';
 import { getSetting } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 // GET — premium talent-pool search for companies (Faz 1, #528). Gated by the
 // TALENT_POOL_SEARCH entitlement. Privacy-safe: only surfaces mentees who have
@@ -57,7 +58,7 @@ export async function GET(request: Request) {
   // Expressed as part of `where` rather than as a post-filter (#1392) so it
   // narrows the set the DB counts and paginates. Filtering it afterwards is
   // what made the old count wrong in the first place.
-  const windowDays = parseInt(await getSetting('earlyAccessWindowDays'), 10) || 0;
+  const windowDays = parseInt(await getSetting('earlyAccessWindowDays', await settingsOrgOf(session)), 10) || 0;
   const hasEarlyAccess = session.user.role === 'ADMIN' || (await hasFeature(session.user.companyId, 'EARLY_ACCESS'));
   if (windowDays > 0 && !hasEarlyAccess) {
     const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);

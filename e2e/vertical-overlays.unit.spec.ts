@@ -95,9 +95,55 @@ test('no MARKETING string on /admin/companies or the board reads like the intern
   }
 });
 
+// The public statements every marketing footer links to (docs/worlds.md). The
+// /ai task list is an array, which flatten() keeps as one leaf, so each
+// namespace is checked as its serialized whole.
+const PUBLIC_STATEMENT_NAMESPACES = ['ai', 'privacy'] as const;
+
+test('the AI page and the privacy notice describe no mentorship feature to a MARKETING visitor', () => {
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    const merged = applyVerticalOverlay(dictionaries[locale], locale, 'MARKETING');
+    for (const ns of PUBLIC_STATEMENT_NAMESPACES) {
+      const text = JSON.stringify(merged[ns]);
+      expect(text.match(MENTORSHIP_WORDS)?.[0], `${locale}: "${ns}" still describes the internship product`).toBeUndefined();
+    }
+    expect(merged.publicProfile.mentor, `${locale}: a rep's profile badge`).not.toMatch(MENTORSHIP_WORDS);
+  }
+});
+
 test('each locale that carries a MARKETING override localizes it, not a copy of English', () => {
   const tr = applyVerticalOverlay(dictionaries.tr, 'tr', 'MARKETING');
   // "Fırsat" is reserved for the deal/pipeline concept (#2498); the person list is
   // "Müşteri Adayları", not a literal translation of the English "Leads" override.
   expect((tr.candidates as { title: string }).title).toBe('Müşteri Adayları');
+});
+
+// The bell rows a sales org produces (a rep assignment, bulk or single, a rep
+// change, the registration/duplicate checks, a role convert) are rendered from
+// `notifications.events` — they must speak sales there too. `{mentorName}` /
+// `{menteeName}` are the template's parameter NAMES, not words a reader sees,
+// so they are stripped before the check.
+const MARKETING_EVENTS = [
+  'mentorship_request.mentorAssigned',
+  'mentorship_request.menteeAssigned',
+  'mentorship.mentorChanged',
+  'mentorship.reassignedAway',
+  'mentorship.assignmentCorrected',
+  'mentorship.bulkAssigned',
+  'mentorship.bulkReassignedAway',
+  'mentorship.autoLinkSkipped',
+  'duplicate.suspected',
+  'role_changed.toMentor',
+  'role_changed.toMentee',
+];
+
+test('the notification rows a MARKETING org triggers do not read like the internship product', () => {
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    const merged = applyVerticalOverlay(dictionaries[locale], locale, 'MARKETING');
+    const events = (merged.notifications as { events: Record<string, string> }).events;
+    for (const key of MARKETING_EVENTS) {
+      const text = events[key].replace(/\{\w+\}/g, '');
+      expect(MENTORSHIP_WORDS.test(text), `${locale}: notifications.events.${key} = "${events[key]}"`).toBe(false);
+    }
+  }
 });

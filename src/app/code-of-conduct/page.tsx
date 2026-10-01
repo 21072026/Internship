@@ -3,6 +3,7 @@ import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
+import { requireVerticalCapability } from '@/lib/verticalPage';
 
 export async function generateMetadata(): Promise<Metadata> {
   return pageMetadata((t) => ({ title: t.codeOfConduct.title, description: t.seo.codeOfConductDescription }));
@@ -12,8 +13,11 @@ export async function generateMetadata(): Promise<Metadata> {
 const REPO_COC_URL = 'https://github.com/21072026/Internship/blob/main/CODE_OF_CONDUCT.md';
 
 // Public code of conduct — the participant-facing summary. The full contributor
-// version (EN/TR/DE) lives in the repository, linked at the bottom.
+// version (EN/TR/DE) lives in the repository, linked at the bottom. Its rules
+// are about the mentor–mentee relationship, so a vertical without mentorship
+// has no such page (same `needs` as its sitemap.ts entry).
 export default async function CodeOfConductPage() {
+  await requireVerticalCapability('mentorship');
   const { t } = await getServerDictionary();
   const c = t.codeOfConduct;
   return (

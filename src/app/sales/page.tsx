@@ -14,6 +14,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 // The sales rep's dashboard (#2580): their own attention queue and their own
 // records. Every read is the rep's rows only (`mentorId = self`) AND the rep's
@@ -56,6 +57,7 @@ export default async function SalesDashboard() {
     getAttentionItems(session.user.id, {
       reasons: SALES_ATTENTION_REASONS,
       relationWhere: withinTenant({}, tenant),
+      orgId: await settingsOrgOf(session),
     }),
     getServerDictionary(),
   ]);

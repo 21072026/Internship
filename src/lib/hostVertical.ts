@@ -44,7 +44,7 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
 // value read here is the proxy's, not the client's. Even so, keep the contract:
 // the host-resolved vertical is COSMETIC — copy, landing sections, chrome — and
 // must not decide anything with cross-user weight (tenant scoping, roles, data
-// access). There are exactly TWO permitted authz-adjacent uses, each chosen
+// access). There are exactly THREE permitted authz-adjacent uses, each chosen
 // because its worst case under a forged header harms only the forger:
 //   1. /api/register refusing a token-less sign-up on a MARKETING host (#2501):
 //      a forged header refuses the forger's own request, nothing else.
@@ -56,6 +56,11 @@ export function verticalForHost(hostHeader: string | null | undefined): Vertical
 //      another tenant's queue — a stranger's demo request, i.e. spam, under the
 //      same rate limit — and nothing is ever READ back out: the response names
 //      no org and carries no data.
+//   3. Refusing an invitation token (/api/register, /api/invite/opened) or an
+//      SSO org code (/api/auth/sso/[slug]/login) of the OTHER world on this
+//      host, answered like an unknown one (docs/worlds.md): a forged header can
+//      only refuse the forger's own request; the invitation row and the org are
+//      still what decide the tenant.
 // Anything beyond that must key off a signal the request cannot influence (the
 // session's org, the invitation row), never this header.
 export async function hostVertical(): Promise<VerticalKey> {
