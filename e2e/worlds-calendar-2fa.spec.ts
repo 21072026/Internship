@@ -79,15 +79,23 @@ test('a SaleVali rep connects Google Calendar on the marketing host and the roun
 
   expect((await signInViaApi(request, repEmail, PW, { host: MARKETING_HOST, headers: freshIp('worlds-gcal') })).error).toBeNull();
 
-  // Consent must send Google's redirect back to THIS host: the marketing
-  // session cookie is not sent to the internship host's callback.
+  // Google only ever calls the redirect_uri registered with it (the configured
+  // host). The marketing origin rides in the signed state, and the callback
+  // there hands the browser straight back to the marketing host, where the
+  // session lives (#2494) — the round-trip never finishes in the other product.
   const consent = await request.get('/api/integrations/google/connect', { headers: H, maxRedirects: 0 });
   expect(consent.status()).toBe(307);
   const consentUrl = new URL(consent.headers()['location']);
   const redirectUri = new URL(consentUrl.searchParams.get('redirect_uri')!);
-  expect(redirectUri.hostname).toBe(MARKETING_HOST);
   expect(redirectUri.pathname).toBe('/api/integrations/google/callback');
   const state = consentUrl.searchParams.get('state')!;
+
+  const viaRegistered = await request.get(`/api/integrations/google/callback?code=ok&state=${encodeURIComponent(state)}`, {
+    maxRedirects: 0,
+  });
+  const hop = new URL(viaRegistered.headers()['location']);
+  expect(hop.hostname).toBe(MARKETING_HOST);
+  expect(hop.pathname).toBe('/api/integrations/google/callback');
 
   const back = await request.get(`/api/integrations/google/callback?code=ok&state=${encodeURIComponent(state)}`, {
     headers: H,

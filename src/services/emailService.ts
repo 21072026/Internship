@@ -58,7 +58,7 @@ import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/l
 // WORLDS (#2590): a link in a mail must open the product the RECIPIENT'S account
 // lives in. The pure host/world rule and the org → world read are the two
 // foundation modules; this file only ever asks them, it keeps no second copy.
-import { originForWorld, type World } from '@/lib/hostWorld';
+import { originForWorld, worldForHostHeader, type World } from '@/lib/hostWorld';
 import { DEFAULT_VERTICAL, productNameFor, toVerticalKey } from '@/lib/verticals';
 import { worldOfOrg } from '@/lib/userWorld';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
@@ -383,15 +383,15 @@ function withUnsubscribeFooter(html: string, footer: string): string {
 // RFC 2919 wants a globally unique id in a namespace we own. The app host is
 // stable, ASCII and always present; a group id is already a dot-atom.
 //
-// The namespace is the RECIPIENT'S product host — the same origin their
-// List-Unsubscribe URL uses. Mail clients show it as the list's name ("via
-// digests.<host>"), so a fixed internship host named the other product in every
-// SaleVali digest. The id still reads the same for everyone a group reaches
-// within one world, which is all the grouping ever needed: one mailbox never
-// receives one list from both worlds under one account.
+// The namespace is the recipient's WORLD host, not their tenant's own host.
+// Mail clients show it as the list's name ("via digests.<host>"), so a fixed
+// internship host named the other product in every SaleVali digest; a tenant's
+// own public host (#2495) would split one list into one per tenant. So the
+// origin is reduced to its world (hostWorld's host rule) and that world's host.
 function listIdHost(origin?: string): string {
   try {
-    return new URL(origin ?? appUrl()).host;
+    const world = origin ? worldForHostHeader(new URL(origin).host) : DEFAULT_VERTICAL;
+    return new URL(appUrlForWorld(world)).host;
   } catch {
     return 'localhost';
   }
