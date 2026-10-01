@@ -10,6 +10,24 @@ Newest entries on top.
 
 ---
 
+## 2026-10-01 — Per-org weekly analytics gate (#2680)
+
+- **A task that names a helper from an open PR may be written against a stale `main`.** The brief
+  pointed at `settingsOrg.ts` from #2629 (unmerged and conflicting), and #2629's branch was older
+  than `main`, where #1884 had already made the report's figures per tenant. Diff the target
+  function on `origin/main` before stacking onto someone else's branch. If you need a helper from
+  an unmerged PR, carry a byte-identical copy of it: an identical add/add merges cleanly in either
+  order.
+- **Playwright's `reuseExistingServer` will quietly test another worktree's code.** Port 3000 was
+  a `next dev` from a parallel session (`lsof -p <pid> | grep cwd` shows whose it is). Start your
+  own with the webServer env (`TRUSTED_PROXY_COUNT=1 SMTP_USER= SMTP_BULK_USER=`) on another port
+  and pass `BASE_URL=http://localhost:<port>`. Do not kill the other session's server.
+- **`EmailLog` is the e2e oracle for "who got a mail"**: `sendEmail` records a row (SKIPPED or
+  FAILED) even without SMTP, so recipient routing can be asserted by address. Remember that a
+  cron run by *any* admin mails *every* enabled org, so count per recipient across runs.
+- **`/api/cron` is open to any tenant's admin**: a job result that carries per-org data must be
+  reduced to the caller's own entry before it is returned.
+
 ## 2026-09-29 — Bir kişi, iki dünya (#2590): paralel `main`, container yeniden başlaması, e2e ortamı
 
 **Aynı konuda `main` de ilerliyor olabilir: tasarlamadan önce `git log origin/main -20`.** Bu iş
@@ -7926,6 +7944,24 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   stamper and pin both callers to it, never an `EXEMPT` entry.
 - **Local MariaDB can be gone after a container pause** (the socket file is there, the process is
   not). `mysqladmin ping || service mariadb start` before any e2e run.
+
+## 2026-09-30 — cross-world isolation sweep (#2647 / #2653)
+
+- **`MT_ENFORCE_ISOLATION` is off in prod, so `withTenantScope()` alone scopes nothing.** A leak
+  audit found ~40 routes wrapped in it with no hand filter; `authzScope`'s ADMIN builders returned
+  `{}`. When a new route reads tenant data, add `tenantWhere`/`withinTenant` — the wrapper is not
+  enough, and a two-org e2e spec (both directions) is the only thing that proves it.
+- **Fixing a fan-out does not clean the rows it already wrote.** Notification rows carry no
+  subject id, so historical cross-tenant bell entries needed a separate, name-based purge script
+  (`prisma/purge-cross-tenant-notifications.mjs`). Deleting prod data from a deploy script is
+  refused by the auto-mode classifier — ship it as an operator CLI with a dry-run default.
+- **Five parallel implementers on disjoint file sets merged with only `e2e/fixtures/authz-matrix.ts`
+  conflicting** (append-only arrays; keep both sides). Give every package its own DB, port and
+  worktree, and let exactly one package own `prisma/schema.prisma`.
+- **`--project` e2e runs from a scratchpad config need `webServer[].cwd` set to the repo**, or the
+  mock servers (`e2e/support/*.mjs`) resolve against the scratchpad and the run never starts.
+- **A fresh local DB must be seeded (`node prisma/seed.mjs`) before the first e2e run**; running
+  specs first leaves rows that make the seed's org backfill hit a unique key (`Source_orgId_name`).
 
 ## 2026-09-30 — relation targets + projects tenant scope (#2618, #2622)
 

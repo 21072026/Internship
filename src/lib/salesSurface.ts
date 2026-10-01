@@ -16,8 +16,8 @@
 //
 // WHO. A MENTOR only. The leads of a MARKETING tenant are MENTEE rows (the
 // person on the record, not an operator) and a COMPANY user is the customer:
-// both keep landing on `/account`. An ADMIN has the whole admin shell and never
-// needs this one.
+// both keep landing on `/account`. An ADMIN keeps the admin shell as home and
+// reaches this one through the mode switch when they also work a book.
 //
 // Pure and dependency-free (type import only), so the unit runner can load it.
 
@@ -34,7 +34,10 @@ export const NEUTRAL_HOME = '/account';
 
 /** Whether this role, in a vertical carrying `capabilities`, works on `/sales`. */
 export function hasSalesSurface(role: string | null | undefined, capabilities: readonly VerticalCapability[]): boolean {
-  return role === 'MENTOR' && capabilities.includes('pipeline') && !capabilities.includes('mentorship');
+  // An ADMIN of such a vertical may also sell (maintainer, 2026-09-30): the
+  // surface is the same rep's-own-book view, reached through the mode switch —
+  // the admin shell stays their home (roleHome is untouched).
+  return (role === 'MENTOR' || role === 'ADMIN') && capabilities.includes('pipeline') && !capabilities.includes('mentorship');
 }
 
 /**
@@ -77,7 +80,9 @@ export function salesRecordLink(
   capabilities: readonly VerticalCapability[],
   relationId: string | null,
 ): string | null {
-  if (!hasSalesSurface(role, capabilities)) return null;
+  // A rep only: an ADMIN's reminders keep pointing into the admin shell, their
+  // home — the sales view is a switch away, not where their mail should land.
+  if (role !== 'MENTOR' || !hasSalesSurface(role, capabilities)) return null;
   return relationId ? salesLeadHref(relationId) : SALES_HOME;
 }
 

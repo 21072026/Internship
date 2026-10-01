@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { MARKETING_HOST, asHost, signInAndSettle, signInViaApi } from './helpers/auth';
+import { MARKETING_HOST, asHost, gotoSettled, signInAndSettle, signInViaApi } from './helpers/auth';
 
 // Cross-world isolation (docs/worlds.md § Super admin, § Internship-only surfaces).
 //
@@ -183,4 +183,44 @@ test('the INTERNSHIP super admin does not see or reach MARKETING organizations',
   // On the marketing host this session is nobody's, super admin or not.
   const elsewhere = await page.request.get('/api/admin/organizations', { headers: asHost(MARKETING_HOST) });
   expect([401, 403]).toContain(elsewhere.status());
+});
+
+// The view switch of a MARKETING admin (maintainer, 2026-09-30): no "Mentor"
+// segment — there is no mentor shell in that product — but a "Sales" one, since
+// an admin may also work a book of their own. The invite form offers no project
+// either: projects are an internship module.
+test('a MARKETING admin switches between admin and sales, never to a mentor view', async ({ page }) => {
+  const mkt = await org('MARKETING', 'modes');
+  const { email } = await admin('mkt-modes', mkt.id);
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, email, PASSWORD, '/admin');
+
+  const switcher = page.getByTestId('mode-switcher');
+  await expect(switcher.locator('[data-mode="admin"]')).toHaveAttribute('data-active', 'true');
+  await expect(switcher.locator('[data-mode="sales"]')).toBeVisible();
+  await expect(switcher.locator('[data-mode="mentor"]')).toHaveCount(0);
+  await expect(switcher.locator('[data-mode="mentee"]')).toHaveCount(0);
+
+  await switcher.locator('[data-mode="sales"]').click();
+  await page.waitForURL(/\/sales(\/|$)/);
+  await expect(page.getByTestId('sales-nav')).toBeVisible();
+  await expect(page.getByTestId('mode-switcher').locator('[data-mode="sales"]')).toHaveAttribute('data-active', 'true');
+
+  // /mentor is not a shell here: it sends the admin to their sales book.
+  await page.goto('/mentor');
+  await page.waitForURL(/\/sales(\/|$)/);
+
+  await gotoSettled(page, '/admin/invite');
+  await expect(page.getByText('Add to this project (optional)')).toHaveCount(0);
+});
+
+test('an INTERNSHIP admin keeps the admin/mentor switch and has no sales view', async ({ page }) => {
+  const intern = await org('INTERNSHIP', 'modes');
+  const { email } = await admin('int-modes', intern.id);
+  await signInAndSettle(page, email, PASSWORD, '/admin');
+  const switcher = page.getByTestId('mode-switcher');
+  await expect(switcher.locator('[data-mode="mentor"]')).toBeVisible();
+  await expect(switcher.locator('[data-mode="sales"]')).toHaveCount(0);
+  await page.goto('/sales');
+  await page.waitForURL(/\/admin(\/|$)/);
 });

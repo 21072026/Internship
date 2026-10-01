@@ -78,7 +78,7 @@ export default async function PublicProjectsPage() {
   });
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: t.projects.showcaseTitle, path: '/projects' }}>
       <div className="max-w-5xl mx-auto px-4 py-12">
         <Link
           href={backHref}

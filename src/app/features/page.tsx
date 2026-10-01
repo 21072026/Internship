@@ -43,7 +43,7 @@ export default async function FeaturesPage() {
   const features = getFeatures(t).filter((f) => isFeatureShown(f, caps));
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: F.title, path: '/features' }}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline mb-6">
           <ArrowLeft className="h-4 w-4" /> {F.backHome}

@@ -52,7 +52,7 @@ export default async function AccessibilityPage() {
     : a.feedbackUnset;
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: a.title, path: '/accessibility' }}>
       <div className="max-w-2xl mx-auto my-12 px-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{a.title}</h1>

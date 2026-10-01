@@ -12,6 +12,7 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import { verticalCapabilities } from '@/lib/verticals';
+import { JsonLd } from '@/components/JsonLd';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { DemoLink } from '@/components/landing/DemoLink';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
@@ -638,6 +639,21 @@ export default async function HomePage() {
       )}
 
       {/* FAQ */}
+      {/* The same `faq` array as the list below (#1382): a copy of the text
+          would be the one place that silently went stale on the next edit. */}
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: faq.flatMap((g) =>
+            g.items.map((item) => ({
+              '@type': 'Question',
+              name: item.q,
+              acceptedAnswer: { '@type': 'Answer', text: item.a },
+            }))
+          ),
+        }}
+      />
       <section className="py-16 px-4">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.faqTitle}</h2>

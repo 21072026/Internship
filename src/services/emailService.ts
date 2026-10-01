@@ -14,6 +14,7 @@ import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { interactionReminderApplies } from '@/lib/salesSurface';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
+import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
@@ -4316,70 +4317,78 @@ export async function weeklyAnalyticsStats(orgId: string, weekAgo: Date): Promis
   return { total, conversion: total ? Math.round((hired / total) * 100) : 0, newRelations, interactions, stageRows };
 }
 
-// Weekly scheduled analytics report email (Faz 2, #541). Premium: only runs
-// when the premiumAnalytics setting is on. Sends every active admin a compact
-// pipeline summary — total relations, hired conversion, stage counts and the
-// last 7 days' activity — honoring the per-user digest email opt-out.
-export async function sendWeeklyAnalyticsReport() {
-  if ((await getSetting('premiumAnalytics')) !== 'true') return { locked: true, sent: 0 };
+// Weekly scheduled analytics report email (Faz 2, #541). Premium, PER ORG: an
+// org's admins get the report only when THAT org's premiumAnalytics setting is
+// on. Each gets a compact summary of their own org's pipeline — total relations,
+// hired conversion, stage counts and the last 7 days' activity — honoring the
+// per-user opt-out.
+export type AnalyticsReportOrgResult = { orgId: string; locked: boolean; sent: number; total: number };
 
+export async function sendWeeklyAnalyticsReport() {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
     select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
   });
 
-  // Per TENANT (#1884). The figures used to be one installation-wide groupBy
-  // mailed to every admin of every tenant, and "hired" was the two default
-  // keys, so a renamed pipeline reported 0% and its stage table printed raw
-  // enum keys. Each admin now gets their own org's numbers (a NULL org is the
-  // default org's, as everywhere), "hired" is that org's `finished` set, and
-  // the table shows the org's own stage labels.
-  const fallbackOrg = await defaultOrgId();
-  const statsByOrg = new Map<string, Promise<WeeklyAnalyticsStats>>();
-  const statsFor = (orgId: string | null) => {
-    const key = orgId ?? fallbackOrg;
-    let hit = statsByOrg.get(key);
-    if (!hit) {
-      hit = weeklyAnalyticsStats(key, weekAgo);
-      statsByOrg.set(key, hit);
-    }
-    return hit;
-  };
+  // Per TENANT (#1884): each admin gets their own org's numbers, "hired" is
+  // that org's `finished` set and the table shows the org's own stage labels
+  // (`weeklyAnalyticsStats`). The GATE is per tenant too (#2680): it used to be
+  // one unscoped read, so one org's premium tier switched the report on for
+  // every tenant. Admins are grouped by the org their settings live in — a NULL
+  // org is the default org's (`settingsOrgOfRow`, the tenantFilter.ts rule) —
+  // and each group is read, counted and mailed on its own.
+  const premiumOf = settingByOrg('premiumAnalytics');
+  const adminsByOrg = new Map<string, typeof admins>();
+  for (const a of admins) {
+    const org = await settingsOrgOfRow(a.orgId);
+    adminsByOrg.set(org, [...(adminsByOrg.get(org) ?? []), a]);
+  }
   // WORLDS (#2590): the dashboard link is resolved per ADMIN from that admin's
   // own organization.
   const origins = createOriginBook();
   await origins.prefetch(admins.map((a) => a.orgId));
 
-  let sent = 0;
-  for (const a of admins) {
-    // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
-    // that used to stand here belonged to `digests` and killed the report while
-    // the preference surfaces showed it as ON. 'digest' is in
-    // reports_analytics.legacy now, so the old opt-out still holds visibly.
-    if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
-    const base = await origins.urlFor(a.orgId);
-    const { total, conversion, newRelations, interactions, stageRows } = await statsFor(a.orgId);
-    await sendEmail({
-      category: 'analytics-report',
-      userId: a.id,
-      orgId: a.orgId,
-      to: a.email,
-      subject: 'Weekly analytics report — Internship CRM',
-      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color:#2563eb;">Weekly analytics report</h2>
-        <p>Hi ${a.fullName},</p>
-        <p><strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
-        last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.</p>
-        <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
-        <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
-      </div>`,
-    }).catch((error) => {
-      console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, error });
-    });
-    sent++;
+  const orgs: AnalyticsReportOrgResult[] = [];
+  for (const [orgId, recipients] of adminsByOrg) {
+    if ((await premiumOf(orgId)) !== 'true') {
+      orgs.push({ orgId, locked: true, sent: 0, total: 0 });
+      continue;
+    }
+    const { total, conversion, newRelations, interactions, stageRows } = await weeklyAnalyticsStats(orgId, weekAgo);
+    let sent = 0;
+    for (const a of recipients) {
+      // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
+      // that used to stand here belonged to `digests` and killed the report while
+      // the preference surfaces showed it as ON. 'digest' is in
+      // reports_analytics.legacy now, so the old opt-out still holds visibly.
+      if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
+      const base = await origins.urlFor(a.orgId);
+      await sendEmail({
+        category: 'analytics-report',
+        userId: a.id,
+        orgId: a.orgId,
+        to: a.email,
+        subject: 'Weekly analytics report — Internship CRM',
+        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color:#2563eb;">Weekly analytics report</h2>
+          <p>Hi ${esc(a.fullName)},</p>
+          <p><strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
+          last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.</p>
+          <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
+          <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
+        </div>`,
+      }).catch((error) => {
+        console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, orgId, error });
+      });
+      sent++;
+    }
+    orgs.push({ orgId, locked: false, sent, total });
   }
-  return { locked: false, sent };
+
+  // `orgs` is every tenant's entry: a caller that answers one tenant's admin
+  // (GET /api/cron) must pick that tenant's own, never pass the list on.
+  return { locked: orgs.every((o) => o.locked), sent: orgs.reduce((n, o) => n + o.sent, 0), orgs };
 }
 
 // Unread-message digest (#667): once an hour, gather messages that have been

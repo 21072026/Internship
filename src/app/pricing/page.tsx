@@ -120,7 +120,7 @@ export default async function PricingPage() {
   const employerPlans = plansForAudience('EMPLOYER');
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: t.pricing.metaTitle, path: '/pricing' }}>
       <div className="max-w-6xl mx-auto px-4 py-12 sm:py-16">
         {/* Hero */}
         <div className="text-center max-w-3xl mx-auto">

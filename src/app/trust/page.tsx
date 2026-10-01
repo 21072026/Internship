@@ -67,7 +67,7 @@ export default async function TrustPage() {
   ];
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: p.title, path: '/trust' }}>
       <div className="max-w-5xl mx-auto my-12 px-4">
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{p.title}</h1>

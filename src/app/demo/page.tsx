@@ -27,7 +27,7 @@ export default async function DemoPage() {
   const roleLabel = (role: 'admin' | 'mentor' | 'mentee') => t.demo.roles[role];
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: t.demo.title, path: '/demo' }}>
       <div className="max-w-3xl mx-auto px-4 py-12">
         <div className="flex items-center gap-3 mb-2">
           <FlaskConical className="h-7 w-7 text-amber-600" aria-hidden="true" />
