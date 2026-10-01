@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
-import { createOrGetProjectConversation, findOrCreateDirectConversation, isActiveProjectMember } from '@/lib/conversations';
+import { createOrGetProjectConversation, findOrCreateDirectConversation, groupRoomOpensFor } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -38,7 +38,9 @@ async function handlePost(request: Request) {
       // The project's group conversation is a projects-module write (#2502).
       const capGate = await requireCapability(session.user.orgId, 'projects');
       if (capGate) return capGate;
-      if (!(await isActiveProjectMember(session.user.id, parsed.data.projectId))) {
+      // The room opens for an active member in the caller's own tenant (#2627) —
+      // the same 403 a non-member, or a project that does not exist, gets.
+      if (!(await groupRoomOpensFor(session.user, parsed.data.projectId))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
       const conversation = await createOrGetProjectConversation(parsed.data.projectId);

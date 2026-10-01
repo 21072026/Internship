@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageProject, isProjectMember } from '@/lib/projectAccess';
+import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
@@ -76,6 +76,11 @@ async function ensureProjectAccess(
   user: { id: string; role: string; companyId?: string | null; orgId?: string | null },
   projectId: string
 ) {
+  // Another tenant's project is a missing one (#2627): the admin bypass below
+  // would otherwise reach every tenant's, with the org middleware dormant.
+  if (!(await projectInCallerTenant({ user }, projectId))) {
+    return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) as NextResponse };
+  }
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true, orgId: true },

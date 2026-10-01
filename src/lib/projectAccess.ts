@@ -93,9 +93,18 @@ export async function resolveOwner(
 // nothing — so each /api/projects/[id]/** handler asks this first and answers
 // false with the 404 a missing project gets: another tenant's project is not
 // "forbidden", it does not exist here. One query, the #2542 filter.
-export async function projectInCallerTenant(session: Session, id: string): Promise<boolean> {
+//
+// Every other route that takes a project id asks it too (#2627): meetings and
+// meeting series, contributor terms, note conversion and the project group chat.
+// Those reach it from helpers that hold only `session.user`, so the one field it
+// reads is all it asks for; a signed-in caller without an org is the default
+// org's, exactly as `tenantWhere()` reads a full session.
+export async function projectInCallerTenant(
+  session: Pick<Session, 'user'> | { user: { orgId?: string | null } },
+  id: string,
+): Promise<boolean> {
   const project = await prisma.project.findFirst({
-    where: withinTenant({ id }, await tenantWhere(session)),
+    where: withinTenant({ id }, await tenantWhere(session as Session)),
     select: { id: true },
   });
   return !!project;
