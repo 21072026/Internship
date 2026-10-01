@@ -4,8 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
-import { getLocale } from '@/i18n/server';
-import { getDictionary } from '@/i18n/dictionaries';
+import { getServerDictionary } from '@/i18n/server';
 import { renderNotification } from '@/lib/notificationText';
 
 // GET — the current user downloads all of their own data as JSON (GDPR-style).
@@ -43,9 +42,9 @@ export async function GET() {
   ]);
 
   // i18n rows (#921) store params instead of text — render them in the user's
-  // locale so the export carries the content, not just a key.
-  const locale = await getLocale();
-  const dict = getDictionary(locale);
+  // locale so the export carries the content, not just a key — and in the
+  // user's product's words, the same dictionary the bell rendered them with.
+  const { locale, t: dict } = await getServerDictionary();
   const renderedNotifications = notifications.map((n) => ({
     type: n.type,
     text: renderNotification(n, dict, locale),

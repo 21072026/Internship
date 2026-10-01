@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { APP_VERSION } from '@/lib/version';
+import { worldForHeaders } from '@/lib/hostWorld';
+import { productNameFor } from '@/lib/verticals';
 
 // The OpenAPI description of the ENTIRE internal API, for the admin API
 // explorer at /admin/api-explorer.
@@ -65,7 +67,7 @@ function loadSpec(): Spec | null {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!(await requireAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const spec = loadSpec();
@@ -82,5 +84,9 @@ export async function GET() {
   // no-store: it is derived per build, it is not public, and an intermediary
   // caching the full internal route inventory is not a risk worth taking for a
   // document that costs nothing to re-serve.
-  return NextResponse.json(spec, { headers: { 'Cache-Control': 'no-store' } });
+  // The build-time title names one product; the cached spec is shared by every
+  // host, so the world's product name is applied per request (docs/worlds.md).
+  const world = worldForHeaders((n) => request.headers.get(n));
+  const title = `${productNameFor(world)} - internal API`;
+  return NextResponse.json({ ...spec, info: { ...spec.info, title } }, { headers: { 'Cache-Control': 'no-store' } });
 }

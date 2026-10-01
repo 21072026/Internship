@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
+import { worldOfOrg } from '@/lib/userWorld';
+import { productNameFor } from '@/lib/verticals';
 import { meetingEnd } from '@/lib/meetingDuration';
 
 /**
@@ -43,7 +45,7 @@ export const pushableSelect = {
   durationMinutes: true,
 } as const satisfies Record<keyof PushableMeeting, true>;
 
-function eventBody(meeting: PushableMeeting) {
+function eventBody(meeting: PushableMeeting, product: string) {
   // A meeting with no time is a shared link, not a calendar entry — there is
   // nothing to put in a slot. Those are skipped by the caller.
   const start = meeting.scheduledAt!;
@@ -54,7 +56,7 @@ function eventBody(meeting: PushableMeeting) {
     location: meeting.meetLink ?? undefined,
     start: { dateTime: start.toISOString(), ...(meeting.timeZone ? { timeZone: meeting.timeZone } : {}) },
     end: { dateTime: end.toISOString(), ...(meeting.timeZone ? { timeZone: meeting.timeZone } : {}) },
-    source: { title: 'Internship CRM', url: meeting.meetLink ?? undefined },
+    source: { title: product, url: meeting.meetLink ?? undefined },
   };
 }
 
@@ -76,11 +78,15 @@ export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): 
     const link = await prisma.googleCalendarEventLink.findUnique({
       where: { meetingId_connectionId: { meetingId: meeting.id, connectionId: auth.connectionId } },
     });
+    // Named per RECIPIENT, not per meeting: the event lands in that person's
+    // calendar and must name the product their account lives in.
+    const owner = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
+    const product = productNameFor(await worldOfOrg(owner?.orgId));
     const path = `/calendars/${encodeURIComponent(auth.calendarId)}/events${link ? `/${encodeURIComponent(link.googleEventId)}` : ''}`;
 
     const res = await calendarFetch(auth.token, path, {
       method: link ? 'PATCH' : 'POST',
-      body: JSON.stringify(eventBody(meeting)),
+      body: JSON.stringify(eventBody(meeting, product)),
     }).catch(() => null);
 
     if (!res || !res.ok) {

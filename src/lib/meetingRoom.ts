@@ -2,6 +2,8 @@ import { randomBytes } from 'crypto';
 import { jaasConfig, jaasRoomUrl } from '@/lib/jaas';
 import { jaasRoomAllowed, projectedHeadCount } from '@/lib/jaasAllowance';
 import { recordVideoUsage } from '@/lib/metering';
+import { prisma } from '@/lib/prisma';
+import { productNameFor } from '@/lib/verticals';
 
 // Where a meeting's video room comes from. Server-only (node:crypto); the
 // client-side link *checks* live in @/lib/meetingLink so components can import
@@ -14,8 +16,15 @@ import { recordVideoUsage } from '@/lib/metering';
 // The room name, without a host. Unguessable on purpose: the room is the only
 // thing protecting a call on the public instance, and on JaaS it is what the
 // participant's token is scoped to.
-export function generateMeetingRoomName(): string {
-  return `InternshipCRM-${randomBytes(8).toString('hex')}`;
+//
+// The prefix is the product of the organizer's world (docs/worlds.md): Jitsi
+// shows the room name as the call title, so a SaleVali demo call must not read
+// "InternshipCRM-…" to the customer. Omitted, it is the internship product —
+// which is what every room was. Nothing parses the prefix back
+// (parseJaasMeetingLink accepts any room name), so old rooms keep working.
+export function generateMeetingRoomName(vertical?: unknown): string {
+  const prefix = productNameFor(vertical).replace(/[^A-Za-z0-9]/g, '');
+  return `${prefix}-${randomBytes(8).toString('hex')}`;
 }
 
 // ── The routing rule (#2011) ─────────────────────────────────────────────────
@@ -64,6 +73,8 @@ export function generateMeetingRoomName(): string {
  * direction — a caller that has not asked whether the allowance has room cannot
  * spend it — and it keeps this function pure and testable without a database.
  *
+ * `vertical` is the organizer org's world and only picks the room-name prefix.
+ *
  * `orgId` is metering only (#1750) and changes nothing about the link: this is
  * the one chokepoint every room creation passes through, so it is the only
  * place where "how much video did this tenant use?" can be answered without
@@ -74,8 +85,9 @@ export function generateMeetingLink(opts: {
   inviteeCount: number | null;
   orgId?: string | null;
   jaasAllowed?: boolean;
+  vertical?: string | null;
 }): string {
-  const room = generateMeetingRoomName();
+  const room = generateMeetingRoomName(opts.vertical);
   const config = opts.jaasAllowed ? jaasConfig() : null;
   // REPORTED, NEVER GATED. This is the tenant's own video volume (#1750), a
   // different question from the JaaS allowance above: one is "what did this
@@ -106,6 +118,17 @@ export async function resolveMeetingLink(opts: {
 }): Promise<string> {
   const pasted = opts.pastedLink?.trim();
   if (pasted) return pasted;
-  const jaasAllowed = await jaasRoomAllowed(projectedHeadCount(opts.inviteeCount));
-  return generateMeetingLink({ inviteeCount: opts.inviteeCount, orgId: opts.orgId, jaasAllowed });
+  const [jaasAllowed, org] = await Promise.all([
+    jaasRoomAllowed(projectedHeadCount(opts.inviteeCount)),
+    // `Organization` is not a tenant model; a failed read is the default world.
+    opts.orgId
+      ? prisma.organization.findUnique({ where: { id: opts.orgId }, select: { vertical: true } }).catch(() => null)
+      : null,
+  ]);
+  return generateMeetingLink({
+    inviteeCount: opts.inviteeCount,
+    orgId: opts.orgId,
+    jaasAllowed,
+    vertical: org?.vertical ?? null,
+  });
 }

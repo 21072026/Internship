@@ -6,14 +6,15 @@
 // meeting in everyone's calendar for ever, and reading the string by hand is the
 // only way to catch it before a real client does.
 import { test, expect } from '@playwright/test';
-import { buildMeetingIcs, buildFeedIcs } from '@/lib/ics';
+import { buildMeetingIcs, buildFeedIcs, feedFilename } from '@/lib/ics';
 
 const START = new Date('2026-09-10T09:00:00Z');
+const P = 'Internship CRM';
 
 // The default length is the app's one default (60, src/lib/meetingDuration.ts,
 // #1984) — it was a bare 30 here, so every downloaded meeting ended early.
 test('defaults: PUBLISH, sequence 0, and the app-wide 60 minutes', () => {
-  const ics = buildMeetingIcs({ uid: 'm1', title: 'Weekly 1:1', start: START });
+  const ics = buildMeetingIcs({ product: P, uid: 'm1', title: 'Weekly 1:1', start: START });
   expect(ics).toContain('METHOD:PUBLISH');
   expect(ics).toContain('SEQUENCE:0');
   expect(ics).toContain('DTSTART:20260910T090000Z');
@@ -24,6 +25,7 @@ test('defaults: PUBLISH, sequence 0, and the app-wide 60 minutes', () => {
 
 test('an invitation is a REQUEST with an organizer and an attendee', () => {
   const ics = buildMeetingIcs({
+    product: P,
     uid: 'm1',
     title: 'Weekly 1:1',
     start: START,
@@ -44,6 +46,7 @@ test('an invitation is a REQUEST with an organizer and an attendee', () => {
 
 test('a nameless participant simply has no CN', () => {
   const ics = buildMeetingIcs({
+    product: P,
     uid: 'm1',
     title: 'Weekly 1:1',
     start: START,
@@ -57,6 +60,7 @@ test('a nameless participant simply has no CN', () => {
 
 test('a PUBLISH copy stays participant-free', () => {
   const ics = buildMeetingIcs({
+    product: P,
     uid: 'm1',
     title: 'Weekly 1:1',
     start: START,
@@ -72,6 +76,7 @@ test('a PUBLISH copy stays participant-free', () => {
 
 test('a cancellation carries CANCEL, CANCELLED and the bumped sequence', () => {
   const ics = buildMeetingIcs({
+    product: P,
     uid: 'm1',
     title: 'Weekly 1:1',
     start: START,
@@ -95,12 +100,12 @@ test('a cancellation carries CANCEL, CANCELLED and the bumped sequence', () => {
 });
 
 test('durationMinutes drives DTEND', () => {
-  const ics = buildMeetingIcs({ uid: 'm1', title: 'Long one', start: START, durationMinutes: 90 });
+  const ics = buildMeetingIcs({ product: P, uid: 'm1', title: 'Long one', start: START, durationMinutes: 90 });
   expect(ics).toContain('DTEND:20260910T103000Z');
 });
 
 test('the subscription feed stays title-and-time only', () => {
-  const ics = buildFeedIcs('InternshipCRM', [
+  const ics = buildFeedIcs(P, [
     { uid: 'series-s1-2026-09-10T09:00:00.000Z', title: 'Project call', start: START },
     { uid: 'deadline-r1', title: '100 · First contact', start: START },
   ]);
@@ -111,4 +116,24 @@ test('the subscription feed stays title-and-time only', () => {
   expect(ics).not.toContain('DESCRIPTION');
   expect(ics).not.toContain('LOCATION');
   expect(ics).not.toContain('https://');
+});
+
+// Worlds (docs/worlds.md): the file names the product it was produced for. The
+// internship values are the ones every existing subscription already holds.
+test('the producer and the feed name follow the product; the UID domain does not', () => {
+  const internship = buildFeedIcs('Internship CRM', [{ uid: 'm1', title: 'Call', start: START }]);
+  expect(internship).toContain('PRODID:-//InternshipCRM//EN');
+  expect(internship).toContain('X-WR-CALNAME:InternshipCRM');
+  expect(feedFilename('Internship CRM')).toBe('internship-crm.ics');
+
+  const marketing = buildFeedIcs('SaleVali', [{ uid: 'm1', title: 'Demo', start: START }]);
+  expect(marketing).toContain('PRODID:-//SaleVali//EN');
+  expect(marketing).toContain('X-WR-CALNAME:SaleVali');
+  expect(marketing).not.toContain('Internship');
+  expect(marketing).toContain('UID:m1@crm.ersah.in');
+  expect(feedFilename('SaleVali')).toBe('salevali.ics');
+
+  const invite = buildMeetingIcs({ product: 'SaleVali', uid: 'm1', title: 'Demo', start: START, method: 'REQUEST' });
+  expect(invite).toContain('PRODID:-//SaleVali//EN');
+  expect(invite).not.toContain('Internship');
 });

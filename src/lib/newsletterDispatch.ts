@@ -5,8 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { getOrgBranding } from '@/lib/orgBranding';
-import type { ResolvedBranding } from '@/lib/branding';
+import { getOrgBranding, type OrgBranding } from '@/lib/orgBranding';
+import { mailAccentFor } from '@/lib/accent';
 import { getSetting } from '@/lib/settings';
 import { broadcastMonth, checkBroadcastQuota, type BroadcastQuotaCheck } from '@/lib/broadcastQuota';
 import { buildNewsletterQuotaHoldAlert, runNewsletterTick } from '@/lib/newsletterQuotaHold';
@@ -134,13 +134,13 @@ interface Recipient {
  * Created per run and never at module scope: branding edited between two issues
  * must show up in the second one.
  */
-export type NewsletterBrandCache = Map<string, Promise<ResolvedBranding>>;
+export type NewsletterBrandCache = Map<string, Promise<OrgBranding>>;
 
 export function newNewsletterBrandCache(): NewsletterBrandCache {
   return new Map();
 }
 
-function brandFor(orgId: string | null | undefined, cache?: NewsletterBrandCache): Promise<ResolvedBranding> {
+function brandFor(orgId: string | null | undefined, cache?: NewsletterBrandCache): Promise<OrgBranding> {
   const key = orgId ?? '';
   const hit = cache?.get(key);
   if (hit) return hit;
@@ -218,9 +218,9 @@ export async function renderNewsletterFor(options: {
     locale,
     html: renderNewsletterHtml({
       content,
-      // A tenant that set no brand colour yields null here; the renderer's
-      // accentOf() turns anything that is not a hex value into the product blue.
-      brand: { name: brand.name, accent: brand.color ?? '', logoUrl: brand.logoUrl },
+      // A tenant that set no brand colour takes its world's mail accent, so a
+      // SaleVali copy is magenta rather than the internship blue.
+      brand: { name: brand.name, accent: brand.color ?? mailAccentFor(brand.vertical), logoUrl: brand.logoUrl },
       labels: labelsFor(locale),
       withMentorNote: showsMentorNote(audience, role),
       imageSrc: imageSrc ?? null,
@@ -489,6 +489,10 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
         // to sit outside the one check that cannot be forgotten.
         userId: user.id,
         prefs: user,
+        // Handed over for the same reason as `prefs`: this fan-out already knows
+        // it. It also names the sender after the reader's org outside the
+        // default world (sendEmail), matching the brand the body wears.
+        orgId: user.orgId,
         attachments,
         headers: {
           // Both halves matter: the URL alone gets a "click to unsubscribe"

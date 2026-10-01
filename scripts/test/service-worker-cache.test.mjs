@@ -73,16 +73,17 @@ function loadWorker() {
   const listeners = new Map();
   const caches = fakeCacheStorage();
   const harness = { fetchImpl: async () => new Response('net') };
+  const shown = [];
 
   const self = {
-    location: { origin: ORIGIN },
+    location: { origin: ORIGIN, hostname: new URL(ORIGIN).hostname },
     addEventListener: (type, fn) => {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(fn);
     },
     skipWaiting: () => {},
     clients: { claim: () => {}, matchAll: async () => [], openWindow: async () => {} },
-    registration: { showNotification: async () => {} },
+    registration: { showNotification: async (title, options) => { shown.push({ title, options }); } },
     atob: (s) => Buffer.from(s, 'base64').toString('binary'),
     caches,
   };
@@ -143,6 +144,15 @@ function loadWorker() {
       await new Promise((r) => setImmediate(r));
       await new Promise((r) => setImmediate(r));
       return res;
+    },
+
+    /** Deliver a push (`json` undefined = an empty push) and return what the tray shows. */
+    async push(json) {
+      await dispatch('push', {
+        data: json === undefined ? null : { json: () => json },
+        waitUntil: (p) => pending.push(p),
+      });
+      return shown.at(-1);
     },
 
     /** Post a message to the worker and resolve with the ack it sends back. */
@@ -334,4 +344,22 @@ test('the push handlers survived the edit', () => {
   for (const type of ['install', 'activate', 'fetch', 'message', 'push', 'notificationclick', 'pushsubscriptionchange']) {
     assert.ok(sw.hasListener(type), `public/sw.js should register a ${type} handler`);
   }
+});
+
+// One static worker serves every product's host (docs/worlds.md): the brand of a
+// notification comes from the payload the server resolved for the recipient,
+// and nothing the worker falls back to may name a product.
+test('a push shows the icon and badge the server chose for the recipient', async () => {
+  const sw = loadWorker();
+  const note = await sw.push({ title: 'New message', body: 'hi', icon: '/icon-salevali-192.png', badge: '/icon-salevali-192.png' });
+  assert.equal(note.title, 'New message');
+  assert.equal(note.options.icon, '/icon-salevali-192.png');
+  assert.equal(note.options.badge, '/icon-salevali-192.png');
+});
+
+test('an empty push is titled with the host, never a product name', async () => {
+  const sw = loadWorker();
+  const note = await sw.push(undefined);
+  assert.equal(note.title, new URL(ORIGIN).hostname);
+  assert.doesNotMatch(readFileSync(SW_PATH, 'utf8'), /Internship CRM|SaleVali/);
 });
