@@ -229,6 +229,23 @@ role scope with the tenant, every `/api/projects/[id]/**` handler asks
 `projectInCallerTenant()` first, `resolveOwner()` and the member-add lookup resolve
 people and companies in the tenant, `POST /api/projects` stamps `orgId`, and the
 `/projects/[id]` page treats a signed-in visitor from another tenant as anonymous.
+**Every other route that takes a project id followed in #2627**, through the same
+`projectInCallerTenant()`: `resolveMeetingContext` (`POST /api/meetings/instant` —
+its RELATION branch also ANDs the tenant, since "an admin reaches any relation"
+meant every tenant's), `/api/meeting-series` (`ensureProjectAccess` and `GET`),
+the project-bound `POST /api/contributor-terms`, and both branches of
+`POST /api/notes/[id]/convert` (the project for a task, the relation for a goal) —
+each a 404 like a missing one. The **project group chat** is the case to remember:
+it is gated on a `ProjectMember` row, and `ProjectMember` carries no org, so a
+membership that crosses tenants (one written before #2622 closed the members
+route) opened another tenant's room. `groupRoomOpensFor()` in
+`src/lib/conversations.ts` asks the tenant before the membership, for
+`getConversationIfAllowed`, `canPostToConversation` and the project branch of
+`POST /api/conversations` — refused with the same 403 as a room that does not
+exist. It reads `orgId` off the user it is handed, so callers pass `session.user`
+whole; a hand-built `{ id, role }` reads as the default org's and locks every
+other tenant out of its own rooms (the two in `/api/messages/[id]/**` were fixed
+for that reason). Proven by `e2e/cross-tenant-project-satellites.spec.ts`.
 Three things to know before copying it:
 
 - **The filter goes in the query.** That is the flag-independent by-id guard —

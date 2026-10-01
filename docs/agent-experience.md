@@ -7963,6 +7963,23 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **A fresh local DB must be seeded (`node prisma/seed.mjs`) before the first e2e run**; running
   specs first leaves rows that make the seed's org backfill hit a unique key (`Source_orgId_name`).
 
+## 2026-09-30 — project satellites tenant scope (#2627)
+
+- **Playwright's `reuseExistingServer` will silently test another worktree's code.** Parallel sessions
+  leave `next dev` on :3000; locally the config reuses whatever answers there, so a "negative control"
+  and a "fix passes" run can both be against someone else's checkout. Check first with
+  `lsof -nP -iTCP:3000 -sTCP:LISTEN` + `lsof -p <pid> -a -d cwd`. If it is not yours, do not kill it:
+  temporarily set `PORT` to e.g. 3100 and the default webServer `command` to `npx next dev -p 3100`
+  in `playwright.config.ts`, pass `NEXTAUTH_URL=http://localhost:3100`, and revert before committing.
+- **Use `expect.soft` in a probe loop** for a negative control: a hard `expect` stops at the first
+  route, so the old-code run proves one hole, not all of them.
+- **`ProjectMember` has no org** — any rule of the form "is an active member" is a cross-tenant rule
+  unless the project's tenant is asked first (`groupRoomOpensFor()` in `src/lib/conversations.ts`).
+  Helpers that read `orgId` off a user must be handed `session.user` whole; a hand-built `{ id, role }`
+  reads as the default org and locks every other tenant out.
+- `docs/agent-experience.md` carried an orphaned `>>>>>>> origin/main` line from an earlier merge
+  (removed here); `grep -nE '^(<<<<<<<|=======|>>>>>>>)'` before appending.
+
 ## 2026-09-30 — relation targets + projects tenant scope (#2618, #2622)
 
 - **Scoping a list by tenant can hide the rows its own creator just made.** With

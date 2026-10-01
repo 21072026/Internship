@@ -27,7 +27,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     select: { relationId: true, conversationId: true, deletedForEveryoneAt: true },
   });
   if (!message) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const allowed = await canAccessMessage({ id: session.user.id, role: session.user.role }, message);
+  const allowed = await canAccessMessage(session.user, message);
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (message.deletedForEveryoneAt) return NextResponse.json({ error: 'Message deleted' }, { status: 409 });
 
