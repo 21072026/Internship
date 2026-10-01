@@ -8,10 +8,10 @@ import { canAccessMessage } from '@/lib/conversations';
 // Load a message and confirm the caller may act on it — via its mentorship
 // thread or its conversation (#769), whichever the message is linked to.
 // Returns the message or null when not found / not allowed.
-async function loadAllowed(userId: string, role: string, messageId: string) {
+async function loadAllowed(user: { id: string; role: string; orgId?: string | null }, messageId: string) {
   const message = await prisma.message.findUnique({ where: { id: messageId } });
   if (!message) return null;
-  if (!(await canAccessMessage({ id: userId, role }, message))) return null;
+  if (!(await canAccessMessage(user, message))) return null;
   return message;
 }
 
@@ -24,7 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
 
-  const message = await loadAllowed(session.user.id, session.user.role, id);
+  const message = await loadAllowed(session.user, id);
   if (!message) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (message.senderId !== session.user.id) {
     return NextResponse.json({ error: 'Only the sender can edit' }, { status: 403 });
@@ -53,7 +53,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const { id } = await params;
   const scope = new URL(request.url).searchParams.get('scope') === 'me' ? 'me' : 'everyone';
 
-  const message = await loadAllowed(session.user.id, session.user.role, id);
+  const message = await loadAllowed(session.user, id);
   if (!message) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   if (scope === 'me') {

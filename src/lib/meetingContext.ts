@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { canPostToConversation, getConversationIfAllowed } from '@/lib/conversations';
+import { projectInCallerTenant } from '@/lib/projectAccess';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import type { Session } from 'next-auth';
 
 // A meeting hangs off exactly one context (#1051). MySQL can't express
 // "exactly one of three columns is set" as a CHECK constraint, so the rule is
@@ -60,6 +63,7 @@ interface SessionUser {
   id: string;
   role: string;
   companyId?: string | null;
+  orgId?: string | null;
 }
 
 // How many context keys the input sets. Anything but 1 is a client bug.
@@ -103,14 +107,14 @@ export async function resolveMeetingContext(
   }
 
   if (input.projectId) {
-    // Read the project first: Project is a TENANT_MODEL (src/lib/orgContext.ts)
-    // so this lookup is org-scoped, while ProjectMember is not — querying
-    // members directly would reach across tenants.
-    const project = await prisma.project.findUnique({
-      where: { id: input.projectId },
-      select: { id: true },
-    });
-    if (!project) return { ok: false, status: 404, error: 'Project not found' };
+    // Read the project first, in the caller's tenant: ProjectMember carries no
+    // org, so querying members directly would reach across tenants. Project is
+    // a TENANT_MODEL, but the middleware only scopes with MT_ENFORCE_ISOLATION
+    // on, so the tenant is asked explicitly (#2627) — another tenant's project
+    // answers like a missing one, for an admin too.
+    if (!(await projectInCallerTenant({ user }, input.projectId))) {
+      return { ok: false, status: 404, error: 'Project not found' };
+    }
 
     const members = await prisma.projectMember.findMany({
       where: { projectId: input.projectId },
@@ -122,7 +126,7 @@ export async function resolveMeetingContext(
       return { ok: false, status: 404, error: 'Project not found' };
     }
     const me = members.find((m) => m.userId === user.id);
-    // Admins reach every project; otherwise only OWNER/MENTOR members may start
+    // Admins reach every project of their tenant; otherwise only OWNER/MENTOR members may start
     // a meeting for the whole team (mentee members join, they don't summon).
     if (user.role !== 'ADMIN' && (!me || me.role === 'MENTEE')) {
       return { ok: false, status: 403, error: 'Forbidden' };
@@ -181,14 +185,15 @@ export async function resolveMeetingContext(
   }
 
   const relationIds = input.relationIds ?? [];
-  // Same scoping rule as /api/meetings: an admin schedules for any relation, a
-  // mentor only for their own.
+  // Same scoping rule as /api/meetings: an admin schedules for any relation of
+  // their tenant, a mentor only for their own. The tenant is a term of its own
+  // (#2627): with the middleware dormant, an admin's "any" was every tenant's.
   const where =
     user.role === 'ADMIN'
       ? { id: { in: relationIds } }
       : { id: { in: relationIds }, mentorId: user.id };
   const relations = await prisma.mentorshipRelation.findMany({
-    where,
+    where: withinTenant(where, await tenantWhere({ user } as Session)),
     select: { id: true, mentee: { select: INVITEE_SELECT } },
   });
   if (relations.length === 0) {
