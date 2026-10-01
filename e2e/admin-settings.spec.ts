@@ -39,7 +39,12 @@ test('admin saves system settings and bulk-imports mentees from CSV', async ({ p
     expect(a?.role).toBe('MENTEE');
   } finally {
     await prisma.user.deleteMany({ where: { email: { in: [importedA, importedB] } } });
-    await prisma.setting.deleteMany({ where: { orgId: null, key: { in: ['reminderDays', 'supportEmail', 'weeklyDigest'] } } });
+    // The seeded admin has no org, so its writes land on the DEFAULT org's row
+    // (#2628) — the global row is left alone by the API now.
+    const def = await prisma.organization.findUnique({ where: { slug: 'default' }, select: { id: true } });
+    await prisma.setting.deleteMany({
+      where: { orgId: def?.id ?? null, key: { in: ['reminderDays', 'supportEmail', 'weeklyDigest'] } },
+    });
     await cleanupByEmail(adminEmail);
   }
 });

@@ -1,15 +1,21 @@
 import { NextResponse } from 'next/server';
 import { WEBHOOK_EVENTS } from '@/lib/webhooks';
 import { API_SCOPES } from '@/lib/apiScopes';
+import { worldForHeaders } from '@/lib/hostWorld';
+import { productNameFor } from '@/lib/verticals';
 
 // Minimal OpenAPI 3.1 description of the public, key-authenticated API.
 // Served publicly so integrators can discover the surface and import it into
 // Swagger/Postman.
-export function GET() {
+//
+// The title names the product of the host it was fetched from (docs/worlds.md):
+// an integrator importing it from the SaleVali host gets a "SaleVali" collection.
+export function GET(request: Request) {
+  const world = worldForHeaders((n) => request.headers.get(n));
   const spec = {
     openapi: '3.1.0',
     info: {
-      title: 'Internship CRM Public API',
+      title: `${productNameFor(world)} Public API`,
       version: '1.0.0',
       description:
         'Read-only candidate access (Bearer API key) plus outgoing webhooks. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to.',
@@ -59,5 +65,5 @@ export function GET() {
       payload: { type: 'object', properties: { event: { type: 'string' }, data: { type: 'object' }, sentAt: { type: 'string', format: 'date-time' } } },
     },
   };
-  return NextResponse.json(spec);
+  return NextResponse.json(spec, { headers: { Vary: 'X-Forwarded-Host, Host' } });
 }

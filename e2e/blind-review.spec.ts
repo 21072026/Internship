@@ -18,9 +18,11 @@ test.afterAll(async () => {
 });
 
 async function setBlindReview(page: import('@playwright/test').Page, on: boolean) {
-  const current = await (await page.request.get('/api/admin/settings')).json();
+  // Only the key under test: posting the whole settings object back would
+  // include the deployment-global keys, which a tenant admin may not write
+  // (403 since #2628).
   const res = await page.request.put('/api/admin/settings', {
-    data: { ...current.settings, blindReview: on ? 'true' : 'false' },
+    data: { blindReview: on ? 'true' : 'false' },
   });
   expect(res.ok()).toBeTruthy();
 }

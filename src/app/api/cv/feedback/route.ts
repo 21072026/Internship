@@ -9,6 +9,7 @@ import { aiCvFeedback } from '@/lib/aiCvFeedback';
 import { runAiGated } from '@/lib/aiGate';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 // AI CV improvement feedback (Faz 2, #535) — the mentee's own CV only, and
 // FREE for the mentee: the cost is metered against the org's AI quota via the
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
   if (!text.trim()) return NextResponse.json({ feedback: null, empty: true });
 
   const gated = await runAiGated({
+    orgId: await settingsOrgOf(session),
     scope: 'cv_feedback',
     consent: { userId: session.user.id, type: 'AI_CV_PARSING' },
     userId: session.user.id,

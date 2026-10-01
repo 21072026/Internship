@@ -77,9 +77,13 @@ test('the SSO login failure redirect stays on the host the browser is on', async
   expect(defLoc.searchParams.get('error')).toBe('sso_unavailable');
 });
 
+// The feed is the internship product's (docs/worlds.md): the marketing host
+// 404s both the page and the feed, so it must not advertise one — neither its
+// own dead URL nor the internship host's.
 test('the release-notes feed link is built on the host the page was served from', async ({ request }) => {
   const marketing = await (await request.get('/release-notes', { headers: AS_MARKETING })).text();
-  expect(marketing).toContain(`https://${MARKETING}/release-notes/feed.xml`);
+  expect(marketing).not.toContain('/release-notes/feed.xml');
+  expect(marketing).not.toContain('Internship CRM — release notes');
 
   const def = await (await request.get('/release-notes')).text();
   expect(def).not.toContain(`${MARKETING}/release-notes/feed.xml`);
@@ -105,7 +109,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-async function seedSamlOrg() {
+async function seedSamlOrg(vertical: 'INTERNSHIP' | 'MARKETING' = 'INTERNSHIP') {
   const slug = `host-sso-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   // Never contacted: the login route only BUILDS the AuthnRequest URL, and the
   // ACS cases below are refused before any assertion is parsed.
@@ -113,6 +117,7 @@ async function seedSamlOrg() {
     data: {
       name: `Host SSO ${slug}`,
       slug,
+      vertical,
       plan: 'ENTERPRISE',
       ssoEnabled: true,
       ssoProvider: 'saml',
@@ -124,9 +129,12 @@ async function seedSamlOrg() {
 }
 
 test('SAML login started on the marketing host sends that origin as RelayState; the default host sends none', async ({ request }) => {
-  const org = await seedSamlOrg();
+  // Each host starts the sign-in of its own world's tenant — an org code of the
+  // other world is refused there like an unknown one (docs/worlds.md).
+  const marketingOrg = await seedSamlOrg('MARKETING');
+  const internshipOrg = await seedSamlOrg('INTERNSHIP');
   try {
-    const marketing = await request.get(`/api/auth/sso/${org.slug}/login`, { headers: AS_MARKETING, maxRedirects: 0 });
+    const marketing = await request.get(`/api/auth/sso/${marketingOrg.slug}/login`, { headers: AS_MARKETING, maxRedirects: 0 });
     expect([302, 303, 307, 308]).toContain(marketing.status());
     const idp = new URL(marketing.headers()['location']);
     expect(idp.origin).toBe('https://idp.example');
@@ -134,12 +142,12 @@ test('SAML login started on the marketing host sends that origin as RelayState; 
     expect(idp.searchParams.get('RelayState')).toBe(`https://${MARKETING}`);
 
     // The internship host's AuthnRequest is exactly what it always was.
-    const def = await request.get(`/api/auth/sso/${org.slug}/login`, { maxRedirects: 0 });
+    const def = await request.get(`/api/auth/sso/${internshipOrg.slug}/login`, { maxRedirects: 0 });
     const defIdp = new URL(def.headers()['location']);
     expect(defIdp.origin).toBe('https://idp.example');
     expect(defIdp.searchParams.get('RelayState') ?? '').toBe('');
   } finally {
-    await prisma.organization.deleteMany({ where: { id: org.id } });
+    await prisma.organization.deleteMany({ where: { id: { in: [marketingOrg.id, internshipOrg.id] } } });
   }
 });
 

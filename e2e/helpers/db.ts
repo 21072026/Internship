@@ -36,6 +36,24 @@ export async function setGlobalSetting(key: string, value: string) {
   else await prisma.setting.create({ data: { orgId: null, key, value } });
 }
 
+// Write a Setting row for the DEFAULT org — the org a seeded user without an
+// explicit org, and the shared seed admin, belongs to. Since #2628 this is the
+// row a default-org admin's settings form writes and every reader of that org
+// resolves first, so a test that means "this tenant's policy" writes it here: a
+// global row is shadowed by it, and stays shadowed once any earlier spec has
+// saved the same key through PUT /api/admin/settings.
+export async function setDefaultOrgSetting(key: string, value: string) {
+  const org = await prisma.organization.upsert({
+    where: { slug: 'default' },
+    update: {},
+    create: { slug: 'default', name: 'Default Organization' },
+    select: { id: true },
+  });
+  const existing = await prisma.setting.findFirst({ where: { orgId: org.id, key } });
+  if (existing) await prisma.setting.update({ where: { id: existing.id }, data: { value } });
+  else await prisma.setting.create({ data: { orgId: org.id, key, value } });
+}
+
 export function uniqueEmail(prefix: string) {
   const slug = prefix.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '') || 'e2e';
   return `${slug}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@e2e.local`;

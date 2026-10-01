@@ -51,6 +51,14 @@ export function defaultAccentFor(vertical?: VerticalKey | null): AccentColor {
   return vertical === 'MARKETING' ? 'magenta' : DEFAULT_ACCENT;
 }
 
+// The accent a MAIL wears when its tenant set no brand colour: SaleVali magenta
+// for MARKETING, the product blue otherwise. Never the preview green — a mail
+// outlives the environment that sent it, and the internship default has always
+// been this blue.
+export function mailAccentFor(vertical?: VerticalKey | null): string {
+  return vertical === 'MARKETING' ? ACCENT_SWATCH.magenta : ACCENT_SWATCH.blue;
+}
+
 // Resolve the accent to apply: an explicit user preference wins, otherwise the
 // vertical's default. Returns the value for the <html data-accent> attribute.
 export function resolveAccent(preference?: string | null, vertical?: VerticalKey | null): AccentColor {

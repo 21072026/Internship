@@ -110,7 +110,7 @@ const LEAK_EXEMPT: Record<string, string> = {
 // — a new leak is fixed with an overlay entry (src/i18n/verticalOverlays.ts),
 // or argued into LEAK_EXEMPT with its reason. History: 528/530/526 (en/tr/de)
 // on the day the ratchet landed, before #2557/#2558's own overlay entries.
-const EXPECTED_LEAKS: Record<string, number> = { en: 438, tr: 440, de: 436 };
+const EXPECTED_LEAKS: Record<string, number> = { en: 414, tr: 417, de: 412 };
 
 const leakArg = process.argv.find((a) => a === '--leaks' || a.startsWith('--leaks='));
 const listLocale = leakArg ? (leakArg.split('=')[1] ?? 'all') : null;

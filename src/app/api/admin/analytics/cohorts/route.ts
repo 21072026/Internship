@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
@@ -31,9 +32,9 @@ export async function GET() {
   // so a vertical without the module is refused here too.
   const gated = await requireCapability(callerOrgId, 'mentorship');
   if (gated) return gated;
-  // The tier is the CALLER's org's (org row, then the global one) — read with
-  // the org passed explicitly, since this runs before the tenant scope binds.
-  if ((await getSetting('premiumAnalytics', callerOrgId)) !== 'true') {
+  // The tier is the CALLER's org's — read with the org passed explicitly, since
+  // this runs before the tenant scope binds.
+  if ((await getSetting('premiumAnalytics', await settingsOrgOf(session))) !== 'true') {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 

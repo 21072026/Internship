@@ -71,7 +71,9 @@ export function verifyTotp(secretB32: string, code: string, atMs = Date.now()): 
 }
 
 // otpauth:// URI for authenticator apps (manual entry shows the secret too).
-export function otpauthUrl(secretB32: string, account: string, issuer = 'Internship CRM'): string {
+// `issuer` is required on purpose: it is the product the entry is filed under,
+// and a default would silently brand every world's factor as one product.
+export function otpauthUrl(secretB32: string, account: string, issuer: string): string {
   const label = encodeURIComponent(`${issuer}:${account}`);
   const params = new URLSearchParams({ secret: secretB32, issuer, algorithm: 'SHA1', digits: '6', period: '30' });
   return `otpauth://totp/${label}?${params.toString()}`;

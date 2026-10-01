@@ -12,6 +12,8 @@ import { PublicShell } from '@/components/landing/PublicShell';
 import { ReleaseNoteMedia } from '@/components/ReleaseNoteMedia';
 import { GITHUB_URL } from '@/components/landing/links';
 import { requireDefaultVertical } from '@/lib/verticalPage';
+import { worldForHeaders } from '@/lib/hostWorld';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
 
 // Discoverability half of the feed (#1383): browsers and readers pick a feed up
 // from this link, so subscribing is one click from the page. Locale-independent,
@@ -19,8 +21,13 @@ import { requireDefaultVertical } from '@/lib/verticalPage';
 // `?lang=`, and the visible link below follows the reader. Dynamic rather than
 // static (#2488) only so the feed URL is built on the host the page was served
 // from: on the marketing host it must not advertise the internship host's feed.
+//
+// The feed exists only on the internship host (feed.xml/route.ts, same host
+// rule), and Next still emits this metadata on the page's 404 — so on any
+// other host there is nothing to advertise.
 export async function generateMetadata(): Promise<Metadata> {
   const h = await headers();
+  if (worldForHeaders((n) => h.get(n)) !== DEFAULT_VERTICAL) return {};
   return {
     // Its own tab title in the reader's language (#1376).
     ...(await pageMetadata(

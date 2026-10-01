@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { buildMeetingIcs } from '@/lib/ics';
 import { meetingDurationMinutes } from '@/lib/meetingDuration';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { worldOfOrg } from '@/lib/userWorld';
+import { productNameFor } from '@/lib/verticals';
 
 // GET — public .ics for a meeting, addressed by its unguessable RSVP token
 // (the same credential used for the email RSVP links).
@@ -34,7 +36,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   // METHOD:CANCEL mail (#1982), not a file served from a bare token.
   if (meeting.status === 'CANCELLED') return NextResponse.json({ error: 'Meeting was cancelled' }, { status: 410 });
 
+  // The meeting's product is its organizer's world: the token may be a guest's,
+  // and a guest has no account of their own to read one from.
+  const organizer = await prisma.user.findUnique({ where: { id: meeting.createdById }, select: { orgId: true } });
   const ics = buildMeetingIcs({
+    product: productNameFor(await worldOfOrg(organizer?.orgId)),
     uid: meeting.id,
     title: meeting.title,
     start: meeting.scheduledAt,

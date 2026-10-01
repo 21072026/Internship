@@ -4,7 +4,7 @@ import { prisma, uniqueEmail } from './helpers/db';
 // when it transforms the spec's import graph, Node at runtime does not.
 import { activeMatchedPairs, countAdminSeats, getUsage, currentPeriod, previousPeriod } from '../src/lib/metering';
 import { runUsageRollup } from '../src/lib/jobs/usageRollup';
-import { generateMeetingLink } from '../src/lib/meetingRoom';
+import { generateMeetingLink, resolveMeetingLink } from '../src/lib/meetingRoom';
 
 // The billable unit and its nightly rollup, against a real database (#1750).
 //
@@ -179,5 +179,32 @@ test('video volume is recorded at the room chokepoint, and gates nothing', async
     await prisma.usageRollup.deleteMany({ where: { orgId: org.id } });
     await prisma.user.delete({ where: { id: mentor.id } }).catch(() => {});
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+// The production path reads the organizer org's world from the row itself —
+// the unit spec only proves the prefix for an explicit `vertical`.
+test('resolveMeetingLink names the room after the organizer org\'s world', async () => {
+  const stamp = uniqueEmail('room-world').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const marketing = await prisma.organization.create({
+    data: { name: `Room world M ${stamp}`, slug: `room-m-${stamp}`.slice(0, 60), plan: 'FREE', vertical: 'MARKETING' },
+  });
+  const internship = await prisma.organization.create({
+    data: { name: `Room world I ${stamp}`, slug: `room-i-${stamp}`.slice(0, 60), plan: 'FREE', vertical: 'INTERNSHIP' },
+  });
+  try {
+    expect(await resolveMeetingLink({ inviteeCount: 1, orgId: marketing.id })).toMatch(/\/SaleVali-[0-9a-f]{16}$/);
+    expect(await resolveMeetingLink({ inviteeCount: 1, orgId: internship.id })).toMatch(/\/InternshipCRM-[0-9a-f]{16}$/);
+    expect(await resolveMeetingLink({ inviteeCount: 1, orgId: null })).toMatch(/\/InternshipCRM-[0-9a-f]{16}$/);
+    // The video meter is written fire-and-forget; wait for it before cleanup
+    // so a late write cannot land on a deleted org.
+    for (const org of [marketing, internship]) {
+      await expect
+        .poll(async () => (await getUsage(org.id, currentPeriod())).VIDEO_ROOM ?? 0, { timeout: 10_000 })
+        .toBe(1);
+    }
+  } finally {
+    await prisma.usageRollup.deleteMany({ where: { orgId: { in: [marketing.id, internship.id] } } });
+    await prisma.organization.deleteMany({ where: { id: { in: [marketing.id, internship.id] } } }).catch(() => {});
   }
 });

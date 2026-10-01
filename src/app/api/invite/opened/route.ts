@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { hostVertical } from '@/lib/hostVertical';
+import { worldOfOrg } from '@/lib/userWorld';
 
 const schema = z.object({ token: z.string().min(1) });
 
@@ -26,7 +28,16 @@ export async function POST(request: Request) {
   const invite = await prisma.invitationToken.findUnique({ where: { token: parsed.data.token } });
   // Silently succeed for unknown/consumed tokens — this is a best-effort signal,
   // not an auth check, and we don't want to leak which tokens exist.
-  if (invite && !invite.used && !invite.revokedAt && !invite.openedAt && invite.expiresAt > new Date()) {
+  // An invitation of the other world opened on this host is not "opened": the
+  // register route refuses it here, so it must not look clicked to its admin.
+  if (
+    invite &&
+    !invite.used &&
+    !invite.revokedAt &&
+    !invite.openedAt &&
+    invite.expiresAt > new Date() &&
+    (await worldOfOrg(invite.orgId)) === (await hostVertical())
+  ) {
     await prisma.invitationToken.update({ where: { id: invite.id }, data: { openedAt: new Date() } });
   }
   return NextResponse.json({ ok: true });

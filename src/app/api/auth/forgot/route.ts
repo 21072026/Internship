@@ -47,10 +47,10 @@ export async function POST(request: Request) {
     // WHICH ACCOUNT (#2590). An address can now be an internship account and a
     // marketing account at once, and this form has no session to say which: the
     // host it was served from decides (the URL you are on is the product you are
-    // in). If the address has no account in that world, the person's account in
-    // the OTHER world is used — but only when there is exactly one — and the
-    // mail links to that account's own product. The response below is the same
-    // in every one of those cases, so none of it is observable to the requester.
+    // in). An address with no account in that world gets no mail: the action
+    // stays in the world it was started in, so SaleVali never sends an
+    // Internship CRM reset (or the reverse). The response below is the same
+    // either way, so none of it is observable to the requester.
     const world = worldForHeaders((name) => request.headers.get(name));
     const targets = await findAccountsForMailedLink(email, world, RESET_TARGET_SELECT);
     for (const user of targets) {
@@ -61,9 +61,8 @@ export async function POST(request: Request) {
       if (await isPasswordLoginBlocked(user)) continue;
       const token = await createPasswordResetToken(user.id, 'RESET');
       try {
-        // `orgId` is what points the mail's link at this account's own product
-        // (marketing accounts get the marketing origin, everyone else exactly the
-        // link they always got).
+        // `orgId` points the mail's brand and link at this account's product,
+        // which is — by the lookup above — the product of the host it was asked on.
         await sendPasswordResetEmail({
           to: user.email,
           token,

@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
+// Static import, not `await import()`: Playwright resolves the `@/…` alias when
+// it transforms the spec's import graph, Node at runtime does not.
+import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // #830 — negative-outcome communication.
 //
@@ -145,5 +148,111 @@ test('a candidate who accepted elsewhere is congratulated, not let down gently',
     await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);
+  }
+});
+
+// Worlds (docs/worlds.md): the outcome templates are placement wording ("could
+// not find a placement"). An org without placements — MARKETING — must get none
+// of it: no automatic mail even with auto-send switched on, and no draft behind
+// the rep's link. SMTP is blank in this environment, so an attempted send still
+// leaves a SKIPPED 'outcome' EmailLog row — which is what makes "nothing was
+// sent" observable, and the INTERNSHIP control below proves the row appears.
+
+async function seedOutcomeOrg(vertical: 'INTERNSHIP' | 'MARKETING', prefix: string) {
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const org = await prisma.organization.create({
+    data: { name: `Outcome ${vertical} ${stamp}`, slug: `${prefix}-${stamp}`, vertical },
+  });
+  const preset = defaultTemplateForVertical(vertical);
+  if (preset) {
+    await prisma.pipelineStage.createMany({
+      data: templateStagePayload(preset).stages.map((st) => ({ ...st, orgId: org.id })),
+    });
+  }
+  // Auto-send ON for this tenant only — a tenant row, so no other spec sees it.
+  await prisma.setting.create({ data: { orgId: org.id, key: 'outcomeAutoSend', value: 'true' } });
+  const mentorEmail = uniqueEmail(`${prefix}-rep`);
+  const menteeEmail = uniqueEmail(`${prefix}-lead`);
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Outcome Rep', org.id);
+  const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Outcome Lead', org.id);
+  const relation = await prisma.mentorshipRelation.create({
+    data: {
+      mentorId: mentor.id,
+      menteeId: mentee.id,
+      orgId: org.id,
+      status: 'ACTIVE',
+      pipelineStatus: vertical === 'MARKETING' ? 'LEAD_QUALIFIED' : 'INTERNSHIP_IN_PROGRESS_450',
+    },
+  });
+  const cleanup = async () => {
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
+    await prisma.emailLog.deleteMany({ where: { to: menteeEmail } });
+    await prisma.statusChange.deleteMany({ where: { relationId: relation.id } }).catch(() => {});
+    await prisma.interactionLog.deleteMany({ where: { relationId: relation.id } }).catch(() => {});
+    await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await prisma.pipelineStage.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  };
+  return { org, mentor, mentee, mentorEmail, menteeEmail, relation, cleanup };
+}
+
+test('a MARKETING lead reaching an outcome gets no placement mail, and the rep no placement draft', async ({ page }) => {
+  test.slow();
+  const seeded = await seedOutcomeOrg('MARKETING', 'outcome-mkt');
+  try {
+    // A MARKETING account signs in only on its own world's host (#2590), and a
+    // rep lands on the sales surface — only the session cookie matters here.
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', seeded.mentorEmail);
+    await page.fill('input[type="password"]', 'MentorPass123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/sales'), { timeout: 30_000 });
+
+    const res = await page.request.put(`/api/mentorship/${seeded.relation.id}`, {
+      data: { pipelineStatus: 'DEAL_LOST', reasonCode: 'NO_RESPONSE' },
+    });
+    expect(res.ok(), await res.text()).toBeTruthy();
+
+    // The rep is still told to write — pointed at the lead's record, with no
+    // template behind the link.
+    const notif = await prisma.notification.findFirst({
+      where: { userId: seeded.mentor.id, type: 'outcome.needsMessage' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(notif).not.toBeNull();
+    expect(notif?.link).toBe(`/sales/leads/${seeded.relation.id}`);
+    expect(notif?.link).not.toContain('template=');
+
+    // Auto-send is on for this org, and still nothing was attempted or logged.
+    expect(await prisma.emailLog.count({ where: { to: seeded.menteeEmail, category: 'outcome' } })).toBe(0);
+    expect(await prisma.interactionLog.count({ where: { relationId: seeded.relation.id, type: 'Email' } })).toBe(0);
+  } finally {
+    await seeded.cleanup();
+  }
+});
+
+test('the INTERNSHIP control: with auto-send on, the outcome mail is attempted and logged', async ({ page }) => {
+  test.slow();
+  const seeded = await seedOutcomeOrg('INTERNSHIP', 'outcome-int');
+  try {
+    await signInAndSettle(page, seeded.mentorEmail, 'MentorPass123', '/mentor');
+    const res = await page.request.put(`/api/mentorship/${seeded.relation.id}`, {
+      data: { pipelineStatus: 'INTERNSHIP_DROPPED_460', reasonCode: 'SKILL_MISMATCH' },
+    });
+    expect(res.ok(), await res.text()).toBeTruthy();
+
+    const notif = await prisma.notification.findFirst({
+      where: { userId: seeded.mentor.id, type: 'outcome.needsMessage' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(notif?.link).toContain('template=outcomeNoMatch');
+    // SKIPPED ("SMTP not configured") — the attempt is the point, not delivery.
+    expect(await prisma.emailLog.count({ where: { to: seeded.menteeEmail, category: 'outcome' } })).toBe(1);
+    expect(await prisma.interactionLog.count({ where: { relationId: seeded.relation.id, type: 'Email' } })).toBe(1);
+  } finally {
+    await seeded.cleanup();
   }
 });

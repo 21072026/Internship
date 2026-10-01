@@ -2,20 +2,23 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
-import { getSettings, setSetting, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { getSettings, isGlobalSettingKey, setSetting, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
+import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 import { findLeadOwner } from '@/lib/leadOwner';
-import { resolveOrgId } from '@/lib/orgScope';
-import { defaultOrgId } from '@/lib/defaultOrg';
 
-// GET — current settings for the caller's tenant, resolved org row → global row
-// → code default (see src/lib/settings.ts).
+// GET — the EFFECTIVE settings of the caller's tenant: its own row → the global
+// row → the code default (see src/lib/settings.ts). The org is passed
+// explicitly rather than read from the bound context, so an org-less session
+// reads the default org's values — the same org its PUT writes (#2628).
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  return withTenantScope(session, async () => NextResponse.json({ settings: await getSettings() }));
+  const orgId = await settingsOrgOf(session);
+  return withTenantScope(session, async () => NextResponse.json({ settings: await getSettings(orgId) }));
 }
 
 const schema = z.object({
@@ -92,10 +95,17 @@ const schema = z.object({
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.
 //
-// The layer written is never taken from the request body: `setSetting` derives it
-// from the org bound by `withTenantScope` below (and falls back to the global row
-// when no org is bound, which is what a single-tenant installation does today),
-// so tenant B's admin cannot reach tenant A's row no matter what it posts.
+// The layer written is never taken from the request body. A tenant key goes to
+// the caller's org row — `settingsOrgOf(session)`, the default org for an
+// org-less session — and NEVER to the global row (#2628): that row is the
+// platform default every tenant without its own override inherits, so writing
+// it from one tenant's settings form toggled `premiumAnalytics` (and every
+// other key here) for every tenant on the deployment.
+//
+// The deployment-global keys (GLOBAL_SETTING_KEYS — retention windows, the
+// access-log window, the orphan-applicant grace period) have no tenant row by
+// definition; they are written to the global row, and only by a super admin. A
+// tenant admin posting one gets 403 and nothing in the request is written.
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -103,20 +113,27 @@ export async function PUT(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
+  const entries = Object.entries(parsed.data).filter(
+    ([k, v]) => k in SETTING_DEFAULTS && v !== undefined,
+  ) as [SettingKey, string][];
+  const globalKeys = entries.filter(([k]) => isGlobalSettingKey(k)).map(([k]) => k);
+  if (globalKeys.length > 0 && !(await isSuperAdmin(session))) {
+    await logCrossTenantDenial(session, `PUT /api/admin/settings (${globalKeys.join(',')})`, null);
+    return NextResponse.json({ error: 'Forbidden', fields: globalKeys }, { status: 403 });
+  }
+
+  const orgId = await settingsOrgOf(session);
+
   const ownerId = parsed.data.defaultLeadOwnerId;
-  if (ownerId) {
-    const orgId = resolveOrgId(session) ?? (await defaultOrgId());
-    if (!(await findLeadOwner(orgId, ownerId))) {
-      return NextResponse.json({ error: 'Validation failed', field: 'defaultLeadOwnerId' }, { status: 400 });
-    }
+  if (ownerId && !(await findLeadOwner(orgId, ownerId))) {
+    return NextResponse.json({ error: 'Validation failed', field: 'defaultLeadOwnerId' }, { status: 400 });
   }
 
   return withTenantScope(session, async () => {
-    const entries = Object.entries(parsed.data).filter(([k]) => k in SETTING_DEFAULTS) as [SettingKey, string][];
     // Sequential on purpose: two writes for the same (org, key) must not race
     // the read-modify-write inside setSetting into a duplicate row.
-    for (const [key, value] of entries) await setSetting(key, value);
+    for (const [key, value] of entries) await setSetting(key, value, isGlobalSettingKey(key) ? null : orgId);
     await logActivity({ action: 'settings.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
-    return NextResponse.json({ settings: await getSettings() });
+    return NextResponse.json({ settings: await getSettings(orgId) });
   });
 }

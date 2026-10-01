@@ -104,6 +104,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         subject: `[TEST] ${subject}`,
         html,
         category: NEWSLETTER_EMAIL_CATEGORY,
+        // The test copy must arrive exactly as a reader's would, sender included.
+        orgId: me.orgId,
         // no-opt-out: a test copy an admin sends to themselves to check their own
         // formatting, not a subscription. The admin has a User row, so this is not
         // a `no-user-row:` case — passing it would render a working unsubscribe in

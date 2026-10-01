@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { isSsoActive } from '@/lib/sso';
 import { samlForOrg } from '@/lib/ssoSaml';
 import { configuredOrigin, requestOrigin } from '@/lib/servedHosts';
+import { worldForHeaders } from '@/lib/hostWorld';
+import { worldOfOrg } from '@/lib/userWorld';
 
 // GET /api/auth/sso/[slug]/login — SP-initiated SSO. Resolve the tenant, and if
 // SSO is active build a SAML AuthnRequest and redirect the browser to the IdP.
@@ -16,6 +18,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const origin = requestOrigin((n) => req.headers.get(n));
   const org = await prisma.organization.findUnique({ where: { slug } });
   if (!org || !isSsoActive(org)) {
+    return NextResponse.redirect(`${origin}/auth/signin?error=sso_unavailable`);
+  }
+  // An org code of the OTHER product is refused exactly like an unknown one: an
+  // action stays in the world it was started in (docs/worlds.md), and a session
+  // for that org is bound to its own world, so it could never be used here. The
+  // same answer keeps this host from confirming which codes exist over there.
+  if ((await worldOfOrg(org.id)) !== worldForHeaders((n) => req.headers.get(n))) {
     return NextResponse.redirect(`${origin}/auth/signin?error=sso_unavailable`);
   }
   try {

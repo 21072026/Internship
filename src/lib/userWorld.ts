@@ -95,8 +95,9 @@ export async function findUsersInWorld<S extends Prisma.UserSelect>(
 
 /**
  * Every account this address holds, in ANY world. Only for callers whose whole
- * job is to cross worlds: the sign-in page saying "that account lives on the
- * other site", and account erasure. Anything that acts on a person's behalf in
+ * job is to cross worlds: the sign-in's WRONG_WORLD_* password check (the page
+ * never names or links the other product), and account erasure. Anything that
+ * acts on a person's behalf in
  * one product must use `findUserInWorld`.
  */
 export async function findUsersByEmail<S extends Prisma.UserSelect>(
