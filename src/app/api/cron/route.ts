@@ -68,6 +68,13 @@ export async function GET(request: Request) {
     if (job === 'meeting-logs') {
       return NextResponse.json({ message: 'Meeting interaction logs ran', meetingLogs: await sweepMeetingInteractionLogs() });
     }
+    // Retention re-consent reminders alone — the same function the batch runs,
+    // idempotent by `retentionReminderSentAt`. Named so an operator (and
+    // e2e/tenant-scope-retention.spec.ts, which checks the per-org admin
+    // summary, #2542) can run it without the whole batch.
+    if (job === 'retention') {
+      return NextResponse.json({ message: 'Retention reminders ran', retention: await checkRetentionReminders() });
+    }
     if (job === 're-engagement') {
       return NextResponse.json({ message: 'Re-engagement reminders ran', reEngagement: await checkReEngagementReminders() });
     }

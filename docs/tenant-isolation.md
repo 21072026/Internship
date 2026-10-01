@@ -274,6 +274,10 @@ Three things to know before copying it:
 - **Server components need it as well.** `/admin` (`src/app/admin/page.tsx`)
   reads Prisma directly, so no API route's filter reaches it; its counts and
   "recent" lists carry `withinTenant(…, tenant)` themselves.
+  So does `/admin/retention`: `getRetentionReview(orgId)` takes the admin's org
+  (required, via `orgWhere`), and the orphan-applicant panel's API passes
+  `tenantWhere(session)` into `listOrphanApplicants`/`countOrphanApplicants`.
+  The nightly orphan sweep keeps the unscoped rule: it erases for every org.
 - **History is not fixed by code.** Rows the four create paths wrote before
   #2542 were NULL and the backfill gave them to the default org, even when a
   MARKETING admin created them. `node prisma/check-tenant-misattribution.mjs`

@@ -242,9 +242,19 @@ export function orphanApplicantWhere(agedBefore?: Date): Prisma.UserWhereInput {
   };
 }
 
+/**
+ * The rule narrowed to one tenant, as a conjunct (`AND`, so the tenant
+ * fragment's own `OR` cannot collide with the rule's). An omitted or empty
+ * tenant is the unscoped rule — what the nightly sweep runs, because the sweep
+ * erases for every org. The admin surface always passes one (#2542).
+ */
+function scoped(where: Prisma.UserWhereInput, tenant?: Prisma.UserWhereInput): Prisma.UserWhereInput {
+  return tenant && Object.keys(tenant).length > 0 ? { AND: [where, tenant] } : where;
+}
+
 /** How many orphan applicants there are (optionally, only the aged ones). */
-export function countOrphanApplicants(agedBefore?: Date): Promise<number> {
-  return prisma.user.count({ where: orphanApplicantWhere(agedBefore) });
+export function countOrphanApplicants(agedBefore?: Date, tenant?: Prisma.UserWhereInput): Promise<number> {
+  return prisma.user.count({ where: scoped(orphanApplicantWhere(agedBefore), tenant) });
 }
 
 /**
@@ -274,12 +284,14 @@ export async function listOrphanApplicants(options: {
   graceDays?: number;
   take?: number;
   now?: Date;
+  /** The reading admin's tenant (`tenantWhere(session)`); omitted = every org. */
+  tenant?: Prisma.UserWhereInput;
 } = {}): Promise<OrphanApplicant[]> {
   const graceDays = options.graceDays ?? ORPHAN_APPLICANT_GRACE_DAYS;
   const now = options.now ?? new Date();
 
   const users = await prisma.user.findMany({
-    where: orphanApplicantWhere(),
+    where: scoped(orphanApplicantWhere(), options.tenant),
     select: {
       id: true,
       fullName: true,
