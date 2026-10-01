@@ -326,12 +326,14 @@ function ensureTenantMiddleware(): void {
 }
 
 // Run `fn` with the given org bound as the current tenant context, so every
-// Prisma query inside is auto-scoped. When enforcement is off this is a straight
-// passthrough (no context, no middleware activity) — the single-tenant app is
-// unchanged.
+// Prisma query inside is auto-scoped. When enforcement is off no query is
+// scoped — the middleware is neither installed nor active — but the org is
+// still BOUND (#2628): `currentOrgId()` is how `src/lib/settings.ts` knows whose
+// settings a request reads and writes, and with the context missing every
+// tenant admin's settings form read and wrote the global row every tenant
+// inherits. The only other reader is the logger's `orgId` field.
 export function runWithOrg<T>(orgId: string | null, fn: () => T): T {
-  if (!isIsolationEnforced()) return fn();
-  ensureTenantMiddleware();
+  if (isIsolationEnforced()) ensureTenantMiddleware();
   return storage.run({ orgId }, () => {
     const result = fn();
     // Prisma's query promises are LAZY: the request — and therefore the

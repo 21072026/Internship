@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function TermsPage() {
   const { t } = await getServerDictionary();
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: t.terms.title, path: '/terms' }}>
       <div className="max-w-2xl mx-auto my-12 px-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">{t.terms.title}</h1>

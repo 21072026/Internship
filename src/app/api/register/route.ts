@@ -129,7 +129,14 @@ export async function POST(request: Request) {
       // not "fix" this by wrapping the handler: the invitation would become
       // unusable to the person it was sent to.
       const invitation = await prisma.invitationToken.findUnique({ where: { token } });
-      if (!invitation) {
+      // An invitation of the OTHER world is no invitation on this host: an
+      // action stays in the world it was started in (docs/worlds.md), and
+      // accepting it would mint the other product's account — and fire its
+      // notifications and mails — from here. Answered exactly like an unknown
+      // token, before its used/expired state can be read, so this host learns
+      // nothing about the other product. Permitted host use #3 in the TRUST
+      // NOTE of src/lib/hostVertical.ts.
+      if (!invitation || (await worldOfOrg(invitation.orgId)) !== (await hostVertical())) {
         return NextResponse.json({ error: 'Invalid invitation token' }, { status: 400 });
       }
       if (invitation.used) {
@@ -225,7 +232,7 @@ export async function POST(request: Request) {
     // lets the account in as soon as the emailed link is clicked — the front
     // door is open to anyone — while 'manual' parks it for an admin. Invited
     // users (proven email + chosen role) are active right away.
-    const pending = !token && (await getSetting('selfRegistration')) === 'manual';
+    const pending = !token && (await getSetting('selfRegistration', orgId)) === 'manual';
     const selfRegistered = !token;
 
     const timezone = isValidTimeZone(parsed.data.timezone) ? parsed.data.timezone : null;

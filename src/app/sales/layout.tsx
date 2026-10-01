@@ -12,11 +12,14 @@ import { MentorNav } from '@/components/MentorNav';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { roleHome } from '@/lib/roleHome';
 import { hasSalesSurface, NEUTRAL_HOME } from '@/lib/salesSurface';
+import { ModeSwitcher } from '@/components/ModeSwitcher';
+import { availableModes } from '@/lib/dualRole';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -33,7 +36,8 @@ export const metadata = NO_INDEX;
 //
 // Nothing admin-only is mounted: no command palette and no global search (both
 // route to admin/mentor pages), no mode switcher. Settings, users, invites,
-// imports and deletes stay behind their ADMIN-only routes server-side.
+// imports and deletes stay behind their ADMIN-only routes server-side. The mode
+// switch appears only for an ADMIN who also sells (admin ↔ sales).
 export default async function SalesLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin');
@@ -56,11 +60,12 @@ export default async function SalesLayout({ children }: { children: React.ReactN
   });
   // Same 2FA hold as every other authenticated shell; skipped while
   // impersonating (the admin behind it is already authenticated).
-  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role))) {
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
     redirect('/security-setup');
   }
 
   const { locale, t } = await getServerDictionary();
+  const modes = await availableModes(session.user);
   const customStages = await resolveCustomStages(session.user.orgId);
 
   return (
@@ -82,6 +87,8 @@ export default async function SalesLayout({ children }: { children: React.ReactN
             <MentorNav capabilities={capabilities} set="sales" />
             <InstallAppButton />
           </nav>
+
+          <ModeSwitcher modes={modes} />
 
           <AccountMenu
             name={session.user.name}

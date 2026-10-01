@@ -20,6 +20,7 @@ import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { availableModes, canUsePortal } from '@/lib/dualRole';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { PortalTabs } from '@/components/PortalTabs';
 
 // Signed-in area: never in a search result (#1376).
@@ -71,7 +72,7 @@ export default async function PortalLayout({ children }: { children: React.React
   // The 2FA gate lives on each staff shell; the portal needs it too now that a
   // role in scope for the policy can enter here — otherwise the portal would be
   // a way around the setup gate.
-  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role))) {
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
     redirect('/security-setup');
   }
 

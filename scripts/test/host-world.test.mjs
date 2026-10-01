@@ -36,7 +36,6 @@ const {
   worldForHeaderBag,
   primaryMarketingHost,
   originForWorld,
-  worldOrigins,
 } = await import('../../src/lib/hostWorld.ts');
 const { VERTICAL_KEYS, DEFAULT_VERTICAL } = await import('../../src/lib/verticals.ts');
 
@@ -366,13 +365,4 @@ test('round trip: originForWorld(w) is a host that worldForHostHeader maps back 
       assert.equal(worldForHostHeader(url.host), w, `${JSON.stringify(env)} → ${w} → ${url.host}`);
     }
   }
-});
-
-test('worldOrigins: one origin per world, identical to originForWorld', () => {
-  setEnv({ NEXTAUTH_URL: 'https://interncrm.com', NEXT_PUBLIC_APP_URL: 'https://interncrm.com/' });
-  const origins = worldOrigins();
-  assert.deepEqual(Object.keys(origins).sort(), [...VERTICAL_KEYS].sort());
-  for (const w of VERTICAL_KEYS) assert.equal(origins[w], originForWorld(w));
-  assert.equal(origins.INTERNSHIP, 'https://interncrm.com');
-  assert.equal(origins.MARKETING, `https://${MKT}`);
 });

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DEFAULT_TERMS_KEY, acceptTerms, acceptanceHistory, getActiveTerms, hasAcceptedContributorTerms } from '@/lib/contributorTerms';
 import { prisma } from '@/lib/prisma';
 import { isProjectMember } from '@/lib/projectTeam';
+import { projectInCallerTenant } from '@/lib/projectAccess';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -56,6 +57,12 @@ export async function POST(request: Request) {
     // platform-level acceptance (no projectId) is not.
     const capGate = await requireCapability(session.user.orgId, 'projects');
     if (capGate) return capGate;
+    // Another tenant's project is a missing one (#2627) — the admin bypass of
+    // the membership check below would otherwise mint evidence about it, and
+    // 404 vs 409 told a caller whether it existed and required terms.
+    if (!(await projectInCallerTenant(session, parsed.data.projectId))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const project = await prisma.project.findUnique({
       where: { id: parsed.data.projectId },
       select: { contributorTermsKey: true, contributorTermsRequired: true },

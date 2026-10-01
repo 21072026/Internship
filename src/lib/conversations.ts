@@ -1,10 +1,14 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getThreadIfAllowed } from '@/lib/messaging';
+import { projectInCallerTenant } from '@/lib/projectAccess';
 
 interface SessionUser {
   id: string;
   role: string;
+  // Pass `session.user` whole: a GROUP room is asked whether its project is in
+  // this tenant (#2627), and a user without an org reads as the default org's.
+  orgId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -36,6 +40,16 @@ export async function isActiveProjectMember(userId: string, projectId: string): 
     where: { projectId_userId: { projectId, userId } },
     select: { id: true },
   })) !== null;
+}
+
+// A project's GROUP room opens for an active member of that project — in the
+// caller's own tenant (#2627). ProjectMember carries no org, so a membership
+// that crosses tenants (a row written before #2622 closed the members route)
+// would otherwise open another tenant's room: its roster, its history, posting.
+// Refused like any room the caller may not open.
+export async function groupRoomOpensFor(user: SessionUser, projectId: string): Promise<boolean> {
+  if (!(await projectInCallerTenant({ user }, projectId))) return false;
+  return isActiveProjectMember(user.id, projectId);
 }
 
 // Do these two users share at least one project? Resolved in a single query via
@@ -121,7 +135,7 @@ export async function getConversationIfAllowed(user: SessionUser, conversationId
   const isParticipant = conversation.participants.some((p) => p.userId === user.id);
   if (conversation.type === 'GROUP') {
     if (!conversation.projectId || !isParticipant) return null;
-    return (await isActiveProjectMember(user.id, conversation.projectId)) ? conversation : null;
+    return (await groupRoomOpensFor(user, conversation.projectId)) ? conversation : null;
   }
   if (!isParticipant && user.role !== 'ADMIN') return null;
   return conversation;
@@ -331,7 +345,7 @@ export async function canPostToConversation(
   // nothing to post; participants are what matter here.
   if (!conversation.participants.some((p) => p.userId === user.id)) return false;
   if (conversation.type === 'GROUP') {
-    return Boolean(conversation.projectId && (await isActiveProjectMember(user.id, conversation.projectId)));
+    return Boolean(conversation.projectId && (await groupRoomOpensFor(user, conversation.projectId)));
   }
   if (conversation.type !== 'DIRECT') return false;
   const others = await otherConversationParticipants(conversation, user.id);

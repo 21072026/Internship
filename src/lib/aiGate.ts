@@ -21,8 +21,10 @@ export type AiGateResult<T> =
   | { ok: true; result: T }
   | { ok: false; reason: AiDenialReason };
 
-export async function getAiQuota(): Promise<{ quota: number; used: number; remaining: number }> {
-  const quota = parseInt(await getSetting('aiMonthlyQuota'), 10) || 0;
+// `orgId` names whose `aiMonthlyQuota` applies (#2628); omitted, it is the org
+// bound by `withTenantScope`, or the global row when nothing is bound.
+export async function getAiQuota(orgId?: string): Promise<{ quota: number; used: number; remaining: number }> {
+  const quota = parseInt(await getSetting('aiMonthlyQuota', orgId), 10) || 0;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const used = await prisma.aiUsage.count({ where: { createdAt: { gte: monthStart } } });
@@ -38,6 +40,8 @@ export async function runAiGated<T>(opts: {
   // Recorded for metering/attribution (companyId prepares per-company quotas).
   userId?: string | null;
   companyId?: string | null;
+  // Whose quota the call spends (#2628) — `settingsOrgOf(session)`.
+  orgId?: string;
   call: () => Promise<T>;
 }): Promise<AiGateResult<T>> {
   if (opts.consent && !(await hasConsent(opts.consent.userId, opts.consent.type))) {
@@ -46,7 +50,7 @@ export async function runAiGated<T>(opts: {
   // Quota before configuration (the issue's order: consent → flag → quota →
   // provider): quota 0 means "AI off" regardless of key, and quota behaviour
   // stays testable in environments without a provider key.
-  const { quota, used } = await getAiQuota();
+  const { quota, used } = await getAiQuota(opts.orgId);
   if (quota <= 0 || used >= quota) return { ok: false, reason: 'quota_exceeded' };
   if (!isAiConfigured()) return { ok: false, reason: 'not_configured' };
 

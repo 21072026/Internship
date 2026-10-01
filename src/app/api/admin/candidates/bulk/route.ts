@@ -10,6 +10,8 @@ import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { MAX_TAGS_PER_USER } from '@/lib/tags';
 import { transferMentorship } from '@/lib/mentorTransfer';
 import { notify } from '@/lib/notify';
@@ -71,7 +73,11 @@ export async function POST(request: Request) {
     const tagId = parsed.data.tagId;
     if (!tagId) return NextResponse.json({ error: 'tagId is required', code: 'tag_required' }, { status: 400 });
 
-    const tag = await prisma.tag.findFirst({ where: withinTenant({ id: tagId }, tenant), select: { id: true, name: true } });
+    // Tag.orgId is NOT NULL, so the default org's `orgId IS NULL` arm of the
+    // tenant fragment is not a valid Tag filter (Prisma: "Argument `orgId` is
+    // missing" → 500). Match the caller's org id exactly, like /api/tags/assign.
+    const tagOrgId = resolveOrgId(session) ?? (await defaultOrgId());
+    const tag = await prisma.tag.findFirst({ where: { id: tagId, orgId: tagOrgId }, select: { id: true, name: true } });
     if (!tag) return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
 
     // Same MENTEE-only scoping as the other bulk actions: a stray id can never

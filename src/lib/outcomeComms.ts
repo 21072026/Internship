@@ -88,7 +88,11 @@ export const OUTCOME_ACTIONS: Record<OutcomeKind, { key: string; href: string }[
  * Where the mentor is sent to write the message: the shared targeted-email
  * composer, with the recipient preselected and the right template applied.
  * Nothing is sent from here — the mentor reads, edits and presses send.
+ *
+ * `null` preselects the recipient only: for an org without placements, whose
+ * reps must not be handed the placement wording of these templates.
  */
-export function outcomeComposerLink(relationId: string, kind: OutcomeKind): string {
-  return `/mentor/email?relation=${encodeURIComponent(relationId)}&template=${OUTCOME_TEMPLATE_KEY[kind]}`;
+export function outcomeComposerLink(relationId: string, kind: OutcomeKind | null): string {
+  const base = `/mentor/email?relation=${encodeURIComponent(relationId)}`;
+  return kind ? `${base}&template=${OUTCOME_TEMPLATE_KEY[kind]}` : base;
 }

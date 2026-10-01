@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
+import { projectInCallerTenant } from '@/lib/projectAccess';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // Turn one line of a note into a real piece of work (#1059).
 //
@@ -59,9 +61,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       // the gate lives inside this branch, not at the handler top.
       const capGate = await requireCapability(session.user.orgId, 'mentorship');
       if (capGate) return capGate;
-      // Only the mentor of that relation (or an admin) may set a goal on it.
-      const relation = await prisma.mentorshipRelation.findUnique({
-        where: { id: relationId! },
+      // Only the mentor of that relation (or an admin of its tenant — #2627, the
+      // middleware is dormant) may set a goal on it.
+      const relation = await prisma.mentorshipRelation.findFirst({
+        where: withinTenant({ id: relationId! }, await tenantWhere(session)),
         select: { mentorId: true },
       });
       if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -84,10 +87,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const projectsGate = await requireCapability(session.user.orgId, 'projects');
     if (projectsGate) return projectsGate;
 
-    // Project is a TENANT_MODEL and ProjectMember is not, so read the project
-    // first — querying members directly would reach across tenants.
-    const project = await prisma.project.findUnique({ where: { id: projectId! }, select: { id: true } });
-    if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // ProjectMember carries no org, so read the project first, in the caller's
+    // tenant (#2627) — another tenant's project answers like a missing one.
+    if (!(await projectInCallerTenant(session, projectId!))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const member = await prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId: projectId!, userId: session.user.id } },
       select: { id: true },

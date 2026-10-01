@@ -126,6 +126,9 @@ export async function POST(request: Request) {
             category: 'mentor-direct',
             userId: rel.mentee.id,
             locale: rel.mentee.preferredLanguage,
+            // The relation's org: outside the default world sendEmail names the
+            // sender after it, so a SaleVali lead never hears "from Internship CRM".
+            orgId: rel.orgId,
           });
         } catch (e) {
           console.error('Mentor email failed for', rel.mentee.email, e);

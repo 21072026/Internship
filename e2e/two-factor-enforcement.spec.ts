@@ -1,11 +1,14 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail, setGlobalSetting } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setDefaultOrgSetting } from './helpers/db';
 
-// The require2fa Setting is global and the CI DB is shared across tests, so this
-// spec MUST restore it to 'off' no matter what — otherwise every later admin
-// login would be redirected to the setup gate and cascade-fail.
+// The require2fa Setting is the default org's (the org the seeded admin and
+// every other default-tenant test user belongs to), and the CI DB is shared
+// across tests, so this spec MUST restore it to 'off' no matter what —
+// otherwise every later admin login would be redirected to the setup gate and
+// cascade-fail. It is the default org's ROW, not the global one, because that
+// is where the settings API below writes it since #2628.
 async function setPolicy(value: string) {
-  await setGlobalSetting('require2fa', value);
+  await setDefaultOrgSetting('require2fa', value);
 }
 
 test.afterAll(async () => {

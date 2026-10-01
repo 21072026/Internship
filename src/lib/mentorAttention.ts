@@ -48,9 +48,13 @@ export async function getAttentionItems(
   options: {
     reasons?: readonly AttentionReason[];
     relationWhere?: Prisma.MentorshipRelationWhereInput;
+    // Whose `reminderDays` decides "no recent contact" (#2628). The dashboards
+    // calling this render outside any tenant scope, so without it the read is
+    // the global row rather than the viewer's own org's setting.
+    orgId?: string;
   } = {},
 ): Promise<AttentionQueue> {
-  const reminderDays = parseInt(await getSetting('reminderDays'), 10) || 14;
+  const reminderDays = parseInt(await getSetting('reminderDays', options.orgId), 10) || 14;
   const now = Date.now();
   const staleCutoff = new Date(now - reminderDays * 24 * 60 * 60 * 1000);
   const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, status: 'ACTIVE' };

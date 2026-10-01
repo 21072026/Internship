@@ -25,7 +25,7 @@ export default async function StoriesPage() {
   const S = t.landing.stories;
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: S.pageTitle, path: '/stories' }}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{S.pageTitle}</h1>
         <p className="text-gray-500 dark:text-gray-400 mb-10">{S.pageSubtitle}</p>

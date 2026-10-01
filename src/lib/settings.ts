@@ -12,11 +12,16 @@ import { ambientOrgId, runUnscoped } from '@/lib/tenantAmbient';
 //   3. SETTING_DEFAULTS              (the code default, below)
 //
 // Which org a call resolves to: an explicit `orgId` argument wins; otherwise the
-// org bound to the current request by `withTenantScope()` (`currentOrgId()`);
-// otherwise none, which means the global layer alone. A single-tenant
-// installation — and every request made while `MT_ENFORCE_ISOLATION` is off —
-// therefore reads and writes the global rows exactly as it did before, so the
-// existing rows keep working untouched as the platform-wide defaults.
+// org bound to the current request by `withTenantScope()` (`currentOrgId()`) —
+// bound whether or not `MT_ENFORCE_ISOLATION` is on (#2628); otherwise none,
+// which means the global layer alone. Callers without a bound tenant (layouts,
+// crons, sessionless routes) pass the org explicitly, resolved by
+// `src/lib/settingsOrg.ts` — never `null` for a tenant's own setting: the global
+// row is the platform-wide default every tenant inherits, so a tenant write
+// landing there is a write into every other tenant (#2628).
+//
+// Keys in GLOBAL_SETTING_KEYS (below) are the exception: deployment-wide by
+// nature, resolved from the global layer only.
 //
 // WHY THESE QUERIES RUN UNSCOPED: `Setting` is registered in `TENANT_MODELS`
 // (src/lib/orgContext.ts), so with enforcement on the tenant middleware would
@@ -214,6 +219,28 @@ export const SETTING_DEFAULTS = {
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
 
+// Keys that belong to the DEPLOYMENT, not to a tenant (#2628). Each is read by
+// something that runs with no tenant bound and crosses every org in one pass —
+// the retention prune (`runRetentionPrune`, the orphan-applicant sweep) — or
+// decides how much of the shared audit trail is written (`viewLogWindowMinutes`).
+// A per-tenant row for one of them would be written and never be the number
+// that fires, so none may exist: reads resolve these from the global layer
+// alone, whatever org they are asked about, and `setSetting` refuses a tenant
+// row for them. Writing them is a platform-operator (super admin) action — see
+// PUT /api/admin/settings.
+export const GLOBAL_SETTING_KEYS: ReadonlySet<SettingKey> = new Set<SettingKey>([
+  'activityLogRetentionDays',
+  'pageViewRetentionDays',
+  'pushSubscriptionStaleDays',
+  'jobRetentionDays',
+  'viewLogWindowMinutes',
+  'orphanApplicantGraceDays',
+]);
+
+export function isGlobalSettingKey(key: string): boolean {
+  return GLOBAL_SETTING_KEYS.has(key as SettingKey);
+}
+
 // The org a settings call applies to. An explicit argument wins (including an
 // explicit `null`, meaning "the global layer"); otherwise the request's bound
 // tenant; otherwise none.
@@ -254,7 +281,7 @@ export async function getSettings(orgId?: string | null): Promise<Record<Setting
   // Global layer first, tenant overrides on top — order matters, not the order
   // the rows happen to come back in.
   for (const r of rows) if (r.orgId === null && r.key in SETTING_DEFAULTS) map[r.key] = r.value;
-  for (const r of rows) if (r.orgId !== null && r.key in SETTING_DEFAULTS) map[r.key] = r.value;
+  for (const r of rows) if (r.orgId !== null && r.key in SETTING_DEFAULTS && !isGlobalSettingKey(r.key)) map[r.key] = r.value;
   return map as Record<SettingKey, string>;
 }
 
@@ -262,7 +289,7 @@ export async function getSettings(orgId?: string | null): Promise<Record<Setting
 export async function getSetting(key: SettingKey, orgId?: string | null): Promise<string> {
   const org = settingOrgId(orgId);
   const rows = await loadRows(org, key);
-  const tenant = org ? rows.find((r) => r.orgId === org) : undefined;
+  const tenant = org && !isGlobalSettingKey(key) ? rows.find((r) => r.orgId === org) : undefined;
   const global = rows.find((r) => r.orgId === null);
   return tenant?.value ?? global?.value ?? SETTING_DEFAULTS[key];
 }
@@ -280,6 +307,9 @@ export async function getSetting(key: SettingKey, orgId?: string | null): Promis
 // the global (orgId = NULL) row.
 export async function setSetting(key: SettingKey, value: string, orgId?: string | null): Promise<void> {
   const org = settingOrgId(orgId);
+  if (org !== null && isGlobalSettingKey(key)) {
+    throw new Error(`Setting "${key}" is deployment-global and has no per-tenant row (#2628)`);
+  }
   await unscopedSettings(async () => {
     const existing = await prisma.setting.findFirst({ where: { orgId: org, key }, select: { id: true } });
     if (existing) await prisma.setting.update({ where: { id: existing.id }, data: { value } });

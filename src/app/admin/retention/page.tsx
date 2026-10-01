@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { resolveOrgId } from '@/lib/orgScope';
-import { defaultOrgId } from '@/lib/defaultOrg';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { getRetentionReview, getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getServerDictionary } from '@/i18n/server';
 import { formatDate } from '@/lib/relativeTime';
@@ -16,11 +15,8 @@ import { OrphanApplicantsPanel } from '@/components/admin/OrphanApplicantsPanel'
 export default async function AdminRetentionPage() {
   const { t, locale } = await getServerDictionary();
   const r = t.retentionAdmin;
-  // The admin's own org (#2542) — an org-less session is the default org's,
-  // never "every tenant" (the tenantFilter.ts rule).
-  const session = await getServerSession(authOptions);
-  const orgId = resolveOrgId(session) ?? (await defaultOrgId());
-  const [items, months] = await Promise.all([getRetentionReview(orgId), getRetentionMonths()]);
+  const orgId = await settingsOrgOf(await getServerSession(authOptions));
+  const [items, months] = await Promise.all([getRetentionReview(orgId), getRetentionMonths(orgId)]);
 
   return (
     <div>

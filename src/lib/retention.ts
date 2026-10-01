@@ -64,8 +64,10 @@ export function accessGrantingRelation() {
   };
 }
 
-export async function getRetentionMonths(): Promise<number> {
-  return parseInt(await getSetting('retentionMonths'), 10) || 12;
+// `orgId` names whose retention limit this is (#2628): the admin page and the
+// reminder cron run outside any tenant scope, and each tenant sets its own.
+export async function getRetentionMonths(orgId?: string): Promise<number> {
+  return parseInt(await getSetting('retentionMonths', orgId), 10) || 12;
 }
 
 // Candidate (mentee) accounts whose consent has passed the retention limit.
@@ -78,7 +80,7 @@ export async function getRetentionMonths(): Promise<number> {
 // addresses of another product's people (#2542). A NULL-org row is the default
 // org's (`orgWhere`), never everybody's.
 export async function getRetentionReview(orgId: string): Promise<RetentionItem[]> {
-  const months = await getRetentionMonths();
+  const months = await getRetentionMonths(orgId);
   const dueCutoff = monthsAgo(months);
   const overdueCutoff = new Date(dueCutoff.getTime() - RETENTION_GRACE_DAYS * 24 * 60 * 60 * 1000);
 
