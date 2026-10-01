@@ -11,6 +11,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { ConvertInquiryModal, type ConvertibleInquiry } from '@/components/admin/ConvertInquiryModal';
 import { useVertical } from '@/lib/verticalClient';
 import { Building2, Mail, Phone, UserPlus, Kanban } from 'lucide-react';
+import { ContactForgetForm } from '@/components/ContactForgetForm';
 
 interface InquiryRow {
   id: string;
@@ -223,6 +224,13 @@ export default function CompanyInquiriesPage() {
                   <Mail className="h-4 w-4 text-gray-400" />
                   <a href={`mailto:${r.email}`} className="text-blue-600 hover:underline">{r.email}</a>
                 </p>
+                {/* DSGVO Art. 17 for a sender with no account (#2559); a
+                    row already forgotten carries the tombstone address. */}
+                {!r.email.endsWith('@erased.local') && (
+                  <div data-testid={`inquiry-forget-${r.id}`}>
+                    <ContactForgetForm email={r.email} onDone={load} />
+                  </div>
+                )}
                 {r.phone && (
                   <p className="flex items-center gap-2 text-gray-700">
                     <Phone className="h-4 w-4 text-gray-400" />{r.phone}

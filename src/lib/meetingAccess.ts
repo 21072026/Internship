@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
+import { meetingOrgSource, type MeetingParents } from '@/lib/meetingTenantRule';
 
 // "Were you in this meeting, or did you call it?" — the one rule that governs a
 // meeting row, wherever it is reached from.
@@ -19,10 +21,40 @@ export interface AccessibleMeeting {
   relationMentorId: string | null;
 }
 
+/**
+ * The caller of every rule here. `orgId` is the session's org: a meeting of
+ * another tenant is answered exactly like a missing one (#2542 follow-up). A
+ * missing/null org is the DEFAULT org's, never a wildcard.
+ */
+export interface MeetingUser {
+  id: string;
+  role: string;
+  orgId?: string | null;
+}
+
+/**
+ * Is a meeting (or a recurring rule) with these parents inside the caller's
+ * tenant? The parents decide (src/lib/meetingTenantRule.ts); only a row with
+ * none — a DIRECT conversation, an instant room, an orphaned series — falls
+ * back to the org of the person who called it.
+ */
+export async function meetingInCallerTenant(
+  parents: MeetingParents,
+  createdById: string,
+  callerOrgId: string | null | undefined,
+): Promise<boolean> {
+  const source = meetingOrgSource(parents);
+  const ownerOrgId =
+    source === 'creator'
+      ? ((await prisma.user.findUnique({ where: { id: createdById }, select: { orgId: true } }))?.orgId ?? null)
+      : source.orgId;
+  return inCallerTenant(ownerOrgId, callerOrgId);
+}
+
 // Returns the meeting when this user may take part in it, null otherwise —
 // including when it does not exist, so a probe cannot tell the two apart.
 export async function loadAccessibleMeeting(
-  user: { id: string; role: string },
+  user: MeetingUser,
   meetingId: string
 ): Promise<AccessibleMeeting | null> {
   const meeting = await prisma.meeting.findUnique({
@@ -32,12 +64,17 @@ export async function loadAccessibleMeeting(
       title: true,
       meetLink: true,
       createdById: true,
-      relation: { select: { mentorId: true, menteeId: true } },
+      relation: { select: { mentorId: true, menteeId: true, orgId: true } },
       projectId: true,
+      project: { select: { orgId: true } },
       conversationId: true,
+      conversation: { select: { project: { select: { orgId: true } } } },
     },
   });
   if (!meeting) return null;
+  // Another tenant's meeting does not exist for this caller — not even for an
+  // admin, whose "any meeting" below means any meeting of their own tenant.
+  if (!(await meetingInCallerTenant(meeting, meeting.createdById, user.orgId))) return null;
 
   const isAdmin = user.role === 'ADMIN';
   const isCreator = meeting.createdById === user.id;
@@ -72,7 +109,7 @@ export async function loadAccessibleMeeting(
 }
 
 export async function canAccessMeeting(
-  user: { id: string; role: string },
+  user: MeetingUser,
   meetingId: string
 ): Promise<boolean> {
   return (await loadAccessibleMeeting(user, meetingId)) !== null;
@@ -95,7 +132,7 @@ export async function canAccessMeeting(
 // happen to pass. And "not yours" is answered by returning null exactly like
 // "does not exist", so callers can 404 both and the id space stays opaque.
 export async function canManageMeeting(
-  user: { id: string; role: string },
+  user: MeetingUser,
   meetingId: string
 ): Promise<AccessibleMeeting | null> {
   if (user.role !== 'ADMIN' && user.role !== 'MENTOR') return null;

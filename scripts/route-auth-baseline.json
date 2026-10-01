@@ -62,6 +62,14 @@
     "methods": ["POST"],
     "why": "The public /for-companies enquiry form. Companies have no self-service sign-up (a COMPANY user is only born from an InvitationToken), so this form is the only bridge. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
   },
+  "src/app/api/contact-permission/confirm/route.ts": {
+    "methods": ["POST"],
+    "why": "The double opt-in confirmation from the demo form's product-news box (#2577). The person confirming filled in a public form and has no account; the signed token was only ever mailed to the address on the request, so holding it is the proof of inbox control a double opt-in exists to establish."
+  },
+  "src/app/api/contact-permission/opt-out/route.ts": {
+    "methods": ["POST"],
+    "why": "Withdrawing the product-news request straight from the confirmation mail (#2577); the signed token is the authorisation and can only withdraw. A withdrawal behind a login is a withdrawal most people cannot make."
+  },
   "src/app/api/consent/renew/route.ts": {
     "methods": ["POST"],
     "why": "Re-consent from the retention reminder email; verifyConsentRenewToken() is the credential and it can do exactly one thing — refresh that user's own consent stamp."

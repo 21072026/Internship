@@ -214,7 +214,7 @@ export const SAML_MODES = [
  * thing about it is wrong; everything else stays valid, so a rejection is
  * attributable.
  */
-export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', inResponseTo }) {
+export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', inResponseTo, groups = [] }) {
   const now = new Date();
   const skewSafe = 60_000; // comfortably past node-saml's 5s accepted clock skew
   const expired = mode === 'expired';
@@ -250,6 +250,13 @@ export function buildSamlResponse({ acsUrl, audience, email, name, mode = 'ok', 
     attribute('email', email) +
     (first ? attribute('firstName', first) : '') +
     (last ? attribute('lastName', last) : '') +
+    // A multi-valued `groups` attribute (#1940), the shape Entra/Okta send a
+    // group claim in: one Attribute, one AttributeValue per group.
+    (groups.length
+      ? `<saml:Attribute Name="groups" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic">` +
+        groups.map((g) => `<saml:AttributeValue>${xmlEscape(g)}</saml:AttributeValue>`).join('') +
+        `</saml:Attribute>`
+      : '') +
     `</saml:AttributeStatement>` +
     `</saml:Assertion>`;
 
@@ -432,6 +439,7 @@ const server = createServer(async (req, res) => {
       name: q.get('name') || 'Stub User',
       mode: q.get('mode') || 'ok',
       inResponseTo: parsed.requestId,
+      groups: (q.get('groups') || '').split(',').map((g) => g.trim()).filter(Boolean),
     });
     return html(res, 200, autoPostForm(parsed.acsUrl, samlResponse, q.get('RelayState') || ''));
   }
@@ -465,6 +473,7 @@ const server = createServer(async (req, res) => {
         name: body.name || 'Stub User',
         mode: body.mode || 'ok',
         inResponseTo,
+        groups: Array.isArray(body.groups) ? body.groups.filter((g) => typeof g === 'string') : [],
       }),
     });
   }

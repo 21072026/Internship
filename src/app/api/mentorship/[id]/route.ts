@@ -4,14 +4,12 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { logActivity } from '@/lib/activity';
-import { emitStageChange } from '@/lib/stageChangeEffects';
-import { stageTrialWindow } from '@/lib/trialWindow';
+import { recordStageMove, stageMoveData } from '@/lib/stageMove';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib/relationTargets';
 import { isPendingActivation } from '@/lib/menteeAccount';
-import { isStageTransition, statusChangeData, validateDropoffReason } from '@/lib/stageChange';
+import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
 import {
   findActiveMentorship,
@@ -254,19 +252,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = {
         ...rest,
-        ...(stageChanging
-          ? {
-              pipelineStatus,
-              // A move into TRIAL_ACTIVE stamps the trial window in the same
-              // write (#2551); a record that already has one keeps it.
-              ...(await stageTrialWindow({
-                orgId: relation.orgId,
-                toStage: pipelineStatus,
-                enteredAt: new Date(),
-                existing: relation,
-              })),
-            }
-          : {}),
+        // The stage columns come from the shared write path (#2658): the stage,
+        // and the trial window a move into TRIAL_ACTIVE stamps (#2551).
+        ...(stageChanging ? await stageMoveData(relation, pipelineStatus!) : {}),
       };
       // Stamp/clear the end of the relation — it anchors the post-mentorship
       // CV/document access window (#854).
@@ -322,40 +310,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         throw e;
       }
 
-      // Record an audit entry when the pipeline stage actually changes. The row
-      // is built by the shared gate (#934), which is what refuses a from === to
-      // entry — `stageChanging` already excludes that case, so this is the same
-      // rule expressed once instead of per write path.
-      const auditRow = stageChanging
-        ? statusChangeData({
-            relationId: id,
-            fromStatus: relation.pipelineStatus,
-            toStatus: pipelineStatus!,
-            changedById: session.user.id,
-            reasonCode,
-            reasonNote,
-          })
-        : null;
-      if (auditRow) {
-        await prisma.statusChange.create({ data: auditRow });
-        await logActivity({
-          action: 'pipeline.stage_change',
-          actorId: session.user.id,
-          actorEmail: session.user.email ?? null,
-          targetType: 'relation',
-          targetId: id,
-          detail: `${relation.pipelineStatus} → ${pipelineStatus}`,
-        });
-        // Notification + webhook via the shared effects service (#926) so every
-        // stage-write path emits identically. `relation` still holds the
-        // pre-update row, so this is the old status.
-        await emitStageChange({
-          relationId: id,
-          menteeId: relation.menteeId,
-          orgId: relation.orgId,
-          from: relation.pipelineStatus,
-          to: pipelineStatus!,
+      // The audit row, activity entry and notification/webhook/SLA effects,
+      // through the shared write path (#2658). `relation` still holds the
+      // pre-update row, so this is the old status.
+      if (stageChanging) {
+        await recordStageMove({
+          relation,
+          toStatus: pipelineStatus!,
+          actor: { id: session.user.id, email: session.user.email },
           reasonCode,
+          reasonNote,
           // The same request set a deadline by hand — don't overwrite it with
           // the stage's default (#817).
           deadlineSetByCaller: stageDeadline !== undefined,

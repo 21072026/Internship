@@ -61,11 +61,61 @@ export function formatEur(amountEur: number, locale: Locale): string {
  * below a euro — dropping its decimals would print "€1" for €1.20.
  */
 export function formatEurCents(cents: number, locale: Locale): string {
+  return withSymbol(centsBody(cents, locale), locale);
+}
+
+/** The signed `1.234,50` body of a two-decimal minor-unit amount. */
+function centsBody(cents: number, locale: Locale): string {
   const r = rules(locale);
   const rounded = Math.round(cents);
   const abs = Math.abs(rounded);
   const body = `${group(String(Math.floor(abs / 100)), r.group)}${r.decimal}${String(abs % 100).padStart(2, '0')}`;
-  return withSymbol(rounded < 0 ? `-${body}` : body, locale);
+  return rounded < 0 ? `-${body}` : body;
+}
+
+/**
+ * A minor-unit amount in ANY two-decimal currency (#2422): EUR through
+ * `formatEurCents` (so a euro reads exactly as it does on the pricing page),
+ * anything else with its ISO code where the symbol would go —
+ * `formatMinorAmount(4990, 'CHF', 'de')` → `"49,90 CHF"`, `'en'` → `"CHF 49.90"`.
+ *
+ * TWO DECIMALS ONLY, deliberately: every currency a deal value may carry
+ * (`DEAL_VALUE_CURRENCIES` in src/lib/dealValue.ts) has two. A zero-decimal
+ * currency such as JPY would print 100× too large here, which is why that list
+ * is closed rather than "any ISO code".
+ */
+export function formatMinorAmount(amountMinor: number, currency: string, locale: Locale): string {
+  const code = currency.trim().toUpperCase();
+  if (code === 'EUR') return formatEurCents(amountMinor, locale);
+  const body = centsBody(amountMinor, locale);
+  return rules(locale).symbolFirst ? `${code}${NBSP}${body}` : `${body}${NBSP}${code}`;
+}
+
+/**
+ * Money typed by a person or a spreadsheet → integer minor units (never a
+ * float). Accepts `1.234,50` and `1,234.50` — the same file carries both when
+ * Excel has seen two locales — by treating the LAST separator as the decimal
+ * point; a trailing group of exactly three digits is a thousands group.
+ * `null` for an empty string, `NaN` for anything that is not an amount.
+ *
+ * Moved here from src/lib/marketingImport.ts (#2422), which re-exports it: the
+ * deal-value editor parses what a rep types with the same rule the importer
+ * applies to the `mrr` column, so one value never parses two ways.
+ */
+export function parseMinorUnits(raw: string): number | null {
+  const text = raw.trim();
+  if (!text) return null;
+  const cleaned = text.replace(/[^\d.,-]/g, '');
+  if (!/^-?[\d.,]+$/.test(cleaned) || !/\d/.test(cleaned)) return NaN;
+  const lastSep = Math.max(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','));
+  const tail = lastSep >= 0 ? cleaned.slice(lastSep + 1) : '';
+  // A trailing group of exactly 1-2 digits is a decimal fraction; 3 is a
+  // thousands group ("1.234" is one thousand two hundred thirty-four euro).
+  const hasFraction = lastSep >= 0 && tail.length > 0 && tail.length <= 2;
+  const whole = (hasFraction ? cleaned.slice(0, lastSep) : cleaned).replace(/[.,]/g, '');
+  const fraction = hasFraction ? tail.padEnd(2, '0') : '00';
+  const value = Number(`${whole}${fraction}`);
+  return Number.isSafeInteger(value) ? value : NaN;
 }
 
 /**

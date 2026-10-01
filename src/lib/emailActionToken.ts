@@ -119,8 +119,8 @@ export function verifyEmailActionToken(token: string): EmailAction | 'expired' |
 // — which knows the recipient's organization — resolves it and hands it over;
 // this module stays free of any database read. Omitted, the URL is
 // byte-for-byte what it always was.
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+function appUrl(origin?: string | null): string {
+  return origin || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 }
 
 /**
@@ -130,12 +130,12 @@ function appUrl(): string {
  * state would fire a reaction nobody clicked. The page performs the action from
  * the browser instead, and scanners do not run scripts.
  */
-export function emailActionUrl(action: EmailAction, origin: string = appUrl()): string {
-  return `${origin}/m/${encodeURIComponent(makeEmailActionToken(action))}`;
+export function emailActionUrl(action: EmailAction, origin?: string | null): string {
+  return `${appUrl(origin)}/m/${encodeURIComponent(makeEmailActionToken(action))}`;
 }
 
 /** "Mark this conversation as read" link for a notification or digest email. */
-export function markReadUrl(relationId: string, userId: string, origin?: string): string {
+export function markReadUrl(relationId: string, userId: string, origin?: string | null): string {
   return emailActionUrl({ kind: 'read', relationId, userId }, origin);
 }
 
@@ -144,7 +144,7 @@ export function markReadUrl(relationId: string, userId: string, origin?: string)
  * same five emoji the in-app composer offers, so reacting from the inbox and
  * reacting in the app produce the same thing.
  */
-export function reactionLinksHtml(messageId: string, userId: string, origin?: string): string {
+export function reactionLinksHtml(messageId: string, userId: string, origin?: string | null): string {
   const links = EMAIL_REACTION_EMOJIS.map((emoji, emojiIndex) => {
     const url = emailActionUrl({ kind: 'react', messageId, userId, emojiIndex }, origin);
     return `<a href="${url}" style="text-decoration:none;font-size:20px;padding:4px 6px;" title="${emoji}">${emoji}</a>`;

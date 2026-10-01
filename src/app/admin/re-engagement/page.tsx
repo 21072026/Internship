@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 import { formatDate } from '@/lib/relativeTime';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { PoolRemoveButton } from '@/components/admin/PoolRemoveButton';
 
 export const dynamic = 'force-dynamic';
@@ -27,9 +28,12 @@ export default async function AdminReEngagementPage() {
   // `...(orgId ? { orgId } : {})` this used to carry: that pattern is not
   // fail-closed — a null orgId under enforcement would have listed every
   // tenant's mentees. withTenantScope lets the central middleware inject the
-  // filter (a no-op while the flag is off).
+  // filter — but that is a no-op while the flag is off, which it is in every
+  // deployment, so this server component listed every tenant's pool (#2542
+  // follow-up). The tenant is therefore also a hand-written conjunct.
+  const tenant = await tenantWhere(session);
   const people = await withTenantScope(session, () => prisma.user.findMany({
-    where: { role: 'MENTEE', reEngageAt: { not: null } },
+    where: withinTenant({ role: 'MENTEE' as const, reEngageAt: { not: null } }, tenant),
     orderBy: { reEngageAt: 'asc' },
     select: { id: true, fullName: true, email: true, reEngageAt: true, reEngageNote: true, reEngageNotifiedAt: true },
   }));

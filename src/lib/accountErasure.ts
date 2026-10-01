@@ -4,10 +4,12 @@ import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import {
+  accountlessTombstoneId,
   companyContactErasureData,
   erasedAddress,
   erasureScoped,
   inquiryErasureData,
+  normalizeContactEmail,
 } from '@/lib/companyContactErasure';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
@@ -84,19 +86,54 @@ async function forgetEmailLog(userId: string): Promise<void> {
 async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<unknown>[]> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, orgId: true } });
   if (!user?.email) return [];
-  const fallbackOrgId = await defaultOrgId();
+  return contactScrubOps(user.email, user.orgId, userId, await defaultOrgId());
+}
+
+/**
+ * The two writes that forget a company contact, for both callers: an erased
+ * ACCOUNT (above) and a contact who never had one (`forgetCompanyContact`,
+ * #2559). One builder, so the two paths cannot scrub different columns or scope
+ * the address differently — the #2434 rule is the whole rule for both.
+ */
+function contactScrubOps(
+  email: string,
+  subjectOrgId: string | null,
+  tombstoneId: string,
+  fallbackOrgId: string,
+): [Prisma.PrismaPromise<Prisma.BatchPayload>, Prisma.PrismaPromise<Prisma.BatchPayload>] {
   return [
     prisma.companyInquiry.updateMany({
-      where: erasureScoped({ email: user.email }, user.orgId, fallbackOrgId),
-      data: inquiryErasureData(userId),
+      where: erasureScoped({ email }, subjectOrgId, fallbackOrgId),
+      data: inquiryErasureData(tombstoneId),
     }),
     // The company itself stays, with its name, needs, offers, requisitions,
     // interests and relations; only the named person on it goes.
     prisma.company.updateMany({
-      where: erasureScoped({ contactEmail: user.email }, user.orgId, fallbackOrgId),
+      where: erasureScoped({ contactEmail: email }, subjectOrgId, fallbackOrgId),
       data: companyContactErasureData(),
     }),
   ];
+}
+
+/**
+ * Forget a company contact who has NO account (#2559, DSGVO Art. 17): a web
+ * enquiry's sender or an imported account's named person. Matched on the
+ * address inside ONE tenant — `orgId` is the requesting admin's org, and the
+ * org-less/default rule is the same as for an erased account (rule 3 in
+ * companyContactErasure.ts). One transaction; returns how many rows each table
+ * gave up. A person who does have an account in this org goes through the
+ * account erasure instead, which also reaches their messages and notes — the
+ * route refuses the address before calling this.
+ */
+export async function forgetCompanyContact(
+  email: string,
+  orgId: string | null,
+  randomId: string,
+): Promise<{ inquiries: number; companies: number }> {
+  const [inquiries, companies] = await prisma.$transaction(
+    contactScrubOps(normalizeContactEmail(email), orgId, accountlessTombstoneId(randomId), await defaultOrgId()),
+  );
+  return { inquiries: inquiries.count, companies: companies.count };
 }
 
 // ── Free text: what each surface gets, and why (#2052) ───────────────────────
@@ -137,27 +174,46 @@ async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<u
 // reached through `meetingId` → the meeting's relation (mentee = this person)
 // or its DIRECT (1:1) conversation with them.
 //
-// KNOWN GAPS — deliberately not silent, tracked in #2106:
+// COVERAGE against the inventory in scripts/sanitize-db.mjs ("Emptied"), #2106.
+// Every per-person free-text column listed there is scrubbed here, EXCEPT the
+// ones below — each with the reason, so a gap is a decision, not an accident:
 //   - a free-standing `PersonalNote` (`meetingId: null`) has no link to any
 //     subject at all; there is no query that can tell a note about this person
-//     from a note about anyone else, so it is left alone here.
-//   - notes taken in a GROUP-conversation or project meeting the person
-//     attended: the note is about the meeting, not about them.
-//   - the remaining per-person free text inventoried in the header of
-//     scripts/sanitize-db.mjs (Evaluation.comment/publicExcerpt,
-//     WeeklyReport.summary/blockers/mentorComment, MentorQuestion,
-//     MeetingRequest.topic, Goal.description, ProjectJoinRequest.message,
-//     CompanyInterest.note, InterviewRequest.note, Offer notes,
-//     StatusChange.reasonNote, Notification.text, ActivityLog/AuditLog detail).
-//     That script already lists every one of them; #2106 brings this function
-//     up to the same inventory. Anything added to the schema belongs in both.
-//     One of those is company-side: the `signup.companyInquiry` notification
-//     every admin receives carries the contact's name in `Notification.params`
-//     and no address, so nothing here can tell it from a namesake's.
-//   - a company contact who never had an ACCOUNT: both erasure paths start from
-//     a `User` row, so an enquiry whose sender never signed up is unreachable
-//     from here. #2559 extends companyContactOps() for that case (and adds a
-//     retention period for enquiries) rather than writing a second path.
+//     from a note about anyone else, so it is left alone. Closing it needs a
+//     product decision (an optional subject link, or notes that require a
+//     context), not a query.
+//   - notes and titles of a GROUP-conversation or project meeting the person
+//     attended: they are about the meeting, not about them.
+//   - the person QUOTED in someone else's text: an admin pasting their phone
+//     number into a reply on a ticket another user opened, or a mentor naming
+//     them in a free-standing note (#2098). Reachable only by full-text search,
+//     and a search is not a key: it finds namesakes and misses a paraphrase,
+//     and running one across private notes would itself read text nobody
+//     asked the author to share. Not reached, by decision — the privacy notice
+//     must say so (the wording is the rights holder's, not code's).
+//   - `Meeting.meetLink`: a room URL, not personal data; sanitize-db drops it
+//     only so a preview link cannot open a live room.
+//   - `MenteeOnboarding.steps` and `Announcement`: checklist state and org-wide
+//     broadcast copy, not text about a person.
+//   - Notifications in OTHER people's bells that name this person ("Ayşe sent
+//     you a message"): the name sits in `params` JSON beside no stable id, so
+//     nothing can tell it from a namesake's (the `signup.companyInquiry` notice
+//     every admin gets is the company-side case). Bounded instead by the
+//     `notification` retention entry (notificationRetentionDays, 180 by
+//     default). Their OWN bell is deleted above.
+//   - The audit trail — `ActivityLog` (actorEmail, detail, ip, userAgent) and
+//     `AuditLog.detail` — is KEPT, by decision: a ledger that erasure rewrites
+//     cannot answer "who did what" for the security review or legal claim it
+//     exists for (GDPR Art. 17(3)(b)/(e)). It is bounded by the `activityLog`
+//     retention entry (activityLogRetentionDays, 365 by default), and nothing
+//     here may start rewriting it without revisiting that decision in
+//     docs/pii-access-lifecycle.md.
+//   - a company contact who never had an ACCOUNT is not reachable from a `User`
+//     row; `forgetCompanyContact()` below (#2559) forgets them by address
+//     through the SAME scrub builder, and unconverted enquiries age out through
+//     the `companyInquiry` retention entry.
+// A new `@db.Text` column about a person belongs in BOTH lists — here and in
+// the sanitize-db header — or in this block with its reason.
 //
 // Emptying rather than nulling is forced by the schema: `Message.body`,
 // `SupportMessage.body`, `PersonalNote.body`, `RelationNote.body` and
@@ -169,6 +225,10 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
   // Relations whose subject this person is. Nested filters (not a pre-read list
   // of ids) so every statement stays inside the caller's $transaction.
   const asSubject = { relation: { menteeId: userId } };
+  // A meeting is about this person when it hangs off their relation
+  // (`asSubject`), or off a DIRECT (1:1) conversation they are in (#1051 made
+  // the second shape legal).
+  const directMeeting = { conversation: { type: 'DIRECT' as const, participants: { some: { userId } } } };
   return [
     // ── Content the person WROTE → tombstone ────────────────────────────────
     // Attachments first: once the message row is masked there is no way back to
@@ -192,19 +252,55 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.personalNote.deleteMany({ where: { userId } }),
     // The mentee's own words in their self-serve mentorship request.
     prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null } }),
+    // Their own bell. A hard delete cascades it; anonymise used to keep every
+    // rendered sentence ("Ayşe sent you a message", with the link) under a row
+    // that claimed to be anonymous. Theirs alone, so deleted (#2106).
+    prisma.notification.deleteMany({ where: { userId } }),
+    // What they asked their mentor, and what they wrote on a project join
+    // request (the decider's note on it is about them, so it goes too).
+    prisma.mentorQuestion.updateMany({ where: { askedById: userId }, data: { question: '' } }),
+    prisma.meetingRequest.updateMany({ where: { requestedById: userId }, data: { topic: '' } }),
+    prisma.projectJoinRequest.updateMany({ where: { userId }, data: { message: null, decisionNote: null } }),
+    // Their words as an AUTHOR, whoever the subject: an evaluation comment and
+    // the excerpt that would be quoted from it, a mentor's answer, a weekly
+    // report review. The scores and dates stay — the counterpart's record keeps
+    // its shape, only the prose written by the erased person goes.
+    prisma.evaluation.updateMany({ where: { authorId: userId }, data: { comment: null, publicExcerpt: null } }),
+    prisma.mentorQuestion.updateMany({ where: { relation: { mentorId: userId } }, data: { answer: null } }),
+    prisma.weeklyReport.updateMany({ where: { reviewedById: userId }, data: { mentorComment: null } }),
 
     // ── Content written ABOUT the person → scrub, keep the row ──────────────
     prisma.interactionLog.updateMany({ where: asSubject, data: { notes: '', subject: null } }),
     prisma.relationNote.updateMany({ where: asSubject, data: { body: '' } }),
     prisma.personalNote.updateMany({
-      where: {
-        OR: [
-          { meeting: { relation: { menteeId: userId } } },
-          { meeting: { conversation: { type: 'DIRECT', participants: { some: { userId } } } } },
-        ],
-      },
+      where: { OR: [{ meeting: asSubject }, { meeting: directMeeting }] },
       data: { body: '' },
     }),
+    // The rest of the per-person inventory in scripts/sanitize-db.mjs (#2106).
+    // Required columns are emptied, optional ones nulled; every date, status,
+    // score and type stays. Most of these cascade on a hard delete (through the
+    // relation or the user) and all of them survived anonymise — the gentler
+    // mode the account page offers.
+    prisma.evaluation.updateMany({
+      where: { OR: [{ relation: { menteeId: userId } }, { subjectId: userId }] },
+      data: { comment: null, publicExcerpt: null },
+    }),
+    prisma.weeklyReport.updateMany({ where: asSubject, data: { summary: '', blockers: null, mentorComment: null } }),
+    prisma.mentorQuestion.updateMany({ where: asSubject, data: { question: '', answer: null } }),
+    prisma.meetingRequest.updateMany({ where: asSubject, data: { topic: '' } }),
+    // A meeting title often names the person ("Mock interview with Ayşe"), and
+    // a cancel reason is free text about the same meeting. Only meetings that
+    // are ABOUT them — their relation, or a 1:1 they were in; a project or
+    // group meeting they attended is about the meeting.
+    prisma.meeting.updateMany({
+      where: { OR: [asSubject, directMeeting] },
+      data: { title: '', cancelReason: null },
+    }),
+    prisma.goal.updateMany({ where: asSubject, data: { description: null } }),
+    prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
+    prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
+    prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
+    prisma.interviewRequest.updateMany({ where: { menteeId: userId }, data: { note: null, declineNote: null } }),
   ];
 }
 

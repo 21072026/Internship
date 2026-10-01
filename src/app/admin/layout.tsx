@@ -1,3 +1,4 @@
+import { NO_INDEX } from '@/lib/pageMetadata';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -20,6 +21,9 @@ import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
 import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
+
+// Signed-in area: never in a search result (#1376).
+export const metadata = NO_INDEX;
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);

@@ -1,9 +1,16 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import { notFound } from 'next/navigation';
 import { Quote } from 'lucide-react';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { listPublishedStories } from '@/lib/testimonials';
 import { PublicShell } from '@/components/landing/PublicShell';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.landing.stories.pageTitle, description: t.landing.stories.pageSubtitle }), '/stories/opengraph-image');
+}
+
 
 // Published, consent-gated success stories (#1100). The honesty rule from
 // docs/landing-value-proposition.md §4.2 applies here too: with zero
@@ -18,7 +25,7 @@ export default async function StoriesPage() {
   const S = t.landing.stories;
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: S.pageTitle, path: '/stories' }}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{S.pageTitle}</h1>
         <p className="text-gray-500 dark:text-gray-400 mb-10">{S.pageSubtitle}</p>

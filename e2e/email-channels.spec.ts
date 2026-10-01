@@ -12,7 +12,9 @@ test.afterAll(async () => {
 // to contain the jobs that actually generate the volume.
 test('admin email panel exposes both outbound channels and the bulk category list', async ({ page }) => {
   const adminEmail = uniqueEmail('chan-admin');
-  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Channel Admin');
+  const admin = await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Channel Admin');
+  // The delivery log is installation-wide, so it is the super admin's (#2635).
+  await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
 
   try {
     await page.goto('/auth/signin');

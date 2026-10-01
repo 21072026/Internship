@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { isGoogleCalendarEnabled } from '@/lib/googleCalendar';
 import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarClient';
+import { meetingEnd } from '@/lib/meetingDuration';
 
 /**
  * Pushing meetings into connected users' own Google Calendars (#709).
@@ -18,22 +19,35 @@ import { accessTokenFor, calendarFetch, noteError } from '@/lib/googleCalendarCl
  * convenience.
  */
 
-/** An hour, the same assumption the dashboard's "meeting is on" banner makes. */
-const DEFAULT_DURATION_MS = 60 * 60 * 1000;
-
 export interface PushableMeeting {
   id: string;
   title: string;
   scheduledAt: Date | null;
   timeZone: string | null;
   meetLink: string | null;
+  // The stored length (#1984); null reads as the one default.
+  durationMinutes: number | null;
 }
+
+/**
+ * The fields a push needs, as one Prisma `select` (#1986). Every push site
+ * spreads this into its query, so a field added to the calendar event here
+ * cannot be forgotten at one of them.
+ */
+export const pushableSelect = {
+  id: true,
+  title: true,
+  scheduledAt: true,
+  timeZone: true,
+  meetLink: true,
+  durationMinutes: true,
+} as const satisfies Record<keyof PushableMeeting, true>;
 
 function eventBody(meeting: PushableMeeting) {
   // A meeting with no time is a shared link, not a calendar entry — there is
   // nothing to put in a slot. Those are skipped by the caller.
   const start = meeting.scheduledAt!;
-  const end = new Date(start.getTime() + DEFAULT_DURATION_MS);
+  const end = meetingEnd(start, meeting);
   return {
     summary: meeting.title,
     description: meeting.meetLink ? `Join: ${meeting.meetLink}` : undefined,
@@ -96,7 +110,15 @@ export async function pushMeeting(meeting: PushableMeeting, userIds: string[]): 
   return pushed;
 }
 
-/** Delete this meeting from every calendar it was mirrored to. */
+/**
+ * Delete this meeting from every calendar it was mirrored to.
+ *
+ * Call sites (#1986): `DELETE` and the cancel branch of `PATCH`
+ * `/api/meetings/[id]`, and the meeting-series purge of old generated rows —
+ * all through `withdrawMeetings()` below. The interview-request cancel path
+ * does not exist yet (#1844); when it lands it must go through
+ * `withdrawMeetings()` as well, never delete a mirrored `Meeting` row directly.
+ */
 export async function removeMeeting(meetingId: string): Promise<void> {
   if (!isGoogleCalendarEnabled()) return;
   const links = await prisma.googleCalendarEventLink.findMany({
@@ -116,6 +138,31 @@ export async function removeMeeting(meetingId: string): Promise<void> {
     // pointing at an event we can no longer reach is worse than no link.
     await prisma.googleCalendarEventLink.delete({ where: { id: link.id } }).catch(() => {});
   }
+}
+
+/** Ceiling on a withdrawal before the caller answers anyway. */
+export const CALENDAR_WITHDRAW_MS = 5_000;
+
+/**
+ * Withdraw these meetings from every calendar they were mirrored to, then
+ * return — bounded by `timeoutMs`, and never rejecting.
+ *
+ * Awaited rather than fired and forgotten, on purpose: it has to finish BEFORE
+ * the caller deletes the rows, because `GoogleCalendarEventLink` cascades away
+ * with the meeting and a withdrawal with no links left to read is a no-op that
+ * leaves a ghost event on someone's real calendar. Bounded instead, so a third
+ * party's API can never make cancelling or deleting hang. Returns immediately
+ * unless the integration is switched on.
+ */
+export async function withdrawMeetings(ids: string[], timeoutMs = CALENDAR_WITHDRAW_MS): Promise<void> {
+  if (!isGoogleCalendarEnabled() || ids.length === 0) return;
+  const work = Promise.allSettled(ids.map((id) => removeMeeting(id)));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  await Promise.race([work, deadline]);
+  if (timer) clearTimeout(timer);
 }
 
 /**

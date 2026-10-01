@@ -5,6 +5,15 @@
 // language, preview the rendered content, and export to PDF / TXT / Markdown
 // without any server-side binary generation (PDF is produced via the browser's
 // print pipeline from styled HTML — Docker-safe, no headless Chromium).
+//
+// PER VERTICAL (cross-world isolation). Every template below is INTERNSHIP
+// career content — a CV, a cover letter, an internship report — so the library
+// is keyed by vertical and a MARKETING tenant is offered none of it. A vertical
+// with no entry of its own gets an empty library (and the UI hides the card),
+// never the internship set: falling back to another product's content is
+// exactly the leak this keying closes.
+
+import type { VerticalKey } from '@/lib/verticals';
 
 export type TemplateLocale = 'en' | 'tr' | 'de';
 
@@ -388,16 +397,25 @@ const INTERVIEW_PREP: DocTemplate = {
   },
 };
 
-export const TEMPLATES: DocTemplate[] = [
-  CV,
-  COVER_LETTER,
-  REFERENCE_REQUEST,
-  INTERNSHIP_REPORT,
-  INTERVIEW_PREP,
-];
+/** The built-in library of each vertical. MARKETING has none of its own yet. */
+export const TEMPLATES_BY_VERTICAL: Readonly<Record<VerticalKey, readonly DocTemplate[]>> = {
+  INTERNSHIP: [CV, COVER_LETTER, REFERENCE_REQUEST, INTERNSHIP_REPORT, INTERVIEW_PREP],
+  MARKETING: [],
+};
 
-export function getTemplate(id: string): DocTemplate | undefined {
-  return TEMPLATES.find((t) => t.id === id);
+/**
+ * The built-ins one vertical offers. An unknown key gets an empty list — never
+ * another vertical's content (the #2350 catalogue falls back to INTERNSHIP for
+ * capabilities, but content is not a capability: showing a CV template to the
+ * wrong product is a leak, showing nothing is not).
+ */
+export function templatesFor(vertical: VerticalKey | string | null | undefined): readonly DocTemplate[] {
+  if (vertical === 'INTERNSHIP' || vertical === 'MARKETING') return TEMPLATES_BY_VERTICAL[vertical];
+  return [];
+}
+
+export function getTemplate(id: string, vertical: VerticalKey | string | null | undefined): DocTemplate | undefined {
+  return templatesFor(vertical).find((t) => t.id === id);
 }
 
 export function isTemplateLocale(v: string): v is TemplateLocale {

@@ -24,6 +24,19 @@ import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runRetentionPrune } from '@/lib/retentionEntries';
 import { runUsageRollup } from '@/lib/jobs/usageRollup';
 import { runTrialReminders } from '@/lib/jobs/trialReminders';
+import { settingsOrgOf } from '@/lib/settingsOrg';
+
+// The weekly analytics report runs for every org (#2542), but any tenant's admin
+// may call this route: answer with the caller's own org's entry only, never the
+// other tenants' counts.
+async function ownAnalyticsReport(
+  session: Parameters<typeof settingsOrgOf>[0],
+  report: Awaited<ReturnType<typeof sendWeeklyAnalyticsReport>>,
+) {
+  const orgId = await settingsOrgOf(session);
+  const own = report.orgs.find((r) => r.orgId === orgId);
+  return own ?? { orgId, locked: true, sent: 0, total: 0 };
+}
 
 export async function GET(request: Request) {
   try {
@@ -34,6 +47,9 @@ export async function GET(request: Request) {
     }
 
     const job = new URL(request.url).searchParams.get('job');
+    if (job === 'analytics-report') {
+      return NextResponse.json({ message: 'Weekly analytics report ran', analyticsReport: await ownAnalyticsReport(session, await sendWeeklyAnalyticsReport()) });
+    }
     if (job === 'weekly-reports') {
       return NextResponse.json({ message: 'Weekly report reminders ran', weeklyReports: await sendWeeklyReportReminders() });
     }
@@ -111,6 +127,13 @@ export async function GET(request: Request) {
       const trialReminders = await runTrialReminders(orgId ? { orgIds: [orgId] } : {});
       return NextResponse.json({ message: 'Trial reminders ran', trialReminders });
     }
+    // Recurring-meeting reminders alone (#2013) — the same function the batch
+    // runs, and as safe to click twice: every occurrence is claimed in
+    // MeetingSeriesReminder before anything is sent. Named so an operator (and
+    // e2e/relation-series-reach.spec.ts) can run it without the whole batch.
+    if (job === 'meeting-series-reminders') {
+      return NextResponse.json({ message: 'Meeting series reminders ran', projectMeetings: await sendProjectMeetingSeriesReminders() });
+    }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();
       return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });
@@ -151,7 +174,7 @@ export async function GET(request: Request) {
       deadlines,
       retention,
       needMatches,
-      analyticsReport,
+      analyticsReport: await ownAnalyticsReport(session, analyticsReport),
       missingDocuments,
       offers,
       weeklyReports,

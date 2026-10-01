@@ -4,6 +4,8 @@ import { getToken } from 'next-auth/jwt';
 import { IS_DEMO_MODE, demoBlockReason } from '@/lib/demoMode';
 import { REMEMBER_COOKIES, REMEMBER_HINT_COOKIE, clearRememberCookies } from '@/lib/rememberCookie';
 import { REQUEST_ID_HEADER, resolveRequestId } from '@/lib/requestId';
+import { hostnameOf, servedHosts } from '@/lib/servedHosts';
+import { writeOriginVerdict } from '@/lib/writeOrigin';
 
 // Methods that mutate state. Unverified users are limited to reads.
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -32,6 +34,11 @@ function isAllowlisted(pathname: string) {
     // itself, /one-click and /prefs.
     pathname === '/api/unsubscribe' ||
     pathname.startsWith('/api/unsubscribe/') ||
+    // The double opt-in's confirm / withdraw buttons (#2577): the signed token
+    // is the credential, and a withdrawal must work from any browser — the
+    // same argument as the unsubscribe routes above. Exact paths.
+    pathname === '/api/contact-permission/confirm' ||
+    pathname === '/api/contact-permission/opt-out' ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.
@@ -107,6 +114,30 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
     url.pathname = '/auth/resume';
     url.search = `?next=${encodeURIComponent(next)}`;
     return NextResponse.redirect(url);
+  }
+
+  // Cross-site write gate (#1467): a browser write to /api/* must come from one
+  // of our own pages, and never as text/plain. The rule and its reasons are in
+  // src/lib/writeOrigin.ts; it runs before every other write check so a forged
+  // request learns nothing about the session it rode in on.
+  if (pathname.startsWith('/api/')) {
+    const verdict = writeOriginVerdict({
+      method: req.method,
+      pathname,
+      origin: req.headers.get('origin'),
+      secFetchSite: req.headers.get('sec-fetch-site'),
+      contentType: req.headers.get('content-type'),
+      requestHost: hostnameOf(req.headers.get('x-forwarded-host') ?? req.headers.get('host')),
+      served: servedHosts(),
+    });
+    if (!verdict.ok) {
+      return NextResponse.json(
+        verdict.status === 415
+          ? { error: 'Send JSON (Content-Type: application/json).', code: verdict.code }
+          : { error: 'Cross-site requests cannot change data here.', code: verdict.code },
+        { status: verdict.status }
+      );
+    }
   }
 
   // Safety net for "remember me" (#1495): every sign-out control in the app

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Security: `GET /api/admin/email-log` is super-admin only (#2635). The log is installation-wide (`EmailLog` has no `orgId`), and a tenant admin could read every tenant's recipients, subjects and SMTP errors from `/admin/settings`. A plain admin now gets a 403 `super_admin_only`, and the delivery-log section is not drawn for them.",
+  "notes": {
+    "en": ["The e-mail delivery log in the settings is now shown only to the platform operator. Workspace admins no longer see mail sent to other workspaces."],
+    "tr": ["Ayarlardaki e-posta teslim kaydı artık yalnızca platform yöneticisine gösteriliyor; çalışma alanı yöneticileri başka alanlara giden mailleri görmüyor."],
+    "de": ["Das E-Mail-Zustellprotokoll in den Einstellungen sieht jetzt nur noch der Plattformbetreiber; Admins eines Arbeitsbereichs sehen keine Mails an andere Arbeitsbereiche mehr."]
+  }
+}

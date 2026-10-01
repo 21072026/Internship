@@ -1,6 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { orgWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 
 /**
  * Fail-closed data scoping (#814 / #831 / #849).
@@ -29,6 +31,12 @@ export interface ScopeUser {
   role: string;
   email?: string | null;
   companyId?: string | null;
+  /**
+   * The caller's org (the session's `orgId`). Every scope below is narrowed to
+   * it at the root — see `scopeForRole`. Missing/null reads as the DEFAULT org,
+   * never as "every tenant" (the tenantFilter.ts rule).
+   */
+  orgId?: string | null;
 }
 
 /** The `where` shape each scoped resource expects. */
@@ -59,14 +67,17 @@ export async function sourceIdForUser(userId: string): Promise<string | null> {
 }
 
 /**
- * One builder per role, per resource. `{}` means "deliberately unscoped"
- * (ADMIN); a missing key means "no scope defined" and denies the role.
+ * One builder per role, per resource. They say WHICH rows of the tenant a role
+ * may read; `{}` means "the whole tenant" (ADMIN). They never say which tenant:
+ * that is added once, at the root, by `scopeForRole`. A missing key means "no
+ * scope defined" and denies the role.
  */
 const BUILDERS: {
   [K in ScopedResource]: Partial<Record<string, (user: ScopeUser) => Promise<ScopeMap[K]>>>;
 } = {
   relation: {
-    // Admins see the whole tenant by design.
+    // Admins see the whole tenant by design — the TENANT, not the database:
+    // `scopeForRole` adds the org conjunct (#2542 follow-up).
     ADMIN: async () => ({}),
     // Both sides, for both roles (#1141): the same person can mentor one relation
     // and be mentored in another, and either way the relation is their own. This
@@ -128,8 +139,9 @@ const BUILDERS: {
   // client that starts asking visible in the activity log instead of silently
   // receiving `[]`.
   company: {
-    // Admins see the whole tenant by design — `{}` keeps the admin screens
-    // byte-identical to before the scope existed.
+    // Admins see the whole tenant by design — `{}` here, and `scopeForRole`
+    // adds WHICH tenant (a MARKETING admin read the INTERNSHIP account book
+    // through every caller that forgot its own `tenantWhere`).
     ADMIN: async () => ({}),
     // Companies reachable through a relation the mentor is personally named
     // in — both sides, mirroring the `relation` builder above (#1141): the same
@@ -153,9 +165,39 @@ export async function scopeForRole<K extends ScopedResource>(
   user: ScopeUser,
   resource: K
 ): Promise<ScopeMap[K] | null> {
+  const scope = await roleScope(user, resource);
+  if (!scope) return null;
+  // The tenant, at the root (#2542 follow-up). The ADMIN builders used to be
+  // the whole answer — `{}`, "admins see the whole tenant" — which with
+  // MT_ENFORCE_ISOLATION off (every deployment) meant EVERY tenant: a MARKETING
+  // admin's `GET /api/mentorship` listed the INTERNSHIP tenant's relations and
+  // mentee e-mails. Adding the org here, once, covers every caller and every
+  // role; a caller that also ANDs `tenantWhere(session)` gets the same filter
+  // twice, which is harmless.
+  return scopeInTenant(scope, await orgWhere(user.orgId || (await defaultOrgId())));
+}
+
+/**
+ * The role half of `scopeForRole` alone — which of the tenant's rows a role
+ * may read, without the tenant. Pure (no database), so the per-role matrix is
+ * unit-testable; route code calls `scopeForRole`, never this.
+ */
+export async function roleScope<K extends ScopedResource>(
+  user: ScopeUser,
+  resource: K
+): Promise<ScopeMap[K] | null> {
   const build = BUILDERS[resource][user.role];
   if (!build) return null;
   return (await build(user)) as ScopeMap[K];
+}
+
+/**
+ * A role scope narrowed to one tenant, as a conjunct (`withinTenant`), so the
+ * tenant's own `OR` (default org + NULL rows) can never merge with a role
+ * scope's `OR`. Pure; exported for the unit test.
+ */
+export function scopeInTenant<W extends object>(scope: W, tenant: TenantWhere): W {
+  return withinTenant(scope, tenant);
 }
 
 /** Audit a denial so an unscoped role showing up in production is visible. */

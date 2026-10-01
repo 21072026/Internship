@@ -93,8 +93,13 @@ test('a MARKETING admin toggling a setting changes only its own tenant; each ten
     const intEnt = await (await intJar.get('/api/admin/analytics/entitlements')).json();
     expect(mktEnt.premiumAnalytics).toBe(true);
     expect(intEnt.premiumAnalytics).toBe(false);
-    expect((await mktJar.get('/api/admin/analytics/cohorts')).status()).not.toBe(403);
-    expect((await intJar.get('/api/admin/analytics/cohorts')).status()).toBe(403);
+    // The premium gate itself, on a route every vertical may call: /cohorts is
+    // also refused to a MARKETING admin by its `mentorship` capability gate, so
+    // a 403 there would not say which gate answered.
+    expect((await mktJar.get('/api/admin/analytics/sources')).status()).not.toBe(403);
+    const locked = await intJar.get('/api/admin/analytics/sources');
+    expect(locked.status()).toBe(403);
+    expect((await locked.json()).error).toBe('feature_locked');
 
     // 3. The other direction: the INTERNSHIP admin's write stays in its tenant.
     const intPut = await intJar.put('/api/admin/settings', { data: { reminderDays: '33' } });

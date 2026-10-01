@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
-import { DROPOFF_REASON_CODES } from '@/lib/dropoffReasons';
+import { dropoffReasonCodesFor } from '@/lib/dropoffReasons';
+import { useVertical } from '@/lib/verticalClient';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 
 export interface DropoffReasonDialogProps {
@@ -24,6 +25,8 @@ export interface DropoffReasonDialogProps {
 export function DropoffReasonDialog({ open, stageLabel, loading = false, onConfirm, onCancel }: DropoffReasonDialogProps) {
   const t = useT();
   const d = t.dropoff;
+  // The vertical's own list (#2573): a lost deal is not a hiring drop-off.
+  const codes = dropoffReasonCodesFor(useVertical());
   const [reasonCode, setReasonCode] = useState('');
   const [reasonNote, setReasonNote] = useState('');
   const dialogRef = useModalFocus<HTMLDivElement>(open, onCancel);
@@ -64,7 +67,7 @@ export function DropoffReasonDialog({ open, stageLabel, loading = false, onConfi
             value={reasonCode}
             onChange={(e) => setReasonCode(e.target.value)}
             placeholder={d.reasonPlaceholder}
-            options={DROPOFF_REASON_CODES.map((code) => ({ value: code, label: d.reasons[code] }))}
+            options={codes.map((code) => ({ value: code, label: d.reasons[code] }))}
           />
           <div>
             <Textarea

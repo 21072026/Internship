@@ -238,6 +238,56 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
   { path: `/api/users/${FOREIGN_USER_ID_PARAM}/activity`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}`, kind: 'detail' },
   { path: `/api/companies/${FOREIGN_COMPANY_ID_PARAM}/delete-impact`, kind: 'detail' },
+  // Analytics and invitations (leak audit WP3/WP5): the payloads carry mentor,
+  // mentee and inviter ids, so a foreign one in the body is the leak.
+  { path: '/api/admin/analytics', kind: 'list' },
+  { path: '/api/admin/analytics/funnel', kind: 'list' },
+  { path: '/api/admin/analytics/aging', kind: 'list' },
+  { path: '/api/invite', kind: 'list' },
+  { path: '/api/admin/invitations', kind: 'list' },
+  // Relations, meetings and the calendar (#2542 follow-up): the ADMIN relation
+  // scope and the meeting/calendar ADMIN branches were `{}`. The seeded foreign
+  // mentee has no relation here, so these are regression tripwires on the
+  // payload; e2e/tenant-isolation-relations.spec.ts seeds the rows and pins
+  // them in both directions.
+  { path: '/api/mentorship', kind: 'list' },
+  { path: '/api/meetings', kind: 'list' },
+  { path: '/api/calendar-events', kind: 'list' },
+  { path: `/api/people/${FOREIGN_USER_ID_PARAM}/card`, kind: 'detail' },
+  // Audit trail, support queue and content pools (cross-world isolation):
+  // each carries user ids (actorId / requester.id / createdById) a leak would
+  // expose. e2e/tenant-isolation-content.spec.ts covers them row by row.
+  { path: '/api/admin/activity', kind: 'list' },
+  { path: '/api/admin/support', kind: 'list' },
+  { path: '/api/admin/message-templates', kind: 'list' },
+  { path: '/api/admin/goal-templates', kind: 'list' },
+  { path: '/api/message-templates', kind: 'list' },
+];
+
+/**
+ * Instance-level writes only a SUPER ADMIN may make (#1535). Every role in the
+ * matrix — the plain tenant ADMIN included, which is exactly the case this list
+ * exists for — must be refused (401/403), and the refusal must happen before
+ * anything is written. `:orgId` is the foreign MARKETING org the spec seeds: the
+ * realistic target, "a tenant admin minting an admin login for somebody else's
+ * tenant". Mirrored in docs/role-access-matrix.md.
+ */
+export const TARGET_ORG_ID_PARAM = ':orgId';
+
+export interface SuperAdminProbe {
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  path: string;
+  body: Record<string, unknown>;
+  why: string;
+}
+
+export const SUPER_ADMIN_ONLY: SuperAdminProbe[] = [
+  {
+    method: 'POST',
+    path: `/api/admin/organizations/${TARGET_ORG_ID_PARAM}/invite-admin`,
+    body: { email: '' },
+    why: 'invite an ADMIN into any organization (docs/worlds.md § İkinci dünyaya davet)',
+  },
 ];
 
 /**
@@ -284,6 +334,7 @@ export const MARKETING_MENTOR_ADMIN_ONLY: SalesProbe[] = [
   { method: 'POST', path: '/api/invite', body: { role: 'MENTEE', email: '' }, expect: 'forbidden', why: 'invite (capability)' },
   { method: 'POST', path: '/api/admin/import', body: {}, expect: 'deny', why: 'import' },
   { method: 'POST', path: '/api/admin/marketing-accounts', body: {}, expect: 'deny', why: 'account import' },
+  { method: 'POST', path: '/api/admin/import/marketing-accounts', body: {}, expect: 'deny', why: 'account file import (#2552)' },
   { method: 'GET', path: '/api/admin/company-inquiries', expect: 'deny', why: 'demo request queue' },
   { method: 'GET', path: '/api/admin/activity', expect: 'deny', why: 'activity log' },
   { method: 'GET', path: '/api/admin/analytics', expect: 'deny', why: 'tenant analytics' },

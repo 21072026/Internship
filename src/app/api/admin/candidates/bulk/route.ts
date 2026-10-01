@@ -9,7 +9,9 @@ import { withTenantScope } from '@/lib/orgContext';
 import { statusChangeData, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 import { stageTrialWindow } from '@/lib/trialWindow';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { MAX_TAGS_PER_USER } from '@/lib/tags';
 import { transferMentorship } from '@/lib/mentorTransfer';
 import { notify } from '@/lib/notify';
@@ -56,6 +58,12 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { candidateIds, action } = parsed.data;
+  // Every id below comes from the client and the tenant middleware is dormant
+  // (MT_ENFORCE_ISOLATION off), so every lookup and every write is narrowed to
+  // the caller's tenant by hand (#2542 follow-up). A foreign id is skipped
+  // exactly like an id that does not exist. A session without an org is the
+  // default org's — the old `orgId ?? undefined` read it as unscoped.
+  const tenant = await tenantWhere(session);
 
   // Bulk tagging (#887). Deliberately placed BEFORE the stage actions and
   // written as its own branch rather than woven into them: advanceStage is
@@ -65,14 +73,17 @@ export async function POST(request: Request) {
     const tagId = parsed.data.tagId;
     if (!tagId) return NextResponse.json({ error: 'tagId is required', code: 'tag_required' }, { status: 400 });
 
-    const orgId = resolveOrgId(session);
-    const tag = await prisma.tag.findFirst({ where: { id: tagId, orgId: orgId ?? undefined }, select: { id: true, name: true } });
+    // Tag.orgId is NOT NULL, so the default org's `orgId IS NULL` arm of the
+    // tenant fragment is not a valid Tag filter (Prisma: "Argument `orgId` is
+    // missing" → 500). Match the caller's org id exactly, like /api/tags/assign.
+    const tagOrgId = resolveOrgId(session) ?? (await defaultOrgId());
+    const tag = await prisma.tag.findFirst({ where: { id: tagId, orgId: tagOrgId }, select: { id: true, name: true } });
     if (!tag) return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
 
     // Same MENTEE-only scoping as the other bulk actions: a stray id can never
     // reach an admin or mentor account.
     const targets = await prisma.user.findMany({
-      where: { id: { in: candidateIds }, role: 'MENTEE' },
+      where: withinTenant({ id: { in: candidateIds }, role: 'MENTEE' as const }, tenant),
       select: { id: true, _count: { select: { tags: true } } },
     });
 
@@ -151,11 +162,10 @@ export async function POST(request: Request) {
     // reason: `ownerId` is an id the CLIENT chose, and this is the request that
     // moves who owns a record. The auto-scoping middleware stays dormant until
     // MT_ENFORCE_ISOLATION is on (src/lib/orgContext.ts), so "the middleware
-    // will catch it" is not true today — a null orgId leaves the lookup exactly
-    // as unscoped as it was, which is the single-tenant behaviour.
-    const ownerOrgId = resolveOrgId(session);
+    // will catch it" is not true today. A session without an org is the
+    // default org's (`tenantWhere`), never unscoped.
     const owner = await prisma.user.findFirst({
-      where: { id: ownerId, orgId: ownerOrgId ?? undefined, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } },
+      where: withinTenant({ id: ownerId, isActive: true, role: { in: ['ADMIN' as const, 'MENTOR' as const] } }, tenant),
       select: { id: true },
     });
     if (!owner) return NextResponse.json({ error: 'Invalid owner', code: 'invalid_owner' }, { status: 400 });
@@ -166,7 +176,7 @@ export async function POST(request: Request) {
     // mentorship, which is POST /api/mentorship's job and not something a
     // checkbox in a grid should do silently.
     const relations = await prisma.mentorshipRelation.findMany({
-      where: { menteeId: { in: candidateIds }, status: 'ACTIVE', mentee: { role: 'MENTEE' } },
+      where: withinTenant({ menteeId: { in: candidateIds }, status: 'ACTIVE' as const, mentee: { role: 'MENTEE' as const } }, tenant),
       select: { id: true, mentorId: true },
     });
 
@@ -201,6 +211,7 @@ export async function POST(request: Request) {
           reasonNote: 'bulk owner assignment',
           actorId: session.user.id,
           actorEmail: session.user.email ?? null,
+          callerOrgId: session.user.orgId,
           request,
           batched: true,
         });
@@ -253,7 +264,7 @@ export async function POST(request: Request) {
   if (action === 'activate' || action === 'deactivate') {
     const isActive = action === 'activate';
     const result = await prisma.user.updateMany({
-      where: { id: { in: candidateIds }, role: 'MENTEE' },
+      where: withinTenant({ id: { in: candidateIds }, role: 'MENTEE' as const }, tenant),
       data: { isActive },
     });
 
@@ -271,7 +282,7 @@ export async function POST(request: Request) {
   if (action === 'advanceStage') {
     // Find active relations for these mentees.
     const relations = await prisma.mentorshipRelation.findMany({
-      where: { menteeId: { in: candidateIds }, status: 'ACTIVE' },
+      where: withinTenant({ menteeId: { in: candidateIds }, status: 'ACTIVE' as const }, tenant),
       select: { id: true, menteeId: true, pipelineStatus: true, orgId: true, trialStartedAt: true, trialEndsAt: true },
     });
 

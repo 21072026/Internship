@@ -29,8 +29,11 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
+import { randomUUID } from 'node:crypto';
 import { runWithOrg } from './orgContext';
+import { acquireLease, releaseLease, replicaId } from './jobs/lease';
 import { logActivity } from './activity';
+import { recordMachineContactPermission } from './contactPermission';
 import { runImport, parseDelimited, type ImportReport, type ParsedTable } from './importPreview';
 import { resolvePipelineStages } from './pipelineStages';
 import { startStageKey } from './pipeline';
@@ -39,6 +42,8 @@ import { trialLengthDaysFor } from './trialWindow';
 import { NO_LOGIN_PASSWORD } from './menteeAccount';
 import { normalizeEmailKey } from './duplicateDetection';
 import { findUsersByEmail, worldOfOrg } from './userWorld';
+import { defaultOrgId } from './defaultOrg';
+import { findOrCreateSource } from './leadSource';
 import {
   AlreadyMentoredError,
   findActiveMentorship,
@@ -138,6 +143,7 @@ const ACCOUNT_SELECT = {
   contactName: true,
   contactEmail: true,
   contactPhone: true,
+  externalId: true,
 } as const;
 
 async function loadSnapshot(
@@ -169,6 +175,9 @@ async function loadSnapshot(
           preferredLanguage: true,
           referralSource: true,
           companyId: true,
+          // First-touch attribution (#2570) reads the referrer the lead has.
+          sourceId: true,
+          referredById: true,
         },
       })
     : [];
@@ -176,11 +185,32 @@ async function loadSnapshot(
   const relations = leads.length
     ? await prisma.mentorshipRelation.findMany({
         where: { menteeId: { in: leads.map((l) => l.id) } },
-        select: { id: true, mentorId: true, menteeId: true, companyId: true, pipelineStatus: true, status: true },
+        select: {
+          id: true,
+          mentorId: true,
+          menteeId: true,
+          companyId: true,
+          pipelineStatus: true,
+          status: true,
+          // The dates the file may fill in (#2554) — planned against these.
+          trialStartedAt: true,
+          trialEndsAt: true,
+          startDate: true,
+          // The estimate the `mrr` column may gap-fill (#2422).
+          value: { select: { valueMinor: true, currency: true } },
+        },
       })
     : [];
 
-  return { accounts, leads, relations };
+  return {
+    accounts,
+    leads,
+    relations: relations.map(({ value, ...r }) => ({
+      ...r,
+      valueMinor: value?.valueMinor ?? null,
+      valueCurrency: value?.currency ?? null,
+    })),
+  };
 }
 
 // ── The writer ───────────────────────────────────────────────────────────────
@@ -191,6 +221,44 @@ interface WriterContext {
   offPathStages: ReadonlySet<string>;
   /** The org's `trialLengthDays`, resolved once per run (#2551). */
   trialLengthDays: number;
+}
+
+/**
+ * How a lead's `Source` is decided (#2570).
+ *
+ * `typed` — the file's (or the manual form's) `source` column IS the source a
+ * person named: "Messe Berlin", "Partner X". It keeps its free-text copy on
+ * `User.referralSource` as before, and is now also bound to the tenant's
+ * `Source` row of that name (created when there is none), so the attribution
+ * report counts it. A blank column leaves the lead unsourced.
+ *
+ * `fixed` — the caller already decided, from machine inputs, through
+ * `leadSourceName()` (the demo form's UTM parameters, #2569; an ingest,
+ * #2450). `name: null` is "unknown": no Source, the explicit `unsourced` bucket.
+ * The free-text `referralSource` is still whatever the caller put in `source`.
+ */
+export type LeadSourceBinding = { kind: 'typed' } | { kind: 'fixed'; name: string | null };
+
+/**
+ * The `sourceId` a planned row's lead gets, or null. Resolved OUTSIDE the
+ * row's transaction (a lost race on the `(orgId, name)` index is a P2002 that
+ * findOrCreateSource() answers by re-reading); a row that then fails leaves at
+ * worst an unused Source row, never a lead without its tenant's source. Only
+ * the database writer calls this — a dry run creates no Source.
+ *
+ * Attribution is FIRST TOUCH: for a lead that already exists it is only
+ * written when the lead has no referrer of either kind yet (see placeOnFunnel).
+ */
+async function leadSourceIdFor(row: MarketingPlannedRow, context: WriterContext): Promise<string | null> {
+  const funnel = row.value.funnel;
+  if (!funnel || !funnel.pending) return null;
+  // Decided by the diff (`MarketingFunnelPlan.sourceName`) from the incoming
+  // value, and already null for a lead that has a referrer — so no Source is
+  // created here that the first-touch write below would then refuse.
+  const name = funnel.sourceName;
+  if (!name) return null;
+  const orgId = context.orgId ?? (await defaultOrgId());
+  return (await findOrCreateSource(orgId, name)).id;
 }
 
 /**
@@ -217,7 +285,30 @@ function accountCreateData(row: MarketingPlannedRow, orgId: string | null) {
     contactName: changes.contactName ?? null,
     contactEmail: changes.contactEmail ?? null,
     contactPhone: changes.contactPhone ?? null,
+    externalId: changes.externalId ?? null,
   };
+}
+
+/**
+ * The row's `mrr` as the record's estimated monthly value (#2422). The plan
+ * already applied the gap-fill policy (`funnel.valueMinor` is null when there
+ * is nothing to write); the file carries no currency column, and every amount
+ * the import parses is euro cents (MarketingAccountRow.mrrMinor). The relation's
+ * org is stamped explicitly: an import run binds no tenant context of its own.
+ */
+async function writeImportedValue(
+  tx: TxClient,
+  relationId: string,
+  funnel: NonNullable<MarketingPlannedRow['value']['funnel']>,
+  context: WriterContext,
+): Promise<void> {
+  if (funnel.valueMinor === null) return;
+  const data = { valueMinor: funnel.valueMinor, currency: 'EUR', source: 'IMPORT', updatedById: funnel.ownerId };
+  await tx.relationValue.upsert({
+    where: { relationId },
+    create: { ...data, relationId, orgId: context.orgId },
+    update: data,
+  });
 }
 
 /**
@@ -229,6 +320,7 @@ async function placeOnFunnel(
   row: MarketingPlannedRow,
   companyId: string,
   context: WriterContext,
+  sourceId: string | null,
 ): Promise<void> {
   const funnel = row.value.funnel;
   if (!funnel || !funnel.pending) return;
@@ -268,12 +360,20 @@ async function placeOnFunnel(
         country: funnel.leadChanges.country ?? null,
         preferredLanguage: funnel.leadChanges.preferredLanguage ?? null,
         referralSource: funnel.leadChanges.referralSource ?? null,
+        sourceId,
       },
       select: { id: true },
     });
     leadId = created.id;
-  } else if (funnel.leadChanged.length > 0) {
-    await tx.user.update({ where: { id: leadId }, data: { ...funnel.leadChanges, companyId } });
+  } else {
+    if (funnel.leadChanged.length > 0) {
+      await tx.user.update({ where: { id: leadId }, data: { ...funnel.leadChanges, companyId } });
+    }
+    // First touch (#2570): an existing lead keeps the referrer it has — a
+    // Source or a referring person (the merged referrer, src/lib/referrer.ts).
+    if (sourceId) {
+      await tx.user.updateMany({ where: { id: leadId, sourceId: null, referredById: null }, data: { sourceId } });
+    }
   }
 
   // ONE mentee, at most one ACTIVE mentor (#419) — asked through the shared
@@ -289,14 +389,16 @@ async function placeOnFunnel(
   if (!active) {
     // A record created straight into TRIAL_ACTIVE gets its trial window in the
     // same insert (#2551) — see funnelRelationCreateData().
-    await tx.mentorshipRelation.create({
+    const created = await tx.mentorshipRelation.create({
       data: funnelRelationCreateData(funnel, leadId, {
         orgId: context.orgId,
         companyId,
         now: new Date(),
         trialLengthDays: context.trialLengthDays,
       }),
+      select: { id: true },
     });
+    await writeImportedValue(tx, created.id, funnel, context);
     // No StatusChange for a relation CREATED at this stage: `stageEnteredAt()`
     // already answers from `startDate` when there is no history
     // (src/lib/stageClock.ts), and a from→to row would record a move that never
@@ -309,6 +411,7 @@ async function placeOnFunnel(
     select: { pipelineStatus: true, companyId: true, trialStartedAt: true, trialEndsAt: true },
   });
   const fromStatus = current?.pipelineStatus ?? funnel.fromStage ?? funnel.toStage;
+  await writeImportedValue(tx, active.id, funnel, context);
   await tx.mentorshipRelation.update({
     where: { id: active.id },
     data: funnelRelationUpdateData(funnel, current, {
@@ -340,23 +443,36 @@ async function placeOnFunnel(
 function databaseWriter(context: WriterContext): MarketingAccountWriter {
   return {
     async createAccount(row) {
+      const sourceId = await leadSourceIdFor(row, context);
       return prisma.$transaction(async (tx) => {
         const company = await tx.company.create({
           data: accountCreateData(row, context.orgId),
-          select: { id: true },
+          select: { id: true, contactEmail: true },
         });
-        await placeOnFunnel(tx, row, company.id, context);
+        // An import knows the address and nothing else (#2577): it records the
+        // e-mail channel with basis NONE, and the rule refuses anything more —
+        // whatever a column in the file claims. A demo request converted
+        // through this writer is upgraded afterwards by its own evidence
+        // (src/lib/contactPermissionDoi.ts, applyInquiryPermission).
+        await recordMachineContactPermission(tx, {
+          writer: 'import',
+          orgId: context.orgId,
+          companyId: company.id,
+          address: company.contactEmail,
+        });
+        await placeOnFunnel(tx, row, company.id, context, sourceId);
         return company.id;
       });
     },
     async updateAccount(row) {
       const targetId = row.value.account.targetId;
       if (!targetId) throw new Error('an UPDATE row reached the writer without a target id');
+      const sourceId = await leadSourceIdFor(row, context);
       return prisma.$transaction(async (tx) => {
         if (row.value.account.changed.length > 0) {
           await tx.company.update({ where: { id: targetId }, data: row.value.account.changes });
         }
-        await placeOnFunnel(tx, row, targetId, context);
+        await placeOnFunnel(tx, row, targetId, context, sourceId);
         return targetId;
       });
     },
@@ -377,6 +493,21 @@ export interface MarketingImportOptions {
   /** `--delimiter`; sniffed from the header line when omitted. */
   delimiter?: string;
   chunkSize?: number;
+  /**
+   * The owner, already resolved — the admin panel (#2552) resolves it from the
+   * session, or from an owner the admin picked in the same org, so no e-mail
+   * lookup is needed. When set, `ownerEmail` is ignored.
+   */
+  owner?: MarketingImportOwner;
+  /** Who ran it, for the activity log, when that is not the owner. Defaults to the owner. */
+  actor?: { id: string; email: string | null };
+  /** The request, so the activity row carries its IP/user agent like other admin writes. */
+  request?: Request;
+  /**
+   * Refuse a file with more data rows than this (`too_many_rows`) before
+   * anything is planned. The panel sets it; the CLI does not.
+   */
+  maxRows?: number;
 }
 
 export interface MarketingImportRunResult {
@@ -387,36 +518,90 @@ export interface MarketingImportRunResult {
 }
 
 /**
+ * How long one apply may hold its organization's import lease. Far above a
+ * worst-case run (MARKETING_IMPORT_MAX_ROWS rows, one short transaction each);
+ * a run that somehow outlives it loses only the exclusivity, and a crashed one
+ * frees the lease by expiry — the JobLease rule, never a `finally` alone.
+ */
+export const MARKETING_IMPORT_LEASE_TTL_MS = 30 * 60 * 1000;
+
+/** One lease per organization: two orgs import in parallel, one org one at a time. */
+export function marketingImportLeaseName(orgId: string | null): string {
+  return `marketing-import:${orgId ?? 'default'}`;
+}
+
+/**
  * One import run. Dry run by default; `apply: true` is the same call with a
  * writer that writes — there is no `if (dryRun)` branch anywhere in the
  * planning path, which is the property the shared engine exists to guarantee.
+ *
+ * An apply holds the organization's import lease (#2552 review) for the whole
+ * run: two applies at once would each plan against a snapshot taken before
+ * the other wrote, and `externalId` / name+country carry no unique index, so a
+ * VAT-less account would be created twice and one external id could land on
+ * two accounts. A second apply while one runs is refused (`import_running`).
+ * The holder is unique per RUN, not per process — two tabs on one replica are
+ * two contenders. A preview writes nothing and takes no lease.
  */
 export async function runMarketingAccountImport(
   options: MarketingImportOptions,
 ): Promise<MarketingImportRunResult> {
-  const owner = await resolveImportOwner(options.ownerEmail);
+  const owner = options.owner ?? (await resolveImportOwner(options.ownerEmail));
+  if (options.apply !== true) return runMarketingAccountImportLocked(options, owner);
+  const lease = marketingImportLeaseName(owner.orgId);
+  const holder = `${replicaId().slice(0, 150)}:${randomUUID()}`;
+  if (!(await acquireLease(lease, holder, MARKETING_IMPORT_LEASE_TTL_MS))) {
+    throw new MarketingImportError(
+      'import_running',
+      'Another marketing account import is being applied in this organization; wait for it to finish',
+    );
+  }
+  try {
+    return await runMarketingAccountImportLocked(options, owner);
+  } finally {
+    // An optimisation only: expiry is what frees a lease a crashed run held.
+    await releaseLease(lease, holder);
+  }
+}
+
+async function runMarketingAccountImportLocked(
+  options: MarketingImportOptions,
+  owner: MarketingImportOwner,
+): Promise<MarketingImportRunResult> {
   const orgId = owner.orgId;
   const apply = options.apply === true;
+  const { maxRows } = options;
 
   const { report, stageKeys } = await runMarketingRows({
     owner,
-    parse: () => parseDelimited(options.text, { delimiter: options.delimiter }),
+    parse: () => {
+      // The same parser either way; the cap is a check on its output, so a
+      // bounded run cannot read the file differently from an unbounded one.
+      const table = parseDelimited(options.text, { delimiter: options.delimiter });
+      if (maxRows !== undefined && table.rows.length > maxRows) {
+        throw new MarketingImportError('too_many_rows', `The file has ${table.rows.length} rows; at most ${maxRows} per run`);
+      }
+      return table;
+    },
     mode: apply ? 'database' : 'preview',
     authoritative: options.authoritative,
     chunkSize: options.chunkSize,
   });
 
   if (apply) {
+    // Counts only — never a name, an address or a row (#2552: the panel's run
+    // is logged like the CLI's, and the activity log is read by every admin).
     await runWithOrg(orgId, () =>
       logActivity({
         action: 'marketing.accounts.imported',
-        actorId: owner.id,
-        actorEmail: owner.email,
+        actorId: options.actor?.id ?? owner.id,
+        actorEmail: options.actor ? options.actor.email : owner.email,
         targetType: 'Organization',
         targetId: orgId,
         detail: `rows=${report.total} ${Object.entries(report.counts)
           .map(([status, count]) => `${status}=${count}`)
-          .join(' ')}`,
+          .join(' ')}${options.authoritative ? ' authoritative' : ''}`,
+        ...(options.request ? { request: options.request } : {}),
       }),
     );
   }
@@ -433,6 +618,8 @@ interface MarketingRunCore {
   mode: WriterMode;
   authoritative?: boolean;
   chunkSize?: number;
+  /** Defaults to `typed` — the file's own `source` column. */
+  leadSource?: LeadSourceBinding;
 }
 
 /**
@@ -450,7 +637,12 @@ async function runMarketingRows(core: MarketingRunCore) {
     const offPathStages = new Set(stages.filter((s) => s.isOffPath).map((s) => s.key));
 
     const validate = makeMarketingValidator({ stageKeys });
-    const database = databaseWriter({ orgId, offPathStages, trialLengthDays: await trialLengthDaysFor(orgId) });
+    const trialLengthDays = await trialLengthDaysFor(orgId);
+    const database = databaseWriter({
+      orgId,
+      offPathStages,
+      trialLengthDays,
+    });
     // Create-only: a CREATE is written through the import's own writer; an
     // UPDATE is what an existing account WOULD receive, so it is reported and
     // not written — "this account already exists" is the answer, not a merge.
@@ -491,6 +683,8 @@ async function runMarketingRows(core: MarketingRunCore) {
           ownerIdByEmail: new Map(owners.map((o) => [o.email.toLowerCase(), o.id])),
           orgKey: orgId ?? '',
           authoritative: core.authoritative === true,
+          trialLengthDays,
+          ...(core.leadSource?.kind === 'fixed' ? { leadSourceName: core.leadSource.name } : {}),
         });
       },
       apply: (chunk) =>
@@ -548,6 +742,12 @@ export async function createMarketingAccount(input: {
    * owner's funnel (actor = null: nobody signed in did it). Defaults to the owner.
    */
   actor?: { id: string; email: string | null } | null;
+  /**
+   * The lead's `Source` when the caller decided it from machine inputs
+   * (`leadSourceName()`; null = unknown). Omitted: the typed `source` field
+   * is the source (#2570, see LeadSourceBinding).
+   */
+  leadSourceName?: string | null;
 }): Promise<ManualAccountOutcome> {
   const { owner, fields } = input;
   const stages = await runWithOrg(owner.orgId, () => resolvePipelineStages(owner.orgId));
@@ -583,6 +783,7 @@ export async function createMarketingAccount(input: {
     owner,
     parse: () => manualAccountTable({ ...fields, stage }),
     mode: 'createOnly',
+    leadSource: input.leadSourceName === undefined ? { kind: 'typed' } : { kind: 'fixed', name: input.leadSourceName },
   });
   const row = report.rows[0];
   if (!row) return { kind: 'invalid', reason: 'empty row' };
@@ -623,6 +824,10 @@ export async function createMarketingAccount(input: {
       return { kind: 'ambiguous', reason: row.reason ?? '' };
     default:
       if (row.reason?.includes('already_mentored')) return { kind: 'already_mentored' };
+      // A refusal the diff made (an external-id conflict, #2554) is about the
+      // input, not a failed write. The form sends no external id today, so this
+      // is defensive — but it must not read as a 500.
+      if (row.value?.refused) return { kind: 'invalid', reason: row.value.refused };
       // A row the VALIDATOR refused carries no plan value; one that reached the
       // writer and failed there does. The first is the caller's input and is
       // worth echoing; the second is ours (a unique index, a dropped

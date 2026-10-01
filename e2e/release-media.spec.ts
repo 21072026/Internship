@@ -1,6 +1,10 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { mkdirSync, statSync } from 'fs';
 import path from 'path';
+// Static, not `await import()`: Playwright resolves the `@/…` alias only for the
+// spec's static import graph (see e2e/erasure-free-text.spec.ts).
+import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle } from './helpers/auth';
 
 /**
  * Release-note media capture (#2233) — a PRODUCER, not a test.
@@ -101,6 +105,34 @@ test.describe('release media', () => {
     await page.goto('/release-notes');
     // The newest card, which is also the surface this very change is about.
     await capturePoster(page.getByTestId('release-card').first(), 'example-release-card');
+  });
+
+  // #1366: empty stages collapse to one strip per run, so three occupied stages
+  // are on screen together.
+  test('poster: the mentor board with its empty stages collapsed', async ({ page }) => {
+    const mentorEmail = uniqueEmail('media-board-mentor');
+    const mentor = await seedUser(mentorEmail, 'MediaBoard123!', 'MENTOR', 'Media Board Mentor');
+    const emails: string[] = [];
+    const ids: string[] = [];
+    for (const [name, stage] of [
+      ['Aylin Demir', 'APPLICATION_100'],
+      ['Berk Yıldız', 'INTERNSHIP_IN_PROGRESS_450'],
+      ['Cemre Kaya', 'HIRED_660'],
+    ]) {
+      const email = uniqueEmail('media-board-mentee');
+      emails.push(email);
+      const mentee = await seedUser(email, 'x', 'MENTEE', name);
+      ids.push((await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, pipelineStatus: stage } })).id);
+    }
+    try {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await signInAndSettle(page, mentorEmail, 'MediaBoard123!', '/mentor');
+      await page.goto('/mentor/board');
+      await capturePoster(page.getByTestId('board-columns'), 'board-empty-stages-collapsed');
+    } finally {
+      await prisma.mentorshipRelation.deleteMany({ where: { id: { in: ids } } });
+      for (const e of [...emails, mentorEmail]) await cleanupByEmail(e);
+    }
   });
 
   /**

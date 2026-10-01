@@ -5,9 +5,10 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
-import { canManageProject, isProjectMember } from '@/lib/projectAccess';
+import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/goalTemplates';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // The goal/task template pool (#51, reworked in #1113).
 //
@@ -41,7 +42,7 @@ const deleteSchema = z.object({ id: z.string().min(1) });
 async function access(session: { user: { id: string; role: string; companyId?: string | null } }, projectId: string) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true },
+    select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true, orgId: true },
   });
   if (!project) return { status: 404 as const };
   const manage = canManageProject(session.user, project) || (await isProjectMember(session.user, projectId));
@@ -55,12 +56,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const a = await access(session, id);
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const rows = await prisma.projectTaskTemplate.findMany({
-      where: { archivedAt: null, OR: [{ projectId: id }, { projectId: null }] },
+      // The shared half is the caller's OWN tenant's pool (cross-world
+      // isolation) — never another org's shared goals.
+      where: {
+        archivedAt: null,
+        OR: [{ projectId: id }, withinTenant({ projectId: null }, await tenantWhere(session))],
+      },
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: { id: true, title: true, translations: true, useCount: true, projectId: true },
     });
@@ -86,6 +94,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const a = await access(session, id);
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -102,7 +112,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const template = await prisma.projectTaskTemplate.upsert({
       where: { projectId_title: { projectId: id, title } },
       update: { archivedAt: null, ...(Object.keys(translations).length > 0 ? { translations } : {}) },
-      create: { projectId: id, title, translations, createdById: session.user.id },
+      create: { projectId: id, orgId: a.project.orgId, title, translations, createdById: session.user.id },
       select: { id: true, title: true, translations: true, useCount: true, projectId: true },
     });
     return NextResponse.json(
@@ -122,6 +132,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const a = await access(session, id);
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -168,6 +180,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    // Another tenant's project answers like a missing one (#2622).
+    if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const a = await access(session, id);
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

@@ -1,8 +1,15 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { operatorIdentity } from '@/lib/imprint';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.privacy.title, description: t.seo.privacyDescription }));
+}
+
 
 // The controller's identity is read from the deployment's env, which only
 // exists at runtime — prerendering this page at build time would freeze the
@@ -45,7 +52,7 @@ export default async function PrivacyPage() {
   ];
 
   return (
-    <PublicShell>
+    <PublicShell breadcrumb={{ name: p.title, path: '/privacy' }}>
       <div className="max-w-2xl mx-auto my-12 px-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{p.title}</h1>

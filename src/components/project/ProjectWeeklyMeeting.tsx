@@ -9,6 +9,8 @@ import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { browserTimeZone } from '@/lib/timezone';
 import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
+import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
+import { DEFAULT_MEETING_MINUTES, meetingDurationMinutes } from '@/lib/meetingDuration';
 
 // The project's recurring meeting (#51).
 //
@@ -25,6 +27,8 @@ interface Series {
   timeOfDay: string;
   /** IANA zone the rule's wall clock is on; null = the deployment default. */
   timeZone: string | null;
+  /** Length of every occurrence (#1984); null = the one default. */
+  durationMinutes?: number | null;
   fixedLink: string | null;
   /** Resolved by the server from the rule — the actual instant of the next call. */
   nextOccurrence: string | null;
@@ -62,7 +66,7 @@ export function ProjectWeeklyMeeting({
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ title: '', days: [1] as number[], timeOfDay: '09:00', meetLink: '' });
+  const [form, setForm] = useState({ title: '', days: [1] as number[], timeOfDay: '09:00', meetLink: '', durationMinutes: DEFAULT_MEETING_MINUTES });
   const [stopId, setStopId] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
 
@@ -120,6 +124,7 @@ export function ProjectWeeklyMeeting({
       days: s?.daysOfWeek.length ? s.daysOfWeek : [1],
       timeOfDay: s?.timeOfDay ?? '09:00',
       meetLink: s?.fixedLink ?? '',
+      durationMinutes: meetingDurationMinutes(s),
     });
     setShowForm(true);
   };
@@ -144,6 +149,7 @@ export function ProjectWeeklyMeeting({
           daysOfWeek: form.days,
           timeOfDay: form.timeOfDay,
           meetLink: form.meetLink || undefined,
+          durationMinutes: form.durationMinutes,
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -277,6 +283,12 @@ export function ProjectWeeklyMeeting({
               value={form.timeOfDay}
               onChange={(e) => setForm({ ...form, timeOfDay: e.target.value })}
               className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
+            />
+            <MeetingDurationSelect
+              compact
+              value={form.durationMinutes}
+              onChange={(n) => setForm({ ...form, durationMinutes: n })}
+              className="w-full px-2.5 py-1.5 sm:w-auto"
             />
             <input
               type="url"

@@ -85,6 +85,12 @@ export const SETTING_DEFAULTS = {
   // installation; an org setting rather than a per-reviewer toggle, because a
   // bias control people opt into is one the reviewers who most need it skip.
   blindReview: 'false',
+  // Accepted offer → hired stage (#2658). 'false' (default) keeps the offer
+  // panel's suggestion and nothing moves by itself. 'true' moves the relation
+  // to the pipeline's hired stage when an offer is accepted, through the same
+  // write path as a move made by hand (src/lib/offerAutoAdvance.ts). Off by
+  // default: some programmes only count a hire once the contract is signed.
+  autoAdvanceOnOfferAccept: 'false',
   // Newsletter cadence (#1469). 'off' (default) means nothing is ever queued
   // automatically and every issue is scheduled by hand. 'weekly' / 'biweekly' /
   // 'monthly' let the daily queue job pick the next unused issue from the
@@ -123,6 +129,9 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // Company enquiries (#2559): an unconverted one is deleted after this many
+  // days, a converted one keeps its row and loses its personal columns.
+  companyInquiryRetentionDays: '730',
   // Read access log (#2433): a repeat of the same read (same reader, record,
   // IP) inside this many minutes writes no second `*.view` ActivityLog row.
   // `0` = log every read; capped at a day; a blank or broken value falls back

@@ -15,6 +15,7 @@ import { defaultLocale, type Locale } from '@/i18n/config';
 import { appUrlFor, sendEmail } from '@/services/emailService';
 import { renderNewsletterHtml, type NewsletterEmailLabels } from '@/lib/newsletterEmail';
 import { nextUnusedTemplate } from '@/lib/newsletterContent';
+import { verticalFor } from '@/lib/verticalContext';
 import {
   newsletterArchiveUrl,
   newsletterPreferencesUrl,
@@ -766,7 +767,9 @@ export async function queueScheduledNewsletter(now: Date = new Date()): Promise<
   });
   const template = nextUnusedTemplate(
     used.map((u) => u.templateKey!).filter(Boolean),
-    ['MENTEE', 'MENTOR', 'BOTH'].includes(audience) ? audience : 'MENTEE'
+    ['MENTEE', 'MENTOR', 'BOTH'].includes(audience) ? audience : 'MENTEE',
+    // The library of the org's own vertical — never another product's issues.
+    await verticalFor(orgId)
   );
   // Exhausted. Reported rather than looped: "we are out of content" is
   // something an admin has to know, and quietly re-sending old issues is worse

@@ -37,8 +37,9 @@ import { CompanyDetailView } from '@/components/CompanyDetailView';
 //
 // Seams for work that is not on main yet, deliberately left out rather than
 // rendered as empty cards: the usage sparkline (#2448, fed by CompanyUsage),
-// the account's channels (#2408) and its contact consent (#2577). Each gets a
-// section here when it lands.
+// and the account's channels (#2408). Each gets a section here when it lands.
+// The contact permission (#2577) has landed: its card and the ADMIN editor are
+// drawn by CompanyDetailView from the same loader.
 
 export default async function AdminCompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

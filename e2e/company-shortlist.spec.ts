@@ -27,9 +27,14 @@ test('a company can shortlist a linked candidate; the mentor is notified and see
       skills: [],
     },
   });
-  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Shortlist Mentor');
-  const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Shortlist Candidate');
-  const outsider = await seedUser(outsiderEmail, 'x', 'MENTEE', 'Shortlist Outsider');
+  // Everyone lives in the company's org. The mentor and mentee used to be
+  // seeded into the default org beside a relation in `org` — a shape prod
+  // cannot produce, which the tenant-scoped mentee page now (rightly) refuses
+  // to show (#2625). The outsider shares the org too, so the IDOR check below
+  // proves "not linked", not merely "another tenant".
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Shortlist Mentor', org.id);
+  const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Shortlist Candidate', org.id);
+  const outsider = await seedUser(outsiderEmail, 'x', 'MENTEE', 'Shortlist Outsider', org.id);
   const rel = await prisma.mentorshipRelation.create({
     data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id, orgId: org.id },
   });

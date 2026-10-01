@@ -8,6 +8,8 @@ import { passwordSchema } from '@/lib/password';
 import { logActivity } from '@/lib/activity';
 import { hardDeleteUser } from '@/lib/accountErasure';
 import { withTenantScope } from '@/lib/orgContext';
+import { orgWhere } from '@/lib/tenantFilter';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { clearRememberCookies } from '@/lib/rememberCookie';
 import { isPasswordLoginBlocked, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
@@ -151,8 +153,14 @@ export async function DELETE(request: Request) {
     // someone who is the only admin of both products delete either one and
     // leave that product without any admin. A single-world admin has no twin,
     // so this is the same `admins <= 1` test as before.
+    // And "another admin" means one OF THIS ORG (#2542): another tenant's admin
+    // cannot administer this one, so counting them let the only admin of an
+    // org delete themselves and leave that org with none. NULL-org admins are
+    // the default org's (orgWhere).
     if (session.user.role === 'ADMIN') {
-      const admins = await prisma.user.count({ where: { role: 'ADMIN', NOT: { email: me.email } } });
+      const admins = await prisma.user.count({
+        where: { AND: [{ role: 'ADMIN', NOT: { email: me.email } }, await orgWhere(me.orgId ?? (await defaultOrgId()))] },
+      });
       if (admins < 1) {
         return NextResponse.json({ error: 'The last admin account cannot be deleted' }, { status: 400 });
       }

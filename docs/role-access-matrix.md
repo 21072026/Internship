@@ -79,6 +79,25 @@ bir `COMPANY` hesabı "filtre yok" değil "hiçbir şey" görmeli.
 Vitrin rolleri (`MENTEE`, `SOURCE`) için yanıt ayrıca **PII'dan arındırılıyor**:
 üye ve ilişki isimleri çıkarılıp yalnız sayı bırakılıyor.
 
+**Her rol için kapsam ayrıca çağıranın kiracısıyla `AND`'lenir** (#2622,
+`tenantWhere(session)`): `MT_ENFORCE_ISOLATION` kapalıyken ADMIN'in `{}`'i
+**bütün kiracıların** projelerini, menti/kaynağın `isPublic`'i bütün kiracıların
+açık projelerini listeliyordu. Kiracılar arası açık vitrin `/projects`'tir (anonim,
+dikey başına), bu liste değil.
+
+`/api/projects/[id]` ve altındaki `members`, `join-requests`, `task-templates`,
+`tasks` uçlarının **hepsi** önce `projectInCallerTenant()`'e sorar
+(`src/lib/projectAccess.ts`): başka kiracının projesi **yok bir proje ile aynı
+404**'ü alır — `canViewProject`/`isProjectOwner`/`canManageProject` her ADMIN'e
+`true` dediği için bu kontrol olmadan başka kiracının admini projeyi okuyor,
+düzenliyor, siliyor, ekibini/katılma isteklerini/hedeflerini yönetiyordu.
+Ayrıca: `members` POST eklenecek kullanıcıyı, `resolveOwner()` sahip
+kullanıcıyı/firmayı çağıranın kiracısında çözer (yoksa 400); `POST /api/projects`
+`orgId`'yi elle damgalar (bayrak kapalıyken middleware damgalamaz, NULL-org proje
+varsayılan org'undur). `/projects/[id]` sayfası başka kiracıdan oturum açmış
+ziyaretçiyi **anonim** gibi okur: açık projede vitrin kartı, gerisinde 404.
+`/api/project-tasks/[taskId]` zaten `inCallerTenant` ile korunuyordu.
+
 ## MARKETING dikeyi / `company` kaynağı — `Company`
 
 Story [#2396](https://github.com/21072026/Internship/issues/2396); karar
@@ -273,6 +292,46 @@ no-store`, tek denetim satırı. **Yeni tablo yok.**
   `detail`'de firma adı yok (`company.view` ile aynı gerekçe). 404 yazmaz.
 
 Sabitleyen: `e2e/company-export.spec.ts` ve `e2e/fixtures/authz-matrix.ts`.
+
+## Süper-admin yalnız uçlar / Super-admin-only endpoints
+
+`role === 'ADMIN'` bir **tenant** admin'idir; kiracıların kendisini yönetmek
+ayrı bir yetkidir (`User.isSuperAdmin`, her istekte veritabanından okunur —
+[`superAdmin.ts`](../src/lib/superAdmin.ts), #1535). Aşağıdaki uçlarda düz bir
+tenant ADMIN'i — hedef org'un **kendi** admin'i dahil — reddedilir ve ret
+`authz.scope_denied` satırı yazar (`logCrossTenantDenial`).
+
+| Uç | Süper-admin | Tenant ADMIN | MENTOR / MENTEE / COMPANY / SOURCE | Oturumsuz | Not |
+|---|---|---|---|---|---|
+| `POST /api/admin/organizations/[id]/invite-admin` | ✅ 201 — yalnızca **kendi dünyasının** org'u; öbür dünyanın org'u ve olmayan id **404** | **403** | **403** | 401 | Kendi dünyasındaki herhangi bir org'a `ADMIN` daveti — yeni bir MARKETING org'unun ilk admin'i ([`docs/worlds.md`](worlds.md) § İkinci dünyaya davet). Ret, org aranmadan önce gelir; yabancı bir org id'sinin varlığını doğrulamaz. Adres hedef org'un dünyasında kayıtlıysa `409 email_taken_in_world`, o org'da açık davet varsa `409 invitation_pending` |
+
+| `GET /api/admin/organizations` | ✅ yalnızca kendi dünyasının org'ları (`world`, `verticals` = oluşturulabilir) | yalnızca kendi org'u | 401 | 401 | Süper-admin dünya başınadır ([`docs/worlds.md`](worlds.md) § Süper-admin dünya başınadır) |
+| `POST /api/admin/organizations` | ✅ 201 — `vertical` zorunlu (`400 vertical_required`), öbür dünya `403 vertical_other_world` | **403** | 401 | 401 | Yeni müşteri org'u doğuşta dikeyiyle tiplenir |
+| `PATCH /api/admin/organizations` | ✅ kendi dünyasının org'u; öbür dünyanın org'u **403**; dikey taşıma **403 `vertical_other_world`** | yalnızca kendi org'u (plan/dikey hariç) | 401 | 401 | |
+| `GET /api/admin/email-log` | ✅ yalnızca kendi dünyasında hesabı olan adreslere giden posta (24s kota kurulum geneli) | **403 `super_admin_only`** | 401 | 401 | |
+
+Her süper-admin kontrolü isteğin host'unun dünyasını da ister: öbür dünyanın host'unda
+süper-admin oturumu etkisizdir (zaten `null` olan oturumun yanında ikinci kilit).
+
+Çalıştırılabilir hali: `e2e/fixtures/authz-matrix.ts` → `SUPER_ADMIN_ONLY`
+(koşan spec `e2e/authz-matrix.spec.ts`, her rol için) ve
+`e2e/super-admin-invite-org-admin.spec.ts`, `e2e/tenant-isolation-worlds.spec.ts`. Bir satır eklerken ikisini birlikte
+güncelleyin.
+
+## Dikey yeteneği kapıları / Vertical capability gates
+
+`src/lib/navLinks.ts`'te `capability` etiketli bir hedef, o yeteneği olmayan bir
+dikeyde (bugün MARKETING) menüde yoktur, URL'si **404** (`gatePage`), API'si
+**`403 capability_unavailable`** verir — rolden bağımsız, okumalar dahil.
+Ayrıntı: [`docs/worlds.md`](worlds.md) § Yalnız-internship yüzeyleri.
+
+| Yüzey | Yetenek | MARKETING ADMIN |
+|---|---|---|
+| `/admin/newsletters`, `/newsletters`, `api/admin/newsletters/**`, `api/newsletters` | `mentorship` | 404 / 403 |
+| `/admin/email` | `mentorship` | 404 |
+| `/admin/re-engagement` | `mentorship` | 404 |
+| `/admin/testimonials`, `api/admin/testimonials` | `mentorship` | 404 / 403 |
+| `api/admin/mentorship-requests` | `mentorship` | 403 |
 
 ## MARKETING satış temsilcisi / The MARKETING sales rep (`/sales`)
 

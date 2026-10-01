@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // POST — record that a canned response was inserted into a composer (#1871).
 //
@@ -30,11 +31,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // update) so "not mine" is a 404 rather than a thrown P2025, and so the
     // ownership filter and the increment are one statement.
     const bumped = await prisma.messageTemplate.updateMany({
-      where: {
-        id,
-        archivedAt: null,
-        OR: [{ ownerId: null }, { ownerId: session.user.id }],
-      },
+      // …inside the caller's own tenant: another org's template is a 404.
+      where: withinTenant(
+        { id, archivedAt: null, OR: [{ ownerId: null }, { ownerId: session.user.id }] },
+        await tenantWhere(session)
+      ),
       data: { useCount: { increment: 1 } },
     });
     if (bumped.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });

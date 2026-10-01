@@ -10,6 +10,7 @@ import { slugify } from '@/lib/transliterate';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolveStartStage } from '@/lib/pipelineStages';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
@@ -125,7 +126,11 @@ export async function POST(request: Request) {
         }
       }
       if (sourceId) {
-        const source = await prisma.source.findUnique({ where: { id: sourceId }, select: { id: true } });
+        // The caller's tenant only (#2570).
+        const source = await prisma.source.findFirst({
+          where: withinTenant({ id: sourceId }, await tenantWhere(session)),
+          select: { id: true },
+        });
         if (!source) return NextResponse.json({ error: 'Source not found' }, { status: 400 });
       }
 

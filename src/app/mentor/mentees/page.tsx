@@ -16,6 +16,7 @@ import { StageClockChip } from '@/components/StageClockChip';
 import { SavedViews } from '@/components/SavedViews';
 import { useResolvedStages } from '@/lib/pipelineStagesClient';
 import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
+import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 import {
   EMPTY_MENTEE_FILTERS,
   MENTEE_STATUS_FILTERS,
@@ -68,11 +69,23 @@ export default function MenteesPage() {
   const [filters, setFilters] = useState<MenteeFilters>(EMPTY_MENTEE_FILTERS);
   const stages = useResolvedStages();
 
+  // A failed load is its own state (#1374): without `res.ok` and a `finally`,
+  // a 500 or a dropped connection left the skeleton spinning forever and "no
+  // mentees" and "something broke" looked the same.
+  const [loadError, setLoadError] = useState(false);
   const fetchRelations = useCallback(async () => {
-    const res = await fetch('/api/mentorship');
-    const data = await res.json();
-    setRelations(data.relations || []);
-    setLoading(false);
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const res = await fetch('/api/mentorship');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setRelations(data.relations || []);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -243,6 +256,8 @@ export default function MenteesPage() {
 
       {loading ? (
         <Card><SkeletonRows rows={6} /></Card>
+      ) : loadError ? (
+        <LoadErrorCard onRetry={fetchRelations} testId="mentees-load-error" />
       ) : visibleRelations.length === 0 && filtering ? (
         /* Filtered to nothing — a different situation from "no mentees yet", and
            the way out is clearing the filter, not adding a mentee. Unless the

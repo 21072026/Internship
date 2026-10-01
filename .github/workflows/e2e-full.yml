@@ -313,12 +313,35 @@ jobs:
     runs-on: ubuntu-latest
     needs: [gate, e2e-full, isolation]
     if: always() && needs.gate.outputs.run == 'true'
+    # issues: write is for the SMTP-free trail below (#2322); nothing else here
+    # writes to the repository.
+    permissions:
+      contents: read
+      actions: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+
+      # The trail that reaches a person even when the e-mail below cannot
+      # leave the runner (ETIMEDOUT on CONN, #2322): one `ci-alert` issue,
+      # opened or refreshed while red, closed by the next green run. It runs
+      # BEFORE the e-mail so a hanging SMTP connect cannot starve it. Best
+      # effort by construction — the script never fails the job.
+      - name: Record the result as an issue (no SMTP)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_KEY: e2e-full
+          ALERT_SIGNATURE: ${{ github.sha }}
+          ALERT_TITLE: '🚨 e2e-full (scheduled) is red'
+          ALERT_SUMMARY: |
+            Commit `${{ github.sha }}`. Shards: **${{ needs.e2e-full.result }}**, tenant isolation: **${{ needs.isolation.result }}**.
+            The failing tests and their errors are in the run's `playwright-report-*` artifacts.
+        run: node scripts/ci-alert-issue.mjs ${{ (needs.e2e-full.result == 'success' && needs.isolation.result == 'success') && 'green' || 'red' }}
 
       - name: Download per-shard JSON results
         uses: actions/download-artifact@v8

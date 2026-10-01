@@ -186,22 +186,108 @@ export interface DuplicatePair {
   score: number;
 }
 
+// Which pairs are worth comparing at all (#1436). A pair reaches the threshold
+// (45) through exactly one of four doors, and each door is an EQUALITY on a
+// normalized key — so every qualifying pair shares at least one bucket:
+//   email 100  → the same `email:` key
+//   phone  80  → the same `phone:` key (either of the two numbers)
+//   name   45  → the same `name:` key
+//   nameFuzzy + university 30+25 → the same `uni:` key; a fuzzy name alone is
+//              30 and never qualifies, and the university signal is only ever
+//              awarded on top of a name signal.
+// Inside a `uni:` bucket only pairs whose name keys differ in length by ≤ 2 are
+// compared: Levenshtein ≤ 2 is impossible otherwise. Nothing here changes WHAT
+// counts as a duplicate — matchSignals/scoreSignals still decide every pair —
+// only which pairs are handed to them. Lossless by construction, and pinned by
+// e2e/duplicate-blocking.unit.spec.ts against the all-pairs scan.
+function blockingKeys(u: CandidateRecord): { exact: string[]; uni: string | null; name: string } {
+  const exact: string[] = [];
+  const email = normalizeEmailKey(u.email);
+  if (email) exact.push(`email:${email}`);
+  for (const phone of new Set([normalizePhoneKey(u.phone), normalizePhoneKey(u.whatsapp)])) {
+    if (phone) exact.push(`phone:${phone}`);
+  }
+  const name = normalizeNameKey(u.fullName);
+  if (name) exact.push(`name:${name}`);
+  // Mirrors matchSignals: the university test runs on the RAW values being
+  // present, then compares normalized keys — which may both be '' — so the
+  // bucket key is the normalized value whenever the raw one is non-empty.
+  const uni = name.length >= 6 && u.university ? `uni:${normalizeNameKey(u.university)}` : null;
+  return { exact, uni, name };
+}
+
+/**
+ * Every suspicious pair among `users`, strongest first, capped. Pure — the
+ * scan and its test share it. Ordering is exactly the old all-pairs scan's:
+ * score descending, then the pair's position in `users` (i, then j).
+ */
+export function findDuplicatePairs(users: CandidateRecord[], cap = 200): DuplicatePair[] {
+  const exactBuckets = new Map<string, number[]>();
+  const uniBuckets = new Map<string, number[]>();
+  const names: string[] = [];
+  users.forEach((u, i) => {
+    const { exact, uni, name } = blockingKeys(u);
+    names[i] = name;
+    for (const key of exact) {
+      const bucket = exactBuckets.get(key);
+      if (bucket) bucket.push(i);
+      else exactBuckets.set(key, [i]);
+    }
+    if (uni) {
+      const bucket = uniBuckets.get(uni);
+      if (bucket) bucket.push(i);
+      else uniBuckets.set(uni, [i]);
+    }
+  });
+
+  const seen = new Set<number>();
+  const found: { i: number; j: number; signals: DuplicateSignal[]; score: number }[] = [];
+  const consider = (x: number, y: number) => {
+    const i = Math.min(x, y);
+    const j = Math.max(x, y);
+    const id = i * users.length + j;
+    if (seen.has(id)) return;
+    seen.add(id);
+    const signals = matchSignals(users[i], users[j]);
+    const score = scoreSignals(signals);
+    if (score >= DUPLICATE_SCORE_THRESHOLD) found.push({ i, j, signals, score });
+  };
+
+  for (const bucket of exactBuckets.values()) {
+    for (let a = 0; a < bucket.length; a++) {
+      for (let b = a + 1; b < bucket.length; b++) consider(bucket[a], bucket[b]);
+    }
+  }
+  // In a university bucket the only door left is the fuzzy name, so the
+  // precomputed keys are checked first with the same bounded Levenshtein
+  // matchSignals uses; only a pair that passes is handed to matchSignals (which
+  // still decides). Equal keys are already in a `name:` bucket.
+  for (const bucket of uniBuckets.values()) {
+    const byLen = [...bucket].sort((x, y) => names[x].length - names[y].length);
+    for (let a = 0; a < byLen.length; a++) {
+      const na = names[byLen[a]];
+      for (let b = a + 1; b < byLen.length && names[byLen[b]].length - na.length <= 2; b++) {
+        const nb = names[byLen[b]];
+        if (na !== nb && levenshtein(na, nb, 2) <= 2) consider(byLen[a], byLen[b]);
+      }
+    }
+  }
+
+  return found
+    .sort((x, y) => y.score - x.score || x.i - y.i || x.j - y.j)
+    .slice(0, cap)
+    .map(({ i, j, signals, score }) => ({ a: users[i], b: users[j], signals, score }));
+}
+
 // One-time/bulk scan: every suspicious MENTEE pair in the org, strongest first.
-// O(n²) over the org's mentees with cheap early-outs — fine at the hundreds
-// scale this app runs at; capped so a pathological org can't flood the UI.
+// Used to compare every pair in JS — ~n²/2 matchSignals calls on the request
+// thread, which at 1 000 mentees blocked the whole process for seconds (#1436).
+// The blocking in findDuplicatePairs compares only pairs that could qualify.
 export async function scanDuplicatePairs(orgId: string | null, cap = 200): Promise<DuplicatePair[]> {
   const users = await prisma.user.findMany({
     where: { role: 'MENTEE', orgId },
     select: CANDIDATE_SELECT,
     orderBy: { createdAt: 'asc' },
   });
-  const pairs: DuplicatePair[] = [];
-  for (let i = 0; i < users.length; i++) {
-    for (let j = i + 1; j < users.length; j++) {
-      const signals = matchSignals(users[i], users[j]);
-      const score = scoreSignals(signals);
-      if (score >= DUPLICATE_SCORE_THRESHOLD) pairs.push({ a: users[i], b: users[j], signals, score });
-    }
-  }
-  return pairs.sort((x, y) => y.score - x.score).slice(0, cap);
+  return findDuplicatePairs(users, cap);
 }

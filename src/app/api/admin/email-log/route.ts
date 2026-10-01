@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
+import { superAdminWorld } from '@/lib/superAdmin';
+import { worldUserWhere } from '@/lib/userWorld';
 
 // GET — the outbound mail delivery log (#1194).
 //
@@ -10,7 +12,20 @@ import { authOptions } from '@/lib/auth';
 // setup looked identical to a user who simply never replied, which is how a
 // batch of never-activated sign-ups stayed unexplained for days.
 //
-// Admin-only: recipient addresses are personal data.
+// Super-admin only (#2635): recipient addresses are personal data, and the log
+// is installation-wide — EmailLog carries no orgId, and since #2605 one address
+// can be a user in two tenants, so no recipient join can say whose mail a row
+// is. A tenant admin used to read every tenant's recipients and subjects here.
+// The relay figures below (7-day totals, 24h quota) are installation facts too.
+//
+// PER WORLD (docs/worlds.md § Super admin): the super admin of one product sees
+// only mail to addresses that hold an account IN ITS WORLD. EmailLog has no
+// orgId, so the address is the only join there is; an address with an account
+// in both worlds appears in both logs (it is the same mailbox), and mail to an
+// address with no account yet (an invitation, a demo-form confirmation) appears
+// in neither. The one exception is the 24h relay quota (`last24h`): both
+// worlds send through the same SMTP allowance, so it stays installation-wide
+// and carries no address.
 const STATUSES = ['SENT', 'FAILED', 'SKIPPED'] as const;
 
 export async function GET(request: Request) {
@@ -18,6 +33,14 @@ export async function GET(request: Request) {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const world = await superAdminWorld(session);
+  if (!world) {
+    return NextResponse.json({ error: 'Forbidden', code: 'super_admin_only' }, { status: 403 });
+  }
+  const worldAddresses = (
+    await prisma.user.findMany({ where: worldUserWhere(world), select: { email: true }, distinct: ['email'] })
+  ).map((u) => u.email);
+  const inWorld = { to: { in: worldAddresses } };
 
   const params = new URL(request.url).searchParams;
   const limit = Math.min(Math.max(Number(params.get('limit')) || 50, 1), 200);
@@ -28,6 +51,7 @@ export async function GET(request: Request) {
   const category = params.get('category');
 
   const where = {
+    ...inWorld,
     ...(status ? { status } : {}),
     ...(category ? { category } : {}),
   };
@@ -57,7 +81,7 @@ export async function GET(request: Request) {
     // SKIPPED/FAILED says the problem is ours, not the recipients'.
     prisma.emailLog.groupBy({
       by: ['status'],
-      where: { createdAt: { gte: since } },
+      where: { ...inWorld, createdAt: { gte: since } },
       _count: { _all: true },
     }),
     // "How much of the relay's daily allowance have we spent?" — only SENT
@@ -71,7 +95,7 @@ export async function GET(request: Request) {
     // the bulk channel instead of the quota being raised.
     prisma.emailLog.groupBy({
       by: ['category', 'transport'],
-      where: { createdAt: { gte: since24h }, status: 'SENT' },
+      where: { ...inWorld, createdAt: { gte: since24h }, status: 'SENT' },
       _count: { _all: true },
     }),
   ]);

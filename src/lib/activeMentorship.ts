@@ -184,10 +184,18 @@ const MAX_GROUPS = 100;
  */
 export async function findMenteesWithMultipleActiveMentors(
   db: RelationDb,
+  /**
+   * Narrows the report to part of the database — the admin route passes the
+   * caller's tenant (#2542 follow-up). Omitted, the whole database, which is
+   * what the future global index sees.
+   */
+  scope: Prisma.MentorshipRelationWhereInput = {},
 ): Promise<RelationIntegrityReport> {
+  const active: Prisma.MentorshipRelationWhereInput =
+    Object.keys(scope).length > 0 ? { AND: [{ status: 'ACTIVE' }, scope] } : { status: 'ACTIVE' };
   const grouped = await db.mentorshipRelation.groupBy({
     by: ['menteeId'],
-    where: { status: 'ACTIVE' },
+    where: active,
     _count: { _all: true },
     having: { menteeId: { _count: { gt: 1 } } },
   });
@@ -206,7 +214,7 @@ export async function findMenteesWithMultipleActiveMentors(
   }
 
   const rows = await db.mentorshipRelation.findMany({
-    where: { menteeId: { in: menteeIds }, status: 'ACTIVE' },
+    where: { AND: [{ menteeId: { in: menteeIds } }, active] },
     orderBy: { startDate: 'asc' },
     select: {
       id: true,

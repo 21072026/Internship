@@ -59,6 +59,25 @@ export async function loadCompanyDetail({
       ),
       include: {
         needs: true,
+        // May we contact this account, and the proof (#2577). The row carries
+        // its own orgId: filtered on it like the relations below.
+        contactPermissions: {
+          where: withinTenant({}, tenant),
+          orderBy: { channel: 'asc' },
+          select: {
+            channel: true,
+            basis: true,
+            source: true,
+            address: true,
+            textVersion: true,
+            textLocale: true,
+            requestedAt: true,
+            confirmedAt: true,
+            reason: true,
+            revokedAt: true,
+            updatedAt: true,
+          },
+        },
         mentorships: {
           // The relation carries its own orgId: filtered on it too, so a
           // relation of another tenant pointing at this company (a bad import)
