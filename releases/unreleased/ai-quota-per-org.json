@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Each organization's AI quota is metered against its own usage** (#2681). `getAiQuota()` read the per-tenant `aiMonthlyQuota` but counted `AiUsage` rows of every org, so one tenant's AI calls exhausted another tenant's monthly budget. `AiUsage` gains a nullable `orgId` (+ `@@index([orgId, createdAt])`) and is registered in `TENANT_MODELS`. `runAiGated()` now takes a required `orgId` (all five callers pass `resolveOrgId(session)`, because `withTenantScope` binds nothing while `MT_ENFORCE_ISOLATION` is off), stamps it on the usage row, and counts with `orgWhere(org)`, so the default org also owns legacy NULL rows. The month is now the UTC metering month (`periodRange(currentPeriod())`), not the server's local one. Legacy rows are attributed by the new idempotent deploy backfill `prisma/backfill-ai-usage-org.mjs` (user's org, then company's), which runs before `backfill-organization.mjs`. `e2e/ai-quota-per-org.spec.ts` proves two orgs' quotas are independent.",
+  "notes": {
+    "en": ["Each organization's monthly AI allowance now counts only its own AI calls. Another organization's usage no longer uses up yours."],
+    "tr": ["Her kuruluşun aylık yapay zekâ kotası artık yalnızca kendi çağrılarını sayıyor; başka bir kuruluşun kullanımı sizin kotanızdan düşmüyor."],
+    "de": ["Das monatliche KI-Kontingent jeder Organisation zählt jetzt nur noch ihre eigenen KI-Aufrufe. Die Nutzung anderer Organisationen verbraucht Ihr Kontingent nicht mehr."]
+  }
+}
