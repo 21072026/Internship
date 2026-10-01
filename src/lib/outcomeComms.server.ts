@@ -8,6 +8,8 @@ import { sendEmail } from '@/services/emailService';
 import { getDictionary } from '@/i18n/dictionaries';
 import { locales, type Locale } from '@/i18n/config';
 import { logger } from '@/lib/logger';
+import { verticalCapabilities } from '@/lib/verticals';
+import { salesRecordLink } from '@/lib/salesSurface';
 import {
   OUTCOME_TEMPLATE_KEY,
   outcomeComposerLink,
@@ -58,8 +60,10 @@ export async function emitOutcomeComms(opts: {
       where: { id: relationId },
       select: {
         id: true,
-        orgId: true,
         mentorId: true,
+        orgId: true,
+        mentor: { select: { role: true } },
+        org: { select: { vertical: true } },
         mentee: {
           select: {
             id: true,
@@ -73,6 +77,16 @@ export async function emitOutcomeComms(opts: {
       },
     });
     if (!relation) return;
+    // The templates are placement outcomes ("no placement this round"), written
+    // for the internship world. An org without placements gets neither the
+    // prefilled draft nor the automatic mail — not even one click away: its rep
+    // is sent to the record (a sales rep has no mentor shell to open a composer
+    // in) and writes the message there (docs/worlds.md).
+    const capabilities = verticalCapabilities(relation.org?.vertical);
+    const placements = capabilities.includes('placements');
+    const link = placements
+      ? outcomeComposerLink(relationId, kind)
+      : (salesRecordLink(relation.mentor?.role, capabilities, relationId) ?? outcomeComposerLink(relationId, null));
 
     // The mentor is the one who writes it — they know the person.
     if (relation.mentorId) {
@@ -81,10 +95,13 @@ export async function emitOutcomeComms(opts: {
         'stageUpdates',
         'outcome.needsMessage',
         { name: relation.mentee.fullName },
-        outcomeComposerLink(relationId, kind)
+        link
       );
     }
 
+    if (!placements) return;
+    // The relation's own org decides — a stage change is not always inside a
+    // request bound to that org's tenant context (a NULL org is the default's).
     if ((await getSetting('outcomeAutoSend', await settingsOrgOfRow(relation.orgId))) !== 'true') return;
 
     // Auto-send is on: the same template the composer would have shown, in the

@@ -52,6 +52,24 @@ function withJaasEnv<T>(vars: Partial<Record<keyof typeof FAKE_ENV, string>>, fn
   }
 }
 
+test.describe('generateMeetingLink — the room is named after the organizer world', () => {
+  test('an internship (or unknown) org keeps the InternshipCRM prefix', () => {
+    for (const vertical of [undefined, null, 'INTERNSHIP', 'NOT_A_VERTICAL']) {
+      const link = withJaasEnv({}, () => generateMeetingLink({ inviteeCount: 1, vertical }));
+      expect(link).toMatch(/^https:\/\/meet\.jit\.si\/InternshipCRM-[0-9a-f]{16}$/);
+    }
+  });
+
+  test('a marketing org gets a SaleVali room, which Jitsi shows as the call title', () => {
+    const link = withJaasEnv({}, () => generateMeetingLink({ inviteeCount: 1, vertical: 'MARKETING' }));
+    expect(link).toMatch(/^https:\/\/meet\.jit\.si\/SaleVali-[0-9a-f]{16}$/);
+    const jaas = withJaasEnv(FAKE_ENV, () =>
+      generateMeetingLink({ inviteeCount: 1, jaasAllowed: true, vertical: 'MARKETING' }),
+    );
+    expect(parseJaasMeetingLink(jaas)?.room).toMatch(/^SaleVali-[0-9a-f]{16}$/);
+  });
+});
+
 test.describe('generateMeetingLink — the allowance decides the host', () => {
   test('a room gets the JaaS tenant when the allowance has room for it', { tag: '@smoke' }, () => {
     const link = withJaasEnv(FAKE_ENV, () => generateMeetingLink({ inviteeCount: 1, jaasAllowed: true }));

@@ -326,8 +326,9 @@ tenant isolation that changes four things:
 - **An address is no longer a key into one tenant.** Every e-mail lookup names its
   world, through `userWorld.ts` and nowhere else. The deliberate exception is
   `findUsersByEmail` ("any world"), whose callers are the ones whose job is to cross
-  worlds — the sign-in page pointing at the other door, account erasure, the
-  wrong-door rescue mail — each with a comment saying why. A bare
+  worlds — the sign-in's wrong-world password check and account erasure — each
+  with a comment saying why. (The "wrong-door rescue" mail that `forgot` used to
+  send to the other world's account is gone: an action stays in its world.) A bare
   `findFirst({ where: { email } })` would pick an arbitrary tenant's row.
 - **Sessionless lookups run unscoped, on purpose.** Sign-in, `forgot`, `register`
   and `verify-email` have no session, so no `runWithOrg` context is bound and the

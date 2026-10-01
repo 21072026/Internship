@@ -370,19 +370,23 @@ export default function AdminSettingsPage() {
               </select>
               <p className="text-xs text-gray-500 mt-1">{t.settings.selfRegistrationHint}</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.outcomeAutoSend}</label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={outcomeAutoSend}
-                  onChange={(e) => setOutcomeAutoSend(e.target.checked)}
-                  data-testid="outcome-auto-send"
-                />
-                {t.settings.outcomeAutoSendLabel}
-              </label>
-              <p className="text-xs text-gray-500 mt-1">{t.settings.outcomeAutoSendHint}</p>
-            </div>
+            {/* The auto-sent message is a placement outcome; without placements
+                emitOutcomeComms never sends it, so the switch would do nothing. */}
+            {verticalHasCapability(vertical, 'placements') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.outcomeAutoSend}</label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={outcomeAutoSend}
+                    onChange={(e) => setOutcomeAutoSend(e.target.checked)}
+                    data-testid="outcome-auto-send"
+                  />
+                  {t.settings.outcomeAutoSendLabel}
+                </label>
+                <p className="text-xs text-gray-500 mt-1">{t.settings.outcomeAutoSendHint}</p>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.blindReview}</label>
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">

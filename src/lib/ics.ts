@@ -24,7 +24,23 @@ function cnParam(name?: string | null): string {
   return `;CN="${trimmed.replace(/"/g, '')}"`;
 }
 
+// The product that produced the file (docs/worlds.md): a SaleVali invite or
+// feed must not identify itself as the internship product. Written without
+// spaces, which keeps the internship values byte-identical to what every
+// existing subscription already shows ("InternshipCRM").
+function compactProduct(product: string): string {
+  return product.replace(/\s+/g, '');
+}
+
+/** The download filename for a product's feed: "internship-crm.ics", "salevali.ics". */
+export function feedFilename(product: string): string {
+  return `${product.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.ics`;
+}
+
 export function buildMeetingIcs(opts: {
+  // The product name of the world the file is produced for (`productNameFor`).
+  // Required, so no caller can fall back to one product's brand by omission.
+  product: string;
   uid: string;
   title: string;
   start: Date;
@@ -66,7 +82,7 @@ export function buildMeetingIcs(opts: {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//InternshipCRM//EN',
+    `PRODID:-//${compactProduct(opts.product)}//EN`,
     'CALSCALE:GREGORIAN',
     `METHOD:${method}`,
     'BEGIN:VEVENT',
@@ -97,12 +113,14 @@ export function buildMeetingIcs(opts: {
 
 // The personal subscription feed (#915). Deliberately PII-minimal: title and
 // time only, no join links, no names — if the feed token leaks, this is all it
-// buys. X-WR-CALNAME labels the subscription in the calendar app.
-export function buildFeedIcs(name: string, events: { uid: string; title: string; start: Date; durationMinutes?: number | null }[]): string {
+// buys. X-WR-CALNAME labels the subscription in the calendar app, so it names
+// the feed owner's product (`productNameFor` of their world).
+export function buildFeedIcs(product: string, events: { uid: string; title: string; start: Date; durationMinutes?: number | null }[]): string {
+  const name = compactProduct(product);
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//InternshipCRM//EN',
+    `PRODID:-//${name}//EN`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeText(name)}`,

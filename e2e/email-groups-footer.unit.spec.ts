@@ -121,10 +121,13 @@ test.describe('the unsubscribe footer', () => {
     const one = new URL(advertised.slice(1, advertised.indexOf('>')));
     expect(one.origin).toBe(origin);
     expect(one.pathname).toBe('/api/unsubscribe/one-click');
-    // The List-Id is an identifier, not a link: it stays on the configured host
-    // so one list does not split into one per tenant.
+    // The List-Id is an identifier, not a link: it names the recipient's WORLD
+    // (docs/worlds.md), never a tenant's own host, so one list does not split
+    // into one per tenant.
     const listId = unsubscribeHeaders('user_1', 'digests', origin)['List-Id'];
-    expect(listId).not.toContain('marketing.bcsit-gmbh.de');
+    expect(listId).toContain('digests.marketing.bcsit-gmbh.de');
+    const tenantHost = unsubscribeHeaders('user_1', 'digests', 'https://crm.some-tenant.example')['List-Id'];
+    expect(tenantHost).not.toContain('some-tenant');
   });
 
   test('names the group in the reader’s own language when a locale is given', () => {
