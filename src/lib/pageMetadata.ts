@@ -41,6 +41,9 @@ export async function socialMetadata(
       type: 'website',
       siteName: productNameFor(vertical),
       locale: OG_LOCALE[locale],
+      // og:url = the canonical URL (root layout): this page on the host that
+      // served it, without the query string.
+      url: './',
       title: copy.title,
       ...(copy.description ? { description: copy.description } : {}),
       images: [{ url: card, width: 1200, height: 630 }],

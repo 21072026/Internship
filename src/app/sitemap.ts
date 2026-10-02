@@ -5,7 +5,8 @@ import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { listPublishedStories } from '@/lib/testimonials';
 import { requestSiteUrl } from '@/lib/siteUrl';
 import { hostVertical } from '@/lib/hostVertical';
-import { DEFAULT_VERTICAL, verticalHasCapability, type VerticalCapability, type VerticalKey } from '@/lib/verticals';
+import { DEFAULT_VERTICAL } from '@/lib/verticals';
+import { PUBLIC_ROUTES, routeListedFor } from '@/lib/publicRoutes';
 
 // /sitemap.xml (#1380). Most public pages are reachable only from the footer
 // (components/landing/PublicFooter.tsx), so a crawler finding them was a matter
@@ -34,68 +35,6 @@ const lastShipped = (): Date => {
 
 /** Same page size app/stories/page.tsx asks for — see the call site below. */
 const STORIES_PAGE_LIMIT = 50;
-
-/**
- * Every route that renders for a signed-out visitor, with the two deliberate
- * omissions:
- *
- *  - `/p/<userId>` — a public profile is a share link the person chose to turn
- *    on; putting it in a search index is a separate consent question and is
- *    left to its own issue.
- *  - `/apply/<mentorId>` — the per-mentor application form is a link a mentor
- *    hands out, not a landing page, and it duplicates /apply-as-mentor's
- *    funnel.
- *  - `/mentors` — the mentor directory is part of the signed-in mentee↔mentor
- *    matching flow (#938); its layout redirects an anonymous visitor to
- *    `/auth/signin`, so it belongs with the other authenticated areas below,
- *    not here (e2e/robots-sitemap.spec.ts caught it answering 307).
- *  - `/announcements` — same defect, same fix: its layout redirects an
- *    anonymous visitor to `/auth/signin` (available to any signed-in role,
- *    not a public page), and the same e2e spec caught it once `/mentors` no
- *    longer masked it (the spec's resolve loop stops at its first failure).
- *
- * Authenticated areas are absent by construction, and robots.ts disallows them.
- */
-/**
- * Which host lists a route (#2495). One container serves both products, and a
- * host must only advertise what it serves in ITS product: `needs` mirrors the
- * page's own guard (`requireVerticalCapability` / `requireDefaultVertical` in
- * src/lib/verticalPage.ts, or the capability check in the page itself), so the
- * marketing host's sitemap never lists a page that 404s there — or one that
- * renders but tells the other product's story (the mentorship code of conduct,
- * the mentee success stories). Absent = every vertical.
- */
-type RouteNeeds = VerticalCapability | 'default-vertical';
-
-const PUBLIC_ROUTES: readonly {
-  path: string;
-  priority: number;
-  changeFrequency: 'daily' | 'weekly' | 'monthly';
-  needs?: RouteNeeds;
-}[] = [
-  { path: '/', priority: 1.0, changeFrequency: 'weekly' },
-  { path: '/features', priority: 0.8, changeFrequency: 'weekly' },
-  { path: '/for-companies', priority: 0.8, changeFrequency: 'monthly', needs: 'placements' },
-  // The price is one of the two things a stranger searches for by name
-  // (#1730), so it sits with /features rather than down among the legal
-  // pages. `monthly` is honest: a published price list that changed weekly
-  // would not be a published price list.
-  { path: '/pricing', priority: 0.8, changeFrequency: 'monthly' },
-  { path: '/apply-as-mentor', priority: 0.8, changeFrequency: 'monthly', needs: 'mentorship' },
-  { path: '/projects', priority: 0.7, changeFrequency: 'weekly', needs: 'projects' },
-  { path: '/release-notes', priority: 0.5, changeFrequency: 'daily', needs: 'default-vertical' },
-  { path: '/code-of-conduct', priority: 0.3, changeFrequency: 'monthly', needs: 'mentorship' },
-  { path: '/contributor-terms', priority: 0.3, changeFrequency: 'monthly', needs: 'default-vertical' },
-  { path: '/privacy', priority: 0.3, changeFrequency: 'monthly' },
-  { path: '/terms', priority: 0.3, changeFrequency: 'monthly' },
-  { path: '/imprint', priority: 0.3, changeFrequency: 'monthly' },
-];
-
-function routeListedFor(vertical: VerticalKey, needs: RouteNeeds | undefined): boolean {
-  if (!needs) return true;
-  if (needs === 'default-vertical') return vertical === DEFAULT_VERTICAL;
-  return verticalHasCapability(vertical, needs);
-}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = await requestSiteUrl();
