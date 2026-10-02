@@ -8032,3 +8032,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **A setting read per tenant is not enough; its meter must be per tenant too.** `aiMonthlyQuota` resolved per org, but its `AiUsage` count was global. Grep for other `count(...)` calls compared against a `getSetting()` value (e.g. broadcast recipients) before assuming a quota is isolated.
 - **Don't lean on the ambient org while `MT_ENFORCE_ISOLATION` is off.** `withTenantScope` binds nothing then, so `getSetting(key)` with no org reads the *global* row. A gate that must be per tenant should take `orgId` from the caller (`resolveOrgId(session)`).
 - **The local `internship_e2e` DB is shared by parallel sessions.** Another session's `db push` dropped my new column between my push and the test run ("column … does not exist in the current database"). Re-push right before `playwright test`, in the same command.
+
+## 2026-10-02 — site launch checklist (#2692)
+
+- **`alternates.canonical: './'` in the root layout is enough for every page.** Next 15 resolves a `./` URL against the *request* pathname and `metadataBase` (`resolve-url.js` → `resolveRelativeUrl`), so one line gives a host-correct, query-free canonical everywhere; `openGraph.url: './'` works the same way.
+- **Killing a background `next dev` with `pkill -f "next dev …"` kills your own shell** (exit 144: the pattern matches the command line). Kill by PID from `ps`; and check `/proc/<pid>/environ` before trusting a restarted server — a stale one with the old `MARKETING_HOSTS` kept answering and made the marketing specs look broken.
+- **Playwright wants `chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`**, but the container ships `-1194/chrome-linux/headless_shell`: make a real directory with that layout and symlink the files in (a whole-dir symlink is not enough), plus the `INSTALLATION_COMPLETE` marker.
+- Chrome refuses a forged `Host` header (`ERR_INVALID_ARGUMENT`); for a manual marketing-host check use `http://marketing.localhost:<port>` with `MARKETING_HOSTS=marketing.localhost`, or `x-forwarded-host` as the specs do.

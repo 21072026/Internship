@@ -41,16 +41,20 @@ export async function generateMetadata(): Promise<Metadata> {
     default: isMarketing ? `${productName} — Marketing CRM` : t.seo.homeTitle,
     template: `%s · ${productName}`,
   },
-  description: isMarketing
-    ? 'A CRM for tracking customers through a marketing pipeline — from first contact to close.'
-    : t.seo.homeDescription,
+  // MARKETING's description comes from its overlay (verticalOverlays.ts), so a
+  // Turkish or German visitor reads it in their language, like the internship one.
+  description: t.seo.homeDescription,
+  // The canonical URL of every page: `./` resolves against the request path
+  // and the metadataBase above, so it is always the host that served the page
+  // with the query string dropped — a link shared with `?utm_…` or `?ref=`
+  // does not become a second copy of the page in the index. Nothing below
+  // overrides it; protected pages carry `noindex` anyway (NO_INDEX).
+  alternates: { canonical: './' },
   // The landing's share card (#1378); a page with its own copy replaces it
   // through pageMetadata(). The image is src/app/opengraph-image.tsx.
   ...(await socialMetadata({
     title: isMarketing ? `${productName} — Marketing CRM` : t.seo.homeTitle,
-    description: isMarketing
-      ? 'A CRM for tracking customers through a marketing pipeline — from first contact to close.'
-      : t.seo.homeDescription,
+    description: t.seo.homeDescription,
   })),
   applicationName: productName,
   appleWebApp: { capable: true, statusBarStyle: 'default', title: productName },

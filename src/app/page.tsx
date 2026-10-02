@@ -147,7 +147,19 @@ export default async function HomePage() {
     { t: L.trans5T, d: L.trans5D, icon: ShieldCheck },
   ];
 
-  const faq = [
+  // The marketing landing's FAQ has one ungrouped list: the per-role groups
+  // below describe the internship loop (#2500).
+  const marketingFaq = [
+    {
+      group: '',
+      items: [
+        { q: L.faqMarketing1Q, a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
+        { q: L.faqMarketing3Q, a: L.faqMarketing3A }, { q: L.faqMarketing4Q, a: L.faqMarketing4A },
+        { q: L.faqMarketing5Q, a: L.faqMarketing5A }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
+      ],
+    },
+  ];
+  const internshipFaq = [
     {
       group: L.faqFilterMentee,
       items: [
@@ -173,6 +185,7 @@ export default async function HomePage() {
       ],
     },
   ];
+  const faq = isMarketing ? marketingFaq : internshipFaq;
 
   const roles = [
     { name: L.roleAdmin, desc: L.roleAdminD, c: 'bg-red-50 border-red-100 text-red-900', badge: 'bg-red-100 text-red-700' },
@@ -611,7 +624,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Mentor/mentee stories and the per-role FAQ are internship-only (#2500). */}
+      {/* Mentor/mentee stories are internship-only (#2500); the FAQ below is not. */}
       {!isMarketing && (<>
       {/* Success stories (#1100) — rendered ONLY when at least one published,
           consent-gated story exists; otherwise this section is not in the DOM
@@ -638,7 +651,9 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* FAQ */}
+      </>)}
+
+      {/* FAQ — both products (the marketing one has its own questions). */}
       {/* The same `faq` array as the list below (#1382): a copy of the text
           would be the one place that silently went stale on the next edit. */}
       <JsonLd
@@ -654,13 +669,13 @@ export default async function HomePage() {
           ),
         }}
       />
-      <section className="py-16 px-4">
+      <section className="py-16 px-4" data-testid="landing-faq">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.faqTitle}</h2>
           <div className="space-y-8">
             {faq.map((g) => (
               <div key={g.group}>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">{g.group}</h3>
+                {g.group && <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">{g.group}</h3>}
                 <div className="space-y-3">
                   {g.items.map((item) => (
                     <details key={item.q} className="group bg-white border border-gray-200 rounded-xl p-4">
@@ -677,7 +692,6 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
-      </>)}
 
       {isMarketing && (
         <section id="demo" className="py-16 px-4 bg-white scroll-mt-16" data-testid="landing-demo-form">

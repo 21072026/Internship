@@ -1,9 +1,17 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
+import { pageMetadata } from '@/lib/pageMetadata';
 
 const REPO_AI_DOC_URL = 'https://github.com/21072026/Internship/blob/main/docs/ai.md';
+
+// The page's own tab title and search snippet (#1376); it had none and wore
+// the home page's.
+export async function generateMetadata(): Promise<Metadata> {
+  return pageMetadata((t) => ({ title: t.ai.title, description: t.seo.aiDescription }));
+}
 
 /**
  * Public AI transparency page (#2034) — the page a privacy reviewer reads
