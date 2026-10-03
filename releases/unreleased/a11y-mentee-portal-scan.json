@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**The accessibility gate now sees the whole mentee portal, with a real mentorship on it** (#1412). The mentee context of `e2e/a11y-scan.spec.ts` used to scan two routes (`/portal`, `/portal/profile`) as a mentee with no relation, so the journey tracker, the mentor card, goals and a filled calendar never rendered and `/portal#dark` sat at `{}`. It now runs on the shared `seedMenteeWithRelation` fixture (#2043) and scans all nine `/portal/*` routes in light and dark. Before each scan, every relation-bearing route asserts the part only a relation produces: the stage label and the mentor on `/portal`, the stage on `/portal/journey`, the seeded goal, the calendar cell (stepping into next month when the meeting falls there), and the interaction. `/portal/projects` gets past the contributor-terms gate. The four findings the wider scan surfaced are fixed rather than frozen: the \"My mentor\" / \"Assigned company\" labels (`text-blue-500`/`text-green-500` on a `*-50` box, 3.37:1 / 2.17:1) move to the 700 shade, which is already retinted in dark; a dark-mode `bg-gray-100.text-gray-600` pill (4.05:1, the \"No response yet\" status and `/portal/notes`' filter pills) gets gray-300 text via one compound rule in `globals.css`; and the RSVP yes/no buttons get dark variants (3.53:1 / 2.74:1 on gray-900). Every portal baseline entry is `{}`.",
-  "notes": {
-    "en": ["Better contrast in the mentee portal: the mentor and company labels, the RSVP buttons in dark mode and the filter pills on your notes are now easier to read."],
-    "tr": ["Mentee portalında daha iyi kontrast: mentor ve şirket etiketleri, koyu temadaki katılım (RSVP) butonları ve notlardaki filtre düğmeleri artık daha kolay okunuyor."],
-    "de": ["Besserer Kontrast im Mentee-Portal: Die Beschriftungen für Mentor und Unternehmen, die Zu-/Absage-Buttons im Dunkelmodus und die Filter bei Ihren Notizen sind jetzt besser lesbar."]
-  }
-}

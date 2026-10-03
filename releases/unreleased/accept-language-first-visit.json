@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**A first visit answers in the browser's language** (#1384). `getLocale()` (`src/i18n/server.ts`) now resolves explicit `locale` cookie > signed-in user's `preferredLanguage` > `Accept-Language` > English; the header step is a pure, dependency-free parser (`src/i18n/acceptLanguage.ts`: q-values, regional tags like `tr-TR`/`de-AT`, `q=0`, `*`, malformed and oversized headers; unit-tested in `scripts/test/accept-language.test.mjs`). No cookie is written — the cookie stays the record of an explicit switcher choice — and a signed-out visit still resolves no session (#1197). `Vary: Accept-Language` could not be added from the app: Next 15.5's app-page handler overwrites `Vary` set by middleware or `next.config` `headers()` (verified against `next start`); it is not needed today because every page is `Cache-Control: private, no-store`, which the new e2e pins. `playwright.config.ts` now fixes `locale: 'en-US'` so English-copy assertions do not depend on the runner's system locale. e2e: `e2e/accept-language.spec.ts` (TR/DE/fr fallback/q-order, cookie beats header, saved preference beats header, a `tr-TR` browser gets Turkish and the switcher marks TR, no locale cookie written).",
-  "notes": {
-    "en": ["The site now opens in your browser's language (English, Turkish or German) on your first visit — no need to find the language switch first."],
-    "tr": ["Site artık ilk ziyaretinizde tarayıcınızın dilinde açılıyor (Türkçe, Almanca ya da İngilizce) — önce dil düğmesini bulmanız gerekmiyor."],
-    "de": ["Die Seite öffnet sich beim ersten Besuch jetzt in der Sprache Ihres Browsers (Deutsch, Türkisch oder Englisch) — ohne vorher den Sprachschalter suchen zu müssen."]
-  }
-}

@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Security: `/api/*` writes are refused unless they come from our own pages (#1467). `SameSite=Lax` does not stop a page on a sibling host of the same site (any `pr<N>.interncrm.com`), and `request.json()` parses a `text/plain` body. So a `<form enctype=\"text/plain\">` there could mint an admin API key with one click; the new e2e reproduced that on `main` (201). `src/middleware.ts` now runs `writeOriginVerdict()` (`src/lib/writeOrigin.ts`, zero imports, unit-tested) on every write. A browser write must carry `Sec-Fetch-Site: same-origin`/`none`, or an `Origin` whose host is in `servedHosts()` or is the request host. Otherwise it gets `403 cross_site_write`. A `text/plain` body gets `415 unsupported_media_type`, even from our own origin. Requests with no browser headers (webhooks, cron, SCIM, Gmail one-click) pass as before. Exempt: the SAML ACS, `/api/inbound-email`, `/api/webhooks/jaas`, `/api/cron/start`."
-}

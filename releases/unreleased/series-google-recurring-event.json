@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**A recurring project meeting reaches its members' Google Calendars — as ONE recurring event** (#2654, split out of #1986). A `MeetingSeries` has no `Meeting` row per occurrence (#1110), so `pushMeeting()` had nothing to push. New `src/lib/googleCalendarSeriesSync.ts` `syncSeries()` writes one event per connected project member with `recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=…']` (built by the pure, unit-tested `src/lib/seriesRrule.ts`), the series' own `timeZone`, its length and `fixedLink`, and reconciles: a schedule change or rename PATCHes the same Google event, and links for anyone the series no longer reaches (left the project, series moved, cancelled) are withdrawn. `/api/meeting-series` syncs in the background on create/update and awaits a bounded withdrawal on cancel, so a Google failure never fails or hangs a save; occurrences are still never materialised. Schema: `GoogleCalendarEventLink.meetingId` is now nullable and gains a nullable `seriesId` with `@@unique([seriesId, connectionId])` — purely additive. e2e: `e2e/google-calendar-series.spec.ts` against the Google stub.",
-  "notes": {
-    "en": ["A project's weekly meeting now appears in each member's connected Google Calendar as one recurring event — and moves or disappears with it."],
-    "tr": ["Projenin haftalık toplantısı artık Google Takvimi bağlı her üyenin takviminde tek bir tekrarlayan etkinlik olarak görünüyor — ve toplantıyla birlikte taşınıyor ya da kalkıyor."],
-    "de": ["Das wöchentliche Projekttreffen erscheint jetzt im verbundenen Google Kalender jedes Mitglieds als ein einziger Serientermin — und wird mit ihm verschoben oder entfernt."]
-  }
-}

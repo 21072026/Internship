@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "The duplicate scan no longer compares every pair of candidates (#1436). `scanDuplicatePairs()` used to run `matchSignals` on all ~n²/2 pairs on the request thread, so 1 000 mentees blocked the whole process for about 4 s. It now runs the pure `findDuplicatePairs()`, which compares only pairs that share an `email:`, `phone:`, `name:` or `uni:` bucket; inside a university bucket it compares only names within Levenshtein distance 2, which is the only way left to qualify there. Every qualifying pair shares at least one bucket, because the threshold (45) can only be reached through one of those four equalities, so the result is identical: signals and scoring (#841) are unchanged. `e2e/duplicate-blocking.unit.spec.ts` pins this against the all-pairs scan on 60 random seeds. On a collision-heavy synthetic cohort, 1 500 mentees take 88 ms instead of 3 907 ms, and 5 000 take ~650 ms. `/admin/duplicates` now shows 25 pairs at a time, strongest first, with a \"Show more\" button.",
-  "notes": {
-    "en": ["The duplicate-candidates page opens much faster on large candidate lists and shows 25 pairs at a time."],
-    "tr": ["Yinelenen adaylar sayfası büyük aday listelerinde çok daha hızlı açılıyor ve çiftleri 25'er 25'er gösteriyor."],
-    "de": ["Die Seite „Doppelte Kandidaten“ öffnet sich bei großen Kandidatenlisten deutlich schneller und zeigt 25 Paare auf einmal."]
-  }
-}
