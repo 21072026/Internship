@@ -5151,6 +5151,9 @@ const en = {
     title: 'What’s new',
     back: 'Back to home',
     feed: 'RSS feed',
+    loadMore: 'Load more',
+    shown: '{shown} of {total} releases shown',
+    loadError: 'Could not load more releases. Please try again.',
     feedDescription: 'New features and improvements in Internship CRM.',
   },
   consentRenew: {
@@ -10871,6 +10874,9 @@ const tr: Dict = {
     title: 'Yenilikler',
     back: 'Ana sayfaya dön',
     feed: 'RSS akışı',
+    loadMore: 'Daha fazla yükle',
+    shown: '{total} sürümden {shown} tanesi gösteriliyor',
+    loadError: 'Daha fazla sürüm yüklenemedi. Lütfen tekrar dene.',
     feedDescription: 'Internship CRM’deki yeni özellikler ve iyileştirmeler.',
   },
   consentRenew: {
@@ -16578,6 +16584,9 @@ const de: Dict = {
     title: 'Neuigkeiten',
     back: 'Zurück zur Startseite',
     feed: 'RSS-Feed',
+    loadMore: 'Mehr laden',
+    shown: '{shown} von {total} Versionen angezeigt',
+    loadError: 'Weitere Versionen konnten nicht geladen werden. Bitte versuche es erneut.',
     feedDescription: 'Neue Funktionen und Verbesserungen im Internship CRM.',
   },
   consentRenew: {

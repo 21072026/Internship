@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**`/release-notes` is paged.** The page rendered all 440+ releases on every visit; it now server-renders the newest 20 (`src/lib/releaseNotesPaging.ts`) and a \"Load more\" control appends the next 20 from `GET /release-notes/entries?offset&limit&lang` (build-time data, no DB, same host gate and cache headers as `feed.xml`). Each slice carries only the reader's locale, and the client bundle imports only the types. Feed permalinks (`#v<version>`) past the first page still land on their card: the list fetches with `until=<version>` and scrolls to it. Without JavaScript the control is a `?show=N` link. Covered by `e2e/release-notes-paging.spec.ts`.",
+  "notes": {
+    "en": ["The \"What's new\" page now opens much faster: it shows the latest 20 releases and loads older ones when you tap \"Load more\"."],
+    "tr": ["\"Yenilikler\" sayfası artık çok daha hızlı açılıyor: son 20 sürümü gösteriyor, eskileri \"Daha fazla yükle\"ye dokundukça yükleniyor."],
+    "de": ["Die Seite „Neuigkeiten“ öffnet jetzt deutlich schneller: Sie zeigt die neuesten 20 Versionen, ältere werden mit „Mehr laden“ nachgeladen."]
+  }
+}
