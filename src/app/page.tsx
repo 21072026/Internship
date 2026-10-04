@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import {
   GraduationCap, ArrowRight, ArrowDown, CheckCircle, Users, Building2, Briefcase,
-  Github, ShieldCheck, Languages, ScrollText, Code2, FlaskConical,
+  Github, FlaskConical,
 } from 'lucide-react';
 import { IS_DEMO_MODE, demoUrl } from '@/lib/demoMode';
 import { getFeatures, isFeatureShown } from '@/lib/features';
@@ -41,18 +41,16 @@ export default async function HomePage() {
   const mentorHref = '/apply-as-mentor';
   const companyHref = '/for-companies';
 
-  // Fed from the single-source catalogue (#584/#588): the landing shows the
-  // featured subset; /features shows everything.
   // Which product is this landing selling (#2500)? Host-resolved for a
-  // signed-out visitor, org-resolved when signed in. The internship landing is
-  // byte-identical (INTERNSHIP carries every capability and `isMarketing` is
-  // false); a MARKETING host gets a lean page — hero, features, funnel, "and
-  // more", transparency, CTA — with the mentee/mentor/company argument, the
-  // role picker, the three audience sections, the free-core band, the how-it-
-  // works steps, the roles grid, the stories and the per-role FAQ left out,
+  // signed-out visitor, org-resolved when signed in. Both pages follow the same
+  // rule — one idea per section, at most one action each (the owner asked for
+  // an iPhone-simple page). The internship page: hero → role doors → free core
+  // → pipeline → six features → stories → FAQ → closing band. A MARKETING host
+  // gets the same frame without the doors, the free-core band and the stories,
   // because those describe the internship loop and would be nonsense to a
-  // sales team. Their copy stays internship-only; the sections that remain are
-  // re-worded through the MARKETING overlay in src/i18n/verticalOverlays.ts.
+  // sales team; it adds its demo form instead. Their copy stays internship-
+  // only; the sections that remain are re-worded through the MARKETING overlay
+  // in src/i18n/verticalOverlays.ts.
   const vertical = await resolveRequestVertical();
   const isMarketing = vertical === 'MARKETING';
   const caps = verticalCapabilities(vertical);
@@ -75,7 +73,7 @@ export default async function HomePage() {
   // never written into copy by hand (§4.3).
   const stories = await listPublishedStories(3);
 
-  // Live hero numbers (#1099) — served from the same cached helper the public
+  // Live numbers under the role cards (#1099) — served from the same cached helper the public
   // /api/public/stats endpoint uses, so the landing never fans out its own
   // count() queries per request.
   const livePieces = buildLiveStripPieces(await getPublicStats(), {
@@ -83,351 +81,140 @@ export default async function HomePage() {
     openProjects: L.liveProjects,
     waitingCandidates: L.liveWaiting,
   });
-  const iconBg: Record<string, string> = {
-    blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',
-    purple: 'bg-purple-100 text-purple-600', amber: 'bg-amber-100 text-amber-600',
-    teal: 'bg-teal-100 text-teal-600', orange: 'bg-orange-100 text-orange-600',
-    sky: 'bg-sky-100 text-sky-600', rose: 'bg-rose-100 text-rose-600',
-    indigo: 'bg-indigo-100 text-indigo-600',
-  };
-
-  const heroChips = [L.chipStages, L.chipRoles, L.chipLangs, L.chipGdpr];
-
-  // The loop: what each side brings, and what it is missing. This is the page's
-  // actual argument — the feature grid further down is only the evidence.
-  const wheel = [
-    { t: L.wheelMenteeT, d: L.wheelMenteeD, arrow: L.wheelArrow1, icon: GraduationCap, c: 'bg-green-50 border-green-100 text-green-900', badge: 'bg-green-100 text-green-700' },
-    { t: L.wheelMentorT, d: L.wheelMentorD, arrow: L.wheelArrow2, icon: Users, c: 'bg-blue-50 border-blue-100 text-blue-900', badge: 'bg-blue-100 text-blue-700' },
-    { t: L.wheelCompanyT, d: L.wheelCompanyD, arrow: L.wheelArrow3, icon: Building2, c: 'bg-indigo-50 border-indigo-100 text-indigo-900', badge: 'bg-indigo-100 text-indigo-700' },
-  ];
-
+  // One quiet chip colour per audience. `-700` text on purpose: a `bg-*-100`
+  // chip stays light in dark mode while globals.css lightens `text-*-600`, so a
+  // `-600` icon there would go light-on-light.
   const pick = [
-    { t: L.pickMenteeT, d: L.pickMenteeD, cta: L.pickMenteeCta, href: '#mentee', icon: GraduationCap, c: 'hover:border-green-300', badge: 'bg-green-100 text-green-700' },
-    { t: L.pickMentorT, d: L.pickMentorD, cta: L.pickMentorCta, href: '#mentor', icon: Users, c: 'hover:border-blue-300', badge: 'bg-blue-100 text-blue-700' },
-    { t: L.pickCompanyT, d: L.pickCompanyD, cta: L.pickCompanyCta, href: '#company', icon: Building2, c: 'hover:border-indigo-300', badge: 'bg-indigo-100 text-indigo-700' },
-  ];
-
-  const menteeItems = [
-    { t: L.audMentee1T, d: L.audMentee1D },
-    { t: L.audMentee2T, d: L.audMentee2D },
-    { t: L.audMentee3T, d: L.audMentee3D },
-    { t: L.audMentee4T, d: L.audMentee4D },
-    { t: L.audMentee5T, d: L.audMentee5D },
-    { t: L.audMentee6T, d: L.audMentee6D },
-  ];
-  const mentorItems = [
-    { t: L.audMentor1T, d: L.audMentor1D },
-    { t: L.audMentor2T, d: L.audMentor2D },
-    { t: L.audMentor3T, d: L.audMentor3D },
-    { t: L.audMentor4T, d: L.audMentor4D },
-    { t: L.audMentor5T, d: L.audMentor5D },
-  ];
-  const companyItems = [
-    { t: L.audCompany1T, d: L.audCompany1D },
-    { t: L.audCompany2T, d: L.audCompany2D },
-    { t: L.audCompany3T, d: L.audCompany3D },
-    { t: L.audCompany4T, d: L.audCompany4D },
-    { t: L.audCompany5T, d: L.audCompany5D },
-    { t: L.audCompany6T, d: L.audCompany6D },
-  ];
-
-  const how = [
-    { t: L.how1T, d: L.how1D },
-    { t: L.how2T, d: L.how2D },
-    { t: L.how3T, d: L.how3D },
+    { t: L.pickMenteeT, d: L.pickMenteeD, cta: L.ctaMentee, href: '/auth/register', icon: GraduationCap, badge: 'bg-green-100 text-green-700', testId: undefined },
+    { t: L.pickMentorT, d: L.pickMentorD, cta: L.ctaMentor, href: mentorHref, icon: Users, badge: 'bg-blue-100 text-blue-700', testId: 'become-mentor-link' },
+    { t: L.pickCompanyT, d: L.pickCompanyD, cta: L.ctaCompany, href: companyHref, icon: Building2, badge: 'bg-indigo-100 text-indigo-700', testId: undefined },
   ];
 
   // Only claims a stranger can check without an account. The version count is
   // read from the release notes rather than typed in, so it cannot go stale.
   const releaseCount = getAllReleaseNotes().length;
-  const transparency = [
-    { t: L.trans1T, d: L.trans1D, icon: Code2 },
-    { t: L.trans2T.replace('{n}', String(releaseCount)), d: L.trans2D, icon: ScrollText },
-    { t: L.trans4T, d: L.trans4D, icon: Languages },
-    { t: L.trans5T, d: L.trans5D, icon: ShieldCheck },
-  ];
 
-  // The marketing landing's FAQ has one ungrouped list: the per-role groups
-  // below describe the internship loop (#2500).
-  const marketingFaq = [
-    {
-      group: '',
-      items: [
-        { q: L.faqMarketing1Q, a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
-        { q: L.faqMarketing3Q, a: L.faqMarketing3A }, { q: L.faqMarketing4Q, a: L.faqMarketing4A },
-        { q: L.faqMarketing5Q, a: L.faqMarketing5A }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
-      ],
-    },
-  ];
+  // Six questions, one flat list per product. The internship page used to group
+  // sixteen questions under three role headers; the audience detail now lives on
+  // the deep pages (/apply-as-mentor, /for-companies), so the landing keeps the
+  // six a first-time visitor actually asks — money, outcome, commitment,
+  // longevity, price, speed. The marketing list was always ungrouped (#2500).
   const internshipFaq = [
-    {
-      group: L.faqFilterMentee,
-      items: [
-        { q: L.faqMentee1Q, a: L.faqMentee1A }, { q: L.faqMentee2Q, a: L.faqMentee2A },
-        { q: L.faqMentee3Q, a: L.faqMentee3A }, { q: L.faqMentee4Q, a: L.faqMentee4A },
-        { q: L.faqMentee5Q, a: L.faqMentee5A }, { q: L.faqMentee6Q, a: L.faqMentee6A },
-      ],
-    },
-    {
-      group: L.faqFilterMentor,
-      items: [
-        { q: L.faqMentor1Q, a: L.faqMentor1A }, { q: L.faqMentor2Q, a: L.faqMentor2A },
-        { q: L.faqMentor3Q, a: L.faqMentor3A }, { q: L.faqMentor4Q, a: L.faqMentor4A },
-        { q: L.faqMentor5Q, a: L.faqMentor5A },
-      ],
-    },
-    {
-      group: L.faqFilterCompany,
-      items: [
-        { q: L.faqCompany1Q, a: L.faqCompany1A }, { q: L.faqCompany2Q, a: L.faqCompany2A },
-        { q: L.faqCompany3Q, a: L.faqCompany3A }, { q: L.faqCompany4Q, a: L.faqCompany4A },
-        { q: L.faqCompany5Q, a: L.faqCompany5A },
-      ],
-    },
+    { q: L.faqMentee5Q, a: L.faqMentee5A }, { q: L.faqMentee6Q, a: L.faqMentee6A },
+    { q: L.faqMentor2Q, a: L.faqMentor2A }, { q: L.faqMentor3Q, a: L.faqMentor3A },
+    { q: L.faqCompany3Q, a: L.faqCompany3A }, { q: L.faqCompany1Q, a: L.faqCompany1A },
+  ];
+  const marketingFaq = [
+    { q: L.faqMarketing1Q, a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
+    { q: L.faqMarketing3Q, a: L.faqMarketing3A }, { q: L.faqMarketing4Q, a: L.faqMarketing4A },
+    { q: L.faqMarketing5Q, a: L.faqMarketing5A }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
   ];
   const faq = isMarketing ? marketingFaq : internshipFaq;
 
-  const roles = [
-    { name: L.roleAdmin, desc: L.roleAdminD, c: 'bg-red-50 border-red-100 text-red-900', badge: 'bg-red-100 text-red-700' },
-    { name: L.roleMentor, desc: L.roleMentorD, c: 'bg-blue-50 border-blue-100 text-blue-900', badge: 'bg-blue-100 text-blue-700' },
-    { name: L.roleMentee, desc: L.roleMenteeD, c: 'bg-green-50 border-green-100 text-green-900', badge: 'bg-green-100 text-green-700' },
-    { name: L.roleCompany, desc: L.roleCompanyD, c: 'bg-indigo-50 border-indigo-100 text-indigo-900', badge: 'bg-indigo-100 text-indigo-700' },
-    { name: L.roleSource, desc: L.roleSourceD, c: 'bg-amber-50 border-amber-100 text-amber-900', badge: 'bg-amber-100 text-amber-700' },
-  ];
-
-  const more = [L.more1, L.more2, L.more3, L.more4, L.more5, L.more6, L.more7, L.more8];
-
   const stages = [L.stageApply, L.stageInterview, L.stageInternship, L.stageHired];
 
-  // One audience block's benefit list: a claim, then how it is possible.
-  const audienceList = (items: { t: string; d: string }[]) => (
-    <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 text-left">
-      {items.map((it) => (
-        <li key={it.t} className="flex items-start gap-3">
-          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-1" />
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-1">{it.t}</h3>
-            <p className="text-gray-600 text-sm leading-relaxed">{it.d}</p>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
+  // The founder's name inside the one-line trust row, as a link to them.
+  const [trustBefore, trustAfter = ''] = L.trustLine.split('{name}');
+
+  const primaryButton =
+    'inline-flex w-full sm:w-auto items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-all';
 
   return (
     <PublicShell>
 
-      {/* Hero — states the loop rather than a slogan, and carries no sign-up
-          button: the visitor picks a side two sections down. A single "get
-          started" would funnel mentors and companies into the mentee sign-up
-          form. The demo button is exempt from that concern — it is role-neutral
-          (every visitor can poke the same demo) and hidden on the demo itself. */}
-      <section className="py-20 sm:py-24 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-medium mb-8">
-            <CheckCircle className="h-4 w-4" />
-            {L.badge}
-          </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6 leading-tight">
+      {/* Hero — a heading, one sentence, one button. It states the loop in that
+          one sentence (the old three-card wheel, condensed) and carries no
+          sign-up button: the visitor picks a side in the very next section. A
+          single "get started" would funnel mentors and companies into the
+          mentee sign-up form. The demo button is exempt from that concern — it
+          is role-neutral (every visitor can poke the same demo) and hidden on
+          the demo itself. */}
+      <section className="py-24 sm:py-32 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          {/* Marketing only: the overlay's badge is what tells a sales team
+              which product this is. The internship promise it used to repeat is
+              the headline of the free-core band below. */}
+          {isMarketing && (
+            <p className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 mb-8">
+              {L.badge}
+            </p>
+          )}
+          <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-gray-900 leading-tight">
             {L.heroTitle} <span className="text-blue-600">{L.heroAccent}</span>
           </h1>
-          <p className="text-lg sm:text-xl text-gray-600 mb-6 max-w-2xl mx-auto">{L.heroSubtitle}</p>
-          {/* `heroModel` used to sit right here, where the one sentence that
-              answers "what does this cost me" was a grey paragraph among five.
-              It is now the headline of its own band further down the page
-              (#1732); the badge above still carries the short form, so the hero
-              has not lost the promise. */}
-          {!isMarketing && (
-          <p className="mt-4 text-sm text-gray-500">
-            {L.becomeMentor}{' '}
-            <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="become-mentor-link">
-              {L.becomeMentorLink}
-            </Link>
-          </p>
-          )}
+          <p className="mt-6 text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto">{L.heroSubtitle}</p>
           {!IS_DEMO_MODE && !isMarketing && (
-            <div className="mt-8">
+            <div className="mt-10">
               {/* Same-tab on purpose (unchanged): the demo is the destination,
                   not a side trip. */}
               <DemoLink
                 href={demoUrl('hero')}
                 placement="hero"
                 testId="hero-demo-cta"
-                className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+                className={primaryButton}
               >
                 <FlaskConical className="h-5 w-5" /> {L.demoCta}
               </DemoLink>
               <p className="mt-3 text-xs text-gray-500 max-w-md mx-auto">{L.demoCtaNote}</p>
             </div>
           )}
-          <div className="mt-10 flex flex-wrap justify-center gap-2 sm:gap-3">
-            {heroChips.map((chip) => (
-              <span key={chip} className="inline-flex items-center gap-1.5 bg-white/70 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium">
-                <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                {chip}
-              </span>
+          {isMarketing && demoFormOpen && (
+            <div className="mt-10">
+              <a href="#demo" data-testid="hero-demo-request" className={primaryButton}>
+                <Briefcase className="h-5 w-5" /> {L.demoFormCta}
+              </a>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Internship-only: the role doors and the free-core band (#2500). */}
+      {!isMarketing && (<>
+      {/* Pick your side — each card is that audience's door, straight to its
+          own page: mentees sign up, mentors apply (#1072), companies ask for a
+          look (#1102). A div, not a link, so the door can sit inside it. */}
+      <section className="py-20 sm:py-24 px-4 bg-white">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center mb-12">{L.pickTitle}</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {pick.map((p) => (
+              <div
+                key={p.t}
+                data-testid="role-card"
+                className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6 transition-all hover:shadow-lg"
+              >
+                <div className={`w-10 h-10 rounded-lg ${p.badge} flex items-center justify-center mb-4`}>
+                  <p.icon className="h-5 w-5" />
+                </div>
+                <h3 className="font-semibold text-gray-900">{p.t}</h3>
+                <p className="mt-2 text-sm text-gray-600 leading-relaxed">{p.d}</p>
+                <Link
+                  href={p.href}
+                  data-testid={p.testId}
+                  className="mt-auto pt-4 inline-flex items-center gap-1.5 min-h-[44px] font-medium text-blue-600 hover:underline"
+                >
+                  {p.cta} <ArrowRight className="h-4 w-4 flex-shrink-0" />
+                </Link>
+              </div>
             ))}
           </div>
           {/* Live status strip (#1099): real numbers, computed — never written
               into copy by hand (§4.3). A zero piece is not rendered; with all
               three at zero the strip is not in the DOM at all ("0 open
               projects" is worse than nothing). */}
-          {!isMarketing && livePieces.length > 0 && (
-            <p className="mt-6 text-center text-sm text-gray-600" data-testid="hero-live-strip">
-              <span className="font-medium text-gray-500">{L.liveNow}</span>{' '}
+          {livePieces.length > 0 && (
+            <p className="mt-8 text-center text-sm text-gray-500" data-testid="hero-live-strip">
+              <span className="font-medium">{L.liveNow}</span>{' '}
               {livePieces.join(' · ')}
             </p>
           )}
-          {!isMarketing && (
-          <div className="text-center mt-10">
-            <a href="#loop" className="inline-flex items-center gap-1.5 text-blue-600 hover:underline font-medium">
-              {L.heroScrollCue} <ArrowDown className="h-4 w-4" />
-            </a>
-          </div>
-          )}
         </div>
       </section>
 
-      {/* Internship-only argument: the loop, the role picker, the three audience
-          sections, the free-core band and the how-it-works steps (#2500). */}
-      {!isMarketing && (<>
-      {/* The loop */}
-      <section id="loop" className="py-16 px-4 bg-white scroll-mt-16">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.wheelTitle}</h2>
-            <p className="text-gray-600 mt-3 max-w-3xl mx-auto">{L.wheelSubtitle}</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {wheel.map((w) => (
-              <div key={w.t} className={`p-6 rounded-2xl border ${w.c}`}>
-                <div className={`w-10 h-10 rounded-lg ${w.badge} flex items-center justify-center mb-4`}>
-                  <w.icon className="h-5 w-5" />
-                </div>
-                <h3 className="font-semibold mb-2">{w.t}</h3>
-                <p className="text-sm opacity-80 leading-relaxed">{w.d}</p>
-                <p className="mt-4 pt-3 border-t border-black/5 text-sm font-medium inline-flex items-center gap-1.5">
-                  <ArrowRight className="h-4 w-4 flex-shrink-0" /> {w.arrow}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-10 max-w-3xl mx-auto bg-gray-50 border border-gray-200 rounded-2xl p-6 sm:p-8">
-            <h3 className="font-semibold text-gray-900 mb-4">{L.wheelChainTitle}</h3>
-            <ol className="space-y-2 text-gray-700 text-sm sm:text-base">
-              {[L.wheelChain1, L.wheelChain2, L.wheelChain3].map((c, i) => (
-                <li key={c} className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                  <span>{c}</span>
-                </li>
-              ))}
-            </ol>
-            <p className="text-sm text-gray-500 mt-5 italic">{L.wheelNote}</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Pick your side */}
-      <section className="py-16 px-4">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.pickTitle}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {pick.map((p) => (
-              <a
-                key={p.t}
-                href={p.href}
-                data-testid="role-card"
-                className={`block p-6 rounded-2xl border border-gray-200 bg-white transition-all hover:shadow-lg ${p.c}`}
-              >
-                <div className={`w-10 h-10 rounded-lg ${p.badge} flex items-center justify-center mb-4`}>
-                  <p.icon className="h-5 w-5" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2">{p.t}</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">{p.d}</p>
-                <span className="mt-4 inline-flex items-center gap-1.5 text-blue-600 font-medium text-sm">
-                  {p.cta} <ArrowRight className="h-4 w-4" />
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Mentee */}
-      <section id="mentee" className="py-16 px-4 bg-white scroll-mt-16">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
-            <span className="inline-block bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold mb-4">{L.pickMenteeT}</span>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.audMenteeTitle}</h2>
-            <p className="text-gray-600 mt-3 max-w-3xl mx-auto">{L.audMenteeSubtitle}</p>
-          </div>
-          {audienceList(menteeItems)}
-          <p className="mt-10 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-xl p-5 leading-relaxed">{L.audMenteeProof}</p>
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors">
-              {L.ctaMentee} <ArrowRight className="h-5 w-5" />
-            </Link>
-            <Link href="/projects" className="inline-flex items-center gap-1.5 text-blue-600 hover:underline font-medium">
-              {L.audMenteeCta2} <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <p className="mt-3 text-center text-xs text-gray-500 max-w-xl mx-auto">{L.audMenteeCtaNote}</p>
-        </div>
-      </section>
-
-      {/* Mentor */}
-      <section id="mentor" className="py-16 px-4 scroll-mt-16">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
-            <span className="inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-4">{L.pickMentorT}</span>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.audMentorTitle}</h2>
-            <p className="text-gray-600 mt-3 max-w-3xl mx-auto">{L.audMentorSubtitle}</p>
-          </div>
-          {audienceList(mentorItems)}
-          <p className="mt-8 text-sm text-gray-700 text-center">{L.audMentorTrust}</p>
-          <p className="mt-6 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl p-5 leading-relaxed">{L.audMentorProof}</p>
-          <div className="mt-8 flex justify-center">
-            <Link
-              href={mentorHref}
-              className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
-            >
-              {L.audMentorCta} <ArrowRight className="h-5 w-5 flex-shrink-0" />
-            </Link>
-          </div>
-          <p className="mt-3 text-center text-xs text-gray-500 max-w-xl mx-auto">{L.audMentorCtaNote}</p>
-        </div>
-      </section>
-
-      {/* Company */}
-      <section id="company" className="py-16 px-4 bg-white scroll-mt-16">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
-            <span className="inline-block bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-semibold mb-4">{L.pickCompanyT}</span>
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.audCompanyTitle}</h2>
-            <p className="text-gray-600 mt-3 max-w-3xl mx-auto">{L.audCompanySubtitle}</p>
-          </div>
-          {audienceList(companyItems)}
-          <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-gray-600">
-            <li className="inline-flex items-center gap-1.5"><Code2 className="h-4 w-4 text-gray-400" />{L.audCompanyProof1}</li>
-            <li className="inline-flex items-center gap-1.5"><ScrollText className="h-4 w-4 text-gray-400" />{L.audCompanyProof2.replace('{n}', String(releaseCount))}</li>
-          </ul>
-          <div className="mt-8 flex justify-center">
-            <Link
-              href={companyHref}
-              className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              {L.audCompanyCta} <ArrowRight className="h-5 w-5 flex-shrink-0" />
-            </Link>
-          </div>
-          <p className="mt-3 text-center text-xs text-gray-500 max-w-xl mx-auto">{L.audCompanyCtaNote}</p>
-        </div>
-      </section>
-
-      {/* Free core (#1732) — the price answer, placed right after the three
-          audience sections have made their case and before "how it works".
+      {/* Free core (#1732) — the price answer, right after the doors.
           `heroModel` is the headline verbatim: it is existing shipped copy (it
           used to be a hero sub-line), so promoting it here changes where the
-          promise is read, not what it claims. Its CTA is parked — see below.
+          promise is read, not what it claims.
 
           Dark mode: `bg-green-50` is retinted by globals.css and the
           `text-green-*` descendants are already covered by the green compound
@@ -435,7 +222,7 @@ export default async function HomePage() {
           `bg-green-100` chip inside — that one stays light in dark mode while
           the override would still lighten its text to green-300. */}
       <section
-        className="py-14 px-4 bg-green-50 border-y border-green-200"
+        className="py-16 px-4 bg-green-50 border-y border-green-200"
         data-testid="landing-free-core"
       >
         <div className="max-w-3xl mx-auto text-center">
@@ -446,9 +233,7 @@ export default async function HomePage() {
           <h2 className="mt-4 text-2xl sm:text-3xl font-bold text-gray-900 leading-snug">{L.heroModel}</h2>
           <p className="mt-4 text-base text-gray-600 leading-relaxed">{L.freeCoreBody}</p>
           {/* The CTA the band was built around, restored with the page it
-              needs (#1730). `freeCoreCta` promises the price in all three
-              locales, which is why it was left pointing nowhere rather than
-              re-aimed at /features while the route was missing. */}
+              needs (#1730). */}
           <Link
             href="/pricing"
             data-testid="free-core-cta"
@@ -458,188 +243,65 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
-
-      {/* How it works */}
-      <section className="py-16 px-4">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.howTitle}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {how.map((h, i) => (
-              <div key={h.t} className="p-6 rounded-2xl border border-gray-200 bg-white">
-                <span className="w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center mb-4">{i + 1}</span>
-                <h3 className="font-semibold text-gray-900 mb-2">{h.t}</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">{h.d}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-6 text-sm text-gray-500 max-w-3xl mx-auto text-center leading-relaxed">{L.howInterest}</p>
-        </div>
-      </section>
       </>)}
 
-      {/* Pipeline diagram */}
-      <section className="py-16 px-4 bg-white">
-        <div className="max-w-5xl mx-auto text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{L.pipelineTitle}</h2>
-          <p className="text-gray-600 mb-10">{L.pipelineSubtitle}</p>
-          <div className="overflow-x-auto">
-            <svg viewBox="0 0 920 160" className="w-full min-w-[680px] max-w-4xl mx-auto" role="img" aria-label={L.pipelineTitle}>
-              <defs>
-                <linearGradient id="pg" x1="0" x2="1">
-                  <stop offset="0" stopColor="#3b82f6" />
-                  <stop offset="1" stopColor="#6366f1" />
-                </linearGradient>
-              </defs>
-              {stages.map((label, i) => {
-                const x = 30 + i * 222;
-                return (
-                  <g key={i}>
-                    <rect x={x} y={50} width="180" height="60" rx="14" fill="url(#pg)" opacity={0.12 + i * 0.06} />
-                    <rect x={x} y={50} width="180" height="60" rx="14" fill="none" stroke="#6366f1" strokeWidth="1.5" />
-                    <circle cx={x + 30} cy={80} r="14" fill="#6366f1" />
-                    <text x={x + 30} y={85} textAnchor="middle" fill="#fff" fontSize="13" fontWeight="700">{i + 1}</text>
-                    <text x={x + 58} y={85} className="fill-slate-800 dark:fill-slate-100" fontSize="15" fontWeight="600">{label}</text>
-                    {i < stages.length - 1 && (
-                      <g>
-                        <line x1={x + 180} y1={80} x2={x + 218} y2={80} stroke="#94a3b8" strokeWidth="2" />
-                        <polygon points={`${x + 218},80 ${x + 210},75 ${x + 210},85`} fill="#94a3b8" />
-                      </g>
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-          <p className="text-sm text-gray-600 mt-6 max-w-2xl mx-auto">{L.pipelineStagesNote}</p>
-          <p className="text-sm text-gray-500 mt-3 max-w-xl mx-auto italic">{L.pipelineNote}</p>
+      {/* Pipeline — four numbered steps. It used to be an SVG with a 680px
+          minimum width inside a sideways scroller; a plain list wraps to 2×2 on
+          a phone and needs no dark-mode fill classes. No stage count in the
+          copy (§7). */}
+      <section className="py-20 sm:py-24 px-4">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center">{L.pipelineTitle}</h2>
+          <ol className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-6">
+            {stages.map((s, i) => (
+              <li key={s} className="flex flex-col items-center text-center gap-3">
+                <span className="w-10 h-10 rounded-full bg-blue-600 text-white font-semibold flex items-center justify-center">{i + 1}</span>
+                <span className="text-sm font-medium text-gray-900">{s}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-10 text-center text-sm text-gray-500">{L.pipelineNote}</p>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-16 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.featuresTitle}</h2>
-            <p className="text-gray-600 mt-2">{L.featuresSubtitle}</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((f) => (
-              <div key={f.title} className="p-7 rounded-2xl border border-gray-100 bg-white hover:border-blue-200 hover:shadow-lg transition-all">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${iconBg[f.color]}`}>
-                  <f.icon className="h-6 w-6" />
+      {/* Features — six titles from the single-source catalogue (#584/#588),
+          nothing more; the descriptions and everything else live on /features. */}
+      <section className="py-20 sm:py-24 px-4 bg-white">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center mb-12">{L.featuresTitle}</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {features.slice(0, 6).map((f) => (
+              <div key={f.title} className="rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:shadow-md">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center mb-4">
+                  <f.icon className="h-5 w-5" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{f.title}</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">{f.desc}</p>
+                <h3 className="font-semibold text-gray-900 leading-snug">{f.title}</h3>
               </div>
             ))}
           </div>
-          <div className="text-center mt-10">
-            <Link href="/features" className="inline-flex items-center gap-1.5 text-blue-600 hover:underline font-medium" data-testid="all-features-link">
+          <div className="text-center mt-8">
+            <Link href="/features" className="inline-flex items-center gap-1.5 min-h-[44px] text-blue-600 hover:underline font-medium" data-testid="all-features-link">
               {t.featureCatalog.allFeatures} <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Roles — the five internship roles; a marketing tenant has one (#2500). */}
-      {!isMarketing && (
-      <section className="py-16 px-4 bg-white">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.rolesTitle}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {roles.map((r) => (
-              <div key={r.name} className={`flex items-start gap-4 p-6 rounded-xl border ${r.c}`}>
-                <div className={`w-10 h-10 rounded-lg ${r.badge} flex items-center justify-center flex-shrink-0`}>
-                  <span className="font-bold text-sm">{r.name[0]}</span>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-1">{r.name}</h3>
-                  <p className="text-sm opacity-80">{r.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-      )}
-
-      {/* And a lot more */}
-      <section className="py-16 px-4">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.moreTitle}</h2>
-            <p className="text-gray-600 mt-2">{L.moreSubtitle}</p>
-          </div>
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            {more.map((item) => (
-              <li key={item} className="flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <span className="text-gray-700 text-sm sm:text-base leading-relaxed">{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* Transparency */}
-      <section className="py-16 px-4 bg-white">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.transTitle}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {transparency.map((tr) => (
-              <div key={tr.t} className="flex items-start gap-4 p-6 rounded-xl border border-gray-200">
-                <tr.icon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-1">{tr.t}</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">{tr.d}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-8 text-sm text-gray-600 bg-amber-50 border border-amber-100 rounded-xl p-5 leading-relaxed">{L.transBeta}</p>
-          <div className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
-            <Link href="/features" className="text-blue-600 hover:underline">{L.transLinkFeatures}</Link>
-            {/* 404s on a marketing host (#2544): the feed is the internship changelog. */}
-            {!isMarketing && (
-              <Link href="/release-notes" className="text-blue-600 hover:underline">{L.transLinkReleases}</Link>
-            )}
-            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1.5">
-              <Github className="h-4 w-4" />{L.transLinkGithub}
-            </a>
-          </div>
-
-          {/* Founder identity (#1097): on a beta product, namelessness is the
-              biggest trust-breaker (docs/landing-value-proposition.md §4.1).
-              A real person, by name — never a company as the owner (CLAUDE.md
-              → Licensing & IP). */}
-          <div className="mt-6 p-6 rounded-xl border border-gray-200 text-center" data-testid="founder-identity">
-            <h3 className="font-semibold text-gray-900 mb-1">{L.founderTitle}</h3>
-            <p className="text-sm text-gray-600 leading-relaxed max-w-2xl mx-auto">
-              {L.founderBody.replace('{name}', FOUNDER_NAME)}
-            </p>
-            <a href={FOUNDER_URL} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline">
-              <Github className="h-4 w-4" />{L.founderLink}
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* Mentor/mentee stories are internship-only (#2500); the FAQ below is not. */}
-      {!isMarketing && (<>
-      {/* Success stories (#1100) — rendered ONLY when at least one published,
-          consent-gated story exists; otherwise this section is not in the DOM
-          at all (docs/landing-value-proposition.md §4.2 honesty rule). */}
-      {stories.length > 0 && (
-        <section className="py-16 px-4" data-testid="landing-stories">
+      {/* Success stories (#1100), internship-only (#2500) — rendered ONLY when
+          at least one published, consent-gated story exists; otherwise this
+          section is not in the DOM at all (docs/landing-value-proposition.md
+          §4.2 honesty rule). */}
+      {!isMarketing && stories.length > 0 && (
+        <section className="py-20 sm:py-24 px-4" data-testid="landing-stories">
           <div className="max-w-5xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.stories.title}</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center mb-12">{L.stories.title}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               {stories.map((s) => (
-                <figure key={s.id} className="rounded-xl border border-gray-200 bg-white p-6">
+                <figure key={s.id} className="rounded-2xl border border-gray-200 bg-white p-6">
                   <blockquote className="text-sm text-gray-700 leading-relaxed">“{s.excerpt}”</blockquote>
                   <figcaption className="mt-4 text-sm">
                     <span className="font-medium text-gray-900">{s.name}</span>
-                    <span className="text-gray-400"> · {L.stories.roles[s.role]}</span>
+                    <span className="text-gray-500"> · {L.stories.roles[s.role]}</span>
                   </figcaption>
                 </figure>
               ))}
@@ -651,8 +313,6 @@ export default async function HomePage() {
         </section>
       )}
 
-      </>)}
-
       {/* FAQ — both products (the marketing one has its own questions). */}
       {/* The same `faq` array as the list below (#1382): a copy of the text
           would be the one place that silently went stale on the next edit. */}
@@ -660,44 +320,35 @@ export default async function HomePage() {
         data={{
           '@context': 'https://schema.org',
           '@type': 'FAQPage',
-          mainEntity: faq.flatMap((g) =>
-            g.items.map((item) => ({
-              '@type': 'Question',
-              name: item.q,
-              acceptedAnswer: { '@type': 'Answer', text: item.a },
-            }))
-          ),
+          mainEntity: faq.map((item) => ({
+            '@type': 'Question',
+            name: item.q,
+            acceptedAnswer: { '@type': 'Answer', text: item.a },
+          })),
         }}
       />
-      <section className="py-16 px-4" data-testid="landing-faq">
+      <section className={`py-20 sm:py-24 px-4 ${stories.length > 0 && !isMarketing ? 'bg-white' : ''}`} data-testid="landing-faq">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.faqTitle}</h2>
-          <div className="space-y-8">
-            {faq.map((g) => (
-              <div key={g.group}>
-                {g.group && <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">{g.group}</h3>}
-                <div className="space-y-3">
-                  {g.items.map((item) => (
-                    <details key={item.q} className="group bg-white border border-gray-200 rounded-xl p-4">
-                      <summary className="font-medium text-gray-900 cursor-pointer list-none flex items-start justify-between gap-3">
-                        <span>{item.q}</span>
-                        <ArrowDown className="h-4 w-4 text-gray-400 flex-shrink-0 mt-1 transition-transform group-open:rotate-180" />
-                      </summary>
-                      <p className="mt-3 text-sm text-gray-600 leading-relaxed">{item.a}</p>
-                    </details>
-                  ))}
-                </div>
-              </div>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center mb-12">{L.faqTitle}</h2>
+          <div className="space-y-3">
+            {faq.map((item) => (
+              <details key={item.q} className="group bg-white border border-gray-200 rounded-xl p-4">
+                <summary className="font-medium text-gray-900 cursor-pointer list-none flex items-start justify-between gap-3">
+                  <span>{item.q}</span>
+                  <ArrowDown className="h-4 w-4 text-gray-400 flex-shrink-0 mt-1 transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="mt-3 text-sm text-gray-600 leading-relaxed">{item.a}</p>
+              </details>
             ))}
           </div>
         </div>
       </section>
 
       {isMarketing && (
-        <section id="demo" className="py-16 px-4 bg-white scroll-mt-16" data-testid="landing-demo-form">
+        <section id="demo" className="py-20 sm:py-24 px-4 bg-white scroll-mt-16" data-testid="landing-demo-form">
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-8">
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.demoFormTitle}</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">{L.demoFormTitle}</h2>
               <p className="text-gray-600 mt-3">{L.demoFormSubtitle}</p>
             </div>
             {demoFormOpen ? (
@@ -715,11 +366,14 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* CTA — one button per audience, all at the same weight */}
-      <section className="py-16 px-4">
-        <div className="max-w-4xl mx-auto text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-10 sm:p-14">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">{L.ctaTitle}</h2>
-          <p className="text-blue-100 mb-8">{L.ctaSubtitle}</p>
+      {/* Closing band — one button, one demo line, one trust row. The mentor
+          and company doors are the role cards above; repeating them here as
+          outline buttons was three equal-weight choices at the end of a page
+          that had already asked. */}
+      <section className="py-20 sm:py-24 px-4">
+        <div className="max-w-4xl mx-auto text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 sm:p-14">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">{L.ctaTitle}</h2>
+          <p className="text-blue-100 mb-8 max-w-2xl mx-auto">{L.ctaSubtitle}</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {/* Marketing is invitation-only (#2501): its one door is sign-in, not
                 the token-less mentee sign-up. */}
@@ -735,31 +389,7 @@ export default async function HomePage() {
                 <Briefcase className="h-5 w-5" /> {L.demoFormCta}
               </a>
             )}
-            {/* The mentor and company sides are internship audiences; a
-                marketing visitor has one door (#2500). */}
-            {!isMarketing && (<>
-            <Link
-              href={mentorHref}
-              className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"
-            >
-              <Users className="h-5 w-5" /> {L.ctaMentor}
-            </Link>
-            <Link
-              href={companyHref}
-              className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"
-            >
-              <Briefcase className="h-5 w-5" /> {L.ctaCompany}
-            </Link>
-            </>)}
           </div>
-          {!isMarketing && (
-          <p className="mt-6 text-sm text-blue-100">
-            {t.auth.wantMentor}{' '}
-            <Link href="/apply-as-mentor" className="text-white underline hover:text-blue-50 font-medium" data-testid="apply-as-mentor-link">
-              {t.auth.applyMentorLink}
-            </Link>
-          </p>
-          )}
           {!IS_DEMO_MODE && !isMarketing && (
             <p className="mt-4 text-sm text-blue-100">
               {L.demoCtaInline}{' '}
@@ -773,10 +403,28 @@ export default async function HomePage() {
               </DemoLink>
             </p>
           )}
-          <p className="mt-2 text-xs text-blue-100">{L.ctaFootnote}</p>
+          {/* Trust row — what the old transparency section said in four cards,
+              in one line: it is a beta, a named person builds it (#1097, §4.1 —
+              a real person, never a company as the owner), the source is open,
+              and the release history is public (internship only: the feed
+              404s on a marketing host, #2544). */}
+          <div className="mt-8 pt-6 border-t border-white/20 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-blue-50">
+            <span data-testid="founder-identity">
+              {trustBefore}
+              <a href={FOUNDER_URL} target="_blank" rel="noopener noreferrer" className="underline hover:text-white">{FOUNDER_NAME}</a>
+              {trustAfter}
+            </span>
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 underline hover:text-white">
+              <Github className="h-4 w-4" />{L.trans1T} · AGPL-3.0
+            </a>
+            {!isMarketing && (
+              <Link href="/release-notes" className="underline hover:text-white">
+                {L.trans2T.replace('{n}', String(releaseCount))}
+              </Link>
+            )}
+          </div>
         </div>
       </section>
-
 
       {/* Live chat for visitors who would rather ask than read (#1174). Landing
           page only, and only once marketing cookies are accepted. */}
