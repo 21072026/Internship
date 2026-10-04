@@ -5,7 +5,7 @@ import { Building2, Mail, MapPin, Phone, ScrollText, ShieldCheck, Github, UserRo
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
-import { operatorIdentity } from '@/lib/imprint';
+import { operatorIdentityForRequest } from '@/lib/imprint';
 
 export async function generateMetadata(): Promise<Metadata> {
   return pageMetadata((t) => ({ title: t.imprint.title, description: t.imprint.intro }));
@@ -36,7 +36,7 @@ export const dynamic = 'force-dynamic';
 export default async function ImprintPage() {
   const { t } = await getServerDictionary();
   const m = t.imprint;
-  const operator = operatorIdentity();
+  const operator = await operatorIdentityForRequest();
 
   const rows = operator
     ? ([

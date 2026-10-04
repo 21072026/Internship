@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { PublicShell } from '@/components/landing/PublicShell';
-import { operatorIdentity } from '@/lib/imprint';
+import { operatorIdentityForRequest } from '@/lib/imprint';
 
 export async function generateMetadata(): Promise<Metadata> {
   return pageMetadata((t) => ({ title: t.privacy.title, description: t.seo.privacyDescription }));
@@ -30,7 +30,7 @@ export default async function PrivacyPage() {
   // live for months. Now they carry the configured identity, and when a
   // deployment has published none the wording says that plainly instead of
   // promising it later.
-  const operator = operatorIdentity();
+  const operator = await operatorIdentityForRequest();
   const controllerBody = operator ? p.controllerBody.replace('{operator}', operator.name) : p.controllerUnset;
   const contactBody = operator ? p.contactBody.replace('{email}', operator.email) : p.contactUnset;
 

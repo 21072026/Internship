@@ -19,6 +19,9 @@
  * server components, so these values never need to reach the browser bundle.
  */
 
+import { headers } from 'next/headers';
+import { worldForHeaders } from '@/lib/hostWorld';
+
 export interface OperatorIdentity {
   /** Natural person or legal entity operating this instance. */
   name: string;
@@ -67,19 +70,45 @@ function addressLines(raw: string | undefined): string[] {
  * contact channel) because one variable is still pending would keep the worse
  * state in place for longer. What is set renders; what is not, does not.
  */
-export function operatorIdentity(env: Env = process.env): OperatorIdentity | null {
-  const name = value(env.OPERATOR_NAME);
-  const email = value(env.OPERATOR_EMAIL);
+export function operatorIdentity(env: Env = process.env, world: 'INTERNSHIP' | 'MARKETING' = 'INTERNSHIP'): OperatorIdentity | null {
+  // One container serves two products (docs/worlds.md), and they need not have
+  // the same provider: the marketing product is BCS-IT GmbH's, the internship
+  // product its own operator's (outreach-compliance.md § 6, open question 9 —
+  // a SaleVali letter or page naming the wrong provider fails § 5 DDG and
+  // § 7 Abs. 2 Nr. 3 UWG). So the marketing world reads its own complete set
+  // under the MARKETING_ prefix (#2697). Without that set it falls back to
+  // the deployment's identity — what every host showed before — rather than to
+  // no imprint at all, which would be the worse state.
+  if (world === 'MARKETING') {
+    const own = identityFrom(env, 'MARKETING_OPERATOR_');
+    if (own) return own;
+  }
+  return identityFrom(env, 'OPERATOR_');
+}
+
+function identityFrom(env: Env, prefix: string): OperatorIdentity | null {
+  const name = value(env[`${prefix}NAME`]);
+  const email = value(env[`${prefix}EMAIL`]);
   if (!name || !email) return null;
 
   return {
     name,
     email,
-    address: addressLines(env.OPERATOR_ADDRESS),
-    phone: value(env.OPERATOR_PHONE),
-    responsible: value(env.OPERATOR_RESPONSIBLE),
-    vatId: value(env.OPERATOR_VAT_ID),
-    register: value(env.OPERATOR_REGISTER),
-    dpo: value(env.OPERATOR_DPO),
+    address: addressLines(env[`${prefix}ADDRESS`]),
+    phone: value(env[`${prefix}PHONE`]),
+    responsible: value(env[`${prefix}RESPONSIBLE`]),
+    vatId: value(env[`${prefix}VAT_ID`]),
+    register: value(env[`${prefix}REGISTER`]),
+    dpo: value(env[`${prefix}DPO`]),
   };
+}
+
+/**
+ * The operator for the host this request came in on — the server-component
+ * entry point of `operatorIdentity`. The host only chooses WHICH configured
+ * identity is shown; it never supplies one.
+ */
+export async function operatorIdentityForRequest(): Promise<OperatorIdentity | null> {
+  const bag = await headers();
+  return operatorIdentity(process.env, worldForHeaders((name) => bag.get(name)));
 }

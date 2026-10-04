@@ -75,6 +75,7 @@ export async function loadCompanyDetail({
             confirmedAt: true,
             reason: true,
             revokedAt: true,
+            revokedVia: true,
             updatedAt: true,
           },
         },

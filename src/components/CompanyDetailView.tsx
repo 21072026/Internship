@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { CompanyExternalIdForm } from '@/components/admin/CompanyExternalIdForm';
 import { ContactPermissionEditor } from '@/components/admin/ContactPermissionEditor';
+import { ownerObjected } from '@/lib/contactPermissionRule';
 import { CONTACT_CHANNELS, marketingEmailAllowed } from '@/lib/contactPermissionRule';
 
 // The account detail screen (#2560), rendered by the ADMIN page and — without
@@ -171,6 +172,11 @@ export function CompanyDetailView({
                         </Badge>
                         {row.revokedAt && (
                           <span className="text-xs text-red-700">{p.revoked.replace('{date}', date(row.revokedAt))}</span>
+                        )}
+                        {row.revokedAt && ownerObjected(row) && (
+                          <Badge variant="danger" data-testid={`company-detail-permission-objection-${channel}`}>
+                            {p.objection}
+                          </Badge>
                         )}
                       </span>
                       <ul className="mt-1 space-y-0.5 text-xs text-gray-500">
