@@ -8039,3 +8039,8 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Killing a background `next dev` with `pkill -f "next dev …"` kills your own shell** (exit 144: the pattern matches the command line). Kill by PID from `ps`; and check `/proc/<pid>/environ` before trusting a restarted server — a stale one with the old `MARKETING_HOSTS` kept answering and made the marketing specs look broken.
 - **Playwright wants `chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`**, but the container ships `-1194/chrome-linux/headless_shell`: make a real directory with that layout and symlink the files in (a whole-dir symlink is not enough), plus the `INSTALLATION_COMPLETE` marker.
 - Chrome refuses a forged `Host` header (`ERR_INVALID_ARGUMENT`); for a manual marketing-host check use `http://marketing.localhost:<port>` with `MARKETING_HOSTS=marketing.localhost`, or `x-forwarded-host` as the specs do.
+
+## 2026-10-04 — /release-notes paging (#2695)
+
+- Playwright 1.63 wants `chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`, but the container ships build 1194 with a different layout (`chrome-linux/headless_shell`). A directory symlink is not enough — create the 1243 directory and symlink the *binary* into the new path.
+- `pkill -f "next dev"` in the same Bash call kills that shell too (exit 144) and silently drops the rest of the command; run it on its own.
