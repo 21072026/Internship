@@ -2,6 +2,7 @@
 
 import { Languages } from 'lucide-react';
 import { locales, type Locale, LOCALE_COOKIE } from '@/i18n/config';
+import { isPrefixablePath, localizePath, splitLocalePrefix } from '@/lib/localePath';
 
 export function LanguageSwitcher({ current }: { current: Locale }) {
   const set = (locale: Locale) => {
@@ -9,6 +10,14 @@ export function LanguageSwitcher({ current }: { current: Locale }) {
     // Device-level override; a full reload re-renders the server layout. The
     // per-user saved preference is set deliberately from account settings.
     document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=${60 * 60 * 24 * 365}`;
+    // A public page has a URL per language (#1386): go to THIS page in the
+    // chosen one, so the address bar is a link to what is on screen. The cookie
+    // above still carries the choice into the pages without a language URL.
+    const { rest } = splitLocalePrefix(window.location.pathname);
+    if (isPrefixablePath(rest)) {
+      window.location.assign(localizePath(rest, locale) + window.location.search + window.location.hash);
+      return;
+    }
     window.location.reload();
   };
 

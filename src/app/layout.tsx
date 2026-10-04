@@ -5,7 +5,7 @@ import './globals.css';
 import { Providers } from './providers';
 import { getLocale, getServerDictionary } from '@/i18n/server';
 import { requestSiteUrl } from '@/lib/siteUrl';
-import { socialMetadata } from '@/lib/pageMetadata';
+import { pageAlternates, socialMetadata } from '@/lib/pageMetadata';
 import { getDictionary, toClientDictionary } from '@/i18n/dictionaries';
 import { resolveRequestVertical } from '@/i18n/server';
 import { applyVerticalOverlay } from '@/i18n/verticalOverlays';
@@ -49,7 +49,10 @@ export async function generateMetadata(): Promise<Metadata> {
   // with the query string dropped — a link shared with `?utm_…` or `?ref=`
   // does not become a second copy of the page in the index. Nothing below
   // overrides it; protected pages carry `noindex` anyway (NO_INDEX).
-  alternates: { canonical: './' },
+  // A language URL (#1386) is canonical to itself and names its two siblings;
+  // pageAlternates() reads the path the middleware saw, because `./` would
+  // resolve against the rewritten (English) path.
+  alternates: await pageAlternates(),
   // The landing's share card (#1378); a page with its own copy replaces it
   // through pageMetadata(). The image is src/app/opengraph-image.tsx.
   ...(await socialMetadata({
