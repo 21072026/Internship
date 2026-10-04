@@ -287,8 +287,8 @@ Kaydın tutulduğu **yer** değil **varlığı** zorunludur. CRM'de tutulması g
 | --- | --- | --- |
 | İzin satırı: kanal, dayanak, kanıt (metin sürümü, talep zamanı, onay zamanı), opt-out zamanı | `ContactPermission` (#2577, `TENANT_MODELS`'e kayıtlı) | İzin geçerli olduğu sürece + ispat için makul süre (açık soru 10) |
 | `EXISTING_CUSTOMER_7_3` / `INQUIRY_REPLY` gerekçesi ve veren admin | İzin satırı + `ActivityLog` | Aynı |
-| Posta kampanyası: veri kaynağı, tarih, Interessenabwägung notu, Art. 14 notunun gönderildiği an | Kampanya kaydı (henüz yok) | Kampanya + 3 yıl (öneri) |
-| **Bastırma listesi (Sperrliste)** — itiraz eden her adres, kanal başına | Silme yüzeyi (#2559) sonrasında yalnız **hash** + opt-out zamanı + kanal | Süresiz — silinen kişiye tekrar yazmamanın tek yolu; gerekçe #2577 § 6'da yazılır |
+| Posta kampanyası: veri kaynağı, tarih, Interessenabwägung notu, Art. 14 notunun gönderildiği an | `PostCampaign` + `PostCampaignRecipient` (#2697, [`postal-campaigns.md`](postal-campaigns.md)); gönderilince kilitli | Kampanya + 3 yıl (öneri) |
+| **Bastırma listesi (Sperrliste)** — itiraz eden her adres, kanal başına | `ContactSuppression` (#2697): yalnız HMAC + kanal + zaman; hesap silinse de kalır | Süresiz — silinen kişiye tekrar yazmamanın tek yolu; gerekçe #2577 § 6'da yazılır |
 | İtirazlar ve yanıtlar | `ActivityLog` | — |
 
 Bastırma listesi her dayanaktan **önce** gelir: bastırılmış bir adres için `DOI_CONFIRMED` dahi
@@ -309,11 +309,11 @@ yeniden verilmez, yalnız adres sahibinin yeni bir DOI tıklaması kaydı açar.
 | İzni olmayan hesapta e-posta aksiyonu uyarı gösterir | **Hedef: uyarı, engel değil** (#2577 § 4, henüz yok) | CRM, bir insanın elle attığı maili durduramaz (dış posta istemcisi) |
 | LinkedIn/XING DM yasağı | **Hayır** | CRM DM göndermez; kural satış ekibinin disiplinidir |
 | Telefon araması için somut bağ | **Hayır** — yalnız `PHONE` izin satırını ve gerekçesini gösterir | Aramanın kendisi CRM dışında |
-| Posta: Art. 14 notu, "Keine Werbung" levhası | **Hayır** | Süreç |
+| Posta: Art. 14 notu, "Keine Werbung" levhası | **Kısmen** (#2697) — Art. 14 + Art. 21 notu her mektubun arkasına otomatik basılır; itiraz edenler ve 90 gün içinde yazılanlar kampanyaya eklenemez; levha süreçtir | `src/lib/postCampaignRule.ts` |
 | Rıza metninin doğru, dar ve işaretsiz olması | **Kısmen** — metin sürümü damgalanır; metnin hukuki yeterliliği Fachanwalt'ın işi | — |
 | İşlemsel maile reklam eklenmemesi | **Hayır** | Metin yazarı + gözden geçirme |
 | SaleVali'nin önceden işaretli kutusu | **Hayır** — bu repo dışında | #2565 (SaleVali karşı işi) |
-| Impressum doğru kimliği gösterir | **Hayır, bugün yanlış kimlik** (§6) | Açık soru 9 |
+| Impressum doğru kimliği gösterir | **Evet, `MARKETING_OPERATOR_*` set edildiğinde** (#2697) — set edilmeden InternCRM operatörü görünür | Açık soru 9; operatör adımı [`postal-campaigns.md`](postal-campaigns.md) |
 
 "Hayır" satırları için satış ekibinin tek kontrolü bu dokümandır; bir CRM uyarısının yokluğu
 **izin anlamına gelmez**.

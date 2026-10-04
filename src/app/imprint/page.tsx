@@ -5,7 +5,7 @@ import { Building2, Mail, MapPin, Phone, ScrollText, ShieldCheck, Github, UserRo
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
-import { operatorIdentityForRequest } from '@/lib/imprint';
+import { operatorIdentityForRequest } from '@/lib/imprintRequest';
 
 export async function generateMetadata(): Promise<Metadata> {
   return pageMetadata((t) => ({ title: t.imprint.title, description: t.imprint.intro }));

@@ -3,7 +3,7 @@ import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
-import { operatorIdentityForRequest } from '@/lib/imprint';
+import { operatorIdentityForRequest } from '@/lib/imprintRequest';
 import { GITHUB_URL } from '@/components/landing/links';
 import {
   ACCESSIBILITY_EVIDENCE,

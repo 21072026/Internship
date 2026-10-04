@@ -19,9 +19,6 @@
  * server components, so these values never need to reach the browser bundle.
  */
 
-import { headers } from 'next/headers';
-import { worldForHeaders } from '@/lib/hostWorld';
-
 export interface OperatorIdentity {
   /** Natural person or legal entity operating this instance. */
   name: string;
@@ -103,12 +100,3 @@ function identityFrom(env: Env, prefix: string): OperatorIdentity | null {
   };
 }
 
-/**
- * The operator for the host this request came in on — the server-component
- * entry point of `operatorIdentity`. The host only chooses WHICH configured
- * identity is shown; it never supplies one.
- */
-export async function operatorIdentityForRequest(): Promise<OperatorIdentity | null> {
-  const bag = await headers();
-  return operatorIdentity(process.env, worldForHeaders((name) => bag.get(name)));
-}

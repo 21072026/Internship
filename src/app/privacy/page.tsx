@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { PublicShell } from '@/components/landing/PublicShell';
-import { operatorIdentityForRequest } from '@/lib/imprint';
+import { operatorIdentityForRequest } from '@/lib/imprintRequest';
 
 export async function generateMetadata(): Promise<Metadata> {
   return pageMetadata((t) => ({ title: t.privacy.title, description: t.seo.privacyDescription }));

@@ -28,7 +28,7 @@ User would have been consent attached to the wrong identity.
 | `requestedAt`, `confirmedAt` | when the box was ticked; when the link was confirmed |
 | `inquiryId` | the enquiry the evidence came from (no FK — enquiries have their own retention) |
 | `grantedById`, `reason` | a manual record: who, and why (the sale behind a § 7(3) record) |
-| `revokedAt`, `revokedVia` | withdrawal — `LINK` (the person) or `ADMIN` |
+| `revokedAt`, `revokedVia` | withdrawal — `LINK` (the person's click), `OBJECTION` (the person's Art. 21 objection made by letter/phone/mail and recorded by an admin, #2697) or `ADMIN` (our own decision). `LINK` and `OBJECTION` lock the row |
 
 **Revocation keeps the basis.** A revoked row still says what was revoked; only a NULL
 `revokedAt` makes it effective. The ActivityLog (`contact_permission.*`) keeps the
@@ -166,3 +166,12 @@ the gate per recipient and skip on `false` — that is what this section is for.
 - **Deleting an account** (#2441/#2559) deletes its permission rows (`onDelete: Cascade`,
   listed in the delete dialog). The withdrawal stays provable on the enquiry row
   (`marketingOptOutAt`) for as long as enquiries are retained; nothing else is kept.
+
+## A recorded objection (#2697)
+
+An objection to direct marketing (Art. 21 Abs. 2 DSGVO) needs no form: it may arrive as a
+letter, a phone call or a reply. The account page's **"Record advertising objection"**
+(`PUT …/contact-permission` `{ action: 'objection' }`) revokes all three channels with
+`revokedVia = 'OBJECTION'` — the owner's own word, locked exactly like `LINK` — and writes the
+account's identifying keys, HMAC'd, to the block list `ContactSuppression`, which outlives the
+account's deletion. Postal campaigns refuse both. Details: `docs/marketing-vertical/postal-campaigns.md`.

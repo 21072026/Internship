@@ -44,7 +44,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro,
+  FolderKanban, BadgeEuro, Send,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -162,6 +162,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'webRequests', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.webRequests.t, desc: C.webRequests.d },
     // #2577 — per-account contact permission with its proof, and the double opt-in.
     { key: 'contactPermission', category: 'trust', icon: MailCheck, color: 'green', capability: 'companies', title: C.contactPermission.t, desc: C.contactPermission.d },
+    // #2697 — outbound acquisition by letter, the lawful cold channel.
+    { key: 'postalCampaigns', category: 'companies', icon: Send, color: 'blue', capability: 'companies', title: C.postalCampaigns.t, desc: C.postalCampaigns.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
     { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
   ];

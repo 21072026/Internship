@@ -5,7 +5,7 @@ import { ShieldCheck, Server, Users, Globe, FileText, AlertTriangle } from 'luci
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
-import { operatorIdentityForRequest } from '@/lib/imprint';
+import { operatorIdentityForRequest } from '@/lib/imprintRequest';
 import {
   getSubprocessors,
   CONTROL_KEYS,
