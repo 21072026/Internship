@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
 import type { Dictionary } from '@/i18n/dictionaries';
-import type { Locale } from '@/i18n/config';
+import { headers } from 'next/headers';
+import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { productNameFor } from '@/lib/verticals';
+import { LOCALE_HEADER, LOCALE_PATH_HEADER, isPrefixablePath, languageAlternates, localizePath } from '@/lib/localePath';
 
 // Every public page's own tab title and search snippet, in the reader's
 // language (#1376). Before this the whole site carried the root layout's one
@@ -31,6 +33,37 @@ const OG_LOCALE: Record<Locale, string> = { en: 'en_US', tr: 'tr_TR', de: 'de_DE
  */
 export const DEFAULT_CARD = '/opengraph-image';
 
+/**
+ * The page's canonical URL and, for a public page, its other languages (#1386).
+ *
+ * The path comes from the middleware's `x-locale-path` header, not from
+ * Next's `./`: `/tr/features` is REWRITTEN to `/features`, and `./` resolves
+ * against the rewritten path, so every Turkish page would name the English one
+ * as its canonical and vanish from the index. A public page's canonical is its
+ * URL in the language it is being served in; each language names the other two
+ * (`hreflang`), plus `x-default` → the unprefixed URL. Anything else (the
+ * signed-in app, which is `noindex` anyway, or a request the middleware did not
+ * see) keeps the old `./`. Relative paths: `metadataBase` makes them absolute
+ * on the host that served the page.
+ */
+export async function pageAlternates(): Promise<{ canonical: string; languages?: Record<string, string> }> {
+  let path: string | null = null;
+  let urlLocale: Locale = defaultLocale;
+  try {
+    const h = await headers();
+    path = h.get(LOCALE_PATH_HEADER);
+    const l = h.get(LOCALE_HEADER);
+    if (isLocale(l)) urlLocale = l;
+  } catch {
+    // outside a request
+  }
+  if (!path || !isPrefixablePath(path)) return { canonical: './' };
+  return {
+    canonical: localizePath(path, urlLocale),
+    languages: { ...languageAlternates(path), 'x-default': path },
+  };
+}
+
 export async function socialMetadata(
   copy: PageCopy,
   card: string = DEFAULT_CARD
@@ -42,8 +75,8 @@ export async function socialMetadata(
       siteName: productNameFor(vertical),
       locale: OG_LOCALE[locale],
       // og:url = the canonical URL (root layout): this page on the host that
-      // served it, without the query string.
-      url: './',
+      // served it, in the language it was served in, without the query string.
+      url: (await pageAlternates()).canonical,
       title: copy.title,
       ...(copy.description ? { description: copy.description } : {}),
       images: [{ url: card, width: 1200, height: 630 }],
