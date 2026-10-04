@@ -395,6 +395,141 @@ async function main() {
   });
   const relationOf = (localPart) => demoRelations.find((relation) => relation.mentee.email === `${localPart}@${DEMO_DOMAIN}`);
 
+  // Recruitment (#1419). These rows need the org backfill above and belong
+  // only to the internship tenant. Stable demo IDs / natural unique keys and
+  // empty updates preserve decisions a visitor made between seed runs.
+  const recruitmentRelation = (localPart) => {
+    const relation = demoRelations.find((r) => r.orgId === defaultOrg.id && r.mentee.email === `${localPart}@${DEMO_DOMAIN}`);
+    if (!relation) throw new Error(`Missing internship demo relation: ${localPart}`);
+    return relation;
+  };
+  const deniz = recruitmentRelation('mentee.deniz');
+  const hakan = recruitmentRelation('mentee.hakan');
+  const kaan = recruitmentRelation('mentee.kaan');
+  const daysAgo = (days) => new Date(Date.now() - days * DAY_MS);
+
+  const source = await prisma.source.upsert({
+    where: { orgId_name: { orgId: defaultOrg.id, name: 'Demo University Careers' } },
+    update: {},
+    create: { orgId: defaultOrg.id, name: 'Demo University Careers', contactEmail: `source.careers@${DEMO_DOMAIN}` },
+  });
+  await upsertUser({
+    email: `source.careers@${DEMO_DOMAIN}`, fullName: 'Careers Demo (Source)', role: 'SOURCE',
+    extra: { orgId: defaultOrg.id, sourceId: source.id, emailVerified: true },
+  });
+  // SOURCE is an account observing a Source institution; candidates share the
+  // institution's id, not the SOURCE user's id. Preserve any later reassignment.
+  await prisma.user.updateMany({
+    where: { id: { in: [deniz.menteeId, recruitmentRelation('mentee.firat').menteeId] }, orgId: defaultOrg.id, sourceId: null },
+    data: { sourceId: source.id },
+  });
+
+  // The FILLED requisition and its counted ACCEPTED offer must commit together.
+  await prisma.$transaction(async (tx) => {
+    const requisitionSpecs = [
+      { key: 'frontend', company: companies[0], title: 'Frontend Developer (demo)', openings: 2, skills: ['React', 'TypeScript'] },
+      { key: 'backend', company: companies[0], title: 'Backend Developer (demo)', openings: 1, skills: ['C#', '.NET'] },
+      { key: 'frontend-filled', company: companies[0], title: 'Frontend Developer — filled (demo)', openings: 1, skills: ['TypeScript', 'Next.js'], filled: true },
+      { key: 'data', company: companies[1], title: 'Data Engineer (demo)', openings: 1, skills: ['Python', 'SQL'] },
+    ];
+    const requisitions = new Map();
+    for (const spec of requisitionSpecs) {
+      const row = await tx.requisition.upsert({
+        where: { id: `demo-requisition-${spec.key}` },
+        update: {},
+        create: {
+          id: `demo-requisition-${spec.key}`, orgId: defaultOrg.id, companyId: spec.company.id,
+          title: spec.title, description: 'Synthetic demo hiring opportunity.',
+          status: spec.filled ? 'FILLED' : 'OPEN', openings: spec.openings,
+          filled: spec.filled ? 1 : 0, requiredSkills: spec.skills,
+          closedAt: spec.filled ? daysAgo(21) : null,
+        },
+      });
+      requisitions.set(spec.key, row);
+    }
+
+    for (const spec of [
+      { relation: deniz, key: 'frontend', status: 'PENDING' },
+      { relation: kaan, key: 'frontend-filled', status: 'APPROVED' },
+    ]) {
+      const requisition = requisitions.get(spec.key);
+      const menteeId = spec.relation.menteeId;
+      // Plain-ESM equivalent of companyInterestScopeKey in
+      // src/lib/companyInterests.ts (this seeder runs without a TS loader).
+      const scopeKey = `requisition:${requisition.id}:${menteeId}`;
+      await tx.companyInterest.upsert({
+        where: { scopeKey }, update: {},
+        create: { companyId: requisition.companyId, menteeId, requisitionId: requisition.id, scopeKey, status: 'SHORTLISTED' },
+      });
+      const approved = spec.status === 'APPROVED';
+      await tx.interviewRequest.upsert({
+        where: { id: `demo-interview-request-${spec.key}` }, update: {},
+        create: {
+          id: `demo-interview-request-${spec.key}`, orgId: defaultOrg.id,
+          companyId: requisition.companyId, requisitionId: requisition.id, menteeId,
+          status: spec.status, note: 'Synthetic demo interview request.',
+          createdAt: daysAgo(approved ? 32 : 1),
+          // Current API shape: an array of ISO timestamps, not slot objects.
+          proposedSlots: [daysAgo(approved ? 30 : -7).toISOString()],
+          // Mirrors interviewActiveKey; the decision route clears it on approval.
+          activeKey: approved ? null : `${requisition.id}:${menteeId}`,
+          decidedAt: approved ? daysAgo(31) : null,
+          decidedById: approved ? demoAdmin.id : null,
+        },
+      });
+    }
+
+    for (const spec of [
+      { relation: hakan, key: 'backend', status: 'SENT' },
+      { relation: kaan, key: 'frontend-filled', status: 'ACCEPTED' },
+    ]) {
+      const requisition = requisitions.get(spec.key);
+      const accepted = spec.status === 'ACCEPTED';
+      await tx.offer.upsert({
+        where: { id: `demo-offer-${spec.key}` }, update: {},
+        create: {
+          id: `demo-offer-${spec.key}`, orgId: defaultOrg.id, relationId: spec.relation.id,
+          companyId: requisition.companyId, requisitionId: requisition.id,
+          position: requisition.title, status: spec.status, createdById: demoAdmin.id,
+          createdAt: daysAgo(accepted ? 25 : 3), sentAt: daysAgo(accepted ? 24 : 2),
+          decidedAt: accepted ? daysAgo(21) : null,
+          decidedById: accepted ? spec.relation.menteeId : null,
+          // Same meaning as applyAcceptedOffer: this acceptance took one seat.
+          requisitionCountedAt: accepted ? requisition.closedAt : null,
+        },
+      });
+    }
+
+    // A completed historical round for the hired candidate. Every assigned
+    // interviewer submitted independently, so calibration is legitimately open.
+    // Null templateId uses the built-in mentee rubric, as in the panel API.
+    const panel = await tx.interviewPanel.upsert({
+      where: { id: 'demo-interview-panel-frontend' }, update: {},
+      create: {
+        id: 'demo-interview-panel-frontend', orgId: defaultOrg.id, subjectId: kaan.menteeId,
+        title: 'Frontend interview (demo)', createdById: demoAdmin.id,
+        createdAt: daysAgo(31), scheduledAt: daysAgo(30),
+      },
+    });
+    for (const [index, mentor] of mentors.slice(0, 2).entries()) {
+      await tx.interviewPanelMember.upsert({
+        where: { panelId_userId: { panelId: panel.id, userId: mentor.id } }, update: {},
+        create: { panelId: panel.id, userId: mentor.id },
+      });
+      await tx.evaluation.upsert({
+        where: { id: `demo-interview-evaluation-${index + 1}` }, update: {},
+        create: {
+          id: `demo-interview-evaluation-${index + 1}`, panelId: panel.id,
+          subjectId: kaan.menteeId, authorId: mentor.id, type: 'INTERVIEW',
+          scores: { technical: 4 - index, communication: 4, reliability: 5 - index, growth: 4 },
+          comment: 'Independent synthetic demo interview scorecard.',
+          createdAt: daysAgo(30), submittedAt: daysAgo(29),
+        },
+      });
+    }
+  });
+  console.log('recruitment demo: requisitions, shortlist, requests, offers, panel and source in place');
+
   // Weekly reports — three consecutive weeks for every relation whose
   // internship has actually started: last-but-one reviewed and approved with a
   // mentor comment, last week either awaiting review or sent back for changes,

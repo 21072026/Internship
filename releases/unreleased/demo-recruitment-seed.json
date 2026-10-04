@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Seed the recruitment demo** (#1419). Add deterministic open/filled requisitions, requisition-scoped shortlists, pending/approved interview requests, sent/accepted offers, a completed two-interviewer panel, and a SOURCE account with two linked candidates. Preserve tenant scope, accepted-offer seat accounting, synthetic identities, and the existing no-op status-history guard on repeated seeds."
+}
