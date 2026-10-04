@@ -308,7 +308,7 @@ Güncel sıra (2026-10, "her bölümde tek fikir, en fazla bir eylem"). Eski 11 
 | 5 | **Özellikler** | Katalogdan altı başlık, açıklamasız | `/features` |
 | 6 | **Hikâyeler** | Faz 0 tamamlanana kadar DOM'da yok | `/stories` |
 | 7 | **SSS** | 6 soru, düz liste (para, sonuç, taahhüt, kalıcılık, fiyat, hız) | — |
-| 8 | **Kapanış** | Ücretsiz hesap düğmesi + demo satırı + güven şeridi (beta · kurucu · AGPL/GitHub · sürümler → `/release-notes`) | `/auth/register` |
+| 8 | **Kapanış** | Ücretsiz hesap düğmesi + altında sessiz bir metin satırı "Mentör olarak başvur · Firma olarak bize yazın" (`cta-other-doors` — başlık "hangi taraftasın?" diye üç tarafa sorduğu için; tek düğme token'sız kayıttır ve her zaman MENTEE yaratır) + demo satırı + güven şeridi (beta · kurucu · AGPL/GitHub · sürümler → `/release-notes`) | `/auth/register` (düğme), `/apply-as-mentor`, `/for-companies` (metin bağlantıları) |
 
 Kitle ayrıntısı (eski 6'şar madde, kanıt cümleleri) derin sayfalarda yaşıyor; landing yalnızca kapıları gösteriyor. Kaldırılanlar: çark şeması (→ `heroSubtitle`), üç kitle bölümü, "nasıl işliyor", roller ızgarası, "ve çok daha fazlası", dört kartlık şeffaflık bölümü (→ güven şeridi), SSS rol başlıkları.
 
@@ -322,8 +322,8 @@ Aynı iskelet, internship döngüsünü anlatan bölümler olmadan: **Hero** (ov
 |---|---|---|---|
 | Mentee | "Ücretsiz hesap aç — 2 dakika" | `/auth/register` | [BUGÜN VAR] — ama kayıt formu "davetiye gerekiyor" izlenimi veriyor, düzeltilmeli |
 | Mentee (düşük taahhüt) | "Açık projelere göz at" | `/projects` | [BUGÜN VAR] |
-| Mentör | "Mentör olarak başvur" | `/apply-as-mentor` | [VAR] (#1072) — rol kartı |
-| Firma | "Firma olarak bize yazın" | `/for-companies` | [VAR] (#1102/#1104) — rol kartı |
+| Mentör | "Mentör olarak başvur" | `/apply-as-mentor` | [VAR] (#1072) — rol kartı + kapanış metin satırı |
+| Firma | "Firma olarak bize yazın" | `/for-companies` | [VAR] (#1102/#1104) — rol kartı + kapanış metin satırı |
 
 **Eski kritik hata (giderildi):** landing'deki üç CTA da aynı adrese gidiyordu. Üç kitleye üç bölüm yazıp hepsini mentee kayıt formuna göndermek, metnin tamamını çürütür.
 

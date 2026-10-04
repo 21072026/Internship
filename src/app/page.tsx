@@ -333,7 +333,7 @@ export default async function HomePage() {
           <div className="space-y-3">
             {faq.map((item) => (
               <details key={item.q} className="group bg-white border border-gray-200 rounded-xl p-4">
-                <summary className="font-medium text-gray-900 cursor-pointer list-none flex items-start justify-between gap-3">
+                <summary className="font-medium text-gray-900 cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-start justify-between gap-3">
                   <span>{item.q}</span>
                   <ArrowDown className="h-4 w-4 text-gray-400 flex-shrink-0 mt-1 transition-transform group-open:rotate-180" />
                 </summary>
@@ -366,10 +366,11 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Closing band — one button, one demo line, one trust row. The mentor
-          and company doors are the role cards above; repeating them here as
-          outline buttons was three equal-weight choices at the end of a page
-          that had already asked. */}
+      {/* Closing band — one button, one line of other doors, one demo line,
+          one trust row. Repeating the mentor and company doors as outline
+          buttons was three equal-weight choices at the end of a page that had
+          already asked; dropping them entirely sent a mentor who answered the
+          band's "which side?" into the mentee sign-up. */}
       <section className="py-20 sm:py-24 px-4">
         <div className="max-w-4xl mx-auto text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 sm:p-14">
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">{L.ctaTitle}</h2>
@@ -390,6 +391,17 @@ export default async function HomePage() {
               </a>
             )}
           </div>
+          {/* The band's question speaks to all three sides, but its one button
+              is the mentee sign-up (token-less, so always a MENTEE). Mentors and
+              companies get their own doors as a quiet text line, never a second
+              and third button. */}
+          {!isMarketing && (
+            <p data-testid="cta-other-doors" className="mt-4 text-sm text-blue-100">
+              <Link href={mentorHref} className="text-white underline hover:text-blue-50 font-medium">{L.ctaMentor}</Link>
+              {' · '}
+              <Link href={companyHref} className="text-white underline hover:text-blue-50 font-medium">{L.ctaCompany}</Link>
+            </p>
+          )}
           {!IS_DEMO_MODE && !isMarketing && (
             <p className="mt-4 text-sm text-blue-100">
               {L.demoCtaInline}{' '}
