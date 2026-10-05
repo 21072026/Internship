@@ -66,6 +66,8 @@ Yani bu bir ilan sitesi ya da CV havuzu değil; **kanıt üreten bir döngü**. 
 
 **Landing'de nasıl anlatılmalı:** üç kutu ve aralarında dönen üç ok; her okun üstünde tek cümle ("emeğini koyar" → "gördüğünü yazar" → "fırsatı açar"). Metin değil şema. Bu şema aynı zamanda ziyaretçiye "ben bu resimde neredeyim" sorusunu kendi kendine cevaplatır ve rol kartlarına doğal geçiş yapar.
 
+**Güncelleme (2026-10, sadeleştirme):** sahibinin "iki ana sayfa da çok karmaşık, iPhone sadeliğinde olsun" isteği üzerine çark şeması (üç kart + kanıt zinciri + not) sayfadan kalktı ve **tek cümleye** indi: `landing.heroSubtitle` ("Aday gerçek bir işte çalışır, mentor gördüğünü yazar, firma da CV'ye değil o kayda bakarak karar verir."). Argüman aynı, şema yok. Bu bölüm çarkı "ana argüman" olarak tanımladığı için bu daraltma **sahibinin onayını gerektirir**; geri dönmek istenirse eski şema git geçmişinde (`src/app/page.tsx`) duruyor ve `wheel*` anahtarları sözlükte silinmedi.
+
 **Dürüstlük notu (site metnine girmez, ekip için):** çark bugün tam dönmüyor. Mentee ve mentör tarafı (eşleşme sonrası deneyim, proje, değerlendirme) kodda gerçekten çalışıyor; firma tarafı elle açılan hesaplar ve elle açılan yetkilerle duruyor. Landing bunu "erken erişim / kurucu kohort" çerçevesiyle dürüstçe taşıyabilir — ama "çark dönüyor" diye yazamaz.
 
 ---
@@ -252,8 +254,8 @@ Altına doğrulanabilir üç satır: *Kodun tamamı açık — AGPL-3.0, GitHub'
 | `/features` — 17 özellik, tek kaynaktan | Herkes | [BUGÜN VAR] |
 | Rıza mimarisi: çift opt-in, sürümlü rıza kaydı, public profilde PII yok | Mentee, firma | [BUGÜN VAR] — klişe değil mekanizma olarak anlat |
 | Üç dilde tam parite (TR/EN/DE) | Firma | [BUGÜN VAR] |
-| Kurucunun adı, yüzü, neden yaptığı | Herkes | [YOK] — sayfada hiç yok; beta bir üründe kimliksizlik en büyük güven kırıcı. **En ucuz P0.** |
-| Canlı sayılar: aktif mentör, açık proje, bekleyen talep | Herkes | [YOK] — veriden hesaplanabilir, endpoint yok |
+| Kurucunun adı, yüzü, neden yaptığı | Herkes | [VAR] — kapanış bandındaki tek satırlık güven şeridinde adıyla (`founder-identity`, `landing.trustLine`: "Beta · {name} tarafından açık kaynak olarak geliştiriliyor") ve footer'da (`footer-founder`). |
+| Canlı sayılar: aktif mentör, açık proje, bekleyen talep | Herkes | [VAR] — `/api/public/stats` + `hero-live-strip` (#1099), §4.3 |
 | "Ürünü kullananlar ürünün kendisini inşa ediyor" hikâyesi | Herkes | **Doğrulanmadı.** Public proje vitrini bunu taşıyabilir — ama yalnızca gerçekten öyleyse ve isimler izinliyse. Uydurulacak bir hikâye değil. |
 
 ### 4.2 Kurulacak mekanizma — dört faz
@@ -277,6 +279,8 @@ Pipeline'ın sonu zaten `ISE_ALINDI` / `IS_BULDU`. Gerçek rakam oluştuğu an s
 ### 4.3 Sayı gösterme kuralı
 Canlı hesaplansın, metne elle gömülmesin (bayatlar, ayrıca landing metinlerini e2e testleri birebir doğruluyor). **Sıfırsa o parça gizlensin** — "0 açık proje" yazan bir kart, hiç olmayan karttan kötüdür. Küçük ama gerçek sayı ("bugün 40 aday") her zaman sayısızlıktan güvenilirdir.
 
+**Yer (2026-10):** canlı şerit (`hero-live-strip`, test kimliği tarihsel adıyla kaldı) hero'dan çıkıp **rol kartlarının hemen altına** taşındı. Sıfır parçayı gizleme, hepsi sıfırsa DOM'a hiç koymama kuralı değişmedi.
+
 ---
 
 ## 5. Landing bilgi mimarisi
@@ -289,21 +293,28 @@ Canlı hesaplansın, metne elle gömülmesin (bayatlar, ayrıca landing metinler
 - **Üç sütun yan yana:** mobilde alt alta ezilir; masaüstünde ziyaretçiye üç metni birden okutur, hiçbirini okumaz. Ayrıca çarkın "birbirine muhtaç" mesajını sütunlara böler. **Hayır.**
 - **Rol kartları (yumuşak yönlendirme) + altında ardışık üç tam bölüm:** ziyaretçi kendini 3 saniyede eşleştirir ve kart tıklamasıyla kendi bölümüne atlar; atlamayan aşağı kaydırarak hepsini okur. Çark anlatısı bozulmaz — tersine kartlar çarkın görsel karşılığı olur. **Öneri bu.**
 
+**Güncelleme (2026-10, sadeleştirme):** rol kartları artık **kitlenin kapısıdır** ve aşağıdaki ardışık bölümlere kaydırmak yerine doğrudan derin sayfalara gider: mentee → `/auth/register`, mentör → `/apply-as-mentor`, firma → `/for-companies`. Üç kitle bölümü landing'den kalktı; kitle ayrıntısı o derin sayfalarda yaşıyor. Sekme yok kararı aynen geçerli.
+
 ### 5.2 Bölüm sırası
+
+Güncel sıra (2026-10, "her bölümde tek fikir, en fazla bir eylem"). Eski 11 bölümlük tablo git geçmişinde.
 
 | # | Bölüm | İçerik | CTA |
 |---|---|---|---|
-| 1 | **Hero** | Çark başlığı + iş modeli alt satırı + canlı durum şeridi (sıfırsa gizli) | Yok — hero'da düğme yok, aşağı yönlendirme var |
-| 2 | **Çark şeması** | Üç kutu, üç ok, ok başına tek cümle. Sitenin ana argümanı. | Yok |
-| 3 | **Rol kartları** | "Staj/iş arıyorum" · "Yol göstermek istiyorum" · "Yetenek arıyorum" | Her kart kendi bölümüne kaydırır |
-| 4 | **Mentee bölümü** | 6 madde + kanıt cümlesi | Birincil: ücretsiz kayıt · İkincil: projelere göz at |
-| 5 | **Mentör bölümü** | 6 madde + güven şeridi + kanıt | "Listeni taşı" *(başvuru akışı bitene kadar kurucuya giden bağlantı)* |
-| 6 | **Firma bölümü** | 6 madde + **anonim aday karnesi ekran görüntüsü** | "15 dakikada gösterelim" → `/for-companies` |
-| 7 | **Nasıl işliyor** | 3 adımlık şema (başvuru → eşleşme + proje → kanıt ve tanıştırma). Firma bölümündeki "ilgi → mentör" akışı buraya taşınır. | Yok |
-| 8 | **Şeffaflık şeridi** | Açık kaynak + GitHub · 104 sürüm · 388 test · 3 dil · rıza mimarisi · beta rozeti (gizlenmeden) | `/features`, `/release-notes` linkleri |
-| 9 | **Hikâyeler** | Faz 0 tamamlanana kadar **yayında değil** | — |
-| 10 | **SSS** | Üç kitlenin itirazları, rol filtreli | — |
-| 11 | **Kapanış CTA** | Üç düğme yan yana, aynı hiyerarşide | Rol başına ayrı hedef |
+| 1 | **Hero** | Başlık + döngüyü anlatan tek cümle (`heroSubtitle`) | Tek, rolden bağımsız demo düğmesi (`hero-demo-cta`) — §5'in izin verdiği tek istisna; kayıt düğmesi yok |
+| 2 | **Rol kartları** + canlı şerit | Üç kart: mentee · mentör · firma; altında canlı sayılar (sıfırsa gizli) | Her kart kendi derin sayfasına: `/auth/register`, `/apply-as-mentor` (`become-mentor-link`), `/for-companies` |
+| 3 | **Ücretsiz çekirdek** | "Mentee ve mentörler için her zaman ücretsiz" bandı | `/pricing` |
+| 4 | **Pipeline** | Dört numaralı adım (başvuru → mülakat → staj → işe alım), aşama sayısı yazılmaz (§7) | Yok |
+| 5 | **Özellikler** | Katalogdan altı başlık, açıklamasız | `/features` |
+| 6 | **Hikâyeler** | Faz 0 tamamlanana kadar DOM'da yok | `/stories` |
+| 7 | **SSS** | 6 soru, düz liste (para, sonuç, taahhüt, kalıcılık, fiyat, hız) | — |
+| 8 | **Kapanış** | Ücretsiz hesap düğmesi + altında sessiz bir metin satırı "Mentör olarak başvur · Firma olarak bize yazın" (`cta-other-doors` — başlık "hangi taraftasın?" diye üç tarafa sorduğu için; tek düğme token'sız kayıttır ve her zaman MENTEE yaratır) + demo satırı + güven şeridi (beta · kurucu · AGPL/GitHub · sürümler → `/release-notes`) | `/auth/register` (düğme), `/apply-as-mentor`, `/for-companies` (metin bağlantıları) |
+
+Kitle ayrıntısı (eski 6'şar madde, kanıt cümleleri) derin sayfalarda yaşıyor; landing yalnızca kapıları gösteriyor. Kaldırılanlar: çark şeması (→ `heroSubtitle`), üç kitle bölümü, "nasıl işliyor", roller ızgarası, "ve çok daha fazlası", dört kartlık şeffaflık bölümü (→ güven şeridi), SSS rol başlıkları.
+
+### 5.2.1 Marketing host'u (`MARKETING_HOSTS`)
+
+Aynı iskelet, internship döngüsünü anlatan bölümler olmadan: **Hero** (overlay rozeti `badge` + başlık + `heroSubtitle`, form açıksa `#demo`'ya giden `hero-demo-request`) → **Pipeline** (overlay aşama adları) → **Özellikler** (altı başlık + `/features`) → **SSS** (6 `faqMarketing*` sorusu) → **Demo formu** (`id="demo"`) → **Kapanış** (yalnızca `/auth/signin` — davetle giriş, kayıt yok; form açıksa `#demo`; güven şeridinde kurucu + GitHub, **`/release-notes` yok**, mentör/firma/başvuru bağlantısı yok).
 
 ### 5.3 CTA matrisi
 
@@ -311,10 +322,10 @@ Canlı hesaplansın, metne elle gömülmesin (bayatlar, ayrıca landing metinler
 |---|---|---|---|
 | Mentee | "Ücretsiz hesap aç — 2 dakika" | `/auth/register` | [BUGÜN VAR] — ama kayıt formu "davetiye gerekiyor" izlenimi veriyor, düzeltilmeli |
 | Mentee (düşük taahhüt) | "Açık projelere göz at" | `/projects` | [BUGÜN VAR] |
-| Mentör | "Listeni taşı" | `/apply/mentor` (yeni) | [YOK] — yazılana kadar kurucuya doğrudan bağlantı |
-| Firma | "15 dakikada gösterelim" | `/for-companies` (yeni) | [YOK] — bugün `/auth/register`'a, yani kapalı kapıya gidiyor |
+| Mentör | "Mentör olarak başvur" | `/apply-as-mentor` | [VAR] (#1072) — rol kartı + kapanış metin satırı |
+| Firma | "Firma olarak bize yazın" | `/for-companies` | [VAR] (#1102/#1104) — rol kartı + kapanış metin satırı |
 
-**Bugünkü kritik hata:** landing'deki üç CTA da aynı adrese gidiyor. Üç kitleye üç bölüm yazıp hepsini mentee kayıt formuna göndermek, metnin tamamını çürütür.
+**Eski kritik hata (giderildi):** landing'deki üç CTA da aynı adrese gidiyordu. Üç kitleye üç bölüm yazıp hepsini mentee kayıt formuna göndermek, metnin tamamını çürütür.
 
 ---
 

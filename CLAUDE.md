@@ -268,8 +268,8 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   all and must keep passing their own `orgId`.
 - **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
   (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
-  assert exact landing strings (e.g. "Connect Talent with", "Everything you need",
-  "Pipeline tracking", TR "Fırsatla buluştur" in `e2e/landing-i18n.spec.ts`) — keep them or
+  assert exact landing strings (e.g. "Companies that want experience", "Everything you need",
+  "Pipeline tracking", TR "ve arada duran mentorlar." in `e2e/landing-i18n.spec.ts`) — keep them or
   update the specs in the same PR. Keep the marketing claims in sync with shipped features
   (check `CHANGELOG.md` / `src/lib/releaseNotes.ts` when features land).
   `check:i18n` also **pins the MARKETING leak count** (#2558): per locale, how many
