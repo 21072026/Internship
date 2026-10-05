@@ -3040,10 +3040,17 @@ export async function checkNextActionReminders(now = new Date()) {
 // Friday reminder for the current UTC week. The unique relation/week claim is
 // created before either channel is sent, so overlapping cron runs cannot send
 // the same reminder twice.
-export async function sendWeeklyReportReminders(now = new Date()) {
+//
+// `relationIds` narrows the run to a coordinator's chase-up selection
+// (/admin/weekly-reports, #1918). It narrows only: the eligibility rules and the
+// per-week claim below are the same ones, so a chase-up after Friday's run —
+// or a second click — sends nothing new for that week.
+export async function sendWeeklyReportReminders(now = new Date(), options: { relationIds?: string[] } = {}) {
   const weekStart = utcWeekStart(now);
+  if (options.relationIds && options.relationIds.length === 0) return { checked: 0, reminded: 0, emailed: 0, remindedRelationIds: [] as string[] };
   const relations = await prisma.mentorshipRelation.findMany({
     where: {
+      ...(options.relationIds ? { id: { in: options.relationIds } } : {}),
       status: 'ACTIVE', pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
       weeklyReports: { none: { weekStart, status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } } },
     },
@@ -3052,7 +3059,7 @@ export async function sendWeeklyReportReminders(now = new Date()) {
       mentee: { select: { id: true, orgId: true, fullName: true, email: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } },
     },
   });
-  if (relations.length === 0) return { checked: 0, reminded: 0, emailed: 0 };
+  if (relations.length === 0) return { checked: 0, reminded: 0, emailed: 0, remindedRelationIds: [] as string[] };
 
   // ONE reminder per PERSON per week (#2287), not per relation. The eligibility
   // query returns a row per ACTIVE relation, so a mentee holding two of them
@@ -3098,8 +3105,10 @@ export async function sendWeeklyReportReminders(now = new Date()) {
   const claimedIds = new Set((await prisma.weeklyReportReminder.findMany({ where: { id: { in: claims.map((claim) => claim.id) } }, select: { relationId: true } })).map((claim) => claim.relationId));
   let reminded = 0;
   let emailed = 0;
+  const remindedRelationIds: string[] = [];
   for (const relation of toRemind) {
     if (!claimedIds.has(relation.id)) continue;
+    remindedRelationIds.push(relation.id);
     const preferredLanguage = relation.mentee.preferredLanguage ?? undefined;
     const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
     const copy = getDictionary(locale).weeklyReports;
@@ -3118,7 +3127,7 @@ export async function sendWeeklyReportReminders(now = new Date()) {
       }).then(() => { emailed++; }).catch((error) => logger.error('Weekly report reminder email failed', { relationId: relation.id, error: String(error) }));
     }
   }
-  return { checked: relations.length, reminded, emailed };
+  return { checked: relations.length, reminded, emailed, remindedRelationIds };
 }
 
 /**

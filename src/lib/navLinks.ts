@@ -89,6 +89,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/support', icon: LifeBuoy, key: 'support' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
+  // Term compliance of the weekly diaries (#1918) — an internship-only screen.
+  { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },

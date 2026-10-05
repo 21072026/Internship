@@ -6,7 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/capabilityGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import { rollUp } from '@/lib/weeklyReportCompliance';
+import { rollUp, INTERNSHIP_STAGE_KEY } from '@/lib/weeklyReportCompliance';
+import { utcWeekStart } from '@/lib/week';
 import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE, complianceRows, type ComplianceRow } from '@/lib/weeklyReportComplianceQuery';
 
 // GET — org-wide weekly-report compliance (#1917), one row per interning
@@ -19,7 +20,8 @@ import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE, complianceRows, type Compli
 //
 // QUERIES PER REQUEST — bounded, independent of the page size:
 //   1 count + 1 relation page (Prisma adds one select per joined name: mentee,
-//   mentor, company, cohort) + 2 in complianceRows() (stage moves, reports).
+//   mentor, company, cohort) + 2 in complianceRows() (stage moves, reports)
+//   + 1 for this week's reminder markers (+ 1 facet query with ?facets=1).
 // A result set of up to ROLLUP_LIMIT relations is read in ONE page-sized go
 // and paginated in memory, which is what makes an exact org roll-up possible
 // at the same query count; above it the roll-up is `null` (narrow the filter —
@@ -34,7 +36,7 @@ function parseDate(value: string | null): Date | null | 'invalid' {
   return Number.isNaN(date.getTime()) ? 'invalid' : date;
 }
 
-function toRow({ relation, compliance, lastSubmittedAt, window }: ComplianceRow) {
+function toRow({ relation, compliance, lastSubmittedAt, window, weeks }: ComplianceRow, remindedThisWeek: Set<string>) {
   return {
     relationId: relation.id,
     status: relation.status,
@@ -54,6 +56,11 @@ function toRow({ relation, compliance, lastSubmittedAt, window }: ComplianceRow)
     lateWeeks: compliance.late,
     rate: compliance.rate,
     lastSubmittedAt,
+    weeks,
+    // The weekly reminder only goes to an active intern still in the stage
+    // (sendWeeklyReportReminders) — the chase-up offers exactly those.
+    canRemind: relation.status === 'ACTIVE' && relation.pipelineStatus === INTERNSHIP_STAGE_KEY,
+    remindedThisWeek: remindedThisWeek.has(relation.id),
   };
 }
 
@@ -97,11 +104,40 @@ export async function GET(request: Request) {
       skip: whole ? 0 : skip,
       take: whole ? ROLLUP_LIMIT : pageSize,
     });
-    const rows = await complianceRows(relations, new Date(), { from, to });
+    const now = new Date();
+    const rows = await complianceRows(relations, now, { from, to });
     const pageRows = whole ? rows.slice(skip, skip + pageSize) : rows;
+    // Who has had this week's reminder already (the Friday run or a chase-up):
+    // the same marker the reminder itself claims, so the screen and the send
+    // can never disagree.
+    const reminded = await prisma.weeklyReportReminder.findMany({
+      where: { weekStart: utcWeekStart(now), relationId: { in: pageRows.map((r) => r.relation.id) } },
+      select: { relationId: true },
+    });
+    const remindedThisWeek = new Set(reminded.map((r) => r.relationId));
+    // The filter choices: every cohort, mentor and company that has an intern
+    // in this tenant, whatever the current filter — one capped query, asked
+    // for only when the screen loads.
+    const facets = query.get('facets') === '1'
+      ? await prisma.mentorshipRelation.findMany({
+          where: withinTenant(INTERNED_WHERE, await tenantWhere(session)),
+          select: { cohort: { select: { id: true, name: true } }, mentor: { select: { id: true, fullName: true } }, company: { select: { id: true, name: true } } },
+          take: ROLLUP_LIMIT,
+        })
+      : null;
+    const distinct = <T extends { id: string }>(items: (T | null)[]) => [...new Map(items.filter((i): i is T => !!i).map((i) => [i.id, i])).values()];
 
     return NextResponse.json({
-      rows: pageRows.map(toRow),
+      rows: pageRows.map((row) => toRow(row, remindedThisWeek)),
+      ...(facets
+        ? {
+            facets: {
+              cohorts: distinct(facets.map((f) => f.cohort)).sort((a, b) => a.name.localeCompare(b.name)),
+              mentors: distinct(facets.map((f) => f.mentor)).sort((a, b) => a.fullName.localeCompare(b.fullName)),
+              companies: distinct(facets.map((f) => f.company)).sort((a, b) => a.name.localeCompare(b.name)),
+            },
+          }
+        : {}),
       rollUp: whole ? rollUp(rows.map((r) => r.compliance)) : null,
       rollUpLimit: ROLLUP_LIMIT,
       total,

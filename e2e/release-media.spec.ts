@@ -120,6 +120,53 @@ test.describe('release media', () => {
     await capturePoster(figure, 'landing-product-tour');
   });
 
+  // #1918: the weekly-report compliance matrix with its legend and summary.
+  test('poster: the weekly-report compliance matrix', async ({ page }) => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const monday = (offset: number) => {
+      const now = new Date();
+      const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7) + offset * 7);
+      return day;
+    };
+    const stamp = Date.now();
+    const org = await prisma.organization.create({ data: { name: `Media WR ${stamp}`, slug: `media-wr-${stamp}` } });
+    const adminEmail = uniqueEmail('media-wr-admin');
+    const mentorEmail = uniqueEmail('media-wr-mentor');
+    await seedUser(adminEmail, 'MediaWr123!', 'ADMIN', 'Media Admin', org.id);
+    const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Selin Aydın', org.id);
+    const emails = [adminEmail, mentorEmail];
+    // Three interns, six owed weeks each, three different stories.
+    const patterns = [
+      ['Aylin Demir', ['APPROVED', 'APPROVED', 'APPROVED', 'APPROVED', 'APPROVED', 'SUBMITTED']],
+      ['Berk Yıldız', ['APPROVED', null, 'APPROVED', 'CHANGES_REQUESTED', 'APPROVED', 'SUBMITTED']],
+      ['Cemre Kaya', ['APPROVED', 'APPROVED', null, null, 'DRAFT', 'APPROVED']],
+    ] as const;
+    try {
+      for (const [index, [name, weeks]] of patterns.entries()) {
+        const email = uniqueEmail('media-wr-intern');
+        emails.push(email);
+        const intern = await seedUser(email, 'x', 'MENTEE', name, org.id);
+        const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: intern.id, orgId: org.id, pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', startDate: monday(-8) } });
+        await prisma.statusChange.create({ data: { relationId: rel.id, fromStatus: 'INTERNSHIP_STARTING_300', toStatus: 'INTERNSHIP_IN_PROGRESS_450', createdAt: new Date(monday(-7).getTime() + DAY) } });
+        for (const [k, status] of weeks.entries()) {
+          if (!status) continue;
+          const weekStart = monday(-6 + k);
+          const late = index === 1 && k === 2;
+          await prisma.weeklyReport.create({ data: { orgId: org.id, relationId: rel.id, weekStart, summary: 'Media', hoursSpent: 35, status, submittedAt: status === 'DRAFT' ? null : new Date(weekStart.getTime() + (late ? 9 : 4) * DAY) } });
+        }
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await signInAndSettle(page, adminEmail, 'MediaWr123!', '/admin');
+      await page.goto('/admin/weekly-reports');
+      await page.getByTestId('weekly-reports-matrix').waitFor();
+      await capturePoster(page.locator('#weekly-reports-print'), 'weekly-report-oversight-screen');
+    } finally {
+      for (const e of emails) await cleanupByEmail(e);
+      await prisma.organization.deleteMany({ where: { id: org.id } });
+    }
+  });
+
   // #1366: empty stages collapse to one strip per run, so three occupied stages
   // are on screen together.
   test('poster: the mentor board with its empty stages collapsed', async ({ page }) => {
