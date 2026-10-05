@@ -27,6 +27,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { logViewActivity } from '@/lib/activity';
+import { CONTACT_SELECT } from '@/lib/companyContacts';
 import type { HeaderSource } from '@/lib/clientIp';
 
 /** How many funnel records and interactions the page lists. An account holds a
@@ -59,6 +60,13 @@ export async function loadCompanyDetail({
       ),
       include: {
         needs: true,
+        // The address book beyond the primary contact (#2442). Each row carries
+        // its own orgId: filtered on it like the relations below.
+        contacts: {
+          where: withinTenant({}, tenant),
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          select: CONTACT_SELECT,
+        },
         // May we contact this account, and the proof (#2577). The row carries
         // its own orgId: filtered on it like the relations below.
         contactPermissions: {

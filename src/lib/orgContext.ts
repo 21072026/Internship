@@ -141,6 +141,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // (src/lib/contactPermission.ts), because registration fills orgId in only
   // from a BOUND context.
   'ContactPermission',
+  // An account's address book (#2442). Every writer is src/lib/companyContacts.ts,
+  // which passes the company's own orgId; the erasure match is tenant-scoped
+  // by hand (src/lib/companyContactErasure.ts).
+  'CompanyContact',
   // Postal campaigns, their recipients and the objection block list (#2697).
   // A campaign names the accounts it wrote to — one tenant's prospect list —
   // and the block list must answer "blocked?" only for the tenant that was

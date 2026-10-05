@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
 // Premium Faz 2 (#542): cross-program benchmark is locked behind the
-// premiumAnalytics setting; once enabled it returns ONLY anonymized aggregates
+// org's ADVANCED_ANALYTICS entitlement (#1740); once enabled it returns ONLY anonymized aggregates
 // (your metric + platform average + pool size) and never another program's
 // identity or raw rows. Serial: toggles a global Setting, restored in finally.
 test('program benchmark is gated and returns anonymized aggregates only', async ({ page }) => {
@@ -26,7 +27,7 @@ test('program benchmark is gated and returns anonymized aggregates only', async 
     expect(locked.status()).toBe(403);
 
     // Enable premium tier.
-    expect((await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } })).ok()).toBeTruthy();
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
 
     const res = await page.request.get('/api/admin/analytics/benchmark');
     expect(res.ok()).toBeTruthy();
@@ -42,7 +43,7 @@ test('program benchmark is gated and returns anonymized aggregates only', async 
     expect(serialized).not.toContain('"name"');
     expect(Array.isArray(body.programs)).toBe(false);
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await cleanupByEmail(adminEmail);
   }
 });

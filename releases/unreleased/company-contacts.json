@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **An account holds several contacts, one of them primary** (#2442, `docs/company-contacts.md`). New `CompanyContact` address book (tenant-registered, per-company unique address, never a `User`) plus `Company.contactPosition`. The primary contact stays in the `Company.contact*` columns every existing reader uses (contact permission, letter campaigns, import, export, erasure), so \"one primary\" is structural: making a row primary swaps it with those columns in one transaction under the company row's lock — concurrent requests queue, nobody is lost or duplicated, and a repeated request does not swap back. Contacts move between accounts of the same tenant (on record in the ActivityLog, row id kept). Reads follow the company scope with name/phone/position ADMIN-only; writes are ADMIN + `companies` capability (`check:capability-writers`). Forgetting an address now also deletes its address-book rows. Editor on `/admin/companies/[id]`.",
+  "notes": {
+    "en": ["Accounts can now hold several contacts. Mark one as the primary contact, edit or remove the others, or move a person to another account when they change jobs."],
+    "tr": ["Hesaplar artık birden fazla muhatap tutabiliyor. Birini birincil muhatap olarak işaretle, diğerlerini düzenle ya da kaldır; iş değiştiren birini başka bir hesaba taşı."],
+    "de": ["Konten können jetzt mehrere Ansprechpartner haben. Markiere einen als Hauptkontakt, bearbeite oder entferne die anderen, oder verschiebe eine Person zu einem anderen Konto, wenn sie den Job wechselt."]
+  }
+}

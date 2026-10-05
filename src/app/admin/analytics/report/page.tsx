@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocked';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
-import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
+import { useAdvancedAnalytics } from '@/lib/analyticsEntitlementsClient';
 import { formatDate } from '@/lib/relativeTime';
 import type { VerticalCapability } from '@/lib/verticals';
 import type { TrialConversionData } from '@/components/admin/TrialConversionCard';
@@ -42,7 +42,7 @@ const td = 'py-1.5 pr-4 text-sm border-b border-gray-100';
 // Premium full analytics report (Faz 2, #540) — a print-friendly page covering
 // funnel, trends, mentor workload, cohort comparison and source conversion.
 // PDF is produced via the browser's print pipeline (#357 pattern — no
-// server-side binary). Locked until the premiumAnalytics setting is enabled.
+// server-side binary). Locked until the org is entitled to ADVANCED_ANALYTICS (#1740).
 //
 // The entitlement is READ, not probed (#1442): the page asks
 // `/api/admin/analytics/entitlements` first and only then fetches the gated
@@ -55,7 +55,7 @@ export default function AnalyticsReportPage() {
   const label = useStageLabel();
   const stages = useResolvedStages();
   const c = t.analytics;
-  const premium = usePremiumAnalytics();
+  const premium = useAdvancedAnalytics();
   const [data, setData] = useState<Analytics | null>(null);
   const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
   const [sources, setSources] = useState<SourceRow[] | null>(null);

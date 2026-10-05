@@ -15,13 +15,15 @@ on:
         default: '@smoke'
   push:
     branches: [main]
+  # No `paths-ignore` here on purpose (#2719). `Playwright smoke` is a REQUIRED
+  # check on `main`, and a workflow skipped by a path filter reports nothing at
+  # all — so a docs-only PR sat BLOCKED with every check green, and only an
+  # admin bypass could merge it (#2608, #2670, #2626). The workflow now always
+  # runs; the `changes` job below decides whether the smoke job has anything
+  # to test, and a job skipped by its `if:` reports Success to branch
+  # protection.
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - 'releases/unreleased/**'
-      - '**.md'
-      - '.HANDOFF-*'
 
 # Cancel superseded runs on the same ref so the gate stays fast.
 concurrency:
@@ -29,8 +31,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Does this PR change anything the smoke suite could notice? The paths that
+  # don't count are the ones the old `paths-ignore` listed: docs/**,
+  # releases/unreleased/**, any *.md, and root .HANDOFF-* notes. A rename counts
+  # by BOTH names, so moving code into docs/ is still a code change. Every
+  # event other than a PR (push to main, a manual dispatch) always tests.
+  changes:
+    name: Detect code changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; echo "Not a PR ($EVENT): smoke runs."; exit 0
+          fi
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)')
+          count=$(printf '%s\n' "$files" | grep -c . || true)
+          ignored() {
+            case "$1" in
+              docs/*|releases/unreleased/*|*.md) return 0 ;;
+              .HANDOFF-*) case "$1" in */*) return 1 ;; *) return 0 ;; esac ;;
+            esac
+            return 1
+          }
+          code=false
+          # The files endpoint stops at 3000 entries; a list that long is
+          # treated as a code change rather than trusted to be complete.
+          [ "$count" -ge 3000 ] && code=true
+          [ "$count" -eq 0 ] && code=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            if ! ignored "$f"; then code=true; echo "Code change: $f"; break; fi
+          done <<< "$files"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "$count path(s) examined; code=$code"
+
   e2e:
     name: Playwright smoke
+    needs: changes
+    # Runs unless the PR is docs-only. FAILS CLOSED: if `changes` errors, its
+    # output is empty, which is not 'false', so the smoke runs instead of the
+    # gate quietly passing. `!cancelled()` keeps a failed `changes` from
+    # skipping this job the way an implicit `success()` would.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
 
     services:

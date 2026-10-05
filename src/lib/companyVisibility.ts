@@ -21,7 +21,22 @@
 //   drifted apart.
 
 /** The Company columns only an ADMIN may read. */
-export const COMPANY_ADMIN_ONLY_FIELDS = ['vatId', 'contactName', 'contactPhone'] as const;
+export const COMPANY_ADMIN_ONLY_FIELDS = ['vatId', 'contactName', 'contactPhone', 'contactPosition'] as const;
+
+/**
+ * The address-book columns (#2442) only an ADMIN may read — the same split as
+ * the primary contact's columns above: a reader who may see the account sees
+ * which addresses it has, not who the named people are or their direct lines.
+ */
+export const COMPANY_CONTACT_ADMIN_ONLY_FIELDS = ['name', 'phone', 'position'] as const;
+
+/** `redactCompanyForReader` for one address-book entry. */
+export function redactContactForReader<T extends Record<string, unknown>>(contact: T, role: string | undefined): T {
+  if (role === 'ADMIN') return contact;
+  const copy = { ...contact };
+  for (const field of COMPANY_CONTACT_ADMIN_ONLY_FIELDS) delete copy[field];
+  return copy;
+}
 
 /**
  * Strip the ADMIN-only columns unless the reader is an ADMIN. The fields are

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
@@ -12,8 +12,8 @@ import { requireCapability } from '@/lib/capabilityGate';
 
 // GET — premium cohort comparison (Faz 2, #538). Side-by-side pipeline
 // conversion, time-to-hire and engagement per cohort. Gated by the
-// premiumAnalytics setting (off by default — basic analytics stay free; this
-// flag becomes a per-tenant entitlement with Faz 3 multi-tenancy).
+// org's ADVANCED_ANALYTICS entitlement — its plan or a grant (#1740). Off by
+// default: basic analytics stay free.
 //
 // "Finished" and "dropped" are the TENANT'S stages, resolved once through
 // `outcomeStageKeys` (#1882). This route used to carry its own
@@ -34,8 +34,8 @@ export async function GET() {
   if (gated) return gated;
   // The tier is the CALLER's org's — read with the org passed explicitly, since
   // this runs before the tenant scope binds.
-  if ((await getSetting('premiumAnalytics', await settingsOrgOf(session))) !== 'true') {
-    return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
+  if (!(await entitled(await settingsOrgOf(session), 'ADVANCED_ANALYTICS'))) {
+    return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });
   }
 
   // Resolved outside the tenant scope on purpose: `getLocale()` reads the

@@ -11,6 +11,7 @@
 // the /notifications page and browser notifications.
 import type { Locale } from '@/i18n/config';
 import { pipelineLabel, PIPELINE_STATUSES } from '@/lib/pipeline';
+import { curatedStageLabel } from '@/lib/programTemplates';
 
 export interface RenderableNotification {
   type: string;
@@ -43,11 +44,13 @@ export function interpolate(template: string, values: Record<string, string>): s
 }
 
 // Stage keys resolve to the viewer-locale label for the built-in pipeline;
-// custom (per-org) stages ship their tenant-set label in params.*Label — those
-// aren't translatable, they render as the tenant wrote them.
+// custom (per-org) stages ship their tenant-set label in params.*Label. A
+// curated template stage (the MARKETING funnel, #2710) whose snapshot is still
+// our own label is translated too — the snapshot is taken in the writer's
+// locale, not the reader's. Only a label the tenant typed renders verbatim.
 function stageDisplay(key: string, customLabel: string | undefined, locale: Locale): string {
   if ((PIPELINE_STATUSES as readonly string[]).includes(key)) return pipelineLabel(key, locale);
-  return customLabel ?? key;
+  return curatedStageLabel(key, customLabel, locale) ?? customLabel ?? key;
 }
 
 export function renderNotification(n: RenderableNotification, t: NotificationDict, locale: Locale): string {
