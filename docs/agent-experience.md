@@ -2562,33 +2562,7 @@ CHANGELOG'u geçmişe sıralar ve `/release-notes`'ta yanlış sırayla görün�
 `packages[""].version`) — biri gözden kaçarsa dosya sessizce tutarsız kalır:
 
 ```
-perl -0pi -e 's/## 2026-10-05 — locale URLs, landing tour, weekly-report compliance (#2698, #2706, #2712, #2713)
-
-- **`npm run seed:demo` does not read `.env`.** `prisma/demoTarget.mjs` checks `process.env.DATABASE_URL`, and with it unset the seeder says "does not look local" even for a localhost URL. `set -a; . ./.env; set +a` first.
-- **A demo record with no stage history is invisible to anything that reads history.** The demo seeder used to write a single `100 → <stage>` move, so every finished intern read as "never interned" to weekly-report compliance. Code that derives a window from `StatusChange` needs the seed to record the stages it reads (now done for the internship stage, #1917). Only fresh seeds pick that up, because the seeder skips relations that already exist.
-- **`sr-only` inside a horizontal scroller widens the whole document.** Absolutely positioned labels with no positioned ancestor escape `overflow-x: auto`: `/admin/weekly-reports` measured 591px wide at 360px while `#main-content` read 360. Put `relative` on the scroller, and compare `document.documentElement.scrollWidth` with `main.scrollWidth` to find this class of bug.
-- **Chromium in this container does not trust the agent proxy's CA**, so a topic preview (`https://prNNNN.interncrm.com`) fails with `ERR_CERT_AUTHORITY_INVALID`. Don't turn off TLS checks. Use curl, which trusts the bundle, with a NextAuth credentials login: GET `/api/auth/csrf`, then POST `/api/auth/callback/credentials` with the cookie jar, then call the API.
-- **Lint from a worktree resolves the PARENT checkout's `.eslintrc.json`**, so it fails with "Failed to load config next/core-web-vitals" when the main checkout has no `node_modules`. Symlink the worktree's `node_modules` into the main checkout while linting, and remove the link afterwards.
-- **Unit-testing a `src/lib` module that imports a sibling without an extension** works through `scripts/test/ts-extensionless-resolve.mjs` (`register()` + dynamic `import()`). Keep the pure rule Prisma-free and put the queries in a sibling `*Query.ts`.
-- **Reusing the Friday reminder for a manual chase-up** (adding a `relationIds` option to `sendWeeklyReportReminders`) got idempotency for free from the existing per-week `WeeklyReportReminder` claim. Look for an existing claim or marker before writing a second dedupe.
-- **The mobile-layout coverage gate goes red on main whenever a sidebar link lands without an audit entry** (`/admin/acquisition`, #2702). A new admin page belongs in `e2e/mobile-layout-coverage.spec.ts` in the same PR.
-- **Element posters for `public/release-media` are capped at 150 KB.** A whole figure with a large screenshot came out at 155 KB; capturing a figure with a simpler screenshot, or a smaller crop, fixed it.
-
-## 2026-10-01 — resolving and merging a queue of conflicting PRs (#2626, #2629, #2632, #2643)
-
-- **A docs-only PR can never auto-merge.** `e2e.yml` has `paths-ignore: docs/**, **.md,
-  releases/unreleased/**`, but `Playwright smoke` is a required check on `main`, so a PR that
-  touches only those paths sits `BLOCKED` with every check green. `gh workflow run e2e.yml --ref
-  <branch>` does put a green `Playwright smoke` check-run on the head sha, but it **does not
-  count** — the requirement only accepts the `pull_request`-event run. The way through is
-  `gh pr merge N --squash --admin` (how #2608, #2670 and #2626 merged), and it is a bypass, so
-  say so to the maintainer. A durable fix (a stub smoke job for docs-only PRs, or dropping the
-  requirement) is the maintainer's call and still open.
-- **`docs/agent-experience.md` re-conflicts on every merge in a wave.** Every PR appends here, so
-  when one merges, the next one conflicts. Both sides are pure appends: resolve by taking main's
-  file and re-appending the branch's added block (difflib over merge-base → HEAD, assert the
-  branch deleted nothing but stray conflict markers — an old main once carried a lone
-  `
+perl -0pi -e 's/<<<<<<< HEAD\n(\s*)"version": "X",\n=======\n\s*"version": "Y",\n>>>>>>> origin\/main\n/$1"version": "Z",\n/g' package-lock.json
 ```
 
 ### Yan yana import çakışması = iki tarafı da al, ama gövdeyi oku
@@ -8113,13 +8087,33 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - `localizeStageLabels()` fills a blank label with the **raw key** — judge "untouched" on the stored label, not on its output.
 - `programTemplates.ts` is client-safe but `pipeline.ts` must not import it (its catalogue calls `defaultPipelineStages()` at module init → cycle/TDZ); put template-aware helpers in `programTemplates.ts`.
 
-<<<<<<< HEAD
-## 2026-10-05 — mobile strategy + Android TWA phase 1 (#2085)
+## 2026-10-05 — locale URLs, landing tour, weekly-report compliance (#2698, #2706, #2712, #2713)
 
-- **A real Android bundle builds inside the web container.** `dl.google.com` and `services.gradle.org` are reachable: unzip `commandlinetools-linux-*_latest.zip` into `<sdk>/cmdline-tools/latest`, `sdkmanager --sdk_root=<sdk> "platforms;android-36" "build-tools;36.0.0"`, write `sdk.dir=<sdk>` to `local.properties`, then `./gradlew bundleRelease` with `-Dhttps.proxyHost/-Dhttps.proxyPort` taken from `$HTTPS_PROXY` (the preset `JAVA_TOOL_OPTIONS` covers trust, the wrapper download still needs the proxy flags). JDK 21 is preinstalled and Gradle 8.11 accepts it; CI uses 17. ~2 min cold.
-- Drive **`@bubblewrap/core`** (`TwaManifest.fromWebManifestJson` / `TwaGenerator.createTwaProject`), not the `bubblewrap` CLI — the CLI prompts for JDK/SDK paths on first run and cannot run headless. Generating `twa-manifest.json` from a manifest object gives the canonical field set instead of a hand-typed one.
-- A plain `npm install` in a fresh container rewrote `package-lock.json` (~60 lines dropped) — `git diff --stat` before staging and `git checkout package-lock.json` unless the change is meant to touch deps. (`npm install --no-save --no-package-lock --prefix mobile/android …` does **not** touch it — verified.)
-- A route under `src/app/.well-known/` works in the App Router, but `next lint --file` reports it as "ignored by default" (dot directory) — `tsc` still typechecks it, and the middleware matcher skips it (path contains a dot).
+- **`npm run seed:demo` does not read `.env`.** `prisma/demoTarget.mjs` checks `process.env.DATABASE_URL`, and with it unset the seeder says "does not look local" even for a localhost URL. `set -a; . ./.env; set +a` first.
+- **A demo record with no stage history is invisible to anything that reads history.** The demo seeder used to write a single `100 → <stage>` move, so every finished intern read as "never interned" to weekly-report compliance. Code that derives a window from `StatusChange` needs the seed to record the stages it reads (now done for the internship stage, #1917). Only fresh seeds pick that up, because the seeder skips relations that already exist.
+- **`sr-only` inside a horizontal scroller widens the whole document.** Absolutely positioned labels with no positioned ancestor escape `overflow-x: auto`: `/admin/weekly-reports` measured 591px wide at 360px while `#main-content` read 360. Put `relative` on the scroller, and compare `document.documentElement.scrollWidth` with `main.scrollWidth` to find this class of bug.
+- **Chromium in this container does not trust the agent proxy's CA**, so a topic preview (`https://prNNNN.interncrm.com`) fails with `ERR_CERT_AUTHORITY_INVALID`. Don't turn off TLS checks. Use curl, which trusts the bundle, with a NextAuth credentials login: GET `/api/auth/csrf`, then POST `/api/auth/callback/credentials` with the cookie jar, then call the API.
+- **Lint from a worktree resolves the PARENT checkout's `.eslintrc.json`**, so it fails with "Failed to load config next/core-web-vitals" when the main checkout has no `node_modules`. Symlink the worktree's `node_modules` into the main checkout while linting, and remove the link afterwards.
+- **Unit-testing a `src/lib` module that imports a sibling without an extension** works through `scripts/test/ts-extensionless-resolve.mjs` (`register()` + dynamic `import()`). Keep the pure rule Prisma-free and put the queries in a sibling `*Query.ts`.
+- **Reusing the Friday reminder for a manual chase-up** (adding a `relationIds` option to `sendWeeklyReportReminders`) got idempotency for free from the existing per-week `WeeklyReportReminder` claim. Look for an existing claim or marker before writing a second dedupe.
+- **The mobile-layout coverage gate goes red on main whenever a sidebar link lands without an audit entry** (`/admin/acquisition`, #2702). A new admin page belongs in `e2e/mobile-layout-coverage.spec.ts` in the same PR.
+- **Element posters for `public/release-media` are capped at 150 KB.** A whole figure with a large screenshot came out at 155 KB; capturing a figure with a simpler screenshot, or a smaller crop, fixed it.
+
+## 2026-10-01 — resolving and merging a queue of conflicting PRs (#2626, #2629, #2632, #2643)
+
+- **A docs-only PR can never auto-merge.** `e2e.yml` has `paths-ignore: docs/**, **.md,
+  releases/unreleased/**`, but `Playwright smoke` is a required check on `main`, so a PR that
+  touches only those paths sits `BLOCKED` with every check green. `gh workflow run e2e.yml --ref
+  <branch>` does put a green `Playwright smoke` check-run on the head sha, but it **does not
+  count** — the requirement only accepts the `pull_request`-event run. The way through is
+  `gh pr merge N --squash --admin` (how #2608, #2670 and #2626 merged), and it is a bypass, so
+  say so to the maintainer. A durable fix (a stub smoke job for docs-only PRs, or dropping the
+  requirement) is the maintainer's call and still open.
+- **`docs/agent-experience.md` re-conflicts on every merge in a wave.** Every PR appends here, so
+  when one merges, the next one conflicts. Both sides are pure appends: resolve by taking main's
+  file and re-appending the branch's added block (difflib over merge-base → HEAD, assert the
+  branch deleted nothing but stray conflict markers — an old main once carried a lone
+  `>>>>>>> origin/main` line that two branches had cleaned up). Expect to do it once per merge.
 - **Resolving someone else's PR: separate worktree, never force-push.** The PR's own session was
   resolving #2643 at the same moment; my push was rejected as non-fast-forward, which is exactly
   the protection you want. Read their merge, confirm it keeps both sides, drop yours.
@@ -8131,4 +8125,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Scratchpad worktrees have no `node_modules`, and another worktree's can be stale** (`main` had
   gained `web-push`, `pdf-lib`, `@axe-core/playwright`). If the lockfile equals main's, `npm ci`
   takes ~17s and is cheaper than chasing phantom type errors.
->>>>>>> origin/main
+
+## 2026-10-05 — mobile strategy + Android TWA phase 1 (#2085)
+
+- **A real Android bundle builds inside the web container.** `dl.google.com` and `services.gradle.org` are reachable: unzip `commandlinetools-linux-*_latest.zip` into `<sdk>/cmdline-tools/latest`, `sdkmanager --sdk_root=<sdk> "platforms;android-36" "build-tools;36.0.0"`, write `sdk.dir=<sdk>` to `local.properties`, then `./gradlew bundleRelease` with `-Dhttps.proxyHost/-Dhttps.proxyPort` taken from `$HTTPS_PROXY` (the preset `JAVA_TOOL_OPTIONS` covers trust, the wrapper download still needs the proxy flags). JDK 21 is preinstalled and Gradle 8.11 accepts it; CI uses 17. ~2 min cold.
+- Drive **`@bubblewrap/core`** (`TwaManifest.fromWebManifestJson` / `TwaGenerator.createTwaProject`), not the `bubblewrap` CLI — the CLI prompts for JDK/SDK paths on first run and cannot run headless. Generating `twa-manifest.json` from a manifest object gives the canonical field set instead of a hand-typed one.
+- A plain `npm install` in a fresh container rewrote `package-lock.json` (~60 lines dropped) — `git diff --stat` before staging and `git checkout package-lock.json` unless the change is meant to touch deps. (`npm install --no-save --no-package-lock --prefix mobile/android …` does **not** touch it — verified.)
+- A route under `src/app/.well-known/` works in the App Router, but `next lint --file` reports it as "ignored by default" (dot directory) — `tsc` still typechecks it, and the middleware matcher skips it (path contains a dot).
