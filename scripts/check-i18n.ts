@@ -105,6 +105,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   offers: 'Offer management — `/api/offers` refuses an org without the `placements` capability (requireCapability).',
   offersAdmin: 'The admin offer screen over the same `placements`-gated API.',
   offerEmail: 'Sent only by src/lib/offerNotify.ts, i.e. by the `placements`-gated offer API.',
+  productTour: 'The landing\'s product tour (#1399) — src/app/page.tsx renders it inside `!isMarketing`, and its screenshots show the internship product.',
 };
 
 // The pinned counts. Lower them when a change removes leaks; never raise them

@@ -1,0 +1,17 @@
+{
+  "bump": "minor",
+  "changelog": "**The landing shows the product, not just describes it** (#1399, story #1371). A new product-tour section after the pipeline steps carries three real screens: the mentee journey, the mentor board and a company's candidate view, each with a one-line caption. Every screen is stored four times (`public/screenshots/<screen>-<desktop|phone>-<light|dark>.webp`, 18–69 KB each): a phone gets the phone layout through `<picture><source media>`, and because dark mode is a class on `<html>` that a media query cannot see, a light/dark `<picture>` pair is toggled with `dark:hidden` — lazy images that are `display:none` are never fetched, so a visitor downloads exactly three files. `next/image`'s `getImageProps` with fixed width/height (no layout shift) and `unoptimized` (the files are already sized WebP). Alt text is per language in a new `productTour` i18n block, exempted from the MARKETING leak ratchet with its reason: the section is rendered only inside `!isMarketing`. The files come from `scripts/capture-landing-screenshots.mjs` (`npm run capture:landing`), which signs into the synthetic demo seed, crops the content area between per-screen anchors with the app's top strip hidden, encodes WebP with sharp, fails a file over 200 KB and refuses a non-localhost `BASE_URL`; `public/screenshots/README.md` has the re-capture recipe. `JourneyTracker` gains a `data-testid`. New `e2e/landing-product-tour.spec.ts` asserts the three described, sized, lazy images, the per-language alt, that a light desktop and a dark phone visitor each download only their three files, and that a marketing host gets no tour.",
+  "notes": {
+    "en": ["The home page now shows the product itself: three real screens — what a mentee sees of their journey, the mentor’s board and a company’s candidate view — in your theme and sized for your device."],
+    "tr": ["Ana sayfa artık ürünün kendisini gösteriyor: üç gerçek ekran — mentee’nin yolculuğu, mentorun panosu ve şirketin aday görünümü — sizin temanızda ve cihazınıza uygun boyutta."],
+    "de": ["Die Startseite zeigt jetzt das Produkt selbst: drei echte Ansichten – die Reise eines Mentees, das Board des Mentors und die Kandidatenansicht eines Unternehmens – in Ihrem Farbschema und passend für Ihr Gerät."]
+  },
+  "media": {
+    "poster": "release-media/landing-product-tour.png",
+    "alt": {
+      "en": "The landing’s product tour: a company’s candidate view with the candidate’s profile and the Interested, Shortlisted and Pass buttons, under the caption “Companies review candidates, not CVs in an inbox”",
+      "tr": "Ana sayfanın ürün turu: “Şirketler gelen kutusundaki CV’leri değil, adayları değerlendirir” başlığı altında, aday profili ve ilgi düğmeleriyle şirketin aday ekranı",
+      "de": "Die Produkttour der Startseite: die Kandidatenansicht eines Unternehmens mit Profil und den Schaltflächen für eine Rückmeldung, unter der Überschrift „Unternehmen sichten Kandidaten statt Lebensläufe im Postfach“"
+    }
+  }
+}

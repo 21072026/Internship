@@ -84,6 +84,7 @@
     "postinstall": "prisma generate",
     "seed:templates": "node prisma/seed-templates.mjs",
     "seed:demo": "node prisma/seed-demo.mjs",
+    "capture:landing": "node scripts/capture-landing-screenshots.mjs",
     "sanitize:preview": "node scripts/sanitize-db.mjs",
     "sanitize:verify": "node scripts/sanitize-db.mjs --verify-only",
     "db:dev:up": "docker compose -f docker-compose.dev.yml up -d",

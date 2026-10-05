@@ -1342,6 +1342,22 @@ const en = {
     colLegal: 'Legal',
     rights: 'All rights reserved.',
   },
+  // The landing's product tour (#1399): three real screens from the demo.
+  // Rendered only on the internship landing (src/app/page.tsx, inside
+  // `!isMarketing`) — the screenshots are of the internship product.
+  productTour: {
+    title: 'See it before you sign up',
+    subtitle: 'Three screens from the live demo — made-up people, the real product.',
+    menteeT: 'Mentees always know where they stand',
+    menteeD: 'Their stage, what to do now, how long they have been waiting, and every step still ahead.',
+    menteeAlt: 'The mentee journey screen: the current stage with a progress bar, a “what to do now” tip, the time spent at this stage, and the list of all stages with the completed ones ticked.',
+    mentorT: 'Mentors see everyone on one board',
+    mentorD: 'Each mentee is a card in their stage’s column — drag it, or use its stage menu, to move it on.',
+    mentorAlt: 'The mentor board: mentee cards sorted into stage columns, each card showing the university, days in the stage and the number of interactions.',
+    companyT: 'Companies review candidates, not CVs in an inbox',
+    companyD: 'A partner company sees the candidate’s profile and stage, and tells the mentor what it thinks in one click.',
+    companyAlt: 'A company’s candidate view: a profile with stage, target role, university and skills, and buttons to give feedback — Interested, Shortlisted or Pass — with a note for the mentor.',
+  },
   landing: {
     signIn: 'Sign In',
     register: 'Register',
@@ -7286,6 +7302,19 @@ const tr: Dict = {
     colLegal: 'Hukuki',
     rights: 'Tüm hakları saklıdır.',
   },
+  productTour: {
+    title: 'Kaydolmadan önce görün',
+    subtitle: 'Canlı demodan üç ekran — kişiler hayali, ürün gerçek.',
+    menteeT: 'Mentee nerede olduğunu her an bilir',
+    menteeD: 'Bulunduğu aşama, şimdi ne yapması gerektiği, ne kadar süredir beklediği ve önündeki tüm adımlar.',
+    menteeAlt: 'Mentee yolculuk ekranı: ilerleme çubuğuyla mevcut aşama, bir “şimdi ne yapmalı” ipucu, bu aşamada geçen süre ve tamamlananları işaretli tüm aşamaların listesi.',
+    mentorT: 'Mentor herkesi tek panoda görür',
+    mentorD: 'Her mentee kendi aşamasının sütununda bir kart — ilerletmek için sürükleyin ya da kartın aşama menüsünü kullanın.',
+    mentorAlt: 'Mentor panosu: aşama sütunlarına dizilmiş mentee kartları; her kartta üniversite, aşamada geçen gün ve etkileşim sayısı.',
+    companyT: 'Şirketler gelen kutusundaki CV’leri değil, adayları değerlendirir',
+    companyD: 'Partner şirket adayın profilini ve aşamasını görür, görüşünü mentora tek tıkla iletir.',
+    companyAlt: 'Şirketin aday ekranı: aşaması, hedef pozisyonu, üniversitesi ve becerileriyle bir aday profili; mentora notla birlikte görüş bildirmek için İlgileniyorum, Kısa liste ve Geç düğmeleri.',
+  },
   landing: {
     signIn: 'Giriş Yap',
     register: 'Kayıt Ol',
@@ -13129,6 +13158,19 @@ const de: Dict = {
     colCommunity: 'Community',
     colLegal: 'Rechtliches',
     rights: 'Alle Rechte vorbehalten.',
+  },
+  productTour: {
+    title: 'Erst ansehen, dann registrieren',
+    subtitle: 'Drei Ansichten aus der Live-Demo – erfundene Personen, das echte Produkt.',
+    menteeT: 'Mentees wissen immer, wo sie stehen',
+    menteeD: 'Ihre Phase, was jetzt zu tun ist, wie lange sie schon warten – und jeder Schritt, der noch vor ihnen liegt.',
+    menteeAlt: 'Die Mentee-Ansicht der eigenen Reise: die aktuelle Phase mit Fortschrittsbalken, ein Hinweis „Was jetzt zu tun ist“, die Zeit in dieser Phase und die Liste aller Phasen, die abgeschlossenen abgehakt.',
+    mentorT: 'Mentoren sehen alle auf einem Board',
+    mentorD: 'Jeder Mentee ist eine Karte in der Spalte seiner Phase – per Ziehen oder über das Phasenmenü der Karte geht es weiter.',
+    mentorAlt: 'Das Mentor-Board: Mentee-Karten in Phasenspalten, jede mit Hochschule, Tagen in der Phase und Anzahl der Interaktionen.',
+    companyT: 'Unternehmen sichten Kandidaten statt Lebensläufe im Postfach',
+    companyD: 'Ein Partnerunternehmen sieht Profil und Phase des Kandidaten und gibt dem Mentor mit einem Klick seine Einschätzung.',
+    companyAlt: 'Die Kandidatenansicht eines Unternehmens: ein Profil mit Phase, Zielposition, Hochschule und Skills sowie Schaltflächen für eine Rückmeldung – Interessiert, Vorgemerkt oder Absage – mit einer Notiz an den Mentor.',
   },
   landing: {
     signIn: 'Anmelden',
