@@ -237,7 +237,7 @@ test('the weekly analytics report speaks its reader’s language, stage table in
     const rep = await seedUser(repEmail, PW, 'MENTOR', 'Cron TR Rep', org.id);
     const lead = await seedUser(leadEmail, PW, 'MENTEE', 'Cron TR Lead', org.id);
     await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: rep.id, menteeId: lead.id, pipelineStatus: 'LEAD_NEW' } });
-    await setSetting('premiumAnalytics', 'true', org.id);
+    await setOrgFeature(org.id, 'ADVANCED_ANALYTICS', true);
 
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const tr = await weeklyAnalyticsStats(org.id, weekAgo, 'tr');
