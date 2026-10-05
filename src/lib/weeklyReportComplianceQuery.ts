@@ -14,8 +14,10 @@ import {
   complianceForRelation,
   expectedWeeks,
   internshipWindow,
+  weekByWeek,
   type Compliance,
   type InternshipWindow,
+  type WeekState,
 } from '@/lib/weeklyReportCompliance';
 
 /** Relations that owe weekly reports at all: in the internship stage now, or ever moved into it. */
@@ -43,6 +45,16 @@ export interface ComplianceRow {
   compliance: Compliance;
   /** The most recent first hand-in among this relation's reports (any week). */
   lastSubmittedAt: Date | null;
+  /** One cell per owed week — what the compliance matrix (#1918) draws. */
+  weeks: WeekCell[];
+}
+
+export interface WeekCell {
+  weekStart: Date;
+  state: WeekState;
+  late: boolean;
+  hoursSpent: number | null;
+  submittedAt: Date | null;
 }
 
 export type ReportingRange = { from?: Date | null; to?: Date | null };
@@ -58,7 +70,7 @@ export async function complianceRows(relations: ComplianceRelation[], now: Date,
     }),
     prisma.weeklyReport.findMany({
       where: { relationId: { in: ids } },
-      select: { relationId: true, weekStart: true, status: true, submittedAt: true },
+      select: { relationId: true, weekStart: true, status: true, submittedAt: true, hoursSpent: true },
     }),
   ]);
   const group = <T extends { relationId: string }>(rows: T[]) => {
@@ -72,11 +84,15 @@ export async function complianceRows(relations: ComplianceRelation[], now: Date,
   return relations.map((relation) => {
     const window = internshipWindow({ ...relation, changes: changesBy.get(relation.id) ?? [] });
     const own = reportsBy.get(relation.id) ?? [];
-    const compliance = complianceForRelation({ expected: expectedWeeks(window, now, range), reports: own });
+    const expected = expectedWeeks(window, now, range);
+    const compliance = complianceForRelation({ expected, reports: own });
+    const weeks = weekByWeek(expected, own).map(({ weekStart, state, late, report }) => ({
+      weekStart, state, late, hoursSpent: report?.hoursSpent ?? null, submittedAt: report?.submittedAt ?? null,
+    }));
     const lastSubmittedAt = own.reduce<Date | null>(
       (latest, r) => (r.submittedAt && (!latest || r.submittedAt > latest) ? r.submittedAt : latest),
       null
     );
-    return { relation, window, compliance, lastSubmittedAt };
+    return { relation, window, compliance, lastSubmittedAt, weeks };
   });
 }

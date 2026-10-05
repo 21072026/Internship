@@ -44,6 +44,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rel
         orderBy: { weekStart: 'asc' },
         select: {
           id: true, weekStart: true, status: true, submittedAt: true, hoursSpent: true,
+          summary: true, blockers: true, mentorComment: true,
           reviewedAt: true, reviewedBy: { select: { id: true, fullName: true } }, createdAt: true,
         },
       }),
