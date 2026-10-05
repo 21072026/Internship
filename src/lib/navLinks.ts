@@ -5,6 +5,7 @@ import {
   Handshake, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
+  Send,
   type LucideIcon,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -54,6 +55,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // /for-companies enquiries, on a MARKETING tenant the landing's demo requests
   // (and is the "unowned leads" list, #2580) — both are the `companies` module.
   { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'companies' },
+  // Outbound acquisition by letter (#2697) — the companies module, so both
+  // products have it: SaleVali writes to merchants, InternCRM to institutions.
+  { href: '/admin/acquisition', icon: Send, key: 'acquisition', capability: 'companies' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
   // templates, programme cohorts and mentor/mentee success stories are
   // internship modules (#2499). A MARKETING

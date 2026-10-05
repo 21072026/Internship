@@ -631,6 +631,8 @@ test('an unmapped marketing host is a closed form — it never writes into the i
   await openMarketingLanding(page);
   await expect(page.getByTestId('landing-demo-unavailable')).toBeVisible();
   await expect(page.getByTestId('company-inquiry-form')).toHaveCount(0);
+  // No hero button may point at a form that is not there.
+  await expect(page.getByTestId('hero-demo-request')).toHaveCount(0);
 
   const res = await postInquiry(request, MARKETING_HOST, { companyName: `Closed ${stamp}`, contactName: 'Nobody', email });
   expect(res.status()).toBe(503);

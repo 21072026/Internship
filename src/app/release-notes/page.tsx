@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { pageMetadata } from '@/lib/pageMetadata';
+import { pageAlternates, pageMetadata } from '@/lib/pageMetadata';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { Rss, Sparkles } from 'lucide-react';
@@ -33,7 +33,10 @@ export async function generateMetadata(): Promise<Metadata> {
       (t) => ({ title: t.releaseNotes.title, description: t.releaseNotes.feedDescription }),
       '/release-notes/opengraph-image'
     )),
+    // A page-level `alternates` replaces the layout's whole block, so the
+    // canonical and the language siblings (#1386) are restated here.
     alternates: {
+      ...(await pageAlternates()),
       types: {
         'application/rss+xml': [
           { url: releaseFeedUrl(publicOrigin((n) => h.get(n))), title: 'Internship CRM — release notes' },

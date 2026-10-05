@@ -7,6 +7,8 @@ import { requestSiteUrl } from '@/lib/siteUrl';
 import { hostVertical } from '@/lib/hostVertical';
 import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { PUBLIC_ROUTES, routeListedFor } from '@/lib/publicRoutes';
+import { languageAlternates } from '@/lib/localePath';
+import { locales } from '@/i18n/config';
 
 // /sitemap.xml (#1380). Most public pages are reachable only from the footer
 // (components/landing/PublicFooter.tsx), so a crawler finding them was a matter
@@ -36,29 +38,34 @@ const lastShipped = (): Date => {
 /** Same page size app/stories/page.tsx asks for — see the call site below. */
 const STORIES_PAGE_LIMIT = 50;
 
+type Entry = MetadataRoute.Sitemap[number];
+
+/**
+ * One public page in all three languages (#1386): an entry per language URL
+ * (`/features`, `/tr/features`, `/de/features`), each naming the other two as
+ * `hreflang` alternates — the form search engines read language clusters from.
+ */
+function inEveryLanguage(base: string, path: string, rest: Omit<Entry, 'url' | 'alternates'>): Entry[] {
+  const urls = languageAlternates(path);
+  const languages = Object.fromEntries(locales.map((l) => [l, `${base}${urls[l]}`]));
+  return locales.map((l) => ({ ...rest, url: `${base}${urls[l]}`, alternates: { languages } }));
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = await requestSiteUrl();
   const vertical = await hostVertical();
   const shipped = lastShipped();
 
-  const entries: MetadataRoute.Sitemap = PUBLIC_ROUTES.filter((r) => routeListedFor(vertical, r.needs)).map((r) => ({
-    url: `${base}${r.path}`,
-    lastModified: shipped,
-    changeFrequency: r.changeFrequency,
-    priority: r.priority,
-  }));
+  const entries: MetadataRoute.Sitemap = PUBLIC_ROUTES.filter((r) => routeListedFor(vertical, r.needs)).flatMap((r) =>
+    inEveryLanguage(base, r.path, { lastModified: shipped, changeFrequency: r.changeFrequency, priority: r.priority })
+  );
 
   // /demo exists only on the demo deployment — everywhere else it is a 404
   // (app/demo/page.tsx), and a sitemap that lists 404s is worse than a short
   // one. Note that the demo's own robots.txt closes the whole site, so this is
   // belt-and-braces rather than an invitation.
   if (IS_DEMO_MODE && vertical === DEFAULT_VERTICAL) {
-    entries.push({
-      url: `${base}/demo`,
-      lastModified: shipped,
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    });
+    entries.push(...inEveryLanguage(base, '/demo', { lastModified: shipped, changeFrequency: 'monthly', priority: 0.6 }));
   }
 
   // The two database-backed public surfaces. A sitemap must not fail the whole
@@ -78,12 +85,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Mentee success stories are the internship product's (#2495).
     const stories = routeListedFor(vertical, 'mentorship') ? await listPublishedStories(STORIES_PAGE_LIMIT) : [];
     if (stories.length > 0) {
-      entries.push({
-        url: `${base}/stories`,
-        lastModified: new Date(stories[0].publishedAt),
-        changeFrequency: 'monthly',
-        priority: 0.7,
-      });
+      entries.push(
+        ...inEveryLanguage(base, '/stories', {
+          lastModified: new Date(stories[0].publishedAt),
+          changeFrequency: 'monthly',
+          priority: 0.7,
+        })
+      );
     }
 
     // Showcase projects. `isPublic` is the opt-in the detail page checks, and
@@ -95,12 +103,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       select: { id: true, updatedAt: true },
     });
     for (const p of projects) {
-      entries.push({
-        url: `${base}/projects/${p.id}`,
-        lastModified: p.updatedAt,
-        changeFrequency: 'monthly',
-        priority: 0.5,
-      });
+      entries.push(
+        ...inEveryLanguage(base, `/projects/${p.id}`, { lastModified: p.updatedAt, changeFrequency: 'monthly', priority: 0.5 })
+      );
     }
   } catch {
     // ignore — serve the static routes rather than a 500

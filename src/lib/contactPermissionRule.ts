@@ -114,7 +114,7 @@ const RANK: Record<ContactBasis, number> = {
 export interface ExistingPermission {
   basis: ContactBasis;
   revokedAt: Date | null;
-  /** 'LINK' = the address owner withdrew; 'ADMIN' = somebody here did. */
+  /** 'LINK' / 'OBJECTION' = the address owner withdrew; 'ADMIN' = somebody here did. */
   revokedVia?: string | null;
 }
 
@@ -128,8 +128,18 @@ export interface ExistingPermission {
  * (`doi`, see `writeReplaces`).
  */
 export function ownerObjected(existing: ExistingPermission | null): boolean {
-  return !!existing?.revokedAt && existing.revokedVia === 'LINK';
+  return !!existing?.revokedAt && OWNER_OBJECTION_VIAS.includes(existing.revokedVia ?? '');
 }
+
+/**
+ * The `revokedVia` values that are the address owner's OWN objection, and so
+ * lock the row: the opt-out link (`LINK`), and an objection the owner made by
+ * letter, phone or e-mail that an admin recorded for them (`OBJECTION`, #2697 —
+ * Art. 21 Abs. 2 DSGVO needs no particular form). `ADMIN` is somebody here
+ * deciding to stop, which an admin may later reverse; an objection is not ours
+ * to reverse.
+ */
+export const OWNER_OBJECTION_VIAS: readonly string[] = ['LINK', 'OBJECTION'];
 
 /**
  * Does a write replace what is stored?

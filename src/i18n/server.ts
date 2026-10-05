@@ -6,12 +6,18 @@ import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { defaultLocale, isLocale, LOCALE_COOKIE, locales, type Locale } from './config';
 import { pickAcceptLanguage } from './acceptLanguage';
+import { LOCALE_HEADER } from '@/lib/localePath';
 import { getDictionary } from './dictionaries';
 import { applyVerticalOverlay } from './verticalOverlays';
 import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { hostVertical } from '@/lib/hostVertical';
 
-// Read the active locale, in this order (#1384):
+// Read the active locale, in this order (#1384, #1386):
+//   0. the language of the URL — `/tr/…` and `/de/…` are rewritten by
+//      src/middleware.ts, which passes the prefix on as the `x-locale` request
+//      header (the middleware strips any inbound copy, so a client cannot set
+//      it). A language URL is a promise: a shared Turkish link opens in Turkish
+//      whatever cookie the reader has;
 //   1. the explicit cookie the language switcher sets — a choice always wins;
 //   2. the signed-in user's saved preference — also their own decision;
 //   3. the browser's Accept-Language — what the visitor reads, before they
@@ -30,6 +36,9 @@ import { hostVertical } from '@/lib/hostVertical';
 // e2e/accept-language.spec.ts pins the no-store; if pages ever become publicly
 // cacheable, add the Vary at the proxy (Caddy `header +Vary Accept-Language`).
 export async function getLocale(): Promise<Locale> {
+  const fromUrl = await urlLocale();
+  if (fromUrl) return fromUrl;
+
   const store = await cookies();
   const v = store.get(LOCALE_COOKIE)?.value;
   if (isLocale(v)) return v;
@@ -55,6 +64,18 @@ export async function getLocale(): Promise<Locale> {
     // ignore — fall through to the browser's languages
   }
   return browserLocale();
+}
+
+// Step 0: the URL's language prefix, as the middleware handed it over. Null
+// outside a request (a script, a cron render) and on every unprefixed URL.
+// Exported for the public chrome, which keeps its links in the URL's language.
+export async function urlLocale(): Promise<Locale | null> {
+  try {
+    const v = (await headers()).get(LOCALE_HEADER);
+    return isLocale(v) ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 // Step 3: the request's Accept-Language, or the default. `headers()` is the

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Landing (both hosts) simplified**: hero → role doors → free core → 4-step pipeline → 6 features → FAQ (6) → closing band; audience sections, wheel, roles grid, 'more' and transparency cards removed; pipeline SVG replaced by an overflow-free step list. The role cards now link straight to `/auth/register`, `/apply-as-mentor` and `/for-companies`; the beta note, founder, GitHub/AGPL and release-notes links condense into one trust row in the closing band (new `landing.trustLine`), and `heroSubtitle` is reworded to carry the loop in one sentence.",
+  "notes": {
+    "en": ["A simpler home page: one idea per section, pick your side in one tap."],
+    "tr": ["Daha sade ana sayfa: her bölümde tek fikir, tarafını tek dokunuşla seç."],
+    "de": ["Eine einfachere Startseite: eine Idee pro Abschnitt, deine Seite mit einem Tipp wählen."]
+  }
+}

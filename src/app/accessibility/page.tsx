@@ -3,7 +3,7 @@ import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
-import { operatorIdentity } from '@/lib/imprint';
+import { operatorIdentityForRequest } from '@/lib/imprintRequest';
 import { GITHUB_URL } from '@/components/landing/links';
 import {
   ACCESSIBILITY_EVIDENCE,
@@ -46,7 +46,7 @@ export default async function AccessibilityPage() {
   // Never a literal address. This deployment's operator publishes one or it
   // does not, exactly as /privacy does it — and when it does not, the page says
   // so and points at the channel that still works, rather than inventing one.
-  const operator = operatorIdentity();
+  const operator = await operatorIdentityForRequest();
   const feedbackBody = operator
     ? a.feedbackBody.replace('{email}', operator.email).replace('{days}', String(ACCESSIBILITY_RESPONSE_DAYS))
     : a.feedbackUnset;

@@ -141,6 +141,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // (src/lib/contactPermission.ts), because registration fills orgId in only
   // from a BOUND context.
   'ContactPermission',
+  // Postal campaigns, their recipients and the objection block list (#2697).
+  // A campaign names the accounts it wrote to — one tenant's prospect list —
+  // and the block list must answer "blocked?" only for the tenant that was
+  // objected to. Every writer passes `orgId` itself (src/lib/postCampaign.ts).
+  'PostCampaign',
+  'PostCampaignRecipient',
+  'ContactSuppression',
   // The notification delivery ledger (#1710). One row per (recipient, event,
   // channel) — who was told what, and why they were not. It is written by the
   // router from whatever context the caller happens to be in (a request, a
