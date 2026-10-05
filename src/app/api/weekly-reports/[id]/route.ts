@@ -63,7 +63,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           ...(parsed.data.summary !== undefined ? { summary } : {}),
           ...(parsed.data.hoursSpent !== undefined ? { hoursSpent: parsed.data.hoursSpent } : {}),
           ...(parsed.data.blockers !== undefined ? { blockers: parsed.data.blockers?.trim() || null } : {}),
-          ...(parsed.data.status ? { status: 'SUBMITTED' as const, mentorComment: null, reviewedById: null, reviewedAt: null } : {}),
+          // submittedAt keeps the FIRST hand-in: a resubmission after changes
+          // were requested is not a late report (#1917).
+          ...(parsed.data.status ? { status: 'SUBMITTED' as const, submittedAt: report.submittedAt ?? new Date(), mentorComment: null, reviewedById: null, reviewedAt: null } : {}),
         },
       });
       return NextResponse.json({ report: reportUpdate });

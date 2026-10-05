@@ -160,6 +160,10 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'what counts as contact: 1:1 yes, group only if the mentee wrote it (#2275)' },
   ],
   [
+    'src/lib/weeklyReportCompliance.ts',
+    { floor: 95, measured: 100.0, why: 'weekly-report compliance: owed weeks, late vs the covered week, null rate before the first owed week (#1917)' },
+  ],
+  [
     'src/lib/skills.ts',
     {
       floor: 95,

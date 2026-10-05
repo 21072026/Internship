@@ -81,7 +81,11 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect(duplicate.status()).toBe(409);
     expect((await duplicate.json()).code).toBe('weekly_report_exists');
     expect((await menteePage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'APPROVED' } })).status()).toBe(400);
+    expect(report.submittedAt).toBeNull(); // still a draft
     expect((await menteePage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'SUBMITTED' } })).status()).toBe(200);
+    // The first hand-in is stamped (#1917) — "late" is measured from it.
+    const firstSubmittedAt = (await prisma.weeklyReport.findUniqueOrThrow({ where: { id: report.id }, select: { submittedAt: true } })).submittedAt;
+    expect(firstSubmittedAt).not.toBeNull();
 
     const outsiderContext = await browser.newContext(); contexts.push(outsiderContext);
     const outsiderPage = await outsiderContext.newPage();
@@ -113,7 +117,8 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect((await mentorPage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'CHANGES_REQUESTED', mentorComment: 'Add the test result.' } })).status()).toBe(200);
     await expect.poll(async () => (await prisma.notification.findFirst({ where: { userId: mentee.id, type: 'weekly_report_review.changes' }, orderBy: { createdAt: 'desc' } }))?.id).toBeTruthy();
     expect((await menteePage.request.patch(`/api/weekly-reports/${report.id}`, { data: { summary: 'Built and tested the onboarding flow', status: 'SUBMITTED' } })).status()).toBe(200);
-    await expect.poll(async () => prisma.weeklyReport.findUnique({ where: { id: report.id }, select: { mentorComment: true, reviewedById: true, reviewedAt: true } })).toEqual({ mentorComment: null, reviewedById: null, reviewedAt: null });
+    // A resubmission after changes were requested keeps the FIRST hand-in time.
+    await expect.poll(async () => prisma.weeklyReport.findUnique({ where: { id: report.id }, select: { mentorComment: true, reviewedById: true, reviewedAt: true, submittedAt: true } })).toEqual({ mentorComment: null, reviewedById: null, reviewedAt: null, submittedAt: firstSubmittedAt });
     const notificationCount = await prisma.notification.count({ where: { userId: mentee.id, type: { startsWith: 'weekly_report_review.' } } });
     const concurrent = await Promise.all([
       mentorPage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'APPROVED', mentorComment: 'Looks good.' } }),
