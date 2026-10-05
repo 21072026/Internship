@@ -1,0 +1,120 @@
+name: Android app bundle (TWA)
+
+# Builds the Play Store bundle for one of the two Android apps
+# (docs/mobile-strategy.md, #2085). The app is a Trusted Web Activity: a thin
+# shell that opens the live site, so it is rebuilt only when the SHELL changes
+# (icon, name, colours, a Bubblewrap template update, a version bump for the
+# store) — never because the web app changed. Every web deploy reaches the
+# installed app on its own.
+#
+# Committed input: mobile/android/<app>/twa-manifest.json. The Gradle project is
+# generated from it on every run (mobile/android/generate-project.mjs) and never
+# committed.
+#
+# Two triggers:
+#   - pull_request on mobile/android/** — an UNSIGNED build, as a guard that the
+#     committed config still produces a bundle. Needs no secret, so it runs on
+#     forks too.
+#   - workflow_dispatch — the release build. Signs with the UPLOAD key when the
+#     three ANDROID_UPLOAD_* secrets exist and uploads the .aab as an artifact,
+#     to be uploaded to Play Console by hand. Play re-signs with the app signing
+#     key it holds (Play App Signing); the upload key can be reset through Play
+#     support if lost, the app signing key never leaves Google.
+#
+# Runs on ubuntu-latest, never the self-hosted runner: nothing compiles on the
+# production box (CLAUDE.md § Deployment).
+on:
+  pull_request:
+    paths:
+      - 'mobile/android/**'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Which app'
+        type: choice
+        options: [interncrm, salevali]
+        default: interncrm
+      version_code:
+        description: 'versionCode — a positive integer, strictly greater than the last one uploaded to Play'
+        required: true
+      version_name:
+        description: 'versionName shown in the store (defaults to the versionCode)'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.ref }}-${{ inputs.app || 'pr' }}
+  cancel-in-progress: true
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # A PR builds both apps; a dispatch builds the one it names.
+        app: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.app)) || fromJSON('["interncrm","salevali"]') }}
+    env:
+      APP: ${{ matrix.app }}
+      VERSION_CODE: ${{ inputs.version_code }}
+      VERSION_NAME: ${{ inputs.version_name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android SDK platform + build tools
+        # The generated project targets API 36; make sure the runner image has it
+        # instead of relying on whatever it ships this month.
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+
+      - name: Generate the Gradle project
+        # Installed next to the script (not into the web app's package.json):
+        # the ESM resolver walks up from mobile/android/ and finds it there.
+        run: |
+          npm install --no-save --no-audit --no-fund --no-package-lock --prefix mobile/android @bubblewrap/core@1.25.0
+          node mobile/android/generate-project.mjs "$APP" "$RUNNER_TEMP/twa" $VERSION_CODE $VERSION_NAME
+
+      - name: Build the release bundle
+        working-directory: ${{ runner.temp }}/twa
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/$APP.aab"
+
+      - name: Sign with the upload key
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::warning::ANDROID_UPLOAD_* secrets are not set — the bundle is UNSIGNED and Play will reject it. See docs/mobile-strategy.md § Signing."
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore "$RUNNER_TEMP/upload.jks" -storepass:env KEYSTORE_PASSWORD -keypass:env KEY_PASSWORD \
+            "$RUNNER_TEMP/$APP.aab" upload
+          jarsigner -verify "$RUNNER_TEMP/$APP.aab" | tail -1
+          rm -f "$RUNNER_TEMP/upload.jks"
+        # jarsigner reads -storepass:env / -keypass:env by variable NAME, so the
+        # passwords never appear on a command line or in the log.
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.app }}-aab
+          path: ${{ runner.temp }}/${{ matrix.app }}.aab
+          retention-days: 14

@@ -1,0 +1,78 @@
+{
+  "packageId": "de.bcsitgmbh.interncrm",
+  "host": "interncrm.com",
+  "name": "Internship CRM",
+  "launcherName": "InternshipCRM",
+  "display": "standalone",
+  "themeColor": "#1D4ED8",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://interncrm.com/icon-512.png",
+  "maskableIconUrl": "https://interncrm.com/icon-512-maskable.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./upload-keystore.jks",
+    "alias": "upload"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Messages",
+      "shortName": "Messages",
+      "url": "https://interncrm.com/messages",
+      "chosenIconUrl": "https://interncrm.com/shortcut-messages-96.png"
+    },
+    {
+      "name": "To-dos",
+      "shortName": "To-dos",
+      "url": "https://interncrm.com/todos",
+      "chosenIconUrl": "https://interncrm.com/shortcut-todos-96.png"
+    },
+    {
+      "name": "Notifications",
+      "shortName": "Alerts",
+      "url": "https://interncrm.com/notifications",
+      "chosenIconUrl": "https://interncrm.com/shortcut-notifications-96.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://interncrm.com/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://interncrm.com/",
+  "minSdkVersion": 21,
+  "shareTarget": {
+    "action": "https://interncrm.com/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "orientation": "any",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "appVersion": "1"
+}
