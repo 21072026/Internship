@@ -8050,3 +8050,24 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   question copy asks needs a door for each answer.
 - **Removed-from-the-page dictionary keys stay.** `check:i18n` allows unused keys, and leaving them keeps
   `EXPECTED_LEAKS` unchanged; deleting them belongs in a follow-up PR (grep other pages first).
+
+## 2026-10-04 — postal campaigns (#2697)
+
+- **Run `npx prisma generate` after EVERY schema edit, renames included.** I renamed a relation field
+  after generating; `tsc` stayed green (it reads the stale client's types too… until it doesn't) and the
+  first e2e run failed with `Unknown argument postRecipients` only in the dev-server log. Grep the
+  dev log for `PrismaClientValidationError` before debugging the UI.
+- **A Prisma relation field longer than the model's longest one reformats the whole block** on
+  `prisma format` (column realignment) — 100+ noisy lines. Pick a name no longer than the existing
+  longest field.
+- **npm 10 (the container's) drops the `libc` entries npm 11 wrote into `package-lock.json`.** Adding a
+  dependency with plain `npm install` produced ~60 unrelated deletions; `npx -y npm@11 install <pkg>`
+  kept the diff to the new packages.
+- **A route.ts may export only handlers** — move shared zod schemas to `src/lib/*Input.ts`.
+- **A file that imports `next/headers` cannot be unit-tested** under `node --test` (ESM wants
+  `next/headers.js`). Keep the pure function in one file and the request-bound wrapper in another
+  (`imprint.ts` / `imprintRequest.ts`).
+- `e2e/marketing-demo-form.spec.ts:339` fails when run alone locally — on `origin/main` too (negative
+  control). Not a regression signal for unrelated changes.
+- The worker was OOM-killed (exit 137) running a whole e2e file next to a dev server and MariaDB;
+  commit + push before long runs.

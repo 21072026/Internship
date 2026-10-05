@@ -348,13 +348,23 @@ app_env_args() {
     -e OPERATOR_RESPONSIBLE="${OPERATOR_RESPONSIBLE:-}" \
     -e OPERATOR_VAT_ID="${OPERATOR_VAT_ID:-}" \
     -e OPERATOR_REGISTER="${OPERATOR_REGISTER:-}" \
-    -e OPERATOR_DPO="${OPERATOR_DPO:-}"
+    -e OPERATOR_DPO="${OPERATOR_DPO:-}" \
+    -e MARKETING_OPERATOR_NAME="${MARKETING_OPERATOR_NAME:-}" \
+    -e MARKETING_OPERATOR_ADDRESS="${MARKETING_OPERATOR_ADDRESS:-}" \
+    -e MARKETING_OPERATOR_EMAIL="${MARKETING_OPERATOR_EMAIL:-}" \
+    -e MARKETING_OPERATOR_PHONE="${MARKETING_OPERATOR_PHONE:-}" \
+    -e MARKETING_OPERATOR_RESPONSIBLE="${MARKETING_OPERATOR_RESPONSIBLE:-}" \
+    -e MARKETING_OPERATOR_VAT_ID="${MARKETING_OPERATOR_VAT_ID:-}" \
+    -e MARKETING_OPERATOR_REGISTER="${MARKETING_OPERATOR_REGISTER:-}" \
+    -e MARKETING_OPERATOR_DPO="${MARKETING_OPERATOR_DPO:-}"
 }
 # OPERATOR_* (#1396) publishes /imprint and names the GDPR controller on
 # /privacy. They live in the env file rather than the source because the project
 # is AGPL and other people run their own instances. This forwarding line is the
 # whole feature on a deployed host: unset here, the container would keep saying
-# "no imprint published" no matter what the env file holds.
+# "no imprint published" no matter what the env file holds. MARKETING_OPERATOR_*
+# (#2697) is the marketing product's own provider (BCS-IT GmbH for SaleVali),
+# shown on the marketing hosts and printed on postal campaign letters.
 mapfile -d '' -t APP_ENV_ARGS < <(app_env_args)
 
 # Wait for /api/health?db=1 and assert what it says. Used for the canary, for

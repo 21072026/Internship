@@ -176,6 +176,9 @@ model Organization {
   usageRollups         UsageRollup[]
   companyUsage         CompanyUsage[]
   contactPermissions   ContactPermission[]
+  postCampaigns        PostCampaign[]
+  postRecipients       PostCampaignRecipient[]
+  contactSuppressions  ContactSuppression[]
   webhooks             Webhook[]
   announcements        Announcement[]
   newsletters          Newsletter[]
@@ -1389,8 +1392,8 @@ model Company {
 
   needs              CompanyNeed[]
   mentorships        MentorshipRelation[]
-  users              User[]               @relation("CompanyUsers")
-  projects           Project[]            @relation("CompanyProjects")
+  users              User[]                  @relation("CompanyUsers")
+  projects           Project[]               @relation("CompanyProjects")
   interests          CompanyInterest[]
   entitlements       CompanyEntitlement[]
   needAlerts         CompanyNeedAlert[]
@@ -1401,11 +1404,13 @@ model Company {
   // The enquiries this company was created from (#1863). A list rather than a
   // single row because nothing stops a second enquiry from the same company
   // later being linked to the account it already has.
-  fromInquiries      CompanyInquiry[]     @relation("ConvertedFromInquiry")
+  fromInquiries      CompanyInquiry[]        @relation("ConvertedFromInquiry")
   usage              CompanyUsage[]
   // May we write to / call this account, and on what basis (#2577)? One row
   // per channel; docs/contact-permission.md.
   contactPermissions ContactPermission[]
+  // The postal campaigns this account was a recipient of (#2697).
+  postRecipients     PostCampaignRecipient[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -1792,6 +1797,88 @@ model ContactPermission {
 // submits cannot both insert it. Deliberately no orgId: the cap protects the
 // RECIPIENT, whose inbox is not per tenant. Rows older than a day are swept on
 // the next insert.
+// ── Outbound acquisition: postal advertising (#2697) ────────────────────────
+//
+// In Germany the one lawful COLD outbound channel to a business is the letter
+// (Briefwerbung): e-mail, LinkedIn DM and list-dialled phone calls need a
+// consent we do not have (UWG § 7 Abs. 2; docs/marketing-vertical/
+// outreach-compliance.md § 2). A letter needs no UWG consent but it does need
+// the DSGVO record: where the address came from (Art. 14 Abs. 2 lit. f), a
+// written balancing of interests (Art. 6 Abs. 1 lit. f), the Art. 14 notice on
+// the letter and a permanent block list for whoever objects (Art. 21 Abs. 3).
+// These three tables are that record. Rule: src/lib/postCampaignRule.ts; store:
+// src/lib/postCampaign.ts; design: docs/marketing-vertical/postal-campaigns.md.
+
+enum PostCampaignStatus {
+  DRAFT
+  // Printed and posted. From here the campaign is EVIDENCE: what was sent, to
+  // whom, on what stated basis — no edit, no recipient change, no delete.
+  SENT
+}
+
+model PostCampaign {
+  orgId         String?
+  org           Organization?      @relation(fields: [orgId], references: [id])
+  id            String             @id @default(cuid())
+  name          String             @db.VarChar(120)
+  // Art. 14 Abs. 2 lit. f: where the addresses came from, printed on the back
+  // of every letter of this campaign.
+  dataSource    String             @db.Text
+  // Art. 6 Abs. 1 lit. f: the written balancing of interests. Not printed —
+  // kept as the accountability record (Art. 5 Abs. 2).
+  balancingNote String             @db.Text
+  letterBody    String             @db.Text
+  // The campaign code: utm_campaign on the letter's link and the short path
+  // /b/<code>. Lower-case [a-z0-9-]; unique per org.
+  code          String             @db.VarChar(60)
+  status        PostCampaignStatus @default(DRAFT)
+  sentAt        DateTime?
+  createdById   String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  recipients PostCampaignRecipient[]
+
+  @@unique([orgId, code])
+  @@index([orgId, createdAt])
+}
+
+model PostCampaignRecipient {
+  orgId         String?
+  org           Organization? @relation(fields: [orgId], references: [id])
+  id            String        @id @default(cuid())
+  campaignId    String
+  campaign      PostCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // The address block as it was printed — the account's address may change
+  // after the letter went out, and the record is of the letter.
+  recipientName String?       @db.VarChar(191)
+  addressBlock  String        @db.Text
+  sentAt        DateTime?
+  createdAt     DateTime      @default(now())
+
+  @@unique([campaignId, companyId])
+  @@index([orgId, companyId, sentAt])
+}
+
+// The block list (Sperrliste, Art. 21 Abs. 3 DSGVO). A person who objected to
+// direct marketing must never be written to again — also after their account
+// is deleted, which is exactly when an ordinary "revoked" row disappears with
+// it (onDelete: Cascade). So this table holds only a keyed HMAC of each
+// identifying key (VAT id, name+country, e-mail, postal address), never the
+// key itself: it can answer "is this one blocked?" and nothing else.
+model ContactSuppression {
+  orgId     String?
+  org       Organization?  @relation(fields: [orgId], references: [id])
+  id        String         @id @default(cuid())
+  channel   ContactChannel
+  keyHash   String         @db.VarChar(64)
+  createdAt DateTime       @default(now())
+
+  @@unique([orgId, channel, keyHash])
+}
+
 model ContactConfirmationMailCap {
   key       String   @id @db.VarChar(80)
   createdAt DateTime @default(now())

@@ -27,6 +27,9 @@ export interface ContactPermissionEditorLabels {
   reasonRequired: string;
   doiHint: string;
   objected: string;
+  objection: string;
+  objectionConfirm: string;
+  objectionDone: string;
   channels: Record<ContactChannel, string>;
   bases: Record<ContactBasis, string>;
 }
@@ -37,7 +40,7 @@ export function ContactPermissionEditor({ companyId, labels }: { companyId: stri
   const [basis, setBasis] = useState<ContactBasis>('EXISTING_CUSTOMER_7_3');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'saved' | 'failed' | 'reason' | 'objected'>('idle');
+  const [status, setStatus] = useState<'idle' | 'saved' | 'failed' | 'reason' | 'objected' | 'objection'>('idle');
 
   // §7(3) is an e-mail rule; for the other channels only the neutral bases apply.
   const bases = channel === 'EMAIL' ? ADMIN_BASES : ADMIN_BASES.filter((b) => b !== 'EXISTING_CUSTOMER_7_3');
@@ -52,7 +55,7 @@ export function ContactPermissionEditor({ companyId, labels }: { companyId: stri
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        setStatus('saved');
+        setStatus(body.action === 'objection' ? 'objection' : 'saved');
         setReason('');
         router.refresh();
         return;
@@ -139,6 +142,19 @@ export function ContactPermissionEditor({ companyId, labels }: { companyId: stri
         >
           {labels.revoke}
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="danger"
+          disabled={busy}
+          data-testid="contact-permission-objection"
+          onClick={() => {
+            if (window.confirm(labels.objectionConfirm)) void send({ action: 'objection' });
+          }}
+        >
+          {labels.objection}
+        </Button>
+        {status === 'objection' && <span className="text-sm text-green-700" data-testid="contact-permission-objection-done">{labels.objectionDone}</span>}
         {status === 'saved' && <span className="text-sm text-green-700" data-testid="contact-permission-saved">{labels.saved}</span>}
         {status === 'failed' && <span className="text-sm text-red-700">{labels.failed}</span>}
         {status === 'objected' && <span className="text-sm text-red-700" data-testid="contact-permission-objected">{labels.objected}</span>}

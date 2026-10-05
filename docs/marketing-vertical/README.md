@@ -55,6 +55,9 @@ sürece tek bir PR sessizce farklı davranamaz.
   devralınan değil: bu repo'nun kararlarıyla yazıldı
 - `salevali-provider-contract.md` — SaleVali'den istenenler (#2565): `externalId`
   anahtarı, kullanım ve lisans olayı uçları, alan eşlemesi, SaleVali karşı işleri
+- `postal-campaigns.md` — giden müşteri kazanımı: yasal Briefwerbung kampanyası, Werbewiderspruch +
+  engel listesi, DIN 5008 mektup, kampanya atfı ve `MARKETING_OPERATOR_*` (#2697)
+- `go-live-checklist.md` — ilk gün / ilk hafta kontrol listesi ve ölçüm (#2581)
 - `old-server-teardown.md` — eski Marketing kutusunun sökümü
 - `outreach-compliance.md` — SaleVali satış iletişimi kanal kuralları (UWG § 7 /
   DSGVO, #2576); CRM izin kodlarının (#2577) hukuki metni — hukuki danışmanlık değildir,

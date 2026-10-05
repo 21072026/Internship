@@ -9,12 +9,14 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { CONTACT_BASES, CONTACT_CHANNELS } from '@/lib/contactPermissionRule';
 import { adminSetContactPermission, revokeContactPermission } from '@/lib/contactPermission';
+import { recordMarketingObjection } from '@/lib/postCampaign';
 
 /**
  * PUT — an admin records or revokes one account × channel contact permission
  * (#2577, docs/contact-permission.md).
  *
- * `{ channel, action: 'set', basis, reason? }` or `{ channel, action: 'revoke' }`.
+ * `{ channel, action: 'set', basis, reason? }`, `{ channel, action: 'revoke' }`, or
+ * `{ action: 'objection' }` — the owner's own Art. 21 objection (#2697).
  * What an admin may set is decided by the rule, not here
  * (src/lib/contactPermissionRule.ts): EXISTING_CUSTOMER_7_3 with a reason naming
  * the sale, INQUIRY_REPLY or NONE — never DOI_CONFIRMED, which only the address
@@ -31,6 +33,10 @@ const schema = z.discriminatedUnion('action', [
     reason: z.string().max(1000).optional(),
   }),
   z.object({ action: z.literal('revoke'), channel: z.enum(CONTACT_CHANNELS) }),
+  // The owner objected to direct marketing (Art. 21 Abs. 2 DSGVO), by letter,
+  // phone or mail — recorded here for them (#2697). All channels, locked like
+  // the opt-out link, and the account's keys onto the block list.
+  z.object({ action: z.literal('objection') }),
 ]);
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -49,10 +55,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     return withTenantScope(session, async () => {
       const company = await prisma.company.findFirst({
         where: withinTenant({ id }, await tenantWhere(session)),
-        select: { id: true, orgId: true, contactEmail: true },
+        select: { id: true, orgId: true, name: true, vatId: true, country: true, contactEmail: true, address: true },
       });
       if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
       const actor = { id: session.user.id, email: session.user.email ?? null };
+
+      if (parsed.data.action === 'objection') {
+        await recordMarketingObjection({ actor, company, request });
+        return NextResponse.json({ ok: true });
+      }
 
       if (parsed.data.action === 'revoke') {
         await revokeContactPermission({
