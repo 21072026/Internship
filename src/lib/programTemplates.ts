@@ -1,4 +1,4 @@
-import { defaultPipelineStages, type ResolvedStage } from './pipeline';
+import { defaultPipelineStages, localizeStageLabels, type ResolvedStage } from './pipeline';
 import type { Locale } from '@/i18n/config';
 import { TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY } from './trialReminderRule';
 
@@ -621,6 +621,39 @@ export function defaultTemplateForVertical(vertical: string): ProgramTemplate | 
 export function programTemplate(key: string | null | undefined): ProgramTemplate | null {
   if (!key) return null;
   return PROGRAM_TEMPLATES.find((t) => t.key === key) ?? null;
+}
+
+// ── Localizing a provisioned template's labels ───────────────────────────────
+
+// Every curated stage outside the canonical set, by key. Template keys are
+// prefixed per template (GRAD_*, BUDDY_*, LEAD_*/DEAL_*, …), so a key names
+// exactly one curated stage.
+const CURATED_STAGE_LABELS: ReadonlyMap<string, LocalizedLabel> = new Map(
+  PROGRAM_TEMPLATES.filter((t) => t.key !== 'canonical_pipeline').flatMap((t) =>
+    t.stages.map((s) => [s.key, s.labels] as const)
+  )
+);
+
+/**
+ * `localizeStageLabels`, extended to the curated template stages. A template
+ * applied (or provisioned, #2353) stores its labels in ONE language — the
+ * MARKETING funnel is written in English at org creation — and `isDefaultLabel`
+ * only recognises the canonical keys, so a Turkish reader saw "New lead",
+ * "Proposal sent" … on a Turkish dashboard. The same rule as #2268 applies:
+ * a stored label that is blank or a byte-for-byte copy of OUR curated label in
+ * any locale was never chosen by the tenant, and reads back in the viewer's
+ * locale; anything the tenant actually typed is kept verbatim.
+ */
+export function localizeResolvedStageLabels(stages: ResolvedStage[], locale: Locale): ResolvedStage[] {
+  // Judged on the STORED label: the canonical pass fills a blank one with the
+  // raw key, which would no longer read as untouched.
+  return localizeStageLabels(stages, locale).map((s, i) => {
+    const labels = CURATED_STAGE_LABELS.get(s.key);
+    if (!labels) return s;
+    const trimmed = stages[i].label.trim();
+    const untouched = !trimmed || TEMPLATE_LOCALES.some((l) => labels[l] === trimmed);
+    return untouched ? { ...s, label: labels[locale] ?? labels.en } : s;
+  });
 }
 
 // ── Reading a template ───────────────────────────────────────────────────────

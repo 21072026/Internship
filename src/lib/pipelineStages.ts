@@ -11,7 +11,6 @@ import {
   CANONICAL_OUTCOME_KEYS,
   defaultPipelineStages,
   isDefaultLabel,
-  localizeStageLabels,
   onPathKeys,
   stageLabel,
   startStageKey,
@@ -20,7 +19,7 @@ import {
   type ResolvedStage,
 } from './pipeline';
 import type { Locale } from '@/i18n/config';
-import { defaultTemplateForVertical, templateStagePayload } from './programTemplates';
+import { defaultTemplateForVertical, localizeResolvedStageLabels, templateStagePayload } from './programTemplates';
 
 export { CANONICAL_OUTCOME_KEYS, defaultPipelineStages, isDefaultLabel, onPathKeys, outcomeStageKeysFrom, stageLabel, startStageKey, type OutcomeStageKeys, type ResolvedStage };
 
@@ -38,7 +37,7 @@ export async function resolvePipelineStages(
     if (rows.length > 0) {
       // A row the tenant never renamed reads back in the CALLER'S locale, not
       // in whatever language the editor happened to persist (#2268).
-      return localizeStageLabels(
+      return localizeResolvedStageLabels(
         rows.map((r) => ({
           key: r.key,
           label: r.label,
