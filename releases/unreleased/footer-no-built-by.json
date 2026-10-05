@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**The public footer no longer carries a \"Built and maintained by\" line**, on either host. On the marketing host it read to a SaleVali visitor as a second provider beside the BCS-IT GmbH imprint; the maintainer asked for it gone everywhere. Removed the `publicNav.builtBy` key (EN/TR/DE) and the footer's `FOUNDER_*` imports; the landing's transparency band and the JSON-LD `founder` stay. `e2e/landing-i18n.spec.ts` now asserts the footer line is absent.",
+  "notes": {
+    "en": ["The site footer is simpler: the “Built and maintained by” line is gone."],
+    "tr": ["Site alt bilgisi sadeleşti: “Geliştiren ve yaşatan” satırı kaldırıldı."],
+    "de": ["Die Fußzeile ist schlanker: Die Zeile „Gebaut und gepflegt von“ entfällt."]
+  }
+}
