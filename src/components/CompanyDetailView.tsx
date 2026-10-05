@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { redactCompanyForReader } from '@/lib/companyVisibility';
+import { redactCompanyForReader, redactContactForReader } from '@/lib/companyVisibility';
 import { stageLabel, type ResolvedStage } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import type { CompanyDetailData } from '@/lib/companyDetail';
@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { CompanyExternalIdForm } from '@/components/admin/CompanyExternalIdForm';
 import { ContactPermissionEditor } from '@/components/admin/ContactPermissionEditor';
+import { CompanyContactsEditor } from '@/components/admin/CompanyContactsEditor';
+import { PRIMARY_CONTACT_ID, hasPrimary, primaryAsContact } from '@/lib/companyContactsRule';
 import { ownerObjected } from '@/lib/contactPermissionRule';
 import { CONTACT_CHANNELS, marketingEmailAllowed } from '@/lib/contactPermissionRule';
 
@@ -29,6 +31,38 @@ function Field({ label, value, testId }: { label: string; value?: string | numbe
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="text-sm text-gray-900 dark:text-gray-100 break-words">{value}</dd>
     </div>
+  );
+}
+
+type ListedContact = {
+  id: string;
+  isPrimary: boolean;
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+  position?: string | null;
+};
+
+/** The read-only list a non-editor sees — already redacted by the caller. */
+function ContactList({ contacts, labels }: { contacts: ListedContact[]; labels: Dictionary['companyDetail']['contacts'] }) {
+  if (contacts.length === 0) return <p className="text-sm text-gray-500">{labels.none}</p>;
+  return (
+    <ul className="divide-y divide-gray-100 dark:divide-gray-800" data-testid="company-contacts-list">
+      {contacts.map((c) => (
+        <li key={c.id} className="py-2 text-sm" data-testid={`company-contact-${c.id}`}>
+          <span className="font-medium text-gray-900 dark:text-gray-100">{c.name ?? c.email}</span>
+          {c.isPrimary && (
+            <Badge variant="info" className="ml-2">
+              {labels.primary}
+            </Badge>
+          )}
+          {c.position && <span className="ml-2 text-gray-500">{c.position}</span>}
+          <div className="text-gray-600 dark:text-gray-400">
+            {[c.email, c.phone].filter(Boolean).join(' · ')}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -143,6 +177,36 @@ export function CompanyDetailView({
           )}
         </Card>
       </div>
+
+      {/* The address book (#2442, docs/company-contacts.md): the primary contact
+          first — it IS the account's contact columns — then everyone else. */}
+      <Card className="mb-6" data-testid="company-detail-contacts">
+        <CardHeader>
+          <CardTitle>{d.contacts.title}</CardTitle>
+        </CardHeader>
+        {showAdminEditors ? (
+          <CompanyContactsEditor
+            companyId={company.id}
+            contacts={[
+              ...(hasPrimary(data.company)
+                ? [{ id: PRIMARY_CONTACT_ID, isPrimary: true, ...primaryAsContact(data.company) }]
+                : []),
+              ...data.company.contacts.map((c) => ({ ...c, isPrimary: false })),
+            ]}
+            labels={d.contacts}
+          />
+        ) : (
+          <ContactList
+            contacts={[
+              ...(hasPrimary(data.company)
+                ? [{ id: PRIMARY_CONTACT_ID, isPrimary: true, ...primaryAsContact(data.company) }]
+                : []),
+              ...data.company.contacts.map((c) => ({ ...c, isPrimary: false })),
+            ].map((c) => redactContactForReader(c, role))}
+            labels={d.contacts}
+          />
+        )}
+      </Card>
 
       {/* Contact permission and its evidence (#2577, docs/contact-permission.md). */}
       <Card className="mb-6" data-testid="company-detail-permission">

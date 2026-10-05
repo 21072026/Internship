@@ -100,7 +100,11 @@ function contactScrubOps(
   subjectOrgId: string | null,
   tombstoneId: string,
   fallbackOrgId: string,
-): [Prisma.PrismaPromise<Prisma.BatchPayload>, Prisma.PrismaPromise<Prisma.BatchPayload>] {
+): [
+  Prisma.PrismaPromise<Prisma.BatchPayload>,
+  Prisma.PrismaPromise<Prisma.BatchPayload>,
+  Prisma.PrismaPromise<Prisma.BatchPayload>,
+] {
   return [
     prisma.companyInquiry.updateMany({
       where: erasureScoped({ email }, subjectOrgId, fallbackOrgId),
@@ -111,6 +115,12 @@ function contactScrubOps(
     prisma.company.updateMany({
       where: erasureScoped({ contactEmail: email }, subjectOrgId, fallbackOrgId),
       data: companyContactErasureData(),
+    }),
+    // An address-book entry (#2442) is nothing BUT the person — name, address,
+    // line, title — so it is deleted rather than scrubbed; the account keeps
+    // its other contacts. Addresses are stored lower-cased, like `email` here.
+    prisma.companyContact.deleteMany({
+      where: erasureScoped({ email }, subjectOrgId, fallbackOrgId),
     }),
   ];
 }
@@ -129,11 +139,11 @@ export async function forgetCompanyContact(
   email: string,
   orgId: string | null,
   randomId: string,
-): Promise<{ inquiries: number; companies: number }> {
-  const [inquiries, companies] = await prisma.$transaction(
+): Promise<{ inquiries: number; companies: number; contacts: number }> {
+  const [inquiries, companies, contacts] = await prisma.$transaction(
     contactScrubOps(normalizeContactEmail(email), orgId, accountlessTombstoneId(randomId), await defaultOrgId()),
   );
-  return { inquiries: inquiries.count, companies: companies.count };
+  return { inquiries: inquiries.count, companies: companies.count, contacts: contacts.count };
 }
 
 // ── Free text: what each surface gets, and why (#2052) ───────────────────────
