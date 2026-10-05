@@ -8087,6 +8087,18 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - `localizeStageLabels()` fills a blank label with the **raw key** — judge "untouched" on the stored label, not on its output.
 - `programTemplates.ts` is client-safe but `pipeline.ts` must not import it (its catalogue calls `defaultPipelineStages()` at module init → cycle/TDZ); put template-aware helpers in `programTemplates.ts`.
 
+## 2026-10-05 — locale URLs, landing tour, weekly-report compliance (#2698, #2706, #2712, #2713)
+
+- **`npm run seed:demo` does not read `.env`.** `prisma/demoTarget.mjs` checks `process.env.DATABASE_URL`, and with it unset the seeder says "does not look local" even for a localhost URL. `set -a; . ./.env; set +a` first.
+- **A demo record with no stage history is invisible to anything that reads history.** The demo seeder used to write a single `100 → <stage>` move, so every finished intern read as "never interned" to weekly-report compliance. Code that derives a window from `StatusChange` needs the seed to record the stages it reads (now done for the internship stage, #1917). Only fresh seeds pick that up, because the seeder skips relations that already exist.
+- **`sr-only` inside a horizontal scroller widens the whole document.** Absolutely positioned labels with no positioned ancestor escape `overflow-x: auto`: `/admin/weekly-reports` measured 591px wide at 360px while `#main-content` read 360. Put `relative` on the scroller, and compare `document.documentElement.scrollWidth` with `main.scrollWidth` to find this class of bug.
+- **Chromium in this container does not trust the agent proxy's CA**, so a topic preview (`https://prNNNN.interncrm.com`) fails with `ERR_CERT_AUTHORITY_INVALID`. Don't turn off TLS checks. Use curl, which trusts the bundle, with a NextAuth credentials login: GET `/api/auth/csrf`, then POST `/api/auth/callback/credentials` with the cookie jar, then call the API.
+- **Lint from a worktree resolves the PARENT checkout's `.eslintrc.json`**, so it fails with "Failed to load config next/core-web-vitals" when the main checkout has no `node_modules`. Symlink the worktree's `node_modules` into the main checkout while linting, and remove the link afterwards.
+- **Unit-testing a `src/lib` module that imports a sibling without an extension** works through `scripts/test/ts-extensionless-resolve.mjs` (`register()` + dynamic `import()`). Keep the pure rule Prisma-free and put the queries in a sibling `*Query.ts`.
+- **Reusing the Friday reminder for a manual chase-up** (adding a `relationIds` option to `sendWeeklyReportReminders`) got idempotency for free from the existing per-week `WeeklyReportReminder` claim. Look for an existing claim or marker before writing a second dedupe.
+- **The mobile-layout coverage gate goes red on main whenever a sidebar link lands without an audit entry** (`/admin/acquisition`, #2702). A new admin page belongs in `e2e/mobile-layout-coverage.spec.ts` in the same PR.
+- **Element posters for `public/release-media` are capped at 150 KB.** A whole figure with a large screenshot came out at 155 KB; capturing a figure with a simpler screenshot, or a smaller crop, fixed it.
+
 ## 2026-10-01 — resolving and merging a queue of conflicting PRs (#2626, #2629, #2632, #2643)
 
 - **A docs-only PR can never auto-merge.** `e2e.yml` has `paths-ignore: docs/**, **.md,
