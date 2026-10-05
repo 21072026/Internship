@@ -8125,3 +8125,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Scratchpad worktrees have no `node_modules`, and another worktree's can be stale** (`main` had
   gained `web-push`, `pdf-lib`, `@axe-core/playwright`). If the lockfile equals main's, `npm ci`
   takes ~17s and is cheaper than chasing phantom type errors.
+
+## 2026-10-05 — mobile strategy + Android TWA phase 1 (#2085)
+
+- **A real Android bundle builds inside the web container.** `dl.google.com` and `services.gradle.org` are reachable: unzip `commandlinetools-linux-*_latest.zip` into `<sdk>/cmdline-tools/latest`, `sdkmanager --sdk_root=<sdk> "platforms;android-36" "build-tools;36.0.0"`, write `sdk.dir=<sdk>` to `local.properties`, then `./gradlew bundleRelease` with `-Dhttps.proxyHost/-Dhttps.proxyPort` taken from `$HTTPS_PROXY` (the preset `JAVA_TOOL_OPTIONS` covers trust, the wrapper download still needs the proxy flags). JDK 21 is preinstalled and Gradle 8.11 accepts it; CI uses 17. ~2 min cold.
+- Drive **`@bubblewrap/core`** (`TwaManifest.fromWebManifestJson` / `TwaGenerator.createTwaProject`), not the `bubblewrap` CLI — the CLI prompts for JDK/SDK paths on first run and cannot run headless. Generating `twa-manifest.json` from a manifest object gives the canonical field set instead of a hand-typed one.
+- A plain `npm install` in a fresh container rewrote `package-lock.json` (~60 lines dropped) — `git diff --stat` before staging and `git checkout package-lock.json` unless the change is meant to touch deps. (`npm install --no-save --no-package-lock --prefix mobile/android …` does **not** touch it — verified.)
+- A route under `src/app/.well-known/` works in the App Router, but `next lint --file` reports it as "ignored by default" (dot directory) — `tsc` still typechecks it, and the middleware matcher skips it (path contains a dot).
