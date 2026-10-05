@@ -72,6 +72,8 @@ const PROFILE_WRITERS = ['src/app/api/profile/route.ts', 'src/components/Profile
 // The marketing account import (#2406) is the only writer of the four account
 // columns #2405/#2407 added; its validator carries their caps.
 const MARKETING_IMPORT_WRITERS = ['src/lib/marketingImport.ts'];
+// The address book (#2442): one validator for every contact write.
+const CONTACT_WRITERS = ['src/lib/companyContactsAccess.ts'];
 
 export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   Company: {
@@ -89,12 +91,22 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     // them adds itself here beside the importer.
     contactName: { limit: 'companyContactName', files: MARKETING_IMPORT_WRITERS },
     contactPhone: { limit: 'companyContactPhone', files: MARKETING_IMPORT_WRITERS },
+    contactPosition: { limit: 'companyContactPosition', files: CONTACT_WRITERS },
     vatId: { limit: 'companyVatId', files: MARKETING_IMPORT_WRITERS },
     country: { limit: 'companyCountry', files: MARKETING_IMPORT_WRITERS },
     externalId: {
       exempt:
         'no request path writes it (#2446 is the column; the nightly usage sync that stamps it is #2447). It is not typed by a person at all — the feed matches on it and fills it as a gap — so the cap belongs on that validator, which the data contract already fixes at the column width: docs/marketing-vertical/salevali-usage-feed.md § Alanlar. A form or route that ever offers this field replaces this exemption with a limit.',
     },
+  },
+  CompanyContact: {
+    id: ID,
+    orgId: ID,
+    companyId: ID,
+    name: { limit: 'companyContactName', files: CONTACT_WRITERS },
+    email: { limit: 'companyContactEmail', files: CONTACT_WRITERS },
+    phone: { limit: 'companyContactPhone', files: CONTACT_WRITERS },
+    position: { limit: 'companyContactPosition', files: CONTACT_WRITERS },
   },
   CompanyNeed: {
     id: ID,

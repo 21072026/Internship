@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     const result = await forgetCompanyContact(email, resolveOrgId(session), randomUUID());
-    if (result.inquiries === 0 && result.companies === 0) {
+    if (result.inquiries === 0 && result.companies === 0 && result.contacts === 0) {
       return NextResponse.json({ error: 'No contact with this address in your organization', code: 'not_found' }, { status: 404 });
     }
 
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       targetId: null,
       // Counts only: the address IS the personal data this erased, so writing it
       // here would keep exactly what the request asked us to forget.
-      detail: `${result.inquiries} enquiries, ${result.companies} companies`,
+      detail: `${result.inquiries} enquiries, ${result.companies} companies, ${result.contacts} address-book entries`,
       request,
     });
 

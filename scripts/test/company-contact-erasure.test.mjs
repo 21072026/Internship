@@ -147,7 +147,7 @@ test('the enquiry keeps every column that belongs to the account', () => {
 });
 
 test('the company loses its three contact columns and nothing else', () => {
-  assert.deepEqual(companyContactErasureData(), { contactEmail: null, contactName: null, contactPhone: null });
+  assert.deepEqual(companyContactErasureData(), { contactEmail: null, contactName: null, contactPhone: null, contactPosition: null });
 });
 
 test('one tombstone address for the User row and the enquiry', () => {

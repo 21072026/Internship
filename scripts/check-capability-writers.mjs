@@ -58,12 +58,23 @@ const MODELS = {
   interviewRequest: 'placements',
   interviewPanel: 'placements',
   interviewPanelMember: 'placements',
+  // The account address book (#2442).
+  companyContact: 'companies',
 };
 
 // Files that write a gated model outside any request handler. Each entry is a
 // promise that the path is sessionless and was reasoned about, with the reason
 // in the value — a reader should never have to go find out why.
 const EXEMPT = {
+  'src/lib/companyContacts.ts':
+    'The address-book writes (#2442) live in a lib so the one-primary swap and the company-row lock have one ' +
+    'home. Its only callers are the handlers under src/app/api/companies/[id]/contacts, each of which passes ' +
+    "adminCompany() (src/lib/companyContactsAccess.ts) — ADMIN + requireCapability(..., 'companies') + the tenant " +
+    'lookup — before calling in. It opens no request path of its own.',
+  'src/lib/accountErasure.ts':
+    'Erasure (#2434/#2559, DSGVO Art. 17) deletes the address-book rows that carry an erased address. It runs from ' +
+    'the account-erasure paths and the retention sweep, which have no vertical to gate on: a right to erasure is ' +
+    'not a product module, and it must reach the rows whatever the org sells.',
   'src/lib/hiringOutcome.ts':
     'applyAcceptedOffer() (#1411/#1854) is a helper with one caller: the accept branch of PATCH ' +
     '/api/offers/[id], which calls requireCapability(..., \'placements\') before anything else and ' +

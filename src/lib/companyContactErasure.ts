@@ -147,5 +147,6 @@ export function inquiryErasureData(userId: string) {
 
 /** What a company whose primary contact is the person is rewritten to. */
 export function companyContactErasureData() {
-  return { contactEmail: null, contactName: null, contactPhone: null };
+  // contactPosition (#2442) is the same person's job title: it goes with them.
+  return { contactEmail: null, contactName: null, contactPhone: null, contactPosition: null };
 }

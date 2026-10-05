@@ -10,6 +10,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withRequestScope } from '@/lib/requestContext';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
+import { CONTACT_SELECT } from '@/lib/companyContacts';
 import { transliterate } from '@/lib/transliterate';
 
 /**
@@ -153,7 +154,7 @@ async function handleGet(request: Request, { params }: { params: Promise<{ id: s
       const relationIds = relations.map((r) => r.id);
       const throughRelations = { relationId: { in: relationIds } };
 
-      const [needs, requisitions, offers, interests, inquiries, interactions, statusChanges] = await Promise.all([
+      const [needs, requisitions, offers, interests, inquiries, interactions, statusChanges, contacts] = await Promise.all([
         prisma.companyNeed.findMany({ where: { companyId: company.id }, orderBy: { id: 'asc' } }),
         prisma.requisition.findMany({
           where: { companyId: company.id },
@@ -173,6 +174,13 @@ async function handleGet(request: Request, { params }: { params: Promise<{ id: s
         }),
         prisma.interactionLog.findMany({ where: throughRelations, orderBy: [{ date: 'asc' }, { id: 'asc' }] }),
         prisma.statusChange.findMany({ where: throughRelations, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+        // The address book beyond the primary contact (#2442); the primary is
+        // the company's own contact columns above.
+        prisma.companyContact.findMany({
+          where: { companyId: company.id },
+          select: CONTACT_SELECT,
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        }),
       ]);
 
       const body = JSON.stringify(
@@ -184,6 +192,7 @@ async function handleGet(request: Request, { params }: { params: Promise<{ id: s
           offers,
           interests,
           inquiries,
+          contacts,
           relations,
           interactions,
           statusChanges,

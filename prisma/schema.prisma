@@ -176,6 +176,7 @@ model Organization {
   usageRollups         UsageRollup[]
   companyUsage         CompanyUsage[]
   contactPermissions   ContactPermission[]
+  companyContacts      CompanyContact[]
   postCampaigns        PostCampaign[]
   postRecipients       PostCampaignRecipient[]
   contactSuppressions  ContactSuppression[]
@@ -1317,13 +1318,13 @@ model Document {
 }
 
 model Company {
-  orgId        String?
-  org          Organization? @relation(fields: [orgId], references: [id])
-  id           String        @id @default(cuid())
-  name         String
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id])
+  id              String        @id @default(cuid())
+  name            String
   // TEXT: the company form offers 2 000 characters, far past VARCHAR(191).
-  description  String?       @db.Text
-  contactEmail String?
+  description     String?       @db.Text
+  contactEmail    String?
   // The primary contact on the account (#2407) — "who do we call", beside the
   // address column that already existed. Three plain columns rather than a
   // `CompanyContact` table on purpose: there is no Contact model here, a
@@ -1345,8 +1346,12 @@ model Company {
   // through the tenant boundary (docs/tenant-isolation.md): two tenants may each
   // hold the same merchant, and one would then be unable to save its own row.
   // Were uniqueness ever wanted here it could only be `@@unique([orgId, ...])`.
-  contactName  String?
-  contactPhone String?
+  contactName     String?
+  contactPhone    String?
+  // The primary contact's role at the account ("Geschäftsführer"). The three
+  // contact columns plus this one ARE the primary contact; CompanyContact holds
+  // everyone else (#2442, docs/company-contacts.md).
+  contactPosition String?
   // VAT identification number (#2405). The account's strongest identity across
   // systems, and therefore the account import's FIRST matching key; the fallback
   // is normalized name + country (docs/marketing-import.md).
@@ -1356,16 +1361,16 @@ model Company {
   // accounts that carry no VAT number are unconstrained — which is every row the
   // internship product has today, and why this can be added to a populated
   // table at all.
-  vatId        String?
+  vatId           String?
   // ISO-3166-1 alpha-2, upper case. The other half of the fallback match key:
   // `address` is free text and cannot answer "which country is this account
   // in", so two merchants of the same name in two countries were one row.
-  country      String?       @db.VarChar(2)
-  industry     String?
-  logoUrl      String?
-  size         String?
-  address      String?
-  quota        Int?
+  country         String?       @db.VarChar(2)
+  industry        String?
+  logoUrl         String?
+  size            String?
+  address         String?
+  quota           Int?
   // The id this account carries in the product the tenant sells (#2446) — the
   // SaleVali merchant id for a MARKETING org, whatever a later feed keys on for
   // anyone else. Nullable and unbackfilled: a company typed in by hand, or
@@ -1386,9 +1391,9 @@ model Company {
   // sample), never guessed at and never turned into a failed chunk at 03:00.
   // The index below is what that lookup reads ("which company of THIS org is
   // external id X?"). Contract: docs/marketing-vertical/salevali-usage-feed.md.
-  externalId   String?       @db.VarChar(191)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  externalId      String?       @db.VarChar(191)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   needs              CompanyNeed[]
   mentorships        MentorshipRelation[]
@@ -1411,6 +1416,7 @@ model Company {
   contactPermissions ContactPermission[]
   // The postal campaigns this account was a recipient of (#2697).
   postRecipients     PostCampaignRecipient[]
+  contacts           CompanyContact[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -1743,6 +1749,34 @@ enum ContactPermissionSource {
   ADMIN
   IMPORT
   INGEST
+}
+
+// An account's address book beyond its primary contact (#2442). The primary
+// contact stays in Company.contactName/Email/Phone/Position — the columns the
+// contact permission (#2577), letter campaigns, the import and the export
+// already read — so "exactly one primary" is structural: making a row primary
+// SWAPS it with those columns in one transaction (src/lib/companyContacts.ts).
+// Deliberately not a User: a contact is no auth principal and never signs in.
+// Deliberately not a funnel carrier (docs/marketing-vertical/pipeline-record.md).
+model CompanyContact {
+  // Registered in TENANT_MODELS; every writer passes the company's own orgId.
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id])
+  id        String        @id @default(cuid())
+  // Cascade: deleting the account deletes its address book.
+  companyId String
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  // Lower-cased on write. Unique per COMPANY, never globally: two tenants may
+  // hold the same merchant (see Company.contactEmail).
+  email     String?
+  phone     String?
+  position  String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([companyId, email])
+  @@index([orgId])
 }
 
 model ContactPermission {
