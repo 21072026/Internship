@@ -76,7 +76,8 @@ function utcMonday(offsetWeeks = 0) {
 }
 
 // A weekly diary only makes sense once the internship is running.
-const REPORTING_STAGES = ['INTERNSHIP_IN_PROGRESS_450', 'INTERNSHIP_COMPLETED_490', 'HIREABLE_600', 'HIRED_660'];
+const INTERNSHIP_STAGE = 'INTERNSHIP_IN_PROGRESS_450';
+const REPORTING_STAGES = [INTERNSHIP_STAGE, 'INTERNSHIP_COMPLETED_490', 'HIREABLE_600', 'HIRED_660'];
 
 // One piece of work per interning relation, so four diaries do not read as four
 // copies of the same week. Indexed, not random — the seed stays deterministic.
@@ -348,7 +349,24 @@ async function main() {
     // APPLICATION_100 → APPLICATION_100 for them is exactly the no-op row of
     // #934, and it was the one the bug report reproduced against ("Deniz Demo
     // · Stage history (1) · 100 · İlk temas → 100 · İlk temas").
-    if (m.stage !== 'APPLICATION_100') {
+    //
+    // A mentee whose internship has started gets the internship stage itself
+    // in their history (#1917): it opens the day after the relation did, and —
+    // for one who has since finished — closes three days ago. That window is
+    // what weekly-report compliance counts owed weeks from; without it every
+    // finished intern would read as "never interned" and the compliance
+    // screen would hold one row.
+    if (REPORTING_STAGES.includes(m.stage)) {
+      const startDate = rel.startDate.getTime();
+      await prisma.statusChange.create({
+        data: { relationId: rel.id, fromStatus: 'APPLICATION_100', toStatus: INTERNSHIP_STAGE, changedById: mentor.id, createdAt: new Date(startDate + DAY_MS) },
+      });
+      if (m.stage !== INTERNSHIP_STAGE) {
+        await prisma.statusChange.create({
+          data: { relationId: rel.id, fromStatus: INTERNSHIP_STAGE, toStatus: m.stage, changedById: mentor.id, createdAt: new Date(Date.now() - 3 * DAY_MS) },
+        });
+      }
+    } else if (m.stage !== 'APPLICATION_100') {
       await prisma.statusChange.create({
         data: { relationId: rel.id, fromStatus: 'APPLICATION_100', toStatus: m.stage, changedById: mentor.id, createdAt: new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000) },
       });
@@ -395,61 +413,80 @@ async function main() {
   });
   const relationOf = (localPart) => demoRelations.find((relation) => relation.mentee.email === `${localPart}@${DEMO_DOMAIN}`);
 
-  // Weekly reports — three consecutive weeks for every relation whose
-  // internship has actually started: last-but-one reviewed and approved with a
-  // mentor comment, last week either awaiting review or sent back for changes,
-  // and this week still a draft. Monday-anchored, so the unique key makes a
-  // re-run a no-op.
+  // Weekly reports (#2062, #1917) — one per owed week of every internship, with
+  // a deliberate mix so the compliance listing (/api/admin/weekly-reports) is
+  // never a wall of 100%: most weeks approved on time, one relation with a
+  // missing week, one with a late hand-in, the last owed week awaiting review
+  // or sent back, and this week still a draft for whoever is interning now.
+  //
+  // "Owed week" is the rule of src/lib/weeklyReportCompliance.ts, mirrored
+  // here: full UTC weeks inside the internship window (read from the stage
+  // history seeded above) that have already ended. Monday-anchored, so the
+  // unique key makes a re-run a no-op.
   const reportingRelations = demoRelations.filter((relation) => REPORTING_STAGES.includes(relation.pipelineStatus));
+  const moves = await prisma.statusChange.findMany({
+    where: { relationId: { in: reportingRelations.map((relation) => relation.id) }, OR: [{ toStatus: INTERNSHIP_STAGE }, { fromStatus: INTERNSHIP_STAGE }] },
+    orderBy: { createdAt: 'asc' },
+    select: { relationId: true, fromStatus: true, toStatus: true, createdAt: true },
+  });
+  const thisMonday = utcMonday(0);
   let reportsCreated = 0;
   for (let index = 0; index < reportingRelations.length; index++) {
     const relation = reportingRelations[index];
     const topic = REPORT_TOPICS[index % REPORT_TOPICS.length];
-    const weeks = [
-      {
-        weekStart: utcMonday(-2),
-        summary: `Paired with my mentor on ${topic} and opened two pull requests. (demo)`,
-        hoursSpent: 36,
+    const own = moves.filter((move) => move.relationId === relation.id);
+    const entry = own.find((move) => move.toStatus === INTERNSHIP_STAGE);
+    const exit = own.filter((move) => move.fromStatus === INTERNSHIP_STAGE).at(-1);
+    const owed = [];
+    if (entry) {
+      const entryWeek = new Date(entry.createdAt);
+      entryWeek.setUTCHours(0, 0, 0, 0);
+      const monday = new Date(entryWeek.getTime() - ((entryWeek.getUTCDay() + 6) % 7) * DAY_MS);
+      let week = monday.getTime() === entry.createdAt.getTime() ? monday : new Date(monday.getTime() + 7 * DAY_MS);
+      const limit = Math.min(Date.now(), exit ? exit.createdAt.getTime() : Infinity);
+      while (week.getTime() + 7 * DAY_MS - 1 < limit) {
+        owed.push(week);
+        week = new Date(week.getTime() + 7 * DAY_MS);
+      }
+    } else {
+      // Seeded before the internship stage had history (a re-run on an old
+      // database): the two recent weeks it always had.
+      owed.push(utcMonday(-2), utcMonday(-1));
+    }
+
+    const weeks = owed.map((weekStart, k) => {
+      const last = k === owed.length - 1;
+      // Every other relation skips its second week entirely.
+      if (index % 2 === 0 && k === 1 && owed.length > 2) return null;
+      if (last && relation.pipelineStatus === INTERNSHIP_STAGE) {
+        return index % 2 === 0
+          ? { weekStart, summary: `Built ${topic}, wrote its first tests and sat in on a code review. (demo)`, hoursSpent: 32, blockers: 'Not sure yet how to test the e-mail path. (demo)', status: 'SUBMITTED', mentorComment: null, reviewed: false, submitDay: 4 }
+          : { weekStart, summary: `Finished ${topic} and started on the filters. (demo)`, hoursSpent: 30, blockers: null, status: 'CHANGES_REQUESTED', mentorComment: 'Add what you took away from the code review and I will sign this off. (demo)', reviewed: true, submitDay: 4 };
+      }
+      return {
+        weekStart,
+        summary: `Week ${k + 1}: paired with my mentor on ${topic} and opened a pull request. (demo)`,
+        hoursSpent: 34 + (k % 3),
         blockers: null,
         status: 'APPROVED',
-        mentorComment: 'Solid week — keep the pull request descriptions this detailed. (demo)',
+        mentorComment: k === 0 ? 'Solid first week — keep the pull request descriptions this detailed. (demo)' : null,
         reviewed: true,
-      },
-      index % 2 === 0
-        ? {
-            weekStart: utcMonday(-1),
-            summary: `Built ${topic}, wrote its first tests and sat in on a code review. (demo)`,
-            hoursSpent: 32,
-            blockers: 'Not sure yet how to test the e-mail path. (demo)',
-            status: 'SUBMITTED',
-            mentorComment: null,
-            reviewed: false,
-          }
-        : {
-            weekStart: utcMonday(-1),
-            summary: `Finished ${topic} and started on the filters. (demo)`,
-            hoursSpent: 30,
-            blockers: null,
-            status: 'CHANGES_REQUESTED',
-            mentorComment: 'Add what you took away from the code review and I will sign this off. (demo)',
-            reviewed: true,
-          },
-      {
-        weekStart: utcMonday(0),
-        summary: `Notes so far: wrapping up ${topic}, then the print view. (demo)`,
-        hoursSpent: 8,
-        blockers: null,
-        status: 'DRAFT',
-        mentorComment: null,
-        reviewed: false,
-      },
-    ];
+        // One relation in three hands one week in on the Wednesday AFTER it.
+        submitDay: index % 3 === 1 && k === 2 ? 9 : 4,
+      };
+    }).filter(Boolean);
+    if (relation.pipelineStatus === INTERNSHIP_STAGE) {
+      weeks.push({ weekStart: thisMonday, summary: `Notes so far: wrapping up ${topic}, then the print view. (demo)`, hoursSpent: 8, blockers: null, status: 'DRAFT', mentorComment: null, reviewed: false, submitDay: null });
+    }
+
     for (const week of weeks) {
       const existing = await prisma.weeklyReport.findUnique({
         where: { relationId_weekStart: { relationId: relation.id, weekStart: week.weekStart } },
         select: { id: true },
       });
       if (existing) continue;
+      // Clamped to now: a hand-in or a review is never dated in the future.
+      const at = (days) => new Date(Math.min(week.weekStart.getTime() + days * DAY_MS, Date.now()));
       await prisma.weeklyReport.create({
         data: {
           orgId: relation.orgId ?? defaultOrg.id,
@@ -459,17 +496,17 @@ async function main() {
           hoursSpent: week.hoursSpent,
           blockers: week.blockers,
           status: week.status,
+          submittedAt: week.submitDay === null ? null : at(week.submitDay),
           mentorComment: week.mentorComment,
           reviewedById: week.reviewed ? relation.mentorId : null,
-          // The Tuesday after the week it reviews — clamped to now, so a review
-          // is never dated in the future when the seeder runs early in the week.
-          reviewedAt: week.reviewed ? new Date(Math.min(week.weekStart.getTime() + 8 * DAY_MS, Date.now())) : null,
+          // The Tuesday after the hand-in's week.
+          reviewedAt: week.reviewed ? at(Math.max(8, (week.submitDay ?? 0) + 1)) : null,
         },
       });
       reportsCreated++;
     }
   }
-  console.log(`weekly reports: ${reportsCreated} created (${reportingRelations.length} interning relations × 3 weeks)`);
+  console.log(`weekly reports: ${reportsCreated} created across ${reportingRelations.length} internships`);
 
   // The shared to-do pool: the wording of a handed-out to-do is read from the
   // template every time it is displayed, so the pool has to exist before the

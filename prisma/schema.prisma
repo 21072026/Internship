@@ -3606,6 +3606,13 @@ model WeeklyReport {
   hoursSpent    Int?
   blockers      String?            @db.Text
   status        WeeklyReportStatus @default(DRAFT)
+  // FIRST time the report left DRAFT (#1917). "Late" is measured against the
+  // week the report covers, so it needs the moment of submission — updatedAt
+  // moves on every edit and review. Kept on a resubmission after
+  // CHANGES_REQUESTED: the deadline was about the first hand-in. NULL on rows
+  // from before the column existed; src/lib/weeklyReportCompliance.ts reads
+  // that as "unknown", never as late.
+  submittedAt   DateTime?
   mentorComment String?            @db.Text
   reviewedById  String?
   reviewedAt    DateTime?
