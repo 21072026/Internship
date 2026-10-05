@@ -8086,3 +8086,30 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - A stage label that "never translates" is usually a **stored** label, not a missing i18n key: `provisionStagePreset()` writes the template's labels in one locale, and `isDefaultLabel()` only recognises canonical keys. Fix on the read side (`localizeResolvedStageLabels`) so existing orgs heal without a backfill.
 - `localizeStageLabels()` fills a blank label with the **raw key** — judge "untouched" on the stored label, not on its output.
 - `programTemplates.ts` is client-safe but `pipeline.ts` must not import it (its catalogue calls `defaultPipelineStages()` at module init → cycle/TDZ); put template-aware helpers in `programTemplates.ts`.
+
+## 2026-10-01 — resolving and merging a queue of conflicting PRs (#2626, #2629, #2632, #2643)
+
+- **A docs-only PR can never auto-merge.** `e2e.yml` has `paths-ignore: docs/**, **.md,
+  releases/unreleased/**`, but `Playwright smoke` is a required check on `main`, so a PR that
+  touches only those paths sits `BLOCKED` with every check green. `gh workflow run e2e.yml --ref
+  <branch>` does put a green `Playwright smoke` check-run on the head sha, but it **does not
+  count** — the requirement only accepts the `pull_request`-event run. The way through is
+  `gh pr merge N --squash --admin` (how #2608, #2670 and #2626 merged), and it is a bypass, so
+  say so to the maintainer. A durable fix (a stub smoke job for docs-only PRs, or dropping the
+  requirement) is the maintainer's call and still open.
+- **`docs/agent-experience.md` re-conflicts on every merge in a wave.** Every PR appends here, so
+  when one merges, the next one conflicts. Both sides are pure appends: resolve by taking main's
+  file and re-appending the branch's added block (difflib over merge-base → HEAD, assert the
+  branch deleted nothing but stray conflict markers — an old main once carried a lone
+  `>>>>>>> origin/main` line that two branches had cleaned up). Expect to do it once per merge.
+- **Resolving someone else's PR: separate worktree, never force-push.** The PR's own session was
+  resolving #2643 at the same moment; my push was rejected as non-fast-forward, which is exactly
+  the protection you want. Read their merge, confirm it keeps both sides, drop yours.
+- **A green merge can still break the PR's own spec.** #2629's tenant-scope spec probed the premium
+  gate through `/api/admin/analytics/cohorts`; main had since put a `mentorship` capability gate
+  on that route, so the MARKETING admin got 403 regardless of the tier. Run the PR's own specs
+  after resolving, not just `tsc` — and an auto-merge can leave a duplicated key in a Prisma
+  `select` (`orgId: true` twice) that only `tsc` catches.
+- **Scratchpad worktrees have no `node_modules`, and another worktree's can be stale** (`main` had
+  gained `web-push`, `pdf-lib`, `@axe-core/playwright`). If the lockfile equals main's, `npm ci`
+  takes ~17s and is cheaper than chasing phantom type errors.
