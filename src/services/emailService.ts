@@ -3,6 +3,7 @@ import cron from 'node-cron';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { orgIdsEntitledTo } from '@/lib/subscription';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { logger } from '@/lib/logger';
@@ -4359,11 +4360,19 @@ const ALERTABLE_REQUISITION_STATUS = 'OPEN';
 // CompanyNeed→Requisition backfill is manual and runs in no deploy step. So this
 // adds a source rather than replacing one; the [companyId, menteeId] dedupe key
 // means a company with the same role in both tables still alerts once.
+//
+// WHO IS ENTITLED (#1733): a company whose ORG may use the feature (its plan or
+// an org grant — orgIdsEntitledTo(), the set form of entitled()), OR a company
+// with a legacy per-company CompanyEntitlement row (grandfathered, the same
+// rule hasFeature() applies).
 export async function checkCompanyNeedMatches() {
+  const entitledOrgIds = await orgIdsEntitledTo('COMPANY_NEED_MATCH_ALERTS');
   const companies = await prisma.company.findMany({
     where: {
-      entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
-      OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }],
+      AND: [
+        { OR: [{ orgId: { in: entitledOrgIds } }, { entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } } }] },
+        { OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }] },
+      ],
     },
     select: {
       id: true,
