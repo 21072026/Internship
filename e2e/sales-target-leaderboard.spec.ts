@@ -197,6 +197,16 @@ test('the admin sets a target, switches the board on, and always sees it', async
 
 test('the rep sees "N of target" with a progressbar and their own org\'s board only', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
+  // The PR gate runs only `@smoke`, so the admin test above (which sets these
+  // through the UI) is skipped there. Write the same two rows it writes, so
+  // this test stands on its own whichever subset runs.
+  for (const [key, value] of [['salesMonthlyWonTarget', '4'], ['salesLeaderboardForReps', 'true']] as const) {
+    await prisma.setting.upsert({
+      where: { orgId_key: { orgId: ids.orgA, key } },
+      create: { orgId: ids.orgA, key, value },
+      update: { value },
+    });
+  }
   await signInMarketing(page, E.rep1, '/sales');
   await expect(page.getByTestId('sales-target-headline')).toHaveText('2 of 4 deals won this month');
   const bar = page.getByRole('progressbar', { name: 'Monthly won-deal target' });
