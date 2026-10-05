@@ -8080,3 +8080,9 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **A PR that sits "dirty" (merge conflict) gets no CI at all** — zero check runs is a signal to fetch `mergeable_state`, not to wait. After merging `main`, `npx prisma generate` and `npm install` again: new models/deps on main show up as bogus `tsc` errors.
 - `pkill -f`/`pgrep -f` with the `next dev` pattern inside a compound command **kills the calling shell** (exit 144) — I wrote this down on 2026-10-02 and still hit it twice. Look up the PID with `ps` in a separate command first.
 - Locally `e2e/certificate.spec.ts` (admin sign-in step never posts credentials) and `e2e/deal-value.spec.ts:182` fail on **origin/main too** in this container — verify with a `git checkout origin/main -- src` control before blaming a change.
+
+## 2026-10-05 — marketing stage labels in English (#2710)
+
+- A stage label that "never translates" is usually a **stored** label, not a missing i18n key: `provisionStagePreset()` writes the template's labels in one locale, and `isDefaultLabel()` only recognises canonical keys. Fix on the read side (`localizeResolvedStageLabels`) so existing orgs heal without a backfill.
+- `localizeStageLabels()` fills a blank label with the **raw key** — judge "untouched" on the stored label, not on its output.
+- `programTemplates.ts` is client-safe but `pipeline.ts` must not import it (its catalogue calls `defaultPipelineStages()` at module init → cycle/TDZ); put template-aware helpers in `programTemplates.ts`.
