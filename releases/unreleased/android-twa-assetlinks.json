@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Android store apps, phase 1 (#2085).** The groundwork for publishing InternshipCRM and SaleVali on Google Play as Trusted Web Activities, decided in `docs/mobile-strategy.md` (no second native client; Android TWA now, iOS only on a concrete customer ask; publisher bcsit GmbH). New per-host `/.well-known/assetlinks.json` (`src/lib/androidAppLinks.ts`, pinned by `npm run test:android-app-links`): each world vouches for its own package (`de.bcsitgmbh.interncrm`, `de.bcsitgmbh.salevali`) and serves `[]` until the Play signing fingerprints are committed, so nothing changes on the live site yet. The Bubblewrap configs live in `mobile/android/<app>/twa-manifest.json`; `android-build.yml` regenerates the Gradle project from them, builds the bundle on `ubuntu-latest` (unsigned on PRs touching `mobile/android/**`, signed with the upload key on dispatch) and uploads the `.aab` as an artifact."
+}

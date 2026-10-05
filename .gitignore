@@ -195,3 +195,8 @@ playwright.repro.config.ts
 # after its slug, never "example-".
 /public/release-media/example-*.png
 /public/release-media/example-*.webm
+
+# Android signing keys (docs/mobile-strategy.md) — they live in GitHub secrets
+# and the maintainer's password manager, never in the tree.
+*.jks
+*.keystore
