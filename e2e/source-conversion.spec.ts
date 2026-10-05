@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
 // Premium Faz 2 (#539): source-conversion report, behind the same
-// premiumAnalytics setting as cohort comparison. Restores the flag in finally.
+// ADVANCED_ANALYTICS entitlement as cohort comparison (#1740). Restores the flag in finally.
 test('source conversion is locked by default and reports per-source hire rates once enabled', async ({ page }) => {
   const stamp = `${Date.now()}`;
   const adminEmail = uniqueEmail('src-admin');
@@ -41,7 +42,7 @@ test('source conversion is locked by default and reports per-source hire rates o
     // Locked by default.
     expect((await page.request.get('/api/admin/analytics/sources')).status()).toBe(403);
 
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } });
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
 
     const res = await page.request.get('/api/admin/analytics/sources');
     expect(res.ok()).toBeTruthy();
@@ -53,7 +54,7 @@ test('source conversion is locked by default and reports per-source hire rates o
     expect(mine!.hired).toBe(1);
     expect(mine!.conversionToHired).toBe(50);
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [hiredRel.id, activeRel.id] } } });
     await cleanupByEmail(hiredEmail);
     await cleanupByEmail(activeEmail);

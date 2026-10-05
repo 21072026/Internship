@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
@@ -38,8 +38,8 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 //
 // 2. THE PREMIUM GATE STAYS. A MARKETING tenant does NOT get attribution for
 //    free. Which reports a tenant has paid for is a plan/entitlement question,
-//    and `premiumAnalytics` is already resolved per tenant (src/lib/settings.ts
-//    reads the org row first, then the global one), so an org that buys the tier
+//    and ADVANCED_ANALYTICS is resolved per tenant (entitled() in
+//    src/lib/entitlements.ts: the org's plan or a grant), so an org that buys the tier
 //    gets the report whatever its vertical is. Making the answer depend on the
 //    vertical instead would be a second, parallel entitlement system whose rules
 //    nobody could state — and it would price a feature by which product the
@@ -51,8 +51,8 @@ export async function GET() {
   }
   // The CALLER's tier, org passed explicitly: this runs before the tenant
   // scope binds, so a bare call read only the global row.
-  if ((await getSetting('premiumAnalytics', await settingsOrgOf(session))) !== 'true') {
-    return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
+  if (!(await entitled(await settingsOrgOf(session), 'ADVANCED_ANALYTICS'))) {
+    return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });
   }
 
   const locale = await getLocale();

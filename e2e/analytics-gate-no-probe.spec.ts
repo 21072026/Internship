@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -43,7 +44,7 @@ test('an unentitled admin opens analytics with no failed requests', async ({ pag
 
     // The tier is off by default; make that explicit so the test does not
     // depend on whatever a previous spec left behind.
-    expect((await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } })).ok()).toBeTruthy();
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false);
 
     // --- /admin/analytics -------------------------------------------------
     const analyticsFailures = collectFailures(page);
@@ -74,9 +75,9 @@ test('an unentitled admin opens analytics with no failed requests', async ({ pag
     // And the entitlements read that replaced the probe is ADMIN-only and honest.
     const ent = await page.request.get('/api/admin/analytics/entitlements');
     expect(ent.ok()).toBeTruthy();
-    expect(await ent.json()).toEqual({ premiumAnalytics: false });
+    expect(await ent.json()).toEqual({ advancedAnalytics: false, reportExport: false });
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await cleanupByEmail(adminEmail);
   }
 });
@@ -88,7 +89,7 @@ test('an entitled admin still gets the premium cards, and still no failed reques
 
   try {
     await signInAndSettle(page, adminEmail, pw, '/admin');
-    expect((await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } })).ok()).toBeTruthy();
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
 
     const failures = collectFailures(page);
     await page.goto('/admin/analytics');
@@ -105,7 +106,7 @@ test('an entitled admin still gets the premium cards, and still no failed reques
     await expect(page.getByTestId('full-report')).toBeVisible({ timeout: 15_000 });
     expect(reportFailures).toEqual([]);
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await cleanupByEmail(adminEmail);
   }
 });

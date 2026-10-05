@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
 // Premium Faz 2 (#540): the full analytics report page is locked until the
-// premiumAnalytics setting is on; enabled, it renders funnel/trends/mentor/
+// org has ADVANCED_ANALYTICS (#1740); enabled, it renders funnel/trends/mentor/
 // cohort sections ready for the browser's print-to-PDF pipeline. Restores the
 // flag in finally.
 test('full report page is locked by default and renders once premium analytics is enabled', async ({ page }) => {
@@ -29,7 +30,7 @@ test('full report page is locked by default and renders once premium analytics i
     await expect(page.getByTestId('full-report-link')).toHaveCount(0);
 
     // Enable the tier → report renders, buttons appear.
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } });
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
 
     await page.goto('/admin/analytics/report');
     await expect(page.getByTestId('full-report')).toBeVisible({ timeout: 10_000 });
@@ -39,7 +40,7 @@ test('full report page is locked by default and renders once premium analytics i
     await expect(page.getByTestId('full-report-link')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('full-report-excel')).toBeVisible();
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await cleanupByEmail(adminEmail);
   }
 });

@@ -22,7 +22,7 @@ import {
 } from '@/lib/funnelKpi';
 import { sourceIsReferral } from '@/lib/referrer';
 import { TRIAL_ACTIVE_STAGE_KEY } from '@/lib/trialReminderRule';
-import { getSetting } from '@/lib/settings';
+import { entitled } from '@/lib/entitlements';
 import { trialLengthDaysFor } from '@/lib/trialWindow';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { shellCapabilities } from '@/lib/shellCapabilities';
@@ -309,7 +309,7 @@ export async function GET(request: Request) {
       // with no recorded end uses the same length the app actually applies.
       const [trialDays, premium] = await Promise.all([
         trialLengthDaysFor(orgId),
-        getSetting('premiumAnalytics', orgId),
+        entitled(orgId, 'ADVANCED_ANALYTICS'),
       ]);
       const result = trialConversion(order, trialJourneys, trialKey, toKey, months, { trialDays });
       // The per-source split is lead ATTRIBUTION, which stays behind the
@@ -317,7 +317,7 @@ export async function GET(request: Request) {
       // /api/admin/analytics/sources). Null = locked, [] = nothing mature yet.
       let bySource: { sourceId: string | null; name: string | null; trials: number; paid: number; rate: number | null }[] | null =
         null;
-      if (premium === 'true') {
+      if (premium) {
         const ids = result.bySource.map((r) => r.sourceId).filter((id): id is string => !!id);
         const names = new Map(
           (ids.length > 0

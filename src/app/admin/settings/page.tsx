@@ -40,7 +40,6 @@ export default function AdminSettingsPage() {
   const [blindReview, setBlindReview] = useState(false);
   const [autoAdvanceOnOfferAccept, setAutoAdvanceOnOfferAccept] = useState(false);
   const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
-  const [premiumAnalytics, setPremiumAnalytics] = useState(false);
   // Monthly AI call budget (#1625). A real, enforced setting — the AI gate
   // refuses calls once the month's pool is spent — that until now had no UI at
   // all, so it could only be changed with an API call or a DB write. The limit
@@ -217,7 +216,6 @@ export default function AdminSettingsPage() {
     setRequire2fa(settings.require2fa ?? 'off');
     setSelfRegistration(settings.selfRegistration ?? 'auto');
     setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
-    setPremiumAnalytics(settings.premiumAnalytics === 'true');
     setAiMonthlyQuota(settings.aiMonthlyQuota ?? '200');
     setLoadedQuota(settings.aiMonthlyQuota ?? '200');
     const wip = settings.boardWipLimit ?? String(DEFAULT_BOARD_WIP_LIMIT);
@@ -303,7 +301,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
@@ -450,13 +448,6 @@ export default function AdminSettingsPage() {
               <p className="text-xs text-gray-500 mt-1">{t.settings.require2faHint}</p>
             </div>
             <Input label={t.settings.earlyAccessWindow} type="number" min={0} max={365} value={earlyAccessWindowDays} onChange={(e) => setEarlyAccessWindowDays(e.target.value)} hint={t.settings.earlyAccessWindowHint} />
-            <div>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" checked={premiumAnalytics} onChange={(e) => setPremiumAnalytics(e.target.checked)} />
-                {t.settings.premiumAnalytics}
-              </label>
-              <p className="text-xs text-gray-500 mt-1">{t.settings.premiumAnalyticsHint}</p>
-            </div>
             {/* max 999999 mirrors the API's `\d{1,6}` regex, which stays the
                 authority — the number attribute only keeps the form honest. */}
             <Input label={t.settings.aiMonthlyQuota} type="number" min={0} max={999999} step={1} value={aiMonthlyQuota} onChange={(e) => { setAiMonthlyQuota(e.target.value); setQuotaError(null); }} hint={t.settings.aiMonthlyQuotaHint} error={quotaError ?? undefined} data-testid="ai-monthly-quota" />

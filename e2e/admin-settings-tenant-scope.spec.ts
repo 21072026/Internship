@@ -9,8 +9,10 @@ import { freshIp } from './helpers/rateLimit';
 // It used to write the global row (orgId = NULL): with MT_ENFORCE_ISOLATION off
 // — every deployment today — `withTenantScope` bound no org, so `setSetting`
 // fell through to the global layer, which is the platform default every tenant
-// without its own override inherits. One MARKETING admin ticking "premium
-// analytics" therefore switched it on for the INTERNSHIP tenant as well.
+// without its own override inherits. One MARKETING admin ticking a box
+// therefore switched it on for the INTERNSHIP tenant as well. (The key here
+// used to be `premiumAnalytics`, retired into an entitlement in #1740;
+// `blindReview` is an ordinary per-tenant boolean with the same shape.)
 //
 // Pinned over HTTP against the ordinary (flag-off) server, because that is
 // where the bug lived: two tenants on one database, each admin in its own
@@ -18,7 +20,7 @@ import { freshIp } from './helpers/rateLimit';
 // seeing and writing only its own value — and the global row untouched by both.
 
 const PW = 'TenantSettings123!';
-const KEY = 'premiumAnalytics';
+const KEY = 'blindReview';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -66,7 +68,7 @@ test('a MARKETING admin toggling a setting changes only its own tenant; each ten
   const mktJar = await playwright.request.newContext({ baseURL, extraHTTPHeaders: mktHost });
   const intJar = await playwright.request.newContext({ baseURL });
   try {
-    // A known starting point for the INTERNSHIP tenant: premium off.
+    // A known starting point for the INTERNSHIP tenant: off.
     await prisma.setting.deleteMany({ where: { orgId: def.id, key: KEY } });
     await prisma.setting.create({ data: { orgId: def.id, key: KEY, value: 'false' } });
     const globalBefore = await prisma.setting.findFirst({ where: { orgId: null, key: KEY }, select: { value: true } });
@@ -74,7 +76,7 @@ test('a MARKETING admin toggling a setting changes only its own tenant; each ten
     expect((await signInViaApi(mktJar, mktEmail, PW, { host: MARKETING_HOST, headers: freshIp('settings-mkt') })).error).toBeNull();
     expect((await signInViaApi(intJar, intEmail, PW, { headers: freshIp('settings-int') })).error).toBeNull();
 
-    // 1. The MARKETING admin switches premium analytics on — for itself.
+    // 1. The MARKETING admin switches the setting on — for itself.
     const put = await mktJar.put('/api/admin/settings', { data: { [KEY]: 'true' } });
     expect(put.ok()).toBeTruthy();
     expect(((await put.json()) as { settings: Record<string, string> }).settings[KEY]).toBe('true');
@@ -85,21 +87,9 @@ test('a MARKETING admin toggling a setting changes only its own tenant; each ten
     // …and NOT on the global row every tenant inherits.
     expect(await prisma.setting.findFirst({ where: { orgId: null, key: KEY }, select: { value: true } })).toEqual(globalBefore);
 
-    // 2. Each tenant reads its own effective value — on the settings page and
-    //    through the gate that actually decides access.
+    // 2. Each tenant reads its own effective value.
     expect((await settingsOf(mktJar))[KEY]).toBe('true');
     expect((await settingsOf(intJar))[KEY]).toBe('false');
-    const mktEnt = await (await mktJar.get('/api/admin/analytics/entitlements')).json();
-    const intEnt = await (await intJar.get('/api/admin/analytics/entitlements')).json();
-    expect(mktEnt.premiumAnalytics).toBe(true);
-    expect(intEnt.premiumAnalytics).toBe(false);
-    // The premium gate itself, on a route every vertical may call: /cohorts is
-    // also refused to a MARKETING admin by its `mentorship` capability gate, so
-    // a 403 there would not say which gate answered.
-    expect((await mktJar.get('/api/admin/analytics/sources')).status()).not.toBe(403);
-    const locked = await intJar.get('/api/admin/analytics/sources');
-    expect(locked.status()).toBe(403);
-    expect((await locked.json()).error).toBe('feature_locked');
 
     // 3. The other direction: the INTERNSHIP admin's write stays in its tenant.
     const intPut = await intJar.put('/api/admin/settings', { data: { reminderDays: '33' } });

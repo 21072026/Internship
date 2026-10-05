@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import {
   __testable,
   checkCompanyNeedMatches,
@@ -11,7 +11,6 @@ import {
 import { getSystemMenteeActivity } from '@/lib/activityReport';
 import { orgWhere } from '@/lib/tenantFilter';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
-import { setSetting } from '@/lib/settings';
 import { prisma as appPrisma } from '@/lib/prisma';
 import { getDictionary } from '../src/i18n/dictionaries';
 
@@ -187,8 +186,8 @@ test.describe('admin digests and summaries describe one org', () => {
   });
 
   test("the weekly analytics report follows each org's own opt-in and names its own product", async () => {
-    await setSetting('premiumAnalytics', 'true', mktOrgId);
-    await setSetting('premiumAnalytics', 'false', intOrgId);
+    await setOrgFeature(mktOrgId, 'ADVANCED_ANALYTICS', true);
+    await setOrgFeature(intOrgId, 'ADVANCED_ANALYTICS', false);
     await sendWeeklyAnalyticsReport();
     const mkt = await logsTo(emails.mktAdmin, 'analytics-report');
     expect(mkt.length).toBeGreaterThanOrEqual(1);

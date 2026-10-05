@@ -784,6 +784,12 @@ run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
 # org created after this ran.
 run_tool node prisma/backfill-org-subscription.mjs || true
 
+# Retire the premiumAnalytics setting into ADVANCED_ANALYTICS org grants (#1740).
+# Analytics gating moved to entitled(orgId, …); an org that had the tier on gets
+# a permanent grant, then the dead setting rows are deleted so a re-run grants
+# nothing (a global 'true' row would otherwise leak the tier to every new org).
+run_tool node prisma/backfill-premium-analytics-entitlement.mjs || true
+
 # Re-split skill lists stored as one blob before anything split them (#2314).
 # Every form used to write `skills.split(',')` from a single-line input, and a
 # browser drops the line breaks out of a multi-line paste — so a pasted CV list

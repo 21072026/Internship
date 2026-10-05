@@ -16,7 +16,7 @@ import { MatchQuality } from '@/components/admin/MatchQuality';
 import { TrialConversionCard, type TrialConversionData } from '@/components/admin/TrialConversionCard';
 import { DealValueCard } from '@/components/admin/DealValueCard';
 import { useT } from '@/i18n/client';
-import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
+import { useAdvancedAnalytics } from '@/lib/analyticsEntitlementsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -172,7 +172,7 @@ export default function AdminAnalyticsPage() {
   // one request that answers the question, where this used to probe the gated
   // cohorts endpoint and infer the tier from a 403 (#1442). `null` = not known
   // yet, so neither the premium cards nor the locked panel is drawn.
-  const premium = usePremiumAnalytics();
+  const premium = useAdvancedAnalytics();
 
   // The word this screen uses for "reached the outcome". A tenant that renamed
   // its last pipeline stage gets ITS name; everyone else keeps the translated
