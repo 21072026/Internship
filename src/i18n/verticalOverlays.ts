@@ -367,7 +367,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       //
       // Stage NAMES need nothing here, deliberately: a MARKETING org is
       // provisioned with MARKETING_FUNNEL (provisionStagePreset), whose stages
-      // carry their own en/tr/de labels that stageLabel() resolves. A second
+      // carry their own en/tr/de labels; the stored (single-language) copy is
+      // read back in the viewer's locale by localizeResolvedStageLabels()
+      // (src/lib/programTemplates.ts, #2710). A second
       // translation layer for stage names is exactly what #2427 rules out.
       //
       // `board.emptyStage` has no reader in src today — the admin board renders
