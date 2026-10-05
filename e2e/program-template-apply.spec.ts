@@ -92,8 +92,11 @@ test('a template applied to a fresh organization becomes exactly its stage set, 
     const swapped = await second.json();
     expect(swapped.stages.map((s: { key: string }) => s.key))
       .toEqual(templateStagePayload(other, 'tr').stages.map((s) => s.key));
-    // Applied in Turkish, so the labels are the Turkish ones.
-    expect(swapped.stages[0].label).toBe('Rehber atandı');
+    // Applied in Turkish, so the STORED labels are the Turkish ones. The response
+    // is resolved in the reader's locale (#2711: an untouched curated label reads
+    // back in the viewer's language), so assert the row, not the echo.
+    const buddy = await prisma.pipelineStage.findFirst({ where: { orgId: org.id, key: 'BUDDY_PAIRED' } });
+    expect(buddy?.label).toBe('Rehber atandı');
     expect(await prisma.pipelineStage.count({ where: { orgId: org.id } })).toBe(other.stages.length);
   } finally {
     await cleanupByEmail(adminEmail);
