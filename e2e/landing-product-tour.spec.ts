@@ -3,16 +3,19 @@ import { test, expect, type Page } from '@playwright/test';
 // The landing's product tour (#1399): three real screenshots, each in the
 // visitor's theme and for their device. Not a pixel comparison (house rule) —
 // it asserts what the visitor is served: three described images, and only the
-// files that match their theme and screen are downloaded.
+// files that match their theme and screen are downloaded — stills and, on a
+// desktop, the clips that play over them (TourClip).
 
 const SCREENS = ['mentee', 'mentor', 'company'] as const;
 
 /** Scroll every figure into view (the images are lazy) and return the screenshot files fetched. */
-async function loadTour(page: Page) {
+async function loadTour(page: Page, kind: 'webp' | 'clip' = 'webp') {
   const fetched: string[] = [];
+  const wanted = kind === 'webp' ? /\.webp$/ : /\.(webm|mp4)$/;
   page.on('response', (r) => {
-    if (r.url().includes('/screenshots/')) {
-      expect(r.status(), r.url()).toBe(200);
+    // A video answers 206 (a range request) as well as 200.
+    if (r.url().includes('/screenshots/') && wanted.test(new URL(r.url()).pathname)) {
+      expect([200, 206], r.url()).toContain(r.status());
       fetched.push(new URL(r.url()).pathname.split('/').pop()!);
     }
   });
@@ -24,8 +27,10 @@ async function loadTour(page: Page) {
     await expect
       .poll(() => figure.locator('img:visible').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
       .toBe(true);
+    if (kind === 'clip') await page.waitForTimeout(800);
   }
-  return fetched.sort();
+  // Deduplicated: a video may be fetched in several ranges.
+  return [...new Set(fetched)].sort();
 }
 
 test('the landing shows three described product screenshots', async ({ page }) => {
@@ -54,12 +59,39 @@ test('a light desktop visitor downloads the light desktop captures only', async 
   expect(await loadTour(page)).toEqual(SCREENS.map((s) => `${s}-desktop-light.webp`).sort());
 });
 
+test('every capture of a device has one size, so the three frames match', async ({ page }) => {
+  await page.goto('/');
+  const sizes = await page.getByTestId('landing-product-tour').locator('img:visible').evaluateAll((imgs) =>
+    imgs.map((i) => `${i.getAttribute('width')}x${i.getAttribute('height')}`),
+  );
+  expect(sizes).toHaveLength(3);
+  expect(new Set(sizes).size).toBe(1);
+});
+
+test('a dark desktop visitor plays the dark clips only, as WebM', async ({ page, baseURL }) => {
+  await page.context().addCookies([{ name: 'theme', value: 'dark', url: baseURL! }]);
+  expect(await loadTour(page, 'clip')).toEqual(SCREENS.map((s) => `${s}-desktop-dark.webm`).sort());
+});
+
+test.describe('reduced motion', () => {
+  test.use({ reducedMotion: 'reduce' });
+
+  test('keeps the stills and fetches no clip', async ({ page }) => {
+    expect(await loadTour(page, 'clip')).toEqual([]);
+  });
+});
+
 test.describe('dark mode on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test('downloads the dark phone captures only', async ({ page, baseURL }) => {
     await page.context().addCookies([{ name: 'theme', value: 'dark', url: baseURL! }]);
     expect(await loadTour(page)).toEqual(SCREENS.map((s) => `${s}-phone-dark.webp`).sort());
+  });
+
+  test('plays no clip — a phone keeps the still', async ({ page, baseURL }) => {
+    await page.context().addCookies([{ name: 'theme', value: 'dark', url: baseURL! }]);
+    expect(await loadTour(page, 'clip')).toEqual([]);
   });
 });
 

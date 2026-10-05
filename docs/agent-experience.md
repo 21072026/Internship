@@ -8132,3 +8132,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - Drive **`@bubblewrap/core`** (`TwaManifest.fromWebManifestJson` / `TwaGenerator.createTwaProject`), not the `bubblewrap` CLI — the CLI prompts for JDK/SDK paths on first run and cannot run headless. Generating `twa-manifest.json` from a manifest object gives the canonical field set instead of a hand-typed one.
 - A plain `npm install` in a fresh container rewrote `package-lock.json` (~60 lines dropped) — `git diff --stat` before staging and `git checkout package-lock.json` unless the change is meant to touch deps. (`npm install --no-save --no-package-lock --prefix mobile/android …` does **not** touch it — verified.)
 - A route under `src/app/.well-known/` works in the App Router, but `next lint --file` reports it as "ignored by default" (dot directory) — `tsc` still typechecks it, and the middleware matcher skips it (path contains a dot).
+
+## 2026-10-05 — product tour frames + clips, dark accent (#2726)
+
+- **Clips of the app: use CDP `Page.startScreencast` for interactions and stepped `page.screenshot()` for scrolling.** The screencast keeps real timing and is sharper than `recordVideo`. But a scroll recorded through it, or through `scrollTo` under the global `scroll-behavior: smooth`, catches frames still in motion. Scroll with `behavior: 'instant'` plus two rAFs per frame.
+- **Headless Chromium plays WebM, not H.264.** Put the `video/webm` source first; the MP4 is for Safari. A `display:none` `<video>` never intersects, so an IntersectionObserver that attaches the sources keeps other-theme and phone clips from ever downloading.
+- **`html.dark .text-blue-600` used to win over every accent.** It was pinned to blue-300, so dark mode turned the magenta MARKETING hero blue. An accent-aware dark rule needs `html.dark[data-accent]` to read `var(--accent-300)`.
+- The capture script changes demo data (a stage move, a shortlist), so capture one theme per fresh seed. `npm install` in this container rewrites `package-lock.json`; `git checkout` it before committing.

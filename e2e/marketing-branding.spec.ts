@@ -50,6 +50,24 @@ test('the marketing host wears SaleVali: magenta accent, the V mark, its own ico
   }
 });
 
+// The hero's accent word is `text-blue-600`, which dark mode lightens. It used
+// to lighten to a fixed blue-300 whatever the accent, so the SaleVali landing
+// turned its magenta headline blue in dark mode; it now takes the accent's own
+// -300 (magenta #e4affe), and the default host keeps its blue-300.
+test('dark mode keeps the accent: magenta on the marketing host, blue on the default one', async ({ page, baseURL }) => {
+  await page.context().addCookies([{ name: 'theme', value: 'dark', url: baseURL! }]);
+  const accentWord = page.locator('h1 span.text-blue-600');
+
+  await page.setExtraHTTPHeaders(MARKETING);
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  await expect(accentWord).toHaveCSS('color', 'rgb(228, 175, 254)');
+
+  await page.setExtraHTTPHeaders({});
+  await page.goto('/');
+  await expect(accentWord).toHaveCSS('color', 'rgb(147, 197, 253)');
+});
+
 // /messages carries its own viewport export (viewportFit: cover), which
 // replaces the root one — so its tint has to follow the vertical by itself.
 // A MARKETING-org account signs in on the marketing host only (#2590: the URL
