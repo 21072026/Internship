@@ -105,13 +105,19 @@ export async function loadSalesTargetView(session: Session, locale = 'en', now: 
   const own = targetProgress(counts.get(userId) ?? 0, target);
   if (!showBoard) return { period, own, leaderboard: null, leaderboardForReps: forReps };
 
-  // Who is on the board: every active rep of the org (a rep with no win yet is
-  // on it at 0 — leaving them off would make the board a list of winners), plus
-  // anyone else of the org who owns a deal won this month (an ADMIN who also
-  // sells). Names only; nothing about the deals themselves.
+  // Who is on the board: every active rep AND every active admin of the org (a
+  // person with no win yet is on it at 0 — leaving them off would make the
+  // board a list of winners; admins sell in small teams, so they are always
+  // listed, maintainer decision 2026-10-05), plus anyone else of the org who
+  // owns a deal won this month. Names only; nothing about the deals themselves.
   const people = await prisma.user.findMany({
     where: withinTenant(
-      { OR: [{ role: 'MENTOR' as const, isActive: true }, { id: { in: [...counts.keys()] } }] },
+      {
+        OR: [
+          { role: { in: ['MENTOR', 'ADMIN'] as ('MENTOR' | 'ADMIN')[] }, isActive: true },
+          { id: { in: [...counts.keys()] } },
+        ],
+      },
       tenant,
     ),
     select: { id: true, fullName: true },

@@ -7,6 +7,7 @@ import {
   sendDailyActivityDigests,
   sendWeeklyAnalyticsReport,
   sendWeeklyMentorDigests,
+  weeklyAnalyticsStats,
 } from '@/services/emailService';
 import { getSystemMenteeActivity } from '@/lib/activityReport';
 import { orgWhere } from '@/lib/tenantFilter';
@@ -211,4 +212,48 @@ test('an open-position alert names only its own tenant’s candidate, and an org
   expect(await alertedOf(mktCompanyId)).toEqual([]);
   expect(await bellOf(ids.mktCompanyUser)).toEqual([]);
   expect(await logsTo(emails.mktCompanyUser, 'company-need-alert')).toHaveLength(0);
+});
+
+// #2715: the report used to be English for every reader. The words now follow
+// the recipient's own language, the stage table included — and a marketing
+// funnel provisioned in English reads back in Turkish (#2710).
+test('the weekly analytics report speaks its reader’s language, stage table included', async () => {
+  const stamp = `${STAMP}-tr`;
+  const org = await prisma.organization.create({
+    data: { name: `World Cron TR ${stamp}`, slug: `world-cron-tr-${stamp}`, vertical: 'MARKETING', brandName: `TR Sales ${stamp}` },
+  });
+  const adminEmail = uniqueEmail('wc-tr-admin');
+  const repEmail = uniqueEmail('wc-tr-rep');
+  const leadEmail = uniqueEmail('wc-tr-lead');
+  try {
+    await prisma.pipelineStage.createMany({
+      data: [
+        { orgId: org.id, key: 'LEAD_NEW', label: 'New lead', order: 0 },
+        { orgId: org.id, key: 'DEAL_PROPOSAL', label: 'Proposal sent', order: 1 },
+      ],
+    });
+    const admin = await seedUser(adminEmail, PW, 'ADMIN', 'Cron TR Admin', org.id);
+    await prisma.user.update({ where: { id: admin.id }, data: { preferredLanguage: 'tr' } });
+    const rep = await seedUser(repEmail, PW, 'MENTOR', 'Cron TR Rep', org.id);
+    const lead = await seedUser(leadEmail, PW, 'MENTEE', 'Cron TR Lead', org.id);
+    await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: rep.id, menteeId: lead.id, pipelineStatus: 'LEAD_NEW' } });
+    await setSetting('premiumAnalytics', 'true', org.id);
+
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const tr = await weeklyAnalyticsStats(org.id, weekAgo, 'tr');
+    expect(tr.stageRows).toContain('Yeni aday');
+    expect(tr.stageRows).not.toContain('New lead');
+    expect((await weeklyAnalyticsStats(org.id, weekAgo, 'de')).stageRows).toContain('Neuer Lead');
+
+    await sendWeeklyAnalyticsReport();
+    const rows = await logsTo(adminEmail, 'analytics-report');
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    for (const row of rows) expect(row.subject).toBe(`Haftalık analiz raporu — TR Sales ${stamp}`);
+  } finally {
+    await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });
+    for (const email of [adminEmail, repEmail, leadEmail]) await cleanupByEmail(email);
+    await prisma.pipelineStage.deleteMany({ where: { orgId: org.id } });
+    await prisma.setting.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
+  }
 });

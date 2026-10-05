@@ -4616,24 +4616,25 @@ export interface WeeklyAnalyticsStats {
 /**
  * One tenant's figures for the weekly report (#1884): relations, "hired"
  * conversion read from that tenant's own `finished` stages, the last week's
- * activity, and a stage table labelled in the tenant's own words. `orgId` is a
+ * activity, and a stage table labelled in the tenant's own words, in `locale`
+ * (the recipient's, #2715). `orgId` is a
  * resolved org (the caller maps a NULL org to the default one); `orgWhere`
  * includes the not-yet-stamped NULL rows for the default org, as everywhere.
  */
-export async function weeklyAnalyticsStats(orgId: string, weekAgo: Date): Promise<WeeklyAnalyticsStats> {
+export async function weeklyAnalyticsStats(orgId: string, weekAgo: Date, locale: Locale = 'en'): Promise<WeeklyAnalyticsStats> {
   const tenant = await orgWhere(orgId);
   const [byStage, newRelations, interactions, stages] = await Promise.all([
     prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: tenant, _count: { _all: true } }),
     prisma.mentorshipRelation.count({ where: { AND: [tenant, { startDate: { gte: weekAgo } }] } }),
     prisma.interactionLog.count({ where: { date: { gte: weekAgo }, relation: tenant } }),
-    resolvePipelineStages(orgId, 'en'),
+    resolvePipelineStages(orgId, locale),
   ]);
   const { finished } = outcomeStageKeysFrom(stages);
   const total = byStage.reduce((n, s) => n + s._count._all, 0);
   const hired = byStage.filter((s) => finished.includes(s.pipelineStatus)).reduce((n, s) => n + s._count._all, 0);
   const stageRows = byStage
     .sort((a, b) => b._count._all - a._count._all)
-    .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${esc(stageLabel(stages, s.pipelineStatus, 'en'))}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
+    .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${esc(stageLabel(stages, s.pipelineStatus, locale))}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
     .join('');
   return { total, conversion: total ? Math.round((hired / total) * 100) : 0, newRelations, interactions, stageRows };
 }
@@ -4649,8 +4650,9 @@ export async function sendWeeklyAnalyticsReport() {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
-    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
+  const dictionaryOf = emailDictionaryMemo();
 
   // Per TENANT (#1884): each admin gets their own org's numbers, "hired" is
   // that org's `finished` set and the table shows the org's own stage labels
@@ -4677,18 +4679,24 @@ export async function sendWeeklyAnalyticsReport() {
       orgs.push({ orgId, locked: true, sent: 0, total: 0 });
       continue;
     }
-    const [{ total, conversion, newRelations, interactions, stageRows }, brand] = await Promise.all([
-      weeklyAnalyticsStats(orgId, weekAgo),
-      emailBrand(orgId),
-    ]);
-    // The default world keeps its report as it always read; another world's
-    // admin gets its own product name and funnel words (docs/worlds.md).
+    const brand = await emailBrand(orgId);
+    // The figures are per org; the words are per RECIPIENT (#2715) — each admin
+    // reads the report, the stage table included, in their own language, and in
+    // their own world's terms (emailDictionary applies the vertical overlay).
+    const statsByLocale = new Map<Locale, Promise<WeeklyAnalyticsStats>>();
+    const statsFor = (locale: Locale) => {
+      let hit = statsByLocale.get(locale);
+      if (!hit) {
+        hit = weeklyAnalyticsStats(orgId, weekAgo, locale);
+        statsByLocale.set(locale, hit);
+      }
+      return hit;
+    };
     const ownWorld = brand.vertical !== DEFAULT_VERTICAL;
-    const summary = ownWorld
-      ? `<strong>${total}</strong> records · <strong>${conversion}%</strong> reached the final stage ·
-          last 7 days: <strong>${newRelations}</strong> new records, <strong>${interactions}</strong> interactions.`
-      : `<strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
-          last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.`;
+    const product = ownWorld ? brand.name : 'Internship CRM';
+    // The org's figures are the same in every language; read them once even
+    // when every admin has opted out, as the result row always reported them.
+    const { total } = await statsFor(resolveLocale(recipients[0]?.preferredLanguage));
     let sent = 0;
     for (const a of recipients) {
       // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
@@ -4696,19 +4704,29 @@ export async function sendWeeklyAnalyticsReport() {
       // the preference surfaces showed it as ON. 'digest' is in
       // reports_analytics.legacy now, so the old opt-out still holds visibly.
       if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
+      const locale = resolveLocale(a.preferredLanguage);
+      const stats = await statsFor(locale);
+      const R = (await dictionaryOf(locale, orgId)).notifications.analyticsReportEmail;
+      const strong = (n: number) => `<strong>${n}</strong>`;
+      const summary = R.summary
+        .replace('{total}', strong(stats.total))
+        .replace('{conversion}', strong(stats.conversion))
+        .replace('{newRelations}', strong(stats.newRelations))
+        .replace('{interactions}', strong(stats.interactions));
       const base = await origins.urlFor(a.orgId);
       await sendEmail({
         category: 'analytics-report',
         userId: a.id,
         orgId: a.orgId,
+        locale: a.preferredLanguage,
         to: a.email,
-        subject: `Weekly analytics report — ${ownWorld ? brand.name : 'Internship CRM'}`,
+        subject: R.subject.replace('{product}', product),
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          ${worldHeading(brand, 'Weekly analytics report', '<h2 style="color:#2563eb;">Weekly analytics report</h2>')}
-          <p>Hi ${esc(a.fullName)},</p>
+          ${worldHeading(brand, esc(R.heading), `<h2 style="color:#2563eb;">${esc(R.heading)}</h2>`)}
+          <p>${esc(R.greeting.replace('{name}', a.fullName))}</p>
           <p>${summary}</p>
-          <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
-          <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
+          <table style="font-size:14px;border-collapse:collapse;">${stats.stageRows}</table>
+          <p><a href="${base}/admin/analytics">${esc(R.cta)}</a></p>
         </div>`,
       }).catch((error) => {
         console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, orgId, error });

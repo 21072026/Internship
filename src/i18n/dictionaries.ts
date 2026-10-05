@@ -1419,7 +1419,6 @@ const en = {
     closeMenu: 'Close menu',
     homeLink: 'InternshipCRM — go to the home page',
     tagline: 'Mentors, mentees and companies in one pipeline — from first contact to hired.',
-    builtBy: 'Built and maintained by',
     colProduct: 'Product',
     colCommunity: 'Community',
     colLegal: 'Legal',
@@ -2584,6 +2583,15 @@ const en = {
       greeting: 'Hi {mentee},',
       body: '{mentor} is now your mentor. Open your portal to say hi and get the mentorship started.',
       cta: 'Open your portal',
+    },
+    // #2715 — the weekly analytics report to admins. Placeholders in `summary`
+    // are filled with <strong>-wrapped numbers by the sender.
+    analyticsReportEmail: {
+      subject: 'Weekly analytics report — {product}',
+      heading: 'Weekly analytics report',
+      greeting: 'Hi {name},',
+      summary: '{total} mentorship relations · {conversion}% hired conversion · last 7 days: {newRelations} new relations, {interactions} interactions.',
+      cta: 'Open the analytics dashboard',
     },
     deadlineEmail: {
       subject: "Overdue: {mentee}'s stage deadline",
@@ -7457,7 +7465,6 @@ const tr: Dict = {
     closeMenu: 'Menüyü kapat',
     homeLink: 'InternshipCRM — ana sayfaya git',
     tagline: 'Mentorlar, mentee’ler ve firmalar tek bir akışta — ilk temastan işe alıma.',
-    builtBy: 'Geliştiren ve yaşatan:',
     colProduct: 'Ürün',
     colCommunity: 'Topluluk',
     colLegal: 'Hukuki',
@@ -8588,6 +8595,13 @@ const tr: Dict = {
       greeting: 'Merhaba {mentee},',
       body: '{mentor} artık senin mentorun. Merhaba demek ve mentorluğu başlatmak için portalını aç.',
       cta: 'Portalını aç',
+    },
+    analyticsReportEmail: {
+      subject: 'Haftalık analiz raporu — {product}',
+      heading: 'Haftalık analiz raporu',
+      greeting: 'Merhaba {name},',
+      summary: '{total} mentorluk ilişkisi · %{conversion} işe yerleşme oranı · son 7 gün: {newRelations} yeni ilişki, {interactions} etkileşim.',
+      cta: 'Analiz panosunu aç',
     },
     deadlineEmail: {
       subject: 'Gecikmiş: {mentee} için aşama son tarihi',
@@ -13392,7 +13406,6 @@ const de: Dict = {
     closeMenu: 'Menü schließen',
     homeLink: 'InternshipCRM — zur Startseite',
     tagline: 'Mentorinnen, Mentees und Unternehmen in einem Prozess — vom ersten Kontakt bis zur Einstellung.',
-    builtBy: 'Gebaut und gepflegt von',
     colProduct: 'Produkt',
     colCommunity: 'Community',
     colLegal: 'Rechtliches',
@@ -14524,6 +14537,13 @@ const de: Dict = {
       greeting: 'Hallo {mentee},',
       body: '{mentor} ist jetzt dein Mentor. Öffne dein Portal, um Hallo zu sagen und das Mentoring zu starten.',
       cta: 'Portal öffnen',
+    },
+    analyticsReportEmail: {
+      subject: 'Wöchentlicher Analysebericht — {product}',
+      heading: 'Wöchentlicher Analysebericht',
+      greeting: 'Hallo {name},',
+      summary: '{total} Mentoring-Beziehungen · {conversion} % Vermittlungsquote · letzte 7 Tage: {newRelations} neue Beziehungen, {interactions} Interaktionen.',
+      cta: 'Analyse-Dashboard öffnen',
     },
     deadlineEmail: {
       subject: 'Überfällig: Phasenfrist für {mentee}',
