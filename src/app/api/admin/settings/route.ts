@@ -9,6 +9,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 import { findLeadOwner } from '@/lib/leadOwner';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { salesTargetApplies } from '@/lib/salesTargetRule';
 
 // GET — the EFFECTIVE settings of the caller's tenant: its own row → the global
 // row → the code default (see src/lib/settings.ts). The org is passed
@@ -91,7 +93,15 @@ const schema = z.object({
   // the database, because a shape check cannot tell a colleague's id from
   // another tenant's.
   defaultLeadOwnerId: z.string().trim().max(64).optional(),
+  // Sales won-deal target + leaderboard (MARKETING only). `''` or `0` = no
+  // target; `\d{1,4}` mirrors SALES_TARGET_MAX. Refused below for a vertical
+  // without the sales surface, so an INTERNSHIP org can never store a
+  // leaderboard switch (leaderboards are a non-goal there).
+  salesMonthlyWonTarget: z.string().regex(/^\d{1,4}$/).or(z.literal('')).optional(),
+  salesLeaderboardForReps: z.enum(['true', 'false']).optional(),
 });
+
+const SALES_TARGET_KEYS = ['salesMonthlyWonTarget', 'salesLeaderboardForReps'] as const;
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.
 //
@@ -127,6 +137,11 @@ export async function PUT(request: Request) {
   const ownerId = parsed.data.defaultLeadOwnerId;
   if (ownerId && !(await findLeadOwner(orgId, ownerId))) {
     return NextResponse.json({ error: 'Validation failed', field: 'defaultLeadOwnerId' }, { status: 400 });
+  }
+
+  const salesKey = SALES_TARGET_KEYS.find((k) => parsed.data[k] !== undefined);
+  if (salesKey && !salesTargetApplies(await shellCapabilities(orgId))) {
+    return NextResponse.json({ error: 'vertical_mismatch', field: salesKey }, { status: 400 });
   }
 
   return withTenantScope(session, async () => {

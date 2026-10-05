@@ -44,7 +44,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro, Send,
+  FolderKanban, BadgeEuro, Award, Send,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -115,6 +115,9 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'mentorSelfApply', category: 'tracking', icon: GraduationCap, color: 'blue', capability: 'mentorship', title: C.mentorSelfApply.t, desc: C.mentorSelfApply.d },
     { key: 'calendar', category: 'collaboration', icon: CalendarDays, color: 'indigo', title: C.calendar.t, desc: C.calendar.d },
     { key: 'todos', category: 'collaboration', icon: ListChecks, color: 'green', capability: 'mentorship', title: C.todos.t, desc: C.todos.d },
+    // The mentee's own completion certificate in the portal + LinkedIn's
+    // add-to-profile link. An internship completion certificate: mentorship only.
+    { key: 'certificateLinkedIn', category: 'collaboration', icon: Award, color: 'amber', capability: 'mentorship', title: C.certificateLinkedIn.t, desc: C.certificateLinkedIn.d },
     { key: 'dualRole', category: 'collaboration', icon: Sprout, color: 'purple', capability: 'mentorship', title: C.dualRole.t, desc: C.dualRole.d },
     { key: 'timezones', category: 'platform', icon: Globe, color: 'sky', title: C.timezones.t, desc: C.timezones.d },
     { key: 'offers', category: 'tracking', icon: Briefcase, color: 'orange', capability: 'placements', title: C.offers.t, desc: C.offers.d },
@@ -152,12 +155,18 @@ export function getFeatures(t: Dictionary): Feature[] {
     // rep's /sales). True in every vertical, so untagged; the rep's wording is a
     // MARKETING overlay sentence, not a second card.
     { key: 'ownWorkspace', category: 'tracking', icon: Users, color: 'green', title: C.ownWorkspace.t, desc: C.ownWorkspace.d },
+    // Light gamification (2026-10): a mentor's own impact counts on /mentor —
+    // private, never ranked. Exists only inside a mentoring programme.
+    { key: 'mentorImpact', category: 'insights', icon: Sprout, color: 'green', capability: 'mentorship', title: C.mentorImpact.t, desc: C.mentorImpact.d },
     // #2560 — the account detail page; every vertical with companies has it.
     { key: 'accountDetail', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.accountDetail.t, desc: C.accountDetail.d },
     // #2422 — the estimated monthly value of an account, and its monthly series
     // on the analytics page. Sales-side only: an internship programme values a
     // placement through the ROI model instead, so it carries withoutCapability.
     { key: 'dealValue', category: 'insights', icon: BadgeEuro, color: 'green', withoutCapability: 'mentorship', title: C.dealValue.t, desc: C.dealValue.d },
+    // Same tag as the deal value: the sales target lives on /sales, which exists
+    // only where there is a pipeline and no mentorship (src/lib/salesTargetRule.ts).
+    { key: 'salesTarget', category: 'insights', icon: Target, color: 'blue', withoutCapability: 'mentorship', title: C.salesTarget.t, desc: C.salesTarget.d },
     // #2569 — the public enquiry / demo form, filed by host into the right org.
     { key: 'webRequests', category: 'companies', icon: Building2, color: 'purple', capability: 'companies', title: C.webRequests.t, desc: C.webRequests.d },
     // #2577 — per-account contact permission with its proof, and the double opt-in.
@@ -166,5 +175,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'postalCampaigns', category: 'companies', icon: Send, color: 'blue', capability: 'companies', title: C.postalCampaigns.t, desc: C.postalCampaigns.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
     { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
+    // Light gamification: the mentee portal's profile completeness meter. Lives
+    // only inside /portal (the mentorship shell), so it carries `mentorship`.
+    { key: 'profileProgress', category: 'tracking', icon: ListChecks, color: 'blue', capability: 'mentorship', title: C.profileProgress.t, desc: C.profileProgress.d },
   ];
 }

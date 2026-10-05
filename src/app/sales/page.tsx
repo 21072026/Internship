@@ -15,6 +15,9 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { salesTargetApplies } from '@/lib/salesTargetRule';
+import { loadSalesTargetView } from '@/lib/salesTarget';
+import { SalesTargetCards } from '@/components/SalesTargetCards';
 
 // The sales rep's dashboard (#2580): their own attention queue and their own
 // records. Every read is the rep's rows only (`mentorId = self`) AND the rep's
@@ -31,7 +34,8 @@ export default async function SalesDashboard() {
   if (!session?.user?.id) redirect('/auth/signin');
   // The second door, like the detail pages: Next renders a layout and its page
   // in parallel, so the layout's redirect is not what stops these queries.
-  if (!hasSalesSurface(session.user.role, await shellCapabilities(session.user.orgId))) notFound();
+  const capabilities = await shellCapabilities(session.user.orgId);
+  if (!hasSalesSurface(session.user.role, capabilities)) notFound();
 
   const tenant = await tenantWhere(session);
   const own = withinTenant({ mentorId: session.user.id }, tenant);
@@ -63,6 +67,8 @@ export default async function SalesDashboard() {
   ]);
   const { t, locale } = dict;
   const s = t.sales;
+  // Won-deal target + team leaderboard: MARKETING only (salesTargetRule.ts).
+  const targetView = salesTargetApplies(capabilities) ? await loadSalesTargetView(session, locale) : null;
   const stages = await resolvePipelineStages(session.user.orgId, locale);
   const date = (value: Date) => formatDate(value, locale, { timeZone: 'UTC' });
 
@@ -74,6 +80,8 @@ export default async function SalesDashboard() {
       </div>
 
       <MentorAttentionQueue items={attention.items} t={t} hrefBase="/sales/leads" />
+
+      {targetView && <SalesTargetCards view={targetView} t={t} viewerId={session.user.id} />}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
         <Card>

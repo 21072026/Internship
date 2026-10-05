@@ -215,6 +215,16 @@ export const SETTING_DEFAULTS = {
   // in src/lib/leadOwner.ts is the one reader. On the settings form for
   // MARKETING tenants only.
   defaultLeadOwnerId: '',
+  // Monthly won-deal target per sales rep (MARKETING only). `''` (default) or
+  // `0` = no target: the rep's card shows the plain count. The reading rule —
+  // what counts as a win, how a broken value is read — is
+  // src/lib/salesTargetRule.ts; on the settings form for MARKETING tenants only,
+  // and the API refuses it for any other vertical.
+  salesMonthlyWonTarget: '',
+  // Show the team leaderboard (names + wins this month) to reps (MARKETING
+  // only). Off by default: a leaderboard is something a team opts into. The
+  // org's admins see it either way.
+  salesLeaderboardForReps: 'false',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
