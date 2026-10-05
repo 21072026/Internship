@@ -39,3 +39,11 @@ test('canonical stages keep their existing localization', () => {
   const [tr] = localizeResolvedStageLabels(stored, 'tr');
   assert.ok(en.label && tr.label && en.label !== tr.label);
 });
+
+test('a stage-change notification snapshot follows the reader, a typed label does not', async () => {
+  const { renderNotification } = await import('../../src/lib/notificationText.ts');
+  const t = { notifications: { events: { 'stage.changed': '{from} → {to}' }, generic: '?' }, interviewDeclineReasons: {} };
+  const n = (toLabel) => ({ type: 'stage.changed', params: { from: 'LEAD_NEW', to: 'DEAL_PROPOSAL', fromLabel: 'New lead', toLabel } });
+  assert.equal(renderNotification(n('Proposal sent'), t, 'tr'), 'Yeni aday → Teklif gönderildi');
+  assert.equal(renderNotification(n('Our offer'), t, 'tr'), 'Yeni aday → Our offer');
+});
