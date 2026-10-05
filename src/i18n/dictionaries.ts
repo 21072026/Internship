@@ -2584,6 +2584,15 @@ const en = {
       body: '{mentor} is now your mentor. Open your portal to say hi and get the mentorship started.',
       cta: 'Open your portal',
     },
+    // #2715 — the weekly analytics report to admins. Placeholders in `summary`
+    // are filled with <strong>-wrapped numbers by the sender.
+    analyticsReportEmail: {
+      subject: 'Weekly analytics report — {product}',
+      heading: 'Weekly analytics report',
+      greeting: 'Hi {name},',
+      summary: '{total} mentorship relations · {conversion}% hired conversion · last 7 days: {newRelations} new relations, {interactions} interactions.',
+      cta: 'Open the analytics dashboard',
+    },
     deadlineEmail: {
       subject: "Overdue: {mentee}'s stage deadline",
       greeting: 'Hi {mentor},',
@@ -8589,6 +8598,13 @@ const tr: Dict = {
       body: '{mentor} artık senin mentorun. Merhaba demek ve mentorluğu başlatmak için portalını aç.',
       cta: 'Portalını aç',
     },
+    analyticsReportEmail: {
+      subject: 'Haftalık analiz raporu — {product}',
+      heading: 'Haftalık analiz raporu',
+      greeting: 'Merhaba {name},',
+      summary: '{total} mentorluk ilişkisi · %{conversion} işe yerleşme oranı · son 7 gün: {newRelations} yeni ilişki, {interactions} etkileşim.',
+      cta: 'Analiz panosunu aç',
+    },
     deadlineEmail: {
       subject: 'Gecikmiş: {mentee} için aşama son tarihi',
       greeting: 'Merhaba {mentor},',
@@ -14525,6 +14541,13 @@ const de: Dict = {
       greeting: 'Hallo {mentee},',
       body: '{mentor} ist jetzt dein Mentor. Öffne dein Portal, um Hallo zu sagen und das Mentoring zu starten.',
       cta: 'Portal öffnen',
+    },
+    analyticsReportEmail: {
+      subject: 'Wöchentlicher Analysebericht — {product}',
+      heading: 'Wöchentlicher Analysebericht',
+      greeting: 'Hallo {name},',
+      summary: '{total} Mentoring-Beziehungen · {conversion} % Vermittlungsquote · letzte 7 Tage: {newRelations} neue Beziehungen, {interactions} Interaktionen.',
+      cta: 'Analyse-Dashboard öffnen',
     },
     deadlineEmail: {
       subject: 'Überfällig: Phasenfrist für {mentee}',
