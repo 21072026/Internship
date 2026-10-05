@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Landing product tour**: all captures now share one frame (desktop 1600×1000 in a browser window, phone 780×1688 in a phone bezel) instead of six content-cropped aspect ratios, and each desktop screen plays a short silent loop (WebM/MP4, lazy, off for phones and `prefers-reduced-motion`) over its still: a card moving stage, a candidate being shortlisted, the journey being read. `capture-landing-screenshots.mjs` captures full viewports and records the clips. **Fix:** in dark mode `text-blue-600` lightened to a fixed blue-300 whatever the accent, so the SaleVali landing's magenta hero word turned blue; it now takes the accent's own -300.",
+  "notes": {
+    "en": ["The home page's product tour now shows each screen in action, in a clean browser or phone frame.", "In dark mode the SaleVali home page keeps its magenta accent."],
+    "tr": ["Ana sayfadaki ürün turu artık her ekranı çalışırken, temiz bir tarayıcı veya telefon çerçevesinde gösteriyor.", "Koyu temada SaleVali ana sayfası magenta vurgu rengini koruyor."],
+    "de": ["Die Produkttour auf der Startseite zeigt jeden Bildschirm jetzt in Aktion, in einem sauberen Browser- oder Handyrahmen.", "Im Dunkelmodus behält die SaleVali-Startseite ihren Magenta-Akzent."]
+  }
+}

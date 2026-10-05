@@ -8086,3 +8086,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - A stage label that "never translates" is usually a **stored** label, not a missing i18n key: `provisionStagePreset()` writes the template's labels in one locale, and `isDefaultLabel()` only recognises canonical keys. Fix on the read side (`localizeResolvedStageLabels`) so existing orgs heal without a backfill.
 - `localizeStageLabels()` fills a blank label with the **raw key** — judge "untouched" on the stored label, not on its output.
 - `programTemplates.ts` is client-safe but `pipeline.ts` must not import it (its catalogue calls `defaultPipelineStages()` at module init → cycle/TDZ); put template-aware helpers in `programTemplates.ts`.
+
+## 2026-10-05 — product tour frames + clips, dark accent (#2726)
+
+- **Clips of the app: use CDP `Page.startScreencast` for interactions and stepped `page.screenshot()` for scrolling.** The screencast keeps real timing and is sharper than `recordVideo`. But a scroll recorded through it, or through `scrollTo` under the global `scroll-behavior: smooth`, catches frames still in motion. Scroll with `behavior: 'instant'` plus two rAFs per frame.
+- **Headless Chromium plays WebM, not H.264.** Put the `video/webm` source first; the MP4 is for Safari. A `display:none` `<video>` never intersects, so an IntersectionObserver that attaches the sources keeps other-theme and phone clips from ever downloading.
+- **`html.dark .text-blue-600` used to win over every accent.** It was pinned to blue-300, so dark mode turned the magenta MARKETING hero blue. An accent-aware dark rule needs `html.dark[data-accent]` to read `var(--accent-300)`.
+- The capture script changes demo data (a stage move, a shortlist), so capture one theme per fresh seed. `npm install` in this container rewrites `package-lock.json`; `git checkout` it before committing.

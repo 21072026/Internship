@@ -1,30 +1,36 @@
 import { getImageProps } from 'next/image';
 import type { Dictionary } from '@/i18n/dictionaries';
-import { PRODUCT_TOUR_SHOTS, shotPath, type TourShot } from './productTourShots';
+import { PRODUCT_TOUR_SHOTS, TOUR_SIZE, clipPath, shotPath, type TourShotName } from './productTourShots';
+import { TourClip } from './TourClip';
 
 // The landing's product tour (#1399): three real screens, so a visitor sees
 // the product before deciding whether to sign up for it. The files are
 // produced by scripts/capture-landing-screenshots.mjs against the synthetic
 // demo seed — see public/screenshots/README.md before replacing one.
 //
-// Each screen exists four times: light/dark × desktop/phone.
+// Each screen is a still for light/dark × desktop/phone, plus a short desktop
+// loop per theme that plays over the still (TourClip).
 //   • Theme: the app's dark mode is a class on <html> (set by the visitor's
 //     toggle, not only by the OS), which a <picture> media query cannot see —
 //     so there are two <picture>s and CSS shows one. A lazy image that is
 //     display:none is never fetched, so a visitor downloads one theme only.
 //   • Device: a phone gets the phone layout through <source media>, not the
-//     desktop capture shrunk to an unreadable thumbnail.
+//     desktop capture shrunk to an unreadable thumbnail — and a phone frame
+//     instead of the browser window.
+//   • Frame: every capture of a device has the same size, so all three sit in
+//     one identical frame; that sameness is most of what makes the set look
+//     deliberate rather than pasted in.
 // `unoptimized`: the files are already sized WebP; running them through the
 // image optimizer on the most-hit page in the app would only re-encode them.
 
 const PHONE_MEDIA = '(max-width: 639px)';
 
-function Shot({ shot, alt, theme }: { shot: TourShot; alt: string; theme: 'light' | 'dark' }) {
+function Shot({ name, alt, theme }: { name: TourShotName; alt: string; theme: 'light' | 'dark' }) {
   // `unoptimized` leaves no srcSet to merge: the <img> is the desktop file.
   const { props: img } = getImageProps({
-    src: shotPath(shot.name, 'desktop', theme),
-    width: shot.desktop.width,
-    height: shot.desktop.height,
+    src: shotPath(name, 'desktop', theme),
+    width: TOUR_SIZE.desktop.width,
+    height: TOUR_SIZE.desktop.height,
     alt,
     unoptimized: true,
     loading: 'lazy',
@@ -34,9 +40,9 @@ function Shot({ shot, alt, theme }: { shot: TourShot; alt: string; theme: 'light
     <picture className={theme === 'dark' ? 'hidden dark:block' : 'block dark:hidden'}>
       <source
         media={PHONE_MEDIA}
-        srcSet={shotPath(shot.name, 'phone', theme)}
-        width={shot.phone.width}
-        height={shot.phone.height}
+        srcSet={shotPath(name, 'phone', theme)}
+        width={TOUR_SIZE.phone.width}
+        height={TOUR_SIZE.phone.height}
       />
       <img {...img} alt={alt} className="block w-full h-auto" />
     </picture>
@@ -56,7 +62,7 @@ export function ProductTour({ t }: { t: Dictionary }) {
       <div className="max-w-5xl mx-auto">
         <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center">{T.title}</h2>
         <p className="mt-4 text-center text-gray-600">{T.subtitle}</p>
-        <div className="mt-14 space-y-16 lg:space-y-20">
+        <div className="mt-14 space-y-20 lg:space-y-24">
           {PRODUCT_TOUR_SHOTS.map((shot) => {
             const c = copy[shot.name];
             return (
@@ -68,11 +74,31 @@ export function ProductTour({ t }: { t: Dictionary }) {
                   <h3 className="text-xl font-semibold text-gray-900">{c.title}</h3>
                   <p className="mt-2 text-gray-600 leading-relaxed">{c.body}</p>
                 </figcaption>
-                {/* A phone capture is tall: cap its width so it reads as a
-                    phone screen instead of filling a whole viewport height. */}
-                <div className="mt-6 mx-auto w-full max-w-[20rem] sm:max-w-none overflow-hidden rounded-xl border border-gray-200 shadow-lg">
-                  <Shot shot={shot} alt={c.alt} theme="light" />
-                  <Shot shot={shot} alt={c.alt} theme="dark" />
+                {/* One frame, two shapes: a phone (black bezel, rounded screen)
+                    below sm, a browser window from sm up. */}
+                <div className="mt-8 mx-auto w-full max-w-[18rem] sm:max-w-none overflow-hidden rounded-[2.25rem] border-[10px] border-gray-900 bg-gray-900 shadow-2xl ring-1 ring-black/5 dark:ring-white/15 sm:rounded-xl sm:border sm:border-gray-200 sm:bg-white">
+                  <div aria-hidden="true" className="hidden sm:flex items-center gap-2 h-9 px-4 border-b border-gray-200 bg-gray-50">
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+                    <span className="mx-auto -translate-x-6 rounded-md bg-white px-3 py-0.5 text-xs text-gray-500 border border-gray-200">
+                      interncrm.com{shot.path}
+                    </span>
+                  </div>
+                  <div className="relative overflow-hidden rounded-[1.6rem] sm:rounded-none">
+                    <Shot name={shot.name} alt={c.alt} theme="light" />
+                    <Shot name={shot.name} alt={c.alt} theme="dark" />
+                    <TourClip
+                      webm={clipPath(shot.name, 'light', 'webm')}
+                      mp4={clipPath(shot.name, 'light', 'mp4')}
+                      className="hidden sm:block dark:sm:hidden"
+                    />
+                    <TourClip
+                      webm={clipPath(shot.name, 'dark', 'webm')}
+                      mp4={clipPath(shot.name, 'dark', 'mp4')}
+                      className="hidden dark:sm:block"
+                    />
+                  </div>
                 </div>
               </figure>
             );

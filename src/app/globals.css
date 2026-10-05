@@ -394,8 +394,11 @@ html[data-accent] .text-blue-600 { color: var(--accent-600); }
    ("become a mentor", "forgot password", "see all announcements") is 3.4:1 on
    gray-950, under the 4.5:1 AA floor. It went unseen for as long as the axe
    scan only ever ran in light mode (#826). */
-html.dark .text-blue-600,
-html.dark[data-accent] .text-blue-600 { color: #93c5fd; } /* blue-300 — 8.6:1 on gray-950 */
+html.dark .text-blue-600 { color: #93c5fd; } /* blue-300 — 8.6:1 on gray-950 */
+/* …and with an accent, that accent's own -300: every -300 in the palettes above
+   is a light shade (blue's is the same #93c5fd), so contrast holds, and the
+   MARKETING landing's magenta hero accent no longer turns blue in dark mode. */
+html.dark[data-accent] .text-blue-600 { color: var(--accent-300); }
 html[data-accent] .text-blue-700 { color: var(--accent-700); }
 html[data-accent] .text-blue-800 { color: var(--accent-800); }
 html[data-accent] .text-blue-900 { color: var(--accent-900); }
