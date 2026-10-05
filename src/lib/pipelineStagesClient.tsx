@@ -1,7 +1,8 @@
 'use client';
 
 import { createContext, useContext, useMemo } from 'react';
-import { defaultPipelineStages, localizeStageLabels, stageLabel, onPathKeys, type ResolvedStage } from '@/lib/pipeline';
+import { defaultPipelineStages, stageLabel, onPathKeys, type ResolvedStage } from '@/lib/pipeline';
+import { localizeResolvedStageLabels } from '@/lib/programTemplates';
 import { useLocale } from '@/i18n/client';
 
 // Client access to the viewer's tenant pipeline stages (#747, Slice B). The
@@ -30,7 +31,7 @@ export function useResolvedStages(): ResolvedStage[] {
   const locale = useLocale();
   const ctx = useContext(Ctx);
   return useMemo(
-    () => (ctx && ctx.length > 0 ? localizeStageLabels(ctx, locale) : defaultPipelineStages(locale)),
+    () => (ctx && ctx.length > 0 ? localizeResolvedStageLabels(ctx, locale) : defaultPipelineStages(locale)),
     [ctx, locale],
   );
 }
