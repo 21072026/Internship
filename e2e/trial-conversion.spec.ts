@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '@/lib/programTemplates';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 /**
  * Trial → paid on /admin/analytics, and the transfer chain counted as ONE
@@ -153,7 +154,7 @@ test('a handover mid-trial is one trial and one paid customer, and the source sp
 
     // Premium off → the attribution half is locked, not empty.
     expect(after!.bySource).toBeNull();
-    expect((await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } })).ok()).toBeTruthy();
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
     const premium = await read();
     // Exact: the Source row is this spec's own.
     const bySource = premium!.bySource!.find((s) => s.sourceId === source.id);
@@ -166,7 +167,7 @@ test('a handover mid-trial is one trial and one paid customer, and the source sp
     await expect(card.getByTestId(`trial-source-${source.id}`)).toHaveText('50%');
     await expect(card.getByTestId('trial-kpi-history-note')).toBeVisible();
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await prisma.statusChange.deleteMany({ where: { relationId: { in: ids } } });
     // Successor first: it points at the predecessor.
     for (const id of [...ids].reverse()) await prisma.mentorshipRelation.deleteMany({ where: { id } });

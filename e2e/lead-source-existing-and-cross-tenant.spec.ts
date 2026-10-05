@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 // Two edges of lead-source attribution (#2570) the first cut missed (review):
 //
@@ -153,7 +154,7 @@ test("a lead pointing at another tenant's source: not counted there, unsourced i
     expect(listed, 'the legacy source is the default org’s').toBeTruthy();
     expect(listed!.mentees, 'only the default org’s own lead is counted').toBe(1);
 
-    expect((await mktPage.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } })).ok()).toBeTruthy();
+    await setOrgFeatureFor(mktPage, 'ADVANCED_ANALYTICS', true);
     const report = (await (await mktPage.request.get('/api/admin/analytics/sources')).json()) as {
       sources: { id: string }[];
       unsourced: number;
@@ -164,7 +165,7 @@ test("a lead pointing at another tenant's source: not counted there, unsourced i
   } finally {
     // Through the route, like the neighbours: with isolation off it writes the
     // GLOBAL row, which a direct delete of the org's settings would not undo.
-    await mktPage.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(mktPage, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await defCtx.close();
     await mktCtx.close();
     for (const email of [defaultLeadEmail, mktLeadEmail, defaultAdminEmail, mktAdminEmail]) await cleanupByEmail(email);

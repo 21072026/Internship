@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 // Lead attribution for a MARKETING tenant (#2421, story #2393).
 //
@@ -33,7 +34,7 @@ import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/pro
 //
 // The premium gate is deliberately still in the way: attribution is a paid
 // report for every vertical (see the route header for the reasoning), so the
-// spec turns `premiumAnalytics` on the way a paying tenant would and restores it
+// spec grants ADVANCED_ANALYTICS the way a paying tenant has it (#1740) and revokes it
 // in `finally` like its neighbours.
 
 test.afterAll(async () => {
@@ -106,9 +107,7 @@ test('a MARKETING admin reaches lead attribution from /admin/analytics, and a so
 
     // Attribution is a paid report for every vertical, so it is locked first.
     expect((await page.request.get('/api/admin/analytics/sources')).status()).toBe(403);
-    expect(
-      (await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } })).ok(),
-    ).toBeTruthy();
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
 
     const res = await page.request.get('/api/admin/analytics/sources');
     expect(res.ok()).toBeTruthy();
@@ -153,7 +152,7 @@ test('a MARKETING admin reaches lead attribution from /admin/analytics, and a so
     await expect(row).toBeVisible();
     await expect(row.getByTestId('source-total')).toHaveText('1');
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await prisma.mentorshipRelation.deleteMany({ where: { id: relation.id } });
     await cleanupByEmail(partnerEmail);
     await cleanupByEmail(leadEmail);

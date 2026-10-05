@@ -58,6 +58,11 @@ export const TEXT_LIMITS = {
    */
   companyContactPhone: 40,
   /**
+   * Company.contactPosition and CompanyContact.position — VARCHAR(191). A job
+   * title ("Head of E-Commerce"); 120 is generous for one and short of a paste.
+   */
+  companyContactPosition: 120,
+  /**
    * Company.vatId — VARCHAR(191). The longest VAT identification number in the
    * EU scheme is 14 characters after the country prefix; 64 leaves room for a
    * non-EU tax id without letting a pasted paragraph reach the match key.

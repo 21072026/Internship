@@ -37,6 +37,7 @@ const NAMES = {
   rep2: `Bravo Rep ${STAMP}`,
   rep3: `Charlie Rep ${STAMP}`,
   foreignRep: `Foreign Rep ${STAMP}`,
+  adminA: `ST Admin A ${STAMP}`,
 };
 const leadEmails: string[] = [];
 const orgIds: string[] = [];
@@ -97,7 +98,7 @@ test.beforeAll(async () => {
   TRIAL = stages.filter((s) => !s.isOffPath && !outcome.finished.includes(s.key)).sort((a, b) => b.order - a.order)[0].key;
   expect(WON && LOST && TRIAL).toBeTruthy();
 
-  ids.adminA = await user(E.adminA, 'ADMIN', `ST Admin A ${STAMP}`, orgA);
+  ids.adminA = await user(E.adminA, 'ADMIN', NAMES.adminA, orgA);
   ids.rep1 = await user(E.rep1, 'MENTOR', NAMES.rep1, orgA);
   ids.rep2 = await user(E.rep2, 'MENTOR', NAMES.rep2, orgA);
   ids.rep3 = await user(E.rep3, 'MENTOR', NAMES.rep3, orgA);
@@ -216,7 +217,9 @@ test('the rep sees "N of target" with a progressbar and their own org\'s board o
   const board = page.getByTestId('sales-leaderboard');
   await expect(board).toBeVisible();
   const rows = board.locator('tbody tr');
-  await expect(rows).toHaveCount(3);
+  // The org's admin is always on the board too, at 0 (maintainer decision
+  // 2026-10-05); the tie at 0 is ordered by name, so after Charlie.
+  await expect(rows).toHaveCount(4);
   await expect(rows.nth(0)).toContainText(NAMES.rep1);
   await expect(rows.nth(0)).toContainText('(you)');
   await expect(rows.nth(0).locator('td').last()).toHaveText('2');
@@ -224,9 +227,11 @@ test('the rep sees "N of target" with a progressbar and their own org\'s board o
   await expect(rows.nth(1).locator('td').last()).toHaveText('1');
   await expect(rows.nth(2)).toContainText(NAMES.rep3);
   await expect(rows.nth(2).locator('td').last()).toHaveText('0');
+  await expect(rows.nth(3)).toContainText(NAMES.adminA);
+  await expect(rows.nth(3).locator('td').last()).toHaveText('0');
   // Negative tenant test: the other org's rep (5 wins) is nowhere.
   await expect(page.getByText(NAMES.foreignRep)).toHaveCount(0);
-  // Names and counts only — no admin on the list, no money anywhere on the card.
+  // Names and counts only — no money anywhere on the card.
   await expect(board).not.toContainText('€');
 });
 

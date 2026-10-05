@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { PREMIUM_FEATURES } from '@/lib/entitlementsCatalog';
 import { useModalFocus } from '@/components/ui/useModalFocus';
+
+type Sources = Record<string, { enabled: boolean; fromPlan: boolean; override: boolean }>;
 
 // Admin modal to toggle a company's premium features (freemium Faz 0). Purely
 // enables/disables entitlements; the features themselves ship in later phases.
@@ -19,7 +21,16 @@ export function CompanyEntitlements({
 }) {
   const t = useT();
   const e = t.entitlements;
+  // The company's OWN override per feature (what the toggle writes), and the
+  // features its org already has from its plan or a grant (#1733) — those are
+  // on whatever this toggle says, so they show checked and read-only.
   const [features, setFeatures] = useState<Record<string, boolean>>({});
+  const [fromPlan, setFromPlan] = useState<Record<string, boolean>>({});
+  const apply = useCallback((d: { sources?: Sources }) => {
+    const sources = d.sources ?? {};
+    setFeatures(Object.fromEntries(Object.entries(sources).map(([k, v]) => [k, v.override])));
+    setFromPlan(Object.fromEntries(Object.entries(sources).map(([k, v]) => [k, v.fromPlan])));
+  }, []);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
@@ -27,10 +38,10 @@ export function CompanyEntitlements({
   useEffect(() => {
     fetch(`/api/admin/companies/${companyId}/entitlements`)
       .then((r) => r.json())
-      .then((d) => setFeatures(d.features ?? {}))
+      .then(apply)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [companyId]);
+  }, [companyId, apply]);
 
   const toggle = async (feature: string, enabled: boolean) => {
     setBusy(feature);
@@ -42,7 +53,7 @@ export function CompanyEntitlements({
         body: JSON.stringify({ feature, enabled }),
       });
       const d = await res.json();
-      if (res.ok) setFeatures(d.features ?? {});
+      if (res.ok) apply(d);
       else setFeatures((s) => ({ ...s, [feature]: !enabled }));
     } catch {
       setFeatures((s) => ({ ...s, [feature]: !enabled }));
@@ -78,6 +89,7 @@ export function CompanyEntitlements({
               // the customer to go configure branding used to get a 403 from
               // the other screen and no explanation anywhere.
               const orgScoped = f.scope === 'org';
+              const planned = !orgScoped && !!fromPlan[f.key];
               return (
                 <label
                   key={f.key}
@@ -95,12 +107,18 @@ export function CompanyEntitlements({
                         {e.orgScoped}
                       </p>
                     )}
+                    {planned && (
+                      <p data-testid={`entitlement-from-plan-${f.key}`} className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        {e.fromPlan}
+                      </p>
+                    )}
                   </div>
                   <input
                     type="checkbox"
                     className="mt-1 h-4 w-4 flex-shrink-0"
-                    checked={!!features[f.key]}
-                    disabled={orgScoped || busy === f.key}
+                    checked={planned || !!features[f.key]}
+                    disabled={orgScoped || planned || busy === f.key}
+                    data-testid={`entitlement-toggle-${f.key}`}
                     onChange={(ev) => toggle(f.key, ev.target.checked)}
                   />
                 </label>

@@ -17,7 +17,7 @@
 import type { Subscription } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PremiumFeature } from '@/lib/entitlementsCatalog';
-import { LEGACY_PLAN_MAP, resolveEntitlements, type EntitlementResolution, type PlanKey } from '@/lib/plans';
+import { ENTITLING_STATUSES, LEGACY_PLAN_MAP, PLANS, resolveEntitlements, type EntitlementResolution, type PlanKey } from '@/lib/plans';
 
 export { LEGACY_PLAN_MAP } from '@/lib/plans';
 
@@ -127,4 +127,33 @@ export async function orgEntitled(
 ): Promise<boolean> {
   const resolution = await resolveOrgEntitlements(orgId, now);
   return resolution.features.includes(feature);
+}
+
+// Every org that may use `feature` right now — the set form of orgEntitled(),
+// for a job that scans many tenants (the open-position match alerts, #1733)
+// and must not ask once per org. Same three sources, same order of authority:
+//   • a subscription on a plan that includes the feature, in a status that
+//     carries the plan;
+//   • an unexpired OrgEntitlement grant for it;
+//   • an org with NO subscription row yet whose legacy `Organization.plan`
+//     maps to such a plan (the same fallback resolveOrgEntitlements() uses).
+// Three bounded reads, whatever the number of tenants.
+export async function orgIdsEntitledTo(feature: PremiumFeature, now: Date = new Date()): Promise<string[]> {
+  const planKeys = PLANS.filter((p) => p.features.includes(feature)).map((p) => p.key);
+  const legacyPlans = (Object.entries(LEGACY_PLAN_MAP) as [keyof typeof LEGACY_PLAN_MAP, PlanKey][])
+    .filter(([, key]) => planKeys.includes(key))
+    .map(([legacy]) => legacy);
+  const [subscribed, granted, legacy] = await Promise.all([
+    planKeys.length
+      ? prisma.subscription.findMany({ where: { planKey: { in: planKeys }, status: { in: [...ENTITLING_STATUSES] } }, select: { orgId: true } })
+      : Promise.resolve([]),
+    prisma.orgEntitlement.findMany({
+      where: { feature, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      select: { orgId: true },
+    }),
+    legacyPlans.length
+      ? prisma.organization.findMany({ where: { subscription: null, plan: { in: legacyPlans } }, select: { id: true } })
+      : Promise.resolve([]),
+  ]);
+  return [...new Set([...subscribed.map((r) => r.orgId), ...granted.map((r) => r.orgId), ...legacy.map((r) => r.id)])];
 }

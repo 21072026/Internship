@@ -648,12 +648,23 @@ export function localizeResolvedStageLabels(stages: ResolvedStage[], locale: Loc
   // Judged on the STORED label: the canonical pass fills a blank one with the
   // raw key, which would no longer read as untouched.
   return localizeStageLabels(stages, locale).map((s, i) => {
-    const labels = CURATED_STAGE_LABELS.get(s.key);
-    if (!labels) return s;
-    const trimmed = stages[i].label.trim();
-    const untouched = !trimmed || TEMPLATE_LOCALES.some((l) => labels[l] === trimmed);
-    return untouched ? { ...s, label: labels[locale] ?? labels.en } : s;
+    const label = curatedStageLabel(s.key, stages[i].label, locale);
+    return label === null ? s : { ...s, label };
   });
+}
+
+/**
+ * The viewer-locale label of a curated template stage whose stored label is
+ * untouched (blank, or our curated label in any locale); null when the key is
+ * not a curated one or the tenant typed its own label. Also what the
+ * notification bell uses for the label snapshot a stage change stores (#921).
+ */
+export function curatedStageLabel(key: string, storedLabel: string | null | undefined, locale: Locale): string | null {
+  const labels = CURATED_STAGE_LABELS.get(key);
+  if (!labels) return null;
+  const trimmed = (storedLabel ?? '').trim();
+  const untouched = !trimmed || TEMPLATE_LOCALES.some((l) => labels[l] === trimmed);
+  return untouched ? labels[locale] ?? labels.en : null;
 }
 
 // ── Reading a template ───────────────────────────────────────────────────────

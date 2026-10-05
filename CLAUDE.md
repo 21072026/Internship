@@ -41,7 +41,13 @@ npm run test:load        # nightly k6 ramp            (BASE_URL=… ; needs the 
 
 **E2E tests** (Playwright) live in `e2e/`. The PR quality gate
 (`.github/workflows/e2e.yml`, isolated MySQL service) runs **only the `@smoke` subset**;
-the full suite is the scheduled safety net (see below). The **smoke set** is the tests
+the full suite is the scheduled safety net (see below). `Playwright smoke` is a **required**
+check, so the workflow has **no `paths-ignore`** (#2719): a path-filtered workflow reports
+nothing and left every docs-only PR `BLOCKED` forever. Instead its `changes` job reads the PR's
+file list and the smoke job is *skipped* — which branch protection counts as passing — only
+when every path is `docs/**`, `releases/unreleased/**`, `*.md` or a root `.HANDOFF-*`; any
+other path (a rename counts by both names) runs it, and a failed detection runs it too.
+Don't reintroduce a `paths:`/`paths-ignore:` filter on a workflow that carries a required check. The **smoke set** is the tests
 tagged `@smoke` (`test('…', { tag: '@smoke' }, …)`) — boot, auth, landing i18n, invite,
 pipeline, free-core regression. When you add a spec for a *critical* flow, tag it
 `@smoke`; keep the set small (~15-20 tests) so the PR gate stays fast. Locally `test:e2e`

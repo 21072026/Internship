@@ -3,6 +3,8 @@ import cron from 'node-cron';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { orgIdsEntitledTo } from '@/lib/subscription';
+import { entitled } from '@/lib/entitlements';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { logger } from '@/lib/logger';
@@ -4359,11 +4361,19 @@ const ALERTABLE_REQUISITION_STATUS = 'OPEN';
 // CompanyNeed→Requisition backfill is manual and runs in no deploy step. So this
 // adds a source rather than replacing one; the [companyId, menteeId] dedupe key
 // means a company with the same role in both tables still alerts once.
+//
+// WHO IS ENTITLED (#1733): a company whose ORG may use the feature (its plan or
+// an org grant — orgIdsEntitledTo(), the set form of entitled()), OR a company
+// with a legacy per-company CompanyEntitlement row (grandfathered, the same
+// rule hasFeature() applies).
 export async function checkCompanyNeedMatches() {
+  const entitledOrgIds = await orgIdsEntitledTo('COMPANY_NEED_MATCH_ALERTS');
   const companies = await prisma.company.findMany({
     where: {
-      entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
-      OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }],
+      AND: [
+        { OR: [{ orgId: { in: entitledOrgIds } }, { entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } } }] },
+        { OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }] },
+      ],
     },
     select: {
       id: true,
@@ -4606,31 +4616,32 @@ export interface WeeklyAnalyticsStats {
 /**
  * One tenant's figures for the weekly report (#1884): relations, "hired"
  * conversion read from that tenant's own `finished` stages, the last week's
- * activity, and a stage table labelled in the tenant's own words. `orgId` is a
+ * activity, and a stage table labelled in the tenant's own words, in `locale`
+ * (the recipient's, #2715). `orgId` is a
  * resolved org (the caller maps a NULL org to the default one); `orgWhere`
  * includes the not-yet-stamped NULL rows for the default org, as everywhere.
  */
-export async function weeklyAnalyticsStats(orgId: string, weekAgo: Date): Promise<WeeklyAnalyticsStats> {
+export async function weeklyAnalyticsStats(orgId: string, weekAgo: Date, locale: Locale = 'en'): Promise<WeeklyAnalyticsStats> {
   const tenant = await orgWhere(orgId);
   const [byStage, newRelations, interactions, stages] = await Promise.all([
     prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: tenant, _count: { _all: true } }),
     prisma.mentorshipRelation.count({ where: { AND: [tenant, { startDate: { gte: weekAgo } }] } }),
     prisma.interactionLog.count({ where: { date: { gte: weekAgo }, relation: tenant } }),
-    resolvePipelineStages(orgId, 'en'),
+    resolvePipelineStages(orgId, locale),
   ]);
   const { finished } = outcomeStageKeysFrom(stages);
   const total = byStage.reduce((n, s) => n + s._count._all, 0);
   const hired = byStage.filter((s) => finished.includes(s.pipelineStatus)).reduce((n, s) => n + s._count._all, 0);
   const stageRows = byStage
     .sort((a, b) => b._count._all - a._count._all)
-    .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${esc(stageLabel(stages, s.pipelineStatus, 'en'))}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
+    .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${esc(stageLabel(stages, s.pipelineStatus, locale))}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
     .join('');
   return { total, conversion: total ? Math.round((hired / total) * 100) : 0, newRelations, interactions, stageRows };
 }
 
 // Weekly scheduled analytics report email (Faz 2, #541). Premium, PER ORG: an
-// org's admins get the report only when THAT org's premiumAnalytics setting is
-// on. Each gets a compact summary of their own org's pipeline — total relations,
+// org's admins get the report only when THAT org is entitled to
+// ADVANCED_ANALYTICS (#1740). Each gets a compact summary of their own org's pipeline — total relations,
 // hired conversion, stage counts and the last 7 days' activity — honoring the
 // per-user opt-out.
 export type AnalyticsReportOrgResult = { orgId: string; locked: boolean; sent: number; total: number };
@@ -4639,8 +4650,9 @@ export async function sendWeeklyAnalyticsReport() {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
-    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+    select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
+  const dictionaryOf = emailDictionaryMemo();
 
   // Per TENANT (#1884): each admin gets their own org's numbers, "hired" is
   // that org's `finished` set and the table shows the org's own stage labels
@@ -4649,7 +4661,8 @@ export async function sendWeeklyAnalyticsReport() {
   // every tenant. Admins are grouped by the org their settings live in — a NULL
   // org is the default org's (`settingsOrgOfRow`, the tenantFilter.ts rule) —
   // and each group is read, counted and mailed on its own.
-  const premiumOf = settingByOrg('premiumAnalytics');
+  // The gate is the org's ADVANCED_ANALYTICS entitlement (#1740) — its plan or
+  // a grant, the same entitled() every analytics route asks.
   const adminsByOrg = new Map<string, typeof admins>();
   for (const a of admins) {
     const org = await settingsOrgOfRow(a.orgId);
@@ -4662,22 +4675,28 @@ export async function sendWeeklyAnalyticsReport() {
 
   const orgs: AnalyticsReportOrgResult[] = [];
   for (const [orgId, recipients] of adminsByOrg) {
-    if ((await premiumOf(orgId)) !== 'true') {
+    if (!(await entitled(orgId, 'ADVANCED_ANALYTICS'))) {
       orgs.push({ orgId, locked: true, sent: 0, total: 0 });
       continue;
     }
-    const [{ total, conversion, newRelations, interactions, stageRows }, brand] = await Promise.all([
-      weeklyAnalyticsStats(orgId, weekAgo),
-      emailBrand(orgId),
-    ]);
-    // The default world keeps its report as it always read; another world's
-    // admin gets its own product name and funnel words (docs/worlds.md).
+    const brand = await emailBrand(orgId);
+    // The figures are per org; the words are per RECIPIENT (#2715) — each admin
+    // reads the report, the stage table included, in their own language, and in
+    // their own world's terms (emailDictionary applies the vertical overlay).
+    const statsByLocale = new Map<Locale, Promise<WeeklyAnalyticsStats>>();
+    const statsFor = (locale: Locale) => {
+      let hit = statsByLocale.get(locale);
+      if (!hit) {
+        hit = weeklyAnalyticsStats(orgId, weekAgo, locale);
+        statsByLocale.set(locale, hit);
+      }
+      return hit;
+    };
     const ownWorld = brand.vertical !== DEFAULT_VERTICAL;
-    const summary = ownWorld
-      ? `<strong>${total}</strong> records · <strong>${conversion}%</strong> reached the final stage ·
-          last 7 days: <strong>${newRelations}</strong> new records, <strong>${interactions}</strong> interactions.`
-      : `<strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
-          last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.`;
+    const product = ownWorld ? brand.name : 'Internship CRM';
+    // The org's figures are the same in every language; read them once even
+    // when every admin has opted out, as the result row always reported them.
+    const { total } = await statsFor(resolveLocale(recipients[0]?.preferredLanguage));
     let sent = 0;
     for (const a of recipients) {
       // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
@@ -4685,19 +4704,29 @@ export async function sendWeeklyAnalyticsReport() {
       // the preference surfaces showed it as ON. 'digest' is in
       // reports_analytics.legacy now, so the old opt-out still holds visibly.
       if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
+      const locale = resolveLocale(a.preferredLanguage);
+      const stats = await statsFor(locale);
+      const R = (await dictionaryOf(locale, orgId)).notifications.analyticsReportEmail;
+      const strong = (n: number) => `<strong>${n}</strong>`;
+      const summary = R.summary
+        .replace('{total}', strong(stats.total))
+        .replace('{conversion}', strong(stats.conversion))
+        .replace('{newRelations}', strong(stats.newRelations))
+        .replace('{interactions}', strong(stats.interactions));
       const base = await origins.urlFor(a.orgId);
       await sendEmail({
         category: 'analytics-report',
         userId: a.id,
         orgId: a.orgId,
+        locale: a.preferredLanguage,
         to: a.email,
-        subject: `Weekly analytics report — ${ownWorld ? brand.name : 'Internship CRM'}`,
+        subject: R.subject.replace('{product}', product),
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          ${worldHeading(brand, 'Weekly analytics report', '<h2 style="color:#2563eb;">Weekly analytics report</h2>')}
-          <p>Hi ${esc(a.fullName)},</p>
+          ${worldHeading(brand, esc(R.heading), `<h2 style="color:#2563eb;">${esc(R.heading)}</h2>`)}
+          <p>${esc(R.greeting.replace('{name}', a.fullName))}</p>
           <p>${summary}</p>
-          <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
-          <p><a href="${base}/admin/analytics">Open the analytics dashboard</a></p>
+          <table style="font-size:14px;border-collapse:collapse;">${stats.stageRows}</table>
+          <p><a href="${base}/admin/analytics">${esc(R.cta)}</a></p>
         </div>`,
       }).catch((error) => {
         console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, orgId, error });
@@ -4964,8 +4993,8 @@ export function initCronJobs() {
   });
   scheduledTasks.set('weekly-digest', digestTask);
 
-  // Weekly premium analytics report — Mondays 8:15 (no-op while the
-  // premiumAnalytics setting is off).
+  // Weekly premium analytics report — Mondays 8:15 (a no-op for every org
+  // without the ADVANCED_ANALYTICS entitlement).
   const analyticsTask = cron.schedule('15 8 * * 1', async () => {
     try {
       const r = await sendWeeklyAnalyticsReport();

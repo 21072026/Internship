@@ -284,6 +284,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/companyContactsRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'one primary contact by construction: the swap neither loses nor invents a person, and the duplicate test sees the primary as well as the rows (#2442)',
+    },
+  ],
+  [
     'src/lib/companyContactErasure.ts',
     {
       floor: 95,

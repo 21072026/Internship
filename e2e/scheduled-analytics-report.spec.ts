@@ -1,14 +1,13 @@
 import crypto from 'crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { MARKETING_HOST, asHost, signInViaApi } from './helpers/auth';
 import { freshIp } from './helpers/rateLimit';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
-
-const KEY = 'premiumAnalytics';
 
 async function defaultOrg() {
   return prisma.organization.upsert({
@@ -20,7 +19,7 @@ async function defaultOrg() {
 }
 
 // Premium Faz 2 (#541): the weekly analytics report email job is a no-op while
-// the premiumAnalytics setting is off, and reports sends once enabled (SMTP is
+// the org lacks ADVANCED_ANALYTICS (#1740), and reports sends once it has it (SMTP is
 // unset in CI, so sendEmail no-ops — the job still counts recipients). Restores
 // the flag in finally.
 //
@@ -30,13 +29,9 @@ test('weekly analytics report is locked by default and sends to admins once enab
   const adminEmail = uniqueEmail('wa-admin');
   const pw = 'WeeklyPass123';
   await seedUser(adminEmail, pw, 'ADMIN', 'Weekly Admin');
-  // The flag below is flipped through the settings route, which writes either
-  // the global row or (#2628) the default org's own row. A default-org row left
-  // by another spec would shadow the former, so start from none and put back
-  // whatever was there.
+  // A known starting point: the default org (this admin's) without the tier.
   const def = await defaultOrg();
-  const before = await prisma.setting.findFirst({ where: { orgId: def.id, key: KEY }, select: { value: true } });
-  await prisma.setting.deleteMany({ where: { orgId: def.id, key: KEY } });
+  await setOrgFeature(def.id, 'ADVANCED_ANALYTICS', false);
 
   try {
     await page.goto('/auth/signin');
@@ -53,7 +48,7 @@ test('weekly analytics report is locked by default and sends to admins once enab
     expect(lockedReport.sent).toBe(0);
 
     // Enable the tier → the job runs and counts at least this admin.
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } });
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
     const on = await page.request.get('/api/cron');
     expect(on.ok()).toBeTruthy();
     const report = (await on.json()).analyticsReport;
@@ -62,22 +57,19 @@ test('weekly analytics report is locked by default and sends to admins once enab
     // Only the caller's own entry — never the other tenants' counts.
     expect(report.orgs).toBeUndefined();
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
-    await prisma.setting.deleteMany({ where: { orgId: def.id, key: KEY } });
-    if (before) await prisma.setting.create({ data: { orgId: def.id, key: KEY, value: before.value } });
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await cleanupByEmail(adminEmail);
   }
 });
 
-// #2680: two tenants on one database (#2542). Each org is gated on ITS OWN setting,
+// #2680: two tenants on one database (#2542). Each org is gated on ITS OWN entitlement,
 // counts only ITS OWN relations, and mails only ITS OWN admins. The EmailLog
 // ledger is written even without SMTP (as SKIPPED/FAILED), so "who got a
 // report" is read from there by recipient address.
 const PW = 'WeeklyTenant123!';
 
 async function setOrgSetting(orgId: string, value: string) {
-  await prisma.setting.deleteMany({ where: { orgId, key: KEY } });
-  await prisma.setting.create({ data: { orgId, key: KEY, value } });
+  await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', value === 'true');
 }
 
 async function runReport(jar: APIRequestContext) {
@@ -108,7 +100,6 @@ test('each tenant gets its own report: own gate, own numbers, own admins (#2680)
   // Exactly one relation in the marketing tenant.
   await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, orgId: mkt.id } });
 
-  const before = await prisma.setting.findFirst({ where: { orgId: def.id, key: KEY }, select: { value: true } });
   const mktJar = await playwright.request.newContext({ baseURL, extraHTTPHeaders: asHost(MARKETING_HOST) });
   const intJar = await playwright.request.newContext({ baseURL });
   try {
@@ -150,8 +141,7 @@ test('each tenant gets its own report: own gate, own numbers, own admins (#2680)
   } finally {
     await mktJar.dispose();
     await intJar.dispose();
-    await prisma.setting.deleteMany({ where: { orgId: def.id, key: KEY } });
-    if (before) await prisma.setting.create({ data: { orgId: def.id, key: KEY, value: before.value } });
+    await setOrgFeature(def.id, 'ADVANCED_ANALYTICS', false);
     await prisma.emailLog.deleteMany({ where: { to: { in: [mktAdmin, intAdmin] } } });
     for (const e of [mktMentee, mktMentor, mktAdmin, intAdmin]) await cleanupByEmail(e);
     await prisma.setting.deleteMany({ where: { orgId: mkt.id } });
