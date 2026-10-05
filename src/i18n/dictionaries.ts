@@ -245,6 +245,7 @@ const en = {
     subtitle: 'Enable premium features for {name}. Mentor and mentee features are always free.',
     phase: 'Phase {n}',
     orgScoped: 'Decided by the organization\'s plan, not by this toggle — set it on the Organizations screen.',
+    fromPlan: 'Included in the organization’s plan — on for every company of the organization.',
     done: 'Done',
     features: {
       TALENT_POOL_SEARCH: 'Talent pool search & filters',
@@ -6356,6 +6357,7 @@ const tr: Dict = {
     subtitle: '{name} için premium özellikleri aç. Mentor ve mentee özellikleri her zaman ücretsizdir.',
     phase: 'Faz {n}',
     orgScoped: 'Bu anahtar değil, organizasyonun planı belirler — Organizasyonlar ekranından ayarlayın.',
+    fromPlan: 'Organizasyonun planına dahil — organizasyonun tüm şirketlerinde açık.',
     done: 'Tamam',
     features: {
       TALENT_POOL_SEARCH: 'Yetenek havuzu arama ve filtre',
@@ -12291,6 +12293,7 @@ const de: Dict = {
     subtitle: 'Premium-Funktionen für {name} aktivieren. Mentor- und Mentee-Funktionen sind immer kostenlos.',
     phase: 'Phase {n}',
     orgScoped: 'Entscheidet der Plan der Organisation, nicht dieser Schalter — im Bildschirm „Organisationen“ festlegen.',
+    fromPlan: 'Im Tarif der Organisation enthalten – für alle Unternehmen der Organisation aktiv.',
     done: 'Fertig',
     features: {
       TALENT_POOL_SEARCH: 'Talentpool-Suche & Filter',
