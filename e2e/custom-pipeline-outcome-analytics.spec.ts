@@ -3,6 +3,7 @@ import { prisma, seedCustomPipelineOrg, cleanupCustomPipelineOrg } from './helpe
 import { signInAndSettle } from './helpers/auth';
 import { outcomeStageKeysFrom } from '../src/lib/pipelineStages';
 import { defaultPipelineStages } from '../src/lib/pipeline';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 /**
  * The five paid reports must count a tenant's OWN finished stage (#1882).
@@ -89,8 +90,7 @@ test('all five paid reports count the renamed tenant’s own finished stage', as
   expect(mentorData.conversionToHired).toBeGreaterThan(0);
 
   // ── premium surfaces ─────────────────────────────────────────────────────
-  const enable = await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } });
-  expect(enable.ok()).toBeTruthy();
+  await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
   try {
     const cohortsRes = await page.request.get('/api/admin/analytics/cohorts');
     expect(cohortsRes.ok()).toBeTruthy();
@@ -124,7 +124,7 @@ test('all five paid reports count the renamed tenant’s own finished stage', as
     // Aggregates only: no other program is identified anywhere in the payload.
     expect(JSON.stringify(bench)).not.toContain(seeded.org.id);
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
   }
 });
 

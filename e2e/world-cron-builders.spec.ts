@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import {
   __testable,
   checkCompanyNeedMatches,
@@ -12,7 +12,6 @@ import {
 import { getSystemMenteeActivity } from '@/lib/activityReport';
 import { orgWhere } from '@/lib/tenantFilter';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
-import { setSetting } from '@/lib/settings';
 import { prisma as appPrisma } from '@/lib/prisma';
 import { getDictionary } from '../src/i18n/dictionaries';
 
@@ -188,8 +187,8 @@ test.describe('admin digests and summaries describe one org', () => {
   });
 
   test("the weekly analytics report follows each org's own opt-in and names its own product", async () => {
-    await setSetting('premiumAnalytics', 'true', mktOrgId);
-    await setSetting('premiumAnalytics', 'false', intOrgId);
+    await setOrgFeature(mktOrgId, 'ADVANCED_ANALYTICS', true);
+    await setOrgFeature(intOrgId, 'ADVANCED_ANALYTICS', false);
     await sendWeeklyAnalyticsReport();
     const mkt = await logsTo(emails.mktAdmin, 'analytics-report');
     expect(mkt.length).toBeGreaterThanOrEqual(1);
@@ -238,7 +237,7 @@ test('the weekly analytics report speaks its reader’s language, stage table in
     const rep = await seedUser(repEmail, PW, 'MENTOR', 'Cron TR Rep', org.id);
     const lead = await seedUser(leadEmail, PW, 'MENTEE', 'Cron TR Lead', org.id);
     await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: rep.id, menteeId: lead.id, pipelineStatus: 'LEAD_NEW' } });
-    await setSetting('premiumAnalytics', 'true', org.id);
+    await setOrgFeature(org.id, 'ADVANCED_ANALYTICS', true);
 
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const tr = await weeklyAnalyticsStats(org.id, weekAgo, 'tr');

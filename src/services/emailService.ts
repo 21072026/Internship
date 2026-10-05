@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { orgIdsEntitledTo } from '@/lib/subscription';
+import { entitled } from '@/lib/entitlements';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { logger } from '@/lib/logger';
@@ -4639,8 +4640,8 @@ export async function weeklyAnalyticsStats(orgId: string, weekAgo: Date, locale:
 }
 
 // Weekly scheduled analytics report email (Faz 2, #541). Premium, PER ORG: an
-// org's admins get the report only when THAT org's premiumAnalytics setting is
-// on. Each gets a compact summary of their own org's pipeline — total relations,
+// org's admins get the report only when THAT org is entitled to
+// ADVANCED_ANALYTICS (#1740). Each gets a compact summary of their own org's pipeline — total relations,
 // hired conversion, stage counts and the last 7 days' activity — honoring the
 // per-user opt-out.
 export type AnalyticsReportOrgResult = { orgId: string; locked: boolean; sent: number; total: number };
@@ -4660,7 +4661,8 @@ export async function sendWeeklyAnalyticsReport() {
   // every tenant. Admins are grouped by the org their settings live in — a NULL
   // org is the default org's (`settingsOrgOfRow`, the tenantFilter.ts rule) —
   // and each group is read, counted and mailed on its own.
-  const premiumOf = settingByOrg('premiumAnalytics');
+  // The gate is the org's ADVANCED_ANALYTICS entitlement (#1740) — its plan or
+  // a grant, the same entitled() every analytics route asks.
   const adminsByOrg = new Map<string, typeof admins>();
   for (const a of admins) {
     const org = await settingsOrgOfRow(a.orgId);
@@ -4673,7 +4675,7 @@ export async function sendWeeklyAnalyticsReport() {
 
   const orgs: AnalyticsReportOrgResult[] = [];
   for (const [orgId, recipients] of adminsByOrg) {
-    if ((await premiumOf(orgId)) !== 'true') {
+    if (!(await entitled(orgId, 'ADVANCED_ANALYTICS'))) {
       orgs.push({ orgId, locked: true, sent: 0, total: 0 });
       continue;
     }
@@ -4991,8 +4993,8 @@ export function initCronJobs() {
   });
   scheduledTasks.set('weekly-digest', digestTask);
 
-  // Weekly premium analytics report — Mondays 8:15 (no-op while the
-  // premiumAnalytics setting is off).
+  // Weekly premium analytics report — Mondays 8:15 (a no-op for every org
+  // without the ADVANCED_ANALYTICS entitlement).
   const analyticsTask = cron.schedule('15 8 * * 1', async () => {
     try {
       const r = await sendWeeklyAnalyticsReport();

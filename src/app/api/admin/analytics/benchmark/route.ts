@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
@@ -23,7 +23,7 @@ const MIN_RELATIONS = 5;
 // GET — premium cross-program benchmark (Faz 2, #542). Compares the viewer's
 // organization's funnel conversion against an ANONYMIZED, aggregated average
 // across all qualifying programs. Only aggregate numbers cross the boundary —
-// never another program's identity or raw rows. Gated by premiumAnalytics.
+// never another program's identity or raw rows. Gated by the org's ADVANCED_ANALYTICS entitlement (#1740).
 //
 // WHY THE STAGE SET IS RESOLVED PER ORG (#1882)
 //
@@ -45,8 +45,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   // The CALLER's tier, org passed explicitly (this runs before the scope binds).
-  if ((await getSetting('premiumAnalytics', await settingsOrgOf(session))) !== 'true') {
-    return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
+  if (!(await entitled(await settingsOrgOf(session), 'ADVANCED_ANALYTICS'))) {
+    return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });
   }
 
   const locale = await getLocale();
