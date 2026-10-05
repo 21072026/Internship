@@ -14,6 +14,7 @@ import { useSession } from 'next-auth/react';
 import { MarketingAccountImport } from '@/components/MarketingAccountImport';
 import { DEFAULT_TRIAL_LENGTH_DAYS, MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 import { verticalHasCapability } from '@/lib/verticals';
+import { isValidWonTargetInput, SALES_TARGET_MAX } from '@/lib/salesTargetRule';
 
 // The delivery log answers "did our mail actually go out, and when?", and a
 // newsletter or announcement send writes one EmailLog row per recipient — 50
@@ -82,6 +83,14 @@ export default function AdminSettingsPage() {
   const [defaultLeadOwnerId, setDefaultLeadOwnerId] = useState('');
   const [loadedDefaultLeadOwnerId, setLoadedDefaultLeadOwnerId] = useState('');
   const [leadOwners, setLeadOwners] = useState<{ id: string; fullName: string; role: string }[]>([]);
+  // Sales won-deal target + team leaderboard (MARKETING only, like the two
+  // above; the API refuses both for any other vertical). Same load/post dance:
+  // an untouched inherited value is never posted.
+  const [salesWonTarget, setSalesWonTarget] = useState('');
+  const [loadedSalesWonTarget, setLoadedSalesWonTarget] = useState('');
+  const [salesWonTargetError, setSalesWonTargetError] = useState<string | null>(null);
+  const [salesLeaderboardForReps, setSalesLeaderboardForReps] = useState(false);
+  const [loadedSalesLeaderboardForReps, setLoadedSalesLeaderboardForReps] = useState(false);
   // Set when the box holds something the API's `\d{1,6}` would reject (empty is
   // the common one — clearing the box is how anybody retypes a number). Without
   // this the whole PUT 400s and every other change on the form is discarded.
@@ -225,6 +234,10 @@ export default function AdminSettingsPage() {
     setLoadedTrialLengthDays(trialDays);
     setDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
     setLoadedDefaultLeadOwnerId(settings.defaultLeadOwnerId ?? '');
+    setSalesWonTarget(settings.salesMonthlyWonTarget ?? '');
+    setLoadedSalesWonTarget(settings.salesMonthlyWonTarget ?? '');
+    setSalesLeaderboardForReps(settings.salesLeaderboardForReps === 'true');
+    setLoadedSalesLeaderboardForReps(settings.salesLeaderboardForReps === 'true');
     setLoadState('ready');
   }, []);
   // The people a lead may belong to: this org's active admins and reps — the
@@ -245,7 +258,7 @@ export default function AdminSettingsPage() {
 
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null); setBroadcastQuotaError(null); setTrialLengthError(null);
+    setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null); setBroadcastQuotaError(null); setTrialLengthError(null); setSalesWonTargetError(null);
     // The API validates the quota with /^\d{1,6}$/ and rejects the WHOLE
     // payload on a miss, so an unusable number is caught here and reported on
     // the field instead — the rest of the form still saves.
@@ -279,16 +292,23 @@ export default function AdminSettingsPage() {
       return;
     }
     const ownerChanged = hasTrialStage && defaultLeadOwnerId !== loadedDefaultLeadOwnerId;
+    const wonTarget = salesWonTarget.trim();
+    const wonTargetChanged = hasTrialStage && wonTarget !== loadedSalesWonTarget;
+    if (wonTargetChanged && !isValidWonTargetInput(wonTarget)) {
+      setSalesWonTargetError(t.settings.salesWonTargetInvalid);
+      return;
+    }
+    const boardChanged = hasTrialStage && salesLeaderboardForReps !== loadedSalesLeaderboardForReps;
     setSavingSettings(true);
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
       // change on the form was dropped.
-      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); }
+      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); }
       else setSaveError(t.settings.saveFailed);
     } catch {
       setSaveError(t.settings.saveFailed);
@@ -474,6 +494,24 @@ export default function AdminSettingsPage() {
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 mt-1">{t.settings.defaultLeadOwnerHint}</p>
+              </div>
+            )}
+            {hasTrialStage && (
+              <Input label={t.settings.salesWonTarget} type="number" min={0} max={SALES_TARGET_MAX} step={1} value={salesWonTarget} onChange={(e) => { setSalesWonTarget(e.target.value); setSalesWonTargetError(null); }} hint={t.settings.salesWonTargetHint} error={salesWonTargetError ?? undefined} data-testid="sales-won-target" />
+            )}
+            {hasTrialStage && (
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={salesLeaderboardForReps}
+                    onChange={(e) => setSalesLeaderboardForReps(e.target.checked)}
+                    aria-describedby="sales-leaderboard-for-reps-hint"
+                    data-testid="sales-leaderboard-for-reps"
+                  />
+                  {t.settings.salesLeaderboardForReps}
+                </label>
+                <p id="sales-leaderboard-for-reps-hint" className="text-xs text-gray-500 mt-1">{t.settings.salesLeaderboardForRepsHint}</p>
               </div>
             )}
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>

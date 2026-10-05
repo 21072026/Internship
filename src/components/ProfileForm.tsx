@@ -22,6 +22,14 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { SKILL_LIMITS, parseSkills } from '@/lib/skills';
 import { FALLBACK_TIMEZONE, timeZoneOptions } from '@/lib/timezone';
+import { ProfileProgressMeter } from '@/components/ProfileProgressMeter';
+import {
+  profileCompleteness,
+  profileFieldAnchor,
+  completenessSnapshot,
+  PROFILE_FIELD_ANCHOR_PREFIX,
+  type ProfileCompletenessInput,
+} from '@/lib/profileCompleteness';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -108,6 +116,11 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
   // is the shape the API takes and the shape a paste has to survive as (#2314).
   const [skills, setSkills] = useState<string[]>([]);
   const [skillLevels, setSkillLevels] = useState<Record<string, number>>({});
+  // What the completeness meter reads (mentee only): the SAVED profile, not
+  // the unsaved form — the meter must not claim a field that a reload would
+  // show empty. Refreshed on load, on a successful save and on a CV upload or
+  // removal (those persist immediately through CvManager).
+  const [savedProfile, setSavedProfile] = useState<ProfileCompletenessInput | null>(null);
 
   const {
     register,
@@ -141,6 +154,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
           setFullName(user.fullName || '');
           setSkillLevels((user.skillLevels && typeof user.skillLevels === 'object') ? user.skillLevels : {});
           setSkills(Array.isArray(user.skills) ? user.skills : []);
+          setSavedProfile(completenessSnapshot(user));
           reset({
             fullName: user.fullName,
             phone: user.phone || '',
@@ -237,6 +251,13 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
         throw new Error(body.error || 'Failed to save');
       }
 
+      // The meter reads what the server persisted (the PUT answers with the
+      // same PROFILE_SELECT row the load path reads), never the submitted
+      // form values — a field the server normalised or dropped must not count.
+      const saved = await res.json().catch(() => null);
+      if (role === 'MENTEE' && saved?.user) {
+        setSavedProfile(completenessSnapshot(saved.user));
+      }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
       toast(t.profileForm.updated);
@@ -247,6 +268,22 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
     }
   });
 
+  // Deep links from the /portal checklist (`/portal/profile#profile-field-…`)
+  // arrive before the form exists: the page renders a loading placeholder
+  // until /api/profile answers, so the browser's own hash scroll finds
+  // nothing. Once the form is in the DOM, honour the hash ourselves — scroll
+  // the field into view and focus its first control. Runs once per load.
+  useEffect(() => {
+    if (loading) return;
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    if (!id.startsWith(PROFILE_FIELD_ANCHOR_PREFIX)) return;
+    const target = document.getElementById(id);
+    if (!target) return;
+    target.scrollIntoView({ block: 'center' });
+    const control = target.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select, button');
+    control?.focus({ preventScroll: true });
+  }, [loading]);
+
   if (loading) return <div className="text-center py-12 text-gray-600 dark:text-gray-400">{t.common.loading}</div>;
 
   return (
@@ -255,6 +292,14 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.profileForm.title}</h1>
         <p className="text-gray-500 mt-1">{t.profileForm.subtitle}</p>
       </div>
+
+      {role === 'MENTEE' && savedProfile && (
+        <ProfileProgressMeter
+          completeness={profileCompleteness(savedProfile)}
+          labels={t.portal.profileProgress}
+          variant="profile"
+        />
+      )}
 
       {userId && (
         <Card className="max-w-2xl mb-6">
@@ -300,7 +345,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
               {...register('whatsapp')}
               error={errors.whatsapp?.message}
             />
-            <Input label={t.profileForm.city} placeholder={t.profileForm.cityHint} maxLength={TEXT_LIMITS.profileShortText} {...register('city')} error={errors.city?.message} />
+            <div id={profileFieldAnchor('city')} className="scroll-mt-24"><Input label={t.profileForm.city} placeholder={t.profileForm.cityHint} maxLength={TEXT_LIMITS.profileShortText} {...register('city')} error={errors.city?.message} /></div>
             <Input label={t.profileForm.birthDate} type="date" {...register('birthDate')} error={errors.birthDate?.message} />
           </div>
 
@@ -308,7 +353,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
             <p className="text-sm font-semibold text-gray-700 mb-4">{t.profileForm.about}</p>
             <div className="space-y-4">
               <Input label={t.profileForm.displayName} placeholder={t.profileForm.displayNameHint} {...register('displayName')} error={errors.displayName?.message} />
-              <div>
+              <div id={profileFieldAnchor('bio')} className="scroll-mt-24">
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.profileForm.bio}</label>
                 <Textarea
                   {...register('bio')}
@@ -338,8 +383,8 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
               )}
               {role === 'MENTEE' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input label={t.profileForm.targetPosition} placeholder={t.profileForm.targetPositionHint} {...register('targetPosition')} error={errors.targetPosition?.message} />
-                  <Input label={t.profileForm.interests} placeholder={t.profileForm.interestsHint} {...register('interests')} error={errors.interests?.message} />
+                  <div id={profileFieldAnchor('targetPosition')} className="scroll-mt-24"><Input label={t.profileForm.targetPosition} placeholder={t.profileForm.targetPositionHint} {...register('targetPosition')} error={errors.targetPosition?.message} /></div>
+                  <div id={profileFieldAnchor('interests')} className="scroll-mt-24"><Input label={t.profileForm.interests} placeholder={t.profileForm.interestsHint} {...register('interests')} error={errors.interests?.message} /></div>
                 </div>
               )}
             </div>
@@ -348,39 +393,39 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
           {role === 'MENTEE' && <div className="border-t border-gray-100 pt-4">
             <p className="text-sm font-semibold text-gray-700 mb-4">{t.profileForm.education}</p>
             <div className="space-y-4">
-              <Input
+              <div id={profileFieldAnchor('university')} className="scroll-mt-24"><Input
                 label={t.profileForm.university}
                 placeholder={t.profileForm.universityHint}
                 maxLength={TEXT_LIMITS.profileShortText}
                 {...register('university')}
                 error={errors.university?.message}
-              />
-              <Input
+              /></div>
+              <div id={profileFieldAnchor('department')} className="scroll-mt-24"><Input
                 label={t.profileForm.department}
                 placeholder={t.profileForm.departmentHint}
                 maxLength={TEXT_LIMITS.profileShortText}
                 {...register('department')}
                 error={errors.department?.message}
-              />
-              <Select
+              /></div>
+              <div id={profileFieldAnchor('graduationYear')} className="scroll-mt-24"><Select
                 label={t.profileForm.graduationYear}
                 options={graduationYearOptions}
                 {...register('graduationYear')}
                 error={errors.graduationYear?.message}
-              />
+              /></div>
             </div>
           </div>}
 
           <div className="border-t border-gray-100 pt-4">
             <p className="text-sm font-semibold text-gray-700 mb-4">{role === 'MENTOR' ? t.profileForm.skills : t.profileForm.skillsCv}</p>
             <div className="space-y-4">
-              <SkillsField
+              <div id={profileFieldAnchor('skills')} className="scroll-mt-24"><SkillsField
                 label={t.profileForm.skills}
                 placeholder={t.profileForm.skillsPlaceholder}
                 hint={t.profileForm.skillsHint}
                 value={skills}
                 onChange={setSkills}
-              />
+              /></div>
               {(() => {
                 const list = skills;
                 if (list.length === 0) return null;
@@ -402,7 +447,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
                   </div>
                 );
               })()}
-              {role === 'MENTEE' && <>{/* Manual link is for an external CV only. Hidden once a file is
+              {role === 'MENTEE' && <div id={profileFieldAnchor('cv')} className="scroll-mt-24">{/* Manual link is for an external CV only. Hidden once a file is
                   uploaded — the CvManager below then owns view/replace/delete. */}
               {!cvUploaded && (
                 <Input
@@ -420,7 +465,10 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
                   <CvManager
                     targetUserId={userId}
                     initialCvUrl={initialCv}
-                    onChange={(url) => setCvUploaded(!!url && url.startsWith('/'))}
+                    onChange={(url) => {
+                      setCvUploaded(!!url && url.startsWith('/'));
+                      setSavedProfile((prev) => (prev ? { ...prev, cvUrl: url } : prev));
+                    }}
                   />
                   {cvUploaded && (
                     <CvSuggestPanel
@@ -431,7 +479,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
                   )}
                   {cvUploaded && <CvFeedback />}
                 </div>
-              )}</>}
+              )}</div>}
 
               <div className="border-t border-gray-100 pt-4">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700">

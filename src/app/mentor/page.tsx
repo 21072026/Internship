@@ -6,6 +6,7 @@ import { MenteeOnboardingWizard } from '@/components/MenteeOnboardingWizard';
 import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
+import { MentorImpactCard } from '@/components/MentorImpactCard';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -19,6 +20,7 @@ import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 import { interactionTypeStyle } from '@/lib/interactionTypes';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { getMentorImpact } from '@/lib/mentorImpact';
 
 async function getMentorData(mentorId: string) {
   const relations = await prisma.mentorshipRelation.findMany({
@@ -99,6 +101,9 @@ export default async function MentorDashboard() {
   const { t, locale } = await getServerDictionary();
   const { relations, recentInteractions, lastContacts } = await getMentorData(session.user.id);
   const attention = await getAttentionItems(session.user.id, { orgId: await settingsOrgOf(session) });
+  // Private to this mentor, never compared; null (not rendered) with no
+  // relations yet — see src/lib/mentorImpactRule.ts.
+  const impact = await getMentorImpact(session, locale);
 
   const activeRelations = relations.filter((r) => r.status === 'ACTIVE');
 
@@ -161,6 +166,8 @@ export default async function MentorDashboard() {
           </div>
         </Card>
       </div>
+
+      {impact && <MentorImpactCard impact={impact} t={t} />}
 
       <div className="mb-6">
         <AnnouncementsCard />

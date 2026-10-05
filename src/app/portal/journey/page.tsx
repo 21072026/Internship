@@ -16,6 +16,7 @@ import { ArchivedNotice } from '@/components/ArchivedNotice';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 import { daysInStage } from '@/lib/stageClock';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
+import { PortalCertificateCard } from '@/components/PortalCertificateCard';
 
 // ACTIVE, else the latest COMPLETED one shown as an archive (#1408).
 async function getMenteeRelation(menteeId: string) {
@@ -67,6 +68,17 @@ export default async function PortalJourneyPage() {
             stageDeadline={relation.stageDeadline?.toISOString() ?? null}
           />
         </div>
+      )}
+
+      {/* The mentee's own completion certificate — renders only when the
+          relation is certificate-eligible (same rule as the generate route).
+          The org is the RELATION's, which is what the generate route prints. */}
+      {relation && (
+        <PortalCertificateCard
+          userId={session.user.id}
+          orgId={relation.orgId ?? session.user.orgId}
+          relation={relation}
+        />
       )}
 
       {/* Mentor & Company */}

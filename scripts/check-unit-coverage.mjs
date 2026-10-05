@@ -63,8 +63,16 @@ const TEST_DIR = 'scripts/test';
 // act on is a gate that gets deleted.
 const FLOORS = new Map([
   [
+    'src/lib/mentorImpactRule.ts',
+    { floor: 95, measured: 100.0, why: "a mentor's private impact counts: tenant's own stages, 'ever reached', people not relations" },
+  ],
+  [
     'src/lib/companySort.ts',
     { floor: 95, measured: 99.12, why: 'company list ordering: unknown sort falls back, never-moved accounts last (#2436)' },
+  ],
+  [
+    'src/lib/profileCompleteness.ts',
+    { floor: 95, measured: 100.0, why: 'the portal completeness meter: blanks never count as filled, weights sum to 100, missing list is deterministic' },
   ],
   [
     'src/lib/verticals.ts',
@@ -138,6 +146,14 @@ const FLOORS = new Map([
   [
     'src/lib/dateRange.ts',
     { floor: 95, measured: 100.0, why: 'a date-only `to` covers the whole day it names — the default analytics view dropped today (#1501)' },
+  ],
+  [
+    'src/lib/certificateLinkedIn.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'only an ISSUED certificate reaches LinkedIn — never a self-uploaded file or a reference letter',
+    },
   ],
   [
     'src/lib/lastContactRule.ts',
