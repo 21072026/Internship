@@ -8071,3 +8071,12 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   control). Not a regression signal for unrelated changes.
 - The worker was OOM-killed (exit 137) running a whole e2e file next to a dev server and MariaDB;
   commit + push before long runs.
+
+## 2026-10-05 — light gamification via a 4-feature workflow (#2699, #2703)
+
+- **A container restart kills a running Workflow and its worktree agents' uncommitted work.** The worktrees survive under `.claude/worktrees/` (locked): `git -C <wt> switch -c <x>-wip && git add -A && git commit` rescues it. Tell every build agent to **commit WIP after each step** — the relaunch then resumes from a branch instead of from zero.
+- **4 CPUs = 2 concurrent workflow agents, and they still overload the box** when each runs its own `next dev` + Playwright (load ~10, dev servers crashing mid-run). Give each agent its own DB (`internship_<slug>`) and port, symlink `node_modules` into the worktree instead of `npm install`, and treat their "failed under load" e2e results as unverified until re-run on a quiet machine.
+- **A serial spec's `@smoke` test must not depend on an untagged earlier test.** The PR gate runs `--grep @smoke`, so the untagged setup step is skipped and the tagged one reads stale state (sales target: "Deals won this month: 2" instead of "2 of 4"). Locally run `--grep @smoke` too, not only the whole file.
+- **A PR that sits "dirty" (merge conflict) gets no CI at all** — zero check runs is a signal to fetch `mergeable_state`, not to wait. After merging `main`, `npx prisma generate` and `npm install` again: new models/deps on main show up as bogus `tsc` errors.
+- `pkill -f`/`pgrep -f` with the `next dev` pattern inside a compound command **kills the calling shell** (exit 144) — I wrote this down on 2026-10-02 and still hit it twice. Look up the PID with `ps` in a separate command first.
+- Locally `e2e/certificate.spec.ts` (admin sign-in step never posts credentials) and `e2e/deal-value.spec.ts:182` fail on **origin/main too** in this container — verify with a `git checkout origin/main -- src` control before blaming a change.
