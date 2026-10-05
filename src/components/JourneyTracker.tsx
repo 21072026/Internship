@@ -68,7 +68,7 @@ export function JourneyTracker({
     (!outcome || isCelebratory(outcome));
 
   return (
-    <Card>
+    <Card data-testid="journey-tracker">
       <CardHeader><CardTitle>{t.portal.journey.title}</CardTitle></CardHeader>
 
       {/* Milestone achievement banner for key stages */}

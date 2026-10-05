@@ -107,6 +107,19 @@ test.describe('release media', () => {
     await capturePoster(page.getByTestId('release-card').first(), 'example-release-card');
   });
 
+  // #1399: the landing's product tour — one of its three figures, caption and
+  // screenshot together, as a visitor scrolls to it.
+  test('poster: a product-tour figure on the landing', async ({ page }) => {
+    await page.goto('/');
+    const figure = page.getByTestId('product-tour-company');
+    await figure.scrollIntoViewIfNeeded();
+    // The screenshot is lazy: wait for its pixels, not just its box.
+    await expect
+      .poll(() => figure.locator('img:visible').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    await capturePoster(figure, 'landing-product-tour');
+  });
+
   // #1366: empty stages collapse to one strip per run, so three occupied stages
   // are on screen together.
   test('poster: the mentor board with its empty stages collapsed', async ({ page }) => {

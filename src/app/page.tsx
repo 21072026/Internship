@@ -15,6 +15,7 @@ import { verticalCapabilities } from '@/lib/verticals';
 import { JsonLd } from '@/components/JsonLd';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { DemoLink } from '@/components/landing/DemoLink';
+import { ProductTour } from '@/components/landing/ProductTour';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
 import { TawkChat } from '@/components/TawkChat';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
@@ -45,10 +46,10 @@ export default async function HomePage() {
   // signed-out visitor, org-resolved when signed in. Both pages follow the same
   // rule — one idea per section, at most one action each (the owner asked for
   // an iPhone-simple page). The internship page: hero → role doors → free core
-  // → pipeline → six features → stories → FAQ → closing band. A MARKETING host
-  // gets the same frame without the doors, the free-core band and the stories,
-  // because those describe the internship loop and would be nonsense to a
-  // sales team; it adds its demo form instead. Their copy stays internship-
+  // → pipeline → product tour → six features → stories → FAQ → closing band. A
+  // MARKETING host gets the same frame without the doors, the free-core band,
+  // the product tour and the stories, because those describe the internship
+  // loop and would be nonsense to a sales team; it adds its demo form instead. Their copy stays internship-
   // only; the sections that remain are re-worded through the MARKETING overlay
   // in src/i18n/verticalOverlays.ts.
   const vertical = await resolveRequestVertical();
@@ -263,6 +264,10 @@ export default async function HomePage() {
           <p className="mt-10 text-center text-sm text-gray-500">{L.pipelineNote}</p>
         </div>
       </section>
+
+      {/* Product tour (#1399), internship-only: the screenshots show the
+          internship product, so a MARKETING host does not get them. */}
+      {!isMarketing && <ProductTour t={t} />}
 
       {/* Features — six titles from the single-source catalogue (#584/#588),
           nothing more; the descriptions and everything else live on /features. */}
