@@ -8174,8 +8174,48 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Assert a Link's `href`, not the navigation, when the target page is cold in `next dev`.** The first compile of a page can exceed the 5 s default and fail the click.
 - **A dashboard indicator with no data source is a row that says so** ("not yet measurable — needs #N"), never a 0 and never a proxy. Reviewers and sponsors read a 0 as a measurement.
 
+<<<<<<< HEAD
 ## 2026-10-06 — survey campaigns (#1887)
 
 - **On MariaDB you cannot replace a unique whose leftmost column is a foreign key in one `db push`.** Prisma drops the old index before it creates the new one, and MariaDB refuses with `Cannot drop index '…_key': needed in a foreign key constraint`. `check:schema-push` does not catch this, and a fresh topic-env database never shows it. Expand first: give the FK its own `@@index([fk])` in one deploy, then change the unique in the next. Prove a transition by pushing `git show origin/main:prisma/schema.prisma` (via `--schema`) and then the branch schema into a scratch database.
 - **`npx tsc --noEmit` includes `e2e/*.ts`.** A spec that builds a typed literal (for example a `questions` array passed to a zod-typed helper) needs an explicit type annotation, or CI's typecheck fails even though Playwright ran it fine.
 - **Merging two PRs that both appended blocks to the same anchor loses the shared closing lines.** This hit the dictionaries, the route-auth baseline JSON and release-media. Keeping both sides of `<<<<<<< / >>>>>>>` drops one `},`. Re-run `tsc` and `JSON.parse` before committing the merge.
+=======
+## 2026-10-06 — Dünya sızıntıları, adres defteri, SaleVali ingest (#2643, #2729, #2733)
+
+- **Açık görünen bir issue'ya başlamadan önce kodu ve `git log`'u oku.** #2570 açıktı ama
+  #2633 onu zaten tamamen sevk etmişti (eşleme, birim test, org başına tekillik, e2e). Kapatmak
+  için kanıt yazmak beş dakika, yeniden yazmak bir gün sürerdi. `grep -rn "#<issue>" src docs`
+  ilk adım.
+- **`src/lib/marketingImport.ts` bir ikili bayt içeriyor** — `file` onu `data` diye görür ve
+  `grep` sessizce **hiçbir şey** bulmaz. `grep -a` kullan; Python ile düzenlerken `rb`/`wb`.
+- **`check:route-auth` oturum okumasını rotanın KENDİ dosyasında arar.** Yardımcı bir fonksiyona
+  taşınan `getServerSession()` guard'ı kırar; oturumu handler'da oku, yardımcıya parametre geç.
+- **Mutasyonla "guard'sız kırmızı" kanıtı (#2452 kabul kriteri):** guard'ı geçici olarak bozup
+  spec'i koş, sonra dosyayı geri yükle (`cp` yedek → geri). `test.describe.configure({ mode:
+  'serial' })` ilk hatada durur — her mutasyonu ayrı `--grep` ile koş, yoksa ikinci iddia hiç
+  çalışmaz ve "yeşil" sanırsın.
+- **main paralel olarak aynı yerleri düzelttiyse** (dünya/tenant sızıntıları: #2653, #2633,
+  #2680): main'in yardımcılarını kanonik al (`tenantAdminIds`), kendininkini sil, yalnızca
+  main'de olmayan **deltayı** geri ekle. Büyük, yalnızca-ekleme içeren bir dosyada (overlay'ler)
+  kör "iki tarafı tut" kilit ayraçları kaydırır: main'in dosyasını al, kendi diff'ini
+  `git apply --reject -C1 --recount` ile uygula, yanlış yere düşen bloğu `tsc`'nin
+  "duplicate property / unknown key" hataları gösterir.
+- **Port 3000 başka oturumların dev sunucusuyla paylaşılıyor**: koşudan önce
+  `lsof -iTCP:3000 -sTCP:LISTEN`. `reuseExistingServer` yabancı bir worktree'nin sunucusunu
+  sessizce benimser ve sonuçlar o kodun sonucudur. Doluysa CI'da `gh workflow run e2e.yml
+  --ref <dal> -f grep='…'` yetkili koşudur.
+- **Yerel `npm install` `package-lock.json`'daki `libc` girişlerini siler** (npm sürümü farkı) —
+  commit'leme, `git checkout -- package-lock.json`.
+- **macOS'ta `core.ignorecase=true`**: `gitignore-exports` birim testi yerelde kırmızı, CI'da
+  (Linux) yeşil. Yerel `test:unit:coverage` bu yüzden floor'u değerlendirmez; tek başarısızlık
+  buysa sorun yok.
+- **Yerel MariaDB `/api/cron`'un paralel işlerinde 1020 ("Record has changed since last read")
+  verir**; CI/prod MySQL 8 vermez. Yerel smoke'taki bu kırmızı bir regresyon değil.
+
+## 2026-10-06 — release compaction unstuck (#2323)
+
+- **Manual compaction needs full history:** this container's clone is shallow (`git rev-parse --is-shallow-repository` → true); run `git fetch --unshallow origin` before `node scripts/release-compact.mjs`, or the stamps are wrong/fail closed. After `main` gains models/deps, `npx prisma generate` before `tsc`, or you get bogus type errors.
+- **A greyed-out repo checkbox in Settings → Actions means the ORG forbids it.** "Allow GitHub Actions to create and approve pull requests" must be ticked and saved at `orgs/21072026/settings/actions` first; each section has its own Save. It is now on (both levels) — `release-compact.yml` opened its own PR (#2762) for the first time.
+- `gh` in this container had an invalid `GH_TOKEN`; the GitHub MCP tools still work, and public run status/logs are readable with plain `curl https://api.github.com/repos/21072026/Internship/actions/...`.
+>>>>>>> origin/main

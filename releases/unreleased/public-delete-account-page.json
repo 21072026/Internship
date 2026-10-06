@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Public account-deletion page** (`/delete-account`, docs/mobile-strategy.md). Google Play requires every app with accounts to link a deletion explanation reachable without the app; the page describes exactly what `hardDeleteUser` does — the in-app path (`/account` → `DELETE /api/account`), the e-mail route when signing in is impossible (operator address from the imprint env, Art. 12(3) GDPR), what is deleted, what stays (org-owned records detached, rolling encrypted backups ≤ 12 months) and the last-admin limit. Per host product name, EN/TR/DE, in `PUBLIC_ROUTES` (sitemap + llms.txt), linked from `/privacy`. `/account`'s sign-in redirect now carries `callbackUrl=/account` so the page's call to action lands back on the settings. Covered by `e2e/delete-account.spec.ts`.",
-  "notes": {
-    "en": ["A new public page explains how to delete your account, what is deleted and what stays — linked from the privacy policy."],
-    "tr": ["Yeni bir herkese açık sayfa, hesabını nasıl sileceğini, nelerin silinip nelerin kaldığını anlatıyor — gizlilik politikasından bağlantılı."],
-    "de": ["Eine neue öffentliche Seite erklärt, wie Sie Ihr Konto löschen, was gelöscht wird und was bleibt – verlinkt in der Datenschutzerklärung."]
-  }
-}
