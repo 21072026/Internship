@@ -3,7 +3,9 @@
 //
 // The landing used to describe the product in words only: a visitor read
 // "pipeline tracking" and had to sign up for the demo to see what that meant.
-// This script drives three real screens against the LOCAL demo seed and writes
+// This script drives real screens against the LOCAL demo seed — three for the
+// internship landing, three `mkt-*` ones for the MARKETING (SaleVali) landing,
+// captured on marketing.localhost — and writes
 // them into public/screenshots/, where src/components/landing/ProductTour.tsx
 // shows them:
 //   • a still per screen × light/dark × desktop/phone (WebP), and
@@ -41,9 +43,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(BASE_URL)) {
-  console.error(`capture-landing-screenshots: BASE_URL ${BASE_URL} is not local. Refusing — capture against the local demo seed only.`);
-  process.exit(1);
+// The MARKETING product (SaleVali) is the same server on another host name:
+// the URL a person signs in on picks the product (docs/worlds.md). Locally that
+// is marketing.localhost, which must be listed in the server's MARKETING_HOSTS.
+const MARKETING_BASE_URL = process.env.MARKETING_BASE_URL || BASE_URL.replace(/\/\/(localhost|127\.0\.0\.1)/, '//marketing.localhost');
+for (const url of [BASE_URL, MARKETING_BASE_URL]) {
+  if (!/^https?:\/\/(localhost|127\.0\.0\.1|marketing\.localhost)(:\d+)?\/?$/.test(url)) {
+    console.error(`capture-landing-screenshots: ${url} is not local. Refusing — capture against the local demo seed only.`);
+    process.exit(1);
+  }
 }
 
 const OUT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'screenshots');
@@ -129,13 +137,16 @@ async function dragGhost(page, card, target, ms = 1300) {
 
 /**
  * One entry per landing screen. `open` navigates and `ready` is the element
- * whose arrival means it has rendered. `play` is the clip's one action.
+ * whose arrival means it has rendered. `play` is the clip's one action. `base`
+ * is the host it is captured on — the internship host unless it says otherwise.
+ * The `mkt-*` screens are the MARKETING landing's tour (SaleVali), captured on
+ * the marketing host against the seeded `demo-marketing` tenant.
  */
 const SCREENS = {
   mentee: {
     email: 'mentee.gizem@demo.example.com',
     landing: '/portal',
-    open: (page) => page.goto(`${BASE_URL}/portal/journey`),
+    open: (page, base) => page.goto(`${base}/portal/journey`),
     ready: (page) => page.getByTestId('journey-tracker'),
     // The journey is a page you read top to bottom: the clip reads it, then
     // returns to the top so the loop has no seam. Scrolling is captured as
@@ -146,7 +157,7 @@ const SCREENS = {
   mentor: {
     email: 'mentor.aylin@demo.example.com',
     landing: '/mentor',
-    open: (page) => page.goto(`${BASE_URL}/mentor/board`),
+    open: (page, base) => page.goto(`${base}/mentor/board`),
     ready: (page) => page.getByTestId('board-card').first(),
     play: async (page) => {
       const card = page.getByTestId('board-card').filter({ hasText: 'Deniz Demo' });
@@ -162,8 +173,8 @@ const SCREENS = {
   company: {
     email: 'company.1@demo.example.com',
     landing: '/company',
-    open: async (page) => {
-      await page.goto(`${BASE_URL}/company`);
+    open: async (page, base) => {
+      await page.goto(`${base}/company`);
       await page.getByText('Hakan Demo', { exact: true }).click();
       await page.waitForURL(/\/company\/candidates\/[^/]+$/);
     },
@@ -177,6 +188,39 @@ const SCREENS = {
       await note.pressSequentially('Strong .NET basics, good fit for our backend team.', { delay: 45 });
     },
   },
+  // ── MARKETING (SaleVali) ──────────────────────────────────────────────────
+  'mkt-pipeline': {
+    base: MARKETING_BASE_URL,
+    email: 'admin.marketing@demo.example.com',
+    landing: '/admin',
+    open: (page, base) => page.goto(`${base}/admin/board`),
+    ready: (page) => page.getByTestId('board-card').first(),
+    play: async (page) => {
+      const card = page.getByTestId('board-card').filter({ hasText: 'Jonas Weber' });
+      const target = page.getByTestId('board-card').filter({ hasText: 'Tim Petersen' });
+      await installCursor(page);
+      await dragGhost(page, card, target);
+      await card.getByRole('combobox').selectOption({ label: 'Contacted' });
+      await page.getByTestId('board-card').filter({ hasText: 'Jonas Weber' }).first().waitFor();
+      await cursorTo(page, 760, 640, 900);
+    },
+  },
+  'mkt-rep': {
+    base: MARKETING_BASE_URL,
+    email: 'owner.lena@demo.example.com',
+    landing: '/sales',
+    open: (page, base) => page.goto(`${base}/sales`),
+    ready: (page) => page.getByTestId('sales-dashboard'),
+    scroll: { distance: 480, seconds: 2.2, hold: 1.2 },
+  },
+  'mkt-insights': {
+    base: MARKETING_BASE_URL,
+    email: 'admin.marketing@demo.example.com',
+    landing: '/admin',
+    open: (page, base) => page.goto(`${base}/admin/analytics`),
+    ready: (page) => page.getByText('Funnel KPIs'),
+    scroll: { distance: 560, seconds: 2.4, hold: 1.4 },
+  },
 };
 
 const CONSENT = JSON.stringify({ version: 3, necessary: true, analytics: false, marketing: false, ts: '2026-01-01T00:00:00.000Z' });
@@ -187,17 +231,18 @@ async function signedInPage(browser, screen, device, theme) {
   // A returning visitor: no consent banner over the screen. The theme cookie is
   // what the no-flash script in src/app/layout.tsx reads first.
   await context.addInitScript((consent) => localStorage.setItem('cookie_consent', consent), CONSENT);
+  const base = screen.base ?? BASE_URL;
   await context.addCookies([
-    { name: 'theme', value: theme, url: BASE_URL },
-    { name: 'locale', value: 'en', url: BASE_URL },
+    { name: 'theme', value: theme, url: base },
+    { name: 'locale', value: 'en', url: base },
   ]);
   const page = await context.newPage();
-  await page.goto(`${BASE_URL}/auth/signin`);
+  await page.goto(`${base}/auth/signin`);
   await page.fill('input[type="email"]', screen.email);
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => u.pathname.startsWith(screen.landing), { timeout: 30_000 });
-  await screen.open(page);
+  await screen.open(page, base);
   await screen.ready(page).waitFor({ state: 'visible', timeout: 30_000 });
   // Fonts and the post-mount fetches (badges, counts) settle.
   await page.evaluate(() => document.fonts.ready);

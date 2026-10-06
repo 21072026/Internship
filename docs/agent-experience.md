@@ -8146,6 +8146,13 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **`robots.ts` disallows by prefix** (`/account` also hides `/account-deletion`) — pick a public path that no disallowed prefix starts with.
 - `e2e/robots-sitemap.spec.ts` fails locally without a DB only because `/` answers 500 (the landing reads public stats); the new route itself resolved.
 
+## 2026-10-06 — marketing product tour (#2737)
+
+- **To capture the MARKETING product locally, sign in on `marketing.localhost:<port>`.** It needs `MARKETING_HOSTS` to include `marketing.localhost`. `npm run seed:demo` also seeds the `demo-marketing` tenant: `admin.marketing@` and the owners `owner.lena@`, `owner.tarik@`, `owner.jonas@`, all `@demo.example.com` with `DemoPass123!`. The worlds rule means the internship host refuses them.
+- **New marketing-landing copy needs its own namespace when the internship one is in `LEAK_EXEMPT`.** Adding keys to an exempt namespace switches the MARKETING leak check off for them without anyone noticing.
+- **The `a11y-scan` full suite is red on main** (`/portal/profile#dark`, profile-progress chip, from #2703). It is not in the PR smoke gate, so a PR stays green while it fails; check main before blaming your diff.
+- **A container restart stops MariaDB.** A 500 on `/` with "Can't reach database server" means `service mariadb start`, not an app bug.
+
 ## 2026-10-06 — report registry, export workbooks, CSV import, report subscriptions (#1903, #1432, #1905)
 
 - **Composing routes in-process stops working the moment a job needs the data.** The first registry version loaded `cohortsGET` and friends with the caller's request. That was fine for an admin download, but a cron has no session, so `getServerSession()` returns null and the report reads 401. Put the computation in `src/lib/` taking `{ stageOrgId, tenant, locale }`, where `tenant` comes from `orgWhere(orgId)`, the sessionless twin of `tenantWhere`. Then make the route a thin caller. Anything a scheduled job, a BI extract or an export may need belongs there from day one.

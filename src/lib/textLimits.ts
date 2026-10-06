@@ -204,6 +204,17 @@ export const TEXT_LIMITS = {
   profileUrl: 191,
   /** User.city / university / department — VARCHAR(191), and previously uncapped */
   profileShortText: 191,
+
+  // ── The admin CSV import (#1432) ───────────────────────────────────────────
+  // The import wrote these columns with no cap at all; a long name 500'd the
+  // request half-way through the file.
+
+  /** User.fullName — VARCHAR(191) */
+  userFullName: 191,
+  /** User.email — VARCHAR(191) (see companyContactEmail on RFC 5321) */
+  userEmail: 191,
+  /** User.phone — VARCHAR(191); capped like `companyContactPhone` (a number, not a paste) */
+  userPhone: 40,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;

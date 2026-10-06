@@ -1,10 +1,13 @@
 import { getImageProps } from 'next/image';
 import type { Dictionary } from '@/i18n/dictionaries';
-import { PRODUCT_TOUR_SHOTS, TOUR_SIZE, clipPath, shotPath, type TourShotName } from './productTourShots';
+import { MARKETING_TOUR_SHOTS, PRODUCT_TOUR_SHOTS, TOUR_SIZE, clipPath, shotPath, type TourShotName } from './productTourShots';
 import { TourClip } from './TourClip';
 
 // The landing's product tour (#1399): three real screens, so a visitor sees
-// the product before deciding whether to sign up for it. The files are
+// the product before deciding whether to sign up for it. Each product has its
+// own set: the internship landing shows the mentee, mentor and company screens;
+// the MARKETING (SaleVali) landing shows its pipeline board, a rep's dashboard
+// and the funnel analytics — never the other product's screens. The files are
 // produced by scripts/capture-landing-screenshots.mjs against the synthetic
 // demo seed — see public/screenshots/README.md before replacing one.
 //
@@ -49,22 +52,32 @@ function Shot({ name, alt, theme }: { name: TourShotName; alt: string; theme: 'l
   );
 }
 
-export function ProductTour({ t }: { t: Dictionary }) {
+export function ProductTour({ t, marketing = false }: { t: Dictionary; marketing?: boolean }) {
   const T = t.productTour;
-  const copy = {
-    mentee: { title: T.menteeT, body: T.menteeD, alt: T.menteeAlt },
-    mentor: { title: T.mentorT, body: T.mentorD, alt: T.mentorAlt },
-    company: { title: T.companyT, body: T.companyD, alt: T.companyAlt },
-  } as const;
+  const M = t.productTourMarketing;
+  const copy: Partial<Record<TourShotName, { title: string; body: string; alt: string }>> = marketing
+    ? {
+        'mkt-pipeline': { title: M.pipelineT, body: M.pipelineD, alt: M.pipelineAlt },
+        'mkt-rep': { title: M.repT, body: M.repD, alt: M.repAlt },
+        'mkt-insights': { title: M.insightsT, body: M.insightsD, alt: M.insightsAlt },
+      }
+    : {
+        mentee: { title: T.menteeT, body: T.menteeD, alt: T.menteeAlt },
+        mentor: { title: T.mentorT, body: T.mentorD, alt: T.mentorAlt },
+        company: { title: T.companyT, body: T.companyD, alt: T.companyAlt },
+      };
+  const shots = marketing ? MARKETING_TOUR_SHOTS : PRODUCT_TOUR_SHOTS;
+  // The address bar names the product's own host — what the visitor would type.
+  const host = marketing ? 'marketing.bcsit-gmbh.de' : 'interncrm.com';
 
   return (
     <section className="py-20 sm:py-24 px-4 bg-white border-y border-gray-200" data-testid="landing-product-tour">
       <div className="max-w-5xl mx-auto">
-        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center">{T.title}</h2>
-        <p className="mt-4 text-center text-gray-600">{T.subtitle}</p>
+        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center">{marketing ? M.title : T.title}</h2>
+        <p className="mt-4 text-center text-gray-600">{marketing ? M.subtitle : T.subtitle}</p>
         <div className="mt-14 space-y-20 lg:space-y-24">
-          {PRODUCT_TOUR_SHOTS.map((shot) => {
-            const c = copy[shot.name];
+          {shots.map((shot) => {
+            const c = copy[shot.name]!;
             return (
               <figure key={shot.name} data-testid={`product-tour-${shot.name}`}>
                 {/* Caption above, picture at the full content width: side by
@@ -82,7 +95,7 @@ export function ProductTour({ t }: { t: Dictionary }) {
                     <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
                     <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
                     <span className="mx-auto -translate-x-6 rounded-md bg-white px-3 py-0.5 text-xs text-gray-500 border border-gray-200">
-                      interncrm.com{shot.path}
+                      {host}{shot.path}
                     </span>
                   </div>
                   <div className="relative overflow-hidden rounded-[1.6rem] sm:rounded-none">

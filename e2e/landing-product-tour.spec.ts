@@ -95,9 +95,24 @@ test.describe('dark mode on a phone', () => {
   });
 });
 
-test('a marketing host gets no tour — the screenshots are of the internship product', async ({ page }) => {
+test('a marketing host gets its own tour — SaleVali screens, never the internship ones', async ({ page }) => {
+  const fetched: string[] = [];
+  page.on('response', (r) => {
+    if (r.url().includes('/screenshots/')) fetched.push(new URL(r.url()).pathname.split('/').pop()!);
+  });
   await page.setExtraHTTPHeaders({ 'x-forwarded-host': 'marketing.bcsit-gmbh.de' });
   await page.goto('/');
   await expect(page.getByText('Every lead, every conversation', { exact: false })).toBeVisible();
-  await expect(page.getByTestId('landing-product-tour')).toHaveCount(0);
+  const tour = page.getByTestId('landing-product-tour');
+  await expect(tour.getByRole('heading', { level: 2 })).toHaveText('See it in action');
+  for (const s of ['mkt-pipeline', 'mkt-rep', 'mkt-insights']) {
+    const figure = page.getByTestId(`product-tour-${s}`);
+    await figure.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() => figure.locator('img:visible').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+  }
+  for (const s of SCREENS) await expect(page.getByTestId(`product-tour-${s}`)).toHaveCount(0);
+  expect(fetched.length).toBeGreaterThan(0);
+  for (const f of fetched) expect(f, 'a marketing visitor only downloads marketing captures').toMatch(/^mkt-/);
 });
