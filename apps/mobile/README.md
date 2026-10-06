@@ -49,6 +49,41 @@ Always add dependencies with `npx expo install <pkg>`, so the versions match the
 
 The `android/` and `ios/` folders are generated (`npx expo prebuild`) and git-ignored. Configure native behaviour in `app.config.ts`.
 
+## Emulator
+
+Expo Go is not enough: the app uses native modules that Expo Go does not ship (`react-native-keyboard-controller`, …). Run a **development build** (`expo-dev-client`) instead. Build it once; after that Metro delivers JS changes in seconds with Fast Refresh. Rebuild only when a native dependency or `app.config.ts` changes.
+
+### One-time setup
+
+| | macOS | Windows | Linux |
+|---|---|---|---|
+| JDK 17 | `brew install --cask zulu@17` (sudo) | `winget install Azul.Zulu.17.JDK` | Zulu 17 / `openjdk-17-jdk` |
+| Android Studio | `brew install --cask android-studio` | `winget install Google.AndroidStudio` | tarball or `snap install android-studio --classic` |
+| `ANDROID_HOME` | `~/Library/Android/sdk` | `%LOCALAPPDATA%\Android\Sdk` | `~/Android/Sdk` |
+| Acceleration | Hypervisor.Framework (built in) | WHPX: *Windows Hypervisor Platform* feature | KVM: user in the `kvm` group |
+| System image (ABI) | Apple Silicon `arm64-v8a`, Intel `x86_64` | `x86_64` | `x86_64` |
+
+- SDK components (Android Studio → SDK Manager, or `sdkmanager`): `platform-tools`, `emulator`, `cmdline-tools;latest`, `platforms;android-36`, `build-tools;36.0.0`, `ndk;27.1.12297006`, plus a `google_apis_playstore` system image. The versions come from `react-native/gradle/libs.versions.toml` (RN 0.86: compileSdk/targetSdk 36); check there after an SDK upgrade.
+- Put `$ANDROID_HOME/emulator` and `$ANDROID_HOME/platform-tools` first on `PATH`. A stray older `adb` (e.g. Homebrew's `android-platform-tools`) behind it fights the SDK's adb server.
+- Without Android Studio's first-run wizard: unzip the [command-line tools](https://developer.android.com/studio#command-tools) to `$ANDROID_HOME/cmdline-tools/latest`, then `sdkmanager --licenses` and `sdkmanager <components>`. They need a JDK; Android Studio's bundled one works (`/Applications/Android Studio.app/Contents/jbr/Contents/Home` on macOS).
+- Create the AVD: Device Manager → Pixel 8 → Google Play image; or `avdmanager create avd -n Pixel_8_API_36 -d pixel_8 -k "system-images;android-36;google_apis_playstore;x86_64"`. `emulator -accel-check` should report acceleration.
+- macOS, for iOS: Xcode (App Store, your job), then `brew install watchman cocoapods`.
+- Intel Mac on a new macOS is a Homebrew *Tier 3* setup: no bottles, so `watchman` (and its `cmake`, …) compiles from source for an hour or more. Start it early, and not alongside the first Gradle build. Metro runs without Watchman.
+
+### The loop
+
+```bash
+emulator -avd Pixel_8_API_36 &                 # or start it from Android Studio
+cd apps/mobile
+APP_ENV=preview npx expo run:android           # first time, and after any native change (10–30 min cold)
+APP_ENV=preview npx expo start --dev-client    # every other day: Metro only, press `a`
+```
+
+- `APP_ENV=preview` points both products at the preview hosts (`preview.interncrm.com`, `marketing.bcsit-gmbh.dev`); leave it out for production. Give it to **both** commands: `run:android` bakes it into the native config, and Metro serves it to JS.
+- Save a file → Fast Refresh in about a second. `r` in the Metro terminal reloads, `m` opens the dev menu (or `Cmd+M` / `Ctrl+M` in the emulator).
+- Rebuild (`run:android`) after `npx expo install` of a package with native code, or after an `app.config.ts` change. `npx expo prebuild --clean` first if the native folders get into a bad state.
+- iOS on a Mac: `APP_ENV=preview npx expo run:ios` (CocoaPods runs on its own).
+
 ## Building
 
 | EAS profile | Hosts | Output |
