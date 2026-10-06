@@ -6,6 +6,7 @@ import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { campaignCandidates, findCampaign } from '@/lib/postCampaign';
+import { isChannelKey } from '@/lib/salesChannels';
 
 /**
  * GET — the accounts an admin may add to a postal campaign (#2697), each with
@@ -33,11 +34,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const url = new URL(request.url);
     const q = url.searchParams.get('q')?.trim().slice(0, 100) || undefined;
     const stage = url.searchParams.get('stage')?.trim().slice(0, 100) || undefined;
+    const rawChannel = url.searchParams.get('channel')?.trim() || '';
+    const channel = isChannelKey(rawChannel) ? rawChannel : undefined;
     return withTenantScope(session, async () => {
       const tenant = await tenantWhere(session);
       const campaign = await findCampaign(tenant, id);
       if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
-      const candidates = await campaignCandidates({ tenant, campaignId: campaign.id, q, stage });
+      const candidates = await campaignCandidates({ tenant, campaignId: campaign.id, q, stage, channel });
       return NextResponse.json({ candidates });
     });
   });

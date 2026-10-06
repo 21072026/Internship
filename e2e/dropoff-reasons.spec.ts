@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { submitSignInForm } from './helpers/auth';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 // Drop-off reason codes + analytics (#810): every pipeline-stage write path
 // (status-changes, mentorship/[id] — also what the board drag/drop and the
@@ -305,8 +306,13 @@ test('the analytics Excel export includes a Drop reasons sheet', async ({ page }
     });
 
     await signInAdmin(page, s.adminEmail, s.pw);
+    // Exports need REPORT_EXPORT (#1740). The default org has it in every
+    // real deployment (grandfathered on the deploy that added the gate), so it
+    // is granted, and left granted: revoking it here would race the other
+    // export specs running in parallel against the same org.
+    await setOrgFeatureFor(page, 'REPORT_EXPORT', true);
     await page.goto('/admin/analytics');
-    await expect(page.getByRole('button', { name: 'Export Excel' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Export Excel' })).toBeEnabled({ timeout: 10_000 });
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('button', { name: 'Export Excel' }).click(),

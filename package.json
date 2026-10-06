@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.227.2-beta",
+  "version": "0.260.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -19,6 +19,7 @@
     "check:demo-blocklist": "node scripts/check-demo-blocklist.mjs",
     "check:demo-fidelity": "node scripts/check-demo-fidelity.mjs",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
+    "check:reports": "node --experimental-strip-types scripts/check-reports.ts",
     "check:skills": "node --experimental-strip-types scripts/check-skills.mjs",
     "check:release-fragments": "node scripts/check-release-fragments.mjs",
     "check:active-mentors": "node prisma/check-active-mentor-duplicates.mjs",

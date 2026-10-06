@@ -65,6 +65,9 @@ export const PUBLIC_ROUTES: readonly {
   { path: '/trust', llms: 'Trust centre: security controls, subprocessors and known limitations', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/ai', llms: 'How the product uses AI: what is sent to a model, what never is, how to switch it off', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/accessibility', llms: 'Accessibility statement: what is known not to work yet and how to report a barrier', priority: 0.3, changeFrequency: 'monthly' },
+  // Required by Google Play for apps with accounts (docs/mobile-strategy.md),
+  // and the answer to an erasure question either way.
+  { path: '/delete-account', llms: 'How to delete an account yourself, what is deleted and what stays', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/imprint', llms: 'Imprint (legal notice, § 5 DDG)', priority: 0.3, changeFrequency: 'monthly' },
 ];
 

@@ -12,7 +12,9 @@ export const metadata = NO_INDEX;
 // Standalone settings page available to every authenticated role.
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
-  if (!session) redirect('/auth/signin');
+  // Back here after sign-in: /delete-account sends signed-out visitors to
+  // this page, and landing on the role dashboard instead loses their way.
+  if (!session) redirect('/auth/signin?callbackUrl=/account');
 
   return (
     <div className="min-h-screen bg-gray-50">

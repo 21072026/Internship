@@ -75,7 +75,9 @@ test('an unentitled admin opens analytics with no failed requests', async ({ pag
     // And the entitlements read that replaced the probe is ADMIN-only and honest.
     const ent = await page.request.get('/api/admin/analytics/entitlements');
     expect(ent.ok()).toBeTruthy();
-    expect(await ent.json()).toEqual({ advancedAnalytics: false, reportExport: false });
+    // REPORT_EXPORT is not asserted: the export specs grant it to the default
+    // org in parallel (#1740), and this test is about the analytics tier.
+    expect(await ent.json()).toMatchObject({ advancedAnalytics: false });
   } finally {
     await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await cleanupByEmail(adminEmail);

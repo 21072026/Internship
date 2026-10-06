@@ -158,19 +158,23 @@ export const CANDIDATE_LIMIT = 200;
 
 /**
  * The accounts an admin may pick from, each with its eligibility. `stage`
- * filters on the account's current funnel stage (any of its relations).
+ * filters on the account's current funnel stage (any of its relations),
+ * `channel` on a sales channel it uses (#2408) — "every OTTO seller".
  */
 export async function campaignCandidates(input: {
   tenant: TenantWhere;
   campaignId: string;
   q?: string;
   stage?: string;
+  /** A sales-channel key (#2408): only accounts that USE it. */
+  channel?: string;
   now?: Date;
 }): Promise<PostCandidate[]> {
   const where: Prisma.CompanyWhereInput = withinTenant(
     {
       ...(input.q ? { name: { contains: input.q } } : {}),
       ...(input.stage ? { mentorships: { some: { pipelineStatus: input.stage } } } : {}),
+      ...(input.channel ? { channels: { some: { channel: input.channel, status: 'USING' } } } : {}),
       postRecipients: { none: { campaignId: input.campaignId } },
     },
     input.tenant,

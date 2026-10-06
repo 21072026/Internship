@@ -81,6 +81,9 @@ export default async function PrivacyPage() {
               <Link href="/ai" className="text-blue-600 hover:underline" data-testid="privacy-ai-link">
                 {p.aiLink} →
               </Link>
+              <Link href="/delete-account" className="text-blue-600 hover:underline" data-testid="privacy-delete-account-link">
+                {t.deleteAccount.title} →
+              </Link>
             </p>
           </div>
 

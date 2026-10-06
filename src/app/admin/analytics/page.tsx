@@ -16,7 +16,7 @@ import { MatchQuality } from '@/components/admin/MatchQuality';
 import { TrialConversionCard, type TrialConversionData } from '@/components/admin/TrialConversionCard';
 import { DealValueCard } from '@/components/admin/DealValueCard';
 import { useT } from '@/i18n/client';
-import { useAdvancedAnalytics } from '@/lib/analyticsEntitlementsClient';
+import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -172,7 +172,10 @@ export default function AdminAnalyticsPage() {
   // one request that answers the question, where this used to probe the gated
   // cohorts endpoint and infer the tier from a 403 (#1442). `null` = not known
   // yet, so neither the premium cards nor the locked panel is drawn.
-  const premium = useAdvancedAnalytics();
+  const entitlements = useAnalyticsEntitlements();
+  const premium = entitlements === null ? null : entitlements.advancedAnalytics;
+  // REPORT_EXPORT (#1740): the export buttons reflect it; the export route enforces it.
+  const canExport = entitlements?.reportExport === true;
 
   // The word this screen uses for "reached the outcome". A tenant that renamed
   // its last pipeline stage gets ITS name; everyone else keeps the translated
@@ -224,14 +227,14 @@ export default function AdminAnalyticsPage() {
   const reasonLabel = (code: string) => (t.dropoff.reasons as Record<string, string>)[code] ?? code;
   // KPI rows shared by both exports (#815) — the ratios travel with the counts
   // rather than living only on screen.
-  const kpiSheets = () => {
-    if (!kpi) return [];
+  const kpiSheets = (src: typeof kpi) => {
+    if (!src) return [];
     const k = t.analytics.funnelKpi;
     const sheets = [
       {
         name: 'Conversion',
         columns: [k.stage, k.entered, k.advanced, k.conversion],
-        rows: kpi.conversions.map((c) => [
+        rows: src.conversions.map((c) => [
           label(c.key),
           c.entered,
           c.advanced,
@@ -239,34 +242,34 @@ export default function AdminAnalyticsPage() {
         ]),
       },
     ];
-    if (kpi.timeToHire.completed > 0) {
+    if (src.timeToHire.completed > 0) {
       sheets.push({
         name: 'Time to hire',
         columns: [k.timeToHireMedian, k.timeToHireAvg, k.entered],
         // The population comes along, so a spreadsheet cannot quote the median
         // without the caveat the screen shows.
         rows: [[
-          kpi.timeToHire.medianDays ?? '—',
-          kpi.timeToHire.avgDays ?? '—',
-          `${kpi.timeToHire.completed}/${kpi.timeToHire.considered}`,
+          src.timeToHire.medianDays ?? '—',
+          src.timeToHire.avgDays ?? '—',
+          `${src.timeToHire.completed}/${src.timeToHire.considered}`,
         ]],
       });
     }
     // Trial → paid (#2556): one row per trial month, and the source split
     // when the tier includes it. An immature month exports "—", not a rate
     // the screen would not show.
-    if (kpi.trialConversion) {
+    if (src.trialConversion) {
       const tk = t.analytics.trialKpi;
       sheets.push({
         name: 'Trial to paid',
         columns: [tk.month, tk.started, tk.paid, tk.rate],
-        rows: kpi.trialConversion.months.map((m) => [m.month, m.started, m.paid, m.rate === null ? '—' : `${m.rate}%`]),
+        rows: src.trialConversion.months.map((m) => [m.month, m.started, m.paid, m.rate === null ? '—' : `${m.rate}%`]),
       });
-      if (kpi.trialConversion.bySource && kpi.trialConversion.bySource.length > 0) {
+      if (src.trialConversion.bySource && src.trialConversion.bySource.length > 0) {
         sheets.push({
           name: 'Trial by source',
           columns: [tk.source, tk.started, tk.paid, tk.rate],
-          rows: kpi.trialConversion.bySource.map((s) => [
+          rows: src.trialConversion.bySource.map((s) => [
             s.name ?? tk.noSource,
             s.trials,
             s.paid,
@@ -275,11 +278,11 @@ export default function AdminAnalyticsPage() {
         });
       }
     }
-    if (kpi.capacity.length > 0) {
+    if (src.capacity.length > 0) {
       sheets.push({
         name: 'Capacity',
         columns: [k.mentor, k.activeMentees, k.ceiling, k.overloaded],
-        rows: kpi.capacity.map((m) => [
+        rows: src.capacity.map((m) => [
           m.fullName,
           m.activeMenteeCount,
           m.capacityKnown ? (m.mentorCapacity as number) : k.noCeiling,
@@ -289,16 +292,31 @@ export default function AdminAnalyticsPage() {
     }
     return sheets;
   };
-  const dropReasonRows = (aging?.dropReasons ?? []).map((d) => [label(d.pipelineStatus), reasonLabel(d.reasonCode), d.count]);
+  const dropReasonRowsOf = (src: typeof aging) => (src?.dropReasons ?? []).map((d) => [label(d.pipelineStatus), reasonLabel(d.reasonCode), d.count]);
+
+  // The workbook's data comes from the export route (#1740), gated by the org's
+  // REPORT_EXPORT entitlement server-side — not from the state this screen
+  // already holds, which would leave nothing on the server to gate.
+  const loadExport = async (dataset: 'analytics' | 'analytics-full') => {
+    const res = await fetch(`/api/admin/export/${dataset}${rangeQuery(range)}`);
+    if (!res.ok) {
+      setError(res.status === 403 ? t.common.exportLocked : t.common.error);
+      return null;
+    }
+    return res.json();
+  };
 
   const exportExcel = async () => {
-    if (!data) return;
+    const src = await loadExport('analytics');
+    const d = src?.analytics as typeof data;
+    if (!d) return;
+    const drops = dropReasonRowsOf(src.aging);
     const { exportXlsxSheets } = await import('@/lib/excel');
     await exportXlsxSheets(`analytics-${new Date().toISOString().slice(0, 10)}`, [
-      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), data.funnel[s.key] || 0]) },
-      ...kpiSheets(),
-      ...(dropReasonRows.length > 0
-        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
+      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), d.funnel[s.key] || 0]) },
+      ...kpiSheets(src.funnel),
+      ...(drops.length > 0
+        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: drops }]
         : []),
     ]);
   };
@@ -306,35 +324,34 @@ export default function AdminAnalyticsPage() {
   // Premium full-report Excel (#540): one workbook covering funnel, trends,
   // mentor workload plus the premium cohort/source reports.
   const exportFullExcel = async () => {
-    if (!data) return;
     // Cohorts are only read for a vertical that has them — the route refuses
     // every other one (leak audit WP3), and the workbook then has no such sheet.
-    const [cohortsRes, sourcesRes] = await Promise.all([
-      showMentorship ? fetch('/api/admin/analytics/cohorts') : Promise.resolve(null),
-      fetch('/api/admin/analytics/sources'),
-    ]);
-    if ((cohortsRes && !cohortsRes.ok) || !sourcesRes.ok) return; // tier switched off mid-session
-    const cohorts = (cohortsRes ? (await cohortsRes.json()).cohorts : []) as { name: string; term?: string | null; total: number; inProgress: number; hired: number; conversionToHired: number; avgDaysToHired: number | null; interactionsPerRelation: number }[];
-    const sources = (await sourcesRes.json()).sources as { name: string; mentees: number; inPipeline: number; hired: number; conversionToHired: number }[];
+    const src = await loadExport('analytics-full');
+    const d = src?.analytics as typeof data;
+    if (!d) return;
+    if (src.sources === null || (showMentorship && src.cohorts === null)) return; // tier switched off mid-session
+    const cohorts = (showMentorship ? src.cohorts : []) as { name: string; term?: string | null; total: number; inProgress: number; hired: number; conversionToHired: number; avgDaysToHired: number | null; interactionsPerRelation: number }[];
+    const sources = src.sources as { name: string; mentees: number; inPipeline: number; hired: number; conversionToHired: number }[];
+    const drops = dropReasonRowsOf(src.aging);
     const { exportXlsxSheets } = await import('@/lib/excel');
     const a = t.analytics;
     await exportXlsxSheets(`analytics-full-${new Date().toISOString().slice(0, 10)}`, [
-      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), data.funnel[s.key] || 0]) },
-      ...kpiSheets(),
-      ...(data.trends ? [{
+      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), d.funnel[s.key] || 0]) },
+      ...kpiSheets(src.funnel),
+      ...(d.trends ? [{
         name: 'Trends',
         columns: [a.fullReportMonth, a.trendNewRelations, a.trendInteractions],
-        rows: data.trends.months.map((m, i) => [m, data.trends!.newRelations[i], data.trends!.interactions[i]]),
+        rows: d.trends.months.map((m, i) => [m, d.trends!.newRelations[i], d.trends!.interactions[i]]),
       }] : []),
       ...(showMentorship
-        ? [{ name: 'Mentors', columns: ['Mentor', a.active, outcomeWord], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) }]
+        ? [{ name: 'Mentors', columns: ['Mentor', a.active, outcomeWord], rows: d.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) }]
         : []),
       ...(showMentorship
         ? [{ name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, outcomeHeading, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) }]
         : []),
       { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, outcomeHeading, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
-      ...(dropReasonRows.length > 0
-        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
+      ...(drops.length > 0
+        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: drops }]
         : []),
     ]);
   };
@@ -363,11 +380,11 @@ export default function AdminAnalyticsPage() {
               { value: 'all', label: t.analytics.allTime },
             ]}
           />
-          <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data}>{t.analytics.exportExcel}</Button>
+          <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>{t.analytics.exportExcel}</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
           {premium && (
             <>
-              <Button variant="outline" size="sm" onClick={exportFullExcel} disabled={!data} data-testid="full-report-excel">{t.analytics.fullReportExcel}</Button>
+              <Button variant="outline" size="sm" onClick={exportFullExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined} data-testid="full-report-excel">{t.analytics.fullReportExcel}</Button>
               <Link href="/admin/analytics/report" className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors" data-testid="full-report-link">
                 {t.analytics.fullReport}
               </Link>

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -24,6 +25,11 @@ test('candidates can be exported to Excel (.xlsx)', async ({ page }) => {
 
   try {
     await adminLogin(page, adminEmail, 'AdminPass123');
+    // Exports need REPORT_EXPORT (#1740). The default org has it in every
+    // real deployment (grandfathered on the deploy that added the gate), so it
+    // is granted, and left granted: revoking it here would race the other
+    // export specs running in parallel against the same org.
+    await setOrgFeatureFor(page, 'REPORT_EXPORT', true);
     await page.goto('/admin/candidates');
     // /admin/candidates renders every candidate twice — once in the md:hidden
     // mobile list, once in the desktop grid — so an unscoped name locator is a
@@ -50,6 +56,7 @@ test('analytics page offers print and Excel export', async ({ page }) => {
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Xls An Admin');
   try {
     await adminLogin(page, adminEmail, 'AdminPass123');
+    await setOrgFeatureFor(page, 'REPORT_EXPORT', true);
     await page.goto('/admin/analytics');
     await expect(page.getByRole('button', { name: 'Print / PDF' })).toBeVisible({ timeout: 10_000 });
     const [download] = await Promise.all([

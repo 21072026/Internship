@@ -402,6 +402,7 @@ const en = {
   },
   offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.', home: 'Go to the home page' },
   common: {
+    exportLocked: 'Exports (CSV / Excel) are part of the Program plan.',
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'System',
     loading: 'Loading...',
@@ -688,6 +689,18 @@ const en = {
   // ADMIN-only; the MARKETING overlay renames the mentorship words.
   companyDetail: {
     // #2442 — the account's address book.
+    channels: {
+      title: 'Sales channels',
+      none: 'No sales channels recorded.',
+      channel: 'Channel',
+      status: 'Status',
+      add: 'Add',
+      remove: 'Remove',
+      failed: 'Could not be saved.',
+      hint: 'Where this merchant sells and ships. An import only adds channels; it never removes one or changes a status set here.',
+      statuses: { USING: 'Uses', INTERESTED: 'Interested', DROPPED: 'Stopped' },
+      kinds: { MARKETPLACE: 'Marketplaces', SHOP: 'Shop systems', CARRIER: 'Carriers' },
+    },
     contacts: {
       title: 'Contacts',
       primary: 'Primary',
@@ -1180,6 +1193,25 @@ const en = {
     dismiss: 'Dismiss',
     nothingSelected: 'Select at least one invitation first.',
     failed: 'The action could not be completed.',
+  },
+  // The report registry (#1903) — titles, descriptions and column labels of the
+  // named reports in src/lib/reports/definitions.ts. `npm run check:reports`
+  // fails on a key a definition names but this block lacks.
+  reports: {
+    pipelineFunnel: { title: 'Pipeline funnel', description: 'How many records sit in each stage of your pipeline right now.' },
+    cohortComparison: { title: 'Cohort comparison', description: 'Outcomes per cohort: in progress, reached the final stage, dropped, conversion and average time to the final stage.' },
+    sourceConversion: { title: 'Source conversion', description: 'How many people each source brought in and how many of them reached the final stage.' },
+    mentorWorkload: { title: 'Mentor workload', description: 'Active relations per mentor and how many reached the final stage.' },
+    placementOutcomes: { title: 'Placement outcomes', description: 'Placements per company and how many of them have a recorded value.' },
+    weeklyReportCompliance: { title: 'Weekly report compliance', description: 'Owed, handed-in, missing and late weekly reports per intern this term.' },
+    col: {
+      stage: 'Stage', count: 'Count', cohort: 'Cohort', total: 'Total', inProgress: 'In progress', reachedOutcome: 'Reached final stage',
+      dropped: 'Dropped', conversion: 'Conversion', avgDaysToOutcome: 'Avg. days to final stage', source: 'Source', inPipeline: 'In pipeline',
+      mentor: 'Mentor', active: 'Active', company: 'Company', placements: 'Placements', valued: 'With recorded value',
+      intern: 'Intern', expected: 'Owed', submitted: 'Handed in', missing: 'Missing', late: 'Late', rate: 'Rate',
+    },
+    suppressedBucket: 'Groups under {n} people (combined)',
+    floorNote: 'Groups with fewer than {n} people are combined into one row so that no individual can be singled out. Totals still add up.',
   },
   // /admin/weekly-reports (#1918): the coordinator’s compliance matrix,
   // chase-up and accreditation booklet. Rendered only for an org with the
@@ -5117,6 +5149,8 @@ const en = {
     allStages: 'All stages',
     addSelected: 'Add selected ({n})',
     selectEligible: 'Select all eligible',
+    channel: 'Sells on',
+    allChannels: 'Any channel',
     added: '{n} added.',
     refused: '{n} could not be added — see the reason next to each account.',
     noCandidates: 'No accounts match.',
@@ -5470,6 +5504,43 @@ const en = {
     unsetTitle: 'No imprint published for this instance',
     unsetBody: 'Whoever runs this deployment has not published operator details yet. If you reached this page on a live service and need to contact whoever runs it, the project itself is open source — you can raise the question in its public repository.',
     unsetLink: 'Project on GitHub',
+    back: 'Back to home',
+  },
+  // Public "how do I delete my account" page (/delete-account, docs/mobile-strategy.md).
+  // Google Play requires one for every app that lets people create an account,
+  // reachable without installing the app. Write only what accountErasure.ts does.
+  deleteAccount: {
+    title: 'Delete your account',
+    description: 'How to delete your account yourself, what is deleted, what stays, and what to do if you cannot sign in.',
+    intro: 'You can delete your {product} account yourself at any time. Deletion happens immediately and cannot be undone.',
+    selfTitle: 'Delete it yourself',
+    selfSteps: [
+      'Sign in on this site with the account you want to delete.',
+      'Open your account settings.',
+      'Under “Delete account”, choose “Delete my account” and confirm with your current password.',
+    ],
+    selfCta: 'Go to account settings',
+    exportHint: 'Want a copy first? “Download my data” on the same page gives you everything we hold about you.',
+    noAccessTitle: 'Cannot sign in?',
+    noAccessReset: 'Reset your password first:',
+    noAccessResetLink: 'Forgot password',
+    noAccessBody: 'If that does not work, write to {email} from the e-mail address of the account and ask for it to be deleted. We check that the request comes from the account holder and delete the account within one month (Art. 12(3) GDPR).',
+    noAccessUnset: 'If that does not work, contact the operator of this site using the details in the imprint and ask for the account to be deleted.',
+    deletedTitle: 'What is deleted',
+    deleted: [
+      'Your account, your sign-in details and your profile, including the files you uploaded to it.',
+      'Messages you wrote: they are removed from every conversation and shown as deleted.',
+      'Your private notes, your notifications and your settings.',
+      'Notes and comments that others wrote about you are emptied.',
+    ],
+    keptTitle: 'What stays',
+    kept: [
+      'Records that belong to the organisation rather than to you — for example a company, a project or a support request — stay, but no longer point to you. Their dates and status remain; anything you wrote in them is removed.',
+      'Encrypted backups are kept only to recover from a failure of the whole system and are replaced on a rolling schedule. The oldest copy is at most twelve months old.',
+    ],
+    limitsTitle: 'When it cannot be done yet',
+    limits: 'The only administrator of an organisation must first make someone else an administrator, so that the organisation is not left without one.',
+    privacyLinkLabel: 'Privacy policy',
     back: 'Back to home',
   },
   privacy: {
@@ -6541,6 +6612,7 @@ const tr: Dict = {
   },
   offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.', home: 'Ana sayfaya git' },
   common: {
+    exportLocked: 'Dışa aktarma (CSV / Excel) Program planına dahildir.',
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'Sistem',
     loading: 'Yükleniyor...',
@@ -6819,6 +6891,18 @@ const tr: Dict = {
   },
   companyDetail: {
     // #2442 — hesabın adres defteri.
+    channels: {
+      title: 'Satış kanalları',
+      none: 'Kayıtlı satış kanalı yok.',
+      channel: 'Kanal',
+      status: 'Durum',
+      add: 'Ekle',
+      remove: 'Kaldır',
+      failed: 'Kaydedilemedi.',
+      hint: 'Bu tüccarın sattığı ve kargoladığı yerler. İçe aktarım yalnızca kanal ekler; burada belirlenen bir kanalı silmez, durumunu değiştirmez.',
+      statuses: { USING: 'Kullanıyor', INTERESTED: 'İlgileniyor', DROPPED: 'Bıraktı' },
+      kinds: { MARKETPLACE: 'Pazaryerleri', SHOP: 'Mağaza sistemleri', CARRIER: 'Kargo' },
+    },
     contacts: {
       title: 'Muhataplar',
       primary: 'Birincil',
@@ -7298,6 +7382,22 @@ const tr: Dict = {
     dismiss: 'Kapat',
     nothingSelected: 'Önce en az bir davet seçin.',
     failed: 'İşlem tamamlanamadı.',
+  },
+  reports: {
+    pipelineFunnel: { title: 'Pipeline hunisi', description: 'Pipeline\'ınızın her aşamasında şu anda kaç kayıt olduğu.' },
+    cohortComparison: { title: 'Grup karşılaştırması', description: 'Grup başına sonuçlar: devam eden, son aşamaya ulaşan, ayrılan, dönüşüm ve son aşamaya ortalama süre.' },
+    sourceConversion: { title: 'Kaynak dönüşümü', description: 'Her kaynağın kaç kişi getirdiği ve bunların kaçının son aşamaya ulaştığı.' },
+    mentorWorkload: { title: 'Mentor iş yükü', description: 'Mentor başına aktif ilişkiler ve kaçının son aşamaya ulaştığı.' },
+    placementOutcomes: { title: 'Yerleştirme sonuçları', description: 'Şirket başına yerleştirmeler ve kaçının kayıtlı bir değeri olduğu.' },
+    weeklyReportCompliance: { title: 'Haftalık rapor uyumu', description: 'Bu dönem stajyer başına beklenen, teslim edilen, eksik ve geç haftalık raporlar.' },
+    col: {
+      stage: 'Aşama', count: 'Sayı', cohort: 'Grup', total: 'Toplam', inProgress: 'Devam eden', reachedOutcome: 'Son aşamaya ulaşan',
+      dropped: 'Ayrılan', conversion: 'Dönüşüm', avgDaysToOutcome: 'Son aşamaya ort. gün', source: 'Kaynak', inPipeline: 'Pipeline\'da',
+      mentor: 'Mentor', active: 'Aktif', company: 'Şirket', placements: 'Yerleştirme', valued: 'Kayıtlı değeri olan',
+      intern: 'Stajyer', expected: 'Beklenen', submitted: 'Teslim', missing: 'Eksik', late: 'Geç', rate: 'Oran',
+    },
+    suppressedBucket: '{n} kişiden küçük gruplar (birleştirildi)',
+    floorNote: '{n} kişiden az olan gruplar, hiç kimse tek başına ayırt edilemesin diye tek satırda birleştirilir. Toplamlar yine tutar.',
   },
   adminWeeklyReports: {
     title: 'Haftalık raporlar',
@@ -11113,6 +11213,8 @@ const tr: Dict = {
     allStages: 'Tüm aşamalar',
     addSelected: 'Seçilenleri ekle ({n})',
     selectEligible: 'Uygun olanların hepsini seç',
+    channel: 'Sattığı kanal',
+    allChannels: 'Tüm kanallar',
     added: '{n} eklendi.',
     refused: '{n} eklenemedi — sebebi her hesabın yanında.',
     noCandidates: 'Eşleşen hesap yok.',
@@ -11462,6 +11564,41 @@ const tr: Dict = {
     unsetTitle: 'Bu kurulum için künye yayınlanmamış',
     unsetBody: 'Bu dağıtımı işleten taraf henüz künye bilgilerini yayınlamadı. Bu sayfaya canlı bir hizmet üzerinden geldiysen ve işletene ulaşman gerekiyorsa, projenin kendisi açık kaynak — soruyu genel deposunda sorabilirsin.',
     unsetLink: 'Projenin GitHub sayfası',
+    back: 'Ana sayfaya dön',
+  },
+  // Herkese açık "hesabımı nasıl silerim" sayfası (/delete-account, docs/mobile-strategy.md).
+  deleteAccount: {
+    title: 'Hesabını sil',
+    description: 'Hesabını kendin nasıl silersin, neler silinir, neler kalır ve giriş yapamıyorsan ne yapmalısın.',
+    intro: '{product} hesabını istediğin zaman kendin silebilirsin. Silme işlemi anında gerçekleşir ve geri alınamaz.',
+    selfTitle: 'Kendin sil',
+    selfSteps: [
+      'Silmek istediğin hesapla bu sitede oturum aç.',
+      'Hesap ayarlarını aç.',
+      '“Hesabı sil” bölümünde “Hesabımı sil”i seç ve mevcut parolanla onayla.',
+    ],
+    selfCta: 'Hesap ayarlarına git',
+    exportHint: 'Önce bir kopyasını mı istiyorsun? Aynı sayfadaki “Verilerimi indir”, hakkında tuttuğumuz her şeyi verir.',
+    noAccessTitle: 'Giriş yapamıyor musun?',
+    noAccessReset: 'Önce parolanı sıfırla:',
+    noAccessResetLink: 'Parolamı unuttum',
+    noAccessBody: 'Bu işe yaramazsa hesabın e-posta adresinden {email} adresine yaz ve hesabın silinmesini iste. Talebin hesap sahibinden geldiğini doğrular ve hesabı bir ay içinde sileriz (GDPR md. 12(3)).',
+    noAccessUnset: 'Bu işe yaramazsa künyedeki iletişim bilgileriyle bu sitenin işletmecisine ulaş ve hesabın silinmesini iste.',
+    deletedTitle: 'Neler silinir',
+    deleted: [
+      'Hesabın, giriş bilgilerin ve yüklediğin dosyalar dahil profilin.',
+      'Yazdığın mesajlar: tüm sohbetlerden kaldırılır ve silinmiş olarak görünür.',
+      'Kişisel notların, bildirimlerin ve ayarların.',
+      'Başkalarının senin hakkında yazdığı notlar ve yorumlar boşaltılır.',
+    ],
+    keptTitle: 'Neler kalır',
+    kept: [
+      'Sana değil kuruma ait kayıtlar — örneğin bir şirket, bir proje ya da bir destek talebi — kalır ama artık seninle ilişkilendirilmez. Tarihleri ve durumları korunur; içlerinde senin yazdıkların kaldırılır.',
+      'Şifreli yedekler yalnızca tüm sistemin çöktüğü bir durumdan kurtulmak için tutulur ve dönüşümlü olarak yenilenir. En eski kopya en fazla on iki aylıktır.',
+    ],
+    limitsTitle: 'Henüz yapılamadığı durum',
+    limits: 'Bir kurumun tek yöneticisi, kurum yöneticisiz kalmasın diye önce başka birini yönetici yapmalıdır.',
+    privacyLinkLabel: 'Gizlilik politikası',
     back: 'Ana sayfaya dön',
   },
   privacy: {
@@ -12517,6 +12654,7 @@ const de: Dict = {
   },
   offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.', home: 'Zur Startseite' },
   common: {
+    exportLocked: 'Exporte (CSV / Excel) sind im Program-Tarif enthalten.',
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'System',
     loading: 'Wird geladen...',
@@ -12795,6 +12933,18 @@ const de: Dict = {
   },
   companyDetail: {
     // #2442 — das Adressbuch des Kontos.
+    channels: {
+      title: 'Vertriebskanäle',
+      none: 'Keine Vertriebskanäle erfasst.',
+      channel: 'Kanal',
+      status: 'Status',
+      add: 'Hinzufügen',
+      remove: 'Entfernen',
+      failed: 'Konnte nicht gespeichert werden.',
+      hint: 'Wo dieser Händler verkauft und versendet. Ein Import fügt nur Kanäle hinzu; er entfernt keinen und ändert keinen hier gesetzten Status.',
+      statuses: { USING: 'Nutzt', INTERESTED: 'Interessiert', DROPPED: 'Aufgehört' },
+      kinds: { MARKETPLACE: 'Marktplätze', SHOP: 'Shopsysteme', CARRIER: 'Versanddienstleister' },
+    },
     contacts: {
       title: 'Ansprechpartner',
       primary: 'Hauptkontakt',
@@ -13275,6 +13425,22 @@ const de: Dict = {
     dismiss: 'Schließen',
     nothingSelected: 'Wählen Sie zuerst mindestens eine Einladung aus.',
     failed: 'Die Aktion konnte nicht ausgeführt werden.',
+  },
+  reports: {
+    pipelineFunnel: { title: 'Pipeline-Trichter', description: 'Wie viele Datensätze gerade in jeder Phase Ihrer Pipeline stehen.' },
+    cohortComparison: { title: 'Kohortenvergleich', description: 'Ergebnisse je Kohorte: laufend, letzte Phase erreicht, abgebrochen, Konversion und durchschnittliche Dauer bis zur letzten Phase.' },
+    sourceConversion: { title: 'Quellen-Konversion', description: 'Wie viele Personen jede Quelle gebracht hat und wie viele davon die letzte Phase erreicht haben.' },
+    mentorWorkload: { title: 'Mentoren-Auslastung', description: 'Aktive Beziehungen je Mentor und wie viele die letzte Phase erreicht haben.' },
+    placementOutcomes: { title: 'Vermittlungsergebnisse', description: 'Vermittlungen je Unternehmen und wie viele davon einen erfassten Wert haben.' },
+    weeklyReportCompliance: { title: 'Wochenbericht-Abgaben', description: 'Fällige, abgegebene, fehlende und verspätete Wochenberichte je Praktikant im laufenden Zeitraum.' },
+    col: {
+      stage: 'Phase', count: 'Anzahl', cohort: 'Kohorte', total: 'Gesamt', inProgress: 'Laufend', reachedOutcome: 'Letzte Phase erreicht',
+      dropped: 'Abgebrochen', conversion: 'Konversion', avgDaysToOutcome: 'Ø Tage bis zur letzten Phase', source: 'Quelle', inPipeline: 'In der Pipeline',
+      mentor: 'Mentor', active: 'Aktiv', company: 'Unternehmen', placements: 'Vermittlungen', valued: 'Mit erfasstem Wert',
+      intern: 'Praktikant', expected: 'Fällig', submitted: 'Abgegeben', missing: 'Fehlend', late: 'Verspätet', rate: 'Quote',
+    },
+    suppressedBucket: 'Gruppen unter {n} Personen (zusammengefasst)',
+    floorNote: 'Gruppen mit weniger als {n} Personen werden in einer Zeile zusammengefasst, damit niemand einzeln erkennbar ist. Die Summen stimmen weiterhin.',
   },
   adminWeeklyReports: {
     title: 'Wochenberichte',
@@ -17092,6 +17258,8 @@ const de: Dict = {
     allStages: 'Alle Phasen',
     addSelected: 'Auswahl hinzufügen ({n})',
     selectEligible: 'Alle zulässigen auswählen',
+    channel: 'Verkauft auf',
+    allChannels: 'Alle Kanäle',
     added: '{n} hinzugefügt.',
     refused: '{n} konnten nicht hinzugefügt werden — der Grund steht beim jeweiligen Account.',
     noCandidates: 'Keine passenden Accounts.',
@@ -17442,6 +17610,41 @@ const de: Dict = {
     unsetBody: 'Wer dieses Deployment betreibt, hat noch keine Betreiberangaben veröffentlicht. Wenn du diese Seite auf einem laufenden Dienst erreicht hast und den Betreiber kontaktieren musst: Das Projekt selbst ist Open Source — du kannst die Frage in seinem öffentlichen Repository stellen.',
     unsetLink: 'Projekt auf GitHub',
     back: 'Zurück zur Startseite',
+  },
+  // Öffentliche Seite „Wie lösche ich mein Konto?“ (/delete-account, docs/mobile-strategy.md).
+  deleteAccount: {
+    title: 'Konto löschen',
+    description: 'Wie Sie Ihr Konto selbst löschen, was gelöscht wird, was bleibt und was Sie tun können, wenn Sie sich nicht anmelden können.',
+    intro: 'Sie können Ihr {product}-Konto jederzeit selbst löschen. Die Löschung erfolgt sofort und lässt sich nicht rückgängig machen.',
+    selfTitle: 'Selbst löschen',
+    selfSteps: [
+      'Melden Sie sich auf dieser Website mit dem Konto an, das Sie löschen möchten.',
+      'Öffnen Sie Ihre Kontoeinstellungen.',
+      'Wählen Sie unter „Konto löschen“ die Option „Mein Konto löschen“ und bestätigen Sie mit Ihrem aktuellen Passwort.',
+    ],
+    selfCta: 'Zu den Kontoeinstellungen',
+    exportHint: 'Möchten Sie vorher eine Kopie? „Meine Daten herunterladen“ auf derselben Seite liefert alles, was wir über Sie speichern.',
+    noAccessTitle: 'Sie können sich nicht anmelden?',
+    noAccessReset: 'Setzen Sie zuerst Ihr Passwort zurück:',
+    noAccessResetLink: 'Passwort vergessen',
+    noAccessBody: 'Wenn das nicht hilft, schreiben Sie von der E-Mail-Adresse des Kontos an {email} und bitten Sie um die Löschung. Wir prüfen, ob die Anfrage vom Kontoinhaber stammt, und löschen das Konto innerhalb eines Monats (Art. 12 Abs. 3 DSGVO).',
+    noAccessUnset: 'Wenn das nicht hilft, wenden Sie sich über die Angaben im Impressum an den Betreiber dieser Website und bitten Sie um die Löschung des Kontos.',
+    deletedTitle: 'Was gelöscht wird',
+    deleted: [
+      'Ihr Konto, Ihre Anmeldedaten und Ihr Profil einschließlich der hochgeladenen Dateien.',
+      'Ihre Nachrichten: Sie werden aus allen Unterhaltungen entfernt und als gelöscht angezeigt.',
+      'Ihre privaten Notizen, Benachrichtigungen und Einstellungen.',
+      'Notizen und Kommentare, die andere über Sie geschrieben haben, werden geleert.',
+    ],
+    keptTitle: 'Was bleibt',
+    kept: [
+      'Datensätze, die der Organisation und nicht Ihnen gehören – etwa ein Unternehmen, ein Projekt oder eine Supportanfrage –, bleiben bestehen, verweisen aber nicht mehr auf Sie. Datum und Status bleiben erhalten; was Sie darin geschrieben haben, wird entfernt.',
+      'Verschlüsselte Sicherungen dienen ausschließlich der Wiederherstellung nach einem Ausfall des gesamten Systems und werden rollierend ersetzt. Die älteste Kopie ist höchstens zwölf Monate alt.',
+    ],
+    limitsTitle: 'Wann es noch nicht geht',
+    limits: 'Die einzige Administratorin bzw. der einzige Administrator einer Organisation muss zuerst eine andere Person zur Administration ernennen, damit die Organisation nicht ohne Verwaltung bleibt.',
+    privacyLinkLabel: 'Datenschutzerklärung',
+    back: 'Zur Startseite',
   },
   privacy: {
     title: 'Datenschutz & Datensicherheit',

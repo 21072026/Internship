@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**The weekly analytics report e-mail speaks its reader's language** (#2715). `sendWeeklyAnalyticsReport` hardcoded its subject, heading, greeting, summary and link in English and labelled the stage table with `resolvePipelineStages(orgId, 'en')`, so every admin — SaleVali included — got it in English. The copy now lives in `notifications.analyticsReportEmail` (EN/TR/DE, with a MARKETING overlay for the summary's \"records / reached the final stage\" wording) and is read through `emailDictionary` per recipient `preferredLanguage`; `weeklyAnalyticsStats(orgId, weekAgo, locale)` labels the stage table in that locale (memoized per org × locale), and `sendEmail` gets the recipient's `locale` for the footer. Pinned in `e2e/world-cron-builders.spec.ts`.",
-  "notes": {
-    "en": ["The weekly analytics report e-mail now arrives in your own language, stage names included."],
-    "tr": ["Haftalık analiz raporu e-postası artık aşama adları dahil kendi dilinizde geliyor."],
-    "de": ["Der wöchentliche Analysebericht per E-Mail kommt jetzt in Ihrer Sprache an – einschließlich der Phasennamen."]
-  }
-}

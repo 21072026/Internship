@@ -8140,6 +8140,12 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **`html.dark .text-blue-600` used to win over every accent.** It was pinned to blue-300, so dark mode turned the magenta MARKETING hero blue. An accent-aware dark rule needs `html.dark[data-accent]` to read `var(--accent-300)`.
 - The capture script changes demo data (a stage move, a shortlist), so capture one theme per fresh seed. `npm install` in this container rewrites `package-lock.json`; `git checkout` it before committing.
 
+## 2026-10-06 — public account-deletion page (Play requirement)
+
+- **Playwright wants `chromium_headless_shell-1243`, the image ships `-1194`.** The `executablePath` trick does not reach `npx playwright test`; build the expected layout instead: `mkdir -p /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64`, symlink every file of `…-1194/chrome-linux/` into it, link `headless_shell` as `chrome-headless-shell`, `touch …-1243/INSTALLATION_COMPLETE`. Then `BASE_URL=http://localhost:3000 npx playwright test <spec> --project=chromium` runs against a DB-less `next dev`.
+- **`robots.ts` disallows by prefix** (`/account` also hides `/account-deletion`) — pick a public path that no disallowed prefix starts with.
+- `e2e/robots-sitemap.spec.ts` fails locally without a DB only because `/` answers 500 (the landing reads public stats); the new route itself resolved.
+
 ## 2026-10-06 — marketing product tour (#2737)
 
 - **To capture the MARKETING product locally, sign in on `marketing.localhost:<port>`.** It needs `MARKETING_HOSTS` to include `marketing.localhost`. `npm run seed:demo` also seeds the `demo-marketing` tenant: `admin.marketing@` and the owners `owner.lena@`, `owner.tarik@`, `owner.jonas@`, all `@demo.example.com` with `DemoPass123!`. The worlds rule means the internship host refuses them.
