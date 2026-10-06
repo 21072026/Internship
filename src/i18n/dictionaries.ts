@@ -1293,6 +1293,7 @@ const en = {
         unknown_report: 'the report no longer exists',
         no_recipient: 'there is no recipient',
         send_failed: 'the e-mail could not be sent',
+        seeded: 'moved over from the old weekly e-mail — it starts next week',
       },
       errors: {
         unknown_report: 'This report is not available for your organisation.',
@@ -7566,6 +7567,7 @@ const tr: Dict = {
         unknown_report: 'rapor artık yok',
         no_recipient: 'alıcı yok',
         send_failed: 'e-posta gönderilemedi',
+        seeded: 'eski haftalık e-postadan taşındı — gelecek hafta başlıyor',
       },
       errors: {
         unknown_report: 'Bu rapor kuruluşunuz için mevcut değil.',
@@ -13696,6 +13698,7 @@ const de: Dict = {
         unknown_report: 'den Bericht gibt es nicht mehr',
         no_recipient: 'es gibt keinen Empfänger',
         send_failed: 'die E-Mail konnte nicht gesendet werden',
+        seeded: 'aus der alten Wochen-E-Mail übernommen – startet nächste Woche',
       },
       errors: {
         unknown_report: 'Dieser Bericht ist für Ihre Organisation nicht verfügbar.',
