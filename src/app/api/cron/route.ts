@@ -24,6 +24,7 @@ import { runRetentionPrune } from '@/lib/retentionEntries';
 import { runUsageRollup } from '@/lib/jobs/usageRollup';
 import { runTrialReminders } from '@/lib/jobs/trialReminders';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
+import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 
 export async function GET(request: Request) {
@@ -111,6 +112,14 @@ export async function GET(request: Request) {
     // Report subscriptions (#1905): the caller's own org only — an admin may
     // fire their tenant's due reports, never another tenant's. `?at=` pins the
     // clock so the idempotency of a period can be exercised.
+    // Relationship health (#1901): the caller's own org only. `?at=` pins the
+    // clock so the snapshot day and the crossing rule can be exercised.
+    if (job === 'relation-health') {
+      const orgId = await settingsOrgOf(session);
+      const at = new URL(request.url).searchParams.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      return NextResponse.json({ message: 'Relation health sweep ran', relationHealth: await sweepRelationHealth({ orgIds: [orgId], now }) });
+    }
     if (job === 'report-subscriptions') {
       const orgId = await settingsOrgOf(session);
       const at = new URL(request.url).searchParams.get('at');
