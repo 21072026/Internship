@@ -8,7 +8,9 @@ import { prisma } from '@/lib/prisma';
 import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib/googleCalendarSync';
-import { durationMinutesField } from '@/lib/meetingDuration';
+import { durationMinutesField, meetingEnd } from '@/lib/meetingDuration';
+import { conflictBody, findConflictFor, lockParticipants, recordForcedBooking } from '@/lib/busyWindows';
+import type { BusyWindow } from '@/lib/busyWindowsRule';
 import { recordLateCancel } from '@/lib/meetingAttendance';
 
 // The three verbs a meeting never had (#1980).
@@ -55,6 +57,8 @@ const patchSchema = z
     cancelReason: z.string().max(1000).optional(),
     // "this person" (default) vs "the whole session" — see `batchKey`.
     scope: z.enum(['one', 'batch']).optional(),
+    // Move over a collision on purpose (#1995) — recorded in the audit log.
+    force: z.boolean().optional(),
   })
   .strict();
 
@@ -176,7 +180,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
-  const { scheduledAt, timeZone, title, meetLink, durationMinutes, status, cancelReason, scope } = parsed.data;
+  const { scheduledAt, timeZone, title, meetLink, durationMinutes, status, cancelReason, scope, force } = parsed.data;
   if (!scheduledAt && title === undefined && meetLink === undefined && durationMinutes === undefined && !status) {
     return NextResponse.json({ error: 'Validation failed', details: { body: 'Nothing to change' } }, { status: 400 });
   }
@@ -268,38 +272,72 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       zone = isValidTimeZone(timeZone) ? timeZone : isValidTimeZone(actor?.timezone) ? actor.timezone : null;
     }
 
-    const moved: Target[] = [];
-    for (const t of targets) {
-      const timeChanged = when !== null && t.scheduledAt?.getTime() !== when.getTime();
-      const updated = (await prisma.meeting.update({
-        where: { id: t.id },
-        data: {
-          ...(when ? { scheduledAt: when } : {}),
-          ...(timeChanged
-            ? {
-                previousScheduledAt: t.scheduledAt,
-                rescheduledAt: now,
-                // Or the reminder for the new time never fires: the cron claims
-                // a meeting by stamping this, and only ever looks at nulls.
-                reminderSentAt: null,
-                // An answer given to the old time is not an answer to this one.
-                // The mentee said yes to Tuesday 10:00, not to Thursday 15:00.
-                rsvp: 'PENDING' as const,
-              }
-            : {}),
-          ...(title !== undefined ? { title } : {}),
-          ...(meetLink !== undefined ? { meetLink: meetLink || null } : {}),
-          ...(durationMinutes !== undefined ? { durationMinutes } : {}),
-          ...(when && zone ? { timeZone: zone } : {}),
-        },
-        select: targetSelect,
-      })) as Target;
-      moved.push(updated);
-      // The mirror follows the meeting. An existing GoogleCalendarEventLink
-      // makes this a PATCH of the event that is already on their calendar
-      // rather than a second one appearing next to the stale first.
-      pushMeetingInBackground(updated, mirrorAudience(updated));
+    // A new time or a new length must not land on top of something the pair
+    // already has (#1995). The rows being moved are excluded — a meeting does not
+    // collide with its own old slot — and so is the rest of the same session.
+    const retimed = when !== null || durationMinutes !== undefined;
+    // Booking over a collision is the admin's or the pair's own mentor's call.
+    if (force && session.user.role !== 'ADMIN' && !targets.every((t) => t.relation?.mentorId === session.user.id)) {
+      return NextResponse.json({ error: 'Only an admin or the mentor may book over a conflict' }, { status: 403 });
     }
+    const pairs = retimed ? targets.flatMap((t) => (t.relation ? [t.relation.mentorId, t.relation.menteeId] : [])) : [];
+    const outcome = await prisma.$transaction(
+      async (tx) => {
+        let forcedOver: BusyWindow | null = null;
+        if (pairs.length > 0) {
+          await lockParticipants(tx, pairs);
+          for (const t of targets) {
+            const start = when ?? t.scheduledAt;
+            if (!start || !t.relation) continue;
+            const window = { start, end: meetingEnd(start, { durationMinutes: durationMinutes ?? t.durationMinutes }) };
+            const conflict = await findConflictFor(tx, session.user, [t.relation.mentorId, t.relation.menteeId], window, {
+              excludeMeetingIds: ids,
+              excludeBatchKey: row.batchKey ?? undefined,
+            });
+            if (conflict && !force) return { conflict };
+            forcedOver ??= conflict;
+          }
+        }
+        const moved: Target[] = [];
+        for (const t of targets) {
+          const timeChanged = when !== null && t.scheduledAt?.getTime() !== when.getTime();
+          const updated = (await tx.meeting.update({
+            where: { id: t.id },
+            data: {
+              ...(when ? { scheduledAt: when } : {}),
+              ...(timeChanged
+                ? {
+                    previousScheduledAt: t.scheduledAt,
+                    rescheduledAt: now,
+                    // Or the reminder for the new time never fires: the cron claims
+                    // a meeting by stamping this, and only ever looks at nulls.
+                    reminderSentAt: null,
+                    // An answer given to the old time is not an answer to this one.
+                    // The mentee said yes to Tuesday 10:00, not to Thursday 15:00.
+                    rsvp: 'PENDING' as const,
+                  }
+                : {}),
+              ...(title !== undefined ? { title } : {}),
+              ...(meetLink !== undefined ? { meetLink: meetLink || null } : {}),
+              ...(durationMinutes !== undefined ? { durationMinutes } : {}),
+              ...(when && zone ? { timeZone: zone } : {}),
+            },
+            select: targetSelect,
+          })) as Target;
+          moved.push(updated);
+        }
+        return { moved, forcedOver };
+      },
+      // A whole session is up to MAX_BATCH_ROWS rows, each checked and written.
+      { timeout: 30_000 },
+    );
+    if (outcome.conflict) return NextResponse.json(conflictBody(outcome.conflict), { status: 409 });
+    const { moved, forcedOver } = outcome;
+    if (forcedOver) await recordForcedBooking(session.user.id, row.id, forcedOver);
+    // The mirror follows the meeting. An existing GoogleCalendarEventLink
+    // makes this a PATCH of the event that is already on their calendar
+    // rather than a second one appearing next to the stale first.
+    for (const updated of moved) pushMeetingInBackground(updated, mirrorAudience(updated));
 
     // `meeting.rescheduled` is registered, not dispatched — same reason as the
     // cancel branch above (#1697's ratchet; the door is `emit()`, #1693).

@@ -168,6 +168,7 @@ model Organization {
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
   surveyCampaigns         SurveyCampaign[]
+  savedViews              SavedView[]
   meetingAttendance       MeetingAttendance[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
@@ -509,6 +510,7 @@ model User {
   ownedProjects                     Project[]                     @relation("ProjectOwner")
   projectMemberships                ProjectMember[]               @relation("ProjectMemberships")
   availabilitySlots                 AvailabilitySlot[]
+  availabilityExceptions            AvailabilityException[]       @relation("AvailabilityExceptions")
   company                           Company?                      @relation("CompanyUsers", fields: [companyId], references: [id])
   source                            Source?                       @relation(fields: [sourceId], references: [id])
   documents                         Document[]                    @relation("DocumentOwner")
@@ -547,6 +549,7 @@ model User {
   // Report subscriptions this user receives (#1905); removed with the user.
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
+  savedViews                        SavedView[]                   @relation("SavedViewAuthor")
   attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
   surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
@@ -2516,7 +2519,37 @@ model AvailabilitySlot {
   endTime   String // "HH:MM"
   createdAt DateTime @default(now())
 
+  // Set → a ONE-OFF on that calendar date (#2001), offered once, never repeated.
+  // `weekday` stays non-null and is derived from it on write, so every existing
+  // query keeps working. A past one-off is filtered out of the read.
+  date DateTime? @db.Date
+  // "office hours", "interview prep" — shown next to the hours.
+  note String?   @db.VarChar(120)
+
   mentor User @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+
+  @@index([mentorId])
+}
+
+// A stretch of days a mentor is away (#2001) — holiday, exams, a busy month.
+// Every slot occurrence whose date, in the MENTOR's zone, falls inside
+// [startDate, endDate] (both inclusive) is not offered; the weekly pattern
+// underneath is untouched, so coming back needs no rebuilding.
+//
+// No `orgId`, deliberately: like AvailabilitySlot this hangs off User and is
+// reached only through `mentorId`, and neither is in TENANT_MODELS
+// (src/lib/orgContext.ts). A model that is not anchored gets no automatic
+// tenant protection, so every reader makes the `mentorId → User` hop itself —
+// see src/lib/availabilityAccess.ts.
+model AvailabilityException {
+  id        String   @id @default(cuid())
+  mentorId  String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  reason    String?  @db.VarChar(120)
+  createdAt DateTime @default(now())
+
+  mentor User @relation("AvailabilityExceptions", fields: [mentorId], references: [id], onDelete: Cascade)
 
   @@index([mentorId])
 }
@@ -5293,4 +5326,27 @@ model SurveyCampaignSend {
 
   @@unique([campaignId, userId, periodKey])
   @@index([campaignId, createdAt])
+}
+
+// A named filter preset on an admin list (#1900) — server-side, so it follows
+// the admin to another device and can be shared with the team. `surface` is a
+// key from SAVED_VIEW_SURFACES (src/lib/savedViews.ts), never a free string, so
+// a typo cannot orphan a view. `visibility` is PRIVATE (the author only) or ORG
+// (every admin of the org); only the author edits or deletes either, checked
+// in the route handler.
+model SavedView {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id])
+  surface     String        @db.VarChar(64)
+  name        String        @db.VarChar(80)
+  filters     Json
+  visibility  String        @default("PRIVATE") @db.VarChar(16)
+  createdById String
+  createdBy   User          @relation("SavedViewAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([orgId, surface, createdById, name])
+  @@index([orgId, surface])
 }

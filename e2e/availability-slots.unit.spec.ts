@@ -94,3 +94,48 @@ test('matchesSlot recognises an instant inside a slot and rejects its edges', ()
   // Right instant, but read in a zone where it is not Monday 09:30.
   expect(matchesSlot(inside, [MON_9], 'Pacific/Auckland')).toBeNull();
 });
+
+// ── One-offs and away windows (#2001) ──────────────────────────────────────
+
+test('a one-off slot is offered exactly once, on its date, whatever its weekday field says', () => {
+  // Thursday 2026-09-03; the stored weekday is deliberately wrong to prove the date wins.
+  const ONCE: WeeklySlot = { id: 'o', weekday: 0, startTime: '11:00', endTime: '12:00', date: '2026-09-03T00:00:00.000Z' };
+  const out = expandSlots([ONCE, MON_9], 'Europe/Istanbul', { from: new Date('2026-08-25T00:00:00Z'), weeks: 3 });
+  const onces = out.filter((o) => o.slotId === 'o');
+  expect(onces.map((o) => o.date)).toEqual(['2026-09-03']);
+  expect(onces[0].startISO).toBe('2026-09-03T08:00:00.000Z');
+  // A past one-off is simply not offered.
+  expect(expandSlots([ONCE], 'Europe/Istanbul', { from: new Date('2026-09-04T00:00:00Z') })).toEqual([]);
+  // …and matchesSlot claims it only on its own date.
+  expect(matchesSlot(new Date('2026-09-03T08:30:00Z'), [ONCE], 'Europe/Istanbul')?.id).toBe('o');
+  expect(matchesSlot(new Date('2026-09-10T08:30:00Z'), [ONCE], 'Europe/Istanbul')).toBeNull();
+});
+
+test('an away window removes every occurrence on its dates, both ends inclusive', () => {
+  const out = expandSlots([MON_9, WED_14], 'Europe/Istanbul', {
+    from: new Date('2026-08-25T00:00:00Z'),
+    weeks: 3,
+    exceptions: [{ startDate: '2026-08-31', endDate: '2026-09-07' }],
+  });
+  // Mon 31 Aug (first day) and Mon 7 Sep (last day) are gone, Wed 2 Sep in between too.
+  expect(out.map((o) => o.date)).toEqual(['2026-08-26', '2026-09-09', '2026-09-14', '2026-09-16']);
+});
+
+test('away dates are read in the MENTOR zone, across a DST change', () => {
+  // New York, Sunday 23:30 — already Monday in UTC. Europe and the US both
+  // leave summer time around here (EU 25 Oct, US 1 Nov 2026).
+  const SUN_LATE: WeeklySlot = { id: 's', weekday: 0, startTime: '23:30', endTime: '23:59' };
+  const from = new Date('2026-10-20T00:00:00Z');
+  const all = expandSlots([SUN_LATE], 'America/New_York', { from, weeks: 3 });
+  expect(all.map((o) => o.date)).toEqual(['2026-10-25', '2026-11-01', '2026-11-08']);
+  // EDT (UTC−4) before the change, EST (UTC−5) after: the wall clock holds.
+  expect(all[0].startISO).toBe('2026-10-26T03:30:00.000Z');
+  expect(all[1].startISO).toBe('2026-11-02T04:30:00.000Z');
+  // Away on Sunday 1 Nov in New York — the day of the change — removes the
+  // occurrence although its UTC instant falls on Monday 2 Nov.
+  const away = expandSlots([SUN_LATE], 'America/New_York', { from, weeks: 3, exceptions: [{ startDate: '2026-11-01', endDate: '2026-11-01' }] });
+  expect(away.map((o) => o.date)).toEqual(['2026-10-25', '2026-11-08']);
+  // An away window on the UTC date (Mon 2 Nov) leaves the Sunday slot alone.
+  const utcDay = expandSlots([SUN_LATE], 'America/New_York', { from, weeks: 3, exceptions: [{ startDate: '2026-11-02', endDate: '2026-11-02' }] });
+  expect(utcDay).toHaveLength(3);
+});

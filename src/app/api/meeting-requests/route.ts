@@ -14,6 +14,8 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestEmail } from '@/services/emailService';
 import { parseUserDateTime } from '@/lib/timezone';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { meetingEnd } from '@/lib/meetingDuration';
+import { conflictBody, findConflictFor } from '@/lib/busyWindows';
 
 // GET ?relationId= — meeting requests for a thread (participants/admin).
 export async function GET(request: Request) {
@@ -70,6 +72,11 @@ export async function POST(request: Request) {
   });
   const proposedAt = parseUserDateTime(parsed.data.proposedAt, requester?.timezone);
   if (!proposedAt) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+
+  // Asking for an hour the pair already has booked is answered now, not when
+  // the mentor tries to accept it (#1995). Accepting re-checks under a lock.
+  const conflict = await findConflictFor(prisma, session.user, [rel.mentorId, rel.menteeId], { start: proposedAt, end: meetingEnd(proposedAt, null) });
+  if (conflict) return NextResponse.json(conflictBody(conflict), { status: 409 });
 
   const req = await prisma.meetingRequest.create({
     data: {

@@ -6,6 +6,13 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveTimeZone } from '@/lib/timezone';
 import { z } from 'zod';
+import { findSlotClash, liveSlotsWhere, mayWriteAvailabilityFor, mentorToday, writableMentorId } from '@/lib/availabilityAccess';
+import { weekdayOfDate } from '@/lib/availabilitySlots';
+import { busyWindows } from '@/lib/busyWindows';
+import { mergeWindows } from '@/lib/busyWindowsRule';
+
+// How far ahead the booked hours are read — the portal offers three weeks of slots.
+const BUSY_HORIZON_MS = 22 * 24 * 60 * 60_000;
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -63,14 +70,19 @@ export async function GET(request: Request) {
   // Own hours: unchanged, and deliberately not tenant-gated — your own row is
   // yours whatever org resolution says.
   if (!requested || requested === session.user.id) {
-    const [me, slots] = await Promise.all([
-      prisma.user.findUnique({ where: { id: session.user.id }, select: { timezone: true } }),
+    const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { timezone: true } });
+    const today = mentorToday(me?.timezone);
+    const [slots, exceptions] = await Promise.all([
       prisma.availabilitySlot.findMany({
-        where: { mentorId: session.user.id },
+        where: liveSlotsWhere(session.user.id, today),
         orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
       }),
+      prisma.availabilityException.findMany({
+        where: { mentorId: session.user.id, endDate: { gte: today } },
+        orderBy: { startDate: 'asc' },
+      }),
     ]);
-    return NextResponse.json({ slots, ...zoneOf(me?.timezone) });
+    return NextResponse.json({ slots, exceptions, ...zoneOf(me?.timezone) });
   }
 
   // Same fail-closed role gate as the mentor directory (#831): COMPANY and
@@ -117,21 +129,62 @@ export async function GET(request: Request) {
     }
     if (!visible) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const slots = await prisma.availabilitySlot.findMany({
-      where: { mentorId: mentor.id },
-      orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
-    });
-    return NextResponse.json({ slots, ...zoneOf(mentor.timezone) });
+    const today = mentorToday(mentor.timezone);
+    const [slots, away] = await Promise.all([
+      prisma.availabilitySlot.findMany({
+        where: liveSlotsWhere(mentor.id, today),
+        orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
+      }),
+      // The dates only (#2001): that a mentor is away is what a booker needs;
+      // why is the mentor's own business.
+      prisma.availabilityException.findMany({
+        where: { mentorId: mentor.id, endDate: { gte: today } },
+        orderBy: { startDate: 'asc' },
+        select: { startDate: true, endDate: true },
+      }),
+    ]);
+    // The hours already booked (#1995), so the picker stops offering them. Only
+    // to the people who can book them — an admin, or the paired mentee, whose
+    // own meetings count too — and only as bare start/end: whose meeting it is
+    // and what it is called are none of the reader's business. A directory
+    // visitor gets the weekly hours, never the diary.
+    let busy: { start: string; end: string }[] | undefined;
+    if (session.user.role === 'ADMIN' || session.user.role === 'MENTEE') {
+      const now = new Date();
+      const people = session.user.role === 'MENTEE' ? [mentor.id, session.user.id] : [mentor.id];
+      const windows = await busyWindows(prisma, people, now, new Date(now.getTime() + BUSY_HORIZON_MS));
+      busy = mergeWindows(windows).map((w) => ({ start: w.start.toISOString(), end: w.end.toISOString() }));
+    }
+    return NextResponse.json({ slots, exceptions: away, ...zoneOf(mentor.timezone), ...(busy ? { busy } : {}) });
   });
 }
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const schema = z.object({
   weekday: z.number().int().min(0).max(6),
   startTime: z.string().regex(TIME),
   endTime: z.string().regex(TIME),
+  // A one-off on this date (#2001); `weekday` is then derived from it.
+  date: z.string().regex(DATE).nullish(),
+  note: z.string().trim().max(120).nullish(),
+  // An ADMIN writing for a mentor of their own org; anyone else writes their own.
+  mentorId: z.string().min(1).optional(),
 });
 
-// POST — add a slot to the current mentor's availability.
+function clashResponse(clash: { startTime: string; endTime: string; date: Date | null }) {
+  return NextResponse.json(
+    { error: 'Overlaps an existing slot', code: 'overlap', clash: { ...clash, date: clash.date ? clash.date.toISOString().slice(0, 10) : null } },
+    { status: 409 }
+  );
+}
+
+async function zoneOfMentor(mentorId: string) {
+  return (await prisma.user.findUnique({ where: { id: mentorId }, select: { timezone: true } }))?.timezone ?? null;
+}
+
+// POST — add a slot to the current mentor's availability (or, for an ADMIN, to
+// a mentor of their own organization). Weekly, or a dated one-off.
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
@@ -142,31 +195,67 @@ export async function POST(request: Request) {
   if (parsed.data.endTime <= parsed.data.startTime) {
     return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });
   }
-  // Reject an interval that overlaps one already on that weekday, exact repeats
-  // included (#1363). Two intervals overlap iff each starts before the other
-  // ends — the half-open comparison, so 09:00–10:00 and 10:00–11:00 are
-  // back-to-back rather than overlapping, which is how a person reads them.
-  // Times are zero-padded "HH:MM", so string order is chronological order and
-  // the DB can do the comparison.
-  const { weekday, startTime, endTime } = parsed.data;
-  const clash = await prisma.availabilitySlot.findFirst({
-    where: {
-      mentorId: session.user.id,
-      weekday,
-      startTime: { lt: endTime },
-      endTime: { gt: startTime },
-    },
-    select: { startTime: true, endTime: true },
-  });
-  if (clash) {
-    return NextResponse.json(
-      { error: 'Overlaps an existing slot', code: 'overlap', clash },
-      { status: 409 }
-    );
-  }
+  const mentorId = await writableMentorId(session, parsed.data.mentorId);
+  if (!mentorId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const { startTime, endTime } = parsed.data;
+  const date = parsed.data.date ? new Date(`${parsed.data.date}T00:00:00Z`) : null;
+  // Kept non-null for a one-off too, derived from the date, so every query that
+  // reads `weekday` keeps working.
+  const weekday = parsed.data.date ? weekdayOfDate(parsed.data.date) : parsed.data.weekday;
+  const today = mentorToday(await zoneOfMentor(mentorId));
+  if (date && date < today) return NextResponse.json({ error: 'That date has passed' }, { status: 400 });
+  // Reject an interval that overlaps one already on offer that day, exact
+  // repeats included (#1363) — see findSlotClash for which rows compete.
+  const clash = await findSlotClash(mentorId, { weekday, date, startTime, endTime }, { today });
+  if (clash) return clashResponse(clash);
 
-  const slot = await prisma.availabilitySlot.create({ data: { mentorId: session.user.id, ...parsed.data } });
+  const slot = await prisma.availabilitySlot.create({
+    data: { mentorId, weekday, startTime, endTime, date, note: parsed.data.note || null },
+  });
   return NextResponse.json({ slot }, { status: 201 });
+}
+
+const patchSchema = z
+  .object({
+    id: z.string().min(1),
+    weekday: z.number().int().min(0).max(6).optional(),
+    // null turns a one-off back into a weekly slot.
+    date: z.string().regex(DATE).nullable().optional(),
+    startTime: z.string().regex(TIME).optional(),
+    endTime: z.string().regex(TIME).optional(),
+    note: z.string().trim().max(120).nullable().optional(),
+  })
+  .strict();
+
+// PATCH — change a slot in place (#2001): its day, its times, its date, its
+// note. Deleting and retyping it was the only way, and a busy volunteer does
+// not do that. The overlap rule is the POST's, minus the row being edited — a
+// slot does not collide with itself.
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const parsed = patchSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  const current = await prisma.availabilitySlot.findUnique({ where: { id: parsed.data.id } });
+  // Not yours (and not your org's, as an admin) reads exactly like missing.
+  if (!current || !(await mayWriteAvailabilityFor(session, current.mentorId))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  const p = parsed.data;
+  const startTime = p.startTime ?? current.startTime;
+  const endTime = p.endTime ?? current.endTime;
+  if (endTime <= startTime) return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });
+  const date = p.date === undefined ? current.date : p.date ? new Date(`${p.date}T00:00:00Z`) : null;
+  const weekday = date ? weekdayOfDate(date.toISOString()) : p.weekday ?? current.weekday;
+  const today = mentorToday(await zoneOfMentor(current.mentorId));
+  if (date && p.date && date < today) return NextResponse.json({ error: 'That date has passed' }, { status: 400 });
+  const clash = await findSlotClash(current.mentorId, { weekday, date, startTime, endTime }, { excludeId: current.id, today });
+  if (clash) return clashResponse(clash);
+  const slot = await prisma.availabilitySlot.update({
+    where: { id: current.id },
+    data: { weekday, date, startTime, endTime, ...(p.note !== undefined ? { note: p.note || null } : {}) },
+  });
+  return NextResponse.json({ slot });
 }
 
 // DELETE ?id= — remove one of the current mentor's slots.
@@ -186,17 +275,8 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get('id') || '';
   const slot = await prisma.availabilitySlot.findUnique({ where: { id } });
   if (!slot) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (slot.mentorId !== session.user.id) {
-    if (session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    const sameOrg = await withTenantScope(session, () =>
-      prisma.user.findFirst({
-        where: { id: slot.mentorId, orgId: resolveOrgId(session) },
-        select: { id: true },
-      })
-    );
-    if (!sameOrg) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (slot.mentorId !== session.user.id && !(await mayWriteAvailabilityFor(session, slot.mentorId))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   await prisma.availabilitySlot.delete({ where: { id } });
   return NextResponse.json({ ok: true });
