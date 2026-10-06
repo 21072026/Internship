@@ -12,6 +12,7 @@ a funder, a sponsor) who leaves through a signed link.
 | `src/lib/jobs/reportSubscriptions.ts` | The sender — `runReportSubscriptions()`, `sendReportSubscription()`, the hourly cron |
 | `src/lib/reportSubscriptionAdmin.ts` | Who may manage them and the write-time checks |
 | `/api/admin/report-subscriptions` (+ `/[id]`, `/[id]/test`) | Admin CRUD and "send me a test" |
+| `/admin/reports/subscriptions` | The admin screen: create, test, pause, delete, delivery history |
 | `/reports/unsubscribe` + `POST /api/report-subscriptions/unsubscribe` | The account-less way out |
 | `src/lib/analyticsReports.ts` | The cohort / source / mentor computations, sessionless, shared by the screens, the registry and this job |
 
@@ -50,6 +51,5 @@ handler. An admin can fire their own org's due subscriptions with
 
 ## Not yet
 
-- The admin screen (`/admin/reports/subscriptions`) — follow-up PR.
 - Retiring `sendWeeklyAnalyticsReport()` into a seeded weekly subscription per
   org — follow-up PR; until then both exist and the old one is unchanged.

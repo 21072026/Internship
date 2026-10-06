@@ -115,3 +115,65 @@ test.describe('report subscriptions', () => {
     expect((await page.request.get('/api/admin/report-subscriptions')).status()).toBe(401);
   });
 });
+
+// The admin screen (#1905 part 2): create a scheduled report for an outside
+// address, send a test, see it in the history, pause it, delete it.
+test.describe('report subscriptions screen', () => {
+  const stamp = `${Date.now()}-ui`;
+  const admin = uniqueEmail('rs-ui-admin');
+  const dean = `rs-ui-dean-${stamp}@example.com`;
+  let orgId = '';
+
+  test.beforeAll(async () => {
+    orgId = (await prisma.organization.create({ data: { name: `RS UI Org ${stamp}`, slug: `rs-ui-${stamp}` } })).id;
+    await seedUser(admin, PW, 'ADMIN', `RS UI Admin ${stamp}`, orgId);
+  });
+
+  test.afterAll(async () => {
+    await prisma.emailLog.deleteMany({ where: { to: { in: [admin, dean] } } });
+    await prisma.reportSubscription.deleteMany({ where: { orgId } });
+    await prisma.orgEntitlement.deleteMany({ where: { orgId } });
+    await cleanupByEmail(admin);
+    await prisma.organization.deleteMany({ where: { id: orgId } });
+  });
+
+  test('locked without the tier; create, test, pause and delete with it', async ({ page }) => {
+    await signInAndSettle(page, admin, PW, '/admin');
+    await page.goto('/admin/reports/subscriptions');
+    await expect(page.getByTestId('report-subs-empty')).toHaveCount(0);
+    await expect(page.getByTestId('report-sub-form')).toHaveCount(0);
+
+    await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', true);
+    await page.reload();
+    await expect(page.getByTestId('report-subs-empty')).toBeVisible();
+
+    const form = page.getByTestId('report-sub-form');
+    await form.getByLabel('E-mail address').fill(dean);
+    await form.getByLabel('Name (optional)').fill('Dean Example');
+    await form.getByLabel('Language').selectOption('tr');
+    // Excel needs REPORT_EXPORT: the API says so and the form shows it.
+    await form.getByLabel('Format').selectOption('XLSX');
+    await form.getByRole('button', { name: 'Create' }).click();
+    await expect(page.getByTestId('report-sub-error')).toContainText('report-export');
+
+    await form.getByLabel('Format').selectOption('EMAIL_SUMMARY');
+    await form.getByRole('button', { name: 'Create' }).click();
+    const card = page.getByTestId('report-subs-list').locator('li').first();
+    await expect(card).toContainText('Dean Example');
+    await expect(card).toContainText('Türkçe');
+
+    await card.getByTestId('report-sub-test').click();
+    await expect(page.getByText('Test sent to your address.')).toBeVisible();
+    await card.getByText('Delivery history').click();
+    await expect(card.getByTestId('report-sub-history')).toContainText('Sent');
+
+    await card.getByTestId('report-sub-toggle').click();
+    await expect(card).toContainText('Paused');
+    expect((await prisma.reportSubscription.findFirst({ where: { orgId } }))?.isActive).toBe(false);
+
+    await card.getByRole('button', { name: /^Delete:/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByTestId('report-subs-empty')).toBeVisible();
+    expect(await prisma.reportSubscription.count({ where: { orgId } })).toBe(0);
+  });
+});
