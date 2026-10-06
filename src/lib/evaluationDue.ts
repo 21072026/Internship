@@ -25,7 +25,6 @@
 import cron from 'node-cron';
 import type { EvaluationType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { logger } from '@/lib/logger';
 import { getSetting } from '@/lib/settings';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
