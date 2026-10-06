@@ -17,3 +17,9 @@ test('a task without a TTL is never answered from the cache', () => {
   assert.ok(TASK_TTL_MS.cv_feedback > 0);
   assert.equal(TASK_TTL_MS.cv_extract, undefined);
 });
+
+test('the match task caches under the gate scope it runs as', () => {
+  // runAiGated keys the cache by `scope`; mentor-suggest runs as mentor_match.
+  assert.ok(TASK_TTL_MS.mentor_match > 0);
+  assert.ok(TASK_TTL_MS.interaction_summary > 0);
+});

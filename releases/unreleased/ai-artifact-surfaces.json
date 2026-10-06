@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**AI artefacts on the summary and the match rationale (#2044, part 2):** the interaction-log summary and the mentor-match rationale are now kept through `runAiGated`'s `persist`. `GET /api/interactions/summary?relationId=` returns the relation's last summary (pair's mentor or admin, else 403) and the card opens on it; an unchanged log inside a day is answered from the saved copy, Regenerate (`regenerate: true`) asks again. `POST /api/admin/mentor-suggest` keeps the AI ranking keyed on the mentee profile plus the exact candidate list (mentor ids and positions hashed, never sent), returns `cached`/`artifact`, and the candidate row shows when the rationale was made. `runAiGated` now treats a stored copy that fails to decode as a cache miss. Fixes the TTL key for the match task (`mentor_match`, the gate scope it runs as).",
+  "notes": {
+    "en": ["The AI summary of your interaction log is kept: it is there when you come back, and asking again for an unchanged log costs nothing."],
+    "tr": ["Etkileşim kaydının yapay zekâ özeti artık saklanıyor: geri döndüğünde orada ve kayıt değişmediyse tekrar istemek ücretsiz."],
+    "de": ["Die KI-Zusammenfassung deines Interaktionsprotokolls wird gespeichert: Sie ist da, wenn du zurückkommst, und eine erneute Anfrage zu einem unveränderten Protokoll kostet nichts."]
+  }
+}

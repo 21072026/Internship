@@ -30,7 +30,7 @@ export const TASK_TTL_MS: Record<string, number> = {
   cv_feedback: 7 * DAY,
   interview_prep: 7 * DAY,
   interaction_summary: 1 * DAY,
-  mentor_suggest: 1 * DAY,
+  mentor_match: 1 * DAY,
 };
 
 /** sha256 over a stable JSON rendering — key order never changes the hash. */
@@ -114,10 +114,15 @@ export async function sweepAiArtifacts(now = new Date()): Promise<{ deleted: num
   return { deleted };
 }
 
-/** The newest artefact of a task about this person, in this org — what a card shows on mount. */
-export async function latestArtifact(input: { orgId: string | null; taskId: string; subjectUserId: string }): Promise<AiArtifact | null> {
+/**
+ * The newest artefact of a task about this person, in this org — what a card
+ * shows on mount. `relationId` narrows it to one pairing: a summary of the
+ * interaction log belongs to the relation whose log it read, so a mentor who
+ * took the mentee over does not open on the previous pairing's digest.
+ */
+export async function latestArtifact(input: { orgId: string | null; taskId: string; subjectUserId: string; relationId?: string }): Promise<AiArtifact | null> {
   return prisma.aiArtifact.findFirst({
-    where: { orgId: input.orgId, taskId: input.taskId, subjectUserId: input.subjectUserId },
+    where: { orgId: input.orgId, taskId: input.taskId, subjectUserId: input.subjectUserId, ...(input.relationId ? { relationId: input.relationId } : {}) },
     orderBy: { createdAt: 'desc' },
   });
 }

@@ -14,8 +14,24 @@ import { MATCH_RULESET_VERSION } from '@/lib/matchFeedback';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { hashInput } from '@/lib/ai/artifacts';
 
-const schema = z.object({ menteeId: z.string().min(1) });
+const schema = z.object({
+  menteeId: z.string().min(1),
+  // The explicit Regenerate: skip the stored rationale for the same input (#2044).
+  regenerate: z.boolean().optional(),
+});
+
+type Ranking = { label: string; reason: string }[];
+
+// A stored ranking is only trusted in the shape the provider returned it.
+function decodeRanking(content: string): Ranking {
+  const v: unknown = JSON.parse(content);
+  if (!Array.isArray(v) || !v.every((r) => r && typeof r.label === 'string' && typeof r.reason === 'string')) {
+    throw new Error('stale ranking');
+  }
+  return v as Ranking;
+}
 
 // POST — mentor suggestions for a mentee (Faz 2, #533). Always computes the
 // rule-based ranking (skill overlap + load); when the AI gate allows (quota +
@@ -160,6 +176,22 @@ export async function POST(request: Request) {
         },
         candidates
       ),
+    // Kept (#2044): the same mentee profile against the same candidates — the
+    // same mentors, in the same order, with the same skills, interests and
+    // load — inside the TTL reuses the stored rationale. The mentor ids are
+    // hashed (they never reach the provider) because the anonymous labels are
+    // positions: a stored "A" is only the same person while the list is.
+    persist: {
+      subjectUserId: mentee.id,
+      createdById: session.user.id,
+      inputHash: hashInput({
+        mentee: { skills: mentee.skills, targetPosition: mentee.targetPosition ?? '', interests: mentee.interests ?? '' },
+        candidates: candidates.map((c, i) => ({ ...c, mentorId: base[i].mentorId })),
+      }),
+      force: parsed.data.regenerate,
+      serialize: (r) => JSON.stringify(r),
+      deserialize: decodeRanking,
+    },
   });
 
   if (!gated.ok) {
@@ -182,6 +214,6 @@ export async function POST(request: Request) {
 
   const suggestions = [...ranked, ...rest];
   await recordShown(suggestions, true);
-  return NextResponse.json({ batchId, suggestions, aiUsed: true });
+  return NextResponse.json({ batchId, suggestions, aiUsed: true, cached: !!gated.cached, artifact: gated.artifact ?? null });
   });
 }

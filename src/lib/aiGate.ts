@@ -111,7 +111,15 @@ export async function runAiGated<T>(opts: {
   const decode = persist?.deserialize ?? ((c: string) => c as unknown as T);
   if (persist && !persist.force) {
     const hit = await findCachedArtifact({ orgId: await quotaOrgId(opts.orgId), taskId: opts.scope, subjectUserId: persist.subjectUserId, inputHash: persist.inputHash }).catch(() => null);
-    if (hit) return { ok: true, result: decode(hit.content), cached: true, artifact: refOf(hit) };
+    // A stored copy that no longer decodes (a format change, a hand-edited
+    // row) is a miss, not an error: the provider answers instead.
+    if (hit) {
+      try {
+        return { ok: true, result: decode(hit.content), cached: true, artifact: refOf(hit) };
+      } catch {
+        /* fall through to a fresh call */
+      }
+    }
   }
   // Quota before configuration (the issue's order: consent → flag → quota →
   // provider): quota 0 means "AI off" regardless of key, and quota behaviour
