@@ -8242,3 +8242,14 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - Before rewording a notification, check **who receives it** (`notifyIfAllowed(<userId>, …)` call site). "Your stage changed" read oddly for MARKETING because it went to the *prospect*, who has no portal — the fix was not to send it, not to reword it.
 - A cross-world notification check: `verticalHasCapability(await verticalFor(orgId), 'mentorship')` is the "does this person have a portal" question; `verticalHasCapability(null, …)` falls back to INTERNSHIP, so null-org callers keep their behaviour.
 - Prove a new e2e assertion bites by temporarily restoring the file from `origin/main` (`git show origin/main:<path> > <path>`), running the one test, then copying your version back — never `git checkout origin/main -- .`, which wipes every uncommitted edit in the tree.
+
+## 2026-10-06 — deterministic a11y gate + hover-contrast check (#2785)
+
+- **The a11y gate was already in the PR job** ("Accessibility regression gate" in `e2e.yml`). Saying it was not was wrong; read the workflow before claiming a check is missing.
+- **axe measures the page as it is at that moment.** Three things made the same commit scan differently from run to run:
+  - where the pointer was left (a hovered element);
+  - the scroll position (a reload keeps it, and the sticky header is translucent);
+  - `transition-colors` mid-fade right after the theme class lands.
+  `scan()` now handles each one: it parks the pointer, scrolls to the top and freezes transitions.
+- **`page.mouse.move(-1, -1)` really clears `:hover` in Chromium.** Checked with `document.querySelectorAll(':hover')`.
+- **A hover-state check must also freeze transitions.** Otherwise it reads the colour mid-fade, and the first version missed the footer link because of that.
