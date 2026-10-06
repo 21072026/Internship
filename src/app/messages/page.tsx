@@ -5,12 +5,11 @@ import Link from 'next/link';
 import { MessageSquare, LifeBuoy, UserRound } from 'lucide-react';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 import { relativeTime } from '@/lib/relativeTime';
 import { StartConversationPicker } from '@/components/StartConversationPicker';
 import { MessagesLiveRefresh } from '@/components/MessagesLiveRefresh';
-import { conversationForRelation, createOrGetProjectConversation } from '@/lib/conversations';
+import { loadInbox } from '@/lib/inbox';
 
 // Unified message inbox for every role: lists the viewer's conversation
 // threads (mentor side or mentee side) with the other participant, a preview
@@ -21,99 +20,18 @@ export default async function MessagesInboxPage() {
   const { locale, t } = await getServerDictionary();
   const me = session.user.id;
 
-  const supportUnread = await prisma.supportMessage.count({
-    where: { ticket: { requesterId: me }, senderId: { not: me }, readAt: null },
-  });
-
-  const myProjectIds = (
-    await prisma.projectMember.findMany({ where: { userId: me }, select: { projectId: true } })
-  ).map((m) => m.projectId);
-
-  // Every mentorship the viewer is in, resolved to the pair's one conversation
-  // and taking the relation's own messages with it (#1156). This list used to
-  // render mentorship threads *alongside* conversations, so anyone reachable
-  // both ways — as a mentee and as a project co-member — appeared twice, with
-  // half of the history behind each row. Runs before the query below so the
-  // adopted messages count towards the preview and the unread badge.
-  const myRelations = await prisma.mentorshipRelation.findMany({
-    where: { OR: [{ mentorId: me }, { menteeId: me }] },
-    select: { id: true, mentorId: true, menteeId: true },
-  });
-  await Promise.all(myRelations.map(conversationForRelation));
-
-  // Lazy-create chats for projects that predate #771, then list GROUP and DIRECT
-  // conversations together so the project chat is reachable from the inbox.
-  const projectGroupIds = (await Promise.all(myProjectIds.map(createOrGetProjectConversation)))
-    .flatMap((conversation) => conversation ? [conversation.id] : []);
-  const conversations = await prisma.conversation.findMany({
-    where: {
-      OR: [
-        { type: 'DIRECT', participants: { some: { userId: me } } },
-        ...(projectGroupIds.length ? [{ type: 'GROUP' as const, id: { in: projectGroupIds } }] : []),
-      ],
-    },
-    select: {
-      id: true,
-      type: true,
-      project: { select: { name: true } },
-      participants: { select: { userId: true, user: { select: { fullName: true } } } },
-      messages: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: { body: true, createdAt: true, senderId: true },
-      },
-      _count: { select: { messages: { where: { readAt: null, senderId: { not: me } } } } },
-    },
-  });
-
-  // Project co-members the viewer may start a DM with. Membership is the
-  // permission (see canMessage in src/lib/conversations.ts), so this list is
-  // derived on the server — the client never decides who is messageable.
-  const coMemberRows = myProjectIds.length
-    ? await prisma.projectMember.findMany({
-        where: { projectId: { in: myProjectIds }, userId: { not: me } },
-        select: { userId: true, user: { select: { fullName: true } }, project: { select: { name: true } } },
-      })
-    : [];
-
-  // One row per conversation — which, for a 1:1 chat, means one row per person.
-  const threads = conversations
-    .map((c) => ({
-      key: `conv-${c.id}`,
-      href: `/messages/c/${c.id}`,
-      otherName: c.type === 'GROUP'
-        ? t.messages.projectGroup.replace('{name}', c.project?.name ?? '—')
-        : c.participants.find((p) => p.userId !== me)?.user.fullName ?? '—',
-      // Who the row is about, so the name can carry a person card (#1166).
-      // Null for a group room — it is named after its project, not a person.
-      otherId: c.type === 'GROUP' ? null : c.participants.find((p) => p.userId !== me)?.userId ?? null,
-      last: c.messages[0] ?? null,
-      unread: c._count.messages,
-    }))
-    .sort((a, b) => {
-      const at = a.last?.createdAt?.getTime() ?? 0;
-      const bt = b.last?.createdAt?.getTime() ?? 0;
-      return bt - at;
-    });
-
-  // Offer only people we don't already have a DM with — those threads are in
-  // the list above. DIRECT only: every co-member is also a participant of the
-  // shared project's GROUP chat, so counting group participants here would
-  // empty the picker for everyone who is in a project. Deduped, since two
-  // shared projects would otherwise surface the same person twice.
-  const existingDmPartnerIds = new Set(
-    conversations
-      .filter((c) => c.type === 'DIRECT')
-      .flatMap((c) => c.participants.map((p) => p.userId))
-      .filter((id) => id !== me),
+  // One read of the inbox for the page and the native app (src/lib/inbox.ts).
+  const { threads: rows, candidates, supportUnread } = await loadInbox(me, (name) =>
+    t.messages.projectGroup.replace('{name}', name),
   );
-  const candidates = [
-    ...new Map(
-      coMemberRows
-        .filter((row) => !existingDmPartnerIds.has(row.userId))
-        .map((row) => [row.userId, { id: row.userId, fullName: row.user.fullName, projectName: row.project.name }]),
-    ).values(),
-  ].sort((a, b) => a.fullName.localeCompare(b.fullName));
+  const threads = rows.map((th) => ({
+    key: `conv-${th.conversationId}`,
+    href: `/messages/c/${th.conversationId}`,
+    otherName: th.name,
+    otherId: th.otherId,
+    last: th.last,
+    unread: th.unread,
+  }));
 
   return (
     <div>

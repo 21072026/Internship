@@ -28,6 +28,7 @@ function RootStack() {
       <Stack.Protected guard={status === 'signed-in'}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="web" options={{ headerShown: true, title: '' }} />
+        <Stack.Screen name="thread/[id]" options={{ headerShown: true, title: '' }} />
       </Stack.Protected>
     </Stack>
   );

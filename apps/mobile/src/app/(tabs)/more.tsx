@@ -15,10 +15,8 @@ export default function MoreTab() {
     },
     {
       label: t.switchProduct,
-      onPress: async () => {
-        await signOut();
-        await clearProduct();
-      },
+      // Keeps this product signed in; only "Sign out" ends a session.
+      onPress: () => void clearProduct(),
     },
     {
       label: t.signOut,
