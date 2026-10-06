@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Mobile: icon for the admin Insights menu entry (#2775):** `apps/mobile/src/lib/menu.ts` gains `insights: 'bulb'` (the web uses `Lightbulb`). The nav key arrived with #2807 without a glyph; the `Mobile app` workflow's icon test only ran on the next `apps/mobile` change, #2824, and has been red on `main` since."
+}

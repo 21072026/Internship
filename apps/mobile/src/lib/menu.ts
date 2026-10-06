@@ -35,6 +35,7 @@ const ICONS: Record<string, string> = {
   interactionLogs: 'book',
   interactions: 'book',
   myNotes: 'lock-closed',
+  insights: 'bulb',
   myInsights: 'analytics',
   newsletters: 'newspaper',
   mentees: 'people',
