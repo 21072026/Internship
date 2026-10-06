@@ -75,6 +75,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Scheduled report delivery (#1905).
   'ReportSubscription',
   'ReportSubscriptionSend',
+  // Relationship-health snapshots (#1901).
+  'RelationHealthSnapshot',
   'Requisition',
   'InterviewRequest',
   'MessageTemplate',

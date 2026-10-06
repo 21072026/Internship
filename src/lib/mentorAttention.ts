@@ -5,6 +5,7 @@ import { getLastContacts } from '@/lib/lastContact';
 import { getSetting } from '@/lib/settings';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { scoreRelation } from '@/lib/relationHealth';
+import { menteesWithOpenTodo } from '@/lib/openWork';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 import { isTrialMissingEndDate } from '@/lib/trialReminderRule';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
@@ -80,29 +81,9 @@ export async function getAttentionItems(
     },
   });
 
-  // "Nothing open" is not a goals-only question (#1113 to-dos): a mentor hands
-  // work out from the shared pool as ProjectTasks, not as Goal rows, so a mentee
-  // with four open to-dos and no Goal was still flagged "no open goal". Count the
-  // to-dos the mentor can actually see on that mentee's list — the ones a project
-  // or another person put there, which is exactly the filter
-  // GET /api/todos applies when reading somebody else's list; a line the mentee
-  // wrote for themselves is private and stays out of this.
-  const menteeIds = relations.map((r) => r.mentee.id);
-  const openTodos = menteeIds.length
-    ? await prisma.projectTask.findMany({
-        where: {
-          assigneeId: { in: menteeIds },
-          done: false,
-          archivedAt: null,
-        },
-        select: { assigneeId: true, projectId: true, createdById: true },
-      })
-    : [];
-  const hasOpenTodo = new Set(
-    openTodos
-      .filter((t) => t.projectId !== null || t.createdById !== t.assigneeId)
-      .map((t) => t.assigneeId as string)
-  );
+  // "Nothing open" counts to-dos as well as goals (#1113) — the rule lives in
+  // lib/openWork.ts, shared with the nightly health sweep (#1901).
+  const hasOpenTodo = await menteesWithOpenTodo(relations.map((r) => r.mentee.id));
 
   // Applicants who never came back after the first outreach are not work the
   // mentor can do anything about — they'd otherwise fill the queue permanently

@@ -164,6 +164,8 @@ model Organization {
   // Scheduled report delivery (#1905).
   reportSubscriptions     ReportSubscription[]
   reportSubscriptionSends ReportSubscriptionSend[]
+  // Nightly relationship-health snapshots (#1901).
+  relationHealthSnapshots RelationHealthSnapshot[]
   offers                  Offer[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
@@ -2635,11 +2637,11 @@ model MentorshipRelation {
   // work to the incoming one — InteractionLog has no author column of its own.
   previousRelationId      String?
 
-  mentor                User                   @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee                User                   @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company               Company?               @relation(fields: [companyId], references: [id])
-  project               Project?               @relation(fields: [projectId], references: [id])
-  cohort                Cohort?                @relation(fields: [cohortId], references: [id])
+  mentor                User                     @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee                User                     @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company               Company?                 @relation(fields: [companyId], references: [id])
+  project               Project?                 @relation(fields: [projectId], references: [id])
+  cohort                Cohort?                  @relation(fields: [cohortId], references: [id])
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
   meetings              Meeting[]
@@ -2657,13 +2659,15 @@ model MentorshipRelation {
   // The record's ESTIMATED monthly value (#2422) — its own row, never a scalar
   // here; see model RelationValue for why.
   value                 RelationValue?
-  rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
-  previousRelation      MentorshipRelation?    @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
+  rematchRequests       MentorshipRequest[]      @relation("RematchRequests")
+  previousRelation      MentorshipRelation?      @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
   // At most one successor in practice (a closed relation is transferred once),
   // but the FK cannot express that, so Prisma types it as a list.
-  nextRelations         MentorshipRelation[]   @relation("RelationChain")
+  nextRelations         MentorshipRelation[]     @relation("RelationChain")
   // Standing 1:1 rules on this pairing (#2013).
   meetingSeries         MeetingSeries[]
+  // Nightly health snapshots (#1901); removed with the relation.
+  healthSnapshots       RelationHealthSnapshot[]
 
   @@index([status])
   @@index([lifecycleState])
@@ -4858,4 +4862,34 @@ model ReportSubscriptionSend {
 
   @@unique([subscriptionId, periodKey])
   @@index([orgId, sentAt])
+}
+
+// ── Relationship-health snapshots (#1901) ────────────────────────────────────
+// One row per ACTIVE relation per UTC day, written by the nightly sweep
+// (src/lib/jobs/relationHealthSweep.ts) from scoreRelation() (#1898). The
+// unique makes a re-run of the same day an upsert, not a second row; rows
+// older than the retention window are pruned by the same sweep — this is the
+// one table here that grows without bound otherwise.
+model RelationHealthSnapshot {
+  id           String             @id @default(cuid())
+  orgId        String?
+  org          Organization?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  relationId   String
+  relation     MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  /// The UTC day the snapshot describes (midnight UTC).
+  takenOn      DateTime           @db.Date
+  /// 0-100, or null for a pair no rule could judge yet.
+  score        Int?
+  /// HEALTHY | WATCH | AT_RISK
+  band         String             @db.VarChar(16)
+  /// The rule flags behind the score (HealthReason[]).
+  reasons      Json
+  rulesVersion Int
+  /// Set on the snapshot whose crossing into AT_RISK was put in an admin
+  /// digest — the marker that keeps it to one alert per crossing.
+  alertedAt    DateTime?
+  createdAt    DateTime           @default(now())
+
+  @@unique([relationId, takenOn])
+  @@index([orgId, takenOn])
 }

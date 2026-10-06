@@ -177,7 +177,9 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'reports_analytics',
     essential: false,
     bulk: true,
-    categories: ['analytics-report'],
+    // 'program-health' (#1901): the admin digest of relationships that turned
+    // AT_RISK — an analytics mail to admins, under the same switch.
+    categories: ['analytics-report', 'program-health'],
     // 'digest' was the only switch the weekly analytics report ever had.
     legacy: ['digest'],
   },

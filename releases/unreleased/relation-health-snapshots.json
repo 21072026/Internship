@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Relationship-health snapshots, trend and at-risk alerts** (#1901; docs/relationship-health.md § History and alerts). New tenant model `RelationHealthSnapshot` (`@@unique([relationId, takenOn])`). A nightly sweep (`src/lib/jobs/relationHealthSweep.ts`, 02:00, registered from `/api/cron/start`; `GET /api/cron?job=relation-health` for the caller's org, `&at=` pins the clock) scores every ACTIVE relation with the #1898 rules table, upserts today's snapshot and prunes rows older than 180 days. `GET /api/admin/relation-health/[id]?days=` returns the measured daily series, the 7/30-day delta and the latest reasons. A pair that crosses into AT_RISK goes into one daily digest per admin of its org — localized, with stage labels and the reasons — once per crossing (again only after recovery or 30 days; the first sweep is a baseline and mails nobody), under the new `program-health` e-mail category in the Reports & analytics group. The open-to-do rule is shared (`src/lib/openWork.ts`) by the sweep and the mentor attention queue. Covered by `scripts/test/relation-health-trend.test.mjs` and `e2e/relation-health-snapshots.spec.ts`.",
+  "notes": {
+    "en": ["Admins now get one short e-mail when a mentoring relationship turns at-risk — with the reasons, such as how long the pair has been out of touch — instead of having to check every relationship themselves."],
+    "tr": ["Bir mentorluk ilişkisi riskli banda geçtiğinde yöneticiler artık gerekçeleriyle (örneğin eşleşmenin kaç gündür temasta olmadığı) kısa bir e-posta alıyor; her ilişkiyi tek tek kontrol etmek gerekmiyor."],
+    "de": ["Admins erhalten jetzt eine kurze E-Mail, wenn eine Mentoring-Beziehung in den Risikobereich rutscht – mit den Gründen, etwa wie lange das Paar keinen Kontakt hatte –, statt jede Beziehung selbst prüfen zu müssen."]
+  }
+}

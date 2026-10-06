@@ -58,9 +58,34 @@ wrong. Where the score is more forgiving the flag is not: a brand-new pair is
 still told "no recent contact" — it just does not lose points for it yet.
 `stage_stalled` is not shown in the mentor queue; it is for the admin view.
 
+## History and alerts (#1901)
+
+- **One snapshot per relation per UTC day.** The nightly sweep
+  (`src/lib/jobs/relationHealthSweep.ts`, 02:00, and
+  `GET /api/cron?job=relation-health` for an admin's own org) scores every
+  `ACTIVE` relation and upserts `RelationHealthSnapshot(relationId, takenOn)` —
+  a re-run the same day updates the row, never adds one. Snapshots older than
+  **180 days** are pruned by the same sweep.
+- **Trend.** `GET /api/admin/relation-health/[id]?days=90` returns the measured
+  daily series (never interpolated), the 7- and 30-day delta (against the latest
+  snapshot on or before that day) and the latest reasons — numbers only; screens
+  draw them with the product's own CSS bars, no chart library.
+- **Alerts: one per crossing.** A pair whose band moved into `AT_RISK` since
+  yesterday goes into one daily digest mail per admin of its org, listing each
+  pair with its mentor, its stage **label** and its **reasons** in the admin's
+  language ("no contact for 24 days · stage deadline passed"), never a bare
+  number. A pair that stays red is not alerted again the next night — only after
+  it recovers and falls again, or 30 days after its last alert. No snapshot
+  yesterday is a baseline, not a crossing, so the first sweep after a deploy
+  mails nobody.
+- **Opt-out.** The digest is the e-mail category `program-health` in the
+  *Reports & analytics* group (`src/lib/emailGroups.ts`): an admin who switched
+  analytics reports off gets neither. (A separate in-app notification category
+  was not added — `NOTIFICATION_CATEGORIES` is frozen, #2348 decision 4.)
+
 ## Version history
 
-- **1** (2026-10) — the table above.
+- **1** (2026-10) — the table above; nightly snapshots and at-risk alerts added without changing the rules (#1901).
 
 A change to any weight, window or threshold bumps `HEALTH_RULES_VERSION` and
 adds a line here, so a score can always be traced to the rules that made it.

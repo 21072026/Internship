@@ -1220,6 +1220,25 @@ const en = {
     exportFootnote: 'In exported reports, groups of fewer than {n} people are combined into one row so that no individual can be singled out; totals still add up.',
   },
   // Scheduled report delivery (#1905): the mail and the one-click way out.
+  // The nightly relationship-health digest (#1901): pairs that turned AT_RISK.
+  relationHealth: {
+    subject: '{n} relationship(s) need attention — {product}',
+    heading: 'Relationships that need attention',
+    greeting: 'Hello {name},',
+    intro: 'These relationships moved into the at-risk band since yesterday. The reasons come from the published health rules.',
+    withMentor: 'with {mentor}',
+    footer: 'Each relationship is listed once when it turns at-risk, not every night. The score is deterministic: same rules, same input, same result.',
+    reason: {
+      inactive: 'no contact for {n} days',
+      inactiveNever: 'no contact yet',
+      overdue: 'stage deadline passed',
+      unanswered_question: 'a question is waiting for an answer',
+      pending_meeting: 'a meeting request is waiting',
+      no_open_goal: 'no open goal or to-do',
+      missing_weekly_reports: 'weekly reports missing for two weeks',
+      stage_stalled: 'no stage change in 60 days',
+    },
+  },
   reportSubscriptions: {
     subject: '{report} — {product}',
     greeting: 'Hello {name},',
@@ -7497,6 +7516,25 @@ const tr: Dict = {
     exportFootnote: 'Dışa aktarılan raporlarda {n} kişiden küçük gruplar, kimse tek başına ayırt edilemesin diye tek satırda birleştirilir; toplamlar yine tutar.',
   },
   // Zamanlanmış rapor gönderimi (#1905): e-posta ve tek tıkla çıkış.
+  // Gecelik ilişki sağlığı özeti (#1901): AT_RISK'e geçen eşleşmeler.
+  relationHealth: {
+    subject: '{n} ilişki ilgi bekliyor — {product}',
+    heading: 'İlgi bekleyen ilişkiler',
+    greeting: 'Merhaba {name},',
+    intro: 'Bu ilişkiler dünden bu yana risk bandına geçti. Gerekçeler yayımlanmış sağlık kurallarından geliyor.',
+    withMentor: '{mentor} ile',
+    footer: 'Her ilişki her gece değil, risk bandına geçtiğinde bir kez listelenir. Skor deterministiktir: aynı kurallar, aynı girdi, aynı sonuç.',
+    reason: {
+      inactive: '{n} gündür temas yok',
+      inactiveNever: 'henüz temas yok',
+      overdue: 'aşama süresi geçti',
+      unanswered_question: 'cevap bekleyen bir soru var',
+      pending_meeting: 'bekleyen bir toplantı talebi var',
+      no_open_goal: 'açık hedef ya da görev yok',
+      missing_weekly_reports: 'iki haftadır haftalık rapor yok',
+      stage_stalled: '60 gündür aşama değişmedi',
+    },
+  },
   reportSubscriptions: {
     subject: '{report} — {product}',
     greeting: 'Merhaba {name},',
@@ -13631,6 +13669,25 @@ const de: Dict = {
     exportFootnote: 'In exportierten Berichten werden Gruppen mit weniger als {n} Personen zu einer Zeile zusammengefasst, damit niemand einzeln erkennbar ist; die Summen stimmen weiterhin.',
   },
   // Geplanter Berichtsversand (#1905): die Mail und der Ein-Klick-Ausstieg.
+  // Die nächtliche Beziehungs-Health-Übersicht (#1901): Paare, die AT_RISK wurden.
+  relationHealth: {
+    subject: '{n} Beziehung(en) brauchen Aufmerksamkeit — {product}',
+    heading: 'Beziehungen, die Aufmerksamkeit brauchen',
+    greeting: 'Hallo {name},',
+    intro: 'Diese Beziehungen sind seit gestern in den Risikobereich gerutscht. Die Gründe stammen aus den veröffentlichten Health-Regeln.',
+    withMentor: 'mit {mentor}',
+    footer: 'Jede Beziehung wird einmal aufgeführt, wenn sie in den Risikobereich wechselt – nicht jede Nacht. Der Score ist deterministisch: gleiche Regeln, gleiche Eingabe, gleiches Ergebnis.',
+    reason: {
+      inactive: 'seit {n} Tagen kein Kontakt',
+      inactiveNever: 'noch kein Kontakt',
+      overdue: 'Phasenfrist überschritten',
+      unanswered_question: 'eine Frage wartet auf Antwort',
+      pending_meeting: 'eine Terminanfrage ist offen',
+      no_open_goal: 'kein offenes Ziel und keine Aufgabe',
+      missing_weekly_reports: 'seit zwei Wochen keine Wochenberichte',
+      stage_stalled: 'seit 60 Tagen kein Phasenwechsel',
+    },
+  },
   reportSubscriptions: {
     subject: '{report} — {product}',
     greeting: 'Hallo {name},',
