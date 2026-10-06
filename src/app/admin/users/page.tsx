@@ -14,6 +14,7 @@ import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { useT } from '@/i18n/client';
 import type { AccountState } from '@/lib/accountState';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { SavedViews } from '@/components/SavedViews';
 
 interface AdminUser {
   id: string;
@@ -345,6 +346,19 @@ export default function AdminUsersPage() {
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder={t.usersAdmin.searchPlaceholder}
           className="ml-auto min-h-11 w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+        />
+      </div>
+      <div className="mb-4">
+        <SavedViews
+          storageKey="users-views"
+          surface="users"
+          current={{ filter, statusView, search }}
+          onApply={(f) => {
+            setFilter((['ALL', 'ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'] as const).find((r) => r === f.filter) ?? 'ALL');
+            setStatusView(f.statusView === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE');
+            setSearch(f.search || '');
+            setPage(1);
+          }}
         />
       </div>
 

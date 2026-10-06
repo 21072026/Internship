@@ -20,6 +20,7 @@ import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { isStageOverdue } from '@/lib/stageClock';
 import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
+import { SavedViews } from '@/components/SavedViews';
 import {
   DEFAULT_BOARD_WIP_LIMIT,
   isOverWipLimit,
@@ -359,6 +360,17 @@ export default function AdminBoardPage() {
           <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
           {t.adminBoard.hideEmpty}
         </label>
+      </div>
+      <div className="mb-4">
+        <SavedViews
+          storageKey="board-views"
+          surface="board"
+          current={{ search, hideEmpty: hideEmpty ? 'true' : 'false' }}
+          onApply={(f) => {
+            setSearch(f.search || '');
+            setHideEmpty(f.hideEmpty === 'true');
+          }}
+        />
       </div>
 
       {relations.length === 0 ? (

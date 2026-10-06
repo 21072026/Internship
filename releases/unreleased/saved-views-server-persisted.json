@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Saved views, server-side and shareable (#1900):** new `SavedView` model (in `TENANT_MODELS`, `surface` from an allowlist, visibility `PRIVATE`/`ORG`) with `GET/POST /api/admin/saved-views` and `PATCH/DELETE /api/admin/saved-views/[id]`. Only the author (or a super admin) may change a view: a colleague gets 403, another tenant 404. `<SavedViews surface>` replaces `window.prompt` with a dialog that has a \"share with my team\" switch, and moves the browser's localStorage presets to the server once. Saved views are now on six admin lists: candidates, mentorships, board, mentors, companies and users.",
+  "notes": {
+    "en": ["Saved views now follow you to any device and can be shared with your team — and you can save them on the board, mentors, companies and users lists too."],
+    "tr": ["Kayıtlı görünümler artık her cihazda seninle ve ekibinle paylaşılabiliyor — ayrıca pano, mentorlar, şirketler ve kullanıcılar listelerinde de görünüm kaydedebilirsin."],
+    "de": ["Gespeicherte Ansichten begleiten dich jetzt auf jedes Gerät und lassen sich mit deinem Team teilen — und du kannst sie auch auf dem Board sowie in den Listen für Mentor:innen, Unternehmen und Nutzer speichern."]
+  }
+}

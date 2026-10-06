@@ -460,6 +460,7 @@ export default function CandidatesPage() {
         <div className="mt-3 border-t border-gray-100 pt-3">
           <SavedViews
             storageKey="candidate-views"
+            surface="candidates"
             current={{ search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, tagFilter: tagFilter.join(','), tagMode }}
             onApply={(f) => {
               setSearch(f.search || '');

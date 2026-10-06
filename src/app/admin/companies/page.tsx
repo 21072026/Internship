@@ -18,6 +18,7 @@ import { NewMarketingLeadDialog } from '@/components/admin/NewMarketingLeadDialo
 import { useVertical } from '@/lib/verticalClient';
 import { marketingEmailAllowed, type PermissionRow } from '@/lib/contactPermissionRule';
 import { Building2, Plus, Pencil, Trash2, Search, Sparkles, UserPlus, Download } from 'lucide-react';
+import { SavedViews } from '@/components/SavedViews';
 
 interface Company {
   id: string;
@@ -547,6 +548,18 @@ export default function CompaniesPage() {
         <span className="text-sm text-gray-500" data-testid="companies-total">
           {t.companiesPage.resultCount.replace('{count}', String(total))}
         </span>
+      </div>
+      <div className="mb-6 -mt-3">
+        <SavedViews
+          storageKey="companies-views"
+          surface="companies"
+          current={{ search, sort, permission }}
+          onApply={(f) => {
+            setSearch(f.search || '');
+            setSort((COMPANY_SORT_KEYS as readonly string[]).includes(f.sort) ? (f.sort as CompanySort) : DEFAULT_COMPANY_SORT);
+            setPermission(f.permission === 'email' ? 'email' : 'all');
+          }}
+        />
       </div>
 
       {/* Companies Grid */}
