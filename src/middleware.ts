@@ -43,6 +43,9 @@ function isAllowlisted(pathname: string) {
     pathname === '/api/contact-permission/opt-out' ||
     // Leaving a scheduled report (#1905) — same argument, exact path.
     pathname === '/api/report-subscriptions/unsubscribe' ||
+    // Login-free survey answering (#1881): the invitation token is the
+    // credential. Exact path.
+    pathname === '/api/surveys/respond' ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.

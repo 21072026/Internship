@@ -187,6 +187,19 @@ export function hashSurveyToken(token: string): string {
 
 // ── Responses ────────────────────────────────────────────────────────────────
 
+/**
+ * Does the survey take answers right now? OPEN, and inside its window when it
+ * has one. The single rule — the answering page and the write both ask it.
+ */
+export function surveyAcceptsAnswers(
+  survey: { status: SurveyStatus; opensAt: Date | null; closesAt: Date | null },
+  now: Date = new Date(),
+): boolean {
+  if (survey.status !== 'OPEN') return false;
+  if (survey.opensAt && survey.opensAt > now) return false;
+  return !(survey.closesAt && survey.closesAt <= now);
+}
+
 export interface SubmitInput {
   surveyId: string;
   /** The invitation answered through, when there is one. */
@@ -207,9 +220,9 @@ export interface SubmitInput {
 export async function submitSurveyResponse(input: SubmitInput) {
   const survey = await prisma.survey.findUnique({
     where: { id: input.surveyId },
-    select: { id: true, orgId: true, status: true, anonymity: true, questions: { select: { key: true, type: true, required: true, options: true } } },
+    select: { id: true, orgId: true, status: true, anonymity: true, opensAt: true, closesAt: true, questions: { select: { key: true, type: true, required: true, options: true } } },
   });
-  if (!survey || survey.status !== 'OPEN') throw new SurveyConflict('not_open');
+  if (!survey || !surveyAcceptsAnswers(survey)) throw new SurveyConflict('not_open');
 
   const errors: Record<string, ValidationErrorKey | 'unknown_question'> = {};
   const known = new Map(survey.questions.map((q) => [q.key, q]));

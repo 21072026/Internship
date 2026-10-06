@@ -102,6 +102,10 @@
     "methods": ["POST"],
     "why": "Unsubscribe from the newsletter straight out of the email (#1469); the signed token is the authorisation. Demanding a password first is how a reader reaches for the spam button instead, which costs the deliverability of every message this app sends, password resets included."
   },
+  "src/app/api/surveys/respond/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "Answering a survey from the mailed link with no login (#1881) — a survey behind a password is a survey nobody answers. The single-use invitation token is the credential (only its hash is stored); both methods are rate-limited, GET never returns an answer, and POST writes one response through the shared validator."
+  },
   "src/app/api/report-subscriptions/unsubscribe/route.ts": {
     "methods": ["POST"],
     "why": "Leave a scheduled report straight out of the e-mail (#1905); the recipient may have no account at all, so the signed token is the authorisation, and it can only switch that one subscription off."
