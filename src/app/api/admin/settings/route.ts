@@ -11,6 +11,7 @@ import { MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 import { findLeadOwner } from '@/lib/leadOwner';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { salesTargetApplies } from '@/lib/salesTargetRule';
+import { resolvePipelineStages } from '@/lib/pipelineStages';
 
 // GET — the EFFECTIVE settings of the caller's tenant: its own row → the global
 // row → the code default (see src/lib/settings.ts). The org is passed
@@ -98,6 +99,11 @@ const schema = z.object({
   // leaderboard switch (leaderboards are a non-goal there).
   salesMonthlyWonTarget: z.string().regex(/^\d{1,4}$/).or(z.literal('')).optional(),
   salesLeaderboardForReps: z.enum(['true', 'false']).optional(),
+  // Evaluation due dates (#1891). The stage is checked below against the
+  // tenant's resolved stages — a key it does not have would silently never fire.
+  evaluationInterimStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
+  evaluationInterimDays: z.string().regex(/^\d{1,3}$/).optional(),
+  evaluationFinalStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
 });
 
 const SALES_TARGET_KEYS = ['salesMonthlyWonTarget', 'salesLeaderboardForReps'] as const;
@@ -136,6 +142,13 @@ export async function PUT(request: Request) {
   const ownerId = parsed.data.defaultLeadOwnerId;
   if (ownerId && !(await findLeadOwner(orgId, ownerId))) {
     return NextResponse.json({ error: 'Validation failed', field: 'defaultLeadOwnerId' }, { status: 400 });
+  }
+
+  for (const field of ['evaluationInterimStage', 'evaluationFinalStage'] as const) {
+    const key = parsed.data[field];
+    if (key && key !== 'off' && !(await resolvePipelineStages(orgId)).some((stage) => stage.key === key)) {
+      return NextResponse.json({ error: 'unknown_stage', field }, { status: 400 });
+    }
   }
 
   const salesKey = SALES_TARGET_KEYS.find((k) => parsed.data[k] !== undefined);

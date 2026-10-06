@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**A MARKETING lead is no longer notified of internal stage moves** (#2781). `emitStageChange` wrote `stage.changed` / `outcome.*` notifications to the relation's mentee on every move; in an org without the `mentorship` capability that person is a prospect with no portal, so the rows were unreadable in-app yet carried the internal funnel (\"Qualified → Negotiation\") into the lead's data export. The mentee half now runs only when the org's vertical has `mentorship`; the rep's `outcome.needsMessage`, the webhook and the SLA refresh are unchanged. Pinned in `e2e/outcome-communication.spec.ts`.",
+  "notes": {
+    "en": ["SaleVali no longer records internal pipeline-stage changes as notifications on a lead's own account."],
+    "tr": ["SaleVali artık iç satış aşaması değişikliklerini müşteri adayının kendi hesabına bildirim olarak yazmıyor."],
+    "de": ["SaleVali legt interne Phasenwechsel nicht mehr als Benachrichtigungen im Konto des Leads ab."]
+  }
+}

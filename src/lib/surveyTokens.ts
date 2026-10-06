@@ -91,8 +91,24 @@ export type ResolvedInvitation = Prisma.SurveyInvitationGetPayload<{ select: typ
 /** null for a token that is not ours or names no invitation; 'expired' past its date. */
 export async function resolveSurveyInvitation(token: string, now = new Date()): Promise<ResolvedInvitation | 'expired' | null> {
   if (!TOKEN_RE.test(token)) return null;
-  const invitation = await prisma.surveyInvitation.findUnique({ where: { tokenHash: hashSurveyToken(token) }, select: INVITATION_SELECT });
+  const tokenHash = hashSurveyToken(token);
+  // The first mail's link, or one a reminder minted (#1889) — every one of
+  // them answers the same invitation, and the invitation is answered once.
+  const invitation =
+    (await prisma.surveyInvitation.findUnique({ where: { tokenHash }, select: INVITATION_SELECT })) ??
+    (await prisma.surveyInvitationToken.findUnique({ where: { tokenHash }, select: { invitation: { select: INVITATION_SELECT } } }))?.invitation ??
+    null;
   if (!invitation) return null;
   if (invitation.expiresAt <= now && !invitation.respondedAt) return 'expired';
   return invitation;
+}
+
+/**
+ * A new link for an existing invitation — what a reminder carries (#1889).
+ * Returned once, never stored; the earlier links keep working.
+ */
+export async function mintInvitationReminderToken(invitationId: string): Promise<string> {
+  const { token, tokenHash } = mintSurveyToken();
+  await prisma.surveyInvitationToken.create({ data: { invitationId, tokenHash } });
+  return token;
 }

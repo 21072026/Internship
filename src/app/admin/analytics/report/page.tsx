@@ -13,6 +13,13 @@ import { formatDate } from '@/lib/relativeTime';
 import type { VerticalCapability } from '@/lib/verticals';
 import type { TrialConversionData } from '@/components/admin/TrialConversionCard';
 import type { SurveyOverviewRow } from '@/lib/surveyOverview';
+import { DealValueTable } from '@/components/admin/DealValueTable';
+import type { DealValueMonth } from '@/lib/dealValue';
+
+type DealValuePayload =
+  | { enabled: false }
+  | { enabled: true; ok: true; currency: string; months: DealValueMonth[] }
+  | { enabled: true; ok: false; error: string; currencies?: string[] };
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -98,6 +105,8 @@ export default function AnalyticsReportPage() {
   const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
   const [sources, setSources] = useState<SourceRow[] | null>(null);
   const [trial, setTrial] = useState<TrialConversionData | null>(null);
+  // The estimated value of won deals (#2424) — MARKETING only (`enabled: false` elsewhere).
+  const [dealValue, setDealValue] = useState<DealValuePayload | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -109,8 +118,10 @@ export default function AnalyticsReportPage() {
       fetch('/api/admin/analytics/sources').then(async (r) => (r.ok ? (await r.json()).sources : null)),
       // Trial → paid (#2556): null for a tenant with no trial stage.
       fetch('/api/admin/analytics/funnel').then(async (r) => (r.ok ? (await r.json()).trialConversion ?? null : null)),
+      fetch('/api/admin/analytics/deal-value').then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([a, co, so, tr]) => {
+      .then(([a, co, so, tr, dv]) => {
+        setDealValue(dv);
         setData(a);
         setCohorts(co ?? []);
         setSources(so ?? []);
@@ -154,6 +165,20 @@ export default function AnalyticsReportPage() {
 
       <ProgramScorecard />
       <SurveysBlock />
+
+      {dealValue?.enabled && (
+        <Section title={t.dealValue.card.title}>
+          {dealValue.ok ? (
+            <DealValueTable months={dealValue.months} currency={dealValue.currency} />
+          ) : (
+            <p className="text-sm text-amber-700" data-testid="report-deal-value-error">
+              {dealValue.error === 'mixed_currency'
+                ? t.dealValue.card.mixedCurrency.replace('{currencies}', (dealValue.currencies ?? []).join(', '))
+                : t.dealValue.card.error}
+            </p>
+          )}
+        </Section>
+      )}
 
       <Section title={c.funnel}>
         <table className="w-full"><thead><tr>

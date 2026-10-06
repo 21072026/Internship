@@ -1,3 +1,4 @@
+import { setOrgFeatureFor } from './helpers/entitlements';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST, signInViaApi } from './helpers/auth';
@@ -125,6 +126,8 @@ test.afterAll(async () => {
   await prisma.user.deleteMany({ where: { id: { in: importedIds } } }).catch(() => {});
   await prisma.company.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.pipelineStage.deleteMany({ where: { orgId } }).catch(() => {});
+  // The export features the series test granted (#2424).
+  await prisma.orgEntitlement.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
   await prisma.$disconnect();
 });
@@ -191,10 +194,30 @@ test('the MARKETING admin sees the monthly estimated series and the editor on th
   // Won in month −2: one new win worth €120.00, and still held since.
   await expect(page.getByTestId(`deal-value-${monthKey(2)}-won`)).toContainText('1');
   await expect(page.getByTestId(`deal-value-${monthKey(2)}-won`)).toContainText('€120.00');
-  await expect(page.getByTestId(`deal-value-${monthKey(3)}-active`)).toHaveText('0');
+  // A month with nothing in it shows "—", never a fabricated 0 (#2424).
+  await expect(page.getByTestId(`deal-value-${monthKey(3)}-active`)).toHaveText('—');
+  await expect(page.getByTestId(`deal-value-${monthKey(3)}-net`)).toHaveText('—');
   // Month −1 adds the chain-to-be won then (€70.00): €190.00 held at its end.
   await expect(page.getByTestId(`deal-value-${monthKey(1)}-won`)).toContainText('€70.00');
   await expect(page.getByTestId(`deal-value-${monthKey(1)}-mrr`)).toContainText('€190.00');
+  // Net change = won − lost, the month-end book's delta (#2424).
+  await expect(page.getByTestId(`deal-value-${monthKey(2)}-net`)).toHaveText('+€120.00');
+  await expect(page.getByTestId(`deal-value-${monthKey(1)}-net`)).toHaveText('+€70.00');
+
+  // The same rows reach both XLSX exports (#2424).
+  await setOrgFeatureFor(page, 'REPORT_EXPORT', true);
+  for (const dataset of ['analytics', 'analytics-full']) {
+    if (dataset === 'analytics-full') await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
+    const exported = await page.request.get(`/api/admin/export/${dataset}`);
+    expect(exported.status(), dataset).toBe(200);
+    const { sheets } = await exported.json();
+    const sheet = sheets.find((x: { name: string }) => x.name === 'Estimated value');
+    expect(sheet, `${dataset} carries the estimated-value sheet`).toBeTruthy();
+    expect(sheet.columns).toContain('Net change (estimated)');
+    const row = sheet.rows.find((r: (string | number)[]) => r[0] === monthKey(1));
+    // month, won n, won value, lost n, lost value, held n, MRR, net, currency
+    expect(row).toEqual([monthKey(1), 1, 70, 0, '—', 2, 190, 70, 'EUR']);
+  }
 
   const api = await page.request.get('/api/admin/analytics/deal-value');
   const series = await api.json();
