@@ -8,6 +8,7 @@ import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { assessRelations, HEALTH_RELATION_SELECT, reminderDaysReader } from '@/lib/relationHealthLive';
 import { buildScorecard, medianOf, percentOf, type ScorecardMetric, type ScorecardRow, SCORECARD_THRESHOLDS } from '@/lib/programScorecard';
 import { npsFromScores } from '@/lib/nps';
+import { evaluationCoverage } from '@/lib/evaluationCoverage';
 import { effectiveMinResponses } from '@/lib/surveyPrivacy';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -144,6 +145,10 @@ export async function loadProgramScorecard(tenant: TenantWhere, now = new Date()
   }
   const nps = npsFromScores(pooled);
   metrics.nps = { value: nps.suppressed ? null : nps.score, basis: nps.n };
+
+  // Evaluation coverage — due 7-90 days ago and written (#1891).
+  const coverage = await evaluationCoverage(tenant, now);
+  metrics.evaluationCoverage = { value: percentOf(coverage.written, coverage.due), basis: coverage.due };
 
   return buildScorecard(metrics);
 }

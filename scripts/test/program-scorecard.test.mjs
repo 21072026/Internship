@@ -44,9 +44,14 @@ test('below the floor, or with nothing counted, a row says "not enough data" —
   assert.equal('value' in by.matchRate, false);
 });
 
-test('indicators without a data source yet are not measurable, with the work that fixes that', () => {
+test('every indicator is measurable now: with no data a row says "not enough data", never "not measurable"', () => {
   const by = Object.fromEntries(buildScorecard({}).map((r) => [r.key, r]));
-  assert.deepEqual(by.evaluationCoverage, { key: 'evaluationCoverage', status: 'not_measurable', dependsOn: [1891] });
+  // #1891 measured the last one.
+  assert.equal(by.evaluationCoverage.status, 'insufficient');
+  assert.equal(buildScorecard({}).some((r) => r.status === 'not_measurable'), false);
+  assert.equal(bandFor('evaluationCoverage', 80), 'GREEN');
+  assert.equal(bandFor('evaluationCoverage', 50), 'AMBER');
+  assert.equal(bandFor('evaluationCoverage', 49), 'RED');
   // The survey indicators became measurable with #1910: no data is "not enough data", not "not measurable".
   assert.equal(by.nps.status, 'insufficient');
   assert.equal(by.surveyResponseRate.status, 'insufficient');
