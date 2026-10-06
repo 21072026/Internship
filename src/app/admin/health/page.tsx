@@ -32,6 +32,8 @@ interface Row {
   stage: { key: string; label: string };
   cohort: { id: string; name: string } | null;
   nextAction: NextAction | null;
+  /** A negative cluster in the newest Insights summary (#2046) — a note, not a reason. */
+  feedbackFlag: { themes: string[]; at: string } | null;
 }
 
 interface HealthResponse {
@@ -278,6 +280,13 @@ export default function AdminHealthPage() {
                           {reasonLabel[r]}
                         </Badge>
                       ))}
+                      {row.feedbackFlag && (
+                        <Link href="/admin/insights" title={h.feedbackFlagHint} data-testid={`health-feedback-${row.relationId}`} className="hover:underline">
+                          <Badge variant="danger" className="text-xs">
+                            {h.feedbackFlag}: {row.feedbackFlag.themes.join(', ')}
+                          </Badge>
+                        </Link>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">

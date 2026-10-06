@@ -13,6 +13,7 @@ import { HEALTH_RULES_VERSION, type HealthBand, type HealthReason } from '@/lib/
 import { assessRelations, HEALTH_RELATION_SELECT, reminderDaysReader, type HealthRelationRow } from '@/lib/relationHealthLive';
 import { crossedIntoRiskSince, healthTrendFrom, utcDay } from '@/lib/relationHealthTrend';
 import { compareHealthRows, nextActionFor, type NextAction } from '@/lib/healthNextAction';
+import { negativeFeedbackFlags } from '@/lib/insights/feedbackFlags';
 
 // GET /api/admin/health — the org-wide at-risk queue (#1902): every ACTIVE
 // relation in the caller's tenant scored NOW with the published rules table,
@@ -87,6 +88,10 @@ export async function GET(request: Request) {
       }
     }
 
+    // Negative open-text clusters (#2046): a NOTE beside a pair, read from the
+    // newest Insights summaries. It lists a pair that has no other reason, but
+    // it never touches the score, the band or anything stored on the relation.
+    const feedback = await negativeFeedbackFlags(settingsOrg, now).catch(() => new Map());
     const [notActive, recent] = await Promise.all([
       prisma.mentorshipRelation.count({ where: withinTenant({ ...narrow, status: { not: 'ACTIVE' as const } }, tenant) }),
       // Two weeks of bands: the 7-day window plus the snapshot before it, so a
@@ -100,18 +105,19 @@ export async function GET(request: Request) {
     for (const s of recent) recentBy.set(s.relationId, [...(recentBy.get(s.relationId) ?? []), s]);
     const since = new Date(utcDay(now).getTime() - 6 * DAY);
 
-    const counts = { HEALTHY: 0, WATCH: 0, AT_RISK: 0, crossed7: 0 };
+    const counts = { HEALTHY: 0, WATCH: 0, AT_RISK: 0, crossed7: 0, feedback: 0 };
     for (const s of scored) {
       counts[s.band]++;
+      if (feedback.has(s.row.id)) counts.feedback++;
       if (crossedIntoRiskSince(recentBy.get(s.row.id) ?? [], since)) counts.crossed7++;
     }
 
     const daysSince = (at: Date | null) => (at ? Math.floor((now.getTime() - at.getTime()) / DAY) : null);
     const listed = scored
-      .filter((s) => s.reasons.length > 0 && (!band || s.band === band))
+      .filter((s) => (s.reasons.length > 0 || feedback.has(s.row.id)) && (!band || s.band === band))
       .map((s) => ({ ...s, relationId: s.row.id, daysSinceContact: daysSince(s.lastContactAt) }))
       .sort(compareHealthRows);
-    const quiet = scored.filter((s) => s.reasons.length === 0 && (!band || s.band === band)).length;
+    const quiet = scored.filter((s) => s.reasons.length === 0 && !feedback.has(s.row.id) && (!band || s.band === band)).length;
     const pageRows = listed.slice((page - 1) * pageSize, page * pageSize);
 
     const pageIds = pageRows.map((r) => r.relationId);
@@ -155,6 +161,7 @@ export async function GET(request: Request) {
         stage: { key: s.row.pipelineStatus, label: label(s.row.pipelineStatus) },
         cohort: s.row.cohortId ? { id: s.row.cohortId, name: cohortName.get(s.row.cohortId) ?? '' } : null,
         nextAction,
+        feedbackFlag: feedback.get(s.relationId) ?? null,
       };
     });
 
