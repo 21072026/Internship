@@ -8217,3 +8217,12 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **On MariaDB you cannot replace a unique whose leftmost column is a foreign key in one `db push`.** Prisma drops the old index before it creates the new one, and MariaDB refuses with `Cannot drop index '…_key': needed in a foreign key constraint`. `check:schema-push` does not catch this, and a fresh topic-env database never shows it. Expand first: give the FK its own `@@index([fk])` in one deploy, then change the unique in the next. Prove a transition by pushing `git show origin/main:prisma/schema.prisma` (via `--schema`) and then the branch schema into a scratch database.
 - **`npx tsc --noEmit` includes `e2e/*.ts`.** A spec that builds a typed literal (for example a `questions` array passed to a zod-typed helper) needs an explicit type annotation, or CI's typecheck fails even though Playwright ran it fine.
 - **Merging two PRs that both appended blocks to the same anchor loses the shared closing lines.** This hit the dictionaries, the route-auth baseline JSON and release-media. Keeping both sides of `<<<<<<< / >>>>>>>` drops one `},`. Re-run `tsc` and `JSON.parse` before committing the merge.
+
+## 2026-10-06 — error-boundary digest → prod log in one grep (#2773)
+- A user screenshot of `RouteErrorBoundary` carries the **digest**; `ssh ubuntu@s.interncrm.com` and
+  `docker logs --since 72h internship-crm 2>&1 | grep -B3 -A25 <digest>` gives the real server stack
+  in seconds — faster than guessing a repro. Here it was a `P2034` deadlock, not navigation logic.
+- Local MariaDB did **not** reproduce the MySQL 8 InnoDB deadlock (6×parallel renders, old code green).
+  For concurrency bugs on prod, the log is the evidence; don't burn time trying to force it locally.
+- A server page that writes on every render (lazy-create upserts) is a deadlock waiting for two
+  concurrent renders (double back, `router.refresh`). Read first, write only when something is missing.
