@@ -9,7 +9,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
-import { expandSlots, matchesSlot, type SlotOccurrence, type WeeklySlot } from '@/lib/availabilitySlots';
+import { expandSlots, matchesSlot, type AvailabilityExceptionRange, type SlotOccurrence, type WeeklySlot } from '@/lib/availabilitySlots';
 
 interface MReq {
   id: string;
@@ -53,6 +53,8 @@ export function MeetingRequestsPanel({
   // gets free-text requests, which is how this worked before.
   const [slots, setSlots] = useState<WeeklySlot[] | null>(null);
   const [slotZone, setSlotZone] = useState<string | null>(null);
+  // The mentor's away windows (#2001): no hour on those dates is offered.
+  const [awayDates, setAwayDates] = useState<AvailabilityExceptionRange[]>([]);
   // A picked occurrence is kept as an exact instant, NOT as a datetime-local
   // string. The slot's wall clock belongs to the mentor's zone; round-tripping
   // it through the date field would re-read it on the mentee's clock and move
@@ -81,6 +83,7 @@ export function MeetingRequestsPanel({
         if (cancelled) return;
         setSlots(d.slots ?? []);
         setSlotZone(d.timezone ?? null);
+        setAwayDates(d.exceptions ?? []);
       })
       // A failed read must not strand the form: fall back to free text rather
       // than leaving the picker in a permanent loading state (#1374's shape).
@@ -123,7 +126,7 @@ export function MeetingRequestsPanel({
 
   // Concrete date-times from the mentor's weekly hours. Recomputed on render is
   // fine: the list is at most `limit` entries and the maths is arithmetic.
-  const offers = slots && slots.length > 0 ? expandSlots(slots, slotZone, { from: new Date(), weeks: 3, limit: 12 }) : [];
+  const offers = slots && slots.length > 0 ? expandSlots(slots, slotZone, { from: new Date(), weeks: 3, limit: 12, exceptions: awayDates }) : [];
   const hasOffers = offers.length > 0;
 
   const statusLabel = (s: string) => (t.portal.meetingRequests.status as Record<string, string>)[s] ?? s;

@@ -73,7 +73,7 @@
  *   EvaluationTemplate/Criterion, Goal.status/dates, Project, ProjectMember,
  *   ProjectTaskTemplate, Cohort, CompanyNeed, CompanyNeedAlert, Requisition,
  *   Meeting timing/RSVP, MeetingSeries(+Reminder, +OccurrenceEnd),
- *   AvailabilitySlot, Conversation(+Participant), MessageReaction,
+ *   AvailabilitySlot (+Exception), Conversation(+Participant), MessageReaction,
  *   MessageHiddenFor, Setting, CompanyEntitlement, AiUsage, DocumentRequirement
  *   (+Reminder), WeeklyReportReminder, Offer status/dates.
  */
