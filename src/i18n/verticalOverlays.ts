@@ -50,6 +50,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The ROI screen's donated-time inputs (#1895), in the rep wording.
+      roi: {
+        screen: {
+          mentorHours: 'Unbilled rep hours to price',
+          hints: {
+            mentorHourValue: 'Prices donated rep time so a volunteer-run programme does not look free.',
+            mentorHours: 'Leave at 0 unless your organisation counts donated rep time as a cost.',
+          },
+        },
+      },
       // #1376: the MARKETING home title comes from the root layout's own
       // branch; these keep the internship copy out of the resolved dictionary.
       seo: {
@@ -642,6 +652,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      // ROI ekranının gönüllü zaman alanları (#1895), temsilci diliyle.
+      roi: {
+        screen: {
+          mentorHours: 'Fiyatlandırılacak ücretsiz temsilci saati',
+          hints: {
+            mentorHourValue: 'Gönüllü temsilci zamanını fiyatlar; gönüllülerle yürüyen bir program bedava görünmesin.',
+            mentorHours: 'Kurumunuz gönüllü temsilci zamanını maliyet saymıyorsa 0 bırakın.',
+          },
+        },
+      },
       seo: {
         homeTitle: 'SaleVali — Pazarlama CRM',
         homeDescription: 'Müşterileri ilk temastan kapanışa kadar bir pazarlama hattında izleyen CRM.',
@@ -1092,6 +1112,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      // Die Eingaben für gespendete Zeit auf der ROI-Seite (#1895), im Vertriebs-Wortlaut.
+      roi: {
+        screen: {
+          mentorHours: 'Unbezahlte Vertriebsstunden, die bewertet werden',
+          hints: {
+            mentorHourValue: 'Bewertet gespendete Vertriebszeit, damit ein ehrenamtlich getragenes Programm nicht kostenlos wirkt.',
+            mentorHours: 'Bei 0 lassen, sofern Ihre Organisation gespendete Vertriebszeit nicht als Kosten zählt.',
+          },
+        },
+      },
       seo: {
         homeTitle: 'SaleVali — Marketing-CRM',
         homeDescription: 'Ein CRM, das Kunden durch eine Marketing-Pipeline begleitet – vom ersten Kontakt bis zum Abschluss.',
