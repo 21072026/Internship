@@ -77,6 +77,11 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ReportSubscriptionSend',
   // Relationship-health snapshots (#1901).
   'RelationHealthSnapshot',
+  // Surveys (#1879). SurveyQuestion and SurveyAnswer are reached only
+  // through a scoped parent and are deliberately not listed (schema comment).
+  'Survey',
+  'SurveyInvitation',
+  'SurveyResponse',
   'Requisition',
   'InterviewRequest',
   'MessageTemplate',
