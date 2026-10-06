@@ -186,9 +186,13 @@ export async function sweepMeetingInteractionLogs(now: Date = new Date()) {
     take: SWEEP_BATCH,
   });
 
-  let logged = 0;
+  // The ids it logged are the meetings nobody marked as ended — exactly the
+  // ones whose mentee gets the one "how was it?" e-mail (#1896,
+  // askForMeetingFeedback), sent by the caller so this module stays free of
+  // the mail layer.
+  const loggedIds: string[] = [];
   for (const meeting of meetings) {
-    if (await logMeetingInteraction(meeting)) logged++;
+    if (await logMeetingInteraction(meeting)) loggedIds.push(meeting.id);
   }
-  return { scanned: meetings.length, logged };
+  return { scanned: meetings.length, logged: loggedIds.length, loggedIds };
 }

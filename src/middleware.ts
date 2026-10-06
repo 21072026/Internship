@@ -43,6 +43,9 @@ function isAllowlisted(pathname: string) {
     pathname === '/api/contact-permission/opt-out' ||
     // Leaving a scheduled report (#1905) — same argument, exact path.
     pathname === '/api/report-subscriptions/unsubscribe' ||
+    // The one-click "how was the meeting?" links (#1896): the signed token is
+    // the credential. A prefix with the trailing slash, so only token paths match.
+    pathname.startsWith('/api/meeting-feedback/') ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.

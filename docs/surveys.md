@@ -74,3 +74,34 @@ default floor is `SURVEY_MIN_RESPONSES = 5`; a survey may raise it
 Admin API: `GET/POST /api/admin/surveys`, `GET/PATCH /api/admin/surveys/[id]`.
 The builder screen, login-free answering (#1881) and campaigns (#1887) build
 on this.
+
+## Meeting feedback (#1896)
+
+The smallest survey in the product: after a relation meeting, each of its two
+people is asked **at most two questions** — did it take place, and how helpful
+was it (1–5). `MeetingFeedback` holds one row per (meeting, rater); answering
+again updates it.
+
+- **Ask once, in two places.** An inline card right after "mark meeting ended"
+  (`MeetingFeedbackCard`, in the dashboard banner), and — when nobody ended the
+  meeting — one e-mail to the mentee from the auto-log sweep
+  (`askForMeetingFeedback`, `src/lib/meetingFeedback.ts`). The sweep claims the
+  meeting row (`Meeting.feedbackAskedAt`) before mailing, so a second sweep
+  asks nobody; a mentee who answered in the app is not asked at all. External
+  `MeetingGuest` invitees are never asked — no account, no relation.
+- **One click, no login.** Each button in the mail is its own signed link
+  (`src/lib/meetingFeedbackToken.ts`, its own HMAC domain). The link opens
+  `/meeting-feedback/<token>`, which records the rating from the browser;
+  `GET /api/meeting-feedback/<token>` only reads, because mail scanners
+  prefetch links.
+- **"We didn't meet" is its own answer.** It counts in `happenedRate` and never
+  in `avgHelpfulness`.
+- **Visibility.** A rater reads their own answer. A mentor reads only
+  `GET /api/mentor/meeting-feedback` — the aggregate of what *other* people
+  said about their meetings, `null` under the response floor, never a rating,
+  a rater or a note. `meetingQualityFor(relationId, windowDays)` is the health
+  score's input and returns `null` under the floor as well.
+- **Free.** No entitlement check anywhere: what is asked is the participant's
+  own experience. The mail is category `meeting-feedback` in the
+  *task reminders* group, so it can be switched off without silencing the
+  meeting reminders.
