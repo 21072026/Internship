@@ -4757,6 +4757,8 @@ const en = {
     empty: 'No interactions to summarize yet.',
     consentRequired: 'The mentee has not allowed AI summaries. They can enable it under Account → Privacy & consent.',
     quotaExceeded: 'The monthly AI quota is exhausted. An admin can raise it in Settings.',
+    // #2024: the provider failed even after its retries — not the user's doing.
+    providerError: 'The AI service is not answering right now. Please try again in a few minutes.',
   },
   cvFeedback: {
     title: 'AI CV feedback',
@@ -11366,6 +11368,7 @@ const tr: Dict = {
     empty: 'Özetlenecek etkileşim yok.',
     consentRequired: 'Mentee AI özetlerine izin vermemiş. Hesap → Gizlilik ve onay bölümünden açabilir.',
     quotaExceeded: 'Aylık AI kotası doldu. Admin, Ayarlar’dan artırabilir.',
+    providerError: 'AI hizmeti şu an yanıt vermiyor. Lütfen birkaç dakika sonra tekrar dene.',
   },
   cvFeedback: {
     title: 'AI CV geri bildirimi',
@@ -17944,6 +17947,7 @@ const de: Dict = {
     empty: 'Noch keine Interaktionen zum Zusammenfassen.',
     consentRequired: 'Der Mentee hat KI-Zusammenfassungen nicht erlaubt. Aktivierbar unter Konto → Datenschutz & Einwilligung.',
     quotaExceeded: 'Das monatliche KI-Kontingent ist aufgebraucht. Ein Admin kann es in den Einstellungen erhöhen.',
+    providerError: 'Der KI-Dienst antwortet gerade nicht. Bitte versuche es in ein paar Minuten noch einmal.',
   },
   cvFeedback: {
     title: 'KI-Feedback zum Lebenslauf',

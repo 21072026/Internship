@@ -6,6 +6,10 @@
 // returned unchanged (graceful fallback).
 
 import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
+import { safeParseModelJson } from '@/lib/ai/provider';
+
+const MATCH_REPLY = z.object({ ranking: z.array(z.object({ label: z.string(), reason: z.string() })) });
 
 // A generation that has not answered in a minute is not going to.
 const AI_TIMEOUT_MS = 60_000;
@@ -55,7 +59,7 @@ export async function aiRankMentors(
   // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
   // enough to hold a request handler open until the user gives up (#895).
   // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS });
+  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
   const payload = {
     mentee: { skills: mentee.skills, targetPosition: mentee.targetPosition ?? '', interests: mentee.interests ?? '' },
     mentors: candidates.map((c) => ({
@@ -74,8 +78,8 @@ export async function aiRankMentors(
     messages: [{ role: 'user', content: JSON.stringify(payload) }],
   });
   const block = res.content.find((b) => b.type === 'text');
-  const parsed = JSON.parse(block && block.type === 'text' ? block.text : '{"ranking":[]}') as {
-    ranking: { label: string; reason: string }[];
-  };
-  return Array.isArray(parsed.ranking) ? parsed.ranking : [];
+  // Not the JSON asked for → no AI ranking (the rule-based order stands), and
+  // the call is recorded as parse_error (#2024).
+  const parsed = safeParseModelJson(block && block.type === 'text' ? block.text : null, MATCH_REPLY, { ranking: [] });
+  return parsed.ranking;
 }

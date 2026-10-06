@@ -9,6 +9,17 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { capSkills } from '@/lib/skills';
+import { z } from 'zod';
+import { safeParseModelJson } from '@/lib/ai/provider';
+
+// The reply's shape, loosely: every field optional, so a partial answer still
+// yields what it has.
+const CV_REPLY = z
+  .object({
+    fullName: z.string(), city: z.string(), university: z.string(), department: z.string(), targetPosition: z.string(),
+    phone: z.string(), linkedinUrl: z.string(), githubUrl: z.string(), portfolioUrl: z.string(), skills: z.array(z.string()),
+  })
+  .partial();
 
 // A generation that has not answered in a minute is not going to.
 const AI_TIMEOUT_MS = 60_000;
@@ -65,7 +76,7 @@ export async function aiExtractFromText(text: string): Promise<AiCvSuggestions> 
   // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
   // enough to hold a request handler open until the user gives up (#895).
   // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS });
+  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
   const trimmed = text.slice(0, MAX_INPUT_CHARS);
 
   const res = await client.messages.create({
@@ -77,8 +88,9 @@ export async function aiExtractFromText(text: string): Promise<AiCvSuggestions> 
   });
 
   const block = res.content.find((b) => b.type === 'text');
-  const raw = block && block.type === 'text' ? block.text : '{}';
-  const parsed = JSON.parse(raw) as Partial<AiCvSuggestions>;
+  // A reply that is not the JSON asked for falls back to "no suggestions" and
+  // is recorded as parse_error (#2024) — never a thrown 500.
+  const parsed: Partial<AiCvSuggestions> = safeParseModelJson(block && block.type === 'text' ? block.text : null, CV_REPLY, {});
 
   return {
     fullName: parsed.fullName ?? '',
