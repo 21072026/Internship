@@ -9,7 +9,8 @@ import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib/googleCalendarSync';
 import { durationMinutesField, meetingEnd } from '@/lib/meetingDuration';
-import { conflictBody, findConflictFor, lockParticipants, recordForcedBooking } from '@/lib/busyWindows';
+import { conflictBody, findConflictFor, lockParticipants, recordForcedBooking, EXTERNAL_PAD_MS, type ExternalBusy } from '@/lib/busyWindows';
+import { providerBusy } from '@/lib/calendarFreeBusy';
 import type { BusyWindow } from '@/lib/busyWindowsRule';
 import { findPolicyViolation, policyBody, policyExempt, recordPolicyOverride } from '@/lib/bookingPolicy';
 import type { PolicyViolation } from '@/lib/bookingPolicyRule';
@@ -283,6 +284,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Only an admin or the mentor may book over a conflict' }, { status: 403 });
     }
     const pairs = retimed ? targets.flatMap((t) => (t.relation ? [t.relation.mentorId, t.relation.menteeId] : [])) : [];
+    // The pairs' real calendars (#1997), fetched before the lock is taken.
+    let external: ExternalBusy = new Map();
+    if (pairs.length > 0) {
+      const starts = targets.map((t) => (when ?? t.scheduledAt)?.getTime()).filter((x): x is number => x != null);
+      if (starts.length) {
+        const longest = Math.max(...targets.map((t) => (durationMinutes ?? t.durationMinutes ?? 60) * 60_000));
+        external = await providerBusy(pairs, new Date(Math.min(...starts) - EXTERNAL_PAD_MS), new Date(Math.max(...starts) + longest + EXTERNAL_PAD_MS));
+      }
+    }
     const outcome = await prisma.$transaction(
       async (tx) => {
         let forcedOver: BusyWindow | null = null;
@@ -297,6 +307,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             const conflict = await findConflictFor(tx, session.user, [t.relation.mentorId, t.relation.menteeId], window, {
               excludeMeetingIds: ids,
               excludeBatchKey: row.batchKey ?? undefined,
+              external,
             });
             if (conflict && !force) return { conflict };
             forcedOver ??= conflict;
@@ -304,7 +315,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             // session moved is one booking for them, not one per row.
             if (ruled.has(t.relation.mentorId) || policyExempt(session.user, t.relation.mentorId)) continue;
             ruled.add(t.relation.mentorId);
-            const violation = await findPolicyViolation(tx, { mentorId: t.relation.mentorId, start: window.start, end: window.end, excludeMeetingIds: ids, excludeBatchKey: row.batchKey ?? undefined });
+            const violation = await findPolicyViolation(tx, { mentorId: t.relation.mentorId, start: window.start, end: window.end, excludeMeetingIds: ids, excludeBatchKey: row.batchKey ?? undefined, external });
             if (violation && !force) return { policy: violation };
             forcedRule ??= violation;
           }

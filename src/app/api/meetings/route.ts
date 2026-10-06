@@ -243,7 +243,7 @@ export async function POST(request: Request) {
             excludeBatchKey: batchKey,
             // The mentor's own bookings are exempt from their rules; an admin
             // is bound by them unless they force it (recorded below).
-            extraCheck: policyExempt(session.user, rel.mentorId) ? undefined : (tx) => findPolicyViolation(tx, { mentorId: rel.mentorId, start: when, end, excludeBatchKey: batchKey }),
+            extraCheck: policyExempt(session.user, rel.mentorId) ? undefined : (tx, external) => findPolicyViolation(tx, { mentorId: rel.mentorId, start: when, end, excludeBatchKey: batchKey, external }),
           },
           (tx) => tx.meeting.create({ data }),
         );

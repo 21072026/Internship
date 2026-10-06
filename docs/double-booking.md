@@ -78,3 +78,36 @@ mentor. On `PATCH`, a mentor who only created the meeting gets a 403. It is
 and over what. In the UI, the conflict notice offers "Book anyway" on the
 scheduling screens. It never offers it on the request form, because a requester
 cannot force.
+
+## Suggested times (#1999)
+
+`GET /api/meetings/suggested-times?relationId=&duration=&count=` is the
+proposing side of the same data. It returns times that work for both people:
+
+1. the mentor's posted hours, including one-offs, minus away windows (#2001),
+   sliced to the meeting length;
+2. minus every attendee's busy windows, with the mentor's widened by their
+   buffer (#2003);
+3. inside **08:00–20:00 on each attendee's own clock**, because a slot at 03:00
+   for the mentee is not a suggestion;
+4. within the mentor's notice period and caps;
+5. ranked soonest first, with an on-the-hour start counted ahead of a :30 start
+   up to 45 minutes earlier.
+
+`src/lib/suggestTimes.ts` is pure and takes the busy windows as an argument. Its
+unit tests (`scripts/test/suggest-times.test.mjs`) cover ranking, two zones and a
+DST change.
+
+**Who may ask:** an admin of the org, the pair's mentor, or the mentee of an
+ACTIVE relation. Anyone else gets a 404. The answer contains only instants and
+each person's zone. A busy hour is simply not offered, with no title and no
+reason given.
+
+**When nothing is free**, the `reason` names the binding constraint:
+`no_hours`, `all_taken`, `outside_hours` or `limit_reached`.
+
+**UI:** a *Suggested times* strip above the date fields in
+`MeetingSchedulerPanel` and in the mentee's request panel. Each chip is shown on
+the viewer's clock, and the selected one expands into `AttendeeTimes`. Picking a
+chip only fills the form. The booking goes through the screen's existing POST,
+so the conflict guard and the booking rules still apply.
