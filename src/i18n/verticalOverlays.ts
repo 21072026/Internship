@@ -275,6 +275,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Bulk import people',
         importModeMentees: 'People (leads)',
       },
+      // The report registry (#1903): the mentorship-only reports are refused for
+      // a tenant without `mentorship`, but the column labels are shared.
+      reports: {
+        mentorWorkload: { title: 'Rep workload', description: 'Active deals per rep and how many reached the final stage.' },
+        weeklyReportCompliance: { description: 'Owed, handed-in, missing and late weekly reports per person this term.' },
+        col: { mentor: 'Rep', intern: 'Person' },
+      },
       analytics: {
         subtitle: 'Funnel, rep workload and activity insights',
         cohortTotal: 'Leads',
@@ -831,6 +838,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Toplu kişi içe aktar',
         importModeMentees: 'Kişiler (lead)',
       },
+      // Rapor kaydı (#1903): mentorluk raporları `mentorship` yeteneği olmayan
+      // kiracıya kapalı, ama sütun etiketleri ortak.
+      reports: {
+        mentorWorkload: { title: 'Temsilci iş yükü', description: 'Temsilci başına aktif fırsatlar ve kaçının son aşamaya ulaştığı.' },
+        weeklyReportCompliance: { description: 'Bu dönem kişi başına beklenen, teslim edilen, eksik ve geç haftalık raporlar.' },
+        col: { mentor: 'Temsilci', intern: 'Kişi' },
+      },
       analytics: {
         subtitle: 'Satış hunisi, temsilci iş yükü ve etkinlik içgörüleri',
         cohortTotal: 'Müşteri adayı',
@@ -1274,6 +1288,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         // MARKETING org's leads — so the card says people.
         bulkImport: 'Personen im Stapel importieren',
         importModeMentees: 'Personen (Leads)',
+      },
+      // The report registry (#1903): the mentorship-only reports are refused for
+      // a tenant without `mentorship`, but the column labels are shared.
+      reports: {
+        mentorWorkload: { title: 'Vertriebler-Auslastung', description: 'Aktive Deals je Vertriebler und wie viele die letzte Phase erreicht haben.' },
+        weeklyReportCompliance: { description: 'Fällige, abgegebene, fehlende und verspätete Wochenberichte je Person im laufenden Zeitraum.' },
+        col: { mentor: 'Vertriebler', intern: 'Person' },
       },
       analytics: {
         subtitle: 'Funnel, Auslastung der Vertriebsmitarbeiter und Aktivitäts-Insights',

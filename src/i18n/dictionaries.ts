@@ -1194,6 +1194,25 @@ const en = {
     nothingSelected: 'Select at least one invitation first.',
     failed: 'The action could not be completed.',
   },
+  // The report registry (#1903) — titles, descriptions and column labels of the
+  // named reports in src/lib/reports/definitions.ts. `npm run check:reports`
+  // fails on a key a definition names but this block lacks.
+  reports: {
+    pipelineFunnel: { title: 'Pipeline funnel', description: 'How many records sit in each stage of your pipeline right now.' },
+    cohortComparison: { title: 'Cohort comparison', description: 'Outcomes per cohort: in progress, reached the final stage, dropped, conversion and average time to the final stage.' },
+    sourceConversion: { title: 'Source conversion', description: 'How many people each source brought in and how many of them reached the final stage.' },
+    mentorWorkload: { title: 'Mentor workload', description: 'Active relations per mentor and how many reached the final stage.' },
+    placementOutcomes: { title: 'Placement outcomes', description: 'Placements per company and how many of them have a recorded value.' },
+    weeklyReportCompliance: { title: 'Weekly report compliance', description: 'Owed, handed-in, missing and late weekly reports per intern this term.' },
+    col: {
+      stage: 'Stage', count: 'Count', cohort: 'Cohort', total: 'Total', inProgress: 'In progress', reachedOutcome: 'Reached final stage',
+      dropped: 'Dropped', conversion: 'Conversion', avgDaysToOutcome: 'Avg. days to final stage', source: 'Source', inPipeline: 'In pipeline',
+      mentor: 'Mentor', active: 'Active', company: 'Company', placements: 'Placements', valued: 'With recorded value',
+      intern: 'Intern', expected: 'Owed', submitted: 'Handed in', missing: 'Missing', late: 'Late', rate: 'Rate',
+    },
+    suppressedBucket: 'Groups under {n} people (combined)',
+    floorNote: 'Groups with fewer than {n} people are combined into one row so that no individual can be singled out. Totals still add up.',
+  },
   // /admin/weekly-reports (#1918): the coordinator’s compliance matrix,
   // chase-up and accreditation booklet. Rendered only for an org with the
   // `mentorship` capability (gatePage + the nav link’s capability).
@@ -7348,6 +7367,22 @@ const tr: Dict = {
     nothingSelected: 'Önce en az bir davet seçin.',
     failed: 'İşlem tamamlanamadı.',
   },
+  reports: {
+    pipelineFunnel: { title: 'Pipeline hunisi', description: 'Pipeline\'ınızın her aşamasında şu anda kaç kayıt olduğu.' },
+    cohortComparison: { title: 'Grup karşılaştırması', description: 'Grup başına sonuçlar: devam eden, son aşamaya ulaşan, ayrılan, dönüşüm ve son aşamaya ortalama süre.' },
+    sourceConversion: { title: 'Kaynak dönüşümü', description: 'Her kaynağın kaç kişi getirdiği ve bunların kaçının son aşamaya ulaştığı.' },
+    mentorWorkload: { title: 'Mentor iş yükü', description: 'Mentor başına aktif ilişkiler ve kaçının son aşamaya ulaştığı.' },
+    placementOutcomes: { title: 'Yerleştirme sonuçları', description: 'Şirket başına yerleştirmeler ve kaçının kayıtlı bir değeri olduğu.' },
+    weeklyReportCompliance: { title: 'Haftalık rapor uyumu', description: 'Bu dönem stajyer başına beklenen, teslim edilen, eksik ve geç haftalık raporlar.' },
+    col: {
+      stage: 'Aşama', count: 'Sayı', cohort: 'Grup', total: 'Toplam', inProgress: 'Devam eden', reachedOutcome: 'Son aşamaya ulaşan',
+      dropped: 'Ayrılan', conversion: 'Dönüşüm', avgDaysToOutcome: 'Son aşamaya ort. gün', source: 'Kaynak', inPipeline: 'Pipeline\'da',
+      mentor: 'Mentor', active: 'Aktif', company: 'Şirket', placements: 'Yerleştirme', valued: 'Kayıtlı değeri olan',
+      intern: 'Stajyer', expected: 'Beklenen', submitted: 'Teslim', missing: 'Eksik', late: 'Geç', rate: 'Oran',
+    },
+    suppressedBucket: '{n} kişiden küçük gruplar (birleştirildi)',
+    floorNote: '{n} kişiden az olan gruplar, hiç kimse tek başına ayırt edilemesin diye tek satırda birleştirilir. Toplamlar yine tutar.',
+  },
   adminWeeklyReports: {
     title: 'Haftalık raporlar',
     subtitle: 'Dönem boyunca her stajyerin haftalık raporları: kim teslim etti, kim geride, gerideki kişilere tek tıkla hatırlatma.',
@@ -13361,6 +13396,22 @@ const de: Dict = {
     dismiss: 'Schließen',
     nothingSelected: 'Wählen Sie zuerst mindestens eine Einladung aus.',
     failed: 'Die Aktion konnte nicht ausgeführt werden.',
+  },
+  reports: {
+    pipelineFunnel: { title: 'Pipeline-Trichter', description: 'Wie viele Datensätze gerade in jeder Phase Ihrer Pipeline stehen.' },
+    cohortComparison: { title: 'Kohortenvergleich', description: 'Ergebnisse je Kohorte: laufend, letzte Phase erreicht, abgebrochen, Konversion und durchschnittliche Dauer bis zur letzten Phase.' },
+    sourceConversion: { title: 'Quellen-Konversion', description: 'Wie viele Personen jede Quelle gebracht hat und wie viele davon die letzte Phase erreicht haben.' },
+    mentorWorkload: { title: 'Mentoren-Auslastung', description: 'Aktive Beziehungen je Mentor und wie viele die letzte Phase erreicht haben.' },
+    placementOutcomes: { title: 'Vermittlungsergebnisse', description: 'Vermittlungen je Unternehmen und wie viele davon einen erfassten Wert haben.' },
+    weeklyReportCompliance: { title: 'Wochenbericht-Abgaben', description: 'Fällige, abgegebene, fehlende und verspätete Wochenberichte je Praktikant im laufenden Zeitraum.' },
+    col: {
+      stage: 'Phase', count: 'Anzahl', cohort: 'Kohorte', total: 'Gesamt', inProgress: 'Laufend', reachedOutcome: 'Letzte Phase erreicht',
+      dropped: 'Abgebrochen', conversion: 'Konversion', avgDaysToOutcome: 'Ø Tage bis zur letzten Phase', source: 'Quelle', inPipeline: 'In der Pipeline',
+      mentor: 'Mentor', active: 'Aktiv', company: 'Unternehmen', placements: 'Vermittlungen', valued: 'Mit erfasstem Wert',
+      intern: 'Praktikant', expected: 'Fällig', submitted: 'Abgegeben', missing: 'Fehlend', late: 'Verspätet', rate: 'Quote',
+    },
+    suppressedBucket: 'Gruppen unter {n} Personen (zusammengefasst)',
+    floorNote: 'Gruppen mit weniger als {n} Personen werden in einer Zeile zusammengefasst, damit niemand einzeln erkennbar ist. Die Summen stimmen weiterhin.',
   },
   adminWeeklyReports: {
     title: 'Wochenberichte',
