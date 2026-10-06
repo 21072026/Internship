@@ -168,6 +168,7 @@ model Organization {
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
   surveyCampaigns         SurveyCampaign[]
+  meetingAttendance       MeetingAttendance[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
   surveyResponses         SurveyResponse[]
@@ -546,6 +547,8 @@ model User {
   // Report subscriptions this user receives (#1905); removed with the user.
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
+  attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
+  attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
   surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
   meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
@@ -2654,6 +2657,8 @@ model MentorshipRelation {
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
   meetings              Meeting[]
+  // Who attended its meetings (#2014), kept even when a meeting is deleted.
+  attendance            MeetingAttendance[]
   messages              Message[]
   evaluations           Evaluation[]
   // INTERIM/FINAL due dates and their reminders (#1891).
@@ -2679,6 +2684,10 @@ model MentorshipRelation {
   meetingSeries         MeetingSeries[]
   // Nightly health snapshots (#1901); removed with the relation.
   healthSnapshots       RelationHealthSnapshot[]
+
+  // The promised meeting cadence, in weeks (#2014); null = no promise made,
+  // so the pair is never "off cadence" (src/lib/meetingCadence.ts).
+  expectedMeetingIntervalWeeks Int?
 
   @@index([status])
   @@index([lifecycleState])
@@ -3112,6 +3121,7 @@ model Meeting {
   googleEvents GoogleCalendarEventLink[]
   guests       MeetingGuest[]
   feedback     MeetingFeedback[]
+  attendance   MeetingAttendance[]
 
   @@index([relationId])
   @@index([projectId])
@@ -3169,6 +3179,57 @@ model MeetingGuest {
 
 // A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;
 // manually scheduled meetings leave seriesId null (backward-compatible).
+// Who actually turned up (#2014) — THE attendance vocabulary of the schema.
+// Group events (#1856) reuse this enum on their own registration row; never
+// declare a second one.
+enum AttendanceState {
+  ATTENDED
+  NO_SHOW
+  // Cancelled inside the late-cancel window (setting `lateCancelHours`) —
+  // derived when the meeting is cancelled, never typed by anyone.
+  LATE_CANCEL
+  EXCUSED
+}
+
+// One person's attendance at one meeting (#2014). Two shapes, like
+// MeetingOccurrenceEnd: a Meeting row (`meetingId`), or a recurring occurrence
+// that has no row (`seriesId` + `occurrenceAt`); each has its own unique, so
+// nothing is recorded twice. `meetingId` is SetNull — deleting the meeting
+// must not delete the record that someone did not show up (the PersonalNote /
+// InteractionLog precedent), and `relationId` keeps it attached to the pair.
+// Who recorded it is always stored; the mentor's record wins over the
+// mentee's (src/lib/meetingAttendance.ts).
+model MeetingAttendance {
+  id               String              @id @default(cuid())
+  orgId            String?
+  org              Organization?       @relation(fields: [orgId], references: [id])
+  meetingId        String?
+  meeting          Meeting?            @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  seriesId         String?
+  series           MeetingSeries?      @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  occurrenceAt     DateTime?
+  relationId       String?
+  relation         MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // When the meeting was due to start — kept here so the cadence figures still
+  // count a meeting whose row was deleted.
+  meetingAt        DateTime
+  userId           String
+  user             User                @relation("AttendanceSubject", fields: [userId], references: [id], onDelete: Cascade)
+  state            AttendanceState
+  recordedById     String
+  recordedBy       User                @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: Cascade)
+  recordedAt       DateTime            @default(now())
+  note             String?             @db.VarChar(500)
+  // The one neutral "we missed you" note to a no-show (#2014) — stamped so it
+  // is sent exactly once, however often the record is edited.
+  noShowNotifiedAt DateTime?
+
+  @@unique([meetingId, userId])
+  @@unique([seriesId, occurrenceAt, userId])
+  @@index([orgId])
+  @@index([relationId, meetingAt])
+}
+
 model MeetingSeries {
   id              String    @id @default(cuid())
   projectId       String?
@@ -3210,6 +3271,7 @@ model MeetingSeries {
   meetings      Meeting[]
   reminders     MeetingSeriesReminder[]
   ends          MeetingOccurrenceEnd[]
+  attendance    MeetingAttendance[]
   // The one recurring Google event per connected member (#2654).
   calendarLinks GoogleCalendarEventLink[]
 
