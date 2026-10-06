@@ -8205,3 +8205,9 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   buysa sorun yok.
 - **Yerel MariaDB `/api/cron`'un paralel işlerinde 1020 ("Record has changed since last read")
   verir**; CI/prod MySQL 8 vermez. Yerel smoke'taki bu kırmızı bir regresyon değil.
+
+## 2026-10-06 — release compaction unstuck (#2323)
+
+- **Manual compaction needs full history:** this container's clone is shallow (`git rev-parse --is-shallow-repository` → true); run `git fetch --unshallow origin` before `node scripts/release-compact.mjs`, or the stamps are wrong/fail closed. After `main` gains models/deps, `npx prisma generate` before `tsc`, or you get bogus type errors.
+- **A greyed-out repo checkbox in Settings → Actions means the ORG forbids it.** "Allow GitHub Actions to create and approve pull requests" must be ticked and saved at `orgs/21072026/settings/actions` first; each section has its own Save. It is now on (both levels) — `release-compact.yml` opened its own PR (#2762) for the first time.
+- `gh` in this container had an invalid `GH_TOKEN`; the GitHub MCP tools still work, and public run status/logs are readable with plain `curl https://api.github.com/repos/21072026/Internship/actions/...`.
