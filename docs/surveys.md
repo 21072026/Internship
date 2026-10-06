@@ -142,7 +142,7 @@ MENTOR or BOTH) gets **which** survey **when**.
 | `DAYS_AFTER_START` | `dayOffset` days after the relation started | `day:<n>` |
 | `DAYS_BEFORE_END` | `dayOffset` days before the relation's stage deadline (a moved deadline is a new period) | `before:<deadline day>` |
 | `MANUAL` | once to the whole active audience, as soon as the campaign is active | `manual` |
-| `RECURRING` | every `everyDays` days — **not yet enabled**, see below | `pulse:<n>` |
+| `RECURRING` | every `everyDays` days (7–365), one round per period from the campaign's creation day | `pulse:<n>` |
 
 `dispatchDueSurveyCampaigns()` (`src/lib/surveyCampaigns.ts`, daily 10:00 UTC
 from `/api/cron/start`, and `GET /api/cron?job=surveys` for an admin's own org):
@@ -158,15 +158,15 @@ from `/api/cron/start`, and `GET /api/cron?job=surveys` for an admin's own org):
   `surveys` e-mail group, and a person who switched it off (or an inactive
   account) is not claimed and not invited.
 
-**Why RECURRING waits (expand → contract).** A pulse needs one invitation per
-person *per round*, so `SurveyInvitation`'s unique has to become
-`[surveyId, email, round]`. MariaDB refuses to drop the old
-`[surveyId, email]` unique while the `surveyId` foreign key is served by it
-(`Cannot drop index … needed in a foreign key constraint`), and Prisma drops
-before it creates — so a one-step change would fail the deploy. This change is
-the **expand** step: the `round` column and a dedicated `@@index([surveyId])`.
-The **contract** step widens the unique and flips `RECURRING_ENABLED`; until
-then the API refuses RECURRING with `recurring_not_yet`.
+**How RECURRING got here (expand → contract).** A pulse needs one invitation
+per person *per round*, so `SurveyInvitation`'s unique is
+`[surveyId, email, round]`. It used to be `[surveyId, email]`, and MariaDB
+refuses to drop a unique the `surveyId` foreign key is served by
+(`Cannot drop index … needed in a foreign key constraint`) — Prisma drops
+before it creates, so a one-step change fails the deploy. It shipped in two
+deploys: #1887 added the `round` column and a dedicated `@@index([surveyId])`
+(the **expand**), #2769 widened the unique and switched RECURRING on (the
+**contract**). Keep that index: it is what lets the unique change again.
 
 ## Results (#1910)
 
