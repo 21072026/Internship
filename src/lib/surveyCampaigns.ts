@@ -37,13 +37,6 @@ import { formatDate } from '@/lib/relativeTime';
 import { emailBrand, sendEmail } from '@/services/emailService';
 
 export const SWEEP_BATCH = 50;
-/**
- * RECURRING needs one invitation per person per ROUND, which needs
- * SurveyInvitation's unique widened to [surveyId, email, round] — the contract
- * step of an expand -> contract change (prisma/schema.prisma). Until it lands
- * the API refuses RECURRING campaigns and the sweep never runs one.
- */
-export const RECURRING_ENABLED = false;
 export const LOOKBACK_DAYS = 7;
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -133,7 +126,7 @@ export async function dueCampaignTargets(now = new Date(), opts: { orgIds?: stri
         break;
       }
       case 'RECURRING': {
-        if (!RECURRING_ENABLED || !campaign.everyDays || campaign.everyDays < 1) break;
+        if (!campaign.everyDays || campaign.everyDays < 1) break;
         // Round n starts at createdAt + n·everyDays; round 0 is the first sweep.
         const round = Math.floor((utcDay(now).getTime() - utcDay(campaign.createdAt).getTime()) / (campaign.everyDays * DAY));
         const rels = await prisma.mentorshipRelation.findMany({ where: { ...scope, status: 'ACTIVE' }, select: relSelect });
