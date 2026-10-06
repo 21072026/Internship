@@ -42,8 +42,9 @@ anything that could allow it (`canReadIndividualResponse`,
 `src/lib/surveyPrivacy.ts`).
 
 **Anonymous means severed at the write.** `submitSurveyResponse()`
-(`src/lib/surveys.ts`) writes `respondentId = NULL` and `invitationId = NULL`
-on an anonymous response; it stamps the invitation's `respondedAt` in the same
+(`src/lib/surveys.ts`) writes `respondentId = NULL`, `invitationId = NULL` and
+`relationId = NULL` on an anonymous response (the relation names the mentee
+just as well as their id does — #1910 closed that gap); it stamps the invitation's `respondedAt` in the same
 transaction, so completion tracking and reminders still work without any record
 of which answer came from whom. `e2e/survey-schema.spec.ts` reads the row back
 from the database to prove it.
@@ -54,8 +55,10 @@ from the database to prove it.
 > next to it is hidden too, so nobody can be worked out by subtraction.**
 
 `applyResponseFloor()` hides every bucket under the floor *with its count*, and
-when exactly one bucket would be hidden next to a published total it hides the
-smallest shown bucket as well. An "everyone else" bucket gets no exemption. The
+while the hidden buckets together add up to fewer than the floor it hides the
+smallest shown bucket as well — next to a published total, the hidden ones
+can be recovered *as a group* by subtraction (#1879 did this only for a single
+hidden bucket, so buckets of 1 and 2 were readable as a group of 3; #1910). An "everyone else" bucket gets no exemption. The
 default floor is `SURVEY_MIN_RESPONSES = 5`; a survey may raise it
 (`minResponses`), never lower it — the API refuses a lower value and
 `effectiveMinResponses()` enforces it again on read.
@@ -126,3 +129,31 @@ again updates it.
   own experience. The mail is category `meeting-feedback` in the
   *task reminders* group, so it can be switched off without silencing the
   meeting reminders.
+
+## Results (#1910)
+
+`/admin/surveys` lists the surveys with their response counts;
+`/admin/surveys/[id]/results` (API: `GET /api/admin/surveys/[id]/results`,
+ADMIN only, tenant-scoped, 404 for another tenant's survey) shows one. Every
+rule is applied in `loadSurveyResults()` (`src/lib/surveyResults.ts`) before a
+number leaves the server — the screen only draws what it gets:
+
+- **Under the floor, nothing but counts.** With fewer responses than the
+  survey's floor the result is the total and how many answered each question —
+  no score, no distribution, no free text.
+- **NPS** (`src/lib/nps.ts`): 9–10 promoter, 7–8 passive, 0–6 detractor,
+  score = % promoters − % detractors, rounded once. The **week-by-week trend**
+  is a breakdown like any other — next to the overall score a lone hidden week
+  could be recovered by subtraction — so the weeks go through
+  `applyResponseFloor`, residual included, and a hidden week carries no count.
+- **Breakdowns** of the first NPS question by respondent role, cohort and
+  mentor go through `applyResponseFloor`, and a hidden group is **not sent at
+  all** — not even its key: "Mentor X: hidden" already says Mentor X has fewer
+  than five. The response says only that some were held back. Cohort and
+  mentor breakdowns exist only where responses carry a relation, so an
+  ANONYMOUS survey has none.
+- **Free text** is an unattributed list sorted alphabetically, never in
+  arrival order (which could be matched to a known time).
+
+Per-question distributions of a survey that passed the floor are shown in
+full: they are counts over at least *floor* people, not a group of them.

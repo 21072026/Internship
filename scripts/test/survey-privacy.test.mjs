@@ -42,8 +42,15 @@ test('the floor: small buckets are hidden with their count, and so is the residu
   const out = applyResponseFloor([{ key: 'a', n: 12 }, { key: 'b', n: 7 }, { key: 'c', n: 3 }]);
   assert.deepEqual(out.map((b) => [b.key, b.suppressed]), [['a', false], ['b', true], ['c', true]]);
   assert.equal('n' in out[2], false, 'a suppressed bucket carries no count');
-  // Two small buckets already protect each other: nothing extra is hidden.
-  assert.deepEqual(applyResponseFloor([{ key: 'a', n: 20 }, { key: 'b', n: 2 }, { key: 'c', n: 1 }]).map((b) => b.suppressed), [false, true, true]);
+  // Two small buckets that reach the floor together protect each other…
+  assert.deepEqual(applyResponseFloor([{ key: 'a', n: 20 }, { key: 'b', n: 3 }, { key: 'c', n: 3 }]).map((b) => b.suppressed), [false, true, true]);
+  // …two that do not (1 + 2 = 3, readable as a group by subtraction) take the
+  // smallest shown bucket with them (#1910).
+  assert.deepEqual(applyResponseFloor([{ key: 'a', n: 20 }, { key: 'b', n: 2 }, { key: 'c', n: 1 }]).map((b) => b.suppressed), [true, true, true]);
+  assert.deepEqual(
+    applyResponseFloor([{ key: 'a', n: 20 }, { key: 'd', n: 6 }, { key: 'b', n: 2 }, { key: 'c', n: 1 }]).map((b) => b.suppressed),
+    [false, true, true, true],
+  );
   // An "everyone else" bucket gets no exemption.
   assert.equal(applyResponseFloor([{ key: 'cohort-x', n: 9 }, { key: 'everyone-else', n: 4 }]).every((b) => b.suppressed), true);
   // Nothing small: everything shown.

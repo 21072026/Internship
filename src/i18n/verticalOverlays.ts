@@ -70,6 +70,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         profileMentorTitle: '{name}',
         profileMenteeTitle: '{name}',
       },
+      // Survey results (#1910): the breakdown labels name the roles, so they
+      // take the same rep/lead words as everywhere else.
+      surveyResults: {
+        byMentor: 'By sales rep',
+        noRelationBreakdowns: 'Anonymous responses carry no cohort or owner, so those breakdowns do not exist for this survey.',
+        role_MENTEE: 'Leads',
+        role_MENTOR: 'Sales reps',
+      },
       nav: { candidates: 'Leads', companyInquiries: 'Demo requests', myCompanies: 'My accounts' },
       // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
       // mentor yet / Mentor" on the screen a rep uses most.
@@ -672,6 +680,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
+      surveyResults: {
+        byMentor: 'Satış temsilcisine göre',
+        noRelationBreakdowns: 'Anonim yanıtlar dönem ya da sorumlu bilgisi taşımaz; bu yüzden bu ankette o kırılımlar yok.',
+        role_MENTEE: 'Müşteri adayları',
+        role_MENTOR: 'Satış temsilcileri',
+      },
       nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
       invite: {
         subtitle: 'Satış temsilcilerini ve müşteri adaylarını davet et',
@@ -1129,6 +1143,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         applyAsMentorDescription: 'Bewerben Sie sich für das Programm.',
         profileMentorTitle: '{name}',
         profileMenteeTitle: '{name}',
+      },
+      surveyResults: {
+        byMentor: 'Nach Vertriebsmitarbeiter',
+        noRelationBreakdowns: 'Anonyme Antworten tragen weder Kohorte noch Zuständige, deshalb gibt es diese Aufschlüsselungen für diese Umfrage nicht.',
+        role_MENTEE: 'Leads',
+        role_MENTOR: 'Vertriebsmitarbeiter',
       },
       nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
       invite: {

@@ -129,6 +129,7 @@ const OUTBOUND: Route[] = shell(
   '/admin/announcements',
   '/admin/newsletters',
   '/admin/testimonials',
+  '/admin/surveys',
   '/admin/email',
   '/admin/documents'
 );
