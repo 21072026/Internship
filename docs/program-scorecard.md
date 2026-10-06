@@ -32,10 +32,11 @@ Bands are inclusive on the good side: a value **at** the green line is green.
 | `meetingCadence` | active relationships older than 30 days with a non-cancelled meeting in the last 30, % | 70 | higher is better | 50 | `/admin/meetings` |
 | `stalledPairs` | active relationships older than 60 days with no stage change in 60 days, % | 10 | lower is better | 25 | `/admin/health` |
 | `atRisk` | active relationships in the AT_RISK band of the published health rules (`docs/relationship-health.md`), % | 10 | lower is better | 20 | `/admin/health?band=AT_RISK` |
+| `surveyResponseRate` | survey invitations sent 7–90 days ago (both reminders have had their chance) that were answered, % | 50 | higher is better | 30 | `/admin/surveys` |
+| `nps` | Net Promoter Score (−100..100) of the last 90 days, every survey's first NPS question pooled — a survey counts only once its own answers reach its own floor (#1910) | 30 | higher is better | 0 | `/admin/surveys` |
 
 ## Not yet measurable
 
 | Key | Needs |
 |---|---|
 | `evaluationCoverage` | stage-triggered evaluation due dates (#1891) — without a due date there is no "outstanding" |
-| `surveyResponseRate`, `nps` | stored survey responses and their analytics (#1910); the response floor applies once they exist |
