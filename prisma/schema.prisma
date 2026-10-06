@@ -169,6 +169,7 @@ model Organization {
   surveys                 Survey[]
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
+  aiArtifacts             AiArtifact[]
   meetingAttendance       MeetingAttendance[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
@@ -551,6 +552,7 @@ model User {
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
   savedViews                        SavedView[]                   @relation("SavedViewAuthor")
+  aiArtifacts                       AiArtifact[]                  @relation("AiArtifactSubject")
   attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
   surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
@@ -2131,6 +2133,39 @@ model AiUsage {
 
   @@index([createdAt])
   @@index([scope])
+  @@index([orgId, createdAt])
+}
+
+// What an AI call PRODUCED (#2044) — AiUsage above is the meter (that a call
+// happened); this is the artefact, so a result survives a reload, can be shared
+// with a mentor, and an identical request inside the task's TTL is answered
+// from here without a provider call or a unit of quota. Written by
+// runAiGated's `persist` option; read and shared through src/lib/ai/artifacts.ts.
+//
+// `subjectUserId` — whose data it is about — is a REAL relation with
+// onDelete: Cascade (unlike AiUsage.userId), so erasing the person erases what
+// was generated about them. `taskId` is runAiGated's `scope` until the #2022
+// registry exists. `visibility`: PRIVATE | SHARED_WITH_MENTOR | SHARED_WITH_ADMIN.
+model AiArtifact {
+  id            String        @id @default(cuid())
+  orgId         String?
+  org           Organization? @relation(fields: [orgId], references: [id])
+  taskId        String        @db.VarChar(64)
+  subjectUserId String?
+  subject       User?         @relation("AiArtifactSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+  relationId    String?
+  requisitionId String?
+  createdById   String
+  inputHash     String        @db.VarChar(64)
+  content       String        @db.Text
+  contentJson   Json?
+  model         String?       @db.VarChar(80)
+  visibility    String        @default("PRIVATE") @db.VarChar(24)
+  pinned        Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+
+  @@index([subjectUserId, taskId, createdAt])
+  @@index([inputHash])
   @@index([orgId, createdAt])
 }
 

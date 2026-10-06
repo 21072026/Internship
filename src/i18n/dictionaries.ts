@@ -4828,6 +4828,13 @@ const en = {
     // #2024: the provider failed even after its retries — not the user's doing.
     providerError: 'The AI service is not answering right now. Please try again in a few minutes.',
   },
+  aiArtifact: {
+    generatedAt: 'Generated {date}',
+    savedCopy: 'Your saved copy. Nothing was recalculated.',
+    regenerate: 'Regenerate',
+    sharedTitle: 'AI notes shared with you',
+    tasks: { cv_feedback: 'CV feedback', interview_prep: 'Interview prep', interaction_summary: 'Summary', mentor_suggest: 'Match rationale' },
+  },
   cvFeedback: {
     title: 'AI CV feedback',
     hint: 'Get constructive suggestions to improve your CV — strengths, improvements and missing sections.',
@@ -6050,7 +6057,7 @@ const en = {
     humanTitle: 'A person decides, always',
     humanBody: 'No model sets a pipeline stage, accepts or rejects anyone, makes an offer or changes an account. Mentor matching is ranked first by a plain rule — shared skills, then who has room — and the model only re-orders that shortlist and adds one sentence of reasoning; an administrator reads it and chooses. Reading a CV proposes values you apply field by field, or do not. Anything that touches a hiring decision is reviewed by a human before that decision is made.',
     retentionTitle: 'What is kept',
-    retentionBody: 'Neither what is sent nor what comes back is stored. Generated text is shown in your browser and is gone when you reload; the one exception is a CV field you deliberately apply to your profile, which is then an ordinary profile field. For each call we store a single metering row — which feature, when, which account — with no prompt, no output and no excerpt of either, so the monthly limit can be counted without keeping anyone’s CV.',
+    retentionBody: 'What is sent to the provider is never stored. Your CV feedback and interview prep are kept, so they are still there after a reload: only you can see them unless you choose to share them, the same request within a week is answered from the saved copy, and they are deleted after your organisation’s retention period or together with your account. Other generated text is shown in your browser and is gone when you reload; the one exception is a CV field you deliberately apply to your profile. For each call we also store a metering row (which feature, when, which account) with no prompt and no output, so the monthly limit can be counted.',
     markerTitle: 'How to recognise generated text',
     markerBody: 'Everything a model wrote carries a ✨ marker labelled “AI”, a description for screen readers and — where it is prose you might act on — a line reminding you to check it. If a piece of text in this product is not marked, a person or a plain rule produced it.',
     notYetTitle: 'What we do not have yet',
@@ -6131,6 +6138,7 @@ const en = {
     back: 'Back to home',
   },
   portal: {
+    aiShare: { share: 'Share with my mentor', shared: 'Shared with your mentor', unshare: 'Stop sharing' },
     welcome: 'Welcome',
     dashSubtitle: 'Your internship dashboard',
     tabs: {
@@ -11552,6 +11560,13 @@ const tr: Dict = {
     quotaExceeded: 'Aylık AI kotası doldu. Admin, Ayarlar’dan artırabilir.',
     providerError: 'AI hizmeti şu an yanıt vermiyor. Lütfen birkaç dakika sonra tekrar dene.',
   },
+  aiArtifact: {
+    generatedAt: '{date} tarihinde oluşturuldu',
+    savedCopy: 'Kayıtlı kopyan. Hiçbir şey yeniden hesaplanmadı.',
+    regenerate: 'Yeniden oluştur',
+    sharedTitle: 'Seninle paylaşılan yapay zekâ notları',
+    tasks: { cv_feedback: 'CV geri bildirimi', interview_prep: 'Mülakat hazırlığı', interaction_summary: 'Özet', mentor_suggest: 'Eşleştirme gerekçesi' },
+  },
   cvFeedback: {
     title: 'AI CV geri bildirimi',
     hint: 'CV’ni geliştirmek için yapıcı öneriler al — güçlü yanlar, iyileştirmeler ve eksik bölümler.',
@@ -12760,7 +12775,7 @@ const tr: Dict = {
     humanTitle: 'Kararı her zaman bir insan verir',
     humanBody: 'Hiçbir model bir hat aşaması belirlemez, kimseyi kabul veya reddetmez, teklif vermez, hesap durumu değiştirmez. Mentor eşleştirmesi önce düz bir kuralla sıralanır — ortak yetkinlikler, sonra yeri olan — ve model yalnızca bu kısa listeyi yeniden sıralayıp birer cümlelik gerekçe ekler; okuyup karar veren yöneticidir. CV okuma, alan alan uygulayacağın (ya da uygulamayacağın) değerler önerir. İşe alım kararına dokunan her şey, karar verilmeden önce bir insan tarafından gözden geçirilir.',
     retentionTitle: 'Ne saklanıyor',
-    retentionBody: 'Ne gönderilen ne de dönen metin saklanır. Üretilen metin tarayıcında gösterilir ve sayfayı yenilediğinde kaybolur; tek istisna, bilerek profiline uyguladığın bir CV alanıdır — o da artık sıradan bir profil alanıdır. Her çağrı için tek bir ölçüm satırı tutarız: hangi özellik, ne zaman, hangi hesap. İstem, çıktı ya da bunlardan bir alıntı yok — böylece aylık limit, kimsenin CV’si saklanmadan sayılabilir.',
+    retentionBody: 'Sağlayıcıya gönderilen hiçbir şey saklanmaz. CV geri bildirimin ve mülakat hazırlığın saklanır, böylece sayfayı yenilediğinde de yerinde durur: sen paylaşmayı seçmedikçe yalnızca sen görürsün, bir hafta içindeki aynı istek kayıtlı kopyadan cevaplanır ve kurumunun saklama süresi dolunca ya da hesabınla birlikte silinir. Üretilen diğer metinler tarayıcında gösterilir ve yenileyince kaybolur; tek istisna, bilerek profiline uyguladığın bir CV alanıdır. Her çağrı için ayrıca bir ölçüm satırı tutarız (hangi özellik, ne zaman, hangi hesap), istem ve çıktı olmadan, böylece aylık limit sayılabilir.',
     markerTitle: 'Üretilmiş metni nasıl tanırsın',
     markerBody: 'Bir modelin yazdığı her şey, “AI” etiketli bir ✨ işareti, ekran okuyucular için bir açıklama ve — üzerine hareket edebileceğin bir metinse — kontrol etmeni hatırlatan bir satır taşır. Üründe işaretlenmemiş bir metni bir insan ya da düz bir kural üretmiştir.',
     notYetTitle: 'Henüz sahip olmadıklarımız',
@@ -12841,6 +12856,7 @@ const tr: Dict = {
     back: 'Ana sayfaya dön',
   },
   portal: {
+    aiShare: { share: 'Mentörümle paylaş', shared: 'Mentörünle paylaşıldı', unshare: 'Paylaşımı durdur' },
     welcome: 'Hoş geldin',
     dashSubtitle: 'Staj panonuz',
     tabs: {
@@ -18245,6 +18261,13 @@ const de: Dict = {
     quotaExceeded: 'Das monatliche KI-Kontingent ist aufgebraucht. Ein Admin kann es in den Einstellungen erhöhen.',
     providerError: 'Der KI-Dienst antwortet gerade nicht. Bitte versuche es in ein paar Minuten noch einmal.',
   },
+  aiArtifact: {
+    generatedAt: 'Erstellt am {date}',
+    savedCopy: 'Deine gespeicherte Fassung. Nichts wurde neu berechnet.',
+    regenerate: 'Neu erstellen',
+    sharedTitle: 'Mit dir geteilte KI-Notizen',
+    tasks: { cv_feedback: 'CV-Feedback', interview_prep: 'Interviewvorbereitung', interaction_summary: 'Zusammenfassung', mentor_suggest: 'Begründung der Zuordnung' },
+  },
   cvFeedback: {
     title: 'KI-Feedback zum Lebenslauf',
     hint: 'Erhalte konstruktive Vorschläge zur Verbesserung deines Lebenslaufs — Stärken, Verbesserungen und fehlende Abschnitte.',
@@ -19454,7 +19477,7 @@ const de: Dict = {
     humanTitle: 'Entschieden wird immer von Menschen',
     humanBody: 'Kein Modell setzt eine Pipeline-Stufe, nimmt jemanden an oder lehnt jemanden ab, macht ein Angebot oder ändert ein Konto. Das Mentoren-Matching wird zuerst nach einer einfachen Regel sortiert — gemeinsame Fähigkeiten, dann freie Kapazität — und das Modell ordnet diese kurze Liste nur neu und ergänzt je einen Satz Begründung; lesen und entscheiden tut ein Mensch. Das Lesen des Lebenslaufs schlägt Werte vor, die du Feld für Feld übernimmst oder eben nicht. Alles, was eine Einstellungsentscheidung berührt, wird vor dieser Entscheidung von einem Menschen geprüft.',
     retentionTitle: 'Was gespeichert wird',
-    retentionBody: 'Weder das Gesendete noch das Zurückkommende wird gespeichert. Erzeugter Text erscheint in deinem Browser und ist beim Neuladen weg; die einzige Ausnahme ist ein Feld aus dem Lebenslauf, das du bewusst in dein Profil übernimmst — danach ist es ein ganz normales Profilfeld. Pro Aufruf speichern wir eine einzige Zeile zur Abrechnung: welche Funktion, wann, welches Konto. Kein Prompt, keine Ausgabe, kein Auszug davon — so lässt sich das Monatslimit zählen, ohne den Lebenslauf von irgendjemandem aufzubewahren.',
+    retentionBody: 'Was an den Anbieter geht, wird nie gespeichert. Dein CV-Feedback und deine Interviewvorbereitung werden aufbewahrt, damit sie nach dem Neuladen noch da sind: Nur du siehst sie, solange du sie nicht teilst, dieselbe Anfrage innerhalb einer Woche wird aus der gespeicherten Fassung beantwortet, und sie werden nach der Aufbewahrungsfrist deiner Organisation oder zusammen mit deinem Konto gelöscht. Anderer erzeugter Text erscheint in deinem Browser und ist beim Neuladen weg; die einzige Ausnahme ist ein Feld aus dem Lebenslauf, das du bewusst in dein Profil übernimmst. Pro Aufruf speichern wir zusätzlich eine Abrechnungszeile (welche Funktion, wann, welches Konto) ohne Prompt und ohne Ausgabe, damit das Monatslimit gezählt werden kann.',
     markerTitle: 'Wie du erzeugten Text erkennst',
     markerBody: 'Alles, was ein Modell geschrieben hat, trägt eine ✨-Markierung mit dem Kürzel „AI“, eine Beschreibung für Screenreader und — wo es Fließtext ist, auf den du hin handeln könntest — eine Zeile, die dich ans Prüfen erinnert. Ist ein Text im Produkt nicht markiert, stammt er von einem Menschen oder einer einfachen Regel.',
     notYetTitle: 'Was wir noch nicht haben',
@@ -19535,6 +19558,7 @@ const de: Dict = {
     back: 'Zurück zur Startseite',
   },
   portal: {
+    aiShare: { share: 'Mit meiner Mentorin / meinem Mentor teilen', shared: 'Mit deiner Mentorin / deinem Mentor geteilt', unshare: 'Nicht mehr teilen' },
     welcome: 'Willkommen',
     dashSubtitle: 'Dein Praktikums-Dashboard',
     tabs: {

@@ -6,6 +6,7 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
+import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 
 // AI CV feedback for the mentee (Faz 2, #535). Free for the mentee — quota
 // exhaustion shows a neutral "temporarily unavailable", never a paywall.
@@ -16,24 +17,40 @@ export function CvFeedback() {
   const c = t.cvFeedback;
   const [state, setState] = useState<{ configured: boolean; hasCv: boolean; consent: boolean } | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  // The kept feedback (#2044): shown on mount, with when it was written.
+  const [artifact, setArtifact] = useState<ArtifactInfo | null>(null);
+  const [cached, setCached] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/cv/feedback').then((r) => (r.ok ? r.json() : null)).then(setState).catch(() => {});
+    fetch('/api/cv/feedback')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        setState(d);
+        if (d?.latest) {
+          setFeedback(d.latest.content);
+          setArtifact(d.latest);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   if (!state || !state.configured || !state.hasCv) return null;
 
-  const run = async () => {
+  const run = async (regenerate = false) => {
     setLoading(true);
     setNotice(null);
     try {
-      const res = await fetch('/api/cv/feedback', { method: 'POST' });
+      const res = await fetch('/api/cv/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(regenerate ? { regenerate: true } : {}) });
       const body = await res.json();
       if (res.ok) {
         if (body.empty) setNotice(c.empty);
-        else setFeedback(body.feedback);
+        else {
+          setFeedback(body.feedback);
+          setArtifact(body.artifact ?? null);
+          setCached(!!body.cached);
+        }
       } else if (body.code === 'consent_required') {
         setNotice(c.consentRequired);
       } else {
@@ -56,7 +73,7 @@ export function CvFeedback() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{c.hint}</p>
         </div>
         {state.consent ? (
-          <Button type="button" variant="outline" size="sm" loading={loading} onClick={run}>
+          <Button type="button" variant="outline" size="sm" loading={loading} onClick={() => run()}>
             <Sparkles className="h-4 w-4 mr-1" /> {c.button}
           </Button>
         ) : (
@@ -72,6 +89,7 @@ export function CvFeedback() {
               deserves to know a model wrote it (#2034). */}
           <AiBadge note className="mb-2" />
           <div className="whitespace-pre-line">{feedback}</div>
+          {artifact && <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={state.consent ? () => run(true) : undefined} regenerating={loading} canShare />}
         </div>
       )}
     </div>
