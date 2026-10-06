@@ -291,9 +291,35 @@ export async function conversationForRelation(relation: { id: string; mentorId: 
 // Creates the project's single GROUP conversation on first use and reconciles
 // all current ProjectMember rows into its participant list. The compound unique
 // key keeps concurrent callers idempotent at database level.
+//
+// The inbox calls this for every project on every render, so the common case —
+// room exists, every member already in it — must not write at all. It used to
+// upsert unconditionally, and two renders of /messages racing each other (a
+// double tap on "back", a live refresh landing mid-navigation) deadlocked in
+// InnoDB on the participant `createMany` and threw P2034 into the error
+// boundary. A write that is still needed is retried on that deadlock.
 export async function createOrGetProjectConversation(projectId: string) {
   if (!projectId) return null;
   const memberIds = await projectMemberIds(projectId);
+  const existing = await prisma.conversation.findUnique({
+    where: { type_projectId: { type: 'GROUP', projectId } },
+    include: CONVERSATION_INCLUDE,
+  });
+  if (existing) {
+    const present = new Set(existing.participants.map((p) => p.userId));
+    if (memberIds.every((id) => present.has(id))) return existing;
+  }
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await upsertProjectConversation(projectId, memberIds);
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') || attempt >= 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25 * attempt));
+    }
+  }
+}
+
+async function upsertProjectConversation(projectId: string, memberIds: string[]) {
   try {
     return await prisma.conversation.upsert({
       where: { type_projectId: { type: 'GROUP', projectId } },
