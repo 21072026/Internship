@@ -67,6 +67,12 @@ export async function loadCompanyDetail({
           orderBy: [{ name: 'asc' }, { id: 'asc' }],
           select: CONTACT_SELECT,
         },
+        // The marketplaces, shop systems and carriers it works on (#2408).
+        channels: {
+          where: withinTenant({}, tenant),
+          orderBy: { channel: 'asc' },
+          select: { channel: true, status: true },
+        },
         // May we contact this account, and the proof (#2577). The row carries
         // its own orgId: filtered on it like the relations below.
         contactPermissions: {

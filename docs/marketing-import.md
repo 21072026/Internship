@@ -67,7 +67,7 @@ checked per field: a value past its cap is a row-level `ERROR`, never a silent t
 | `monthly_transactions` (`transactions`, `bestellungen`) | no | whole number; `.`/`,`/spaces allowed as grouping | *nothing yet* |
 | `mrr` (`monthly_revenue`) | no | money; `1.250,00` and `1,250.50` both read, parsed to integer minor units | *nothing yet* |
 | `owner_email` (`owner`, `betreuer`) | no | e-mail of an `ADMIN`/`MENTOR` in this org; blank = `--owner` | `MentorshipRelation.mentorId` |
-| `channels` (`kanale`, `kanallar`) | no | `;`-separated list, trimmed and de-duplicated (`Amazon;eBay;OTTO`) | *nothing yet* — #2408 |
+| `channels` (`kanale`, `kanallar`) | no | `;`-separated list, trimmed and de-duplicated (`Amazon;eBay;OTTO`). Each name must resolve to the vocabulary in `src/lib/salesChannels.ts` (aliases: `Amazon FBA`, `ebay.de`, `Shopware 6` …); an unknown one fails the row with the valid list | `CompanyChannel` rows, status `USING` — **additive**: a re-run adds what is missing and never removes a channel or changes a status set on the account page (#2408) |
 | `contact_name` (`ansprechpartner`) | no | free text, ≤ 191 | `Company.contactName` **and** the lead's `User.fullName` |
 | `contact_email` (`email`, `e-mail`) | no | an address; `@import.local` / `@erased.local` refused | `Company.contactEmail`. It is also the lead person's **identity** for matching — but a lead this importer *creates* is stored under a generated stand-in address, never this one (see "What it writes") |
 | `contact_phone` (`telefon`, `phone`) | no | free text, ≤ 40; compared by normalised digits, so a re-spelling is not a change | `Company.contactPhone` **and** the lead's `User.phone` |
@@ -138,11 +138,11 @@ board are labels.
 
 ### Columns with no home yet
 
-`legal_name`, `website`, `monthly_transactions`, `mrr` and `channels` are part of the
+`legal_name`, `website`, `monthly_transactions` and `mrr` are part of the
 contract: they are **validated** (a malformed `mrr` fails its row now, not in six months)
 and carried into the run report, and the CLI prints the list up front. They are not
-persisted, because no column holds them yet — sales channels are #2408, revenue and volume
-belong with metering.
+persisted, because no column holds them yet — revenue and volume belong with metering.
+(Sales channels used to be on this list; since #2408 they land in `CompanyChannel`.)
 
 They are **not** silently dropped: `--report=<path>` writes the complete per-row JSON,
 including these fields, and the same file can simply be replayed once the column lands.
@@ -479,7 +479,7 @@ Organization    : <org id>                                ← the tenant it writ
 Pipeline stages : LEAD_NEW, LEAD_CONTACTED, …             ← what the `stage` column may hold
 Field policy    : fill gaps only                          ← "authoritative (overwrites)" with the flag
 Columns known   : name, legal_name, country, …
-Not stored yet  : legal_name, website, monthly_transactions, mrr, channels — …
+Not stored yet  : legal_name, website, monthly_transactions, mrr — …
 ```
 
 and then the rows. This is the real output for a four-line synthetic file:

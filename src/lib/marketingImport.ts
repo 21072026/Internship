@@ -58,6 +58,7 @@ import { normalizeEmailKey, normalizeNameKey, normalizePhoneKey } from './duplic
 import { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './menteeAccount';
 import { planFieldUpdates } from './externalSyncPolicy';
 import { typedSourceName } from './leadSourceName';
+import { channelLabelList, channelsToAdd, resolveChannel } from './salesChannels';
 import { parseMinorUnits } from './money';
 import { DEAL_VALUE_MAX_MINOR } from './dealValue';
 import { TEXT_LIMITS } from './textLimits';
@@ -105,7 +106,7 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
   { field: 'monthlyTransactions', header: 'monthly_transactions', required: false, aliases: ['transactions', 'bestellungen'], target: null },
   { field: 'mrr', header: 'mrr', required: false, aliases: ['monthly_revenue'], target: null },
   { field: 'ownerEmail', header: 'owner_email', required: false, aliases: ['owner', 'betreuer'], target: 'MentorshipRelation.mentorId' },
-  { field: 'channels', header: 'channels', required: false, aliases: ['kanale', 'kanallar'], target: null },
+  { field: 'channels', header: 'channels', required: false, aliases: ['kanale', 'kanallar'], target: 'CompanyChannel (USING, additive)' },
   { field: 'contactName', header: 'contact_name', required: false, aliases: ['ansprechpartner'], target: 'Company.contactName + User.fullName' },
   { field: 'contactEmail', header: 'contact_email', required: false, aliases: ['email', 'e-mail'], target: 'Company.contactEmail + User.email' },
   { field: 'contactPhone', header: 'contact_phone', required: false, aliases: ['telefon', 'phone'], target: 'Company.contactPhone + User.phone' },
@@ -152,8 +153,8 @@ export const MARKETING_IMPORT_COLUMNS: readonly MarketingColumnSpec[] = [
  * Columns the contract accepts, validates and reports — and that no column in
  * the schema holds yet. They are NOT silently dropped: they ride in the row's
  * `value`, so the run report (`--report`) is a complete record of the file and
- * the same file can be replayed once the column lands. Sales channels are
- * #2408; revenue/volume belong to the metering epic.
+ * the same file can be replayed once the column lands. Revenue/volume belong
+ * to the metering epic. (Sales channels landed in #2408: `CompanyChannel`.)
  */
 export const MARKETING_COLUMNS_WITHOUT_TARGET: readonly string[] = MARKETING_IMPORT_COLUMNS.filter(
   (c) => c.target === null,
@@ -515,6 +516,15 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
     // inside its transaction as a generic write failure.
     if (mrrMinor !== null && mrrMinor > DEAL_VALUE_MAX_MINOR) return reject(`mrr is too large: "${rawMrr}"`);
 
+    // Channels resolve to the ONE vocabulary (src/lib/salesChannels.ts); a name
+    // we do not know is refused with the list, never skipped in silence (#2408).
+    const channels: string[] = [];
+    for (const name of parseChannels(read('channels'))) {
+      const channelKey = resolveChannel(name);
+      if (!channelKey) return reject(`channel "${name}" is not a known sales channel (${channelLabelList()})`);
+      if (!channels.includes(channelKey)) channels.push(channelKey);
+    }
+
     const rawContactEmail = read('contactEmail');
     const contactEmail = rawContactEmail.toLowerCase();
     if (contactEmail && !looksLikeEmail(contactEmail)) return reject(`contact_email is not an address: "${rawContactEmail}"`);
@@ -566,7 +576,7 @@ export function makeMarketingValidator(context: MarketingValidateContext) {
       monthlyTransactions,
       mrrMinor,
       ownerEmail,
-      channels: parseChannels(read('channels')),
+      channels,
       contactName: read('contactName'),
       contactEmail,
       contactPhone: read('contactPhone'),
@@ -637,6 +647,8 @@ export interface MarketingAccountTarget {
   contactPhone: string | null;
   /** Optional only so a snapshot built before #2554 still reads; the store selects it. */
   externalId?: string | null;
+  /** The account's channel keys today (#2408). Optional so an older snapshot still reads. */
+  channels?: string[];
 }
 
 export interface MarketingLeadTarget {
@@ -798,6 +810,8 @@ export interface MarketingPlanValue {
     changed: string[];
     /** Fields the file disagreed with and was not allowed to overwrite. */
     withheld: string[];
+    /** Channel keys the account does not carry yet (#2408); written as USING. */
+    channelsToAdd?: string[];
   };
   funnel: MarketingFunnelPlan | null;
   /** Non-fatal notes on a row that still lands. */
@@ -1225,6 +1239,10 @@ export function diffMarketingAccounts(
       accountChanged = Object.keys(incoming).filter((f) => incoming[f as keyof MarketingAccountWrite] !== undefined);
     }
 
+    // Additive: a file never removes a channel nor touches a status a person set.
+    const newChannels = channelsToAdd(value.channels, target?.channels ?? []);
+    if (newChannels.length > 0) accountChanged = [...accountChanged, 'channels'];
+
     const funnel = planFunnel(value, target, {
       leadByEmail,
       relations: snapshot.relations,
@@ -1273,7 +1291,13 @@ export function diffMarketingAccounts(
       ...(reason ? { reason } : {}),
       value: {
         input: value,
-        account: { targetId: target?.id ?? null, changes: accountChanges, changed: accountChanged, withheld },
+        account: {
+          targetId: target?.id ?? null,
+          changes: accountChanges,
+          changed: accountChanged,
+          withheld,
+          ...(newChannels.length > 0 ? { channelsToAdd: newChannels } : {}),
+        },
         funnel,
         warnings,
       },

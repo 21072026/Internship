@@ -688,6 +688,18 @@ const en = {
   // ADMIN-only; the MARKETING overlay renames the mentorship words.
   companyDetail: {
     // #2442 — the account's address book.
+    channels: {
+      title: 'Sales channels',
+      none: 'No sales channels recorded.',
+      channel: 'Channel',
+      status: 'Status',
+      add: 'Add',
+      remove: 'Remove',
+      failed: 'Could not be saved.',
+      hint: 'Where this merchant sells and ships. An import only adds channels; it never removes one or changes a status set here.',
+      statuses: { USING: 'Uses', INTERESTED: 'Interested', DROPPED: 'Stopped' },
+      kinds: { MARKETPLACE: 'Marketplaces', SHOP: 'Shop systems', CARRIER: 'Carriers' },
+    },
     contacts: {
       title: 'Contacts',
       primary: 'Primary',
@@ -5101,6 +5113,8 @@ const en = {
     allStages: 'All stages',
     addSelected: 'Add selected ({n})',
     selectEligible: 'Select all eligible',
+    channel: 'Sells on',
+    allChannels: 'Any channel',
     added: '{n} added.',
     refused: '{n} could not be added — see the reason next to each account.',
     noCandidates: 'No accounts match.',
@@ -6803,6 +6817,18 @@ const tr: Dict = {
   },
   companyDetail: {
     // #2442 — hesabın adres defteri.
+    channels: {
+      title: 'Satış kanalları',
+      none: 'Kayıtlı satış kanalı yok.',
+      channel: 'Kanal',
+      status: 'Durum',
+      add: 'Ekle',
+      remove: 'Kaldır',
+      failed: 'Kaydedilemedi.',
+      hint: 'Bu tüccarın sattığı ve kargoladığı yerler. İçe aktarım yalnızca kanal ekler; burada belirlenen bir kanalı silmez, durumunu değiştirmez.',
+      statuses: { USING: 'Kullanıyor', INTERESTED: 'İlgileniyor', DROPPED: 'Bıraktı' },
+      kinds: { MARKETPLACE: 'Pazaryerleri', SHOP: 'Mağaza sistemleri', CARRIER: 'Kargo' },
+    },
     contacts: {
       title: 'Muhataplar',
       primary: 'Birincil',
@@ -11084,6 +11110,8 @@ const tr: Dict = {
     allStages: 'Tüm aşamalar',
     addSelected: 'Seçilenleri ekle ({n})',
     selectEligible: 'Uygun olanların hepsini seç',
+    channel: 'Sattığı kanal',
+    allChannels: 'Tüm kanallar',
     added: '{n} eklendi.',
     refused: '{n} eklenemedi — sebebi her hesabın yanında.',
     noCandidates: 'Eşleşen hesap yok.',
@@ -12766,6 +12794,18 @@ const de: Dict = {
   },
   companyDetail: {
     // #2442 — das Adressbuch des Kontos.
+    channels: {
+      title: 'Vertriebskanäle',
+      none: 'Keine Vertriebskanäle erfasst.',
+      channel: 'Kanal',
+      status: 'Status',
+      add: 'Hinzufügen',
+      remove: 'Entfernen',
+      failed: 'Konnte nicht gespeichert werden.',
+      hint: 'Wo dieser Händler verkauft und versendet. Ein Import fügt nur Kanäle hinzu; er entfernt keinen und ändert keinen hier gesetzten Status.',
+      statuses: { USING: 'Nutzt', INTERESTED: 'Interessiert', DROPPED: 'Aufgehört' },
+      kinds: { MARKETPLACE: 'Marktplätze', SHOP: 'Shopsysteme', CARRIER: 'Versanddienstleister' },
+    },
     contacts: {
       title: 'Ansprechpartner',
       primary: 'Hauptkontakt',
@@ -17050,6 +17090,8 @@ const de: Dict = {
     allStages: 'Alle Phasen',
     addSelected: 'Auswahl hinzufügen ({n})',
     selectEligible: 'Alle zulässigen auswählen',
+    channel: 'Verkauft auf',
+    allChannels: 'Alle Kanäle',
     added: '{n} hinzugefügt.',
     refused: '{n} konnten nicht hinzugefügt werden — der Grund steht beim jeweiligen Account.',
     noCandidates: 'Keine passenden Accounts.',

@@ -12,6 +12,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { SALES_CHANNELS } from '@/lib/salesChannels';
 
 // One postal campaign (#2697): its texts while it is a draft, the account
 // picker with each account's eligibility, the recipients, the print view and
@@ -68,6 +69,7 @@ export default function PostCampaignPage({ params }: { params: Promise<{ id: str
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [q, setQ] = useState('');
   const [stage, setStage] = useState('');
+  const [channel, setChannel] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refusedReasons, setRefusedReasons] = useState<Record<string, string>>({});
 
@@ -94,9 +96,10 @@ export default function PostCampaignPage({ params }: { params: Promise<{ id: str
     const qs = new URLSearchParams();
     if (q.trim()) qs.set('q', q.trim());
     if (stage) qs.set('stage', stage);
+    if (channel) qs.set('channel', channel);
     const res = await fetch(`/api/admin/post-campaigns/${id}/candidates?${qs}`);
     setCandidates(res.ok ? (await res.json()).candidates : []);
-  }, [id, q, stage]);
+  }, [id, q, stage, channel]);
 
   useEffect(() => {
     void load();
@@ -312,6 +315,15 @@ export default function PostCampaignPage({ params }: { params: Promise<{ id: str
                 <option value="">{c.allStages}</option>
                 {stages.map((s) => (
                   <option key={s.key} value={s.key}>{stageLabel(s.key)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {c.channel}
+              <select className="mt-1.5 block rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900" value={channel} onChange={(e) => setChannel(e.target.value)} data-testid="post-campaign-channel">
+                <option value="">{c.allChannels}</option>
+                {SALES_CHANNELS.filter((x) => x.kind !== 'CARRIER').map((x) => (
+                  <option key={x.key} value={x.key}>{x.label}</option>
                 ))}
               </select>
             </label>
