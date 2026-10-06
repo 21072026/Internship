@@ -64,7 +64,7 @@ test.describe('executive dashboard', () => {
     await prisma.$disconnect();
   });
 
-  test('four named scores, each with its arithmetic, and an honest capability panel', { tag: '@smoke' }, async ({ page }) => {
+  test('four named scores, each with its arithmetic, and an honest capability panel', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
 
     const api = await (await page.request.get(`/api/admin/analytics/executive?from=${from}&to=${to}`)).json();

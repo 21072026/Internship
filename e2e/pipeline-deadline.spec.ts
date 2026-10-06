@@ -6,7 +6,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('stage deadlines flag overdue, surface on the calendar, and trigger reminders', { tag: '@smoke' }, async ({ page }) => {
+test('stage deadlines flag overdue, surface on the calendar, and trigger reminders', async ({ page }) => {
   const adminEmail = uniqueEmail('dl-admin');
   const mentorEmail = uniqueEmail('dl-mentor');
   const menteeEmail = uniqueEmail('dl-mentee');

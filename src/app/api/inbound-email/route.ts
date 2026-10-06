@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
-import { routeInboundEmail } from '@/lib/inboundEmail';
+import { routeInboundMail } from '@/lib/crmBcc';
 import { enforceRateLimit } from '@/lib/rateLimit';
 
 const schema = z.object({
@@ -9,6 +9,10 @@ const schema = z.object({
   from: z.string().min(1),
   text: z.string().max(20000).optional().default(''),
   messageId: z.string().max(998).optional(),
+  // BCC-to-CRM (#2809) only; a thread reply ignores them.
+  cc: z.string().max(20000).optional(),
+  subject: z.string().max(2000).optional(),
+  date: z.string().max(200).optional(),
 });
 
 function secretOk(request: Request): boolean {
@@ -30,7 +34,8 @@ function secretOk(request: Request): boolean {
 // script. (The server's own mailbox is drained by the IMAP bridge in
 // `src/services/inboundMailBridge.ts`, which calls the same routing logic
 // directly.) Routes it to a thread only when the HMAC reply token verifies AND
-// the sender is a participant of that thread.
+// the sender is a participant of that thread — or, for a `crm+` address, logs
+// it on the matching account (BCC-to-CRM, src/lib/crmBcc.ts).
 export async function POST(request: Request) {
     // The mail provider can deliver a burst from one IP, so allow 120 messages per minute.
   const limited = enforceRateLimit(request, 'inbound-email', { limit: 120, windowMs: 60 * 1000 });
@@ -40,8 +45,9 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
 
-  const result = await routeInboundEmail(parsed.data);
+  const result = await routeInboundMail(parsed.data);
   if (!result.ok) return NextResponse.json({ error: result.reason }, { status: result.status });
+  if (result.kind === 'crm-bcc') return NextResponse.json({ ok: true, logged: result.logged, duplicates: result.duplicates });
 
   return NextResponse.json({ ok: true, created: !result.duplicate });
 }

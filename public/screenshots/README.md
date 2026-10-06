@@ -12,6 +12,11 @@ The screens in the landing page's product tour
   `npm run seed:demo`), so the server needs `marketing.localhost` in
   `MARKETING_HOSTS`. Override the host with `MARKETING_BASE_URL` if needed.
 
+Every capture exists in each landing language (#2808). English keeps the
+original unsuffixed names; Turkish and German add `-tr` / `-de` before the
+extension (`mentor-desktop-dark-de.webp`), so a visitor who reads the landing
+in German also sees the product in German.
+
 Each screen is stored as:
 
 - a still per theme and device: `<screen>-<desktop|phone>-<light|dark>.webp`;
@@ -42,12 +47,13 @@ reseed() { npx prisma db push --force-reset --skip-generate && npx prisma db see
 npm run build && npm run start               # a production build: no dev-mode badge in the picture
 reseed && npm run capture:landing -- --theme=light
 reseed && npm run capture:landing -- --theme=dark
+reseed && npm run capture:landing -- --theme=light --locale=de   # likewise tr
 npm run capture:landing -- mentee --theme=dark --no-video   # stills only
 ```
 
 `seed:demo` wants `DATABASE_URL` in the environment. The clips need `ffmpeg` on
 `PATH`. The script fails a still over **200 KB** and a clip over **900 KB**.
-Captures are in English. The alt text is per language in the `productTour`
+Pass `--locale=tr|de` for the other languages (default `en`). The alt text is per language in the `productTour`
 block of `src/i18n/dictionaries.ts`; update it if a screen's content changes.
 
 A headless browser draws no mouse pointer and no native drag image, so the

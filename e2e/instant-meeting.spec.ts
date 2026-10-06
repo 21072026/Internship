@@ -9,7 +9,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('mentee card starts a meeting in one click and opens the side panel', { tag: '@smoke' }, async ({ page }) => {
+test('mentee card starts a meeting in one click and opens the side panel', async ({ page }) => {
   const mentorEmail = uniqueEmail('inst-mentor');
   const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Instant Mentor');
   const mentee = await seedUser(uniqueEmail('inst-mentee'), 'x', 'MENTEE', 'Instant Mentee');

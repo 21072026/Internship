@@ -11,7 +11,7 @@ test.afterAll(async () => {
 // feature is that the outsider needs nothing — no login, no sign-up — so every
 // assertion below is made with the browser's cookies cleared.
 
-test('a mentor invites an outsider by email and they RSVP with no account', { tag: '@smoke' }, async ({ page }) => {
+test('a mentor invites an outsider by email and they RSVP with no account', async ({ page }) => {
   const mentorEmail = uniqueEmail('guestmentor');
   const menteeEmail = uniqueEmail('guestmentee');
   // Deliberately NOT an @e2e.local seeded user — this address belongs to nobody.

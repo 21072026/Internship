@@ -59,7 +59,7 @@ for (const path of PUBLIC_PAGES) {
   });
 }
 
-test('the landing wordmark actually navigates home from a sub-page', { tag: '@smoke' }, async ({ page }) => {
+test('the landing wordmark actually navigates home from a sub-page', async ({ page }) => {
   await page.goto('/terms');
   await dismissConsent(page);
   await page.getByTestId('public-home-link').click();
@@ -91,7 +91,7 @@ test('the company page keeps its register button out of the chrome', async ({ pa
 test.describe('phone width', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the nav collapses into a menu that reaches every page', { tag: '@smoke' }, async ({ page }) => {
+  test('the nav collapses into a menu that reaches every page', async ({ page }) => {
     await page.goto('/');
     await dismissConsent(page);
 
@@ -145,7 +145,7 @@ test.describe('phone width', () => {
 test.describe('signed in', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('the public chrome shows the dashboard, not Sign In', { tag: '@smoke' }, async ({ page }) => {
+  test('the public chrome shows the dashboard, not Sign In', async ({ page }) => {
     const email = uniqueEmail('chrome-session');
     const password = 'ChromePass123!';
     await seedUser(email, password, 'MENTEE', 'Chrome Session Mentee');

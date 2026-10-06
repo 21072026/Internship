@@ -17,7 +17,7 @@ async function signIn(page: import('@playwright/test').Page, email: string, pass
   await page.click('button[type="submit"]');
 }
 
-test('a mentor who is also mentored can switch to the mentee portal', { tag: '@smoke' }, async ({ page }) => {
+test('a mentor who is also mentored can switch to the mentee portal', async ({ page }) => {
   // Three people: the dual-role mentor, the mentor above them, and the mentee
   // below them — so both sides of the dual role are real relations.
   const dualEmail = uniqueEmail('dual-mentor');

@@ -33,7 +33,9 @@ bu dosyanın durumu #2578'e yorum olarak geçer.
 - [ ] Her yeni demo talebi **≤ 1 iş günü** içinde sahiplendi (sahipsiz sayaç: `/admin/company-inquiries`)
 - [ ] Her `TRIAL_ACTIVE` kaydında `trialEndsAt` dolu
 - [ ] Her temas `InteractionLog` olarak girildi (görüşme, e-posta, telefon) — "son temas" ve ilk temas
-      süresi buna dayanır ([`../last-contact.md`](../last-contact.md))
+      süresi buna dayanır ([`../last-contact.md`](../last-contact.md)). Giden e-postalar için
+      `/admin/settings` → "Gönderilen e-postaları BCC ile kaydet" adresini BCC'ye eklemek yeter
+      ([`sales-email-capture.md`](sales-email-capture.md)); telefon ve görüşme hâlâ elle
 - [ ] Gelen her itiraz (mektup/telefon/e-posta) **aynı gün** hesap sayfasında "Werbewiderspruch
       erfassen" ile kaydedildi
 - [ ] Temsilcinin takıldığı her şey bir issue oldu ve #2348 altındaki doğru story'ye bağlandı

@@ -46,7 +46,7 @@ async function seedMeeting(relationId: string, scheduledAt: Date, title: string,
   });
 }
 
-test('any participant can declare a running meeting over — and it is gone for everyone', { tag: '@smoke' }, async ({ page }) => {
+test('any participant can declare a running meeting over — and it is gone for everyone', async ({ page }) => {
   const { mentorEmail, menteeEmail, mentee, relation } = await seedPair('endnow');
   const meeting = await seedMeeting(relation.id, minutesFromNow(-10), 'Retro running');
 

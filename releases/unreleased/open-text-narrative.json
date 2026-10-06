@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "**Open-text engine, part 2 (#2046):** the survey summary (#1910) now runs on `summarizeOpenText` — themes with the answers behind each (clickable on the results page), a four-bucket sentiment flag, verbatim quotes, caveats, cached as an `AiArtifact` and regenerable; the engine floor is the survey's k-floor applied to the question's written answers. `src/lib/surveyTextSummary.ts` and `parseSummary` are gone (the engine owns verification). New \"what changed\" paragraph on `/admin/analytics` (`GET|POST /api/admin/analytics/narrative`): the figures are recomputed server-side from the new `src/lib/adminAnalyticsData.ts` (which `GET /api/admin/analytics` now also returns from), sent as `label: value` facts with no names, and the reply is discarded unless every number it cites is in the facts (`acceptNarrative`, golden case in `scripts/test/narrative-rules.test.mjs`). `/ai` lists seven features.",
+  "notes": {
+    "en": [
+      "The AI summary of a survey question now shows how many answers each theme stands for and opens them on click.",
+      "The analytics page can write a short “what changed” paragraph from its own figures — and throws it away if it cites a number that is not on the page."
+    ],
+    "tr": [
+      "Bir anket sorusunun yapay zekâ özeti artık her temanın kaç yanıta dayandığını gösteriyor ve tıklayınca o yanıtları açıyor.",
+      "Analiz sayfası kendi rakamlarından kısa bir “ne değişti” paragrafı yazabiliyor — sayfada olmayan bir sayı anarsa paragrafı atıyor."
+    ],
+    "de": [
+      "Die KI-Zusammenfassung einer Umfragefrage zeigt jetzt, für wie viele Antworten jedes Thema steht, und öffnet sie per Klick.",
+      "Die Analyseseite kann aus ihren eigenen Zahlen einen kurzen Absatz „Was sich verändert hat“ schreiben — und verwirft ihn, wenn er eine Zahl nennt, die nicht auf der Seite steht."
+    ]
+  }
+}

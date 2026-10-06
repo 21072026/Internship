@@ -9,7 +9,7 @@ test.afterAll(async () => {
 // Rate limiting is keyed by authenticated user ID (and optionally org ID), so
 // a user exhausting their limit receives a 429 while another user on the same
 // network/IP remains unblocked.
-test('AI endpoints isolate user limits without draining the org budget', { tag: '@smoke' }, async ({ page }) => {
+test('AI endpoints isolate user limits without draining the org budget', async ({ page }) => {
   const menteeAEmail = uniqueEmail('airatelimit-a');
   const menteeBEmail = uniqueEmail('airatelimit-b');
   const pw = 'AiRateLimitPass123!';

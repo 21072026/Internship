@@ -42,7 +42,7 @@ async function seedPair(prefix: string) {
   };
 }
 
-test('a 45-minute meeting is 45 minutes in the .ics and the feed; a legacy row reads 60, never 30', { tag: '@smoke' }, async ({ page, request }) => {
+test('a 45-minute meeting is 45 minutes in the .ics and the feed; a legacy row reads 60, never 30', async ({ page, request }) => {
   const s = await seedPair('dur-ics');
   try {
     await signInAndSettle(page, s.mentorEmail, PASSWORD, '/mentor');

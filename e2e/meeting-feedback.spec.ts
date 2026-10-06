@@ -52,7 +52,7 @@ test.describe('meeting feedback', () => {
     await prisma.$disconnect();
   });
 
-  test('one click from the e-mail records a rating with no login; "didn\'t meet" is its own answer', { tag: '@smoke' }, async ({ page }) => {
+  test('one click from the e-mail records a rating with no login; "didn\'t meet" is its own answer', async ({ page }) => {
     const four = makeMeetingFeedbackToken({ meetingId: meetingIds[0], userId: menteeIds[0], rating: 4 });
     // GET reads and never writes — a mail scanner prefetching it changes nothing.
     expect((await page.request.get(`/api/meeting-feedback/${four}`)).status()).toBe(200);

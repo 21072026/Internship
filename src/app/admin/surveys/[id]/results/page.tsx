@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import type { Breakdown, DistributionBin, QuestionResult, SurveyResults } from '@/lib/surveyResults';
 import type { Nps } from '@/lib/nps';
-import type { SummaryTheme } from '@/lib/surveyTextRules';
+import { AiBadge } from '@/components/AiBadge';
+import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 
 // One survey's results (#1910). Everything that keeps a small group unreadable
 // already happened on the server (src/lib/surveyResults.ts) — this screen only
@@ -60,24 +61,49 @@ function NpsBlock({ nps, s }: { nps: Nps; s: Dict }) {
   );
 }
 
-// "Summarise these answers" (#1910). The plain list above always stays: when
-// AI is off, out of quota or fails, the reply says why and nothing else changes.
-function AiSummary({ surveyId, questionKey, s }: { surveyId: string; questionKey: string; s: Dict }) {
+// "Summarise these answers" (#1910, on the open-text engine since #2046). The
+// plain list above always stays: when AI is off, out of quota or fails, the
+// reply says why and nothing else changes. Each theme opens the answers it was
+// built from — by position in that same list — so it can be checked.
+type Sentiment = 'positive' | 'neutral' | 'negative' | 'unclear';
+interface SurveySummary {
+  themes: { label: string; count: number; sentiment: Sentiment; answers: number[] }[];
+  overall: Record<Sentiment, number>;
+  quotes: string[];
+  caveats: ({ code: string } & Record<string, string | number>)[];
+}
+const TONE: Record<Sentiment, string> = {
+  positive: 'bg-green-100 text-green-800',
+  neutral: 'bg-gray-100 text-gray-800',
+  negative: 'bg-red-100 text-red-800',
+  unclear: 'bg-amber-100 text-amber-800',
+};
+
+function AiSummary({ surveyId, questionKey, texts, s }: { surveyId: string; questionKey: string; texts: string[]; s: Dict }) {
+  const t = useT();
+  const ins = t.adminInsights;
   const [busy, setBusy] = useState(false);
-  const [themes, setThemes] = useState<SummaryTheme[] | null>(null);
+  const [summary, setSummary] = useState<SurveySummary | null>(null);
+  const [artifact, setArtifact] = useState<ArtifactInfo | null>(null);
+  const [cached, setCached] = useState(false);
+  const [open, setOpen] = useState<number | null>(null);
   const [note, setNote] = useState('');
-  const run = async () => {
+  const run = async (regenerate = false) => {
     setBusy(true);
     setNote('');
     try {
       const res = await fetch(`/api/admin/surveys/${surveyId}/summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questionKey }),
+        body: JSON.stringify({ questionKey, regenerate }),
       });
       const body = await res.json().catch(() => ({}));
-      if (res.ok && body.summary) setThemes(body.summary.themes);
-      else setNote((s as Record<string, string>)[`aiUnavailable_${body.reason ?? body.code}`] ?? s.aiUnavailable);
+      if (res.ok && body.summary) {
+        setSummary(body.summary);
+        setArtifact(body.artifact ?? null);
+        setCached(!!body.cached);
+        setOpen(null);
+      } else setNote((s as Record<string, string>)[`aiUnavailable_${body.reason ?? body.code}`] ?? s.aiUnavailable);
     } catch {
       setNote(s.aiUnavailable);
     } finally {
@@ -86,27 +112,54 @@ function AiSummary({ surveyId, questionKey, s }: { surveyId: string; questionKey
   };
   return (
     <div className="mt-3" data-testid={`ai-summary-${questionKey}`}>
-      {!themes && (
-        <Button size="sm" variant="outline" onClick={run} loading={busy} data-testid={`ai-summarise-${questionKey}`}>
+      {!summary && (
+        <Button size="sm" variant="outline" onClick={() => run()} loading={busy} data-testid={`ai-summarise-${questionKey}`}>
           <Sparkles className="mr-1 h-4 w-4" /> {s.aiSummarise}
         </Button>
       )}
       {note && <p className="mt-2 text-sm text-gray-600 dark:text-gray-300" role="status" data-testid={`ai-note-${questionKey}`}>{note}</p>}
-      {themes && (
+      {summary && (
         <div className="rounded-lg border border-purple-200 p-3 dark:border-purple-900">
-          <p className="mb-2 flex items-center gap-1 text-xs font-medium text-purple-700 dark:text-purple-300"><Sparkles className="h-3.5 w-3.5" /> {s.aiSummaryTitle}</p>
-          {themes.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-300">{s.aiNoThemes}</p>}
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium text-purple-700 dark:text-purple-300">{s.aiSummaryTitle}</p>
+            <AiBadge />
+          </div>
+          {summary.themes.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-300">{s.aiNoThemes}</p>}
           <ul className="space-y-2 text-sm">
-            {themes.map((t, i) => (
-              <li key={i}>
-                <p className="font-medium text-gray-900 dark:text-gray-100">{t.theme}</p>
-                {t.quotes.map((quote, j) => (
-                  <blockquote key={j} className="ml-3 border-l-2 border-gray-200 pl-2 text-gray-700 dark:border-gray-700 dark:text-gray-200">“{quote}”</blockquote>
-                ))}
+            {summary.themes.map((theme, i) => (
+              <li key={i} data-testid={`ai-theme-${questionKey}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{theme.label}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${TONE[theme.sentiment]}`}>{ins.sentiment[theme.sentiment]}</span>
+                  <button type="button" onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="text-xs text-blue-700 hover:underline dark:text-blue-300">
+                    {open === i ? ins.hideRows : fill(ins.showRows, { n: theme.count })}
+                  </button>
+                </div>
+                {open === i && (
+                  <ul className="ml-3 mt-1 space-y-1" data-testid={`ai-theme-answers-${questionKey}`}>
+                    {theme.answers.filter((n) => texts[n] !== undefined).map((n) => (
+                      <li key={n} className="border-l-2 border-gray-200 pl-2 text-gray-700 dark:border-gray-700 dark:text-gray-200">{texts[n]}</li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
+          {summary.quotes.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {summary.quotes.map((quote, j) => (
+                <li key={j}><blockquote className="border-l-2 border-purple-200 pl-2 italic text-gray-700 dark:border-purple-900 dark:text-gray-200">“{quote}”</blockquote></li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+            {ins.overallTitle}: {(['positive', 'neutral', 'negative', 'unclear'] as const).map((k) => `${ins.sentiment[k]} ${summary.overall[k]}`).join(' · ')}
+          </p>
+          {summary.caveats.map((c, i) => (
+            <p key={i} className="text-[11px] text-gray-500">{fill((ins.caveats as Record<string, string>)[c.code] ?? '', c)}</p>
+          ))}
           <p className="mt-2 text-xs text-gray-500">{s.aiSummaryNote}</p>
+          {artifact && <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={() => run(true)} regenerating={busy} />}
         </div>
       )}
     </div>
@@ -146,7 +199,7 @@ function QuestionCard({ q, s, floor, surveyId }: { q: QuestionResult; s: Dict; f
               <li key={i} className="whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-2 text-sm text-gray-800 dark:text-gray-100">{text}</li>
             ))}
           </ul>
-          <AiSummary surveyId={surveyId} questionKey={q.key} s={s} />
+          <AiSummary surveyId={surveyId} questionKey={q.key} texts={q.texts} s={s} />
         </div>
       )}
     </Card>

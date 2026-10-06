@@ -68,7 +68,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('a mentor loses CV access once the mentorship has been over for the window', { tag: '@smoke' }, async ({ page }) => {
+test('a mentor loses CV access once the mentorship has been over for the window', async ({ page }) => {
   await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');
 
   // Active mentorship — unchanged behaviour.

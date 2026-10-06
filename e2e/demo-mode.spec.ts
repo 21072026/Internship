@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test';
 //     infra/test/reset-demo-guard.test.sh, including the production and preview
 //     database names.
 
-test('the demo banner is absent when DEMO_MODE is off', { tag: '@smoke' }, async ({ page }) => {
+test('the demo banner is absent when DEMO_MODE is off', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('demo-mode-banner')).toHaveCount(0);
 

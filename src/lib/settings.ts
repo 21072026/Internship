@@ -231,6 +231,15 @@ export const SETTING_DEFAULTS = {
   evaluationInterimStage: '',
   evaluationInterimDays: '30',
   evaluationFinalStage: '',
+  // BCC-to-CRM (#2809, docs/marketing-vertical/sales-email-capture.md): a mail
+  // staff send with the org's `crm+…` address in BCC is logged on the matching
+  // account. '' = the vertical's default (on for MARKETING, off for
+  // INTERNSHIP); 'true' / 'false' = the org chose. The reading rule is
+  // crmBccEnabledFor() in src/lib/crmBccRule.ts.
+  crmBccEnabled: '',
+  // The address's version: it is signed into the token, so bumping it (the
+  // admin's "new address" button) makes the old address dead at once.
+  crmBccVersion: '1',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

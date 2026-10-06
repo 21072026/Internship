@@ -1,19 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { buildSignupWindow, type SignupCounts } from '@/lib/signupFunnel';
-import { outcomeStageKeys } from '@/lib/pipelineStages';
-import { shellCapabilities } from '@/lib/shellCapabilities';
 import { getLocale } from '@/i18n/server';
-import { rangeEnd, rangeStart } from '@/lib/dateRange';
-import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import { interactionInTenant, meetingInTenant } from '@/lib/analyticsScope';
-import { mentorWorkload as mentorWorkloadRows } from '@/lib/analyticsReports';
+import { loadAdminAnalytics } from '@/lib/adminAnalyticsData';
 
 // GET — aggregate analytics for the admin dashboard:
 // pipeline funnel, mentor workload/outcomes, engagement and RSVP rate.
+// Computed in src/lib/adminAnalyticsData.ts, which the "what changed"
+// narrative (#2046) reads too, so the paragraph and the cards share numbers.
 //
 // Time-scoped metrics (trends, engagement counts, RSVP) honour an optional
 // ?from=YYYY-MM-DD&to=YYYY-MM-DD date-range window. Defaults to the last 6
@@ -26,145 +21,8 @@ export async function GET(request: Request) {
   }
 
   const locale = await getLocale();
-
-  return await withTenantScope(session, async () => {
   const { searchParams } = new URL(request.url);
-  const now = new Date();
-  // Range: default from = start of the month 5 months ago; to = now. If the
-  // client sends bad/inverted dates we fall back to the default rather than 500.
-  //
-  // `rangeEnd` rather than a bare `new Date(…)`: the screen's presets send
-  // `to` as `YYYY-MM-DD`, which parses to that day's FIRST instant, so an
-  // `lte` bound used to exclude everything that happened on the day the admin
-  // picked — including today, on the default view (#1501).
-  const to = rangeEnd(searchParams.get('to')) ?? now;
-  const defaultFrom = new Date(to.getFullYear(), to.getMonth() - 5, 1);
-  let from = rangeStart(searchParams.get('from')) ?? defaultFrom;
-  if (from.getTime() > to.getTime()) from = defaultFrom;
-
-  // Monthly buckets spanning [from, to], oldest first, as YYYY-MM keys.
-  // Capped at 24 buckets so a huge range can't produce an unwieldy chart.
-  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  const months: string[] = [];
-  const cursor = new Date(from.getFullYear(), from.getMonth(), 1);
-  const end = new Date(to.getFullYear(), to.getMonth(), 1);
-  while (cursor.getTime() <= end.getTime() && months.length < 24) {
-    months.push(monthKey(cursor));
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-  const inRange = { gte: from, lte: to };
-
-  // The caller's tenant, by hand: `withTenantScope` is a passthrough with
-  // MT_ENFORCE_ISOLATION off, so every count below used to sum every
-  // organization on the database — a MARKETING admin's funnel, meeting and
-  // signup numbers included the INTERNSHIP product's rows. Interactions and
-  // meetings carry no `orgId`; they belong to their relation's (or project's)
-  // tenant — src/lib/analyticsScope.ts.
-  const tenant = await tenantWhere(session);
-  const interactionWhere = { date: inRange, ...interactionInTenant(tenant) };
-  const meetingWhere = { scheduledAt: inRange, ...meetingInTenant(tenant) };
-
-  const [byStage, interactions, meetings, rsvpGroups, projectRows, relDates, interactionDates] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({}, tenant), _count: { _all: true } }),
-    prisma.interactionLog.count({ where: interactionWhere }),
-    prisma.meeting.count({ where: meetingWhere }),
-    prisma.meeting.groupBy({ by: ['rsvp'], where: meetingWhere, _count: { _all: true } }),
-    prisma.project.findMany({ where: withinTenant({}, tenant), select: { name: true, _count: { select: { relations: true } } } }),
-    prisma.mentorshipRelation.findMany({ where: withinTenant({ startDate: inRange }, tenant), select: { startDate: true } }),
-    prisma.interactionLog.findMany({ where: interactionWhere, select: { date: true } }),
-  ]);
-
-  // Signup funnel (#1191) — deliberately NOT tied to the date-range picker:
-  // it answers "is the front door working RIGHT NOW?", so it always looks at
-  // the last 7 and 30 days. Counted per window rather than derived from one
-  // list, so a huge tenant never loads every user row just to bucket them.
-  const signupWindows = await Promise.all(
-    [7, 30].map(async (days) => {
-      const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-      const createdIn = { createdAt: { gte: since } };
-      const inTenant = <W extends object>(w: W) => withinTenant(w, tenant);
-      const [registered, verified, active] = await Promise.all([
-        prisma.user.count({ where: inTenant(createdIn) }),
-        prisma.user.count({ where: inTenant({ ...createdIn, emailVerified: true }) }),
-        // "Active" is the end of the door: verified, enabled, and past any
-        // approval hold — the state in which the account can actually be used.
-        prisma.user.count({ where: inTenant({ ...createdIn, emailVerified: true, isActive: true, pendingApproval: false }) }),
-      ]);
-      return buildSignupWindow(days, { registered, verified, active } satisfies SignupCounts);
-    })
+  return await withTenantScope(session, async () =>
+    NextResponse.json(await loadAdminAnalytics(session, { from: searchParams.get('from'), to: searchParams.get('to') }, locale)),
   );
-
-  // Monthly trend buckets.
-  const newRelationsByMonth: Record<string, number> = Object.fromEntries(months.map((m) => [m, 0]));
-  for (const r of relDates) { const k = monthKey(r.startDate); if (k in newRelationsByMonth) newRelationsByMonth[k]++; }
-  const interactionsByMonth: Record<string, number> = Object.fromEntries(months.map((m) => [m, 0]));
-  for (const it of interactionDates) { const k = monthKey(it.date); if (k in interactionsByMonth) interactionsByMonth[k]++; }
-  const trends = {
-    months,
-    newRelations: months.map((m) => newRelationsByMonth[m]),
-    interactions: months.map((m) => interactionsByMonth[m]),
-  };
-  const range = { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
-
-  const projectWorkload = projectRows
-    .map((p) => ({ name: p.name, interns: p._count.relations }))
-    .sort((a, b) => b.interns - a.interns)
-    .slice(0, 10);
-
-  const funnel = Object.fromEntries(byStage.map((s) => [s.pipelineStatus, s._count._all]));
-
-  // What "hired" means here is the TENANT's own finished stage set (#1882) —
-  // this route used to compare against the literals `HIRED_660`/`EMPLOYED_700`,
-  // which a customer that renamed its pipeline does not have, so the headline
-  // conversion and every mentor's outcome count read zero. For an org on the
-  // built-in catalogue `finished` is exactly those two keys.
-  const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
-  const [outcome, capabilities] = await Promise.all([
-    outcomeStageKeys(orgId, locale),
-    // The tenant's module set (#2423), resolved through the SAME path the
-    // sidebar and the write gate use (`shellCapabilities`), so the screen can
-    // hide the cards that describe a module this vertical does not carry —
-    // mentor workload, RSVP, the signup funnel and match quality need
-    // `mentorship`, the projects card needs `projects`. The numbers themselves
-    // are still computed: they are tenant-scoped and correct, only meaningless
-    // to a tenant without the module. INTERNSHIP carries every capability, so
-    // its payload and screen are unchanged.
-    shellCapabilities(orgId),
-  ]);
-  // Shared with the report registry and the scheduled subscriptions (#1905).
-  const mentorWorkload = await mentorWorkloadRows({ stageOrgId: orgId, tenant, locale }, outcome);
-
-  const rsvp = Object.fromEntries(rsvpGroups.map((g) => [g.rsvp, g._count._all]));
-  // Acceptance rate is over those who actually responded (accepted + declined).
-  // Pending invites shouldn't drag the rate down, and with no responses at all
-  // the rate is null (rendered as "—") rather than a misleading 0%.
-  const rsvpResponded = (rsvp.ACCEPTED || 0) + (rsvp.DECLINED || 0);
-  const rsvpAcceptanceRate = rsvpResponded ? Math.round(((rsvp.ACCEPTED || 0) / rsvpResponded) * 100) : null;
-
-  const totalRelations = byStage.reduce((n, s) => n + s._count._all, 0);
-  const hiredCount = outcome.finished.reduce((n, key) => n + (funnel[key] || 0), 0);
-  const conversionToHired = totalRelations ? Math.round((hiredCount / totalRelations) * 100) : 0;
-
-  return NextResponse.json({
-    funnel,
-    totalRelations,
-    conversionToHired,
-    mentorWorkload,
-    projectWorkload,
-    engagement: { interactions, meetings },
-    rsvp: { ...rsvp, responded: rsvpResponded, acceptanceRate: rsvpAcceptanceRate },
-    trends,
-    range,
-    signupFunnel: signupWindows,
-    // So the screen can name the stage the conversion number counted, rather
-    // than asserting a universal "Hired" (#1882). `finishedLabelIsCustom` is
-    // false for a tenant that never renamed it, and the page then keeps its own
-    // translated wording — byte-identical text for a default-catalogue tenant.
-    finishedLabel: outcome.finishedLabel,
-    finishedLabelIsCustom: outcome.finishedLabelIsCustom,
-    // Which modules the cards above are about (#2423) — see the comment where
-    // it is resolved. A consumer that finds the field missing shows everything.
-    capabilities,
-  });
-  });
 }

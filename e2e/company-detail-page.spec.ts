@@ -58,7 +58,7 @@ test.afterAll(async () => {
   await tenants?.cleanup();
 });
 
-test('ADMIN opens the account from the list and sees its whole state', { tag: '@smoke' }, async ({ page }) => {
+test('ADMIN opens the account from the list and sees its whole state', async ({ page }) => {
   const { orgA } = tenants;
   await signInAsTenantActor(page, orgA.admin);
 

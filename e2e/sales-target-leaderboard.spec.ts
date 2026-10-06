@@ -151,7 +151,7 @@ async function signInMarketing(page: Page, email: string, landing: string) {
   await signInAndSettle(page, email, PASSWORD, landing);
 }
 
-test('a rep sees their own wins this month; the leaderboard is off for reps by default', { tag: '@smoke' }, async ({ page }) => {
+test('a rep sees their own wins this month; the leaderboard is off for reps by default', async ({ page }) => {
   test.slow();
   await signInMarketing(page, E.rep1, '/sales');
   const card = page.getByTestId('sales-target-card');
@@ -196,11 +196,10 @@ test('the admin sets a target, switches the board on, and always sees it', async
   expect(await prisma.setting.count({ where: { orgId: ids.orgB } })).toBe(0);
 });
 
-test('the rep sees "N of target" with a progressbar and their own org\'s board only', { tag: '@smoke' }, async ({ page }) => {
+test('the rep sees "N of target" with a progressbar and their own org\'s board only', async ({ page }) => {
   test.slow();
-  // The PR gate runs only `@smoke`, so the admin test above (which sets these
-  // through the UI) is skipped there. Write the same two rows it writes, so
-  // this test stands on its own whichever subset runs.
+  // Write the same two rows the admin test above sets through the UI, so this
+  // test stands on its own whichever subset runs (e.g. a --grep for its title).
   for (const [key, value] of [['salesMonthlyWonTarget', '4'], ['salesLeaderboardForReps', 'true']] as const) {
     await prisma.setting.upsert({
       where: { orgId_key: { orgId: ids.orgA, key } },

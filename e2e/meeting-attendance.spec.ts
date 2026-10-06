@@ -50,7 +50,7 @@ test.describe('meeting attendance', () => {
     await prisma.$disconnect();
   });
 
-  test('record a no-show → one neutral note → the admin figure moves; the mentor\'s record wins', { tag: '@smoke' }, async ({ browser }) => {
+  test('record a no-show → one neutral note → the admin figure moves; the mentor\'s record wins', async ({ browser }) => {
     // Four people sign in: well past the default budget on a cold server.
     test.slow();
     const admin1 = await (await browser.newContext()).newPage();

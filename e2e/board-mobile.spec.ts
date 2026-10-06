@@ -88,7 +88,7 @@ test('mentor board on a phone: stage list, no sideways scrolling, stage change w
   }
 });
 
-test('mentor board keeps its columns and per-card stage select on desktop', { tag: '@smoke' }, async ({ page }) => {
+test('mentor board keeps its columns and per-card stage select on desktop', async ({ page }) => {
   const { ownerEmail, password, relation, cleanup } = await seedRelation('bd', 'MENTOR');
 
   try {

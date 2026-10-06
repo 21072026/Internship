@@ -13,7 +13,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('apply-as-mentor form requires consent, submits, and confirms no account was created', { tag: '@smoke' }, async ({ page }) => {
+test('apply-as-mentor form requires consent, submits, and confirms no account was created', async ({ page }) => {
   const email = uniqueEmail('apply-mentor');
 
   await page.goto('/apply-as-mentor');
@@ -51,7 +51,7 @@ test('apply-as-mentor form requires consent, submits, and confirms no account wa
   }
 });
 
-test('a duplicate pending application (409) gets a distinct message from a rate limit (429)', { tag: '@smoke' }, async ({ page }) => {
+test('a duplicate pending application (409) gets a distinct message from a rate limit (429)', async ({ page }) => {
   const fillMinimalForm = async () => {
     await page.getByLabel(/full name/i).fill('Mocked Mentor');
     await page.getByLabel(/^email/i).fill(uniqueEmail('apply-mentor-mock'));

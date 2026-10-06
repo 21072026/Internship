@@ -1,7 +1,7 @@
 # Satış e-postalarının CRM'e düşmesi — karar (#2564)
 
-> **Durum: KARAR — maintainer onayıyla uygulamaya geçer.** Spike #2564'ün çıktısıdır; uygulama
-> task'ı ayrıca açıldı (bu dosyanın sonundaki bağlantı). Hukuki danışmanlık değildir.
+> **Durum: UYGULANDI (#2809).** Spike #2564'ün kararı; iki açık soru maintainer tarafından
+> önerildiği gibi kapatıldı (aşağıda). Hukuki danışmanlık değildir.
 
 ## Sorun
 
@@ -73,14 +73,30 @@ eşleşmesi de tutmaz.
 - **Saklama:** kayıt, bağlı olduğu funnel kaydıyla yaşar ve onunla silinir (`onDelete:
   Cascade`); hesabın silme yüzeyi (#2441/#2559) zaten kapsar.
 
-## Açık sorular (maintainer)
+## Açık sorular — kapandı
 
-1. INTERNSHIP org'larına da açılsın mı (mentorların şirketlere yazdığı mailler)? Öneri: aynı
-   kod, varsayılan **kapalı**, org ayarıyla açılır.
-2. Gelen yanıtlar (müşteri → satışçı) ikinci adımda "satışçı yanıtı CRM adresine
-   yönlendirir" ile mi gelsin? Öneri: evet, ayrı task — yönlendirilmiş mailde asıl göndereni
-   başlıklardan güvenle çıkarmak ayrı bir iş.
+1. INTERNSHIP: aynı kod, varsayılan **kapalı**, org ayarıyla açılır (`crmBccEnabled`).
+2. Gelen yanıtlar (müşteri → satışçı, satışçının CRM adresine yönlendirmesiyle): ayrı task.
 
-## Uygulama
+## Uygulama (#2809)
 
-Task: #2809 (bu kararla açıldı).
+| Parça | Yer |
+| --- | --- |
+| Kural (token ayrıştırma, müşteri adresleri, kayıt seçimi, konu kırpma, açık/kapalı) | `src/lib/crmBccRule.ts` — `scripts/test/crm-bcc.test.mjs` |
+| HMAC (`crm-bcc:` öneki, sürüm imzada) | `src/lib/crmBccTokens.ts` |
+| Yönlendirme + yazma | `src/lib/crmBcc.ts` — `routeInboundMail()` IMAP köprüsü ve `POST /api/inbound-email` için tek giriş: `reply+` varsa başlık yolu, yoksa `crm+` |
+| Tekrar koruması | `InteractionLog.sourceRef` (`bcc:<sha256(Message-ID)>`, Message-ID yoksa gönderen+tarih+konu+alıcılar) + `@@unique([relationId, sourceRef])` |
+| Ayarlar | `crmBccEnabled` (`''` = vertical varsayılanı), `crmBccVersion` (döndürme = +1) |
+| Admin ekranı | `/admin/settings` → "Gönderilen e-postaları BCC ile kaydet" (`/api/admin/crm-bcc`: göster, kopyala, yeni adres, aç/kapat, varsayılana dön) |
+| Gizlilik metni | `privacy.purposesBody` (MARKETING overlay + temel metin), `PRIVACY_POLICY_VERSION = 2026-10-06` |
+| E2E | `e2e/crm-bcc.spec.ts` |
+
+Notlar:
+
+- `notes` alanı `BCC → <eşleşen alıcılar>` biçimindedir; "gövde saklanmaz" bir politika olduğu
+  için her kayda yazılmaz.
+- Adres yalnızca admin ekranında görünür; satışçılara admin iletir. Sızarsa "Yeni adres" eskisini
+  anında geçersiz kılar (sürüm imzanın parçası, yönlendirme yalnız güncel sürümü kabul eder).
+- `INBOUND_EMAIL_DOMAIN` tanımsız bir ortamda adres gösterilemez; kart bunu söyler.
+- Gönderen kontrolü: `findUsersInWorld` ile org'un dünyasında arama, sonra org eşleşmesi (NULL
+  `orgId` = varsayılan org kuralı); yalnız aktif `ADMIN`/`MENTOR`.

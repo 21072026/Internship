@@ -54,6 +54,30 @@ test('the alt text follows the page language', async ({ page }) => {
   expect(alt).toContain('Mentor-Board');
 });
 
+// The screens themselves are in the page language too (#2808): a German visitor
+// downloads the German captures and clips, not the English ones.
+for (const locale of ['tr', 'de'] as const) {
+  test(`a ${locale.toUpperCase()} visitor gets the ${locale.toUpperCase()} captures and clips`, async ({ page, baseURL }) => {
+    await page.context().addCookies([{ name: 'theme', value: 'light', url: baseURL! }]);
+    const fetched: string[] = [];
+    page.on('response', (r) => {
+      if (r.url().includes('/screenshots/')) fetched.push(new URL(r.url()).pathname.split('/').pop()!);
+    });
+    await page.goto(`/${locale}`);
+    for (const s of SCREENS) {
+      const figure = page.getByTestId(`product-tour-${s}`);
+      await figure.scrollIntoViewIfNeeded();
+      await expect
+        .poll(() => figure.locator('img:visible').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+        .toBe(true);
+      await page.waitForTimeout(800);
+    }
+    const files = [...new Set(fetched)].sort();
+    expect(files.filter((f) => f.endsWith('.webp'))).toEqual(SCREENS.map((s) => `${s}-desktop-light-${locale}.webp`).sort());
+    expect(files.filter((f) => f.endsWith('.webm'))).toEqual(SCREENS.map((s) => `${s}-desktop-light-${locale}.webm`).sort());
+  });
+}
+
 test('a light desktop visitor downloads the light desktop captures only', async ({ page, baseURL }) => {
   await page.context().addCookies([{ name: 'theme', value: 'light', url: baseURL! }]);
   expect(await loadTour(page)).toEqual(SCREENS.map((s) => `${s}-desktop-light.webp`).sort());

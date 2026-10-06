@@ -9,6 +9,7 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
+import { CrmBccCard } from '@/components/CrmBccCard';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 import { useVertical } from '@/lib/verticalClient';
 import { useSession } from 'next-auth/react';
@@ -773,6 +774,9 @@ export default function AdminSettingsPage() {
           )}
         </div>
       </Card>
+
+      {/* BCC-to-CRM address (#2809): on by default for MARKETING, opt-in elsewhere. */}
+      <CrmBccCard />
 
       {/* The org's competency framework (#822) — criteria as data, not code.
           Only where the vertical scores anyone (#2558): MARKETING carries no

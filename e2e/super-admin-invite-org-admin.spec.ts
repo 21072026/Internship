@@ -56,7 +56,6 @@ test.afterAll(async () => {
 
 test(
   'a super admin invites the first ADMIN of a MARKETING org from the organizations screen, and the link registers them there',
-  { tag: '@smoke' },
   async ({ page }) => {
     const { email: superEmail } = await seedSuperAdmin('ui');
     const org = await seedMarketingOrg('ui');
