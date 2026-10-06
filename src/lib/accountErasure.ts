@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { OPEN_TEXT_TASKS } from '@/lib/ai/artifacts';
 import {
   accountlessTombstoneId,
   companyContactErasureData,
@@ -314,17 +315,29 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
   ];
 }
 
+/**
+ * The person's org's open-text summaries (#2046): subject-less artefacts that
+ * may quote what they wrote. A cache, so it is wiped rather than scrubbed.
+ */
+async function openTextArtifactOps(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true } });
+  if (!user) return [];
+  const orgId = user.orgId ?? (await defaultOrgId());
+  return [prisma.aiArtifact.deleteMany({ where: { orgId, subjectUserId: null, taskId: { in: [...OPEN_TEXT_TASKS] } } })];
+}
+
 export async function hardDeleteUser(userId: string): Promise<void> {
   await forgetEmailLog(userId);
   // Built while the row — and with it the address and the org — still exists.
   const companyContact = await companyContactOps(userId);
+  const openText = await openTextArtifactOps(userId);
   // BEFORE the relations go: deleting a relation cascades to its meetings, and
   // `PersonalNote.meetingId` is SetNull — so a note taken in this person's
   // meeting would survive with its text intact and its only link to them
   // nulled, unreachable by any later query (#2052). One $transaction so a
   // partial scrub cannot happen; the deletes below keep their existing failure
   // mode (an FK that neither cascades nor is detached).
-  await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact]);
+  await prisma.$transaction([...scrubFreeTextOps(userId, new Date()), ...companyContact, ...openText]);
   await prisma.mentorshipRelation.deleteMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] } });
   await prisma.statusChange.deleteMany({ where: { changedById: userId } });
   // Optional references without a DB-level cascade (FK restrict) would abort
@@ -345,7 +358,9 @@ export async function anonymizeUser(userId: string): Promise<void> {
   // rewrites it, so the two cannot come apart (#2434).
   await forgetEmailLog(userId);
   const companyContact = await companyContactOps(userId);
+  const openText = await openTextArtifactOps(userId);
   await prisma.$transaction([
+    ...openText,
     // Remove uploaded file bytes; anonymize doesn't need the CV/photo to remain.
     prisma.cvFile.deleteMany({ where: { userId } }),
     // What an AI wrote about the person (#2044): the row stays, the person's

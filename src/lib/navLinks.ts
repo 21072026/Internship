@@ -6,6 +6,7 @@ import {
   ScrollText, Settings, ShieldCheck, Smile, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
   Send,
+  Lightbulb,
   type LucideIcon,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -96,6 +97,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
   // Term compliance of the weekly diaries (#1918) — an internship-only screen.
   { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship' },
+  // Open-text insights (#2046): themes over evaluation comments and weekly-
+  // report blockers — both internship records, hence `mentorship`.
+  { href: '/admin/insights', icon: Lightbulb, key: 'insights', capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
   { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },

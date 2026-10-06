@@ -48,6 +48,13 @@ export const AI_RATE_LIMITS = {
   // mentee generative tools, while 10 per 10m buffers LLM token consumption.
   interaction_summary: { limit: 10, windowMs: 10 * 60 * 1000 },
 
+  // Open-text insights (POST /api/admin/insights/*, #2046).
+  // 10 calls / 10 minutes: one summary reads up to 400 rows, so a call is the
+  // largest prompt an admin can start. Changing the date range or cohort a few
+  // times is the legitimate pattern; an unchanged set is answered from the
+  // stored artefact without reaching this limit's provider call at all.
+  open_text_insights: { limit: 10, windowMs: 10 * 60 * 1000 },
+
   // Coarse per-organization burst limit across all AI routes.
   // 120 calls / 10 minutes: Prevents a single tenant from starving shared capacity
   // or exhausting provider burst rates before fine-grained per-tenant quotas land (#1555).

@@ -29,9 +29,23 @@ const DAY = 24 * 60 * 60 * 1000;
 export const TASK_TTL_MS: Record<string, number> = {
   cv_feedback: 7 * DAY,
   interview_prep: 7 * DAY,
+  // Open-text insights (#2046): keyed on exactly the rows sent, so any new or
+  // edited row is a fresh question anyway; the day bounds how long a page
+  // view keeps re-reading one answer.
+  evaluation_insights: 1 * DAY,
+  weekly_report_digest: 1 * DAY,
   interaction_summary: 1 * DAY,
   mentor_suggest: 1 * DAY,
 };
+
+/**
+ * Tasks whose artefacts quote MANY people at once and have no subject (#2046):
+ * a summary of an org's evaluation comments or weekly-report blockers. Erasing
+ * any one of those people wipes the org's copies (src/lib/accountErasure.ts) —
+ * they are a cache, regenerated on the next request, and a quote of an erased
+ * person must not outlive them.
+ */
+export const OPEN_TEXT_TASKS = ['evaluation_insights', 'weekly_report_digest'] as const;
 
 /** sha256 over a stable JSON rendering — key order never changes the hash. */
 export function hashInput(value: unknown): string {
