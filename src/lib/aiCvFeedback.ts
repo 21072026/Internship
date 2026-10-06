@@ -17,7 +17,7 @@ export async function aiCvFeedback(text: string): Promise<string> {
   // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
   // enough to hold a request handler open until the user gives up (#895).
   // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS });
+  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 700,

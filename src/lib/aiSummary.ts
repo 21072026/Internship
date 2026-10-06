@@ -24,7 +24,7 @@ export async function aiSummarizeInteractions(menteeName: string, interactions: 
   // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
   // enough to hold a request handler open until the user gives up (#895).
   // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS });
+  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
   const log = interactions
     .map((i) => `${i.date.toISOString().slice(0, 10)} · ${i.type}${i.subject ? ` · ${i.subject}` : ''}\n${i.notes}`)
     .join('\n---\n')

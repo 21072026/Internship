@@ -6,6 +6,7 @@ import { ambientOrgId } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
+import { callProvider, trackParseErrors } from '@/lib/ai/provider';
 import type { ConsentType } from '@prisma/client';
 
 // Central AI gate (Faz 2, #537) — the single wrapper every AI feature goes
@@ -31,7 +32,9 @@ import type { ConsentType } from '@prisma/client';
 // callers get a typed denial and surface a clear message to the operator —
 // mentees are never shown a paywall (core flows never depend on AI).
 
-export type AiDenialReason = 'no_consent' | 'not_configured' | 'quota_exceeded';
+// 'provider_error' (#2024): the provider failed even after its retries, or the
+// breaker is open. Like the other three it is a typed denial, never a throw.
+export type AiDenialReason = 'no_consent' | 'not_configured' | 'quota_exceeded' | 'provider_error';
 
 export type AiGateResult<T> =
   | { ok: true; result: T }
@@ -46,8 +49,9 @@ export async function getAiQuota(
 ): Promise<{ orgId: string; quota: number; used: number; remaining: number }> {
   const org = await quotaOrgId(orgId);
   const quota = parseInt(await getSetting('aiMonthlyQuota', org), 10) || 0;
+  // A provider failure is recorded (#2024) but never consumes quota.
   const used = await prisma.aiUsage.count({
-    where: withinTenant({ createdAt: periodRange(currentPeriod()) }, await orgWhere(org)),
+    where: withinTenant({ createdAt: periodRange(currentPeriod()), outcome: { not: 'provider_error' } }, await orgWhere(org)),
   });
   return { orgId: org, quota, used, remaining: Math.max(0, quota - used) };
 }
@@ -76,9 +80,20 @@ export async function runAiGated<T>(opts: {
   if (quota <= 0 || used >= quota) return { ok: false, reason: 'quota_exceeded' };
   if (!isAiConfigured()) return { ok: false, reason: 'not_configured' };
 
-  const result = await opts.call();
-  await prisma.aiUsage
-    .create({ data: { scope: opts.scope, orgId, userId: opts.userId ?? null, companyId: opts.companyId ?? null } })
-    .catch(() => {}); // metering must never break a successful call
-  return { ok: true, result };
+  // One logical task is one metered call, however many attempts the retries
+  // took (src/lib/ai/provider.ts). A failure is recorded, at no cost to the
+  // quota, and comes back as a typed denial — never a thrown 500.
+  const record = (outcome: 'ok' | 'parse_error' | 'provider_error') =>
+    prisma.aiUsage
+      .create({ data: { scope: opts.scope, orgId, userId: opts.userId ?? null, companyId: opts.companyId ?? null, outcome } })
+      .catch(() => {}); // metering must never break the call
+  try {
+    const { result, parseError } = await trackParseErrors(() => callProvider(opts.call));
+    await record(parseError ? 'parse_error' : 'ok');
+    return { ok: true, result };
+  } catch (error) {
+    console.error('[ai] provider call failed', { scope: opts.scope, error: String(error) });
+    await record('provider_error');
+    return { ok: false, reason: 'provider_error' };
+  }
 }
