@@ -15,7 +15,8 @@ import { sendMeetingRequestEmail } from '@/services/emailService';
 import { parseUserDateTime } from '@/lib/timezone';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { meetingEnd } from '@/lib/meetingDuration';
-import { conflictBody, findConflictFor } from '@/lib/busyWindows';
+import { conflictBody, findConflictFor, EXTERNAL_PAD_MS } from '@/lib/busyWindows';
+import { providerBusy } from '@/lib/calendarFreeBusy';
 import { findPolicyViolation, loadBookingPolicy, policyBody, policyExempt } from '@/lib/bookingPolicy';
 
 // GET ?relationId= — meeting requests for a thread (participants/admin).
@@ -79,11 +80,13 @@ export async function POST(request: Request) {
   // A session is as long as the mentor says (#2003), or the default.
   const policy = await loadBookingPolicy(prisma, rel.mentorId);
   const proposedEnd = meetingEnd(proposedAt, { durationMinutes: policy?.defaultSlotMinutes ?? null });
-  const conflict = await findConflictFor(prisma, session.user, [rel.mentorId, rel.menteeId], { start: proposedAt, end: proposedEnd });
+  // Both people's real calendars count too (#1997).
+  const external = await providerBusy([rel.mentorId, rel.menteeId], new Date(proposedAt.getTime() - EXTERNAL_PAD_MS), new Date(proposedEnd.getTime() + EXTERNAL_PAD_MS));
+  const conflict = await findConflictFor(prisma, session.user, [rel.mentorId, rel.menteeId], { start: proposedAt, end: proposedEnd }, { external });
   if (conflict) return NextResponse.json(conflictBody(conflict), { status: 409 });
   // …and the mentor's booking rules, named so the panel can say which (#2003).
   if (!policyExempt(session.user, rel.mentorId)) {
-    const violation = await findPolicyViolation(prisma, { mentorId: rel.mentorId, start: proposedAt, end: proposedEnd, policy });
+    const violation = await findPolicyViolation(prisma, { mentorId: rel.mentorId, start: proposedAt, end: proposedEnd, policy, external });
     if (violation) return NextResponse.json(policyBody(violation), { status: 409 });
   }
 

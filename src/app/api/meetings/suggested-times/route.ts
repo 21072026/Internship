@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { busyWindows } from '@/lib/busyWindows';
+import { providerBusy } from '@/lib/calendarFreeBusy';
 import { mergeWindows } from '@/lib/busyWindowsRule';
 import { findPolicyViolation, loadBookingPolicy } from '@/lib/bookingPolicy';
 import { widenForBuffer } from '@/lib/bookingPolicyRule';
@@ -63,11 +64,13 @@ export async function GET(request: Request) {
     const now = new Date();
     const horizon = new Date(now.getTime() + HORIZON_MS);
     const today = mentorToday(rel.mentor.timezone, now);
+    // Both people's real calendars count (#1997) — as bare windows, like ours.
+    const external = await providerBusy([rel.mentorId, rel.menteeId], now, horizon);
     const [slots, exceptions, mentorBusy, menteeBusy] = await Promise.all([
       prisma.availabilitySlot.findMany({ where: liveSlotsWhere(rel.mentorId, today), select: { id: true, weekday: true, startTime: true, endTime: true, date: true } }),
       prisma.availabilityException.findMany({ where: { mentorId: rel.mentorId, endDate: { gte: today } }, select: { startDate: true, endDate: true } }),
-      busyWindows(prisma, [rel.mentorId], now, horizon),
-      busyWindows(prisma, [rel.menteeId], now, horizon),
+      busyWindows(prisma, [rel.mentorId], now, horizon, { external }),
+      busyWindows(prisma, [rel.menteeId], now, horizon, { external }),
     ]);
     const result = suggestTimes({
       slots,
@@ -88,7 +91,7 @@ export async function GET(request: Request) {
     if (policy && (policy.maxPerWeek || policy.maxPerMonth) && result.suggestions.length > 0) {
       suggestions = [];
       for (const s of result.suggestions.slice(0, MAX_POLICY_CHECKS)) {
-        const violation = await findPolicyViolation(prisma, { mentorId: rel.mentorId, start: new Date(s.startISO), end: new Date(s.endISO), now, policy });
+        const violation = await findPolicyViolation(prisma, { mentorId: rel.mentorId, start: new Date(s.startISO), end: new Date(s.endISO), now, policy, external });
         if (!violation) suggestions.push(s);
         if (suggestions.length >= count) break;
       }

@@ -36,6 +36,9 @@ import { DEFAULT_VERTICAL } from '@/lib/verticals';
 // creates a Google account or acts without consent.
 export const GOOGLE_CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
+  // Busy/free intervals only — never titles (#1997). Connections made before
+  // this was requested keep working for pushes and are offered a reconnect.
+  'https://www.googleapis.com/auth/calendar.freebusy',
   'openid',
   'email',
 ];

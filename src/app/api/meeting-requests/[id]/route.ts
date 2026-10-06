@@ -110,7 +110,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       viewer: session.user,
       userIds: [rel.mentorId, rel.menteeId],
       window: { start: req.proposedAt, end },
-      extraCheck: policyExempt(session.user, rel.mentorId) ? undefined : (tx) => findPolicyViolation(tx, { mentorId: rel.mentorId, start: req.proposedAt, end, policy }),
+      extraCheck: policyExempt(session.user, rel.mentorId) ? undefined : (tx, external) => findPolicyViolation(tx, { mentorId: rel.mentorId, start: req.proposedAt, end, policy, external }),
     },
     (tx) =>
       tx.meeting.create({

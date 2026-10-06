@@ -14,7 +14,7 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { busyWindows } from '@/lib/busyWindows';
+import { busyWindows, type ExternalBusy } from '@/lib/busyWindows';
 import { checkPolicy, isEmptyPolicy, periodBounds, type BookingPolicy, type PolicyViolation } from '@/lib/bookingPolicyRule';
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -58,7 +58,7 @@ async function countMeetings(db: Db, mentorId: string, from: Date, to: Date, exc
  */
 export async function findPolicyViolation(
   db: Db,
-  input: { mentorId: string; start: Date; end: Date; now?: Date; excludeMeetingIds?: string[]; excludeBatchKey?: string; policy?: BookingPolicy | null },
+  input: { mentorId: string; start: Date; end: Date; now?: Date; excludeMeetingIds?: string[]; excludeBatchKey?: string; policy?: BookingPolicy | null; external?: ExternalBusy },
 ): Promise<PolicyViolation | null> {
   const policy = input.policy === undefined ? await loadBookingPolicy(db, input.mentorId) : input.policy;
   if (!policy) return null;
@@ -72,7 +72,7 @@ export async function findPolicyViolation(
     policy.maxPerWeek ? countMeetings(db, input.mentorId, week.start, week.end, exclude, input.excludeBatchKey) : Promise.resolve(0),
     policy.maxPerMonth ? countMeetings(db, input.mentorId, month.start, month.end, exclude, input.excludeBatchKey) : Promise.resolve(0),
     buffer
-      ? busyWindows(db, [input.mentorId], new Date(input.start.getTime() - buffer), new Date(input.end.getTime() + buffer), { excludeMeetingIds: exclude, excludeBatchKey: input.excludeBatchKey })
+      ? busyWindows(db, [input.mentorId], new Date(input.start.getTime() - buffer), new Date(input.end.getTime() + buffer), { excludeMeetingIds: exclude, excludeBatchKey: input.excludeBatchKey, external: input.external })
       : Promise.resolve([]),
   ]);
   return checkPolicy(policy, { start: input.start, end: input.end, now, timezone: mentor?.timezone, weekCount, monthCount, busy });
