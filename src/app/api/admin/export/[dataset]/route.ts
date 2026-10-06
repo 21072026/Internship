@@ -14,6 +14,7 @@ import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { analyticsWorkbook, candidatesSheet, fullAnalyticsWorkbook } from '@/lib/reports/workbooks';
 import { toCsv } from '@/lib/reports/render';
 import { tenantWhere } from '@/lib/tenantFilter';
+import { loadSurveyOverview } from '@/lib/surveyOverview';
 import { loadProgramScorecard } from '@/lib/programScorecardData';
 
 // GET /api/admin/export/[dataset] — the ONE door every admin export goes
@@ -103,7 +104,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
         ]);
         if (!analytics.ok) return NextResponse.json({ error: 'Export failed' }, { status: analytics.status });
         const scorecard = await loadProgramScorecard(await tenantWhere(session));
-        const src = { analytics: analytics.body, aging: aging.body, funnel: funnel.body, scorecard };
+        const surveys = await loadSurveyOverview(await tenantWhere(session), locale);
+        const src = { analytics: analytics.body, aging: aging.body, funnel: funnel.body, scorecard, surveys };
         const ctx = { orgId, locale, stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null };
         const sheets = dataset === 'analytics'
           ? await analyticsWorkbook(src, ctx, t, label)

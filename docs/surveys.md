@@ -195,3 +195,17 @@ number leaves the server — the screen only draws what it gets:
 
 Per-question distributions of a survey that passed the floor are shown in
 full: they are counts over at least *floor* people, not a group of them.
+
+### Where else the numbers go (#1910)
+
+- **The programme scorecard** (`docs/program-scorecard.md`): `nps` is the
+  last 90 days' answers to every survey's first NPS question, pooled — a
+  survey counts only once its own answers reach its own floor, so a survey
+  that raised its floor is not read below it through a pooled number.
+  `surveyResponseRate` is the invitations sent 7–90 days ago (both reminders
+  have had their chance) that were answered. Both are on `/admin/analytics`,
+  in the print report and in the XLSX "Programme health" sheet.
+- **One row per survey** (`loadSurveyOverview`, `src/lib/surveyOverview.ts`;
+  `GET /api/admin/analytics/surveys`): the print report's Surveys block and
+  the XLSX "Surveys" sheet — counts always, the rate and the NPS only at or
+  above that survey's floor.

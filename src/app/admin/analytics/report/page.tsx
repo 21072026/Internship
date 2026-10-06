@@ -12,6 +12,7 @@ import { useAdvancedAnalytics } from '@/lib/analyticsEntitlementsClient';
 import { formatDate } from '@/lib/relativeTime';
 import type { VerticalCapability } from '@/lib/verticals';
 import type { TrialConversionData } from '@/components/admin/TrialConversionCard';
+import type { SurveyOverviewRow } from '@/lib/surveyOverview';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -39,6 +40,42 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const th = 'text-left text-xs text-gray-500 py-1.5 pr-4 border-b border-gray-200';
 const td = 'py-1.5 pr-4 text-sm border-b border-gray-100';
+
+// The surveys (#1910), floored like the results screen: no rate and no NPS
+// under a survey's floor. Renders nothing when the programme has no surveys.
+function SurveysBlock() {
+  const t = useT();
+  const s = t.surveyResults;
+  const [rows, setRows] = useState<SurveyOverviewRow[] | null>(null);
+  useEffect(() => {
+    fetch('/api/admin/analytics/surveys')
+      .then((r) => (r.ok ? r.json() : { surveys: [] }))
+      .then((d) => setRows(d.surveys ?? []))
+      .catch(() => setRows([]));
+  }, []);
+  if (!rows || rows.length === 0) return null;
+  const label = (prefix: string, v: string) => (s as Record<string, string>)[`${prefix}_${v}`] ?? v;
+  return (
+    <Section title={s.reportTitle}>
+      <table className="w-full" data-testid="report-surveys"><thead><tr>
+        <th className={th}>{s.colSurvey}</th><th className={th}>{s.colStatus}</th><th className={th}>{s.colInvited}</th>
+        <th className={th}>{s.colResponses}</th><th className={th}>{s.colRate}</th><th className={th}>{s.colNps}</th>
+      </tr></thead><tbody>
+        {rows.map((r) => (
+          <tr key={r.id} data-testid={`report-survey-${r.id}`}>
+            <td className={td}>{r.title}</td>
+            <td className={td}>{label('status', r.status)}</td>
+            <td className={td}>{r.invited}</td>
+            <td className={td}>{r.responses}</td>
+            <td className={td}>{r.rate === null ? s.belowFloor : `${r.rate}%`}</td>
+            <td className={td}>{r.nps === null ? (r.npsN > 0 ? s.belowFloor : '—') : `${r.nps} (n=${r.npsN})`}</td>
+          </tr>
+        ))}
+      </tbody></table>
+      <p className="mt-2 text-xs text-gray-500">{s.reportNote}</p>
+    </Section>
+  );
+}
 
 // Premium full analytics report (Faz 2, #540) — a print-friendly page covering
 // funnel, trends, mentor workload, cohort comparison and source conversion.
@@ -116,6 +153,7 @@ export default function AnalyticsReportPage() {
       </p>
 
       <ProgramScorecard />
+      <SurveysBlock />
 
       <Section title={c.funnel}>
         <table className="w-full"><thead><tr>
