@@ -110,11 +110,13 @@ bir parmak iziyle yalnızca o host'un paketini listeledi.
 ### Mağaza kaydı kontrol listesi (uygulama başına)
 
 - [ ] Gizlilik politikası URL'i: `https://<host>/privacy`
-- [ ] **Hesap silme URL'i:** Play, hesap oluşturulabilen uygulamalardan, uygulamayı
-      kurmadan da erişilebilen bir "hesabımı nasıl silerim" sayfası istiyor.
-      Uygulama içi yol var (`DELETE /api/account`, `/account`), ama herkese açık bir
-      açıklama sayfası doğrulanmadı. Kayıttan önce `/privacy`'ye bir bölüm ya da ayrı
-      bir sayfa gerekebilir.
+- [x] **Hesap silme URL'i:** `https://<host>/delete-account`. Play, hesap
+      oluşturulabilen uygulamalardan, uygulamayı kurmadan da erişilebilen bir silme
+      açıklaması istiyor. Sayfa uygulama içi yolu (`/account` → `DELETE /api/account`),
+      giriş yapılamıyorsa e-posta talebini, nelerin silindiğini ve nelerin kaldığını
+      `hardDeleteUser` (`src/lib/accountErasure.ts`) ile birebir anlatır; erasure
+      değişirse metin aynı diff'te değişir. `/account-deletion` değil, çünkü
+      `robots.ts` `/account` önekini engelliyor.
 - [ ] Data safety formu (toplanan veriler: hesap, mesajlar, dosyalar; şifreleme: TLS;
       silme: evet)
 - [ ] İçerik derecelendirmesi, hedef kitle (çocuklar **değil**), reklam yok
