@@ -1,6 +1,7 @@
 import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SessionProvider, useSession } from '../lib/session';
 import { navigationTheme, useAppTheme } from '../lib/theme';
@@ -42,9 +43,12 @@ function RootStack() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <SessionProvider>
-        <RootStack />
-      </SessionProvider>
+      {/* Reports the keyboard's real height to the screens that follow it (thread/[id]). */}
+      <KeyboardProvider>
+        <SessionProvider>
+          <RootStack />
+        </SessionProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }
