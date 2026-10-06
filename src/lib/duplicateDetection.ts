@@ -162,16 +162,28 @@ const CANDIDATE_SELECT = {
 export async function findPossibleDuplicates(
   input: DuplicateInput & { orgId: string | null; excludeId?: string },
 ): Promise<DuplicateMatch[]> {
-  const candidates = await prisma.user.findMany({
+  const pool = await loadDuplicatePool(input.orgId, input.excludeId);
+  return rankDuplicates(input, pool);
+}
+
+/** The org's MENTEEs as compared by `rankDuplicates` — one query for a whole batch. */
+export async function loadDuplicatePool(orgId: string | null, excludeId?: string): Promise<CandidateRecord[]> {
+  return prisma.user.findMany({
     where: {
       role: 'MENTEE',
-      orgId: input.orgId,
-      ...(input.excludeId ? { id: { not: input.excludeId } } : {}),
+      orgId,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
     },
     select: CANDIDATE_SELECT,
   });
+}
+
+// The comparison itself, without the query. A caller checking many inputs
+// against the same org — the CSV import (#1432), whose per-row query made a
+// 150-row dry run take 2.5 s — loads the pool once and ranks each row here.
+export function rankDuplicates(input: DuplicateInput, pool: CandidateRecord[]): DuplicateMatch[] {
   const matches: DuplicateMatch[] = [];
-  for (const other of candidates) {
+  for (const other of pool) {
     const signals = matchSignals(input, other);
     const score = scoreSignals(signals);
     if (score >= DUPLICATE_SCORE_THRESHOLD) matches.push({ ...other, signals, score });

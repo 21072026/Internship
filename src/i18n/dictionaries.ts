@@ -1586,6 +1586,22 @@ const en = {
     companyD: 'A partner company sees the candidate’s profile and stage, and tells the mentor what it thinks in one click.',
     companyAlt: 'A company’s candidate view: a profile with stage, target role, university and skills, and buttons to give feedback — Interested, Shortlisted or Pass — with a note for the mentor.',
   },
+  // The MARKETING landing's tour (SaleVali): its own namespace, not more keys in
+  // `productTour`, because that one is leak-exempt (it describes the internship
+  // screens) and this copy must stay inside the MARKETING leak check.
+  productTourMarketing: {
+    title: 'See it in action',
+    subtitle: 'Three screens from the demo workspace — made-up accounts, the real product.',
+    pipelineT: 'Every deal on one board',
+    pipelineD: 'Each lead is a card in its stage — drag it on, and the whole team sees where it stands.',
+    pipelineAlt: 'The pipeline board: lead cards sorted into funnel columns — new lead, contacted, qualified, trial running — each showing its account owner and number of interactions.',
+    repT: 'Each rep starts the day with their own list',
+    repD: 'Their open leads and accounts, and what needs a decision today — an expired trial, a follow-up that is due.',
+    repAlt: 'A sales rep’s dashboard: a “needs attention” box with an expired trial, deals won this month, counts of open leads and accounts, and the rep’s own leads with their stage.',
+    insightsT: 'See where deals get stuck',
+    insightsD: 'Stage-to-stage conversion, time to won and monthly cohorts — computed from the pipeline, not typed into a spreadsheet.',
+    insightsAlt: 'The analytics screen: totals for records, won rate and interactions, a stage-to-stage conversion chart that marks the biggest drop-off, time to won, and a cohort table by month.',
+  },
   landing: {
     signIn: 'Sign In',
     register: 'Register',
@@ -7811,6 +7827,19 @@ const tr: Dict = {
     companyD: 'Partner şirket adayın profilini ve aşamasını görür, görüşünü mentora tek tıkla iletir.',
     companyAlt: 'Şirketin aday ekranı: aşaması, hedef pozisyonu, üniversitesi ve becerileriyle bir aday profili; mentora notla birlikte görüş bildirmek için İlgileniyorum, Kısa liste ve Geç düğmeleri.',
   },
+  productTourMarketing: {
+    title: 'Çalışırken görün',
+    subtitle: 'Demo çalışma alanından üç ekran — uydurma hesaplar, gerçek ürün.',
+    pipelineT: 'Her fırsat tek bir panoda',
+    pipelineD: 'Her lead kendi aşamasında bir kart — sürükleyip ilerletin, ekibin tamamı nerede durduğunu görsün.',
+    pipelineAlt: 'Pipeline panosu: yeni lead, iletişime geçildi, nitelikli, deneme sürüyor sütunlarına dizilmiş lead kartları; her kartta hesap sahibi ve etkileşim sayısı.',
+    repT: 'Her satışçı güne kendi listesiyle başlar',
+    repD: 'Açık lead’leri ve hesapları, bir de bugün karar bekleyenler — süresi dolan bir deneme, vadesi gelen bir takip.',
+    repAlt: 'Bir satışçının panosu: süresi dolmuş bir denemeyi gösteren “dikkat gerekiyor” kutusu, bu ay kazanılan fırsatlar, açık lead ve hesap sayıları ve aşamalarıyla birlikte kendi lead listesi.',
+    insightsT: 'Fırsatların nerede takıldığını görün',
+    insightsD: 'Aşamadan aşamaya dönüşüm, kazanmaya kadar geçen süre ve aylık kohortlar — bir tabloya elle yazılmaz, pipeline’dan hesaplanır.',
+    insightsAlt: 'Analiz ekranı: kayıt, kazanma oranı ve etkileşim toplamları, en büyük kaybı işaretleyen aşamadan aşamaya dönüşüm grafiği, kazanmaya kadar geçen süre ve aylık kohort tablosu.',
+  },
   landing: {
     signIn: 'Giriş Yap',
     register: 'Kayıt Ol',
@@ -13931,6 +13960,19 @@ const de: Dict = {
     companyT: 'Unternehmen sichten Kandidaten statt Lebensläufe im Postfach',
     companyD: 'Ein Partnerunternehmen sieht Profil und Phase des Kandidaten und gibt dem Mentor mit einem Klick seine Einschätzung.',
     companyAlt: 'Die Kandidatenansicht eines Unternehmens: ein Profil mit Phase, Zielposition, Hochschule und Skills sowie Schaltflächen für eine Rückmeldung – Interessiert, Vorgemerkt oder Absage – mit einer Notiz an den Mentor.',
+  },
+  productTourMarketing: {
+    title: 'In Aktion sehen',
+    subtitle: 'Drei Bildschirme aus dem Demo-Arbeitsbereich – erfundene Kunden, das echte Produkt.',
+    pipelineT: 'Jeder Deal auf einem Board',
+    pipelineD: 'Jeder Lead ist eine Karte in seiner Phase – ziehen Sie sie weiter, und das ganze Team sieht, wo er steht.',
+    pipelineAlt: 'Das Pipeline-Board: Lead-Karten in Funnel-Spalten – neuer Lead, kontaktiert, qualifiziert, Test läuft –, jede mit Account-Verantwortlichem und Anzahl der Interaktionen.',
+    repT: 'Jeder im Vertrieb startet mit der eigenen Liste',
+    repD: 'Die eigenen offenen Leads und Accounts und was heute eine Entscheidung braucht – ein abgelaufener Test, ein fälliges Follow-up.',
+    repAlt: 'Das Vertriebs-Dashboard einer Person: ein Kasten „Braucht Aufmerksamkeit“ mit einem abgelaufenen Test, die diesen Monat gewonnenen Deals, die Zahl offener Leads und Accounts und die eigenen Leads mit ihrer Phase.',
+    insightsT: 'Sehen, wo Deals hängen bleiben',
+    insightsD: 'Konversion von Phase zu Phase, Zeit bis zum Abschluss und monatliche Kohorten – aus der Pipeline berechnet, nicht in eine Tabelle getippt.',
+    insightsAlt: 'Die Analyse-Ansicht: Summen für Datensätze, Gewinnquote und Interaktionen, ein Diagramm der Konversion von Phase zu Phase mit dem größten Abfall markiert, die Zeit bis zum Abschluss und eine Kohortentabelle nach Monat.',
   },
   landing: {
     signIn: 'Anmelden',
