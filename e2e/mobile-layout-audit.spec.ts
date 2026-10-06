@@ -36,7 +36,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('phone width: the admin rows keep the person identifiable', { tag: '@smoke' }, async ({ page }) => {
+test('phone width: the admin rows keep the person identifiable', async ({ page }) => {
   const adminEmail = uniqueEmail('mobile-audit-admin');
   const mentorEmail = uniqueEmail('mobile-audit-mentor-with-a-long-address');
   const pw = 'MobileAudit123!';

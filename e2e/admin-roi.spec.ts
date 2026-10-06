@@ -67,7 +67,7 @@ test.describe('programme ROI', () => {
     await prisma.$disconnect();
   });
 
-  test('the number, every step, and assumptions that recalculate it', { tag: '@smoke' }, async ({ page }) => {
+  test('the number, every step, and assumptions that recalculate it', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
 
     const api = await (await page.request.get('/api/admin/analytics/roi')).json();

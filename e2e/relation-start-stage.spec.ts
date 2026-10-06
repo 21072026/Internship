@@ -19,7 +19,7 @@ test.afterAll(async () => {
 
 const PASSWORD = 'StartStagePass123!';
 
-test('a relation created in a custom-pipeline org starts on that org\'s first on-path stage', { tag: '@smoke' }, async ({ page }) => {
+test('a relation created in a custom-pipeline org starts on that org\'s first on-path stage', async ({ page }) => {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const org = await prisma.organization.create({
     data: { name: `Start Stage ${stamp}`, slug: `start-stage-${stamp}` },
@@ -84,7 +84,7 @@ test('a relation created in a custom-pipeline org starts on that org\'s first on
   }
 });
 
-test('an org on the built-in stages still starts a relation on APPLICATION_100', { tag: '@smoke' }, async ({ page }) => {
+test('an org on the built-in stages still starts a relation on APPLICATION_100', async ({ page }) => {
   const adminEmail = uniqueEmail('defaultstage-admin');
   const mentorEmail = uniqueEmail('defaultstage-mentor');
   const menteeEmail = uniqueEmail('defaultstage-mentee');

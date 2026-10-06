@@ -17,7 +17,7 @@ async function signIn(page: import('@playwright/test').Page, email: string, pass
   await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 }
 
-test('admin previews and sends a bulk invitation roster', { tag: '@smoke' }, async ({ page }) => {
+test('admin previews and sends a bulk invitation roster', async ({ page }) => {
   const adminEmail = uniqueEmail('bulk-admin');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Bulk Admin');
   const tag = `${Date.now()}`;

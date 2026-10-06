@@ -22,7 +22,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 const CONFIGURED = Boolean(process.env.OPERATOR_NAME && process.env.OPERATOR_EMAIL);
 
-test('the imprint page is public and reachable from the footer', { tag: '@smoke' }, async ({ page }) => {
+test('the imprint page is public and reachable from the footer', async ({ page }) => {
   await page.goto('/privacy');
 
   const link = page.getByTestId('public-footer').getByRole('link', { name: /imprint|künye|impressum/i });

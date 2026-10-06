@@ -1,9 +1,7 @@
 name: E2E Tests
 
 on:
-  # Re-enabled 2026-07-21 after the repo transfer reset the Actions quota. This
-  # is the @smoke-only PR gate (~3.5 min) — cheap enough to run per PR. The full
-  # suite (e2e-full) stays workflow_dispatch-only to protect the monthly budget.
+  # The @smoke-only PR gate. The full suite runs 4x a day in e2e-full.yml.
   # A manual run takes an optional Playwright --grep filter, so a single
   # non-smoke spec can be re-verified on a branch without dispatching the whole
   # 4-shard e2e-full suite (which also emails a summary on every run).
@@ -78,8 +76,28 @@ jobs:
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "$count path(s) examined; code=$code"
 
+  # The smoke set and the accessibility gate, run as PARALLEL jobs (#2811).
+  #
+  # Serially this job took ~19 min wall-clock: ~4 min installing CJK/Thai/X11
+  # font packages from a slow apt mirror, 2.6 min building, 7.6 min for the
+  # ~200 @smoke tests on one worker and 2.9 min for the a11y gate. The smoke
+  # set was pruned back to critical flows + security guards (~107 tests, most
+  # of them browserless unit specs), and the rest is split:
+  #
+  #   - smoke 1/2, 2/2: Playwright `--shard` over the @smoke set. Each shard is
+  #     its own runner with its own MySQL service and its own `next start`, so
+  #     the state isolation is exactly what one worker on one runner gave —
+  #     `workers: 1` stays (specs share the seeded admin, rate-limit buckets and
+  #     global rows, and were never written for concurrency on one DB).
+  #   - a11y: the serial baseline scan (e2e/a11y-scan.spec.ts) cannot be
+  #     sharded — its last test compares what every earlier test collected — so
+  #     it is a job of its own and, at ~3 min, the one that sets the pace.
+  #
+  # The REQUIRED check is the `Playwright smoke` job at the bottom, which only
+  # aggregates these. Branch protection matches check names literally, and a
+  # matrix job is named `Playwright smoke (…)`, never `Playwright smoke`.
   e2e:
-    name: Playwright smoke
+    name: Playwright smoke (${{ matrix.label }})
     needs: changes
     # Runs unless the PR is docs-only. FAILS CLOSED: if `changes` errors, its
     # output is empty, which is not 'false', so the smoke runs instead of the
@@ -87,6 +105,15 @@ jobs:
     # skipping this job the way an implicit `success()` would.
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
+    strategy:
+      # One red shard should not cancel the others: the report of every shard
+      # is what tells you whether it is one flaky spec or a real break.
+      fail-fast: false
+      matrix:
+        include:
+          - { label: 'smoke 1/2', suite: smoke, shard: '1/2' }
+          - { label: 'smoke 2/2', suite: smoke, shard: '2/2' }
+          - { label: 'a11y', suite: a11y, shard: '' }
 
     services:
       mysql:
@@ -131,8 +158,26 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
+      # Next's webpack cache. Restored on every run, SAVED only by the push to
+      # main — so PR runs start from main's cache (a branch may read its base
+      # branch's caches) without each PR push adding a few hundred MB to the
+      # repo's 10 GB cache budget and evicting the npm/Playwright caches.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
       - name: Build app
         run: npm run build
+
+      - name: Save Next.js build cache
+        if: ${{ github.event_name == 'push' && matrix.shard == '1/2' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -141,38 +186,71 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: playwright-${{ runner.os }}-
 
+      # The browser only — no `--with-deps`. On ubuntu-latest every shared
+      # library Chromium needs is already installed (the runner image ships
+      # Chrome); `--with-deps` added nothing but nine font packages (CJK, Thai,
+      # X11 bitmap fonts) and spent ~4 min fetching them from the Azure apt
+      # mirror on every run. No smoke spec compares screenshots, so glyph
+      # fallback cannot change a result. The scheduled full suite
+      # (e2e-full.yml) keeps `--with-deps` and therefore the full font set.
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       # PR gate runs the @smoke subset only (#623); the FULL suite runs 4x a
       # day via e2e-full.yml (sharded, email on failure) and on demand.
       # The filter is passed through an env var, not interpolated into the
-      # shell — a dispatch input is untrusted text.
-      - name: Run E2E tests
+      # shell — a dispatch input is untrusted text. `--pass-with-no-tests`
+      # because a narrow manual grep (one test title) leaves most shards empty,
+      # and an empty shard is not a failure.
+      - name: Run E2E tests (${{ matrix.label }})
+        if: ${{ matrix.suite == 'smoke' }}
         env:
           E2E_GREP: ${{ inputs.grep || '@smoke' }}
-        run: npx playwright test --grep "$E2E_GREP"
+          E2E_SHARD: ${{ matrix.shard }}
+        run: npx playwright test --grep "$E2E_GREP" --shard="$E2E_SHARD" --pass-with-no-tests
 
       # The accessibility regression gate, run OUTSIDE the grep (#826).
       #
-      # This step exists because the gate shipped in #862 did not gate. The scan
-      # carries no @smoke tag, and the step above filters on @smoke, so the
+      # This job exists because the gate shipped in #862 did not gate. The scan
+      # carries no @smoke tag, and the smoke shards filter on @smoke, so the
       # 9-page baseline comparison only ever ran in the scheduled suite — a PR
       # introducing a new serious violation sailed through. #1333 is that
       # failure mode realised.
       #
-      # Kept as its own step rather than tagged @smoke so the smoke set stays
-      # small and fast (CLAUDE.md), while the gate still blocks the PR it is
-      # supposed to block. Skipped when a manual run asked for a specific grep,
-      # because that run is targeting something else on purpose.
+      # Kept out of the @smoke tag so the smoke set stays small and fast
+      # (CLAUDE.md), while the gate still blocks the PR it is supposed to
+      # block. Skipped when a manual run asked for a specific grep, because that
+      # run is targeting something else on purpose.
       - name: Accessibility regression gate
-        if: ${{ !inputs.grep }}
+        if: ${{ matrix.suite == 'a11y' && !inputs.grep }}
         run: npx playwright test e2e/a11y-scan.spec.ts
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ strategy.job-index }}-${{ matrix.suite }}
           path: playwright-report/
           retention-days: 7
+
+  # The REQUIRED check. Green when every shard above is green, and when the PR
+  # is docs-only and the shards were skipped on purpose (`changes` said
+  # code=false) — the same outcome the single skipped job used to report.
+  # Anything else is red: a failed or cancelled shard, and a shard skipped for
+  # any OTHER reason (fails closed, like the `if:` above).
+  smoke:
+    name: Playwright smoke
+    needs: [changes, e2e]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULT: ${{ needs.e2e.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+        run: |
+          echo "shards: $RESULT, code change: ${CODE:-unknown}"
+          if [ "$RESULT" = "success" ]; then exit 0; fi
+          if [ "$RESULT" = "skipped" ] && [ "$CODE" = "false" ]; then
+            echo "Docs-only PR: nothing for the smoke suite to test."; exit 0
+          fi
+          exit 1

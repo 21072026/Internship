@@ -29,7 +29,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('admin list shows a pending application and the detail page renders every field', { tag: '@smoke' }, async ({ page }) => {
+test('admin list shows a pending application and the detail page renders every field', async ({ page }) => {
   const adminEmail = uniqueEmail('mentor-app-review-admin');
   const pw = 'ReviewAdmin123';
   await seedUser(adminEmail, pw, 'ADMIN', 'Review Admin');
@@ -53,7 +53,7 @@ test('admin list shows a pending application and the detail page renders every f
   }
 });
 
-test('taking an application under review updates its status and sends the applicant an email', { tag: '@smoke' }, async ({ page }) => {
+test('taking an application under review updates its status and sends the applicant an email', async ({ page }) => {
   const adminEmail = uniqueEmail('mentor-app-review-admin');
   const pw = 'ReviewAdmin123';
   await seedUser(adminEmail, pw, 'ADMIN', 'Review Admin');
@@ -74,7 +74,7 @@ test('taking an application under review updates its status and sends the applic
   }
 });
 
-test('rejecting requires a reason and records it internally', { tag: '@smoke' }, async ({ page }) => {
+test('rejecting requires a reason and records it internally', async ({ page }) => {
   const adminEmail = uniqueEmail('mentor-app-review-admin');
   const pw = 'ReviewAdmin123';
   await seedUser(adminEmail, pw, 'ADMIN', 'Review Admin');
@@ -104,7 +104,7 @@ test('rejecting requires a reason and records it internally', { tag: '@smoke' },
 // a rejected application silently destroyed the reason the admin had recorded.
 // The two fields are separate columns now — this asserts the reason survives a
 // note save byte-for-byte, and that the note landed in its own column.
-test('saving an admin note does not overwrite the rejection reason', { tag: '@smoke' }, async ({ page }) => {
+test('saving an admin note does not overwrite the rejection reason', async ({ page }) => {
   const adminEmail = uniqueEmail('mentor-app-note-admin');
   const pw = 'NoteAdmin123';
   await seedUser(adminEmail, pw, 'ADMIN', 'Note Admin');
@@ -159,7 +159,7 @@ test('saving an admin note does not overwrite the rejection reason', { tag: '@sm
   }
 });
 
-test('approving a new applicant creates an invitation and a second approve attempt is a no-op (idempotent)', { tag: '@smoke' }, async ({ page }) => {
+test('approving a new applicant creates an invitation and a second approve attempt is a no-op (idempotent)', async ({ page }) => {
   const adminEmail = uniqueEmail('mentor-app-review-admin');
   const pw = 'ReviewAdmin123';
   await seedUser(adminEmail, pw, 'ADMIN', 'Review Admin');
@@ -193,7 +193,7 @@ test('approving a new applicant creates an invitation and a second approve attem
   }
 });
 
-test('approving an applicant who already has a mentee account promotes it to MENTOR instead of duplicating', { tag: '@smoke' }, async ({ page }) => {
+test('approving an applicant who already has a mentee account promotes it to MENTOR instead of duplicating', async ({ page }) => {
   const adminEmail = uniqueEmail('mentor-app-review-admin');
   const pw = 'ReviewAdmin123';
   await seedUser(adminEmail, pw, 'ADMIN', 'Review Admin');
@@ -244,7 +244,7 @@ test('the decide endpoint requires admin auth: 401 anonymous, 403 for a non-admi
   }
 });
 
-test('landing and sign-in pages link to the public mentor application form', { tag: '@smoke' }, async ({ page }) => {
+test('landing and sign-in pages link to the public mentor application form', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByTestId('become-mentor-link')).toBeVisible();
   await page.getByTestId('become-mentor-link').click();
@@ -255,7 +255,7 @@ test('landing and sign-in pages link to the public mentor application form', { t
   await expect(page.getByTestId('apply-as-mentor-link')).toBeVisible();
 });
 
-test('the public apply form and its landing link stay usable on a phone-sized viewport', { tag: '@smoke' }, async ({ page }) => {
+test('the public apply form and its landing link stay usable on a phone-sized viewport', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 });
   await page.goto('/');
   const link = page.getByTestId('become-mentor-link');

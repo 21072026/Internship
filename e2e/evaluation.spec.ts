@@ -69,7 +69,7 @@ test('a mentor can delete an evaluation they recorded by mistake, but not the me
   }
 });
 
-test('mentor received feedback is private, read-only, and uses only mentor criteria', { tag: '@smoke' }, async ({ browser }) => {
+test('mentor received feedback is private, read-only, and uses only mentor criteria', async ({ browser }) => {
   const adminEmail = uniqueEmail('feedback-admin');
   const mentorAEmail = uniqueEmail('feedback-mentor-a');
   const mentorBEmail = uniqueEmail('feedback-mentor-b');

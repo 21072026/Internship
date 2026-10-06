@@ -17,7 +17,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('a server error under /mentor renders the boundary, not Next\'s default screen', { tag: '@smoke' }, async ({ page }) => {
+test('a server error under /mentor renders the boundary, not Next\'s default screen', async ({ page }) => {
   const email = uniqueEmail('boundary-mentor');
   const password = 'BoundaryPass123!';
   await seedUser(email, password, 'MENTOR', 'Boundary Mentor');
@@ -47,7 +47,7 @@ test('a server error under /mentor renders the boundary, not Next\'s default scr
   }
 });
 
-test('the boundary is translated — Turkish under the locale cookie', { tag: '@smoke' }, async ({ page }) => {
+test('the boundary is translated — Turkish under the locale cookie', async ({ page }) => {
   const email = uniqueEmail('boundary-tr');
   const password = 'BoundaryPass123!';
   await seedUser(email, password, 'MENTOR', 'Boundary TR Mentor');
@@ -69,7 +69,7 @@ test('the boundary is translated — Turkish under the locale cookie', { tag: '@
   }
 });
 
-test('a server error under /portal sends the mentee back to /portal', { tag: '@smoke' }, async ({ page }) => {
+test('a server error under /portal sends the mentee back to /portal', async ({ page }) => {
   const email = uniqueEmail('boundary-mentee');
   const password = 'BoundaryPass123!';
   await seedUser(email, password, 'MENTEE', 'Boundary Mentee');

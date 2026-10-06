@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  * on its card (lib/releaseNotesPaging.ts).
  */
 
-test('release notes load one page at a time', { tag: '@smoke' }, async ({ page }) => {
+test('release notes load one page at a time', async ({ page }) => {
   await page.goto('/release-notes');
   const cards = page.getByTestId('release-card');
   await expect(cards).toHaveCount(20);

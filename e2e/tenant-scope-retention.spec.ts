@@ -78,7 +78,7 @@ for (const [label, pick] of [
   ['A reads B', (t: TwoTenants) => [t.orgA, t.orgB] as const],
   ['B reads A', (t: TwoTenants) => [t.orgB, t.orgA] as const],
 ] as const) {
-  test(`the retention review lists only the admin's own candidates · ${label}`, { tag: '@smoke' }, async ({ page }) => {
+  test(`the retention review lists only the admin's own candidates · ${label}`, async ({ page }) => {
     const [own, other] = pick(tenants);
     await signInAsTenantActor(page, own.admin);
     await gotoSettled(page, '/admin/retention');

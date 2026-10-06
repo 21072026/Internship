@@ -97,7 +97,7 @@ test('skipping the wizard returns to the dashboard and never redirects again', a
   }
 });
 
-test('the existing mentee onboarding flow is unchanged', { tag: '@smoke' }, async ({ page }) => {
+test('the existing mentee onboarding flow is unchanged', async ({ page }) => {
   const email = uniqueEmail('menteeunchanged');
   await seedUser(email, 'MenteePass123!', 'MENTEE', 'Unchanged Mentee');
 

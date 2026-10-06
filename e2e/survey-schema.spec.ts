@@ -42,7 +42,7 @@ test.describe('survey schema', () => {
     await prisma.$disconnect();
   });
 
-  test('anonymous is severed in the database; identified keeps the link; one answer per invitation', { tag: '@smoke' }, async ({ page }) => {
+  test('anonymous is severed in the database; identified keeps the link; one answer per invitation', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
     const created = await page.request.post('/api/admin/surveys', { data: body('ANONYMOUS') });
     expect(created.status()).toBe(201);

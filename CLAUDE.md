@@ -47,10 +47,19 @@ nothing and left every docs-only PR `BLOCKED` forever. Instead its `changes` job
 file list and the smoke job is *skipped* — which branch protection counts as passing — only
 when every path is `docs/**`, `releases/unreleased/**`, `*.md` or a root `.HANDOFF-*`; any
 other path (a rename counts by both names) runs it, and a failed detection runs it too.
-Don't reintroduce a `paths:`/`paths-ignore:` filter on a workflow that carries a required check. The **smoke set** is the tests
-tagged `@smoke` (`test('…', { tag: '@smoke' }, …)`) — boot, auth, landing i18n, invite,
-pipeline, free-core regression. When you add a spec for a *critical* flow, tag it
-`@smoke`; keep the set small (~15-20 tests) so the PR gate stays fast. Locally `test:e2e`
+Don't reintroduce a `paths:`/`paths-ignore:` filter on a workflow that carries a required check. The gate runs as **parallel jobs**: Playwright `--shard` 1/2, 2/2 over the `@smoke` set plus
+the a11y baseline scan as a fifth job, each on its own runner with its own MySQL (so `workers: 1`
+stays — specs were never written to share one DB concurrently). The required `Playwright smoke`
+check is a small aggregator job over them; never rename it or make the matrix job carry that
+name. The smoke job installs Chromium **without** `--with-deps` (that only added fonts, ~4 min
+of apt per run). The **smoke set** is the tests
+tagged `@smoke` (`test('…', { tag: '@smoke' }, …)`) — boot, auth/SSO, landing i18n, invite,
+signup, pipeline, free-core regression, health, plus the **security guards** (authz matrix,
+role scoping, tenant isolation, session revocation, API-key/upload/mail enforcement) and the
+browserless `*.unit.spec.ts` checks, which cost ~nothing. Feature specs do **not** get the tag:
+the scheduled full suite covers them. It had drifted to 213 tests and was pruned to ~107 in
+#2811 — when you add a spec for a *critical* flow or a security boundary, tag it `@smoke`;
+anything else stays untagged. Locally `test:e2e`
 boots the dev server; set `BASE_URL=https://preview.interncrm.com` to run against a
 deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —

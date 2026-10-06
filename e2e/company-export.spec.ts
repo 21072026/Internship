@@ -168,7 +168,7 @@ test.afterAll(async () => {
 const exportCount = (targetId: string) =>
   prisma.activityLog.count({ where: { action: 'company.export', targetId } });
 
-test('another org\'s company cannot be exported by id', { tag: '@smoke' }, async ({ page }) => {
+test('another org\'s company cannot be exported by id', async ({ page }) => {
   // The row is really there — the 404 below is the org boundary answering, not
   // a missing id.
   expect(await prisma.company.count({ where: { id: foreignCompanyId, orgId: foreignOrgId } })).toBe(1);

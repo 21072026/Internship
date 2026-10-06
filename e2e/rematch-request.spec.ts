@@ -14,7 +14,7 @@ test.afterAll(async () => {
  * the state the approval leaves behind — the old pairing reads ENDED_REMATCHED,
  * and the mentee has EXACTLY ONE live relation, never two and never none.
  */
-test('mentee asks for a different mentor → admin approves → old pairing reads ENDED_REMATCHED', { tag: '@smoke' }, async ({ browser }) => {
+test('mentee asks for a different mentor → admin approves → old pairing reads ENDED_REMATCHED', async ({ browser }) => {
   const pw = 'RematchPass123';
   const menteeEmail = uniqueEmail('rm-mentee');
   const adminEmail = uniqueEmail('rm-admin');

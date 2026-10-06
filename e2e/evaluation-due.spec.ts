@@ -52,7 +52,7 @@ test.describe('evaluation due dates', () => {
     await prisma.$disconnect();
   });
 
-  test('custom stages, one row per type, two reminders, stop on write', { tag: '@smoke' }, async ({ page }) => {
+  test('custom stages, one row per type, two reminders, stop on write', async ({ page }) => {
     // Nine sweeps and three sign-ins: well past the default budget on a cold server.
     test.slow();
     await signInAndSettle(page, admin, PW, '/admin');

@@ -96,7 +96,7 @@ test.describe('request this mentor', () => {
     }
   });
 
-  test('directory card -> prefilled panel -> submitted request', { tag: '@smoke' }, async ({ page }) => {
+  test('directory card -> prefilled panel -> submitted request', async ({ page }) => {
     await signIn(page, menteeEmail, pw, '/portal');
 
     await page.goto('/mentors');

@@ -62,7 +62,7 @@ test.describe('survey campaigns', () => {
     await prisma.$disconnect();
   });
 
-  test('a custom-stage trigger fires once per person across two sweeps, and opt-outs are never claimed', { tag: '@smoke' }, async ({ page }) => {
+  test('a custom-stage trigger fires once per person across two sweeps, and opt-outs are never claimed', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
     // A pulse without its interval is refused.
     expect((await page.request.post('/api/admin/survey-campaigns', { data: { surveyId, name: 'Pulse', trigger: 'RECURRING' } })).status()).toBe(400);

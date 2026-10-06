@@ -193,7 +193,7 @@ async function signInRep(page: Page) {
   await signInAndSettle(page, repEmail, PASSWORD, '/sales');
 }
 
-test('a MARKETING sales rep lands on the sales surface and sees only their own records', { tag: '@smoke' }, async ({ page }) => {
+test('a MARKETING sales rep lands on the sales surface and sees only their own records', async ({ page }) => {
   test.slow();
   await signInRep(page);
 
@@ -332,7 +332,7 @@ test('the rep cannot re-point their record at another account', async ({ page })
   await expect(page.getByTestId('sales-accounts-table')).not.toContainText(`Colleague Account ${STAMP}`);
 });
 
-test('admin-only endpoints refuse the rep', { tag: '@smoke' }, async ({ page }) => {
+test('admin-only endpoints refuse the rep', async ({ page }) => {
   test.slow();
   await signInRep(page);
   for (const probe of MARKETING_MENTOR_ADMIN_ONLY) {

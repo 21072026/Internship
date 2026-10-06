@@ -26,7 +26,7 @@ async function readPref(userId: string, key: string) {
   return prefsOf(u?.notificationPrefs)[key];
 }
 
-test('a footer link unsubscribes on arrival — no sign-in, no Save', { tag: '@smoke' }, async ({ page }) => {
+test('a footer link unsubscribes on arrival — no sign-in, no Save', async ({ page }) => {
   const email = uniqueEmail('unsub-page');
   const user = await seedUser(email, 'UnsubPass123', 'MENTEE', 'Unsub Page');
   try {
