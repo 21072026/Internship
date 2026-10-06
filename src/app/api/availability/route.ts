@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { findSlotClash, liveSlotsWhere, mayWriteAvailabilityFor, mentorToday, writableMentorId } from '@/lib/availabilityAccess';
 import { weekdayOfDate } from '@/lib/availabilitySlots';
 import { busyWindows } from '@/lib/busyWindows';
+import { providerBusy } from '@/lib/calendarFreeBusy';
 import { loadBookingPolicy } from '@/lib/bookingPolicy';
 import { widenForBuffer } from '@/lib/bookingPolicyRule';
 import { mergeWindows } from '@/lib/busyWindowsRule';
@@ -160,9 +161,11 @@ export async function GET(request: Request) {
     if (session.user.role === 'ADMIN' || session.user.role === 'MENTEE') {
       const now = new Date();
       const horizon = new Date(now.getTime() + BUSY_HORIZON_MS);
+      // Real calendars included (#1997): still bare windows to the reader.
+      const external = await providerBusy(session.user.role === 'MENTEE' ? [mentor.id, session.user.id] : [mentor.id], now, horizon);
       const [mentorBusy, ownBusy] = await Promise.all([
-        busyWindows(prisma, [mentor.id], now, horizon),
-        session.user.role === 'MENTEE' ? busyWindows(prisma, [session.user.id], now, horizon) : Promise.resolve([]),
+        busyWindows(prisma, [mentor.id], now, horizon, { external }),
+        session.user.role === 'MENTEE' ? busyWindows(prisma, [session.user.id], now, horizon, { external }) : Promise.resolve([]),
       ]);
       busy = mergeWindows([...widenForBuffer(mentorBusy, policy?.bufferMinutes), ...ownBusy]).map((w) => ({ start: w.start.toISOString(), end: w.end.toISOString() }));
     }

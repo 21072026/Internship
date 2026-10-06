@@ -42,6 +42,7 @@ export async function GET() {
         accountEmail: conn?.accountEmail ?? null,
         lastSyncAt: conn?.lastSyncAt?.toISOString() ?? null,
         lastError: sanitizeError(conn?.lastError),
+        freeBusy: conn?.freeBusy ?? false,
         connectPath: p.connectPath,
         disconnectPath: p.disconnectPath,
       };

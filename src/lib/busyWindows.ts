@@ -22,6 +22,23 @@ import { prisma } from '@/lib/prisma';
 import { meetingEnd, meetingDurationMinutes, MAX_MEETING_MINUTES } from '@/lib/meetingDuration';
 import { ruleOccurrences, SERIES_RULE_SELECT } from '@/lib/meetingSeriesOccurrences';
 import { firstConflict, overlaps, type BusyWindow, type Window } from '@/lib/busyWindowsRule';
+import { providerBusy } from '@/lib/calendarFreeBusy';
+
+/**
+ * Busy windows from people's real calendars (#1997), by user id — fetched by
+ * the caller with `providerBusy()` BEFORE any transaction (it makes HTTP
+ * calls) and merged in here, so the answer is one list whatever its source.
+ */
+export type ExternalBusy = Map<string, BusyWindow[]>;
+
+export interface BusyOpts {
+  excludeMeetingIds?: string[];
+  excludeBatchKey?: string;
+  external?: ExternalBusy;
+}
+
+/** How far around a booking provider windows are fetched — enough for any buffer (#2003). */
+export const EXTERNAL_PAD_MS = 240 * 60_000;
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -42,7 +59,7 @@ export async function busyWindows(
   userIds: string[],
   from: Date,
   to: Date,
-  opts: { excludeMeetingIds?: string[]; excludeBatchKey?: string } = {},
+  opts: BusyOpts = {},
 ): Promise<BusyWindow[]> {
   if (userIds.length === 0) return [];
   // A meeting that started up to a working day before `from` may still be running.
@@ -79,6 +96,8 @@ export async function busyWindows(
       windows.push({ start: at, end: new Date(at.getTime() + minutes * 60_000), title: s.title });
     }
   }
+  // The real calendars' busy blocks (#1997) — already { start, end } only.
+  for (const id of userIds) windows.push(...(opts.external?.get(id) ?? []));
   const range: Window = { start: from, end: to };
   return windows.filter((w) => overlaps(w, range));
 }
@@ -88,7 +107,7 @@ export async function findConflict(
   db: Db,
   userIds: string[],
   candidate: Window,
-  opts: { excludeMeetingIds?: string[]; excludeBatchKey?: string } = {},
+  opts: BusyOpts = {},
 ): Promise<BusyWindow | null> {
   return firstConflict(candidate, await busyWindows(db, userIds, candidate.start, candidate.end, opts));
 }
@@ -109,7 +128,7 @@ export async function findConflictFor(
   viewer: Viewer,
   userIds: string[],
   candidate: Window,
-  opts: { excludeMeetingIds?: string[]; excludeBatchKey?: string } = {},
+  opts: BusyOpts = {},
 ): Promise<BusyWindow | null> {
   const conflict = await findConflict(db, userIds, candidate, opts);
   if (!conflict || viewer.role === 'ADMIN') return conflict;
@@ -149,7 +168,7 @@ export async function bookWithoutConflict<T, R = never>(
     force?: boolean;
     excludeMeetingIds?: string[];
     excludeBatchKey?: string;
-    extraCheck?: (tx: Prisma.TransactionClient) => Promise<R | null>;
+    extraCheck?: (tx: Prisma.TransactionClient, external: ExternalBusy) => Promise<R | null>;
   },
   write: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<
@@ -157,11 +176,14 @@ export async function bookWithoutConflict<T, R = never>(
   | { ok: false; conflict: BusyWindow; refused?: undefined }
   | { ok: false; conflict?: undefined; refused: R }
 > {
+  // The real calendars first, outside the lock: an HTTP call must never hold
+  // a row lock (or the transaction's own time budget) for its whole timeout.
+  const external = await providerBusy(opts.userIds, new Date(opts.window.start.getTime() - EXTERNAL_PAD_MS), new Date(opts.window.end.getTime() + EXTERNAL_PAD_MS));
   return prisma.$transaction(async (tx) => {
     await lockParticipants(tx, opts.userIds);
-    const conflict = await findConflictFor(tx, opts.viewer, opts.userIds, opts.window, { excludeMeetingIds: opts.excludeMeetingIds, excludeBatchKey: opts.excludeBatchKey });
+    const conflict = await findConflictFor(tx, opts.viewer, opts.userIds, opts.window, { excludeMeetingIds: opts.excludeMeetingIds, excludeBatchKey: opts.excludeBatchKey, external });
     if (conflict && !opts.force) return { ok: false as const, conflict };
-    const refused = opts.extraCheck ? await opts.extraCheck(tx) : null;
+    const refused = opts.extraCheck ? await opts.extraCheck(tx, external) : null;
     if (refused && !opts.force) return { ok: false as const, refused };
     return { ok: true as const, result: await write(tx), forcedOver: conflict, forcedRule: refused };
   });

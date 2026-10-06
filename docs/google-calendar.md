@@ -150,3 +150,39 @@ What the stub **cannot** prove, and what the flag is therefore still guarding:
 
 Those need the real credentials from the setup section above. Do step 3 of
 "Turning it on" before trusting the integration anywhere that matters.
+
+## Free/busy (#1997)
+
+Bookings also respect what a person's **real** calendar says is taken. This
+covers more than the meetings this app created.
+
+- `providerBusy(userIds, from, to)` in `src/lib/calendarFreeBusy.ts` calls
+  `POST {apiBase}/freeBusy` for each connected user whose stored `scope` permits
+  it (`calendar.freebusy`, `calendar.readonly` or `calendar`). It returns busy
+  windows by user id.
+- **Only `{ start, end }` crosses the boundary.** The response is mapped field by
+  field. No summary, attendee or location reaches a caller, a log or a row. The
+  windows carry an empty title, so a refusal says "already taken" and never what
+  the other appointment is.
+- **Never inside the booking lock.** The write paths fetch before their
+  transaction, padded by 4 hours so a buffer (#2003) can see neighbouring
+  blocks. They pass the result into `busyWindows()` / `findConflict(For)` /
+  `findPolicyViolation` as `external`. After that the answer is one list, and
+  callers cannot tell where each window came from.
+- **Degrade, never block.** A user with no connection, a connection without the
+  scope, a 4xx/5xx or a timeout (5 s, `AbortSignal.timeout`) all fall back to
+  today's database-only answer for that person. The reason is written to the
+  connection's `lastError`. A later successful push overwrites it, because
+  `lastError` describes the most recent calendar operation.
+- **Bounded:** at most 5 people at a time, and a 60 s in-process cache keyed by
+  (connection, quarter-hour window). There is no durable cache.
+- **Scope:** `calendar.freebusy` is now requested on connect. Existing
+  connections keep pushing on their old grant, and the Connected calendars card
+  *offers* a reconnect (`freeBusy: false` in `/api/integrations/calendar/status`).
+- **Testing:** the e2e stub (`e2e/support/google-mock.mjs`) answers `freeBusy`
+  with blocks set through `POST /__freebusy` (`{ busy, fail }`). Every block it
+  returns carries a fake `summary`, which `e2e/calendar-free-busy.spec.ts`
+  proves never leaves the server.
+
+Microsoft's `POST /me/calendar/getSchedule` will join here once its connection
+exists (#1991). The provider-neutral interface belongs to #1989.

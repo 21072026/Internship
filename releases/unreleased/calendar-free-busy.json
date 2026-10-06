@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Real-calendar free/busy (#1997, Google):** a block that exists only in someone's connected Google calendar now refuses a booking, removes the hour from the slot picker and keeps it out of suggested times. `providerBusy()` in `src/lib/calendarFreeBusy.ts` calls `freeBusy.query` with a 5 s timeout, at most 5 people at a time and a 60 s in-process cache, and maps the response to `{ start, end }` at the boundary. Nothing else is returned, logged or stored. It is fetched before the booking transaction, never inside the lock, and merged into `busyWindows()` through the new `external` option, so callers cannot tell the sources apart. The `calendar.freebusy` scope is now requested. A connection granted without it keeps working as it does today (database only, pushes unaffected), and the Connected calendars card offers a reconnect without forcing one. A timeout or provider error falls back to the database-only answer and is recorded on the connection's `lastError`. The e2e Google stub gains a `freeBusy` endpoint. Microsoft's `getSchedule` will follow with #1991.",
+  "notes": {
+    "en": ["If your Google Calendar is connected, bookings now respect the times it shows as busy. Only the busy times are read, never what they are."],
+    "tr": ["Google Takvimin bağlıysa randevular artık orada dolu görünen saatlere saygı gösteriyor. Yalnızca dolu saatler okunur, ne oldukları asla."],
+    "de": ["Ist dein Google Kalender verbunden, berücksichtigen Buchungen jetzt die dort als belegt markierten Zeiten. Gelesen werden nur die belegten Zeiten, nie was sie sind."]
+  }
+}

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { isGoogleCalendarConfigured, isGoogleCalendarEnabled } from '@/lib/googleCalendar';
+import { scopeAllowsFreeBusy } from '@/lib/calendarFreeBusy';
 
 // The calendar provider registry (#1993).
 //
@@ -26,6 +27,8 @@ export interface CalendarConnectionSummary {
   accountEmail: string | null;
   lastSyncAt: Date | null;
   lastError: string | null;
+  /** The grant lets bookings see when this person is busy (#1997). */
+  freeBusy: boolean;
 }
 
 export interface CalendarProvider {
@@ -62,10 +65,10 @@ export const CALENDAR_PROVIDERS: readonly CalendarProvider[] = [
     async readConnection(userId) {
       const conn = await prisma.googleCalendarConnection.findUnique({
         where: { userId },
-        select: { googleEmail: true, lastSyncAt: true, lastError: true },
+        select: { googleEmail: true, lastSyncAt: true, lastError: true, scope: true },
       });
       if (!conn) return null;
-      return { accountEmail: conn.googleEmail, lastSyncAt: conn.lastSyncAt, lastError: conn.lastError };
+      return { accountEmail: conn.googleEmail, lastSyncAt: conn.lastSyncAt, lastError: conn.lastError, freeBusy: scopeAllowsFreeBusy(conn.scope) };
     },
   },
 ];

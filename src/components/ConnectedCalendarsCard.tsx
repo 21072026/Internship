@@ -15,6 +15,7 @@ interface ProviderRow {
   accountEmail: string | null;
   lastSyncAt: string | null;
   lastError: string | null;
+  freeBusy?: boolean;
   connectPath: string;
   disconnectPath: string;
 }
@@ -225,6 +226,16 @@ export function ConnectedCalendarsCard() {
                           data-testid={`${row.provider}-calendar-reconnect`}
                           className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800 dark:!text-white"
                         >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          {c.reconnect}
+                        </a>
+                      </div>
+                    ) : row.freeBusy === false ? (
+                      // Offered, never forced (#1997): pushes keep working on
+                      // the old grant; only the busy hours need the new one.
+                      <div data-testid={`${row.provider}-calendar-freebusy`} className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs text-gray-700 dark:text-gray-300">
+                        <p>{c.freeBusyHint}</p>
+                        <a href={row.connectPath} className="mt-1 inline-flex items-center gap-1.5 font-medium text-blue-700 hover:underline dark:text-blue-300">
                           <RefreshCw className="h-3.5 w-3.5" />
                           {c.reconnect}
                         </a>

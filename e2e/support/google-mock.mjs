@@ -16,7 +16,7 @@ import { createServer } from 'node:http';
 const PORT = Number(process.env.GOOGLE_MOCK_PORT || 4599);
 
 // Recorded so a test can assert on what the app sent.
-const state = { events: new Map(), revoked: [], seq: 0 };
+const state = { events: new Map(), revoked: [], seq: 0, freeBusy: { busy: [], fail: false }, freeBusyCalls: 0 };
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -50,7 +50,7 @@ const server = createServer(async (req, res) => {
         access_token: 'mock-access-1',
         refresh_token: 'mock-refresh-1',
         expires_in: 3600,
-        scope: 'https://www.googleapis.com/auth/calendar.events openid email',
+        scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy openid email',
         id_token: idToken('connected.person@gmail.example'),
       });
     }
@@ -86,11 +86,28 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  // freeBusy.query (#1997). Busy blocks are set by the spec through
+  // /__freebusy; each carries a `summary` Google would never send, so the spec
+  // can prove the app drops everything but start/end at the boundary.
+  if (url.pathname === '/calendar/v3/freeBusy' && req.method === 'POST') {
+    state.freeBusyCalls++;
+    if (state.freeBusy.fail) return json(res, 503, { error: { message: 'backendError' } });
+    const q = JSON.parse(body || '{}');
+    const id = q.items?.[0]?.id ?? 'primary';
+    const busy = state.freeBusy.busy.filter((b) => b.start < q.timeMax && b.end > q.timeMin);
+    return json(res, 200, { kind: 'calendar#freeBusy', calendars: { [id]: { busy: busy.map((b) => ({ ...b, summary: 'Dentist (private)' })) } } });
+  }
+  if (url.pathname === '/__freebusy' && req.method === 'POST') {
+    state.freeBusy = { busy: [], fail: false, ...JSON.parse(body || '{}') };
+    return json(res, 200, { ok: true });
+  }
+
   // Inspection endpoint for the spec — not part of Google's API.
   if (url.pathname === '/__state') {
     return json(res, 200, {
       events: [...state.events.entries()].map(([id, e]) => ({ id, ...e })),
       revoked: state.revoked,
+      freeBusyCalls: state.freeBusyCalls,
     });
   }
 
