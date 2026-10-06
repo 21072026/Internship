@@ -1,6 +1,7 @@
 'use client';
 
 import { ProgramScorecard } from '@/components/admin/ProgramScorecard';
+import { MeetingAttendanceCard } from '@/components/admin/MeetingAttendanceCard';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
@@ -293,6 +294,8 @@ export default function AdminAnalyticsPage() {
 
       {/* "Is this programme healthy?" (#1908) — the verdict first, the detail below. */}
       <ProgramScorecard />
+      {/* Who actually met, and on the promised rhythm (#2014). */}
+      <MeetingAttendanceCard />
 
       {error && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">

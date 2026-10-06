@@ -38,6 +38,9 @@ const updateRelationSchema = z.object({
   // and are applied below, so this route and any later writer share them.
   nextActionAt: z.string().nullable().optional(),
   nextActionNote: z.string().nullable().optional(),
+  // The pair's promised meeting cadence, in weeks (#2014); null clears it.
+  // Read by src/lib/meetingCadence.ts — "on cadence" means met within it.
+  expectedMeetingIntervalWeeks: z.number().int().min(1).max(52).nullable().optional(),
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
