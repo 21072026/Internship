@@ -265,9 +265,10 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Product tour (#1399), internship-only: the screenshots show the
-          internship product, so a MARKETING host does not get them. */}
-      {!isMarketing && <ProductTour t={t} />}
+      {/* Product tour (#1399): each host shows its own product's screens — the
+          internship set here, SaleVali's pipeline, rep and analytics screens on
+          a MARKETING host (ProductTour picks by `marketing`). */}
+      <ProductTour t={t} marketing={isMarketing} />
 
       {/* Features — six titles from the single-source catalogue (#584/#588),
           nothing more; the descriptions and everything else live on /features. */}

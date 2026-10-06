@@ -8139,3 +8139,10 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Headless Chromium plays WebM, not H.264.** Put the `video/webm` source first; the MP4 is for Safari. A `display:none` `<video>` never intersects, so an IntersectionObserver that attaches the sources keeps other-theme and phone clips from ever downloading.
 - **`html.dark .text-blue-600` used to win over every accent.** It was pinned to blue-300, so dark mode turned the magenta MARKETING hero blue. An accent-aware dark rule needs `html.dark[data-accent]` to read `var(--accent-300)`.
 - The capture script changes demo data (a stage move, a shortlist), so capture one theme per fresh seed. `npm install` in this container rewrites `package-lock.json`; `git checkout` it before committing.
+
+## 2026-10-06 — marketing product tour (#2737)
+
+- **To capture the MARKETING product locally, sign in on `marketing.localhost:<port>`.** It needs `MARKETING_HOSTS` to include `marketing.localhost`. `npm run seed:demo` also seeds the `demo-marketing` tenant: `admin.marketing@` and the owners `owner.lena@`, `owner.tarik@`, `owner.jonas@`, all `@demo.example.com` with `DemoPass123!`. The worlds rule means the internship host refuses them.
+- **New marketing-landing copy needs its own namespace when the internship one is in `LEAK_EXEMPT`.** Adding keys to an exempt namespace switches the MARKETING leak check off for them without anyone noticing.
+- **The `a11y-scan` full suite is red on main** (`/portal/profile#dark`, profile-progress chip, from #2703). It is not in the PR smoke gate, so a PR stays green while it fails; check main before blaming your diff.
+- **A container restart stops MariaDB.** A 500 on `/` with "Can't reach database server" means `service mariadb start`, not an app bug.

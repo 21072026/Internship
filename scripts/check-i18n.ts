@@ -106,7 +106,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   offersAdmin: 'The admin offer screen over the same `placements`-gated API.',
   offerEmail: 'Sent only by src/lib/offerNotify.ts, i.e. by the `placements`-gated offer API.',
   adminWeeklyReports: '/admin/weekly-reports (#1918) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
-  productTour: 'The landing\'s product tour (#1399) — src/app/page.tsx renders it inside `!isMarketing`, and its screenshots show the internship product.',
+  productTour: 'The internship landing\'s product tour (#1399): ProductTour reads it only for an INTERNSHIP host, and its screenshots show the internship product. The MARKETING tour reads `productTourMarketing`, which is deliberately not exempt.',
 };
 
 // The pinned counts. Lower them when a change removes leaks; never raise them

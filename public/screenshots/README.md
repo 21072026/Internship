@@ -1,8 +1,18 @@
 # Landing product screenshots and clips (#1399)
 
-The three screens in the landing page's product tour
-(`src/components/landing/ProductTour.tsx`): the mentee journey, the mentor
-board and a company's candidate view. Each one is stored as:
+The screens in the landing page's product tour
+(`src/components/landing/ProductTour.tsx`). Each product shows its own three:
+
+- **Internship** (interncrm.com): `mentee` (the journey), `mentor` (the board)
+  and `company` (a candidate view).
+- **Marketing / SaleVali** (the marketing host): `mkt-pipeline` (the funnel
+  board), `mkt-rep` (a sales rep's dashboard) and `mkt-insights` (funnel
+  analytics). They are captured on `marketing.localhost` against the seeded
+  `demo-marketing` tenant (`prisma/seed-demo-marketing.mjs`, part of
+  `npm run seed:demo`), so the server needs `marketing.localhost` in
+  `MARKETING_HOSTS`. Override the host with `MARKETING_BASE_URL` if needed.
+
+Each screen is stored as:
 
 - a still per theme and device: `<screen>-<desktop|phone>-<light|dark>.webp`;
 - a short silent desktop loop per theme: `<screen>-desktop-<light|dark>.{webm,mp4}`.
