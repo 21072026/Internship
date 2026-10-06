@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 import { useModalFocus } from '@/components/ui/useModalFocus';
+import { SavedViews } from '@/components/SavedViews';
 
 interface MentorUser {
   id: string;
@@ -120,6 +121,17 @@ export default function MentorsPage() {
         placeholder={t.mentors.searchPlaceholder}
         className="mb-4 w-full sm:w-80 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
       />
+      <div className="mb-4">
+        <SavedViews
+          storageKey="mentors-views"
+          surface="mentors"
+          current={{ search, statusView }}
+          onApply={(f) => {
+            setSearch(f.search || '');
+            setStatusView(f.statusView === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE');
+          }}
+        />
+      </div>
 
       <div className="flex gap-2 mb-4">
         {(['ACTIVE', 'ARCHIVED'] as const).map((s) => (

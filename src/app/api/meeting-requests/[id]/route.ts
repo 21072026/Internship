@@ -13,6 +13,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { pushMeetingInBackground, pushableSelect } from '@/lib/googleCalendarSync';
+import { meetingEnd } from '@/lib/meetingDuration';
+import { bookWithoutConflict, conflictBody } from '@/lib/busyWindows';
 
 const schema = z.object({ action: z.enum(['accept', 'decline']) });
 
@@ -94,18 +96,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     where: { id: req.requestedById },
     select: { timezone: true },
   });
-  const meeting = await prisma.meeting.create({
-    data: {
-      relationId: rel.id,
-      title: req.topic,
-      scheduledAt: req.proposedAt,
-      timeZone: requester?.timezone ?? null,
-      meetLink: link,
-      rsvpToken: randomBytes(24).toString('hex'),
-      createdById: session.user.id,
-    },
-    select: pushableSelect,
-  });
+  // The hour may have been taken since it was asked for (#1995): lock the pair,
+  // check, write. A collision leaves the request PENDING — the mentor can still
+  // decline it, or ask for another time in the thread.
+  const booked = await bookWithoutConflict(
+    { viewer: session.user, userIds: [rel.mentorId, rel.menteeId], window: { start: req.proposedAt, end: meetingEnd(req.proposedAt, null) } },
+    (tx) =>
+      tx.meeting.create({
+        data: {
+          relationId: rel.id,
+          title: req.topic,
+          scheduledAt: req.proposedAt,
+          timeZone: requester?.timezone ?? null,
+          meetLink: link,
+          rsvpToken: randomBytes(24).toString('hex'),
+          createdById: session.user.id,
+        },
+        select: pushableSelect,
+      }),
+  );
+  if (!booked.ok) return NextResponse.json(conflictBody(booked.conflict), { status: 409 });
+  const meeting = booked.result;
   // Mirror it into both participants' own calendars (#1986) — the accepted
   // request used to be the one scheduling path that never reached a calendar.
   // Fire-and-forget: a third party's API may not make accepting fail or hang.

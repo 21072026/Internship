@@ -168,6 +168,7 @@ model Organization {
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
   surveyCampaigns         SurveyCampaign[]
+  savedViews              SavedView[]
   meetingAttendance       MeetingAttendance[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
@@ -548,6 +549,7 @@ model User {
   // Report subscriptions this user receives (#1905); removed with the user.
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
+  savedViews                        SavedView[]                   @relation("SavedViewAuthor")
   attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
   attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
   surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
@@ -5321,4 +5323,27 @@ model SurveyCampaignSend {
 
   @@unique([campaignId, userId, periodKey])
   @@index([campaignId, createdAt])
+}
+
+// A named filter preset on an admin list (#1900) — server-side, so it follows
+// the admin to another device and can be shared with the team. `surface` is a
+// key from SAVED_VIEW_SURFACES (src/lib/savedViews.ts), never a free string, so
+// a typo cannot orphan a view. `visibility` is PRIVATE (the author only) or ORG
+// (every admin of the org); only the author edits or deletes either, checked
+// in the route handler.
+model SavedView {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id])
+  surface     String        @db.VarChar(64)
+  name        String        @db.VarChar(80)
+  filters     Json
+  visibility  String        @default("PRIVATE") @db.VarChar(16)
+  createdById String
+  createdBy   User          @relation("SavedViewAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([orgId, surface, createdById, name])
+  @@index([orgId, surface])
 }

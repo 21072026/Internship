@@ -140,8 +140,10 @@ test('a saved view remembers the tag filter and replays the same list', async ({
     await expect(desktop.getByTestId(`candidate-card-${untagged.user.id}`)).toHaveCount(0);
 
     // Save the view under a name, clear the filter, then replay it.
-    page.on('dialog', (d) => d.accept('Tagged only'));
+    // Named in the view dialog, not a window.prompt since #1900.
     await page.getByTestId('saved-views-save').click();
+    await page.getByTestId('saved-views-name').fill('Tagged only');
+    await page.getByTestId('saved-views-confirm').click();
     const savedView = page.getByRole('button', { name: 'Tagged only' });
     await expect(savedView).toBeVisible({ timeout: 10_000 });
     await chip.click();
@@ -157,6 +159,8 @@ test('a saved view remembers the tag filter and replays the same list', async ({
     await cleanupByEmail(tagged.email);
     await cleanupByEmail(untagged.email);
     await prisma.tag.deleteMany({ where: { id: tag.id } });
+    // Saved views are server-side since #1900 — leave none behind.
+    await prisma.savedView.deleteMany({ where: { surface: 'candidates', name: 'Tagged only' } });
   }
 });
 
