@@ -6,6 +6,11 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolveTimeZone } from '@/lib/timezone';
 import { z } from 'zod';
+import { busyWindows } from '@/lib/busyWindows';
+import { mergeWindows } from '@/lib/busyWindowsRule';
+
+// How far ahead the booked hours are read — the portal offers three weeks of slots.
+const BUSY_HORIZON_MS = 22 * 24 * 60 * 60_000;
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -121,7 +126,19 @@ export async function GET(request: Request) {
       where: { mentorId: mentor.id },
       orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
     });
-    return NextResponse.json({ slots, ...zoneOf(mentor.timezone) });
+    // The hours already booked (#1995), so the picker stops offering them. Only
+    // to the people who can book them — an admin, or the paired mentee, whose
+    // own meetings count too — and only as bare start/end: whose meeting it is
+    // and what it is called are none of the reader's business. A directory
+    // visitor gets the weekly hours, never the diary.
+    let busy: { start: string; end: string }[] | undefined;
+    if (session.user.role === 'ADMIN' || session.user.role === 'MENTEE') {
+      const now = new Date();
+      const people = session.user.role === 'MENTEE' ? [mentor.id, session.user.id] : [mentor.id];
+      const windows = await busyWindows(prisma, people, now, new Date(now.getTime() + BUSY_HORIZON_MS));
+      busy = mergeWindows(windows).map((w) => ({ start: w.start.toISOString(), end: w.end.toISOString() }));
+    }
+    return NextResponse.json({ slots, ...zoneOf(mentor.timezone), ...(busy ? { busy } : {}) });
   });
 }
 

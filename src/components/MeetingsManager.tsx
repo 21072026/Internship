@@ -19,6 +19,7 @@ import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/Meetin
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 import { copyToClipboard } from '@/lib/clipboard';
 import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
+import { ConflictNotice, readConflict, useConflictText, type MeetingConflict } from '@/components/meeting/ConflictNotice';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
 
 interface Relation {
@@ -76,6 +77,8 @@ export function MeetingsManager() {
   const scheduledAt = date ? wallClockToInstantISO(date, time || '00:00') : '';
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<MeetingConflict | null>(null);
+  const conflictText = useConflictText();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -128,9 +131,10 @@ export function MeetingsManager() {
    setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
   };
 
-  const schedule = async () => {
+  const schedule = async (force = false) => {
     setBusy(true);
     setResult(null);
+    setConflict(null);
     try {
       const res = await fetch('/api/meetings', {
         method: 'POST',
@@ -145,6 +149,7 @@ export function MeetingsManager() {
           durationMinutes,
           timeZone: browserTimeZone() ?? undefined,
           guests: guests.length > 0 ? guests : undefined,
+          ...(force ? { force: true } : {}),
         }),
       });
       const data = await res.json();
@@ -161,6 +166,10 @@ export function MeetingsManager() {
         for (const email of (data.rejectedAsMembers ?? []) as string[]) {
           lines.push(t.meetings.guests.isMember.replace('{email}', email));
         }
+        // A bulk schedule books the free pairs and names the ones it skipped (#1995).
+        for (const c of (data.conflicts ?? []) as { menteeName: string; conflictsWith: MeetingConflict }[]) {
+          lines.push(conflictText(c.conflictsWith, c.menteeName));
+        }
         setResult(lines.join(' '));
         setTitle('');
         setDate('');
@@ -169,6 +178,8 @@ export function MeetingsManager() {
         setGuests([]);
         setSelected({});
         await load();
+      } else if (readConflict(data)) {
+        setConflict(readConflict(data));
       } else {
         setResult(data.error || 'Failed');
       }
@@ -192,6 +203,12 @@ export function MeetingsManager() {
               .replace('{requisition}', interviewRequisitionTitle || interviewRequisitionId)}
           </p>
         </Card>
+      )}
+
+      {conflict && (
+        <div className="mb-4">
+          <ConflictNotice conflict={conflict} busy={busy} onForce={() => schedule(true)} />
+        </div>
       )}
 
       {result && (
@@ -302,7 +319,7 @@ export function MeetingsManager() {
             {/* Outsiders are additive to the selection above, never a
                 replacement for it: this endpoint schedules against relations. */}
             <GuestInviteField guests={guests} onChange={setGuests} max={MAX_GUESTS_PER_MEETING} disabled={busy} testIdPrefix="guest" />
-            <Button onClick={schedule} loading={busy} disabled={chosen.length === 0 || !title}>
+            <Button onClick={() => schedule()} loading={busy} disabled={chosen.length === 0 || !title}>
               {t.meetings.sendInvite}
             </Button>
           </div>

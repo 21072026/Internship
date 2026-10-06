@@ -16,7 +16,8 @@ import { resolveMeetingLink } from '@/lib/meetingContext';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
-import { durationMinutesField } from '@/lib/meetingDuration';
+import { durationMinutesField, meetingEnd } from '@/lib/meetingDuration';
+import { bookWithoutConflict, conflictBody, recordForcedBooking } from '@/lib/busyWindows';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -36,6 +37,9 @@ const schema = z.object({
   // the same emailed yes/no buttons; see src/lib/meetingGuests.ts for why the
   // whole batch is attached to ONE of the created rows.
   guests: guestsField,
+  // Book over a collision on purpose (#1995). Only an admin or the mentor can
+  // reach this route, so whoever may send it may use it; it is recorded.
+  force: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -133,7 +137,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
-    const { relationIds, title, scheduledAt, meetLink, guests, durationMinutes } = parsed.data;
+    const { relationIds, title, scheduledAt, meetLink, guests, durationMinutes, force } = parsed.data;
 
     // `scheduledAt` normally arrives zone-qualified from the browser. A bare wall
     // clock ("2026-08-03T16:30") still has to be honoured for API clients and for
@@ -206,21 +210,39 @@ export async function POST(request: Request) {
     // The row the guests hang off — the first one written in this batch.
     let guestHostMeetingId: string | null = null;
     const notifiedMentees = new Set<string>();
+    // Per invitee, not all-or-nothing (#1995): a bulk schedule writes the rows
+    // that are free and reports the ones that collide.
+    const conflicts: { relationId: string; menteeName: string; conflictsWith: { title: string; startsAt: string } }[] = [];
     for (const rel of relations) {
       const rsvpToken = randomBytes(24).toString('hex');
-      const meeting = await prisma.meeting.create({
-        data: {
-          relationId: rel.id,
-          title,
-          scheduledAt: when,
-          durationMinutes: durationMinutes ?? null,
-          timeZone: organizerZone,
-          meetLink: link,
-          rsvpToken,
-          createdById: session.user.id,
-          batchKey,
-        },
-      });
+      const data = {
+        relationId: rel.id,
+        title,
+        scheduledAt: when,
+        durationMinutes: durationMinutes ?? null,
+        timeZone: organizerZone,
+        meetLink: link,
+        rsvpToken,
+        createdById: session.user.id,
+        batchKey,
+      };
+      let meeting: Awaited<ReturnType<typeof prisma.meeting.create>>;
+      if (when) {
+        // Lock the pair, check, write — one transaction, so two bookings of
+        // the same hour cannot both land.
+        const booked = await bookWithoutConflict(
+          { viewer: session.user, userIds: [rel.mentorId, rel.menteeId], window: { start: when, end: meetingEnd(when, { durationMinutes }) }, force, excludeBatchKey: batchKey },
+          (tx) => tx.meeting.create({ data }),
+        );
+        if (!booked.ok) {
+          conflicts.push({ relationId: rel.id, menteeName: rel.mentee.fullName, conflictsWith: conflictBody(booked.conflict).conflictsWith });
+          continue;
+        }
+        meeting = booked.result;
+        if (booked.forcedOver) await recordForcedBooking(session.user.id, meeting.id, booked.forcedOver);
+      } else {
+        meeting = await prisma.meeting.create({ data });
+      }
       guestHostMeetingId ??= meeting.id;
       // Mirror into the calendars of whoever connected their own Google account
       // (#709). A no-op unless the operator enabled the integration and the
@@ -301,6 +323,10 @@ export async function POST(request: Request) {
     if (created > 0) recordPairActivity(session.user.orgId, created);
 
     if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created }, session.user.orgId);
-    return NextResponse.json({ created, guestsInvited: invitedGuests.length, guests: invitedGuests, rejectedAsMembers });
+    // Nothing could be booked: the whole request collided (#1995).
+    if (created === 0 && conflicts.length > 0) {
+      return NextResponse.json({ error: 'This time collides with another meeting', code: 'conflict', conflictsWith: conflicts[0].conflictsWith, conflicts }, { status: 409 });
+    }
+    return NextResponse.json({ created, guestsInvited: invitedGuests.length, guests: invitedGuests, rejectedAsMembers, conflicts });
   });
 }

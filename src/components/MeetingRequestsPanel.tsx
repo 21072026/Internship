@@ -9,6 +9,9 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
+import { ConflictNotice, readConflict, type MeetingConflict } from '@/components/meeting/ConflictNotice';
+import { filterBookedOccurrences } from '@/lib/busyWindowsRule';
+import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
 import { expandSlots, matchesSlot, type SlotOccurrence, type WeeklySlot } from '@/lib/availabilitySlots';
 
 interface MReq {
@@ -47,6 +50,8 @@ export function MeetingRequestsPanel({
   const [reqs, setReqs] = useState<MReq[]>([]);
   const [topic, setTopic] = useState('');
   const [when, setWhen] = useState('');
+  const [conflict, setConflict] = useState<MeetingConflict | null>(null);
+  const [busyHours, setBusyHours] = useState<{ start: string; end: string }[]>([]);
   const [busy, setBusy] = useState(false);
   // The mentor's posted weekly hours, and the zone they are written in (#1361).
   // Empty is the normal, supported state: a mentor who has posted nothing still
@@ -81,6 +86,7 @@ export function MeetingRequestsPanel({
         if (cancelled) return;
         setSlots(d.slots ?? []);
         setSlotZone(d.timezone ?? null);
+        setBusyHours(d.busy ?? []);
       })
       // A failed read must not strand the form: fall back to free text rather
       // than leaving the picker in a permanent loading state (#1374's shape).
@@ -98,6 +104,8 @@ export function MeetingRequestsPanel({
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ relationId, topic, proposedAt }),
       });
+      // The hour is already taken (#1995): say so instead of a silent no-op.
+      setConflict(res.status === 409 ? readConflict(await res.json().catch(() => null)) : null);
       if (res.ok) { setTopic(''); setWhen(''); setPicked(null); await load(); }
     } finally {
       setBusy(false);
@@ -107,9 +115,11 @@ export function MeetingRequestsPanel({
   const handle = async (id: string, action: 'accept' | 'decline') => {
     setBusy(true);
     try {
-      await fetch(`/api/meeting-requests/${id}`, {
+      const res = await fetch(`/api/meeting-requests/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
       });
+      // Taken since it was asked for: the request stays pending, the reason shows.
+      setConflict(res.status === 409 ? readConflict(await res.json().catch(() => null)) : null);
       await load();
     } finally {
       setBusy(false);
@@ -123,7 +133,19 @@ export function MeetingRequestsPanel({
 
   // Concrete date-times from the mentor's weekly hours. Recomputed on render is
   // fine: the list is at most `limit` entries and the maths is arithmetic.
-  const offers = slots && slots.length > 0 ? expandSlots(slots, slotZone, { from: new Date(), weeks: 3, limit: 12 }) : [];
+  // An hour already booked for either of the pair is not offered (#1995); the
+  // request would only be refused. Expanded wider than shown, then trimmed.
+  const booked = busyHours.map((b) => ({ start: new Date(b.start), end: new Date(b.end) }));
+  const offers =
+    slots && slots.length > 0
+      ? filterBookedOccurrences(
+          expandSlots(slots, slotZone, { from: new Date(), weeks: 3, limit: 30 }).map((o) => {
+            const start = new Date(o.startISO);
+            return { ...o, start, end: new Date(start.getTime() + DEFAULT_MEETING_MINUTES * 60_000) };
+          }),
+          booked,
+        ).slice(0, 12)
+      : [];
   const hasOffers = offers.length > 0;
 
   const statusLabel = (s: string) => (t.portal.meetingRequests.status as Record<string, string>)[s] ?? s;
@@ -134,6 +156,8 @@ export function MeetingRequestsPanel({
   return (
     <Card>
       <CardHeader><CardTitle>{mode === 'manage' ? t.portal.meetingRequests.titleManage : t.portal.meetingRequests.title}</CardTitle></CardHeader>
+
+      {conflict && <div className="mb-4"><ConflictNotice conflict={conflict} /></div>}
 
       {/* Picking one of the mentor's offered slots is a write action like the
           form below, so an archived mentorship closes both (#1408). */}
