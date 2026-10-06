@@ -558,6 +558,15 @@ html.dark option { background-color: #111827; color: #f3f4f6; }
   #executive-print .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #executive-print .text-sm { font-size: 10px; line-height: 1.3; }
   #executive-print .text-xs { font-size: 9px; line-height: 1.25; }
+  /* The first-destination report pack (#1912): one page a coordinator files. */
+  #outcomes-print { font-size: 10.5px; max-width: none; }
+  #outcomes-print h1 { font-size: 18px; }
+  #outcomes-print .p-6, #outcomes-print .p-4 { padding: 0.5rem !important; }
+  #outcomes-print .mb-4, #outcomes-print .mb-6 { margin-bottom: 0.5rem !important; }
+  #outcomes-print .text-2xl { font-size: 18px; }
+  #outcomes-print .text-sm { font-size: 10px; line-height: 1.3; }
+  #outcomes-print .text-xs { font-size: 9px; line-height: 1.25; }
+  #outcomes-print .sm\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 /* a11y: a clear, consistent keyboard focus ring for interactive elements. */
@@ -716,4 +725,15 @@ textarea:focus-visible {
   .ui-badge {
     border: 1px solid currentColor;
   }
+}
+
+/* Inside the native app (#2775). The root layout renders <html
+   data-embedded-app> when the request comes from the app's web view
+   (src/lib/embeddedApp.ts), and the app draws its own header, tab bar and
+   menu — so the site's own top bar, drawer and "install the app" prompt step
+   aside. Marked with data-app-chrome where they are rendered (ResponsiveShell,
+   MessagesShell, InstallAppButton); a browser never gets the attribute, so
+   nothing changes on the web. */
+html[data-embedded-app] [data-app-chrome] {
+  display: none !important;
 }

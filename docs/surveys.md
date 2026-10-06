@@ -305,6 +305,29 @@ happened to the person.
     `SURVEY_MIN_RESPONSES` known answers, a bucket shows its counts and rate but
     no destination table.
 
+### The screen, the pack, the sheet (#1912 part 2)
+
+- `/admin/analytics/outcomes` is linked from Analytics on every plan, because it
+  is a compliance report and not an upsell. It offers one-click setup and
+  additional offsets, shows the headline tiles, and has the destination table
+  plus breakdowns by cohort and by source.
+- **Print report** turns the same page into the one-page **report pack** a
+  coordinator files (`#outcomes-print` in `globals.css`). It contains:
+  - the title and the period;
+  - N, the knowledge rate and the destination table;
+  - the programme NPS (the scorecard's own number);
+  - the counting rule.
+- Both analytics XLSX exports gain a **Destinations** sheet: overall, by cohort
+  and by source. A bucket below the floor says so in words instead of showing
+  counts.
+- The programme scorecard gains **`destinationKnown`**, the knowledge rate over
+  the last twelve months of completions (`docs/program-scorecard.md`).
+- **Pre-fill:** when the participant's most recent relation reached the org's
+  own finished stages (`outcomeStageKeys`, e.g. `HIRED_660`/`EMPLOYED_700`), the
+  link opens with `EMPLOYED_HERE` selected. It is a starting value only: the
+  participant confirms it or picks another option, and nothing is stored until
+  they submit.
+
 ### Retention of destination answers
 
 A destination answer is personal data with a long life. It sits in

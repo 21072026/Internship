@@ -50,15 +50,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
+  // Picking a product reuses whatever that product's host already has: the
+  // cookie jar holds each host's session separately, so switching away and back
+  // must not cost a sign-in — a live session, else the remembered device.
   const chooseProduct = useCallback(async (id: Product['id']) => {
     const p = productById(id);
     if (!p) return;
     await AsyncStorage.setItem(PRODUCT_KEY, p.id).catch(() => {});
+    setStatus('loading');
     setProduct(p);
-    setUser(null);
-    setStatus('signed-out');
+    const o = originFor(p, APP_ENV);
+    const current = (await getSession(o)) ?? (await resumeSession(o));
+    setUser(current);
+    setStatus(current ? 'signed-in' : 'signed-out');
   }, []);
 
+  // Back to the product picker. Deliberately NOT a sign-out: the session of the
+  // product being left stays in the jar for when the person switches back.
   const clearProduct = useCallback(async () => {
     await AsyncStorage.removeItem(PRODUCT_KEY).catch(() => {});
     setProduct(null);

@@ -24,6 +24,8 @@ interface Question {
 
 interface SurveyPayload {
   state: 'open' | 'alreadyAnswered' | 'closed' | 'expired' | 'invalid';
+  /** Starting values the server already knows (#1912) — still the person's to change. */
+  prefill?: Record<string, unknown>;
   survey?: { title: string; intro?: string | null; anonymity?: 'IDENTIFIED' | 'CONFIDENTIAL' | 'ANONYMOUS'; questions?: Question[] };
 }
 
@@ -43,7 +45,10 @@ export default function SurveyRespondPage({ params }: { params: Promise<{ token:
   useEffect(() => {
     fetch(`/api/surveys/respond?token=${encodeURIComponent(token)}`)
       .then(async (res) => (res.status === 429 ? { state: 'invalid' as const } : ((await res.json()) as SurveyPayload)))
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        if (d.prefill) setAnswers((a) => ({ ...d.prefill, ...a }));
+      })
       .catch(() => setData({ state: 'invalid' }));
   }, [token]);
 

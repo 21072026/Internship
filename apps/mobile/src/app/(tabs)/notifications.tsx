@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { apiGet, apiPost, SessionLostError } from '../../lib/api';
 import { deviceLocale, strings } from '../../lib/i18n';
@@ -12,11 +12,14 @@ import {
   type NotificationPage,
 } from '../../lib/notifications';
 import { useSession } from '../../lib/session';
+import { useAppTheme, type Palette } from '../../lib/theme';
 import { useUnread } from '../../lib/unread';
 
 // Native notification list (#2775). The text is rendered by the server in the
 // reader's locale (`display`); a tap marks the row read and opens its page.
 export default function NotificationsTab() {
+  const { c } = useAppTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const { origin, product, signOut } = useSession();
   const { refresh: refreshBadge } = useUnread();
   const t = strings();
@@ -128,9 +131,10 @@ export default function NotificationsTab() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  muted: { color: '#6b7280', textAlign: 'center' },
+  muted: { color: c.muted, textAlign: 'center' },
   markAll: { alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 10 },
   markAllText: { fontWeight: '600' },
   row: {
@@ -140,11 +144,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: c.border,
   },
-  unread: { backgroundColor: '#f8fafc' },
+  unread: { backgroundColor: c.highlight },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
-  text: { color: '#111827', fontSize: 15 },
+  text: { color: c.text, fontSize: 15 },
   bold: { fontWeight: '600' },
-  time: { color: '#6b7280', fontSize: 12, marginTop: 4 },
+  time: { color: c.muted, fontSize: 12, marginTop: 4 },
 });

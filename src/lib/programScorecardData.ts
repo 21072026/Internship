@@ -9,6 +9,7 @@ import { assessRelations, HEALTH_RELATION_SELECT, reminderDaysReader } from '@/l
 import { buildScorecard, medianOf, percentOf, type ScorecardMetric, type ScorecardRow, SCORECARD_THRESHOLDS } from '@/lib/programScorecard';
 import { npsFromScores } from '@/lib/nps';
 import { evaluationCoverage } from '@/lib/evaluationCoverage';
+import { defaultOutcomePeriod, loadOutcomeReport } from '@/lib/outcomesData';
 import { effectiveMinResponses } from '@/lib/surveyPrivacy';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -149,6 +150,11 @@ export async function loadProgramScorecard(tenant: TenantWhere, now = new Date()
   // Evaluation coverage — due 7-90 days ago and written (#1891).
   const coverage = await evaluationCoverage(tenant, now);
   metrics.evaluationCoverage = { value: percentOf(coverage.written, coverage.due), basis: coverage.due };
+
+  // Destination known — completions of the last twelve months with a
+  // consented first-destination answer (#1912); the report's own number.
+  const outcomes = await loadOutcomeReport(tenant, defaultOutcomePeriod(now));
+  metrics.destinationKnown = { value: percentOf(outcomes.overall.known, outcomes.overall.eligible), basis: outcomes.overall.eligible };
 
   return buildScorecard(metrics);
 }

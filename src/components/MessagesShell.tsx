@@ -86,7 +86,7 @@ export function MessagesShell({
         {/* `bg-white/95` is not the `bg-white` globals.css retints, so dark mode
             needs its own surface here. `viewport-fit=cover` also puts the status
             bar inside the viewport, hence the top inset on the header. */}
-        <header className="shrink-0 border-b border-gray-200 bg-white/95 pt-[env(safe-area-inset-top,0px)] backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 lg:border-0 lg:bg-transparent lg:pt-0 lg:backdrop-blur-none dark:lg:bg-transparent">
+        <header data-app-chrome className="shrink-0 border-b border-gray-200 bg-white/95 pt-[env(safe-area-inset-top,0px)] backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 lg:border-0 lg:bg-transparent lg:pt-0 lg:backdrop-blur-none dark:lg:bg-transparent">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-1 px-2 py-1.5 lg:px-8 lg:pb-0 lg:pt-8">
             <Link
               href={backHref}

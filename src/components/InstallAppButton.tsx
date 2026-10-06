@@ -67,7 +67,7 @@ export function InstallAppButton() {
   // iOS: no programmatic prompt — offer a hint.
   if (isIos && !deferred) {
     return (
-      <div>
+      <div data-app-chrome>
         <button
           onClick={() => setShowIosHint((v) => !v)}
           className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
@@ -89,6 +89,7 @@ export function InstallAppButton() {
 
   return (
     <button
+      data-app-chrome
       onClick={install}
       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium"
     >

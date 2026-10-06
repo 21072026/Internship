@@ -75,6 +75,7 @@ const INVITATION_SELECT = {
   survey: {
     select: {
       id: true,
+      templateKey: true,
       title: true,
       intro: true,
       anonymity: true,

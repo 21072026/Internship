@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { WebView, type WebViewNavigation } from 'react-native-webview';
+import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 import { useSession } from '../lib/session';
 import { strings } from '../lib/i18n';
 import { isSameOrigin } from '../lib/products';
+import { useAppTheme } from '../lib/theme';
+import { AFTER_LOAD_JS, parsePageMeta, pageTitle, type PageMeta } from '../lib/webMeta';
 
 /**
  * The hybrid half of the app (#2775): a page of the chosen product's web app,
@@ -11,14 +13,18 @@ import { isSameOrigin } from '../lib/products';
  * every surface that is not native yet, and for the long tail (admin, pipeline
  * board, analytics) that stays on the web on purpose.
  *
- * Two rules:
+ * Rules:
  *  - it never leaves the product's origin — any other URL goes to the system
  *    browser, because this view carries the product's session;
  *  - it notices a lost session (the page lands on /auth/signin) and hands
- *    control back to the native sign-in instead of showing the web form.
+ *    control back to the native sign-in instead of showing the web form;
+ *  - the page knows it is inside the app (the User-Agent marker; see
+ *    lib/webMeta.ts): it drops its own top bar and drawer, and tells the app
+ *    its title and colours, which `onMeta` hands to the native header.
  */
-export function WebScreen({ path }: { path: string }) {
-  const { origin, signOut } = useSession();
+export function WebScreen({ path, onMeta }: { path: string; onMeta?: (meta: PageMeta) => void }) {
+  const { origin, product, signOut } = useSession();
+  const { c } = useAppTheme();
   const t = strings();
   const ref = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -48,19 +54,27 @@ export function WebScreen({ path }: { path: string }) {
     [origin, signOut],
   );
 
+  const onMessage = useCallback(
+    (e: WebViewMessageEvent) => {
+      const meta = parsePageMeta(e.nativeEvent.data);
+      if (meta && onMeta) onMeta({ ...meta, title: pageTitle(meta.title, product?.name ?? '') });
+    },
+    [onMeta, product],
+  );
+
   if (!origin) return null;
 
   if (failed) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.muted}>{t.offline}</Text>
+      <View style={[styles.center, { backgroundColor: c.bg }]}>
+        <Text style={{ color: c.muted, textAlign: 'center' }}>{t.offline}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => {
             setFailed(false);
             ref.current?.reload();
           }}
-          style={styles.retry}
+          style={[styles.retry, { backgroundColor: product?.color ?? '#1D4ED8' }]}
         >
           <Text style={styles.retryText}>{t.retry}</Text>
         </Pressable>
@@ -72,12 +86,18 @@ export function WebScreen({ path }: { path: string }) {
     <WebView
       ref={ref}
       source={{ uri: `${origin}${path}` }}
+      style={{ backgroundColor: c.bg }}
       sharedCookiesEnabled
       thirdPartyCookiesEnabled={false}
+      // How the site knows it is inside the app (src/lib/embeddedApp.ts on the
+      // server): it renders <html data-embedded-app> and drops its own chrome.
+      applicationNameForUserAgent="InternCRMApp/1"
+      injectedJavaScript={AFTER_LOAD_JS}
+      onMessage={onMessage}
       pullToRefreshEnabled
       startInLoadingState
       renderLoading={() => (
-        <View style={styles.center}>
+        <View style={[styles.center, { backgroundColor: c.bg }]}>
           <ActivityIndicator />
         </View>
       )}
@@ -95,8 +115,7 @@ export function WebScreen({ path }: { path: string }) {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  muted: { color: '#6b7280', textAlign: 'center' },
-  retry: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#1D4ED8' },
+  center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
+  retry: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
   retryText: { color: '#fff', fontWeight: '600' },
 });

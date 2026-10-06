@@ -35,6 +35,7 @@ Bands are inclusive on the good side: a value **at** the green line is green.
 | `surveyResponseRate` | survey invitations sent 7–90 days ago (both reminders have had their chance) that were answered, % | 50 | higher is better | 30 | `/admin/surveys` |
 | `nps` | Net Promoter Score (−100..100) of the last 90 days, every survey's first NPS question pooled — a survey counts only once its own answers reach its own floor (#1910) | 30 | higher is better | 0 | `/admin/surveys` |
 | `evaluationCoverage` | INTERIM/FINAL evaluations due 7–90 days ago (`EvaluationDue`, #1891 — both reminders have gone out) that were written, % | 80 | higher is better | 50 | `/admin/mentors` |
+| `destinationKnown` | Participants whose relation completed in the last 12 months with a consented first-destination answer (#1912, the knowledge rate of `/admin/analytics/outcomes`), % | 60 | higher is better | 40 | `/admin/analytics/outcomes` |
 
 ## Not yet measurable
 

@@ -1,32 +1,33 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { apiGet } from './api';
-import type { NotificationPage } from './notifications';
 import { useSession } from './session';
 
-// The unread count behind the Notifications tab badge (#2775). Read when the
-// app comes to the foreground and once a minute while it is open; the tab
-// refreshes it after marking rows read. Native push (a later slice) will make
-// the minute poll unnecessary.
+// The unread counts behind the Messages and Notifications tab badges (#2775).
+// One request: GET /api/messages/unread answers with both, counted by the same
+// src/lib/unreadCounts.ts the web header and its live stream use. Read when the
+// app comes to the foreground and once a minute while it is open; screens call
+// refresh() after they mark something read. Native push (a later slice) will
+// make the minute poll unnecessary.
 
 const POLL_MS = 60_000;
 
 interface UnreadState {
-  count: number;
+  messages: number;
+  notifications: number;
   refresh: () => void;
 }
 
-const Ctx = createContext<UnreadState>({ count: 0, refresh: () => {} });
+const Ctx = createContext<UnreadState>({ messages: 0, notifications: 0, refresh: () => {} });
 
 export function UnreadProvider({ children }: { children: ReactNode }) {
   const { origin } = useSession();
-  const [count, setCount] = useState(0);
+  const [counts, setCounts] = useState({ messages: 0, notifications: 0 });
 
   const refresh = useCallback(() => {
     if (!origin) return;
-    // One row is enough: the count comes back on every page.
-    apiGet<NotificationPage>(origin, '/api/notifications?read=unread&pageSize=1')
-      .then((p) => setCount(p.unread))
+    apiGet<{ messages: number; notifications: number }>(origin, '/api/messages/unread')
+      .then((c) => setCounts({ messages: c.messages, notifications: c.notifications }))
       .catch(() => {});
   }, [origin]);
 
@@ -42,7 +43,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
-  const value = useMemo(() => ({ count, refresh }), [count, refresh]);
+  const value = useMemo(() => ({ ...counts, refresh }), [counts, refresh]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
