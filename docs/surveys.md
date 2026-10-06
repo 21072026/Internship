@@ -196,6 +196,31 @@ number leaves the server — the screen only draws what it gets:
 Per-question distributions of a survey that passed the floor are shown in
 full: they are counts over at least *floor* people, not a group of them.
 
+### Summarising free text with AI (#1910)
+
+A free-text question on the results screen has **Summarise with AI**
+(`POST /api/admin/surveys/[id]/summary`, ADMIN only): themes, most frequent
+first, each with up to three quotes.
+
+- **Only above the floor** — the same `suppressed` verdict as the screen
+  (409 `below_floor`), so a summary can never be read where the answers could
+  not.
+- **What leaves:** the unattributed, alphabetically sorted texts from
+  `loadSurveyResults`, with e-mail addresses, phone numbers and links masked
+  (`redactAnswerText`, `src/lib/surveyTextRules.ts`). No respondent id, name,
+  relation or timestamp.
+- **What comes back:** `parseSummary` keeps a quote only when an answer
+  contains it **verbatim** — a quote the model made up is dropped, so the
+  summary can only say what the answers say. The prompt also forbids naming
+  anyone.
+- **Through `runAiGated`** (scope `survey_summary`): metered against the
+  org's AI quota, no per-person consent because no person is processed (the
+  footing of `mentor_match`'s anonymous labels). When AI is off, out of quota
+  or fails, the reply carries the reason and the screen keeps the plain list —
+  the answers are always complete without it. An org-side feature: nothing a
+  participant sees depends on it.
+- Not stored: every click is a fresh, metered call.
+
 ## Reminders and completion (#1889)
 
 **Two reminders, never three.** `SURVEY_MAX_REMINDERS = 2`
