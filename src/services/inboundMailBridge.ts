@@ -1,6 +1,6 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { routeInboundEmail } from '@/lib/inboundEmail';
+import { routeInboundMail } from '@/lib/crmBcc';
 import { logger } from '@/lib/logger';
 
 // The mail bridge: drains the reply mailbox over IMAP and feeds each message
@@ -53,6 +53,10 @@ export function recipientCandidates(headerLines: readonly { key: string; line: s
     .join(' ');
 }
 
+function headerText(headerLines: readonly { key: string; line: string }[], key: string): string {
+  return headerLines.filter((h) => h.key.toLowerCase() === key).map((h) => h.line).join(' ');
+}
+
 export type PollSummary = { fetched: number; routed: number; skipped: number; failed: number };
 
 // Drain one batch. Safe to call concurrently-ish: a message is only flagged
@@ -95,16 +99,21 @@ export async function pollInboundMailbox(): Promise<PollSummary> {
           const to = recipientCandidates(mail.headerLines);
           const from = mail.from?.value?.[0]?.address || '';
 
-          const result = await routeInboundEmail({
+          // `crm+` (BCC-to-CRM, #2809) or `reply+` — routeInboundMail decides.
+          // The BCC path reads Cc/subject/date and never the body.
+          const result = await routeInboundMail({
             to,
             from,
             text: mail.text || '',
             messageId: mail.messageId || null,
+            cc: headerText(mail.headerLines, 'cc'),
+            subject: mail.subject || null,
+            date: mail.date ? mail.date.toISOString() : null,
           });
 
           if (result.ok) {
             summary.routed++;
-            if (!result.duplicate) {
+            if (result.kind === 'reply' && !result.duplicate) {
               logger.info('Inbound reply threaded from mailbox', { relationId: result.relationId, from });
             }
           } else {

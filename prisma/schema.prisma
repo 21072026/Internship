@@ -3122,9 +3122,16 @@ model InteractionLog {
   // SetNull rather than Cascade — deleting the meeting row must not delete the
   // record that the meeting happened (same reasoning as PersonalNote).
   meetingId  String?         @unique
+  // Idempotency key of a log written from outside (#2809): `bcc:<hash>` for a
+  // mail copied to the org's CRM address — a hash of its Message-ID, so one
+  // mail delivered twice is still one log per funnel record. NULL for every
+  // hand-written log; MySQL lets any number of NULLs share the unique below.
+  sourceRef  String?
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+
+  @@unique([relationId, sourceRef])
 }
 
 enum RsvpStatus {

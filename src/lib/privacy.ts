@@ -21,7 +21,10 @@
 // confirmation records (two times, wording version and language, no IP) and
 // the withdrawal link. A second version on the same day, suffixed rather than
 // post-dated: nothing parses this as a date, it is only stamped and shown.
-export const PRIVACY_POLICY_VERSION = '2026-09-29.2';
+// 2026-10-06: the purposes section names BCC-to-CRM (#2809) — a staff e-mail
+// copied to the org's CRM address is logged with date, subject and recipient
+// address only, never its content or attachments.
+export const PRIVACY_POLICY_VERSION = '2026-10-06';
 
 // Version of the product-news opt-in WORDING on the marketing demo form
 // (`companyInquiry.marketingOptIn` in the dictionaries, #2569). Separate from
