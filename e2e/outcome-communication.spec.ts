@@ -211,6 +211,13 @@ test('a MARKETING lead reaching an outcome gets no placement mail, and the rep n
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/sales'), { timeout: 30_000 });
 
+    // An ordinary move first: the lead is a prospect with no portal, so the
+    // internal funnel ("Qualified → Proposal sent") must not be written to them.
+    const move = await page.request.put(`/api/mentorship/${seeded.relation.id}`, {
+      data: { pipelineStatus: 'DEAL_PROPOSAL' },
+    });
+    expect(move.ok(), await move.text()).toBeTruthy();
+
     const res = await page.request.put(`/api/mentorship/${seeded.relation.id}`, {
       data: { pipelineStatus: 'DEAL_LOST', reasonCode: 'NO_RESPONSE' },
     });
@@ -225,6 +232,9 @@ test('a MARKETING lead reaching an outcome gets no placement mail, and the rep n
     expect(notif).not.toBeNull();
     expect(notif?.link).toBe(`/sales/leads/${seeded.relation.id}`);
     expect(notif?.link).not.toContain('template=');
+
+    // Neither stage move reached the lead's bell — no generic line, no outcome.
+    expect(await prisma.notification.count({ where: { userId: seeded.mentee.id } })).toBe(0);
 
     // Auto-send is on for this org, and still nothing was attempted or logged.
     expect(await prisma.emailLog.count({ where: { to: seeded.menteeEmail, category: 'outcome' } })).toBe(0);
@@ -249,6 +259,8 @@ test('the INTERNSHIP control: with auto-send on, the outcome mail is attempted a
       orderBy: { createdAt: 'desc' },
     });
     expect(notif?.link).toContain('template=outcomeNoMatch');
+    // The mentee has a portal here, so their own outcome line still arrives.
+    expect(await prisma.notification.count({ where: { userId: seeded.mentee.id, type: 'outcome.noMatch' } })).toBe(1);
     // SKIPPED ("SMTP not configured") — the attempt is the point, not delivery.
     expect(await prisma.emailLog.count({ where: { to: seeded.menteeEmail, category: 'outcome' } })).toBe(1);
     expect(await prisma.interactionLog.count({ where: { relationId: seeded.relation.id, type: 'Email' } })).toBe(1);
