@@ -6,7 +6,7 @@ import { MessageSquare, LifeBuoy, UserRound } from 'lucide-react';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { getServerDictionary } from '@/i18n/server';
-import { relativeTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { StartConversationPicker } from '@/components/StartConversationPicker';
 import { MessagesLiveRefresh } from '@/components/MessagesLiveRefresh';
 import { loadInbox } from '@/lib/inbox';
@@ -17,7 +17,7 @@ import { loadInbox } from '@/lib/inbox';
 export default async function MessagesInboxPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin?callbackUrl=/messages');
-  const { locale, t } = await getServerDictionary();
+  const { t } = await getServerDictionary();
   const me = session.user.id;
 
   // One read of the inbox for the page and the native app (src/lib/inbox.ts).
@@ -106,7 +106,7 @@ export default async function MessagesInboxPage() {
                         )}
                       </span>
                       {th.last && (
-                        <span className="text-xs text-gray-400 shrink-0">{relativeTime(th.last.createdAt, locale)}</span>
+                        <RelativeTime date={th.last.createdAt} className="text-xs text-gray-400 shrink-0" />
                       )}
                     </div>
                     <p className={`text-xs truncate mt-0.5 ${th.unread > 0 ? 'text-gray-700' : 'text-gray-400'}`}>{preview}</p>

@@ -5,6 +5,7 @@ import { BarChart3, MessageSquareText, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { MENTOR_CRITERIA, mentorFeedbackAverage, type MentorCriterion } from '@/lib/evaluation';
 import { useLocale, useT } from '@/i18n/client';
 
@@ -158,7 +159,7 @@ export default function MentorFeedbackPage() {
                       ))}
                     </div>
                     {item.comment && <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-400">{item.comment}</p>}
-                    <p className="mt-2 text-xs text-gray-400">{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(item.createdAt))}</p>
+                    <p className="mt-2 text-xs text-gray-400"><RelativeTime date={item.createdAt} /></p>
                   </div>
                 );
               })}

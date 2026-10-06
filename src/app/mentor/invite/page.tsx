@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Check, Copy, Send, UserPlus } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { locales } from '@/i18n/config';
 import { Select } from '@/components/ui/Select';
 
@@ -209,7 +209,7 @@ export default function MentorInvitePage() {
                         </p>
                         <p className="text-xs text-gray-400 truncate">
                           {invite.email && invite.label ? `${invite.label} · ` : ''}
-                          {formatDate(invite.createdAt, locale)}
+                          <RelativeTime date={invite.createdAt} />
                         </p>
                       </div>
                       <Badge variant={status === 'accepted' ? 'success' : status === 'expired' ? 'warning' : 'default'}>

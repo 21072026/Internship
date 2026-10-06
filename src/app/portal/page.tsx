@@ -17,6 +17,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { User, Building2, ExternalLink, MessageCircle, FolderKanban, ArrowRight, Route } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
 import { missingRequirementsForUser } from '@/lib/documentRequirements';
 import type { Locale } from '@/i18n/config';
@@ -220,10 +221,16 @@ export default async function PortalDashboard({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <StatusBadge status={relation.status} />
+              {/* "Completed" is the moment it ended, so it reads as a distance;
+                  "Since" is the mentorship's start date and stays a date. */}
               <span className="text-xs text-gray-400">
-                {isArchived && relation.completedAt
-                  ? `${t.portal.archived.completedOn} ${formatDate(relation.completedAt, locale)}`
-                  : `${t.portal.since} ${formatDate(relation.startDate, locale)}`}
+                {isArchived && relation.completedAt ? (
+                  <>
+                    {t.portal.archived.completedOn} <RelativeTime date={relation.completedAt} />
+                  </>
+                ) : (
+                  `${t.portal.since} ${formatDate(relation.startDate, locale)}`
+                )}
               </span>
             </div>
             {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Past timestamps read as a distance, the exact time on hover (#2813):** a new `<RelativeTime>` element (`src/components/ui/RelativeTime.tsx`) renders an instant as compact `Intl.RelativeTimeFormat` text (\"5 dk. önce\" / \"5 min. ago\" / \"vor 5 Min.\") inside a `<time datetime>`, with the absolute reading as its `title`. It ticks on one shared 30 s clock and is keyed on hydration, so neither the server's nor a cache's \"now\" survives the first client render; a default title is attached only in the browser (it is in the viewer's zone), an explicit one is server-rendered. `relativeTime()` gains `style` and `now` options, returns `''` for an unparseable date instead of throwing, and drops the week rung (\"8 days ago\", not \"last week\"). `fillTemplate()` (`src/components/ui/fillTemplate.ts`) puts the element into a translated `{slot}` sentence. `/release-notes` shows each release's distance with its `YYYY-MM-DD HH:MM UTC` stamp on hover, and about 60 on-screen instants across admin, mentor, portal, messages, notifications, offers, invitations, integrations, account and activity views moved to it — every former `relativeTime()` rendering gains the hover. Schedules, future dates, date-only fields, printed/legal/exported records and charts stay absolute. e2e: `release-notes-relative-date`, `relative-time.unit`; `date-formatter-locale`, `interview-requests-locale` and `evaluation` now read the absolute value from the title/datetime.",
+  "notes": {
+    "en": [
+      "Times now read the quick way: \"5 min. ago\", \"8 days ago\" instead of a full date — on the release notes and across messages, notifications, activity and lists. Hover to see the exact date and time."
+    ],
+    "tr": [
+      "Zamanlar artık bir bakışta okunuyor: tam tarih yerine \"5 dk. önce\", \"8 gün önce\" — sürüm notlarında ve mesajlar, bildirimler, etkinlik ve listelerde. Tam tarih ve saati görmek için üzerine gelmen yeterli."
+    ],
+    "de": [
+      "Zeiten lesen sich jetzt auf einen Blick: \"vor 5 Min.\", \"vor 8 Tagen\" statt eines vollen Datums — in den Versionshinweisen sowie in Nachrichten, Benachrichtigungen, Aktivitäten und Listen. Mit der Maus darüber siehst du Datum und Uhrzeit genau."
+    ]
+  }
+}

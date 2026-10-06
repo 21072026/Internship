@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { Megaphone } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardFooter } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 
 interface AnnouncementItem {
   id: string;
@@ -24,7 +24,6 @@ const LIMIT = 5;
 // all active users, so any signed-in user sees the same feed.
 export function AnnouncementsCard() {
   const t = useT();
-  const locale = useLocale();
   const [items, setItems] = useState<AnnouncementItem[] | null>(null); // null = loading
 
   useEffect(() => {
@@ -73,7 +72,9 @@ export function AnnouncementsCard() {
                 )}
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{a.text}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatDate(a.createdAt, locale)}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    <RelativeTime date={a.createdAt} />
+                  </p>
                 </div>
               </div>
             );

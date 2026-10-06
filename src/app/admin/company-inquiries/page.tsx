@@ -6,8 +6,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { ConvertInquiryModal, type ConvertibleInquiry } from '@/components/admin/ConvertInquiryModal';
 import { useVertical } from '@/lib/verticalClient';
 import { Building2, Mail, Phone, UserPlus, Kanban } from 'lucide-react';
@@ -53,7 +53,6 @@ const STATUS_VARIANT: Record<string, 'warning' | 'info' | 'success'> = {
 // unanswered.
 export default function CompanyInquiriesPage() {
   const t = useT();
-  const locale = useLocale();
   const a = t.companyInquiriesAdmin;
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_TABS)[number]>('NEW');
   const [rows, setRows] = useState<InquiryRow[]>([]);
@@ -175,7 +174,7 @@ export default function CompanyInquiriesPage() {
                     )}
                   </CardTitle>
                   <p className="text-sm text-gray-500 mt-1">
-                    {r.contactName} · {formatDate(r.createdAt, locale)}
+                    {r.contactName} · <RelativeTime date={r.createdAt} />
                     {r.handledBy ? ` · ${a.handledBy.replace('{name}', r.handledBy.fullName)}` : ''}
                   </p>
                 </div>

@@ -36,6 +36,7 @@ import { encodeReferrer, referrerLabel } from '@/lib/referrer';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { RelationCadencePanel } from '@/components/RelationCadencePanel';
@@ -531,7 +532,7 @@ export default function AdminMenteeDetailPage() {
                           <span className="text-gray-400">{label(sc.fromStatus)}</span>
                           {' → '}
                           <span className="font-medium">{label(sc.toStatus)}</span>
-                          <span className="text-xs text-gray-400"> · {sc.changedBy?.fullName ?? t.common.systemActor} · {formatDate(sc.createdAt, locale)}</span>
+                          <span className="text-xs text-gray-400"> · {sc.changedBy?.fullName ?? t.common.systemActor} · <RelativeTime date={sc.createdAt} /></span>
                         </span>
                         <button
                           onClick={() => deleteHistory(sc.id)}
@@ -581,6 +582,7 @@ export default function AdminMenteeDetailPage() {
                         <div>
                           <p className="text-gray-700">{i.notes}</p>
                           <AutoLoggedBadge autoLogged={i.autoLogged} className="text-xs mt-1" />
+                          {/* Usually a day picked in a date input (AddInteractionForm), not an instant — it stays a date. */}
                           <p className="text-xs text-gray-400">{formatDate(i.date, locale)}</p>
                         </div>
                       </div>

@@ -5,8 +5,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDateTime } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 
 interface AnnouncementItem {
   id: string;
@@ -26,7 +26,6 @@ const PAGE_SIZE = 10;
 export default function AnnouncementsPage() {
   const t = useT();
   const lightbox = useImageLightbox();
-  const locale = useLocale();
   const [items, setItems] = useState<AnnouncementItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -106,7 +105,7 @@ export default function AnnouncementsPage() {
                     {a.link}
                   </a>
                 )}
-                <p className="text-xs text-gray-400 mt-2">{formatDateTime(a.createdAt, locale)}</p>
+                <p className="text-xs text-gray-400 mt-2"><RelativeTime date={a.createdAt} /></p>
               </div>
             ))}
           </div>

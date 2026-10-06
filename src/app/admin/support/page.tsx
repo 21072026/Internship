@@ -5,8 +5,8 @@ import { LifeBuoy, UserPlus } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { useT, useLocale } from '@/i18n/client';
-import { relativeTime } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { SupportAttachmentList } from '@/components/SupportAttachmentList';
 import {
   MessageComposer,
@@ -45,7 +45,6 @@ export default function AdminSupportPage() {
   const t = useT();
   const s = t.support;
   const a = t.adminSupport;
-  const locale = useLocale();
   const [tickets, setTickets] = useState<Ticket[] | null>(null);
   const [me, setMe] = useState('');
   const [filter, setFilter] = useState<Status | ''>('');
@@ -225,7 +224,7 @@ export default function AdminSupportPage() {
                         <Badge variant="danger" className="text-xs" data-testid="unread-badge">{unread}</Badge>
                       )}
                       <Badge variant={STATUS_VARIANT[tk.status]} className="text-xs">{statusLabel[tk.status]}</Badge>
-                      <span className="text-xs text-gray-400">{relativeTime(new Date(tk.updatedAt), locale)}</span>
+                      <RelativeTime date={tk.updatedAt} className="text-xs text-gray-400" />
                     </div>
                   </div>
                 </button>

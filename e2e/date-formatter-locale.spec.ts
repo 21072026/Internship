@@ -23,13 +23,16 @@ test('dates on admin/activity follow the selected app language, not the browser 
     await page.evaluate(() => { document.cookie = 'locale=tr;path=/'; });
     await page.goto('/admin/activity');
 
-    // TR formatting uses dots (gg.aa.yyyy), never the en-US slash format.
-    // Target the test id, not `span.text-gray-400` — the row also carries an
+    // The row reads as a distance ("1 dk. önce") with the stamp on hover, and
+    // both follow the app language: TR words on screen, and TR dots
+    // (gg.aa.yyyy) in the title, never the en-US slash format.
+    // Target the test id, not `.text-gray-400` — the row also carries an
     // IP chip in that colour (#881), and it comes first in the DOM.
     const firstDate = page.getByTestId('activity-date').first();
     await expect(firstDate).toBeVisible();
-    await expect(firstDate).toHaveText(/\d{2}\.\d{2}\.\d{4}/);
-    await expect(firstDate).not.toHaveText(/\d{1,2}\/\d{1,2}\/\d{4}/);
+    await expect(firstDate).toHaveText(/önce|şimdi/);
+    await expect(firstDate).toHaveAttribute('title', /\d{2}\.\d{2}\.\d{4}/);
+    await expect(firstDate).not.toHaveAttribute('title', /\d{1,2}\/\d{1,2}\/\d{4}/);
   } finally {
     await prisma.activityLog.deleteMany({ where: { actorId: admin.id } });
     await cleanupByEmail(adminEmail);

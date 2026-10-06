@@ -6,8 +6,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useT, useLocale } from '@/i18n/client';
-import { relativeTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { useT } from '@/i18n/client';
 
 interface Note {
   id: string;
@@ -21,7 +21,6 @@ interface Note {
 // never sees this panel or its data (EPIC: mentor private notes).
 export function RelationNotesPanel({ relationId }: { relationId: string }) {
   const t = useT();
-  const locale = useLocale();
   const c = t.relationNotes;
   const [notes, setNotes] = useState<Note[]>([]);
   const [body, setBody] = useState('');
@@ -133,7 +132,7 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
                   <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">{n.body}</p>
                   <div className="flex items-center justify-between mt-2">
                     <p className="text-xs text-gray-400">
-                      {n.author.fullName} · {relativeTime(n.createdAt, locale)}
+                      {n.author.fullName} · <RelativeTime date={n.createdAt} />
                     </p>
                     <div className="flex items-center gap-2">
                       <button onClick={() => startEdit(n)} aria-label={t.common.edit} className="text-gray-300 hover:text-blue-600 dark:text-gray-600 dark:hover:text-blue-400">

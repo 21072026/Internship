@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDateTime } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -40,7 +40,6 @@ const PAGE_SIZE = 25;
 
 function RecordSummary({ record }: { record: DuplicateRecord }) {
   const t = useT();
-  const locale = useLocale();
 
   return (
     <div className="min-w-0 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
@@ -62,7 +61,7 @@ function RecordSummary({ record }: { record: DuplicateRecord }) {
         {record.university && <p className="break-words">🎓 {record.university}</p>}
         {record.phone && <p>📞 {record.phone}</p>}
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          {t.duplicates.createdAt}: {formatDateTime(record.createdAt, locale)}
+          {t.duplicates.createdAt}: <RelativeTime date={record.createdAt} />
         </p>
       </div>
     </div>

@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { LifeBuoy } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { useT, useLocale } from '@/i18n/client';
-import { relativeTime } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { SupportAttachmentList } from '@/components/SupportAttachmentList';
 import { useMessagesHeaderTitle } from '@/components/MessagesShell';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
@@ -37,7 +37,6 @@ const STATUS_VARIANT: Record<Ticket['status'], 'info' | 'warning' | 'default'> =
 export default function SupportChatPage() {
   const t = useT();
   const s = t.support;
-  const locale = useLocale();
   const narrow = useIsNarrow();
   const [tickets, setTickets] = useState<Ticket[] | null>(null);
   const [me, setMe] = useState('');
@@ -134,7 +133,7 @@ export default function SupportChatPage() {
               <div key={ticket.id} data-testid={`ticket-${ticket.id}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <Badge variant={STATUS_VARIANT[ticket.status]} className="text-xs">{statusLabel[ticket.status]}</Badge>
-                  <span className="text-xs text-gray-400">{relativeTime(new Date(ticket.createdAt), locale)}</span>
+                  <RelativeTime date={ticket.createdAt} className="text-xs text-gray-400" />
                 </div>
                 <div className="space-y-2">
                   {ticket.messages.map((m) => (

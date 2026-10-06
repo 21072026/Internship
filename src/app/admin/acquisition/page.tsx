@@ -10,8 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useLocale, useT } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { useT } from '@/i18n/client';
 import { useVertical } from '@/lib/verticalClient';
 import { defaultBalancingNote, defaultLetterBody } from '@/lib/postCampaignTemplates';
 
@@ -36,7 +36,6 @@ const textarea =
 export default function PostCampaignsPage() {
   const t = useT();
   const c = t.postCampaigns;
-  const locale = useLocale();
   const vertical = useVertical();
   const router = useRouter();
   const [rows, setRows] = useState<CampaignRow[] | null>(null);
@@ -165,7 +164,7 @@ export default function PostCampaignsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={r.status === 'SENT' ? 'success' : 'default'}>{c.statuses[r.status]}</Badge>
-                    {r.sentAt && <span className="ml-2 text-xs text-gray-500">{formatDate(new Date(r.sentAt), locale)}</span>}
+                    {r.sentAt && <RelativeTime date={r.sentAt} className="ml-2 text-xs text-gray-500" />}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{r.recipients}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{r.inquiries}</td>

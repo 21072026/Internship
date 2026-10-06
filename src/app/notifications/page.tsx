@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDateTime } from '@/lib/relativeTime';
 import { renderNotification } from '@/lib/notificationText';
 
 interface NotificationItem {
@@ -280,7 +280,9 @@ export default function NotificationsPage() {
                   <p className={`break-words text-sm ${n.read ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100 font-medium'}`}>
                     {renderNotification(n, t, locale)}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">{formatDateTime(n.createdAt, locale)}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    <RelativeTime date={n.createdAt} />
+                  </p>
                 </div>
                 {!n.read && <span className="mt-1.5 h-2 w-2 rounded-full bg-blue-500 flex-shrink-0" aria-hidden="true" />}
               </Card>

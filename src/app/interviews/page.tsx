@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Users } from 'lucide-react';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 
 interface PanelRow {
   id: string;
@@ -31,7 +31,6 @@ interface PanelRow {
 
 export default function InterviewsPage() {
   const t = useT();
-  const locale = useLocale();
   const [panels, setPanels] = useState<PanelRow[]>([]);
   const [candidates, setCandidates] = useState<{ id: string; fullName: string }[]>([]);
   const [interviewers, setInterviewers] = useState<{ id: string; fullName: string }[]>([]);
@@ -168,7 +167,7 @@ export default function InterviewsPage() {
                         {p.blind ? `${t.interviewPanel.blindLabelPrefix} #${p.blindLabel}` : p.subjectName}
                       </Link>
                       <p className="text-xs text-gray-400">
-                        {formatDate(p.createdAt, locale)} ·{' '}
+                        <RelativeTime date={p.createdAt} /> ·{' '}
                         {t.interviewPanel.progress
                           .replace('{done}', String(p.submittedCount))
                           .replace('{total}', String(p.memberCount))}

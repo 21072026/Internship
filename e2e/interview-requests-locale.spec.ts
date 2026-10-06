@@ -90,9 +90,12 @@ test('a Turkish UI on a US-locale browser prints 25.08.2026 and names the slot z
   const card = queue.getByTestId(`interview-request-${request.id}`);
   await expect(card).toBeVisible({ timeout: 20_000 });
 
-  // The request date: Turkish gg.aa.yyyy, never the en-US M/D/YYYY the browser
-  // would have produced.
-  await expect(card).toContainText('25.08.2026');
+  // The request date reads as a distance ("geçen ay"), and its hover is the
+  // absolute reading: Turkish gg.aa.yyyy on the admin's saved clock with the
+  // zone named, like the slot below — never the en-US M/D/YYYY of the browser.
+  const requestedAt = card.getByTestId('interview-request-requested-at');
+  await expect(requestedAt).toHaveAttribute('title', /^25\.08\.2026\D+16:30 \(GMT\+3\)$/);
+  await expect(requestedAt).not.toHaveText(/\d{4}/);
   await expect(card).not.toContainText(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/);
 
   // The proposed slot: read on the admin's saved Istanbul clock (16:30), not on
