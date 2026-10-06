@@ -9,7 +9,6 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
-import { RECURRING_ENABLED } from '@/lib/surveyCampaigns';
 
 // Survey campaigns (#1887): who gets which survey, when. The sweep that acts on
 // them is src/lib/surveyCampaigns.ts. A stage trigger is checked against the
@@ -66,11 +65,6 @@ export async function POST(request: Request) {
   return withTenantScope(session, async () => {
     const survey = await prisma.survey.findFirst({ where: withinTenant({ id: input.surveyId }, await tenantWhere(session)), select: { id: true } });
     if (!survey) return NextResponse.json({ error: 'Survey not found' }, { status: 404 });
-    // A pulse needs one invitation per round; refused until the invitation
-    // unique is widened (RECURRING_ENABLED, src/lib/surveyCampaigns.ts).
-    if (input.trigger === 'RECURRING' && !RECURRING_ENABLED) {
-      return NextResponse.json({ error: 'recurring_not_yet', code: 'recurring_not_yet' }, { status: 400 });
-    }
     if (input.trigger === 'STAGE_ENTERED') {
       const keys = new Set((await resolvePipelineStages(settingsOrg)).map((s) => s.key));
       if (!keys.has(input.stageKey!)) return NextResponse.json({ error: 'unknown_stage', code: 'unknown_stage' }, { status: 400 });

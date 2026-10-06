@@ -5120,19 +5120,17 @@ model SurveyInvitation {
   expiresAt     DateTime
   createdAt     DateTime  @default(now())
   // Which round of the survey this invitation is for (#1887): "" for a
-  // one-off, a recurring campaign's pulse period ("pulse:3") otherwise.
-  // EXPAND step of expand -> contract: the column and the surveyId index land
-  // first; widening the unique below to include `round` is the follow-up, and
-  // cannot happen in the same deploy (MariaDB will not drop the old unique
-  // while the surveyId foreign key still relies on it).
+  // one-off, a recurring campaign's pulse period ("pulse:3") otherwise. One
+  // invitation per person per round — the unique below (#2769).
   round         String    @default("") @db.VarChar(80)
 
   response SurveyResponse?
 
-  @@unique([surveyId, email])
-  // The surveyId foreign key's own index, so the unique above can later be
-  // widened to [surveyId, email, round] without MariaDB refusing to drop it
-  // ("needed in a foreign key constraint").
+  // Widened from [surveyId, email] in a second deploy (#2769, the contract
+  // step of #1887): MariaDB will not drop a unique the surveyId foreign key
+  // relies on, so the FK's own index below had to be live first. Keep that
+  // index — it is what lets this unique change again.
+  @@unique([surveyId, email, round])
   @@index([surveyId])
   @@index([orgId])
 }

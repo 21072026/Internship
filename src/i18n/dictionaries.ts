@@ -1288,6 +1288,7 @@ const en = {
     lastMet: 'Last met {date} ({n} days ago).',
     noMeetingYet: 'No meeting held yet.',
   },
+
   meetingAttendance: {
     title: 'Meeting attendance',
     subtitle: 'Whether pairs actually meet, and on the rhythm they agreed — from the meetings held and the attendance recorded.',
@@ -1347,6 +1348,14 @@ const en = {
     role_MENTEE: 'Mentees',
     role_MENTOR: 'Mentors',
     role_COMPANY: 'Companies',
+    colInvited: 'Invited',
+    colRate: 'Response rate',
+    colNps: 'NPS',
+    colNpsN: 'NPS answers',
+    belowFloor: 'below floor',
+    reportTitle: 'Surveys',
+    reportNote: 'Rates and scores appear once a survey has at least its minimum number of responses.',
+
     aiSummarise: 'Summarise with AI',
     aiSummaryTitle: 'AI summary — themes and quotes taken word for word from the answers',
     aiSummaryNote: 'Generated from the answers above, without names. Every quote appears in an answer exactly as written.',
@@ -6564,7 +6573,7 @@ const en = {
     needs: 'Needs #{n}',
     howLink: 'How the thresholds were chosen',
     bands: { GREEN: 'On track', AMBER: 'Watch', RED: 'Act now' },
-    units: { percent: '{v}%', days: '{v} days' },
+    units: { percent: '{v}%', days: '{v} days', score: '{v}' },
     indicators: {
       activation: 'Invitations accepted',
       matchRate: 'Participants matched',
@@ -7998,6 +8007,7 @@ const tr: Dict = {
     lastMet: 'Son görüşme {date} ({n} gün önce).',
     noMeetingYet: 'Henüz görüşme yapılmadı.',
   },
+
   meetingAttendance: {
     title: 'Görüşmelere katılım',
     subtitle: 'Çiftlerin gerçekten görüşüp görüşmediği ve anlaştıkları sıklıkta mı görüştükleri — yapılan görüşmelerden ve kaydedilen katılımdan.',
@@ -8057,6 +8067,14 @@ const tr: Dict = {
     role_MENTEE: 'Mentee\'ler',
     role_MENTOR: 'Mentorlar',
     role_COMPANY: 'Şirketler',
+    colInvited: 'Davet',
+    colRate: 'Yanıt oranı',
+    colNps: 'NPS',
+    colNpsN: 'NPS yanıtı',
+    belowFloor: 'eşiğin altında',
+    reportTitle: 'Anketler',
+    reportNote: 'Oranlar ve skorlar, bir anket asgari yanıt sayısına ulaştığında görünür.',
+
     aiSummarise: 'AI ile özetle',
     aiSummaryTitle: 'AI özeti — temalar ve yanıtlardan kelimesi kelimesine alıntılar',
     aiSummaryNote: 'Yukarıdaki yanıtlardan, isim kullanılmadan oluşturuldu. Her alıntı bir yanıtta tam olarak böyle geçiyor.',
@@ -13135,7 +13153,7 @@ const tr: Dict = {
     needs: '#{n} gerekiyor',
     howLink: 'Eşikler nasıl belirlendi',
     bands: { GREEN: 'Yolunda', AMBER: 'İzlenmeli', RED: 'Hemen ilgilen' },
-    units: { percent: '%{v}', days: '{v} gün' },
+    units: { percent: '%{v}', days: '{v} gün', score: '{v}' },
     indicators: {
       activation: 'Kabul edilen davetler',
       matchRate: 'Eşleşen katılımcılar',
@@ -14563,6 +14581,7 @@ const de: Dict = {
     lastMet: 'Zuletzt getroffen am {date} (vor {n} Tagen).',
     noMeetingYet: 'Noch kein Treffen.',
   },
+
   meetingAttendance: {
     title: 'Teilnahme an Treffen',
     subtitle: 'Ob sich Paare tatsächlich treffen, und im vereinbarten Rhythmus — aus den stattgefundenen Treffen und der erfassten Teilnahme.',
@@ -14622,6 +14641,14 @@ const de: Dict = {
     role_MENTEE: 'Mentees',
     role_MENTOR: 'Mentor:innen',
     role_COMPANY: 'Unternehmen',
+    colInvited: 'Eingeladen',
+    colRate: 'Rücklaufquote',
+    colNps: 'NPS',
+    colNpsN: 'NPS-Antworten',
+    belowFloor: 'unter der Mindestzahl',
+    reportTitle: 'Umfragen',
+    reportNote: 'Quoten und Werte erscheinen, sobald eine Umfrage ihre Mindestzahl an Antworten erreicht hat.',
+
     aiSummarise: 'Mit KI zusammenfassen',
     aiSummaryTitle: 'KI-Zusammenfassung — Themen und wörtliche Zitate aus den Antworten',
     aiSummaryNote: 'Aus den Antworten oben erstellt, ohne Namen. Jedes Zitat steht genau so in einer Antwort.',
@@ -19702,7 +19729,7 @@ const de: Dict = {
     needs: 'Benötigt #{n}',
     howLink: 'Wie die Schwellenwerte gewählt wurden',
     bands: { GREEN: 'Im Plan', AMBER: 'Beobachten', RED: 'Handeln' },
-    units: { percent: '{v} %', days: '{v} Tage' },
+    units: { percent: '{v} %', days: '{v} Tage', score: '{v}' },
     indicators: {
       activation: 'Angenommene Einladungen',
       matchRate: 'Zugeordnete Teilnehmende',

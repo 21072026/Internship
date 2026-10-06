@@ -8218,6 +8218,15 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **`npx tsc --noEmit` includes `e2e/*.ts`.** A spec that builds a typed literal (for example a `questions` array passed to a zod-typed helper) needs an explicit type annotation, or CI's typecheck fails even though Playwright ran it fine.
 - **Merging two PRs that both appended blocks to the same anchor loses the shared closing lines.** This hit the dictionaries, the route-auth baseline JSON and release-media. Keeping both sides of `<<<<<<< / >>>>>>>` drops one `},`. Re-run `tsc` and `JSON.parse` before committing the merge.
 
+## 2026-10-06 — survey results and recurring pulses (#1910, #2769)
+
+- **Residual suppression needs a sum rule, not a count rule.** "If exactly one bucket is hidden, hide the smallest shown one too" still leaks: two hidden buckets of 1 and 2 can be recovered together by subtraction, as a group of 3. Keep hiding the smallest shown bucket until the hidden ones add up to at least the floor (`applyResponseFloor`). A time-series trend next to an overall total is a breakdown too: floor its periods the same way.
+- **A suppressed bucket must not travel at all.** `{ key: 'mentor-id', suppressed: true }` in the JSON already tells the reader that this mentor has fewer than five responses. Strip hidden groups server-side and send only a `hidden: boolean`. Key groups by id, not by display name, so two people with the same name stay two groups.
+- **`pkill -f "next dev"` / `pgrep -f "node .*next dev"` match the agent's own shell command line**, which kills the shell (exit 144). Bracket a character so the pattern cannot match itself: `pgrep -af "[n]ext dev -p"`.
+- **A new sidebar link needs an entry in `e2e/mobile-layout-coverage.spec.ts`.** That gate only runs in the scheduled full suite, so a miss shows up days later as a red full run (`/admin/health` from #1902 was found this way). Add the route in the same PR that adds the link.
+- **Strings in an untagged namespace that contain mentor or mentee words trip the MARKETING leak ratchet** (`check:i18n`). Add a `verticalOverlays.ts` MARKETING entry using the rep/lead wording; do not raise the ratchet.
+- **Expand → contract worked as planned.** Ship the FK index first, confirm with `/api/health` that **both** prod and shared preview carry that commit, then widen the unique. `check:schema-push` will warn about possible duplicates on any new unique; when every column already exists under a stricter unique, that warning cannot fire on live data, so say so in the PR.
+
 ## 2026-10-06 — error-boundary digest → prod log in one grep (#2773)
 - A user screenshot of `RouteErrorBoundary` carries the **digest**; `ssh ubuntu@s.interncrm.com` and
   `docker logs --since 72h internship-crm 2>&1 | grep -B3 -A25 <digest>` gives the real server stack
@@ -8226,6 +8235,7 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   For concurrency bugs on prod, the log is the evidence; don't burn time trying to force it locally.
 - A server page that writes on every render (lazy-create upserts) is a deadlock waiting for two
   concurrent renders (double back, `router.refresh`). Read first, write only when something is missing.
+
 
 ## 2026-10-06 — "wrong wording" was a wrong recipient (#2781)
 

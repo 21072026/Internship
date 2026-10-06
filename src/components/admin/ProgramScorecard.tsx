@@ -6,7 +6,7 @@ import { ArrowRight, HeartPulse } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useT } from '@/i18n/client';
-import type { ScorecardBand, ScorecardRow } from '@/lib/programScorecard';
+import type { ScorecardBand, ScorecardRow, ScorecardUnit } from '@/lib/programScorecard';
 
 // The programme health scorecard (#1908): one row per indicator — value, the
 // count behind it, the target, a band chip and, for an amber or red row, the
@@ -39,8 +39,8 @@ export function ProgramScorecard() {
 
   if (rows === null || rows.length === 0) return null;
 
-  const fmt = (value: number, unit: 'percent' | 'days') => s.units[unit].replace('{v}', String(value));
-  const target = (row: { target: number; direction: 'higher' | 'lower'; unit: 'percent' | 'days' }) =>
+  const fmt = (value: number, unit: ScorecardUnit) => s.units[unit].replace('{v}', String(value));
+  const target = (row: { target: number; direction: 'higher' | 'lower'; unit: ScorecardUnit }) =>
     (row.direction === 'higher' ? s.targetAtLeast : s.targetAtMost).replace('{v}', fmt(row.target, row.unit));
 
   return (
