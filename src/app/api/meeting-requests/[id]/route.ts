@@ -15,6 +15,7 @@ import { inCallerTenant } from '@/lib/tenantFilter';
 import { pushMeetingInBackground, pushableSelect } from '@/lib/googleCalendarSync';
 import { meetingEnd } from '@/lib/meetingDuration';
 import { bookWithoutConflict, conflictBody } from '@/lib/busyWindows';
+import { findPolicyViolation, loadBookingPolicy, policyBody, policyExempt } from '@/lib/bookingPolicy';
 
 const schema = z.object({ action: z.enum(['accept', 'decline']) });
 
@@ -99,14 +100,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // The hour may have been taken since it was asked for (#1995): lock the pair,
   // check, write. A collision leaves the request PENDING — the mentor can still
   // decline it, or ask for another time in the thread.
+  // The mentor's booking rules (#2003) set the length and, unless the mentor
+  // is the one accepting — their own call to make — bind the booking too.
+  const policy = await loadBookingPolicy(prisma, rel.mentorId);
+  const durationMinutes = policy?.defaultSlotMinutes ?? null;
+  const end = meetingEnd(req.proposedAt, { durationMinutes });
   const booked = await bookWithoutConflict(
-    { viewer: session.user, userIds: [rel.mentorId, rel.menteeId], window: { start: req.proposedAt, end: meetingEnd(req.proposedAt, null) } },
+    {
+      viewer: session.user,
+      userIds: [rel.mentorId, rel.menteeId],
+      window: { start: req.proposedAt, end },
+      extraCheck: policyExempt(session.user, rel.mentorId) ? undefined : (tx) => findPolicyViolation(tx, { mentorId: rel.mentorId, start: req.proposedAt, end, policy }),
+    },
     (tx) =>
       tx.meeting.create({
         data: {
           relationId: rel.id,
           title: req.topic,
           scheduledAt: req.proposedAt,
+          durationMinutes,
           timeZone: requester?.timezone ?? null,
           meetLink: link,
           rsvpToken: randomBytes(24).toString('hex'),
@@ -115,7 +127,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         select: pushableSelect,
       }),
   );
-  if (!booked.ok) return NextResponse.json(conflictBody(booked.conflict), { status: 409 });
+  if (!booked.ok) return NextResponse.json(booked.conflict ? conflictBody(booked.conflict) : policyBody(booked.refused), { status: 409 });
   const meeting = booked.result;
   // Mirror it into both participants' own calendars (#1986) — the accepted
   // request used to be the one scheduling path that never reached a calendar.

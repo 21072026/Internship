@@ -9,6 +9,8 @@ import { z } from 'zod';
 import { findSlotClash, liveSlotsWhere, mayWriteAvailabilityFor, mentorToday, writableMentorId } from '@/lib/availabilityAccess';
 import { weekdayOfDate } from '@/lib/availabilitySlots';
 import { busyWindows } from '@/lib/busyWindows';
+import { loadBookingPolicy } from '@/lib/bookingPolicy';
+import { widenForBuffer } from '@/lib/bookingPolicyRule';
 import { mergeWindows } from '@/lib/busyWindowsRule';
 
 // How far ahead the booked hours are read — the portal offers three weeks of slots.
@@ -148,14 +150,24 @@ export async function GET(request: Request) {
     // own meetings count too — and only as bare start/end: whose meeting it is
     // and what it is called are none of the reader's business. A directory
     // visitor gets the weekly hours, never the diary.
+    //
+    // The mentor's booking rules (#2003) shape the offer the same way: their
+    // meetings are widened by the buffer, and the picker gets the block length
+    // and the notice horizon — never the caps, which would tell a reader how
+    // full someone else's week is.
+    const policy = await loadBookingPolicy(prisma, mentor.id);
     let busy: { start: string; end: string }[] | undefined;
     if (session.user.role === 'ADMIN' || session.user.role === 'MENTEE') {
       const now = new Date();
-      const people = session.user.role === 'MENTEE' ? [mentor.id, session.user.id] : [mentor.id];
-      const windows = await busyWindows(prisma, people, now, new Date(now.getTime() + BUSY_HORIZON_MS));
-      busy = mergeWindows(windows).map((w) => ({ start: w.start.toISOString(), end: w.end.toISOString() }));
+      const horizon = new Date(now.getTime() + BUSY_HORIZON_MS);
+      const [mentorBusy, ownBusy] = await Promise.all([
+        busyWindows(prisma, [mentor.id], now, horizon),
+        session.user.role === 'MENTEE' ? busyWindows(prisma, [session.user.id], now, horizon) : Promise.resolve([]),
+      ]);
+      busy = mergeWindows([...widenForBuffer(mentorBusy, policy?.bufferMinutes), ...ownBusy]).map((w) => ({ start: w.start.toISOString(), end: w.end.toISOString() }));
     }
-    return NextResponse.json({ slots, exceptions: away, ...zoneOf(mentor.timezone), ...(busy ? { busy } : {}) });
+    const booking = policy ? { slotMinutes: policy.defaultSlotMinutes, minNoticeMinutes: policy.minNoticeMinutes } : null;
+    return NextResponse.json({ slots, exceptions: away, ...zoneOf(mentor.timezone), ...(busy ? { busy } : {}), ...(booking ? { booking } : {}) });
   });
 }
 
@@ -168,6 +180,8 @@ const schema = z.object({
   // A one-off on this date (#2001); `weekday` is then derived from it.
   date: z.string().regex(DATE).nullish(),
   note: z.string().trim().max(120).nullish(),
+  // This window's own session length (#2003); null → the mentor's default.
+  slotMinutes: z.number().int().min(15).max(240).nullish(),
   // An ADMIN writing for a mentor of their own org; anyone else writes their own.
   mentorId: z.string().min(1).optional(),
 });
@@ -210,7 +224,7 @@ export async function POST(request: Request) {
   if (clash) return clashResponse(clash);
 
   const slot = await prisma.availabilitySlot.create({
-    data: { mentorId, weekday, startTime, endTime, date, note: parsed.data.note || null },
+    data: { mentorId, weekday, startTime, endTime, date, note: parsed.data.note || null, slotMinutes: parsed.data.slotMinutes ?? null },
   });
   return NextResponse.json({ slot }, { status: 201 });
 }
@@ -224,6 +238,7 @@ const patchSchema = z
     startTime: z.string().regex(TIME).optional(),
     endTime: z.string().regex(TIME).optional(),
     note: z.string().trim().max(120).nullable().optional(),
+    slotMinutes: z.number().int().min(15).max(240).nullable().optional(),
   })
   .strict();
 
@@ -253,7 +268,7 @@ export async function PATCH(request: Request) {
   if (clash) return clashResponse(clash);
   const slot = await prisma.availabilitySlot.update({
     where: { id: current.id },
-    data: { weekday, date, startTime, endTime, ...(p.note !== undefined ? { note: p.note || null } : {}) },
+    data: { weekday, date, startTime, endTime, ...(p.note !== undefined ? { note: p.note || null } : {}), ...(p.slotMinutes !== undefined ? { slotMinutes: p.slotMinutes } : {}) },
   });
   return NextResponse.json({ slot });
 }

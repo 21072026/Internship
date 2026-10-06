@@ -9,7 +9,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
-import { ConflictNotice, readConflict, type MeetingConflict } from '@/components/meeting/ConflictNotice';
+import { ConflictNotice, PolicyNotice, readConflict, readPolicy, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 import { filterBookedOccurrences } from '@/lib/busyWindowsRule';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
 import { expandSlots, matchesSlot, type AvailabilityExceptionRange, type SlotOccurrence, type WeeklySlot } from '@/lib/availabilitySlots';
@@ -51,6 +51,9 @@ export function MeetingRequestsPanel({
   const [topic, setTopic] = useState('');
   const [when, setWhen] = useState('');
   const [conflict, setConflict] = useState<MeetingConflict | null>(null);
+  // The mentor's booking rules (#2003): which one a request ran into.
+  const [refusal, setRefusal] = useState<MeetingPolicyRefusal | null>(null);
+  const [booking, setBooking] = useState<{ slotMinutes: number | null; minNoticeMinutes: number | null } | null>(null);
   const [busyHours, setBusyHours] = useState<{ start: string; end: string }[]>([]);
   const [busy, setBusy] = useState(false);
   // The mentor's posted weekly hours, and the zone they are written in (#1361).
@@ -90,6 +93,7 @@ export function MeetingRequestsPanel({
         setSlotZone(d.timezone ?? null);
         setAwayDates(d.exceptions ?? []);
         setBusyHours(d.busy ?? []);
+        setBooking(d.booking ?? null);
       })
       // A failed read must not strand the form: fall back to free text rather
       // than leaving the picker in a permanent loading state (#1374's shape).
@@ -107,8 +111,11 @@ export function MeetingRequestsPanel({
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ relationId, topic, proposedAt }),
       });
-      // The hour is already taken (#1995): say so instead of a silent no-op.
-      setConflict(res.status === 409 ? readConflict(await res.json().catch(() => null)) : null);
+      // The hour is already taken (#1995), or a booking rule says no (#2003):
+      // say which instead of a silent no-op.
+      const body = res.status === 409 ? await res.json().catch(() => null) : null;
+      setConflict(readConflict(body));
+      setRefusal(readPolicy(body));
       if (res.ok) { setTopic(''); setWhen(''); setPicked(null); await load(); }
     } finally {
       setBusy(false);
@@ -121,8 +128,11 @@ export function MeetingRequestsPanel({
       const res = await fetch(`/api/meeting-requests/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
       });
-      // Taken since it was asked for: the request stays pending, the reason shows.
-      setConflict(res.status === 409 ? readConflict(await res.json().catch(() => null)) : null);
+      // Taken since it was asked for, or against the rules: the request stays
+      // pending, the reason shows.
+      const body = res.status === 409 ? await res.json().catch(() => null) : null;
+      setConflict(readConflict(body));
+      setRefusal(readPolicy(body));
       await load();
     } finally {
       setBusy(false);
@@ -142,9 +152,11 @@ export function MeetingRequestsPanel({
   const offers =
     slots && slots.length > 0
       ? filterBookedOccurrences(
-          expandSlots(slots, slotZone, { from: new Date(), weeks: 3, limit: 30, exceptions: awayDates }).map((o) => {
+          // Sliced into the mentor's session length and cut at their notice
+          // horizon (#2003); `busy` already carries their buffer.
+          expandSlots(slots, slotZone, { from: new Date(), weeks: 3, limit: 30, exceptions: awayDates, slotMinutes: booking?.slotMinutes, minNoticeMinutes: booking?.minNoticeMinutes }).map((o) => {
             const start = new Date(o.startISO);
-            return { ...o, start, end: new Date(start.getTime() + DEFAULT_MEETING_MINUTES * 60_000) };
+            return { ...o, start, end: new Date(start.getTime() + (o.minutes ?? DEFAULT_MEETING_MINUTES) * 60_000) };
           }),
           booked,
         ).slice(0, 12)
@@ -161,6 +173,7 @@ export function MeetingRequestsPanel({
       <CardHeader><CardTitle>{mode === 'manage' ? t.portal.meetingRequests.titleManage : t.portal.meetingRequests.title}</CardTitle></CardHeader>
 
       {conflict && <div className="mb-4"><ConflictNotice conflict={conflict} /></div>}
+      {refusal && <div className="mb-4"><PolicyNotice refusal={refusal} name={mode === 'request' ? counterpart?.name : undefined} /></div>}
 
       {/* Picking one of the mentor's offered slots is a write action like the
           form below, so an archived mentorship closes both (#1408). */}

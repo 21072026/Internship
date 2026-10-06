@@ -234,6 +234,13 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         }
       }
 
+      // MentorBookingPolicy: mentorId @unique (#2003). The primary's rules win
+      // when both exist — the duplicate's row goes with the final cascade.
+      if (!(await tx.mentorBookingPolicy.findUnique({ where: { mentorId: primaryId }, select: { id: true } }))) {
+        const moved = await tx.mentorBookingPolicy.updateMany({ where: { mentorId: duplicateId }, data: { mentorId: primaryId } });
+        add(counts, 'mentorBookingPolicy', moved.count);
+      }
+
       // DocumentRequirementReminder — compound unique over both user columns;
       // pure delivery-idempotency markers, colliding rows are safe to drop.
       for (const col of ['menteeId', 'recipientId'] as const) {

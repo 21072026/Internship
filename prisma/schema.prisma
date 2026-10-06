@@ -511,6 +511,7 @@ model User {
   projectMemberships                ProjectMember[]               @relation("ProjectMemberships")
   availabilitySlots                 AvailabilitySlot[]
   availabilityExceptions            AvailabilityException[]       @relation("AvailabilityExceptions")
+  bookingPolicy                     MentorBookingPolicy?          @relation("MentorBookingPolicy")
   company                           Company?                      @relation("CompanyUsers", fields: [companyId], references: [id])
   source                            Source?                       @relation(fields: [sourceId], references: [id])
   documents                         Document[]                    @relation("DocumentOwner")
@@ -2526,9 +2527,37 @@ model AvailabilitySlot {
   // "office hours", "interview prep" — shown next to the hours.
   note String?   @db.VarChar(120)
 
+  // Block length for this window (#2003), overriding the mentor's
+  // MentorBookingPolicy.defaultSlotMinutes; null → that default.
+  slotMinutes Int?
+
   mentor User @relation(fields: [mentorId], references: [id], onDelete: Cascade)
 
   @@index([mentorId])
+}
+
+// A mentor's booking guardrails (#2003): one row per person, because these
+// are person-level rules — a copy per slot would have to be edited in ten
+// places. Minutes everywhere, never hours: #1808's admin CSV import writes
+// `minNoticeMinutes` and `maxPerMonth` into this row, and those names and units
+// are the contract with it. Every column null = no rule. Enforced in one place,
+// src/lib/bookingPolicy.ts, on every write path; judged by the pure
+// src/lib/bookingPolicyRule.ts.
+//
+// No `orgId`, deliberately: like AvailabilitySlot it hangs off User and is
+// reached only through `mentorId`; writes go through src/lib/availabilityAccess.ts.
+model MentorBookingPolicy {
+  id                 String   @id @default(cuid())
+  mentorId           String   @unique
+  minNoticeMinutes   Int?
+  bufferMinutes      Int?
+  maxPerWeek         Int?
+  maxPerMonth        Int?
+  defaultSlotMinutes Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  mentor User @relation("MentorBookingPolicy", fields: [mentorId], references: [id], onDelete: Cascade)
 }
 
 // A stretch of days a mentor is away (#2001) — holiday, exams, a busy month.

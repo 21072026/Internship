@@ -137,17 +137,33 @@ export function conflictBody(conflict: BusyWindow): ConflictBody {
 
 /**
  * Lock the participants, check, and write — in one transaction. Returns the
- * write's result, or the conflict when there is one and `force` is not set.
+ * write's result, or what is in the way when `force` is not set: a collision,
+ * or whatever `extraCheck` refuses (a mentor's booking rules, #2003 — passed in
+ * rather than imported, so this file stays below src/lib/bookingPolicy.ts).
  */
-export async function bookWithoutConflict<T>(
-  opts: { viewer: Viewer; userIds: string[]; window: Window; force?: boolean; excludeMeetingIds?: string[]; excludeBatchKey?: string },
+export async function bookWithoutConflict<T, R = never>(
+  opts: {
+    viewer: Viewer;
+    userIds: string[];
+    window: Window;
+    force?: boolean;
+    excludeMeetingIds?: string[];
+    excludeBatchKey?: string;
+    extraCheck?: (tx: Prisma.TransactionClient) => Promise<R | null>;
+  },
   write: (tx: Prisma.TransactionClient) => Promise<T>,
-): Promise<{ ok: true; result: T; forcedOver: BusyWindow | null } | { ok: false; conflict: BusyWindow }> {
+): Promise<
+  | { ok: true; result: T; forcedOver: BusyWindow | null; forcedRule: R | null }
+  | { ok: false; conflict: BusyWindow; refused?: undefined }
+  | { ok: false; conflict?: undefined; refused: R }
+> {
   return prisma.$transaction(async (tx) => {
     await lockParticipants(tx, opts.userIds);
     const conflict = await findConflictFor(tx, opts.viewer, opts.userIds, opts.window, { excludeMeetingIds: opts.excludeMeetingIds, excludeBatchKey: opts.excludeBatchKey });
     if (conflict && !opts.force) return { ok: false as const, conflict };
-    return { ok: true as const, result: await write(tx), forcedOver: conflict };
+    const refused = opts.extraCheck ? await opts.extraCheck(tx) : null;
+    if (refused && !opts.force) return { ok: false as const, refused };
+    return { ok: true as const, result: await write(tx), forcedOver: conflict, forcedRule: refused };
   });
 }
 

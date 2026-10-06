@@ -16,7 +16,7 @@ import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 import { copyToClipboard } from '@/lib/clipboard';
 import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
-import { ConflictNotice, readConflict, type MeetingConflict } from '@/components/meeting/ConflictNotice';
+import { ConflictNotice, PolicyNotice, readConflict, readPolicy, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 
 interface Meeting {
   id: string;
@@ -52,6 +52,7 @@ export function MeetingSchedulerPanel({
   const [guests, setGuests] = useState<PendingGuest[]>([]);
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState<MeetingConflict | null>(null);
+  const [refusal, setRefusal] = useState<MeetingPolicyRefusal | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // Time optional: a date gives the meeting a time (+ RSVP); no date → no-time
   // meeting (just a link). Sent zone-qualified — see MeetingsManager (#1061).
@@ -83,6 +84,7 @@ export function MeetingSchedulerPanel({
   const schedule = async (force = false) => {
     setBusy(true);
     setConflict(null);
+    setRefusal(null);
     try {
       const res = await fetch('/api/meetings', {
         method: 'POST',
@@ -99,7 +101,11 @@ export function MeetingSchedulerPanel({
           ...(force ? { force: true } : {}),
         }),
       });
-      if (res.status === 409) setConflict(readConflict(await res.json().catch(() => null)));
+      if (res.status === 409) {
+        const body = await res.json().catch(() => null);
+        setConflict(readConflict(body));
+        setRefusal(readPolicy(body));
+      }
       if (res.ok) {
         setTitle('');
         setDate('');
@@ -183,6 +189,11 @@ export function MeetingSchedulerPanel({
         {conflict && (
           <div className="sm:col-span-2">
             <ConflictNotice conflict={conflict} busy={busy} onForce={() => schedule(true)} />
+          </div>
+        )}
+        {refusal && (
+          <div className="sm:col-span-2">
+            <PolicyNotice refusal={refusal} busy={busy} onForce={() => schedule(true)} />
           </div>
         )}
       </div>

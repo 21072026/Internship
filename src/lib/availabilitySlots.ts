@@ -25,6 +25,8 @@ export interface WeeklySlot {
    * "YYYY-MM-DD" or a Date, since a `@db.Date` column round-trips as any of them.
    */
   date?: string | Date | null;
+  /** Block length for this window (#2003); falls back to the expansion's `slotMinutes`. */
+  slotMinutes?: number | null;
 }
 
 /**
@@ -61,6 +63,8 @@ export interface SlotOccurrence {
   weekday: number;
   startTime: string;
   endTime: string;
+  /** Set when the window was sliced into bookable blocks (#2003): the block's length. */
+  minutes?: number;
 }
 
 const DAY_MS = 86_400_000;
@@ -78,9 +82,20 @@ export function dateInZone(at: Date, timeZone: string): string {
 }
 
 /** 0..6 (Sunday-based) for an instant, read in `timeZone`. */
-function weekdayInZone(at: Date, timeZone: string): number {
+export function weekdayInZone(at: Date, timeZone: string): number {
   const name = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(at);
   return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(name);
+}
+
+const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+const toHHMM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+/** Whole `minutes`-long blocks inside a "HH:MM"–"HH:MM" window, as wall-clock pairs. */
+export function sliceWindow(startTime: string, endTime: string, minutes: number): (readonly [string, string])[] {
+  const out: (readonly [string, string])[] = [];
+  const end = toMinutes(endTime);
+  for (let m = toMinutes(startTime); m + minutes <= end; m += minutes) out.push([toHHMM(m), toHHMM(m + minutes)] as const);
+  return out;
 }
 
 /**
@@ -99,7 +114,18 @@ export function expandSlots(
     weeks = 3,
     limit = 30,
     exceptions,
-  }: { from: Date; weeks?: number; limit?: number; exceptions?: AvailabilityExceptionRange[] }
+    slotMinutes,
+    minNoticeMinutes,
+  }: {
+    from: Date;
+    weeks?: number;
+    limit?: number;
+    exceptions?: AvailabilityExceptionRange[];
+    /** Slice every window into blocks of this many minutes (#2003); unset → one occurrence per window. */
+    slotMinutes?: number | null;
+    /** Nothing that starts sooner than this after `from` is offered (#2003). */
+    minNoticeMinutes?: number | null;
+  }
 ): SlotOccurrence[] {
   if (slots.length === 0) return [];
   const zone = resolveTimeZone(timezone);
@@ -109,6 +135,8 @@ export function expandSlots(
   // land on the same calendar date twice across a DST transition, so dedupe on
   // the date string rather than trusting the arithmetic.
   const seen = new Set<string>();
+  // The minimum-notice horizon (#2003) moves the "already past" line forward.
+  const earliest = from.getTime() + Math.max(0, minNoticeMinutes ?? 0) * 60_000;
   for (let step = 0; step <= weeks * 7 + 1; step++) {
     const cursor = new Date(from.getTime() + step * DAY_MS);
     const date = dateInZone(cursor, zone);
@@ -121,16 +149,24 @@ export function expandSlots(
     for (const slot of slots) {
       // A one-off lives on its date alone; a weekly slot on its weekday.
       if (slot.date ? calendarDate(slot.date) !== date : slot.weekday !== weekday) continue;
-      const start = parseWallClockInZone(`${date}T${slot.startTime}`, zone);
-      if (!start || start.getTime() <= from.getTime()) continue;
-      out.push({
-        slotId: slot.id,
-        startISO: start.toISOString(),
-        date,
-        weekday,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-      });
+      // One occurrence per window, or — with a block length — one per whole
+      // block that fits (#2003): 09:00–12:00 at 30 minutes is six bookings, not
+      // one three-hour appointment. A trailing part block is not offered.
+      const block = slot.slotMinutes ?? slotMinutes ?? null;
+      const pieces = block && block > 0 ? sliceWindow(slot.startTime, slot.endTime, block) : [[slot.startTime, slot.endTime] as const];
+      for (const [pieceStart, pieceEnd] of pieces) {
+        const start = parseWallClockInZone(`${date}T${pieceStart}`, zone);
+        if (!start || start.getTime() <= earliest) continue;
+        out.push({
+          slotId: slot.id,
+          startISO: start.toISOString(),
+          date,
+          weekday,
+          startTime: pieceStart,
+          endTime: pieceEnd,
+          ...(block && block > 0 ? { minutes: block } : {}),
+        });
+      }
     }
   }
 
