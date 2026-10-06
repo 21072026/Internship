@@ -450,6 +450,13 @@ html.dark[data-accent] .hover\:text-blue-700:hover,
    profile-progress chips on /portal/profile hovered to rgb(30,64,175) on
    gray-900, which the a11y scan caught (#2703). */
 html.dark[data-accent] .hover\:text-blue-800:hover,
+/* -600 as well, which the note above kept out: a `hover:text-blue-600` link on
+   a dark surface (the footer's release-notes link, the mentor's e-mail on the
+   journey card) hovered to accent-600, 3.4:1 on gray-900. The hover-contrast
+   check in e2e/a11y-scan.spec.ts measures every hover state on the scanned
+   pages in both themes, so a -600 hover that does sit on a light chip shows up
+   there rather than going unseen. */
+html.dark[data-accent] .hover\:text-blue-600:hover,
 html.dark[data-accent] .group:hover .group-hover\:text-blue-600 { color: var(--accent-300); }
 
 /*

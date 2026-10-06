@@ -220,6 +220,17 @@ export const SETTING_DEFAULTS = {
   // only). Off by default: a leaderboard is something a team opts into. The
   // org's admins see it either way.
   salesLeaderboardForReps: 'false',
+  // Meeting attendance (#2014): a cancellation this many hours or fewer before
+  // the start is recorded as LATE_CANCEL for whoever cancelled.
+  lateCancelHours: '24',
+  // Evaluation due dates (#1891, src/lib/evaluationDue.ts). A stage KEY of the
+  // tenant's own pipeline, never a label: '' means "the built-in default if
+  // this pipeline has it" (INTERNSHIP_IN_PROGRESS_450 + 30 days for INTERIM,
+  // INTERNSHIP_COMPLETED_490 for FINAL), 'off' switches that type off. The sweep
+  // never guesses a stage a renamed pipeline does not have.
+  evaluationInterimStage: '',
+  evaluationInterimDays: '30',
+  evaluationFinalStage: '',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

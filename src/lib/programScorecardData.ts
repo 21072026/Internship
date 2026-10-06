@@ -7,6 +7,9 @@ import { prisma } from '@/lib/prisma';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { assessRelations, HEALTH_RELATION_SELECT, reminderDaysReader } from '@/lib/relationHealthLive';
 import { buildScorecard, medianOf, percentOf, type ScorecardMetric, type ScorecardRow, SCORECARD_THRESHOLDS } from '@/lib/programScorecard';
+import { npsFromScores } from '@/lib/nps';
+import { evaluationCoverage } from '@/lib/evaluationCoverage';
+import { effectiveMinResponses } from '@/lib/surveyPrivacy';
 
 const DAY = 24 * 60 * 60 * 1000;
 const BATCH = 500;
@@ -15,6 +18,9 @@ const INVITE_WINDOW_DAYS = 90;
 const FIRST_MEETING_WINDOW_DAYS = 180;
 const CADENCE_DAYS = 30;
 const STALL_DAYS = 60;
+/** Survey indicators (#1910): the last 90 days, invitations given 7 days to answer. */
+const SURVEY_WINDOW_DAYS = 90;
+const SURVEY_SETTLE_DAYS = 7;
 
 type Metrics = Partial<Record<keyof typeof SCORECARD_THRESHOLDS, ScorecardMetric>>;
 
@@ -110,6 +116,39 @@ export async function loadProgramScorecard(tenant: TenantWhere, now = new Date()
     }
   }
   metrics.atRisk = { value: percentOf(atRisk, scored), basis: scored };
+
+  // Survey response rate — invitations sent 7-90 days ago (both reminders have
+  // had their chance) that were answered.
+  const surveyInvites = await prisma.surveyInvitation.findMany({
+    where: withinTenant({ createdAt: { gte: ago(SURVEY_WINDOW_DAYS), lte: ago(SURVEY_SETTLE_DAYS) } }, tenant),
+    select: { respondedAt: true },
+  });
+  metrics.surveyResponseRate = { value: percentOf(surveyInvites.filter((i) => i.respondedAt).length, surveyInvites.length), basis: surveyInvites.length };
+
+  // NPS — every survey's first NPS question, answers from the last 90 days,
+  // pooled. A survey counts only once its own answers in the window reach its
+  // own floor (a survey that raised its floor to 10 is not read at 7 through
+  // the back door of a pooled number).
+  const npsSurveys = await prisma.survey.findMany({
+    where: withinTenant({ questions: { some: { type: 'NPS' as const } } }, tenant),
+    select: { id: true, minResponses: true, questions: { where: { type: 'NPS' as const }, orderBy: { sortOrder: 'asc' as const }, take: 1, select: { key: true } } },
+  });
+  const pooled: unknown[] = [];
+  for (const survey of npsSurveys) {
+    const key = survey.questions[0]?.key;
+    if (!key) continue;
+    const answers = await prisma.surveyAnswer.findMany({
+      where: { questionKey: key, response: { surveyId: survey.id, submittedAt: { gte: ago(SURVEY_WINDOW_DAYS) } } },
+      select: { value: true },
+    });
+    if (answers.length >= effectiveMinResponses(survey.minResponses)) pooled.push(...answers.map((a) => a.value));
+  }
+  const nps = npsFromScores(pooled);
+  metrics.nps = { value: nps.suppressed ? null : nps.score, basis: nps.n };
+
+  // Evaluation coverage — due 7-90 days ago and written (#1891).
+  const coverage = await evaluationCoverage(tenant, now);
+  metrics.evaluationCoverage = { value: percentOf(coverage.written, coverage.due), basis: coverage.due };
 
   return buildScorecard(metrics);
 }

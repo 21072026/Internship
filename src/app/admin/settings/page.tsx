@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
+import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 import { useVertical } from '@/lib/verticalClient';
@@ -778,6 +779,8 @@ export default function AdminSettingsPage() {
           `evaluations` capability, so its admins were offered criteria for
           "what a mentor scores a mentee on" in a product with neither. */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationFrameworkEditor />}
+      {/* When INTERIM/FINAL fall due, and their reminders (#1891). */}
+      {verticalHasCapability(vertical, 'evaluations') && <EvaluationScheduleEditor />}
 
       {/* Per-stage service levels (#817) — how long anyone may wait. */}
       <StageSlaEditor />

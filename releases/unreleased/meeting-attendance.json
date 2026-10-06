@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Meeting attendance and cadence (#2014, part 1):**\n- New `enum AttendanceState` (the schema's one attendance vocabulary) and `MeetingAttendance`, covering both a Meeting row and a recurring occurrence with no row, each with its own unique key. `meetingId` is `SetNull`, so deleting a meeting keeps its attendance.\n- `POST/GET /api/meetings/[id]/attendance`: the mentor's record wins over the mentee's.\n- `LATE_CANCEL` is derived when one of the pair cancels within the `lateCancelHours` setting.\n- A no-show gets one neutral in-app note (`meeting.noShow`), sent once.\n- New `MentorshipRelation.expectedMeetingIntervalWeeks`.\n- Deterministic `src/lib/meetingCadence.ts`, feeding `GET /api/admin/analytics/attendance` and a Meeting attendance card on `/admin/analytics`: pairs met in the last 30 days, pairs on their agreed rhythm, no-show rate and median gap, each suppressed below five.",
+  "notes": {
+    "en": ["Analytics now shows whether your pairs actually meet: who met in the last 30 days, who keeps the agreed rhythm, and the no-show rate — counted from real meetings, never predicted."],
+    "tr": ["Analitik artık çiftlerin gerçekten görüşüp görüşmediğini gösteriyor: son 30 günde kimin görüştüğünü, kimin anlaşılan sıklığı tuttuğunu ve gelmeme oranını — tahminle değil, gerçek görüşmelerden sayılarak."],
+    "de": ["Die Analytics zeigen jetzt, ob sich deine Paare wirklich treffen: wer sich in den letzten 30 Tagen getroffen hat, wer den vereinbarten Rhythmus hält und die Quote des Nichterscheinens — gezählt aus echten Treffen, nie vorhergesagt."]
+  }
+}

@@ -116,6 +116,9 @@ export const NOTIFICATION_EVENTS = [
   // Meetings. An invitation and its answer are meeting_invites; the recurring
   // nudge before a meeting is meeting_reminders — the split a reader actually
   // wants ("stop reminding me", not "stop inviting me").
+  // The one neutral note to someone marked absent (#2014) — in-app only, no
+  // score, sent once per record (MeetingAttendance.noShowNotifiedAt).
+  { key: 'meeting.noShow', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },
   { key: 'meeting_reminder.startingSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'minutes', 'when'] },
   { key: 'meeting_reminder.seriesSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'project', params: ['title', 'project', 'when'] },
   { key: 'meeting_reminder.seriesTomorrow', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'project', params: ['title', 'project', 'when'] },
@@ -231,6 +234,10 @@ export const NOTIFICATION_EVENTS = [
   { key: 'goal.assigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['title'] },
   { key: 'goal.completed', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['title'] },
   { key: 'evaluation.added', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: [] },
+  // Evaluation due reminders to the mentor (#1891): at most two per evaluation;
+  // the mail goes in the existing `goals-evaluation` category (src/lib/evaluationDue.ts).
+  { key: 'evaluation.dueInterim', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
+  { key: 'evaluation.dueFinal', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
   { key: 'testimonial.approvalRequested', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'testimonial.declined', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'project.goalAssigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'project', params: ['title'] },

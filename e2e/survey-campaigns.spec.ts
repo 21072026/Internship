@@ -8,7 +8,8 @@ import { createSurvey } from '../src/lib/surveys';
 // so a hardcoded stage key could never make this pass.
 //   • two sweeps in a row → one claim, one invitation, one mail per person;
 //   • someone who switched the `surveys` e-mail group off is never claimed;
-//   • one tick sends no more than the cap, the rest go on the next tick.
+//   • one tick sends no more than the cap, the rest go on the next tick;
+//   • a RECURRING pulse sends one invitation per person per ROUND (#2769).
 
 const PW = 'SurveyCampaigns123!';
 
@@ -63,8 +64,8 @@ test.describe('survey campaigns', () => {
 
   test('a custom-stage trigger fires once per person across two sweeps, and opt-outs are never claimed', { tag: '@smoke' }, async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
-    // A pulse is refused until invitations can carry a round (expand -> contract).
-    expect((await page.request.post('/api/admin/survey-campaigns', { data: { surveyId, name: 'Pulse', trigger: 'RECURRING', everyDays: 30 } })).status()).toBe(400);
+    // A pulse without its interval is refused.
+    expect((await page.request.post('/api/admin/survey-campaigns', { data: { surveyId, name: 'Pulse', trigger: 'RECURRING' } })).status()).toBe(400);
     // A key the org does not have is refused — it would silently never fire.
     const bogus = await page.request.post('/api/admin/survey-campaigns', { data: { surveyId, name: 'Bogus', trigger: 'STAGE_ENTERED', stageKey: 'INTERNSHIP_COMPLETED_490' } });
     expect(bogus.status()).toBe(400);
@@ -113,5 +114,40 @@ test.describe('survey campaigns', () => {
     expect(await prisma.surveyCampaignSend.count({ where: { campaignId } })).toBe(3);
     // A batch above the cap is clamped, never raised.
     expect((await (await page.request.get('/api/cron?job=surveys&batch=500')).json()).surveys.sent).toBe(0);
+    await page.request.patch(`/api/admin/survey-campaigns/${campaignId}`, { data: { active: false } });
+  });
+
+  test('a recurring pulse invites each person once per round, and each round only once', async ({ page }) => {
+    await signInAndSettle(page, admin, PW, '/admin');
+    const pulse = await createSurvey(orgId, {
+      key: 'weekly_pulse',
+      title: { en: 'Weekly pulse' },
+      audience: 'MENTEE',
+      anonymity: 'ANONYMOUS',
+      questions: [{ key: 'mood', type: 'SCALE', labels: { en: 'How is it going?' }, required: true }],
+    });
+    await prisma.survey.update({ where: { id: pulse.id }, data: { status: 'OPEN' } });
+    const created = await page.request.post('/api/admin/survey-campaigns', { data: { surveyId: pulse.id, name: 'Weekly', trigger: 'RECURRING', everyDays: 7 } });
+    expect(created.status()).toBe(201);
+    const campaignId = (await created.json()).campaign.id;
+
+    const day = 24 * 60 * 60 * 1000;
+    const sweep = async (offsetDays: number) =>
+      (await (await page.request.get(`/api/cron?job=surveys&at=${new Date(Date.now() + offsetDays * day).toISOString()}`)).json()).surveys;
+    // Round 0, twice: three reachable mentees (the fourth opted out), once each.
+    expect((await sweep(0)).sent).toBe(3);
+    expect((await sweep(0)).sent).toBe(0);
+    // Round 1 a week later — a second invitation per person, which the old
+    // [surveyId, email] unique could not hold — and again only once.
+    expect((await sweep(7)).sent).toBe(3);
+    expect((await sweep(8)).sent).toBe(0);
+
+    const invitations = await prisma.surveyInvitation.findMany({ where: { surveyId: pulse.id }, select: { userId: true, round: true } });
+    expect(invitations).toHaveLength(6);
+    for (const id of ids.slice(0, 3)) {
+      expect(invitations.filter((i) => i.userId === id).map((i) => i.round).sort()).toEqual(['pulse:0', 'pulse:1']);
+    }
+    expect(invitations.some((i) => i.userId === ids[3])).toBe(false);
+    expect(await prisma.surveyCampaignSend.count({ where: { campaignId } })).toBe(6);
   });
 });

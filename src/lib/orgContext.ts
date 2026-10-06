@@ -89,6 +89,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'MeetingFeedback',
   // Saved filter presets on admin lists (#1900).
   'SavedView',
+  // Who attended a meeting (#2014).
+  'MeetingAttendance',
+  // INTERIM/FINAL due dates and reminders (#1891).
+  'EvaluationDue',
   'Requisition',
   'InterviewRequest',
   'MessageTemplate',

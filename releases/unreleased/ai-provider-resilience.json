@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Fix: AI provider failures no longer surface as 500s (#2024).**\n- **New denial reason:** `runAiGated` catches a failed call and returns `provider_error`. It records `AiUsage.outcome = 'provider_error'`, which does not consume quota (the quota count now excludes it).\n- **Retries and breaker:** new `src/lib/ai/provider.ts` with at most 2 retries (429/5xx/timeout/connection only, jittered backoff, no attempt after 45 s) and a per-process circuit breaker. The SDK's own retries are off.\n- **Safe parsing:** `safeParseModelJson` replaces the raw `JSON.parse` in `cvExtractAi` and `aiMentorMatch`. It falls back and records `parse_error` instead of throwing.\n- **Routes:** CV feedback, CV extract, interview prep and interaction summary answer `503 provider_error`; mentor suggestions keep the rule-based ranking.",
+  "notes": {
+    "en": ["When the AI service has a hiccup, AI features now retry quietly and, if it is still down, say \"temporarily unavailable\" instead of failing — and a failed attempt never counts against your monthly allowance."],
+    "tr": ["AI hizmeti aksadığında AI özellikleri artık sessizce yeniden deniyor; hâlâ yanıt yoksa hata vermek yerine \"geçici olarak kullanılamıyor\" diyor — ve başarısız bir deneme aylık hakkından düşülmüyor."],
+    "de": ["Wenn der KI-Dienst hakt, versuchen KI-Funktionen es jetzt still erneut und sagen, falls er weiter ausfällt, „vorübergehend nicht verfügbar“ statt zu scheitern — ein fehlgeschlagener Versuch zählt nie gegen dein Monatskontingent."]
+  }
+}

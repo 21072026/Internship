@@ -41,6 +41,7 @@ import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { StageClockChip } from '@/components/StageClockChip';
 import { daysInStage } from '@/lib/stageClock';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
+import { RelationCadencePanel } from '@/components/RelationCadencePanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 
@@ -340,6 +341,11 @@ export default function MenteeDetailPage() {
           nextActionNote={relation.nextActionNote}
           onSaved={fetchRelation}
         />
+      </div>
+
+      {/* The pair's meeting rhythm (#2014). */}
+      <div className="mb-6">
+        <RelationCadencePanel relationId={relation.id} />
       </div>
 
       {/* The trial end (#2553) — nothing renders outside a trial. */}

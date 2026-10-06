@@ -169,6 +169,8 @@ model Organization {
   surveys                 Survey[]
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
+  meetingAttendance       MeetingAttendance[]
+  evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
   surveyResponses         SurveyResponse[]
   meetingFeedback         MeetingFeedback[]
@@ -547,6 +549,8 @@ model User {
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
   savedViews                        SavedView[]                   @relation("SavedViewAuthor")
+  attendanceRecords                 MeetingAttendance[]           @relation("AttendanceSubject")
+  attendanceRecorded                MeetingAttendance[]           @relation("AttendanceRecorder")
   surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
   meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
@@ -2117,6 +2121,12 @@ model AiUsage {
   orgId     String?
   createdAt DateTime @default(now())
 
+  // How the call ended (#2024): 'ok', 'parse_error' (the provider answered,
+  // the reply was not the JSON asked for — the task fell back) or
+  // 'provider_error' (it never answered). Only the first two consume quota:
+  // a failure must stay visible without costing the tenant anything.
+  outcome String @default("ok") @db.VarChar(20)
+
   @@index([createdAt])
   @@index([scope])
   @@index([orgId, createdAt])
@@ -2655,8 +2665,12 @@ model MentorshipRelation {
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
   meetings              Meeting[]
+  // Who attended its meetings (#2014), kept even when a meeting is deleted.
+  attendance            MeetingAttendance[]
   messages              Message[]
   evaluations           Evaluation[]
+  // INTERIM/FINAL due dates and their reminders (#1891).
+  evaluationDues        EvaluationDue[]
   goals                 Goal[]
   meetingRequests       MeetingRequest[]
   questions             MentorQuestion[]
@@ -2678,6 +2692,10 @@ model MentorshipRelation {
   meetingSeries         MeetingSeries[]
   // Nightly health snapshots (#1901); removed with the relation.
   healthSnapshots       RelationHealthSnapshot[]
+
+  // The promised meeting cadence, in weeks (#2014); null = no promise made,
+  // so the pair is never "off cadence" (src/lib/meetingCadence.ts).
+  expectedMeetingIntervalWeeks Int?
 
   @@index([status])
   @@index([lifecycleState])
@@ -2704,6 +2722,31 @@ enum EvaluationType {
 enum GoalStatus {
   OPEN
   DONE
+}
+
+// When an INTERIM or FINAL evaluation is due, and whether the mentor has been
+// reminded (#1891). One row per relation and type — the unique is the claim,
+// so two sweeps (or two replicas) create one row. `dueAt` comes from the org's
+// schedule (src/lib/evaluationDue.ts): N days after the relation entered the
+// configured stage. `completedAt` is stamped by POST /api/evaluations when the
+// mentor (or an admin) writes that type — not by polling — and stops the
+// reminders at once. At most two reminders, ever (EVALUATION_MAX_REMINDERS).
+model EvaluationDue {
+  id             String             @id @default(cuid())
+  orgId          String?
+  org            Organization?      @relation(fields: [orgId], references: [id])
+  relationId     String
+  relation       MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  type           EvaluationType
+  dueAt          DateTime
+  remindersSent  Int                @default(0)
+  lastRemindedAt DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@unique([relationId, type])
+  @@index([orgId])
+  @@index([completedAt, dueAt])
 }
 
 model Evaluation {
@@ -3086,6 +3129,7 @@ model Meeting {
   googleEvents GoogleCalendarEventLink[]
   guests       MeetingGuest[]
   feedback     MeetingFeedback[]
+  attendance   MeetingAttendance[]
 
   @@index([relationId])
   @@index([projectId])
@@ -3143,6 +3187,57 @@ model MeetingGuest {
 
 // A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;
 // manually scheduled meetings leave seriesId null (backward-compatible).
+// Who actually turned up (#2014) — THE attendance vocabulary of the schema.
+// Group events (#1856) reuse this enum on their own registration row; never
+// declare a second one.
+enum AttendanceState {
+  ATTENDED
+  NO_SHOW
+  // Cancelled inside the late-cancel window (setting `lateCancelHours`) —
+  // derived when the meeting is cancelled, never typed by anyone.
+  LATE_CANCEL
+  EXCUSED
+}
+
+// One person's attendance at one meeting (#2014). Two shapes, like
+// MeetingOccurrenceEnd: a Meeting row (`meetingId`), or a recurring occurrence
+// that has no row (`seriesId` + `occurrenceAt`); each has its own unique, so
+// nothing is recorded twice. `meetingId` is SetNull — deleting the meeting
+// must not delete the record that someone did not show up (the PersonalNote /
+// InteractionLog precedent), and `relationId` keeps it attached to the pair.
+// Who recorded it is always stored; the mentor's record wins over the
+// mentee's (src/lib/meetingAttendance.ts).
+model MeetingAttendance {
+  id               String              @id @default(cuid())
+  orgId            String?
+  org              Organization?       @relation(fields: [orgId], references: [id])
+  meetingId        String?
+  meeting          Meeting?            @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  seriesId         String?
+  series           MeetingSeries?      @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  occurrenceAt     DateTime?
+  relationId       String?
+  relation         MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // When the meeting was due to start — kept here so the cadence figures still
+  // count a meeting whose row was deleted.
+  meetingAt        DateTime
+  userId           String
+  user             User                @relation("AttendanceSubject", fields: [userId], references: [id], onDelete: Cascade)
+  state            AttendanceState
+  recordedById     String
+  recordedBy       User                @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: Cascade)
+  recordedAt       DateTime            @default(now())
+  note             String?             @db.VarChar(500)
+  // The one neutral "we missed you" note to a no-show (#2014) — stamped so it
+  // is sent exactly once, however often the record is edited.
+  noShowNotifiedAt DateTime?
+
+  @@unique([meetingId, userId])
+  @@unique([seriesId, occurrenceAt, userId])
+  @@index([orgId])
+  @@index([relationId, meetingAt])
+}
+
 model MeetingSeries {
   id              String    @id @default(cuid())
   projectId       String?
@@ -3184,6 +3279,7 @@ model MeetingSeries {
   meetings      Meeting[]
   reminders     MeetingSeriesReminder[]
   ends          MeetingOccurrenceEnd[]
+  attendance    MeetingAttendance[]
   // The one recurring Google event per connected member (#2654).
   calendarLinks GoogleCalendarEventLink[]
 
@@ -5032,19 +5128,17 @@ model SurveyInvitation {
   expiresAt     DateTime
   createdAt     DateTime  @default(now())
   // Which round of the survey this invitation is for (#1887): "" for a
-  // one-off, a recurring campaign's pulse period ("pulse:3") otherwise.
-  // EXPAND step of expand -> contract: the column and the surveyId index land
-  // first; widening the unique below to include `round` is the follow-up, and
-  // cannot happen in the same deploy (MariaDB will not drop the old unique
-  // while the surveyId foreign key still relies on it).
+  // one-off, a recurring campaign's pulse period ("pulse:3") otherwise. One
+  // invitation per person per round — the unique below (#2769).
   round         String    @default("") @db.VarChar(80)
 
   response SurveyResponse?
 
-  @@unique([surveyId, email])
-  // The surveyId foreign key's own index, so the unique above can later be
-  // widened to [surveyId, email, round] without MariaDB refusing to drop it
-  // ("needed in a foreign key constraint").
+  // Widened from [surveyId, email] in a second deploy (#2769, the contract
+  // step of #1887): MariaDB will not drop a unique the surveyId foreign key
+  // relies on, so the FK's own index below had to be live first. Keep that
+  // index — it is what lets this unique change again.
+  @@unique([surveyId, email, round])
   @@index([surveyId])
   @@index([orgId])
 }

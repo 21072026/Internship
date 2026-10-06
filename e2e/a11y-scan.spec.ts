@@ -13,6 +13,7 @@ import {
   type SeededRelation,
 } from './helpers/db';
 import { signInAsFreshUser, settleStreamedSuspense } from './helpers/auth';
+import { freezeTransitions, hoverContrastFindings, parkPointer } from './helpers/hoverContrast';
 
 // Role-based WCAG scan (#862, story #826).
 //
@@ -98,7 +99,23 @@ async function scan(page: Page, key: string) {
   // The app never goes network-idle (TimezoneSync + <Link> prefetch, #1081),
   // so settle on the DOM instead of waiting for silence.
   await page.waitForLoadState('domcontentloaded');
+  // Pointer off the page first: axe measures whatever is hovered at this moment,
+  // so a pointer left over a link by an earlier step made the result depend on
+  // where it happened to rest (#2765 — a hover-only contrast bug was caught
+  // locally and missed in CI). Hover states are checked on purpose instead, in
+  // `hoverContrastFindings` below.
+  await parkPointer(page);
+  // …at the top of the page: the hover check below scrolls to each element it
+  // hovers, a reload keeps that scroll, and the sticky header is translucent —
+  // so a scan of a scrolled page measured header links over whatever content
+  // sat behind them (4.42:1 over a grey card) instead of over the header.
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  // …and no colour mid-transition: a theme class that has just landed after a
+  // reload fades `transition-colors` text from its light shade to its dark one,
+  // and a scan inside those 150ms measured the light shade on the dark header.
+  const thaw = await freezeTransitions(page);
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+  await thaw();
   const findings: Finding[] = results.violations.map((v) => ({
     page: key,
     rule: v.id,
@@ -119,6 +136,11 @@ async function scan(page: Page, key: string) {
       const f = gated.find((x) => x.rule === rule)!;
       return `${key}: ${rule} (${f.severity}) ×${n} > baseline ${allowed[rule] ?? 0} — ${f.selectors[0] ?? ''}`;
     });
+  // Hover states, measured deliberately (see e2e/helpers/hoverContrast.ts). Not
+  // baselined: there were none when this landed, so any finding is new.
+  for (const h of await hoverContrastFindings(page)) {
+    regressions.push(`${key}: hover-contrast ${h.ratio}:1 < ${h.required}:1 — ${h.selector} (${h.color} on ${h.background})`);
+  }
   return { counts, regressions };
 }
 

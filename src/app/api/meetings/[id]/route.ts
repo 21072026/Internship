@@ -9,6 +9,7 @@ import { canManageMeeting, type MeetingUser } from '@/lib/meetingAccess';
 import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib/googleCalendarSync';
 import { durationMinutesField } from '@/lib/meetingDuration';
+import { recordLateCancel } from '@/lib/meetingAttendance';
 
 // The three verbs a meeting never had (#1980).
 //
@@ -206,6 +207,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           cancelReason: cancelReason?.trim() || null,
         },
       });
+      // Cancelled inside the late-cancel window by one of the pair: that is a
+      // LATE_CANCEL for them (#2014) — derived here, never typed by anyone.
+      await recordLateCancel(
+        await prisma.meeting.findMany({ where: { id: { in: ids } }, select: { id: true, scheduledAt: true, relation: { select: { id: true, orgId: true, mentorId: true, menteeId: true } } } }),
+        session.user.id,
+        now,
+      );
       // Off the invitees' real calendars too — through the helper, never by
       // deleting GoogleCalendarEventLink rows from here (#1986 owns that file).
       await withdrawMeetings(ids);
