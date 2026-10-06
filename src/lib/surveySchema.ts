@@ -33,3 +33,9 @@ export function toFieldDef(q: SurveyQuestionDef): FormFieldDef {
 export function validateSurveyAnswer(q: SurveyQuestionDef, value: unknown): ValidationErrorKey | null {
   return validateResponse(toFieldDef(q), value);
 }
+
+/** A `{ en?, tr?, de? }` JSON value in `locale`, falling back to EN, then any language. */
+export function pickLocalized(text: unknown, locale: string): string {
+  const t = (text && typeof text === 'object' ? text : {}) as Record<string, string | undefined>;
+  return t[locale] || t.en || t.tr || t.de || '';
+}

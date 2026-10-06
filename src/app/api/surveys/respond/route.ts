@@ -4,6 +4,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { hashSurveyToken, submitSurveyResponse, SurveyAnswerInvalid, SurveyConflict, surveyAcceptsAnswers } from '@/lib/surveys';
 import { resolveSurveyInvitation, type ResolvedInvitation } from '@/lib/surveyTokens';
+import { pickLocalized } from '@/lib/surveySchema';
 
 // Login-free survey answering (#1881). No session: the invitation token is the
 // credential (src/lib/surveyTokens.ts). Both methods are rate-limited per IP,
@@ -21,11 +22,7 @@ import { resolveSurveyInvitation, type ResolvedInvitation } from '@/lib/surveyTo
 // `alreadyAnswered`, never an error page.
 
 type LocalizedJson = Partial<Record<Locale, string>> | null;
-
-function pick(text: unknown, locale: Locale): string {
-  const t = (text ?? {}) as LocalizedJson ?? {};
-  return t?.[locale] || t?.en || t?.tr || t?.de || '';
-}
+const pick = (text: unknown, locale: Locale) => pickLocalized(text, locale);
 
 function localeOf(inv: ResolvedInvitation): Locale {
   if (isLocale(inv.locale ?? undefined)) return inv.locale as Locale;
