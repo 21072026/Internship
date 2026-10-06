@@ -43,9 +43,8 @@ export async function PublicFooter() {
         // #1732 — the price is a Product answer, not a legal one, and the
         // footer is where a visitor who scrolled past the band looks for it.
         // Un-parked with the header entry now that the page exists (#1730).
-        // Left out on a marketing host for the same reason the header entry is
-        // (#2475): there is no marketing price list to send anyone to yet.
-        ...(isMarketing ? [] : [{ href: '/pricing', label: n.pricing }]),
+        // Both hosts: the marketing price list was published 2026-10-06.
+        { href: '/pricing', label: n.pricing },
         ...(isMarketing ? [] : [{ href: '/projects', label: n.showcase }]),
         // The release feed is the internship product's changelog and 404s on a
         // marketing host (#2544), so the marketing footer does not offer it.
