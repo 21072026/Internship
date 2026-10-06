@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -21,6 +22,10 @@ test('a same-site page cannot write with the admin cookie, and text/plain is ref
 
   try {
     await signInAndSettle(page, adminEmail, pw, '/admin');
+    // Keys that read /api/v1 and webhooks are the INTEGRATIONS_API feature
+    // (#1744): granted to the default org and left granted, like REPORT_EXPORT,
+    // so parallel specs on the same org never race a revoke.
+    await setOrgFeatureFor(page, 'INTEGRATIONS_API', true);
 
     // 1. The form on a sibling host: same-site, its own Origin.
     const forged = await page.request.post('/api/admin/api-keys', {

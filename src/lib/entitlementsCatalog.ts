@@ -23,6 +23,10 @@ export const PREMIUM_FEATURES = [
   { key: 'REPORT_EXPORT', phase: 2, scope: 'company' },
   { key: 'WHITE_LABEL', phase: 3, scope: 'org' },
   { key: 'SSO_SAML', phase: 3, scope: 'org' },
+  // The public API (#1744): /api/v1 reads, webhook subscriptions and issuing a
+  // key that can read them. The tenant's, like SSO — a company in the talent
+  // pool does not integrate the programme's data.
+  { key: 'INTEGRATIONS_API', phase: 3, scope: 'org' },
 ] as const;
 
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number]['key'];

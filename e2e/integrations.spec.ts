@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -21,6 +22,10 @@ test('admin generates an API key that authorizes the read-only v1 API', async ({
     await page.fill('input[type="password"]', 'AdminPass123');
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+    // Keys that read /api/v1 and webhooks are the INTEGRATIONS_API feature
+    // (#1744): granted to the default org and left granted, like REPORT_EXPORT,
+    // so parallel specs on the same org never race a revoke.
+    await setOrgFeatureFor(page, 'INTEGRATIONS_API', true);
 
     // Generate a key (raw value returned once).
     // A key must carry at least one scope since #1545.

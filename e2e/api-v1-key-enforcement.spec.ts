@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createHash, randomBytes } from 'crypto';
-import { prisma, cleanupByEmail, seedUser, uniqueEmail } from './helpers/db';
+import { prisma, cleanupByEmail, seedUser, uniqueEmail, setOrgFeature } from './helpers/db';
 
 // Enforcement of the API-key lifecycle at the /api/v1 door (#1546).
 //
@@ -80,13 +80,21 @@ test('a key that is expired, revoked, out of scope or org-less never reaches can
     expect(orglessRes.status()).toBe(403);
     expect((await orglessRes.json()).candidates).toBeUndefined();
 
-    // The control: a live, in-scope, org-bound key is still served.
+    // A live, in-scope, org-bound key whose org's plan lacks the public API
+    // (#1744): 403 naming the feature — not data, and not a 401.
     const good = await seedKey({ orgId: org.id });
+    const unentitled = await request.get(CANDIDATES, { headers: bearer(good.raw) });
+    expect(unentitled.status()).toBe(403);
+    expect(await unentitled.json()).toMatchObject({ code: 'feature_locked', feature: 'INTEGRATIONS_API' });
+
+    // The control: with the feature, the same key is served.
+    await setOrgFeature(org.id, 'INTEGRATIONS_API', true);
     const ok = await request.get(CANDIDATES, { headers: bearer(good.raw) });
     expect(ok.status()).toBe(200);
     expect(Array.isArray((await ok.json()).candidates)).toBeTruthy();
   } finally {
     await prisma.apiKey.deleteMany({ where: { name: { startsWith: KEY_PREFIX } } });
+    await prisma.orgEntitlement.deleteMany({ where: { orgId: org.id } });
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });
@@ -108,6 +116,7 @@ test('a key sees its own organisation and no other', async ({ request }) => {
     await prisma.user.update({ where: { id: menteeB.id }, data: { orgId: orgB.id } });
 
     const keyA = await seedKey({ orgId: orgA.id });
+    await setOrgFeature(orgA.id, 'INTEGRATIONS_API', true);
     const res = await request.get(CANDIDATES, { headers: bearer(keyA.raw) });
     expect(res.status()).toBe(200);
     const ids = ((await res.json()).candidates as { id: string }[]).map((c) => c.id);
@@ -125,6 +134,7 @@ test('a key sees its own organisation and no other', async ({ request }) => {
     await prisma.apiKey.deleteMany({ where: { name: { startsWith: KEY_PREFIX } } });
     await cleanupByEmail(emailA);
     await cleanupByEmail(emailB);
+    await prisma.orgEntitlement.deleteMany({ where: { orgId: { in: [orgA.id, orgB.id] } } });
     await prisma.organization.deleteMany({ where: { id: { in: [orgA.id, orgB.id] } } });
   }
 });

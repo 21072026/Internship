@@ -24,6 +24,25 @@ export type ApiScope = (typeof API_SCOPES)[number];
 // already read.
 export const DEFAULT_API_SCOPES: readonly ApiScope[] = ['candidates:read'];
 
+// Which paid feature a scope belongs to (#1744), or null with the reason it is
+// not sold. A Record over every scope, so a new scope cannot be added without
+// deciding: the door (withApiKey) and API-key issuing both read this, and
+// scripts/check-api-key-routes.mjs fails an /api/v1 route whose scope maps to
+// anything but INTEGRATIONS_API.
+//   candidates:read  — the public API the plans sell ("public API + webhooks").
+//   companies:write  — NOT the public API: SaleVali's own account ingest
+//                      (#2450), the marketing product's provider contract.
+//                      Gating it would switch off the product's own data feed.
+export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
+  'candidates:read': 'INTEGRATIONS_API',
+  'companies:write': null,
+};
+
+/** The scopes among `scopes` that need INTEGRATIONS_API. */
+export function publicApiScopes(scopes: readonly string[]): ApiScope[] {
+  return scopes.filter((s): s is ApiScope => isApiScope(s) && SCOPE_ENTITLEMENT[s] === 'INTEGRATIONS_API');
+}
+
 export function isApiScope(value: string): value is ApiScope {
   return (API_SCOPES as readonly string[]).includes(value);
 }

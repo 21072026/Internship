@@ -258,6 +258,7 @@ const en = {
       REPORT_EXPORT: 'Report export (PDF / Excel)',
       WHITE_LABEL: 'White-label branding',
       SSO_SAML: 'SSO / SAML (Enterprise)',
+      INTEGRATIONS_API: 'Public API & webhooks',
     },
   },
   talentPool: {
@@ -1914,6 +1915,7 @@ const en = {
     feature: {
       ADVANCED_ANALYTICS: 'Full analytics',
       REPORT_EXPORT: 'XLSX / CSV export and a scheduled report email',
+      INTEGRATIONS_API: 'Public API and webhooks',
       WHITE_LABEL: 'White-label, including your own domain',
       SSO_SAML: 'Single sign-on (SAML)',
       TALENT_POOL_SEARCH: 'Talent-pool search',
@@ -3968,6 +3970,7 @@ const en = {
     paused: 'Paused',
     rotateSecret: 'Rotate secret',
     rotateSecretConfirm: 'Rotate the signing secret? The receiver stops verifying until you redeploy it with the new secret.',
+    apiLocked: 'Your plan does not include the public API and webhooks. Existing webhooks keep firing and you can still pause or delete them and revoke keys; to add or change an integration, upgrade to Program Plus or ask us for the add-on.',
     sendTest: 'Send test event',
     testOk: 'Receiver answered {status} in {ms} ms',
     testFailed: 'Delivery failed',
@@ -6574,6 +6577,7 @@ const tr: Dict = {
       REPORT_EXPORT: 'Rapor ihracı (PDF / Excel)',
       WHITE_LABEL: 'Beyaz etiket markalama',
       SSO_SAML: 'SSO / SAML (Enterprise)',
+      INTEGRATIONS_API: 'Public API ve webhook\'lar',
     },
   },
   talentPool: {
@@ -8149,6 +8153,7 @@ const tr: Dict = {
     feature: {
       ADVANCED_ANALYTICS: 'Tam analitik',
       REPORT_EXPORT: 'XLSX / CSV dışa aktarma ve zamanlanmış rapor e-postası',
+      INTEGRATIONS_API: 'Public API ve webhook\'lar',
       WHITE_LABEL: 'Beyaz etiket, kendi alan adınız dahil',
       SSO_SAML: 'Tek oturum açma (SAML)',
       TALENT_POOL_SEARCH: 'Yetenek havuzunda arama',
@@ -10136,6 +10141,7 @@ const tr: Dict = {
     paused: 'Duraklatıldı',
     rotateSecret: 'Gizli anahtarı yenile',
     rotateSecretConfirm: 'İmza gizli anahtarı yenilensin mi? Yeni anahtarla yeniden yayına alana kadar alıcı imzayı doğrulayamaz.',
+    apiLocked: 'Planınız public API ve webhook\'ları içermiyor. Mevcut webhook\'lar çalışmaya devam eder; onları duraklatabilir, silebilir ve anahtarları iptal edebilirsiniz. Entegrasyon eklemek ya da değiştirmek için Program Plus\'a geçin ya da eklentiyi bizden isteyin.',
     sendTest: 'Test olayı gönder',
     testOk: 'Alıcı {status} ile {ms} ms’de yanıt verdi',
     testFailed: 'Gönderim başarısız',
@@ -12704,6 +12710,7 @@ const de: Dict = {
       REPORT_EXPORT: 'Berichtsexport (PDF / Excel)',
       WHITE_LABEL: 'White-Label-Branding',
       SSO_SAML: 'SSO / SAML (Enterprise)',
+      INTEGRATIONS_API: 'Öffentliche API & Webhooks',
     },
   },
   talentPool: {
@@ -14280,6 +14287,7 @@ const de: Dict = {
     feature: {
       ADVANCED_ANALYTICS: 'Vollständige Analysen',
       REPORT_EXPORT: 'XLSX-/CSV-Export und geplanter Report per E-Mail',
+      INTEGRATIONS_API: 'Öffentliche API und Webhooks',
       WHITE_LABEL: 'White-Label, inklusive eigener Domain',
       SSO_SAML: 'Single Sign-on (SAML)',
       TALENT_POOL_SEARCH: 'Suche im Talentpool',
@@ -16268,6 +16276,7 @@ const de: Dict = {
     paused: 'Pausiert',
     rotateSecret: 'Secret erneuern',
     rotateSecretConfirm: 'Signatur-Secret erneuern? Der Empfänger kann Signaturen erst wieder prüfen, wenn du ihn mit dem neuen Secret neu ausrollst.',
+    apiLocked: 'Dein Tarif enthält die öffentliche API und Webhooks nicht. Bestehende Webhooks feuern weiter, und du kannst sie pausieren, löschen und Schlüssel widerrufen; um eine Integration hinzuzufügen oder zu ändern, wechsle zu Program Plus oder frag uns nach dem Add-on.',
     sendTest: 'Testereignis senden',
     testOk: 'Empfänger antwortete mit {status} in {ms} ms',
     testFailed: 'Zustellung fehlgeschlagen',

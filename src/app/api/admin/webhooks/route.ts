@@ -8,6 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { WEBHOOK_EVENTS } from '@/lib/webhooks';
 import { assertPublicHttpsUrl, SsrfBlockedError } from '@/lib/ssrfGuard';
+import { integrationsLocked } from '@/lib/integrationsGate';
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -36,6 +37,9 @@ const schema = z.object({
 export async function POST(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // A new subscription is the paid feature (#1744).
+  const locked = await integrationsLocked(session);
+  if (locked) return locked;
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   // The URL is called from the server's network position, so a schema check is
@@ -83,6 +87,12 @@ export async function PATCH(request: Request) {
   // writing nothing and logging a change that did not happen.
   if (!parsed.success || Object.keys(parsed.data).length === 0) {
     return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  }
+  // Re-pointing, re-scoping or switching a webhook back on is setting up an
+  // integration (#1744); switching one OFF must always work.
+  if (parsed.data.url !== undefined || parsed.data.events !== undefined || parsed.data.active === true) {
+    const locked = await integrationsLocked(session);
+    if (locked) return locked;
   }
   if (parsed.data.url) {
     // Same guard as create — an edit is just as much a server-side fetch target.
