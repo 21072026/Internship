@@ -278,6 +278,52 @@ test.describe('release media', () => {
     }
   });
 
+  // #1895: the ROI report — the number, then every step that produced it.
+  test('poster: the programme ROI working', async ({ page }) => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const stamp = Date.now();
+    const org = await prisma.organization.create({ data: { name: `Media ROI ${stamp}`, slug: `media-roi-${stamp}` } });
+    await prisma.orgEntitlement.create({ data: { orgId: org.id, feature: 'ADVANCED_ANALYTICS', note: 'release media' } });
+    const adminEmail = uniqueEmail('media-roi-admin');
+    const emails = [adminEmail];
+    try {
+      await seedUser(adminEmail, 'MediaRoi123!', 'ADMIN', 'Media ROI Admin', org.id);
+      const mentorEmail = uniqueEmail('media-roi-mentor');
+      emails.push(mentorEmail);
+      const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Dr. Lena Hoffmann', org.id);
+      const now = Date.now();
+      await prisma.programCost.createMany({
+        data: [
+          { orgId: org.id, category: 'STAFF', label: 'Programme coordinator', amountMinor: 3_600_000, currency: 'EUR', periodStart: new Date(now - 300 * DAY), periodEnd: new Date(now - 10 * DAY) },
+          { orgId: org.id, category: 'PLATFORM', label: 'Licence', amountMinor: 480_000, currency: 'EUR', periodStart: new Date(now - 300 * DAY), periodEnd: new Date(now + 60 * DAY) },
+          { orgId: org.id, category: 'EVENT', label: 'Kick-off day', amountMinor: 250_000, currency: 'EUR', periodStart: new Date(now - 200 * DAY), periodEnd: new Date(now - 200 * DAY) },
+        ],
+      });
+      for (const [i, name] of ['Aylin Demir', 'Jonas Weber', 'Selin Arslan', 'Mert Koç', 'Hanna Becker'].entries()) {
+        const email = uniqueEmail('media-roi-mentee');
+        emails.push(email);
+        const mentee = await seedUser(email, 'x', 'MENTEE', name, org.id);
+        const rel = await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, pipelineStatus: 'HIRED_660' } });
+        await prisma.statusChange.create({ data: { relationId: rel.id, fromStatus: 'INTERNSHIP_COMPLETED_490', toStatus: 'HIRED_660', createdAt: new Date(now - (30 + i * 40) * DAY) } });
+        if (i < 3) {
+          await prisma.placement.create({ data: { orgId: org.id, relationId: rel.id, menteeId: mentee.id, placedAt: new Date(now - (30 + i * 40) * DAY), valueMinor: 2_200_000 + i * 150_000, valueCurrency: 'EUR', valueSource: 'MANUAL' } });
+        }
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await signInAndSettle(page, adminEmail, 'MediaRoi123!', '/admin');
+      await page.goto('/admin/analytics/roi');
+      await expect(page.getByTestId('roi-steps')).toBeVisible();
+      await capturePoster(page.getByTestId('roi-steps').locator('xpath=ancestor::section[1]/..'), 'roi-executive-dashboards');
+    } finally {
+      await prisma.programCost.deleteMany({ where: { orgId: org.id } });
+      await prisma.placement.deleteMany({ where: { orgId: org.id } });
+      await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });
+      for (const e of emails) await cleanupByEmail(e);
+      await prisma.orgEntitlement.deleteMany({ where: { orgId: org.id } });
+      await prisma.organization.deleteMany({ where: { id: org.id } });
+    }
+  });
+
   /**
    * TEMPLATE — a clip, for a change where motion is the point.
    *

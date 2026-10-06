@@ -41,7 +41,7 @@ export function ResponsiveShell({
     <div className={`${mobileChrome ? 'min-h-screen' : 'lg:min-h-screen'} bg-gray-50 dark:bg-gray-950 lg:flex`}>
       {/* Mobile top bar */}
       {mobileChrome && (
-        <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-2">
+        <div className="no-print lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-2">
           {/* Keep enough room for the one-line wordmark and three 44px actions;
               the secondary environment badge returns at the sm breakpoint. */}
           <div className="flex items-center min-w-0">
@@ -70,7 +70,7 @@ export function ResponsiveShell({
       {/* Sidebar: drawer on mobile, sticky column on desktop */}
       <div
         data-testid="app-drawer"
-        className={`fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:translate-x-0 ${
+        className={`no-print fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }${mobileChrome ? '' : ' max-lg:hidden'}`}
       >
