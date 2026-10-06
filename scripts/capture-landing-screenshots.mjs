@@ -259,6 +259,10 @@ async function signedInPage(browser, screen, device, theme) {
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => u.pathname.startsWith(screen.landing), { timeout: 30_000 });
+  // Let the post-sign-in redirect finish: when the screen IS the landing page
+  // (/sales), navigating there mid-redirect aborts with "interrupted by another
+  // navigation".
+  await page.waitForLoadState('load');
   await screen.open(page, base);
   await screen.ready(page).waitFor({ state: 'visible', timeout: 30_000 });
   // Fonts and the post-mount fetches (badges, counts) settle.
