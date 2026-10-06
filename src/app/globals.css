@@ -717,3 +717,14 @@ textarea:focus-visible {
     border: 1px solid currentColor;
   }
 }
+
+/* Inside the native app (#2775). The root layout renders <html
+   data-embedded-app> when the request comes from the app's web view
+   (src/lib/embeddedApp.ts), and the app draws its own header, tab bar and
+   menu — so the site's own top bar, drawer and "install the app" prompt step
+   aside. Marked with data-app-chrome where they are rendered (ResponsiveShell,
+   MessagesShell, InstallAppButton); a browser never gets the attribute, so
+   nothing changes on the web. */
+html[data-embedded-app] [data-app-chrome] {
+  display: none !important;
+}

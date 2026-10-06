@@ -1,15 +1,19 @@
+import { useMemo } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { strings } from '../../lib/i18n';
 import { roleHome, roleSection } from '../../lib/roleHome';
 import { useSession } from '../../lib/session';
+import { useAppTheme, type Palette } from '../../lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
 // Native home (#2775). Shortcuts open the web page for now; each one becomes a
 // native screen in its own slice of the epic.
 export default function HomeTab() {
+  const { c } = useAppTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const { user, product } = useSession();
   const t = strings();
   const tint = product?.color ?? '#1D4ED8';
@@ -50,17 +54,18 @@ export default function HomeTab() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
   body: { padding: 20, gap: 8 },
-  hello: { fontSize: 26, fontWeight: '800', color: '#111827' },
-  hint: { color: '#6b7280', marginBottom: 12 },
+  hello: { fontSize: 26, fontWeight: '800', color: c.text },
+  hint: { color: c.muted, marginBottom: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   tile: {
     width: '47%',
     borderRadius: 14,
     padding: 18,
     gap: 10,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: c.subtle,
   },
-  tileText: { fontWeight: '600', color: '#111827' },
+  tileText: { fontWeight: '600', color: c.text },
 });

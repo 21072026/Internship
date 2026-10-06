@@ -613,6 +613,14 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   kapısı segment `layout.tsx` + `gatePage()` (`src/lib/pageCapabilityGate.ts`), API kapısı
   `requireCapability()`; hazır içerik (doküman şablonları, bülten sayıları) vertical başına
   anahtarlıdır, yüklenen/yazılan her içerik org'unda kalır.
+- **The site inside the native app** (#2775, `apps/mobile/README.md`): the app's web view sends
+  `InternCRMApp/1` in its User-Agent and the root layout renders `<html data-embedded-app>`
+  (`src/lib/embeddedApp.ts`); anything marked **`data-app-chrome`** (the mobile top bar and drawer,
+  the messages header, the install prompt) is hidden there, because the app draws its own header,
+  tabs and menu. New web chrome that duplicates something native gets the same marker. The app's
+  menu is `GET /api/app/navigation` — `navLinks.ts` through `appNavLinks()`, never a second list;
+  a new nav key needs an icon in `apps/mobile/src/lib/menu.ts` (a unit test enforces it). Presentation
+  only: a forged User-Agent hides chrome on the forger's own screen and grants nothing.
 - **One request, one id** (#1601): `src/middleware.ts` mints an `x-request-id` (or honours an
   inbound one, bounded to the log-safe alphabet in `src/lib/requestId.ts` — never trusted
   verbatim), forwards it to the handler and echoes it on **every** response, error responses

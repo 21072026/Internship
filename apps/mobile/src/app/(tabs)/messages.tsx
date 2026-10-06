@@ -1,16 +1,19 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { apiGet, SessionLostError } from '../../lib/api';
 import { deviceLocale, strings } from '../../lib/i18n';
 import { previewLine, type Inbox, type InboxThread } from '../../lib/messages';
 import { useSession } from '../../lib/session';
+import { useAppTheme, type Palette } from '../../lib/theme';
 import { useUnread } from '../../lib/unread';
 
 // Native inbox (#2775): GET /api/conversations — the same read as the web's
 // /messages page (src/lib/inbox.ts), so the rows, names and unread counts match.
 export default function MessagesTab() {
+  const { c } = useAppTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const { origin, product, user, signOut } = useSession();
   const { refresh: refreshBadges } = useUnread();
   const t = strings();
@@ -115,15 +118,16 @@ export default function MessagesTab() {
 
 function Badge({ count }: { count: number }) {
   return (
-    <View style={styles.badge}>
-      <Text style={styles.badgeText}>{count > 9 ? '9+' : count}</Text>
+    <View style={badgeStyles.badge}>
+      <Text style={badgeStyles.badgeText}>{count > 9 ? '9+' : count}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  muted: { color: '#6b7280', textAlign: 'center' },
+  muted: { color: c.muted, textAlign: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -131,15 +135,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: c.border,
   },
   avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   line: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  name: { fontSize: 15, color: '#111827', fontWeight: '500', flexShrink: 1 },
+  name: { fontSize: 15, color: c.text, fontWeight: '500', flexShrink: 1 },
   bold: { fontWeight: '700' },
-  time: { fontSize: 12, color: '#9ca3af' },
-  preview: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
-  previewUnread: { color: '#374151' },
+  time: { fontSize: 12, color: c.faint },
+  preview: { fontSize: 13, color: c.faint, marginTop: 2 },
+  previewUnread: { color: c.text },
+});
+
+// Fixed colours on purpose: the unread pill reads the same in light and dark.
+const badgeStyles = StyleSheet.create({
   badge: {
     minWidth: 20,
     height: 20,

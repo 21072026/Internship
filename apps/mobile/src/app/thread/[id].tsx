@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -26,6 +26,7 @@ import {
   type ThreadMessage,
 } from '../../lib/messages';
 import { useSession } from '../../lib/session';
+import { useAppTheme, type Palette } from '../../lib/theme';
 import { useUnread } from '../../lib/unread';
 
 // Native thread (#2775). Reads GET /api/messages?conversationId= — which is
@@ -34,6 +35,8 @@ import { useUnread } from '../../lib/unread';
 // is in the foreground it asks again every few seconds; native push replaces
 // that in a later slice.
 export default function ThreadScreen() {
+  const { c } = useAppTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
   const { origin, user, product, signOut } = useSession();
   const { refresh: refreshBadges } = useUnread();
@@ -117,7 +120,7 @@ export default function ThreadScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: '#fff' }}
+      style={{ flex: 1, backgroundColor: c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
     >
@@ -181,6 +184,7 @@ export default function ThreadScreen() {
             <TextInput
               style={styles.input}
               placeholder={t.typeMessage}
+              placeholderTextColor={c.faint}
               value={draft}
               onChangeText={setDraft}
               multiline
@@ -203,27 +207,28 @@ export default function ThreadScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  muted: { color: '#6b7280', textAlign: 'center' },
+  muted: { color: c.muted, textAlign: 'center' },
   bubble: { maxWidth: '82%', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
   mine: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-  theirs: { alignSelf: 'flex-start', backgroundColor: '#f3f4f6', borderBottomLeftRadius: 4 },
-  sender: { fontSize: 12, fontWeight: '700', color: '#4b5563' },
-  body: { fontSize: 15, color: '#111827' },
+  theirs: { alignSelf: 'flex-start', backgroundColor: c.subtle, borderBottomLeftRadius: 4 },
+  sender: { fontSize: 12, fontWeight: '700', color: c.muted },
+  body: { fontSize: 15, color: c.text },
   mineText: { color: '#fff' },
-  deleted: { fontSize: 14, fontStyle: 'italic', color: '#6b7280' },
+  deleted: { fontSize: 14, fontStyle: 'italic', color: c.muted },
   attachment: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  attachmentText: { fontSize: 14, color: '#1f2937', textDecorationLine: 'underline', flexShrink: 1 },
-  time: { fontSize: 11, color: '#9ca3af', alignSelf: 'flex-end' },
+  attachmentText: { fontSize: 14, color: c.text, textDecorationLine: 'underline', flexShrink: 1 },
+  time: { fontSize: 11, color: c.faint, alignSelf: 'flex-end' },
   mineTime: { color: 'rgba(255,255,255,0.8)' },
-  readOnly: { textAlign: 'center', color: '#6b7280', paddingTop: 12, paddingHorizontal: 16 },
+  readOnly: { textAlign: 'center', color: c.muted, paddingTop: 12, paddingHorizontal: 16 },
   composer: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: c.border,
     paddingHorizontal: 10,
     paddingTop: 8,
-    backgroundColor: '#fff',
+    backgroundColor: c.bg,
     gap: 4,
   },
   composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
@@ -231,13 +236,13 @@ const styles = StyleSheet.create({
     flex: 1,
     maxHeight: 120,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: c.inputBorder,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 9,
     fontSize: 15,
-    color: '#111827',
+    color: c.text,
   },
   sendButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  error: { color: '#b91c1c', fontSize: 13 },
+  error: { color: c.danger, fontSize: 13 },
 });
