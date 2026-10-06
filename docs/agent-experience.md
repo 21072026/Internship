@@ -8226,3 +8226,13 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **A new sidebar link needs an entry in `e2e/mobile-layout-coverage.spec.ts`.** That gate only runs in the scheduled full suite, so a miss shows up days later as a red full run (`/admin/health` from #1902 was found this way). Add the route in the same PR that adds the link.
 - **Strings in an untagged namespace that contain mentor or mentee words trip the MARKETING leak ratchet** (`check:i18n`). Add a `verticalOverlays.ts` MARKETING entry using the rep/lead wording; do not raise the ratchet.
 - **Expand → contract worked as planned.** Ship the FK index first, confirm with `/api/health` that **both** prod and shared preview carry that commit, then widen the unique. `check:schema-push` will warn about possible duplicates on any new unique; when every column already exists under a stricter unique, that warning cannot fire on live data, so say so in the PR.
+
+## 2026-10-06 — error-boundary digest → prod log in one grep (#2773)
+- A user screenshot of `RouteErrorBoundary` carries the **digest**; `ssh ubuntu@s.interncrm.com` and
+  `docker logs --since 72h internship-crm 2>&1 | grep -B3 -A25 <digest>` gives the real server stack
+  in seconds — faster than guessing a repro. Here it was a `P2034` deadlock, not navigation logic.
+- Local MariaDB did **not** reproduce the MySQL 8 InnoDB deadlock (6×parallel renders, old code green).
+  For concurrency bugs on prod, the log is the evidence; don't burn time trying to force it locally.
+- A server page that writes on every render (lazy-create upserts) is a deadlock waiting for two
+  concurrent renders (double back, `router.refresh`). Read first, write only when something is missing.
+

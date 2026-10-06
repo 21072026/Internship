@@ -1,17 +1,34 @@
-# Mobil strateji: PWA, mağaza kabukları ve çevrimdışı (#2085)
+# Mobil strateji: native uygulama, PWA ve mağaza kabukları (#2085, #2775)
 
-> **Karar — 2026-10-05 (maintainer):** ikinci bir native istemci **yok**. Android için
-> Play Store'a bir **Trusted Web Activity (TWA)** kabuğu, şimdi. iOS için mağaza kabuğu
-> yalnızca somut bir müşteri / RFP talebiyle. Gerçek çevrimdışı mod ertelendi.
-> Mağaza hesapları **bcsit GmbH** adına açılır.
+> **Güncel karar — 2026-10-06 (maintainer):** **native uygulama yapılıyor.** Expo
+> (React Native) ile iOS + Android için **tek uygulama, iki ürün** (girişte Internship
+> CRM / SaleVali seçilir). MVP mentee + mentor; admin/pipeline/analiz uygulama içinde
+> oturumu açık web görünümünde (hibrit). Derleme Expo EAS. Kod: `apps/mobile/`
+> (README orada), epic **#2775**. Bu karar 2026-10-05 tarihli "native yok" kararını
+> **geri alır**; aşağıdaki eski gerekçeler (§ Neden ikinci bir native istemci değil)
+> tarihî kayıt olarak duruyor — üç kaygıyı tasarım şöyle karşılıyor:
+>
+> 1. *Her merge anında canlı* — native ekranlar bile mevcut `/api/*` uçlarını okur;
+>    henüz native olmayan her yüzey canlı web sayfasıdır. Mağaza sürümü yalnızca native
+>    ekran veya kabuk değişince gerekir; API'yi değiştiren bir PR, sahadaki eski app
+>    sürümlerini kırmamalıdır (geriye uyumluluk artık bir kural).
+> 2. *Çerez tabanlı güvenlik modeli* — korunuyor: uygulama ikinci bir token/oturum
+>    üretmez, NextAuth'un kendi HTTP akışını OS çerez kavanozuyla sürer
+>    (`apps/mobile/src/lib/authClient.ts`). Sunucuda auth değişikliği yok.
+> 3. *Tek okuma yolu* — native ekranlar aynı yetkili uçları çağırır; mobil için ayrı
+>    bir okuma yüzeyi açılmaz.
+>
+> TWA (`mobile/android`, `android-build.yml`) native uygulama mağazaya çıkana kadar
+> Android yedeği olarak kalır, sonra kaldırılır. Mağaza hesapları **bcsit GmbH** adına.
+>
+> *Önceki karar — 2026-10-05:* native istemci yok; Android'de TWA, iOS talep olursa.
 
 | | Karar | Durum |
 |---|---|---|
-| PWA (kurulabilir, Web Push, kısayollar, share target) | Ana mobil istemci olarak kalır | Canlıda (`src/app/manifest.ts`, `public/sw.js`) |
-| Android — Play Store | TWA (Bubblewrap), iki kayıt: InternshipCRM + SaleVali | **Faz 1 başladı** — bu doküman + `mobile/android/` + `android-build.yml` |
-| iOS — App Store | Capacitor kabuğu + native eklentiler, **talep olursa** | Ertelendi (§ iOS) |
-| React Native / Flutter / Swift+Kotlin | Yapılmayacak | — |
-| Gerçek çevrimdışı (mentee listesi, kuyruklu yazma) | Ertelendi, önce ölçüm | — |
+| **Native uygulama (Expo, iOS + Android)** | Tek uygulama, iki ürün; MVP mentee + mentor | **İskelet** — `apps/mobile/`, #2775 |
+| PWA (kurulabilir, Web Push, kısayollar, share target) | Web'de kalır | Canlıda (`src/app/manifest.ts`, `public/sw.js`) |
+| Android — TWA | Native çıkana kadar yedek | `mobile/android/` + `android-build.yml` |
+| Gerçek çevrimdışı | Ertelendi, önce ölçüm | — |
 
 ## Neden ikinci bir native istemci değil
 

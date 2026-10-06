@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Native mobile app, skeleton** (#2775, `apps/mobile`). Expo (React Native) app for iOS and Android — one app for both products: the person picks Internship CRM or SaleVali, and the app talks only to that host (docs/worlds.md). Native sign-in with 2FA/recovery codes and \"keep me signed in\" drives NextAuth's own HTTP flow through the OS cookie jar (`authClient.ts`) — no second session minter, no server auth change. Native home and more tabs; messages, to-dos and every other surface open the product's web page in a signed-in in-app web view that never leaves the product's origin and hands a lost session back to the native sign-in. EN/TR/DE. EAS profiles `preview`/`staging`/`production`; `mobile.yml` typechecks, unit-tests and bundles the app on PRs that touch it. `docs/mobile-strategy.md` records the reversed decision (native, not TWA-only). Root `tsconfig.json` and `.dockerignore` exclude `apps/`."
+}

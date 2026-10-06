@@ -1,0 +1,81 @@
+name: Mobile app
+
+# The native app in apps/mobile (#2775, Expo / React Native). Its own workflow,
+# with a path filter: none of these checks is a required one, so a PR that does
+# not touch the app is not left waiting on it (contrast e2e.yml, #2719).
+#
+#   checks — typecheck, the app's unit tests, and a full Android JS bundle
+#            (`expo export`), which is what catches a broken import or a
+#            route that no longer resolves. No secrets, so it runs on forks.
+#   eas    — workflow_dispatch only: queue an EAS cloud build. Needs the
+#            EXPO_TOKEN secret and an EAS project id (apps/mobile/README.md).
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        type: choice
+        options: [preview, staging, production]
+        default: preview
+      platform:
+        description: 'Platform'
+        type: choice
+        options: [android, ios, all]
+        default: android
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: apps/mobile
+
+jobs:
+  checks:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - name: Bundle for Android
+        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/export"
+
+  eas:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      PROFILE: ${{ inputs.profile }}
+      PLATFORM: ${{ inputs.platform }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Queue the EAS build
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN is not set — see apps/mobile/README.md § Building."
+            exit 1
+          fi
+          npx eas-cli@latest build --platform "$PLATFORM" --profile "$PROFILE" --non-interactive --no-wait
