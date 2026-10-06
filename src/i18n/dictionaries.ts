@@ -1578,6 +1578,14 @@ const en = {
       tooLong: '{field} is too long (at most {max} characters)',
     },
   },
+  orgStarterPack: {
+    title: 'Starter pack',
+    body: 'Stages, service levels, document requirements, an evaluation framework and goal templates for this organization, ready to adjust. Applying it again only adds what is missing — it never changes anything you have edited.',
+    apply: 'Apply starter pack',
+    row: '{model}: {created} added, {skipped} already there',
+    models: { stages: 'Stages', slas: 'Service levels', documentRequirements: 'Document requirements', evaluationTemplates: 'Evaluation frameworks', goalTemplates: 'Goal templates' },
+    error: 'The starter pack could not be applied. Nothing was changed.',
+  },
   adminWeeklyReports: {
     title: 'Weekly reports',
     subtitle: 'Every intern’s weekly reports for the term: who has handed in, who is behind, and a reminder for those who are.',
@@ -8529,6 +8537,14 @@ const tr: Dict = {
       tooLong: '{field} çok uzun (en fazla {max} karakter)',
     },
   },
+  orgStarterPack: {
+    title: 'Başlangıç paketi',
+    body: 'Bu kurum için aşamalar, hizmet süreleri, belge gereksinimleri, bir değerlendirme çerçevesi ve hedef şablonları — düzenlemeye hazır. Tekrar uygulamak yalnızca eksik olanı ekler; düzenlediğin hiçbir şeyi değiştirmez.',
+    apply: 'Başlangıç paketini uygula',
+    row: '{model}: {created} eklendi, {skipped} zaten vardı',
+    models: { stages: 'Aşamalar', slas: 'Hizmet süreleri', documentRequirements: 'Belge gereksinimleri', evaluationTemplates: 'Değerlendirme çerçeveleri', goalTemplates: 'Hedef şablonları' },
+    error: 'Başlangıç paketi uygulanamadı. Hiçbir şey değişmedi.',
+  },
   adminWeeklyReports: {
     title: 'Haftalık raporlar',
     subtitle: 'Dönem boyunca her stajyerin haftalık raporları: kim teslim etti, kim geride, gerideki kişilere tek tıkla hatırlatma.',
@@ -15335,6 +15351,14 @@ const de: Dict = {
       couldNotSave: 'Konnte nicht gespeichert werden',
       tooLong: '{field} ist zu lang (höchstens {max} Zeichen)',
     },
+  },
+  orgStarterPack: {
+    title: 'Startpaket',
+    body: 'Phasen, Servicezeiten, Dokumentanforderungen, ein Bewertungsrahmen und Zielvorlagen für diese Organisation — bereit zum Anpassen. Erneutes Anwenden ergänzt nur, was fehlt, und ändert nichts, was Sie bearbeitet haben.',
+    apply: 'Startpaket anwenden',
+    row: '{model}: {created} hinzugefügt, {skipped} bereits vorhanden',
+    models: { stages: 'Phasen', slas: 'Servicezeiten', documentRequirements: 'Dokumentanforderungen', evaluationTemplates: 'Bewertungsrahmen', goalTemplates: 'Zielvorlagen' },
+    error: 'Das Startpaket konnte nicht angewendet werden. Es wurde nichts geändert.',
   },
   adminWeeklyReports: {
     title: 'Wochenberichte',
