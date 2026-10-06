@@ -19,6 +19,12 @@ Expo (React Native) app for iOS and Android. It is one app that serves both prod
   - It never leaves the product's origin. Any other URL opens in the system browser.
   - If the page lands on `/auth/signin`, the session is gone and the native sign-in takes over.
   - It is used for every surface that is not native yet, and for the admin, pipeline and analytics screens, which stay on the web on purpose.
+- **A way into messages opens the native screen.** `/messages/c/<id>` opens the native thread; `/messages` and `/notifications` open their tabs (`src/lib/nativeRoutes.ts`, the one rule). This holds however a page gets there:
+  - a link tap is stopped before the site's router sees it;
+  - a `router.push()` after a fetch (the "send message" buttons) and a redirect's `replaceState` (the legacy `/messages/<relationId>` URL) are let through, reported and undone with `history.back()`;
+  - a full load is refused in `onShouldStartLoadWithRequest`;
+  - a notification tap asks the same rule before it opens a web page.
+- **The keyboard.** The app draws edge to edge, so Android no longer resizes the window for the keyboard, and React Native's own `KeyboardAvoidingView` does nothing there. Screens with a text field use `react-native-keyboard-controller` (`KeyboardProvider` in the root layout): the thread follows the keyboard's height with a spacer, and sign-in uses that library's `KeyboardAvoidingView`.
 
 ## The site inside the app
 

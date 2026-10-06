@@ -4886,7 +4886,7 @@ const en = {
     savedCopy: 'Your saved copy. Nothing was recalculated.',
     regenerate: 'Regenerate',
     sharedTitle: 'AI notes shared with you',
-    tasks: { cv_feedback: 'CV feedback', interview_prep: 'Interview prep', interaction_summary: 'Summary', mentor_suggest: 'Match rationale' },
+    tasks: { cv_feedback: 'CV feedback', interview_prep: 'Interview prep', interaction_summary: 'Summary', mentor_match: 'Match rationale' },
   },
   cvFeedback: {
     title: 'AI CV feedback',
@@ -11678,7 +11678,7 @@ const tr: Dict = {
     savedCopy: 'Kayıtlı kopyan. Hiçbir şey yeniden hesaplanmadı.',
     regenerate: 'Yeniden oluştur',
     sharedTitle: 'Seninle paylaşılan yapay zekâ notları',
-    tasks: { cv_feedback: 'CV geri bildirimi', interview_prep: 'Mülakat hazırlığı', interaction_summary: 'Özet', mentor_suggest: 'Eşleştirme gerekçesi' },
+    tasks: { cv_feedback: 'CV geri bildirimi', interview_prep: 'Mülakat hazırlığı', interaction_summary: 'Özet', mentor_match: 'Eşleştirme gerekçesi' },
   },
   cvFeedback: {
     title: 'AI CV geri bildirimi',
@@ -18439,7 +18439,7 @@ const de: Dict = {
     savedCopy: 'Deine gespeicherte Fassung. Nichts wurde neu berechnet.',
     regenerate: 'Neu erstellen',
     sharedTitle: 'Mit dir geteilte KI-Notizen',
-    tasks: { cv_feedback: 'CV-Feedback', interview_prep: 'Interviewvorbereitung', interaction_summary: 'Zusammenfassung', mentor_suggest: 'Begründung der Zuordnung' },
+    tasks: { cv_feedback: 'CV-Feedback', interview_prep: 'Interviewvorbereitung', interaction_summary: 'Zusammenfassung', mentor_match: 'Begründung der Zuordnung' },
   },
   cvFeedback: {
     title: 'KI-Feedback zum Lebenslauf',

@@ -152,6 +152,26 @@ component:
 Only the subject changes visibility (`PATCH /api/ai/artifacts/[id]`, audited as
 `ai_artifact.visibility`). The mentor sees shared ones on the mentee's page.
 
+**What each surface keeps, and what counts as "the same input":**
+
+| Task (`scope`) | TTL | Hashed input | Re-opened by |
+|---|---|---|---|
+| `cv_feedback` | 7 days | the CV text | the CV card, on mount (`GET /api/cv/feedback`) |
+| `interview_prep` | 7 days | position, skills, focus | the prep card, on mount (`GET /api/interview-prep`) |
+| `interaction_summary` | 1 day | the relation, the mentee's name, the 30 newest log entries | the summary card on `/mentor/mentees/[id]`, on mount (`GET /api/interactions/summary?relationId=`), for the pair's mentor or an admin |
+| `mentor_match` | 1 day | the mentee's skills / target / interests and the candidate list **including each candidate's mentor id and position** | the next *Suggest* on the candidate row |
+
+- **Interaction summary:** one log entry added or edited changes the hash. The
+  `latest` read is narrowed to the relation, so a mentor who took the mentee
+  over does not open on the previous pairing's digest.
+- **Match rationale:** the provider sees anonymous labels (`A`–`E`), which are
+  positions in the candidate list. The mentor ids are hashed even though they
+  never leave the server. Without them, a stored "A" could name a different
+  person once the pool changed. A stored ranking that no longer decodes is
+  treated as a miss (`runAiGated` falls through to a fresh call), never a 500.
+  The candidates page renders one row per mentee, so the card does not fetch on
+  mount. A repeat *Suggest* is free and says it is the saved copy.
+
 **Erasure and retention:**
 
 - `subjectUserId` is a real relation with `onDelete: Cascade`, so a hard delete

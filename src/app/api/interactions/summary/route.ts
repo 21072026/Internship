@@ -12,8 +12,34 @@ import { aiSummarizeInteractions } from '@/lib/aiSummary';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { hashInput, latestArtifact, toArtifactDto } from '@/lib/ai/artifacts';
 
-const schema = z.object({ relationId: z.string().min(1) });
+const schema = z.object({
+  relationId: z.string().min(1),
+  // The explicit Regenerate: skip the stored summary of the same log (#2044).
+  regenerate: z.boolean().optional(),
+});
+
+// GET ?relationId= — the relation's last summary (#2044), so a reload or next
+// month's visit opens on it instead of an empty card. Same gate as POST: the
+// mentor of the pair or an admin of its org; anything else reads as missing.
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const relationId = new URL(request.url).searchParams.get('relationId') ?? '';
+  if (!relationId) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  return await withTenantScope(session, async () => {
+    const rel = await getThreadIfAllowed(session.user, relationId);
+    if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    const latest = await latestArtifact({ orgId: await settingsOrgOf(session), taskId: 'interaction_summary', subjectUserId: rel.menteeId, relationId: rel.id });
+    return NextResponse.json({ latest: latest ? toArtifactDto(latest, session.user.id) : null });
+  });
+}
 
 // POST — AI auto-summary of a relation's interaction logs (Faz 2, #534).
 // Mentor/admin only (it is a mentor-facing digest of their own log). Runs
@@ -67,6 +93,20 @@ export async function POST(request: Request) {
     consent: { userId: rel.menteeId, type: 'AI_INTERACTION_SUMMARY' },
     userId: session.user.id,
     call: () => aiSummarizeInteractions(rel.mentee.fullName, interactions),
+    // Kept (#2044): the same log — not one entry added or edited — inside the
+    // TTL is answered from the stored summary, with no provider call and no
+    // quota. The summary is about the mentee, so it is erased with them.
+    persist: {
+      subjectUserId: rel.menteeId,
+      createdById: session.user.id,
+      relationId: rel.id,
+      inputHash: hashInput({
+        relationId: rel.id,
+        mentee: rel.mentee.fullName,
+        log: interactions.map((i) => ({ date: i.date.toISOString(), type: i.type, subject: i.subject ?? '', notes: i.notes })),
+      }),
+      force: parsed.data.regenerate,
+    },
   });
 
   if (!gated.ok) {
@@ -83,6 +123,6 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: 'AI is not configured', code: 'not_configured' }, { status: 501 });
   }
-  return NextResponse.json({ summary: gated.result });
+  return NextResponse.json({ summary: gated.result, cached: !!gated.cached, artifact: gated.artifact ?? null });
   });
 }

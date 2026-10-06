@@ -247,11 +247,16 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   nothing to click. Open it as soon as the work is committed, even mid-review, and post the
   preview URL. If an issue for the work does not exist yet, file one and reference it
   (`Closes #N`) so the branch, the PR and the issue all point at each other.
-- **End-of-session retrospective (standing instruction, 2026-07):** before wrapping up a
-  session, append a short dated entry to [`docs/agent-experience.md`](docs/agent-experience.md)
-  with the concrete, reusable lessons you learned (environment quirks, tooling limits, process
-  gotchas). Read it at the start of a session too — it captures fast-changing tactical tips that
-  complement these durable rules.
+- **End-of-session retrospective (standing instruction, 2026-07; one file per session since
+  2026-10-06, #2804):** before wrapping up a session, add a short dated file
+  `docs/agent-experience/YYYY-MM-DD-<slug>.md` with the concrete, reusable lessons you learned
+  (environment quirks, tooling limits, process gotchas). **Never append to
+  `docs/agent-experience.md`** — that file is the frozen archive up to 2026-10-06: every PR
+  appended to its end, so two open PRs always conflicted there, and GitHub reports a conflicted
+  PR as un-mergeable and runs **no CI on it at all** (it ignores the `merge=union` in
+  `.gitattributes`, which only helps local merges). Read the newest files in the folder and the
+  archive at the start of a session too — they capture fast-changing tactical tips that
+  complement these durable rules. Format in `docs/agent-experience/README.md`.
 - **Security work** starts from [`docs/security-audit-playbook.md`](docs/security-audit-playbook.md):
   how to stand up a local DB in this container (no Docker daemon — apt MariaDB), the Playwright
   `executablePath` workaround, the role × endpoint matrix method, **which areas already tested

@@ -1,16 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
+import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 
 // AI auto-summary of the interaction log (Faz 2, #534), mentor-facing. Runs
 // on demand (never automatically — each run consumes AI quota) and surfaces
 // the gate's denials as human messages: missing mentee consent, exhausted
 // quota, or an unconfigured provider (in which case the button self-hides
-// after the first attempt reveals it).
+// after the first attempt reveals it). The last summary is kept (#2044) and
+// shown on mount with when it was made; an unchanged log is answered from that
+// copy for free, and Regenerate asks the provider again on purpose.
 export function InteractionSummary({ relationId }: { relationId: string }) {
   const t = useT();
   const a = t.aiSummary;
@@ -18,20 +21,41 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [artifact, setArtifact] = useState<ArtifactInfo | null>(null);
+  const [cached, setCached] = useState(false);
 
-  const run = async () => {
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/interactions/summary?relationId=${encodeURIComponent(relationId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!live || !body?.latest) return;
+        setSummary(body.latest.content);
+        setArtifact(body.latest);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [relationId]);
+
+  const run = async (regenerate = false) => {
     setLoading(true);
     setNotice(null);
     try {
       const res = await fetch('/api/interactions/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationId }),
+        body: JSON.stringify({ relationId, regenerate }),
       });
       const body = await res.json();
       if (res.ok) {
         if (body.empty) setNotice(a.empty);
-        else setSummary(body.summary);
+        else {
+          setSummary(body.summary);
+          setArtifact(body.artifact ?? null);
+          setCached(!!body.cached);
+        }
       } else if (body.code === 'consent_required') {
         setNotice(a.consentRequired);
       } else if (body.code === 'quota_exceeded') {
@@ -56,7 +80,7 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
     <div className="mb-4" data-testid="interaction-summary">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-gray-500 dark:text-gray-400">{a.hint}</p>
-        <Button type="button" variant="outline" size="sm" loading={loading} onClick={run}>
+        <Button type="button" variant="outline" size="sm" loading={loading} onClick={() => run()}>
           <Sparkles className="h-4 w-4 mr-1" /> {a.button}
         </Button>
       </div>
@@ -67,6 +91,7 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
               would otherwise take for the mentor's own words (#2034). */}
           <AiBadge note className="mb-2" />
           <div className="whitespace-pre-line">{summary}</div>
+          {artifact && <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={() => run(true)} regenerating={loading} />}
         </div>
       )}
     </div>

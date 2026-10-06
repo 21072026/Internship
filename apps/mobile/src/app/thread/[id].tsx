@@ -5,14 +5,14 @@ import {
   ActivityIndicator,
   AppState,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiGet, apiPost, SessionLostError } from '../../lib/api';
 import { deviceLocale, strings } from '../../lib/i18n';
@@ -22,6 +22,7 @@ import {
   senderName,
   THREAD_POLL_MS,
   threadChanged,
+  threadTitle,
   type Thread,
   type ThreadMessage,
 } from '../../lib/messages';
@@ -48,6 +49,16 @@ export default function ThreadScreen() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState(false);
   const messagesRef = useRef<ThreadMessage[]>([]);
+
+  // The keyboard pushes the composer up (#2775). The app draws edge to edge, so
+  // Android no longer shrinks the window for the keyboard and React Native's own
+  // KeyboardAvoidingView does nothing there; this spacer follows the keyboard's
+  // real height, frame by frame, on both platforms. The composer already pads
+  // itself for the home indicator, which the keyboard covers.
+  const keyboard = useReanimatedKeyboardAnimation();
+  const keyboardSpacer = useAnimatedStyle(() => ({
+    height: Math.max(0, -keyboard.height.value - insets.bottom),
+  }));
 
   const load = useCallback(async () => {
     if (!origin || !id) return;
@@ -104,7 +115,10 @@ export default function ThreadScreen() {
   const fmt = new Intl.DateTimeFormat(deviceLocale(), { dateStyle: 'short', timeStyle: 'short' });
   const me = user?.id ?? '';
 
-  const header = <Stack.Screen options={{ headerShown: true, title: typeof name === 'string' ? name : '' }} />;
+  // Opened from the inbox, the row hands its name over; opened from a link in a
+  // web page or a notification, the thread names itself once it has loaded.
+  const title = typeof name === 'string' && name ? name : thread ? threadTitle(thread, me) : '';
+  const header = <Stack.Screen options={{ headerShown: true, title }} />;
 
   if (!thread) {
     return (
@@ -119,16 +133,14 @@ export default function ThreadScreen() {
   const items = [...thread.messages].reverse();
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: c.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
-    >
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
       {header}
       <FlatList
         inverted
         data={items}
         keyExtractor={(m) => m.id}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 12, gap: 8 }}
         ListEmptyComponent={
           <View style={[styles.center, { transform: [{ scaleY: -1 }] }]}>
@@ -203,7 +215,8 @@ export default function ThreadScreen() {
           </View>
         </View>
       )}
-    </KeyboardAvoidingView>
+      <Animated.View style={keyboardSpacer} />
+    </View>
   );
 }
 

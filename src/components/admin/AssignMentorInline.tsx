@@ -5,6 +5,7 @@ import { Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AiBadge } from '@/components/AiBadge';
+import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 import { useT } from '@/i18n/client';
 import { mentorshipAssignmentError } from '@/lib/mentorshipAssignmentError';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
@@ -62,6 +63,10 @@ export function AssignMentorInline({
   const [cursor, setCursor] = useState(0);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [aiUsed, setAiUsed] = useState(false);
+  // The kept AI ranking behind the rationale (#2044): when it was made, and
+  // whether this answer came from the stored copy instead of the provider.
+  const [artifact, setArtifact] = useState<ArtifactInfo | null>(null);
+  const [cached, setCached] = useState(false);
   const [exhausted, setExhausted] = useState(false);
   // The dismiss reason picker, open only after the ✕ is clicked.
   const [dismissing, setDismissing] = useState(false);
@@ -95,7 +100,7 @@ export function AssignMentorInline({
 
   // Mentor suggestion (#533): rule-based ranking, AI-deepened with a rationale
   // when the AI gate allows — otherwise the top rule-based match, no rationale.
-  const suggest = async () => {
+  const suggest = async (regenerate = false) => {
     setSuggesting(true);
     setErr('');
     setExhausted(false);
@@ -104,7 +109,7 @@ export function AssignMentorInline({
       const res = await fetch('/api/admin/mentor-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ menteeId }),
+        body: JSON.stringify({ menteeId, regenerate }),
       });
       if (res.ok) {
         const d = await res.json();
@@ -113,6 +118,8 @@ export function AssignMentorInline({
         setCursor(0);
         setBatchId(d.batchId ?? null);
         setAiUsed(!!d.aiUsed);
+        setArtifact(d.artifact ?? null);
+        setCached(!!d.cached);
         if (list[0]) setChoice(list[0].mentorId);
         else setErr(a.noSuggestion);
       } else {
@@ -235,7 +242,7 @@ export function AssignMentorInline({
         <Button size="sm" variant="outline" loading={busy} disabled={!choice} onClick={() => assign(choice)}>
           {a.assign}
         </Button>
-        <Button size="sm" variant="ghost" loading={suggesting} onClick={suggest} title={a.suggestHint} data-testid="suggest-mentor">
+        <Button size="sm" variant="ghost" loading={suggesting} onClick={() => suggest()} title={a.suggestHint} data-testid="suggest-mentor">
           <Sparkles className="h-4 w-4" />
         </Button>
       </div>
@@ -262,6 +269,9 @@ export function AssignMentorInline({
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
+      )}
+      {suggestion && aiUsed && artifact && (
+        <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={() => suggest(true)} regenerating={suggesting} />
       )}
       {suggestion && dismissing && (
         <div className="mt-1.5 flex flex-wrap items-center gap-2" data-testid="dismiss-reason-picker">
