@@ -1212,6 +1212,7 @@ const en = {
     },
     suppressedBucket: 'Groups under {n} people (combined)',
     floorNote: 'Groups with fewer than {n} people are combined into one row so that no individual can be singled out. Totals still add up.',
+    exportFootnote: 'In exported reports, groups of fewer than {n} people are combined into one row so that no individual can be singled out; totals still add up.',
   },
   // /admin/weekly-reports (#1918): the coordinator’s compliance matrix,
   // chase-up and accreditation booklet. Rendered only for an org with the
@@ -7382,6 +7383,7 @@ const tr: Dict = {
     },
     suppressedBucket: '{n} kişiden küçük gruplar (birleştirildi)',
     floorNote: '{n} kişiden az olan gruplar, hiç kimse tek başına ayırt edilemesin diye tek satırda birleştirilir. Toplamlar yine tutar.',
+    exportFootnote: 'Dışa aktarılan raporlarda {n} kişiden küçük gruplar, kimse tek başına ayırt edilemesin diye tek satırda birleştirilir; toplamlar yine tutar.',
   },
   adminWeeklyReports: {
     title: 'Haftalık raporlar',
@@ -13412,6 +13414,7 @@ const de: Dict = {
     },
     suppressedBucket: 'Gruppen unter {n} Personen (zusammengefasst)',
     floorNote: 'Gruppen mit weniger als {n} Personen werden in einer Zeile zusammengefasst, damit niemand einzeln erkennbar ist. Die Summen stimmen weiterhin.',
+    exportFootnote: 'In exportierten Berichten werden Gruppen mit weniger als {n} Personen zu einer Zeile zusammengefasst, damit niemand einzeln erkennbar ist; die Summen stimmen weiterhin.',
   },
   adminWeeklyReports: {
     title: 'Wochenberichte',

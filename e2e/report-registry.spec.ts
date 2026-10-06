@@ -114,6 +114,20 @@ test.describe('report registry', () => {
     expect(xlsx.headers()['content-type']).toContain('spreadsheetml');
     // A real zip container, not an error page served with the right header.
     expect((await xlsx.body()).subarray(0, 2).toString()).toBe('PK');
+
+    // The analytics workbook's cohort sheet is the same report, so the same
+    // floor (#1903 part 2) — the full report is exactly the file that leaves.
+    const workbook = await (await page.request.get('/api/admin/export/analytics-full')).json();
+    const cohortSheet = (workbook.sheets as { name: string; rows: (string | number)[][] }[]).find((s) => s.name === 'Cohorts')!;
+    const cells = cohortSheet.rows.flat().map(String);
+    expect(cells).toContain(bigName);
+    expect(cells).toContain(body.privacyFloor.bucketLabel);
+    expect(cells).toContain(body.privacyFloor.note);
+    for (const name of smallNames) expect(cells).not.toContain(name);
+
+    // …and the screen says so, next to the cards that still show every cohort.
+    await page.goto('/admin/analytics');
+    await expect(page.getByTestId('report-floor-footnote')).toContainText('5');
   });
 
   test('a mentor cannot read the registry', async ({ page }) => {

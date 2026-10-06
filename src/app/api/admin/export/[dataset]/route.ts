@@ -9,8 +9,10 @@ import { GET as candidatesGET } from '@/app/api/candidates/route';
 import { GET as analyticsGET } from '@/app/api/admin/analytics/route';
 import { GET as agingGET } from '@/app/api/admin/analytics/aging/route';
 import { GET as funnelGET } from '@/app/api/admin/analytics/funnel/route';
-import { GET as cohortsGET } from '@/app/api/admin/analytics/cohorts/route';
-import { GET as sourcesGET } from '@/app/api/admin/analytics/sources/route';
+import { getServerDictionary } from '@/i18n/server';
+import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
+import { analyticsWorkbook, candidatesSheet, fullAnalyticsWorkbook } from '@/lib/reports/workbooks';
+import { toCsv } from '@/lib/reports/render';
 
 // GET /api/admin/export/[dataset] — the ONE door every admin export goes
 // through (#1740), gated by the org's REPORT_EXPORT entitlement (its plan or a
@@ -19,12 +21,13 @@ import { GET as sourcesGET } from '@/app/api/admin/analytics/sources/route';
 // they had).
 //
 // Exports used to be built entirely in the browser from data the page already
-// held, so there was nothing on the server to gate. This route returns the
-// DATA each workbook is made from; the page keeps turning it into the file
-// with src/lib/excel.ts, which preserves the SheetJS code-splitting and the
-// screens' own label helpers. Moving the row SHAPES server-side as named,
-// localized definitions is the report registry's job (#1903), which will
-// resolve against this same route rather than add a second one.
+// held, so there was nothing on the server to gate. This route now returns
+// finished SHEETS — columns and rows, labels already in the caller's locale —
+// built by src/lib/reports/workbooks.ts (#1903), whose named-report sheets
+// come from the report registry and carry its privacy floor. The page only
+// hands them to src/lib/excel.ts, which keeps SheetJS code-split. The
+// candidate list also comes as a file (`?format=csv`), so no page assembles
+// CSV by hand any more.
 //
 // Each dataset is the response of the endpoint the screen already reads,
 // called in-process — so tenant scoping, the `mentorship` capability gate and
@@ -57,13 +60,33 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
     return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'REPORT_EXPORT' }, { status: 403 });
   }
 
+  const orgId = await settingsOrgOf(session);
+  // The full report is the premium tier's workbook: its cohort and source
+  // sheets are ADVANCED_ANALYTICS reports, so the file is refused as a whole
+  // rather than silently handed out without them.
+  if (dataset === 'analytics-full' && !(await entitled(orgId, 'ADVANCED_ANALYTICS'))) {
+    return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });
+  }
+  const { t, locale } = await getServerDictionary();
+
   return withTenantScope(session, async () => {
+    const stages = await resolvePipelineStages(orgId, locale);
+    const label = (key: string) => stageLabel(stages, key, locale);
     switch (dataset as Dataset) {
       case 'candidates': {
         // Every matching candidate, every page — the screen's filters, with all=1.
         const res = await internal(candidatesGET, request, '/api/candidates', { all: '1' });
         if (!res.ok) return NextResponse.json({ error: 'Export failed' }, { status: res.status });
-        return NextResponse.json({ candidates: res.body.candidates ?? [] });
+        const sheet = candidatesSheet(res.body.candidates ?? [], label);
+        if (new URL(request.url).searchParams.get('format') === 'csv') {
+          return new NextResponse(toCsv(sheet), {
+            headers: {
+              'Content-Type': 'text/csv; charset=utf-8',
+              'Content-Disposition': `attachment; filename="candidates-${new Date().toISOString().slice(0, 10)}.csv"`,
+            },
+          });
+        }
+        return NextResponse.json({ sheets: [sheet] });
       }
       case 'contributor-terms': {
         const { rows } = await buildAcceptanceReport();
@@ -77,20 +100,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
           internal(funnelGET, request, '/api/admin/analytics/funnel'),
         ]);
         if (!analytics.ok) return NextResponse.json({ error: 'Export failed' }, { status: analytics.status });
-        const base = { analytics: analytics.body, aging: aging.body, funnel: funnel.body };
-        if (dataset === 'analytics') return NextResponse.json(base);
-        // The premium sheets keep their own gate (ADVANCED_ANALYTICS) and the
-        // cohort report its `mentorship` capability: a locked one is null here,
-        // exactly as the screen would have it.
-        const [cohorts, sources] = await Promise.all([
-          internal(cohortsGET, request, '/api/admin/analytics/cohorts'),
-          internal(sourcesGET, request, '/api/admin/analytics/sources'),
-        ]);
-        return NextResponse.json({
-          ...base,
-          cohorts: cohorts.ok ? cohorts.body.cohorts ?? [] : null,
-          sources: sources.ok ? sources.body.sources ?? [] : null,
-        });
+        const src = { analytics: analytics.body, aging: aging.body, funnel: funnel.body };
+        const ctx = { session, orgId, locale, request };
+        const sheets = dataset === 'analytics'
+          ? await analyticsWorkbook(src, ctx, t, label)
+          : await fullAnalyticsWorkbook(src, ctx, t, label);
+        return NextResponse.json({ sheets });
       }
     }
   });

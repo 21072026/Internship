@@ -20,6 +20,7 @@ import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { VerticalCapability } from '@/lib/verticals';
+import { DEFAULT_MIN_COHORT } from '@/lib/reports/definitions';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -182,7 +183,6 @@ export default function AdminAnalyticsPage() {
   // strings that were here before #1882, so a default-catalogue tenant sees
   // exactly the same text as before.
   const outcomeName = data?.finishedLabelIsCustom ? data.finishedLabel : undefined;
-  const outcomeHeading = outcomeName ?? t.analytics.cohortHired;
   const outcomeWord = outcomeName ?? t.analytics.hired;
   const conversionLabel = outcomeName
     ? t.analytics.conversionToStage.replace('{stage}', outcomeName)
@@ -225,136 +225,24 @@ export default function AdminAnalyticsPage() {
   // Drop-off reason label (#810), falling back to the raw code for anything
   // outside the current whitelist (defensive — should not normally happen).
   const reasonLabel = (code: string) => (t.dropoff.reasons as Record<string, string>)[code] ?? code;
-  // KPI rows shared by both exports (#815) — the ratios travel with the counts
-  // rather than living only on screen.
-  const kpiSheets = (src: typeof kpi) => {
-    if (!src) return [];
-    const k = t.analytics.funnelKpi;
-    const sheets = [
-      {
-        name: 'Conversion',
-        columns: [k.stage, k.entered, k.advanced, k.conversion],
-        rows: src.conversions.map((c) => [
-          label(c.key),
-          c.entered,
-          c.advanced,
-          c.rate === null ? (c.terminal ? '—' : k.noData) : `${c.rate}%`,
-        ]),
-      },
-    ];
-    if (src.timeToHire.completed > 0) {
-      sheets.push({
-        name: 'Time to hire',
-        columns: [k.timeToHireMedian, k.timeToHireAvg, k.entered],
-        // The population comes along, so a spreadsheet cannot quote the median
-        // without the caveat the screen shows.
-        rows: [[
-          src.timeToHire.medianDays ?? '—',
-          src.timeToHire.avgDays ?? '—',
-          `${src.timeToHire.completed}/${src.timeToHire.considered}`,
-        ]],
-      });
-    }
-    // Trial → paid (#2556): one row per trial month, and the source split
-    // when the tier includes it. An immature month exports "—", not a rate
-    // the screen would not show.
-    if (src.trialConversion) {
-      const tk = t.analytics.trialKpi;
-      sheets.push({
-        name: 'Trial to paid',
-        columns: [tk.month, tk.started, tk.paid, tk.rate],
-        rows: src.trialConversion.months.map((m) => [m.month, m.started, m.paid, m.rate === null ? '—' : `${m.rate}%`]),
-      });
-      if (src.trialConversion.bySource && src.trialConversion.bySource.length > 0) {
-        sheets.push({
-          name: 'Trial by source',
-          columns: [tk.source, tk.started, tk.paid, tk.rate],
-          rows: src.trialConversion.bySource.map((s) => [
-            s.name ?? tk.noSource,
-            s.trials,
-            s.paid,
-            s.rate === null ? '—' : `${s.rate}%`,
-          ]),
-        });
-      }
-    }
-    if (src.capacity.length > 0) {
-      sheets.push({
-        name: 'Capacity',
-        columns: [k.mentor, k.activeMentees, k.ceiling, k.overloaded],
-        rows: src.capacity.map((m) => [
-          m.fullName,
-          m.activeMenteeCount,
-          m.capacityKnown ? (m.mentorCapacity as number) : k.noCeiling,
-          m.overloaded ? '!' : '',
-        ]),
-      });
-    }
-    return sheets;
-  };
-  const dropReasonRowsOf = (src: typeof aging) => (src?.dropReasons ?? []).map((d) => [label(d.pipelineStatus), reasonLabel(d.reasonCode), d.count]);
-
-  // The workbook's data comes from the export route (#1740), gated by the org's
-  // REPORT_EXPORT entitlement server-side — not from the state this screen
-  // already holds, which would leave nothing on the server to gate.
-  const loadExport = async (dataset: 'analytics' | 'analytics-full') => {
+  // The workbooks come from the export route (#1740) as finished sheets — rows
+  // and localized labels built server-side (src/lib/reports/workbooks.ts,
+  // #1903), gated by the org's REPORT_EXPORT entitlement (the full report also
+  // by ADVANCED_ANALYTICS). This screen only writes the file.
+  const exportWorkbook = async (dataset: 'analytics' | 'analytics-full') => {
     const res = await fetch(`/api/admin/export/${dataset}${rangeQuery(range)}`);
     if (!res.ok) {
       setError(res.status === 403 ? t.common.exportLocked : t.common.error);
-      return null;
+      return;
     }
-    return res.json();
-  };
-
-  const exportExcel = async () => {
-    const src = await loadExport('analytics');
-    const d = src?.analytics as typeof data;
-    if (!d) return;
-    const drops = dropReasonRowsOf(src.aging);
+    const { sheets } = await res.json();
     const { exportXlsxSheets } = await import('@/lib/excel');
-    await exportXlsxSheets(`analytics-${new Date().toISOString().slice(0, 10)}`, [
-      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), d.funnel[s.key] || 0]) },
-      ...kpiSheets(src.funnel),
-      ...(drops.length > 0
-        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: drops }]
-        : []),
-    ]);
+    await exportXlsxSheets(`${dataset}-${new Date().toISOString().slice(0, 10)}`, sheets);
   };
-
-  // Premium full-report Excel (#540): one workbook covering funnel, trends,
-  // mentor workload plus the premium cohort/source reports.
-  const exportFullExcel = async () => {
-    // Cohorts are only read for a vertical that has them — the route refuses
-    // every other one (leak audit WP3), and the workbook then has no such sheet.
-    const src = await loadExport('analytics-full');
-    const d = src?.analytics as typeof data;
-    if (!d) return;
-    if (src.sources === null || (showMentorship && src.cohorts === null)) return; // tier switched off mid-session
-    const cohorts = (showMentorship ? src.cohorts : []) as { name: string; term?: string | null; total: number; inProgress: number; hired: number; conversionToHired: number; avgDaysToHired: number | null; interactionsPerRelation: number }[];
-    const sources = src.sources as { name: string; mentees: number; inPipeline: number; hired: number; conversionToHired: number }[];
-    const drops = dropReasonRowsOf(src.aging);
-    const { exportXlsxSheets } = await import('@/lib/excel');
-    const a = t.analytics;
-    await exportXlsxSheets(`analytics-full-${new Date().toISOString().slice(0, 10)}`, [
-      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), d.funnel[s.key] || 0]) },
-      ...kpiSheets(src.funnel),
-      ...(d.trends ? [{
-        name: 'Trends',
-        columns: [a.fullReportMonth, a.trendNewRelations, a.trendInteractions],
-        rows: d.trends.months.map((m, i) => [m, d.trends!.newRelations[i], d.trends!.interactions[i]]),
-      }] : []),
-      ...(showMentorship
-        ? [{ name: 'Mentors', columns: ['Mentor', a.active, outcomeWord], rows: d.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) }]
-        : []),
-      ...(showMentorship
-        ? [{ name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, outcomeHeading, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) }]
-        : []),
-      { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, outcomeHeading, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
-      ...(drops.length > 0
-        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: drops }]
-        : []),
-    ]);
-  };
+  const exportExcel = () => exportWorkbook('analytics');
+  // Premium full-report Excel (#540): funnel, KPIs, trends, mentor workload
+  // and the cohort/source reports — the latter two behind the privacy floor.
+  const exportFullExcel = () => exportWorkbook('analytics-full');
 
   return (
     <div>
@@ -975,6 +863,12 @@ export default function AdminAnalyticsPage() {
         <>
           <ProgramBenchmark />
           <SourceConversion />
+          {/* The privacy floor (#1903): the cards above show every cohort and
+              source to the admin, but the exported reports merge small groups
+              — say so where the export buttons' output is described. */}
+          <p className="mb-6 text-xs text-gray-500 dark:text-gray-400" data-testid="report-floor-footnote">
+            {t.reports.exportFootnote.replace('{n}', String(DEFAULT_MIN_COHORT))}
+          </p>
         </>
       )}
         </>

@@ -11,6 +11,8 @@ CSV or XLSX.
 | `src/lib/reports/definitions.ts` | The catalogue (pure, client-safe): key, i18n keys, columns, floor settings, capability |
 | `src/lib/reports/privacyFloor.ts` | `applyMinCohort` — the floor itself (pure, unit-tested) |
 | `src/lib/reports/registry.ts` | Server side: one loader per key, `loadReport(def, ctx)` |
+| `src/lib/reports/render.ts` | Localized labels, bucket name, CSV — shared by the route and the workbooks |
+| `src/lib/reports/workbooks.ts` | The export workbooks' sheets (analytics, full report, candidates) |
 | `src/app/api/admin/reports/[key]/route.ts` | `GET ?format=json\|csv\|xlsx` |
 | `scripts/check-reports.ts` | CI guard (`npm run check:reports`) |
 
@@ -50,6 +52,26 @@ Rules, all enforced in `applyMinCohort`:
 Every response says what happened: JSON carries
 `privacyFloor: { minCohort, suppressedGroups, bucketLabel, note }`, and CSV/XLSX
 append the note as a trailing line when anything was merged.
+
+## The export workbooks
+
+`GET /api/admin/export/[dataset]` (#1740) returns **finished sheets**
+(`{ sheets: [{ name, columns, rows }] }`) built by `workbooks.ts`; the screens
+only pass them to `src/lib/excel.ts`, which keeps SheetJS code-split. No page
+component builds report rows any more, and the candidate list's CSV is a file
+from the route (`?format=csv`).
+
+- The sheets that are named reports — Funnel, Mentors, Cohorts, Sources — are
+  loaded through the registry, so the workbook and the single-report download
+  cannot disagree and **the cohort and source sheets carry the privacy floor**.
+  A sheet whose module the vertical lacks is left out.
+- The KPI tables (conversion, time to hire, trials, capacity, trends, drop
+  reasons) are screen-specific and live in `workbooks.ts` as plain builders.
+- `analytics-full` is refused as a whole (`403 feature ADVANCED_ANALYTICS`)
+  without the premium tier, instead of handing out a workbook with holes.
+- `/admin/analytics` footnotes the floor under the premium cards
+  (`data-testid="report-floor-footnote"`): the cards show the admin every
+  group, the exported files do not.
 
 ## Adding a report
 
