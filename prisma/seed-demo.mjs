@@ -413,7 +413,6 @@ async function main() {
   });
   const relationOf = (localPart) => demoRelations.find((relation) => relation.mentee.email === `${localPart}@${DEMO_DOMAIN}`);
 
-<<<<<<< HEAD
   // Recruitment (#1419). These rows need the org backfill above and belong
   // only to the internship tenant. Stable demo IDs / natural unique keys and
   // empty updates preserve decisions a visitor made between seed runs.
@@ -549,12 +548,6 @@ async function main() {
   });
   console.log('recruitment demo: requisitions, shortlist, requests, offers, panel and source in place');
 
-  // Weekly reports — three consecutive weeks for every relation whose
-  // internship has actually started: last-but-one reviewed and approved with a
-  // mentor comment, last week either awaiting review or sent back for changes,
-  // and this week still a draft. Monday-anchored, so the unique key makes a
-  // re-run a no-op.
-=======
   // Weekly reports (#2062, #1917) — one per owed week of every internship, with
   // a deliberate mix so the compliance listing (/api/admin/weekly-reports) is
   // never a wall of 100%: most weeks approved on time, one relation with a
@@ -565,7 +558,6 @@ async function main() {
   // here: full UTC weeks inside the internship window (read from the stage
   // history seeded above) that have already ended. Monday-anchored, so the
   // unique key makes a re-run a no-op.
->>>>>>> origin/main
   const reportingRelations = demoRelations.filter((relation) => REPORTING_STAGES.includes(relation.pipelineStatus));
   const moves = await prisma.statusChange.findMany({
     where: { relationId: { in: reportingRelations.map((relation) => relation.id) }, OR: [{ toStatus: INTERNSHIP_STAGE }, { fromStatus: INTERNSHIP_STAGE }] },
