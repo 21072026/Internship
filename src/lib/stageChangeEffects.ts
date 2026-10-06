@@ -6,6 +6,8 @@ import { outcomeForStage } from '@/lib/outcomeComms';
 import { emitOutcomeComms, notifyMenteeOfOutcome } from '@/lib/outcomeComms.server';
 import { stageDeadlineUpdate } from '@/lib/stageSla';
 import { prisma } from '@/lib/prisma';
+import { verticalFor } from '@/lib/verticalContext';
+import { verticalHasCapability } from '@/lib/verticals';
 
 // The observable side of a pipeline stage change (#926): the mentee's in-app
 // notification and the pipeline.stage_change webhook. Every write path that
@@ -65,7 +67,13 @@ export async function emitStageChange(opts: {
   // the org turned that on.
   const outcome = outcomeForStage(opts.to, { isOffPath: toIsOffPath, reasonCode: opts.reasonCode });
 
-  if (!opts.skipNotify) {
+  // The mentee's half is portal content: an org without the `mentorship`
+  // capability (a MARKETING sales book) has no portal, and its "mentee" is a
+  // prospect — telling them "Qualified → Negotiation" would hand an outside
+  // party the internal sales funnel, in a row only their data export would
+  // ever show. The rep's side (outcome.needsMessage) and the webhook still run.
+  const notifyMentee = !opts.skipNotify && verticalHasCapability(opts.orgId ? await verticalFor(opts.orgId) : null, 'mentorship');
+  if (notifyMentee) {
     if (outcome) await notifyMenteeOfOutcome(opts.menteeId, outcome);
     else await notifyIfAllowed(opts.menteeId, 'stageUpdates', 'stage.changed', stageParams, '/portal');
   }
