@@ -46,18 +46,58 @@ const KNOWN_REASONS: Record<string, string> = {
   'already exists': 'alreadyExists',
   'duplicate in file': 'duplicateInFile',
   'could not be saved': 'couldNotSave',
+  // The programme migration's (#2073).
+  'invalid mentorEmail': 'invalidEmail',
+  'invalid menteeEmail': 'invalidEmail',
+  'unknown mentor': 'unknownMentor',
+  'unknown mentee': 'unknownMentee',
+  'unknown pair': 'unknownPair',
+  'belongs to another organization': 'otherOrganization',
+  'mentee already has an active mentorship': 'alreadyMentored',
+  'date is in the future': 'futureDate',
+  'startDate is in the future': 'futureDate',
+  'from and to are the same stage': 'sameStage',
+  'unreadable date': 'unreadableDate',
+  'unreadable startDate': 'unreadableDate',
+  'date missing': 'dateMissing',
+  'notes missing': 'notesMissing',
+  'role missing': 'roleMissing',
+  'mentor and mentee are the same person': 'samePerson',
 };
+
+// Reasons that carry a value: the token's English shape → its key and the value.
+const PATTERN_REASONS: [RegExp, string][] = [
+  [/^unmapped stage "(.*)"$/, 'unmappedStage'],
+  [/^unknown role "(.*)"$/, 'unknownRole'],
+  [/^unknown type "(.*)"$/, 'unknownType'],
+  [/^unknown status "(.*)"$/, 'unknownStatus'],
+  [/^(?:mentor |mentee )?exists as (\w+)$/, 'existsAs'],
+];
 
 const show = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
 
-export function ImportPreview({ report, maxHeight = 'max-h-72' }: { report: PreviewReport; maxHeight?: string }) {
+export function ImportPreview({
+  report,
+  maxHeight = 'max-h-72',
+  reasons: extraReasons,
+}: {
+  report: PreviewReport;
+  maxHeight?: string;
+  /** Reason texts an importer brings itself (words this shared block must not carry). */
+  reasons?: Record<string, string>;
+}) {
   const t = useT();
   const p = t.importPreview;
+  const dict: Record<string, string> = { ...(p.reasons as Record<string, string>), ...(extraReasons ?? {}) };
   const reasonText = (reason: string) => {
     const known = KNOWN_REASONS[reason];
-    if (known) return (p.reasons as Record<string, string>)[known];
+    if (known && dict[known]) return dict[known];
     const tooLong = /^(\w+) too long \(max (\d+)\)$/.exec(reason);
     if (tooLong) return p.reasons.tooLong.replace('{field}', tooLong[1]).replace('{max}', tooLong[2]);
+    for (const [re, key] of PATTERN_REASONS) {
+      const m = re.exec(reason);
+      if (m && dict[key]) return dict[key].replace('{value}', m[1]);
+    }
     return reason;
   };
 

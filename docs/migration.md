@@ -10,9 +10,30 @@ capability). It runs on the shared import engine (`src/lib/importPreview.ts`,
 [`src/lib/migration/migrationRules.ts`](../src/lib/migration/migrationRules.ts),
 which is pure and unit-tested in `scripts/test/migration-rules.test.mjs`. The
 database half is
-[`src/lib/migration/runMigration.ts`](../src/lib/migration/runMigration.ts). The
-admin screen (upload → map columns → map stages → preview → confirm) is #2073
-part 2.
+[`src/lib/migration/runMigration.ts`](../src/lib/migration/runMigration.ts).
+
+## The screen: `/admin/migrate`
+
+Upload → map columns → map stages → preview → confirm. All of it is per-run
+input; nothing about a mapping is stored.
+
+- **Upload** one CSV per sheet (`migrate-upload-<sheet>`). The header row is read
+  in the browser with the same parser the server uses.
+- **Columns** are *proposed* by `suggestMapping`, which matches the header
+  against the words an export uses for each field in EN/TR/DE (`E-Posta`,
+  `Ad Soyad`, `Rolle`, `Stajyer`, `Aşama`, `Datum`, …). The admin corrects them
+  (`migrate-mapping-<sheet>-<field>`; the sheet is in the id because three sheets
+  share `mentorEmail` and `menteeEmail`).
+- **Stages** lists every distinct source stage in the history sheet
+  (`sourceStages`), each with a choice of this organization's stages
+  (`GET /api/admin/migrate`) (`migrate-stagemap-<source>`). An exact key of ours
+  is preselected; everything else starts **unmapped** and stays an error row
+  until someone picks a stage.
+- **Preview** (`migrate-preview`) shows each sheet in the shared `ImportPreview`,
+  with missing required columns named above it. **Migrate now**
+  (`migrate-confirm`) appears only after a preview and is disabled while a
+  required column is missing. A notice about not sending e-mail stays on screen
+  throughout (`migrate-no-mail`).
 
 ## The four sheets
 

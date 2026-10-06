@@ -7,6 +7,7 @@ import {
   Webhook,
   Send,
   Lightbulb,
+  ArrowRightLeft,
   type LucideIcon,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -100,6 +101,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Open-text insights (#2046): themes over evaluation comments and weekly-
   // report blockers — both internship records, hence `mentorship`.
   { href: '/admin/insights', icon: Lightbulb, key: 'insights', capability: 'mentorship' },
+  // Mid-programme migration (#2073): people, pairs, stage history and notes
+  // from another platform — internship records, hence `mentorship`.
+  { href: '/admin/migrate', icon: ArrowRightLeft, key: 'migrate', capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
   { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },

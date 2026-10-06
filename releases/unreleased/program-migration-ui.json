@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Migration screen (#2073, part 2):** `/admin/migrate` (nav, `mentorship`) over `POST /api/admin/migrate` — upload one CSV per sheet, a column mapping proposed from the headers by `suggestMapping` (EN/TR/DE synonyms) and corrected by the admin, a stage map listing every distinct source stage (`sourceStages`) against the org's stages (new `GET /api/admin/migrate`), the per-sheet preview in the shared `ImportPreview`, then confirm. Exact stage keys are preselected; everything else starts unmapped. `ImportPreview` translates the migration's reasons (neutral ones in `importPreview`, the internship-worded ones passed in via a new `reasons` prop so the shared block stays vertical-neutral). `migration` i18n block in EN/TR/DE.",
+  "notes": {
+    "en": ["New Migrate a programme page: upload your old platform's export, check the proposed column and stage mapping, preview every row, then migrate — nobody is e-mailed."],
+    "tr": ["Yeni Program taşıma sayfası: eski platformunun dışa aktarımını yükle, önerilen sütun ve aşama eşlemesini kontrol et, her satırı ön izle, sonra taşı — kimseye e-posta gitmez."],
+    "de": ["Neue Seite „Programm übernehmen“: Export der bisherigen Plattform hochladen, vorgeschlagene Spalten- und Phasenzuordnung prüfen, jede Zeile in der Vorschau sehen, dann übernehmen — niemand bekommt eine E-Mail."]
+  }
+}

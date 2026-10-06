@@ -125,3 +125,55 @@ test('a four-sheet migration previews, applies with original dates, re-runs as u
     await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });
+
+test('the migration screen proposes the columns, takes an explicit stage map, previews, then migrates', async ({ page }) => {
+  test.slow();
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const org = await prisma.organization.create({ data: { name: `Migrate UI ${stamp}`, slug: `migrate-ui-${stamp}` } });
+  const adminEmail = uniqueEmail('migui-admin');
+  const mentor = `migui-mentor-${stamp}@demo.example.com`;
+  const ada = `migui-ada-${stamp}@demo.example.com`;
+  const migrated = [mentor, ada];
+  const file = (name: string, text: string) => ({ name, mimeType: 'text/csv', buffer: Buffer.from(text, 'utf8') });
+  try {
+    await seedUser(adminEmail, PW, 'ADMIN', 'Migrate UI Admin', org.id);
+    await signInAndSettle(page, adminEmail, PW, '/admin');
+    await page.goto('/admin/migrate');
+    await expect(page.getByTestId('migrate-no-mail')).toBeVisible();
+
+    // Turkish headers, German stage names.
+    await page.getByTestId('migrate-upload-people').setInputFiles(file('people.csv', `E-Posta;Ad Soyad;Rol\n${mentor};Deniz;Mentör\n${ada};Ada;Mentee`));
+    await page.getByTestId('migrate-upload-pairs').setInputFiles(file('pairs.csv', `Mentor,Mentee,Durum\n${mentor},${ada},aktif`));
+    await page.getByTestId('migrate-upload-stageHistory').setInputFiles(
+      file('history.csv', `Mentor,Stajyer,Aşama,Tarih\n${mentor},${ada},Interview,01.02.2026\n${mentor},${ada},Im Praktikum,01.03.2026\n${mentor},${ada},Archiv,15.03.2026`),
+    );
+    await expect(page.getByTestId('migrate-loaded-stageHistory')).toContainText('3');
+
+    // The mapping is proposed from the headers.
+    await expect(page.getByTestId('migrate-mapping-people-email')).toHaveValue('E-Posta');
+    await expect(page.getByTestId('migrate-mapping-people-fullName')).toHaveValue('Ad Soyad');
+    await expect(page.getByTestId('migrate-mapping-stageHistory-menteeEmail')).toHaveValue('Stajyer');
+    await expect(page.getByTestId('migrate-mapping-stageHistory-toStage')).toHaveValue('Aşama');
+
+    // Two stages mapped; "Archiv" deliberately left unmapped.
+    await page.getByTestId('migrate-stagemap-Interview').selectOption('INTERVIEW_PENDING_250');
+    await page.getByTestId('migrate-stagemap-Im Praktikum').selectOption('INTERNSHIP_IN_PROGRESS_450');
+    await page.getByTestId('migrate-preview').click();
+    const result = page.getByTestId('migrate-result');
+    await expect(result).toHaveAttribute('data-dry-run', 'true');
+    const history = page.getByTestId('migrate-sheet-stageHistory');
+    await expect(history.getByTestId('import-preview-counts').locator('[data-status="CREATE"]')).toHaveAttribute('data-count', '2');
+    await expect(history.getByTestId('import-preview-row-3')).toHaveAttribute('data-status', 'ERROR');
+    await expect(history.getByTestId('import-preview-row-3')).toContainText('Stage "Archiv" is not mapped');
+    expect(await prisma.user.count({ where: { email: { in: migrated } } })).toBe(0);
+
+    await page.getByTestId('migrate-confirm').click();
+    await expect(result).toHaveAttribute('data-dry-run', 'false');
+    const rel = await prisma.mentorshipRelation.findFirst({ where: { mentee: { email: ada } }, select: { pipelineStatus: true, orgId: true, status: true } });
+    expect(rel).toEqual({ pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', orgId: org.id, status: 'ACTIVE' });
+  } finally {
+    for (const e of migrated) await cleanupByEmail(e);
+    await cleanupByEmail(adminEmail);
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
+  }
+});

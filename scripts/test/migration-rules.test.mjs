@@ -79,3 +79,16 @@ test('pairs: the same person on both sides, unknown status and a future start ar
   assert.match(p(['a@x.de', 'b@x.de', '', '2030-01-01']).reason, /future/);
   assert.deepEqual(p(['A@x.de', 'b@x.de', 'Abgeschlossen', '']).value, { mentorEmail: 'a@x.de', menteeEmail: 'b@x.de', status: 'COMPLETED', startDate: null });
 });
+
+test('a mapping is proposed from foreign headers, one column per field', () => {
+  assert.deepEqual(R.suggestMapping('people', ['E-Posta', 'Ad Soyad', 'Rolle', 'Handy']), { email: 'E-Posta', fullName: 'Ad Soyad', role: 'Rolle', phone: 'Handy' });
+  assert.deepEqual(R.suggestMapping('stageHistory', ['Mentor', 'Stajyer', 'Aşama', 'Tarih']), { mentorEmail: 'Mentor', menteeEmail: 'Stajyer', toStage: 'Aşama', date: 'Tarih' });
+  assert.deepEqual(R.suggestMapping('interactions', ['mentor', 'mentee', 'Datum', 'Art', 'Betreff', 'Notizen']), {
+    mentorEmail: 'mentor', menteeEmail: 'mentee', date: 'Datum', type: 'Art', subject: 'Betreff', notes: 'Notizen',
+  });
+});
+
+test('the distinct source stages of a history sheet, through its mapping', () => {
+  const csv = 'm,e,Phase,Von,When\na@x.de,b@x.de,Im Praktikum,Interview,2026-01-01\na@x.de,b@x.de,Interview,,2026-01-01';
+  assert.deepEqual(R.sourceStages(csv, { toStage: 'Phase', fromStage: 'Von' }), ['Im Praktikum', 'Interview']);
+});
