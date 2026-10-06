@@ -167,6 +167,7 @@ model Organization {
   // Nightly relationship-health snapshots (#1901).
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
+  surveyCampaigns         SurveyCampaign[]
   surveyInvitations       SurveyInvitation[]
   surveyResponses         SurveyResponse[]
   meetingFeedback         MeetingFeedback[]
@@ -4967,6 +4968,7 @@ model Survey {
   questions   SurveyQuestion[]
   invitations SurveyInvitation[]
   responses   SurveyResponse[]
+  campaigns   SurveyCampaign[]
 
   @@index([orgId, status])
 }
@@ -5019,10 +5021,21 @@ model SurveyInvitation {
   respondedAt   DateTime?
   expiresAt     DateTime
   createdAt     DateTime  @default(now())
+  // Which round of the survey this invitation is for (#1887): "" for a
+  // one-off, a recurring campaign's pulse period ("pulse:3") otherwise.
+  // EXPAND step of expand -> contract: the column and the surveyId index land
+  // first; widening the unique below to include `round` is the follow-up, and
+  // cannot happen in the same deploy (MariaDB will not drop the old unique
+  // while the surveyId foreign key still relies on it).
+  round         String    @default("") @db.VarChar(80)
 
   response SurveyResponse?
 
   @@unique([surveyId, email])
+  // The surveyId foreign key's own index, so the unique above can later be
+  // widened to [surveyId, email, round] without MariaDB refusing to drop it
+  // ("needed in a foreign key constraint").
+  @@index([surveyId])
   @@index([orgId])
 }
 
@@ -5096,4 +5109,67 @@ model MeetingFeedback {
   @@unique([meetingId, raterId])
   @@index([relationId, createdAt])
   @@index([orgId])
+}
+
+// ── Survey campaigns (#1887) ─────────────────────────────────────────────────
+//
+// Who gets which survey, when — so the programme sends it, not an admin.
+// One idempotent sweep (src/lib/surveyCampaigns.ts, daily and `job=surveys`)
+// resolves each active campaign into targets and invites them, claiming a
+// SurveyCampaignSend row BEFORE anything is minted or mailed.
+
+// STAGE_ENTERED   — a relation entered `stageKey` (read from StatusChange, the
+//                   tenant's own stage key, never a hardcoded one).
+// DAYS_AFTER_START — `dayOffset` days after the relation started.
+// DAYS_BEFORE_END — `dayOffset` days before the relation's stage deadline.
+// RECURRING       — every `everyDays` days, one round per period.
+// MANUAL          — once to the whole audience, as soon as it is active.
+enum SurveyTrigger {
+  STAGE_ENTERED
+  DAYS_AFTER_START
+  DAYS_BEFORE_END
+  RECURRING
+  MANUAL
+}
+
+model SurveyCampaign {
+  id        String          @id @default(cuid())
+  orgId     String?
+  org       Organization?   @relation(fields: [orgId], references: [id])
+  surveyId  String
+  survey    Survey          @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  name      String          @db.VarChar(120)
+  trigger   SurveyTrigger
+  stageKey  String?         @db.VarChar(64)
+  dayOffset Int?
+  everyDays Int?
+  // Null inherits the survey's audience.
+  audience  SurveyAudience?
+  active    Boolean         @default(true)
+  lastRunAt DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  sends SurveyCampaignSend[]
+
+  @@index([orgId, active])
+}
+
+// The idempotency claim: one row per (campaign, person, period), written
+// before the invitation is minted or the mail sent. A second sweep finds the
+// row and does nothing. Not in TENANT_MODELS: reached only through its
+// SurveyCampaign, the same reasoning as SurveyQuestion.
+model SurveyCampaignSend {
+  id           String         @id @default(cuid())
+  campaignId   String
+  campaign     SurveyCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  relationId   String?
+  userId       String
+  // `stage:<key>`, `day:<n>`, `before:<deadline day>`, `pulse:<n>` or `manual`.
+  periodKey    String         @db.VarChar(80)
+  invitationId String?
+  createdAt    DateTime       @default(now())
+
+  @@unique([campaignId, userId, periodKey])
+  @@index([campaignId, createdAt])
 }

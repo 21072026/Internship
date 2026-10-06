@@ -25,6 +25,8 @@ import { buildLiveStripPieces } from '@/lib/liveStrip';
 import { headers } from 'next/headers';
 import { CompanyInquiryForm } from '@/components/CompanyInquiryForm';
 import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostOrg';
+import { formatEur } from '@/lib/money';
+import { marketingFromSeatEur } from '@/lib/marketingPlans';
 
 export default async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
@@ -32,7 +34,7 @@ export default async function HomePage() {
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   if (session) redirect(roleHome(session.user.role));
 
-  const { t } = await getServerDictionary();
+  const { t, locale } = await getServerDictionary();
   const L = t.landing;
 
   // Each audience now has a door of its own: mentors apply at /apply-as-mentor
@@ -108,7 +110,7 @@ export default async function HomePage() {
   const marketingFaq = [
     { q: L.faqMarketing1Q, a: L.faqMarketing1A }, { q: L.faqMarketing2Q, a: L.faqMarketing2A },
     { q: L.faqMarketing3Q, a: L.faqMarketing3A }, { q: L.faqMarketing4Q, a: L.faqMarketing4A },
-    { q: L.faqMarketing5Q, a: L.faqMarketing5A }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
+    { q: L.faqMarketing5Q, a: L.faqMarketing5A.replace('{from}', formatEur(marketingFromSeatEur(), locale)) }, { q: L.faqMarketing6Q, a: L.faqMarketing6A },
   ];
   const faq = isMarketing ? marketingFaq : internshipFaq;
 

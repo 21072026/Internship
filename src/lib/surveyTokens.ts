@@ -27,7 +27,8 @@ export function surveyInviteUrl(token: string, origin?: string | null): string {
 /**
  * Invite one person. Returns the token exactly once — it is not stored — or
  * null when this address is already invited to this survey (one person, one
- * invitation: @@unique([surveyId, email])).
+ * invitation: @@unique([surveyId, email]); per round once the unique is
+ * widened — see SurveyInvitation.round).
  */
 export async function createSurveyInvitation(input: {
   surveyId: string;
@@ -36,6 +37,8 @@ export async function createSurveyInvitation(input: {
   userId?: string | null;
   locale?: string | null;
   ttlDays?: number;
+  /** A recurring campaign's period; "" for a one-off. */
+  round?: string;
   now?: Date;
 }): Promise<{ invitationId: string; token: string } | null> {
   const { token, tokenHash } = mintSurveyToken();
@@ -49,6 +52,7 @@ export async function createSurveyInvitation(input: {
         userId: input.userId ?? null,
         locale: input.locale ?? null,
         tokenHash,
+        round: input.round ?? '',
         expiresAt: new Date(now.getTime() + (input.ttlDays ?? SURVEY_INVITE_TTL_DAYS) * DAY),
       },
       select: { id: true },
