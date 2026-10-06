@@ -16,14 +16,12 @@ test.describe('report export gate', () => {
   const mentorEmail = uniqueEmail('export-gate-mentor');
   const menteeEmail = uniqueEmail('export-gate-mentee');
   let orgId = '';
-  let menteeId = '';
 
   test.beforeAll(async () => {
     orgId = (await prisma.organization.create({ data: { name: `Export Gate ${stamp}`, slug: `export-gate-${stamp}` } })).id;
     await seedUser(adminEmail, PW, 'ADMIN', `Export Gate Admin ${stamp}`, orgId);
     const mentor = await seedUser(mentorEmail, PW, 'MENTOR', `Export Gate Mentor ${stamp}`, orgId);
     const mentee = await seedUser(menteeEmail, PW, 'MENTEE', `Export Gate Candidate ${stamp}`, orgId);
-    menteeId = mentee.id;
     await prisma.mentorshipRelation.create({ data: { orgId, mentorId: mentor.id, menteeId: mentee.id } });
   });
 
@@ -53,21 +51,27 @@ test.describe('report export gate', () => {
     await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', false);
     try {
       await signInAndSettle(page, adminEmail, PW, '/admin');
+      // Finished sheets, built server-side (#1903): the page only writes the file.
       const candidates = await page.request.get('/api/admin/export/candidates');
       expect(candidates.status()).toBe(200);
-      const ids = ((await candidates.json()).candidates as { id: string }[]).map((c) => c.id);
-      expect(ids).toContain(menteeId);
+      const [sheet] = (await candidates.json()).sheets as { columns: string[]; rows: string[][] }[];
+      expect(sheet.columns.slice(0, 2)).toEqual(['Name', 'Email']);
+      expect(sheet.rows.map((r) => r[1])).toContain(menteeEmail);
+      const csv = await page.request.get('/api/admin/export/candidates?format=csv');
+      expect(csv.headers()['content-type']).toContain('text/csv');
+      expect(await csv.text()).toContain(menteeEmail);
 
       const basic = await (await page.request.get('/api/admin/export/analytics')).json();
-      expect(Object.keys(basic).sort()).toEqual(['aging', 'analytics', 'funnel']);
+      expect(Object.keys(basic)).toEqual(['sheets']);
+      expect((basic.sheets as { name: string }[]).map((s) => s.name)).toContain('Funnel');
 
-      // Without ADVANCED_ANALYTICS the cohort and source sheets are null, as on the screen.
-      const full = await (await page.request.get('/api/admin/export/analytics-full')).json();
-      expect(full.cohorts).toBeNull();
-      expect(full.sources).toBeNull();
+      // The full report is the premium tier's workbook: refused as a whole without it.
+      const full = await page.request.get('/api/admin/export/analytics-full');
+      expect(full.status()).toBe(403);
+      expect(await full.json()).toMatchObject({ code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' });
       await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', true);
       const premium = await (await page.request.get('/api/admin/export/analytics-full')).json();
-      expect(Array.isArray(premium.sources)).toBe(true);
+      expect((premium.sheets as { name: string }[]).map((s) => s.name)).toEqual(expect.arrayContaining(['Funnel', 'Sources', 'Cohorts', 'Mentors']));
 
       expect((await page.request.get('/api/admin/export/contributor-terms')).status()).toBe(200);
       expect((await page.request.get('/api/admin/export/everything')).status()).toBe(404);

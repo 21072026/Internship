@@ -5,9 +5,9 @@ import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
 import { getServerDictionary } from '@/i18n/server';
-import { getReportDefinition, type ReportDefinition } from '@/lib/reports/definitions';
+import { getReportDefinition } from '@/lib/reports/definitions';
 import { loadReport, ReportUnavailable } from '@/lib/reports/registry';
-import { SUPPRESSED_LABEL, type Row } from '@/lib/reports/privacyFloor';
+import { renderReport, reportSheet, toCsv } from '@/lib/reports/render';
 
 // GET /api/admin/reports/[key]?format=json|csv|xlsx — one route for every named
 // report in the registry (#1903; definitions in src/lib/reports/definitions.ts,
@@ -28,19 +28,6 @@ import { SUPPRESSED_LABEL, type Row } from '@/lib/reports/privacyFloor';
 // surface can footnote it. It is not a parameter.
 
 type Format = 'json' | 'csv' | 'xlsx';
-
-function pick(obj: unknown, path: string): string | undefined {
-  const v = path.split('.').reduce<unknown>((o, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined), obj);
-  return typeof v === 'string' ? v : undefined;
-}
-
-function cell(def: ReportDefinition, key: string, value: Row[string], bucketLabel: string): string | number {
-  if (value === null || value === undefined) return '';
-  if (value === SUPPRESSED_LABEL && key === def.labelColumn) return bucketLabel;
-  const type = def.columns.find((c) => c.key === key)?.type;
-  if (type === 'percent' && typeof value === 'number') return `${value}%`;
-  return value;
-}
 
 export async function GET(request: Request, { params }: { params: Promise<{ key: string }> }) {
   const session = await getServerSession(authOptions);
@@ -69,39 +56,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
       }
       throw error;
     }
-    const title = pick(R, def.titleKey) ?? def.key;
-    const columns = def.columns.map((c) => ({ key: c.key, label: pick(R, c.labelKey) ?? c.key, type: c.type }));
-    const bucketLabel = loaded.minCohort ? R.suppressedBucket.replace('{n}', String(loaded.minCohort)) : '';
-    const floorNote = loaded.minCohort ? R.floorNote.replace('{n}', String(loaded.minCohort)) : null;
+    const view = renderReport(def, loaded, R);
 
     if (format === 'json') {
       return NextResponse.json({
         key: def.key,
-        title,
-        description: pick(R, def.descriptionKey) ?? '',
-        columns,
+        title: view.title,
+        description: view.description,
+        columns: view.columns,
         rows: loaded.rows,
-        privacyFloor: loaded.minCohort ? { minCohort: loaded.minCohort, suppressedGroups: loaded.suppressedGroups, bucketLabel, note: floorNote } : null,
+        privacyFloor: loaded.minCohort
+          ? { minCohort: loaded.minCohort, suppressedGroups: loaded.suppressedGroups, bucketLabel: view.bucketLabel, note: view.floorNote }
+          : null,
       });
     }
 
-    const header = columns.map((c) => c.label);
-    const body = loaded.rows.map((r) => def.columns.map((c) => cell(def, c.key, r[c.key], bucketLabel)));
-    const stamp = new Date().toISOString().slice(0, 10);
-    const filename = `${def.key}-${stamp}.${format}`;
+    const sheet = reportSheet(view.title, view, loaded);
+    const filename = `${def.key}-${new Date().toISOString().slice(0, 10)}.${format}`;
     if (format === 'csv') {
-      const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const lines = [header, ...body].map((row) => row.map(esc).join(','));
-      if (floorNote && loaded.suppressedGroups > 0) lines.push('', esc(floorNote));
-      return new NextResponse('﻿' + lines.join('\n'), {
+      return new NextResponse(toCsv(sheet), {
         headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}"` },
       });
     }
     const XLSX = await import('xlsx');
-    const rows: (string | number)[][] = [header, ...body];
-    if (floorNote && loaded.suppressedGroups > 0) rows.push([], [floorNote]);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), title.slice(0, 31));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sheet.columns, ...sheet.rows]), sheet.name.slice(0, 31));
     const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

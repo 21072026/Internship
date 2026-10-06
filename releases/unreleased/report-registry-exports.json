@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Export workbooks built on the report registry** (#1903, part 2; docs/reports.md). `GET /api/admin/export/[dataset]` now returns finished sheets (`{ sheets }`, labels in the caller's locale) from `src/lib/reports/workbooks.ts`; `/admin/analytics` and `/admin/candidates` only hand them to `src/lib/excel.ts`, and the hand-rolled candidates CSV is gone (the route serves `?format=csv`). The Funnel, Mentors, Cohorts and Sources sheets load through the registry, so the full report's cohort and source sheets now apply the privacy floor (groups under 5 merged, totals reconcile, note row). `analytics-full` answers `403 feature ADVANCED_ANALYTICS` without the premium tier instead of a workbook with null sheets. Shared rendering extracted to `src/lib/reports/render.ts`. `/admin/analytics` footnotes the floor under the premium cards. Covered by `e2e/report-registry.spec.ts` and `e2e/report-export-gate.spec.ts`.",
+  "notes": {
+    "en": ["Exported analytics reports now combine groups of fewer than 5 people into one row, so no individual can be singled out — the totals still add up, and the analytics page notes it."],
+    "tr": ["Dışa aktarılan analiz raporları artık 5 kişiden küçük grupları tek satırda birleştiriyor; böylece kimse tek başına ayırt edilemiyor — toplamlar yine tutuyor ve analiz sayfası bunu belirtiyor."],
+    "de": ["Exportierte Analyseberichte fassen Gruppen mit weniger als 5 Personen jetzt zu einer Zeile zusammen, damit niemand einzeln erkennbar ist – die Summen stimmen weiterhin, und die Analyseseite weist darauf hin."]
+  }
+}
