@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Analytics narrative GET no longer doubles the dashboard's queries (#2046):** `GET /api/admin/analytics/narrative`, which the dashboard calls on every view, recomputed every figure to look up a stored paragraph — next to `GET /api/admin/analytics` computing the same ones. It now asks first, with one indexed read, whether the org has any narrative artefact inside the TTL, and recomputes only then. Found by two page-level specs timing out locally after #2816."
+}
