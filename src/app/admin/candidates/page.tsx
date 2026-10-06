@@ -21,6 +21,7 @@ import { LanguageBadge } from '@/components/LanguageBadge';
 import { TagFilter, TagChips, type TagOption } from '@/components/TagFilter';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { clipSkillLabel } from '@/lib/skills';
+import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 
 interface Candidate {
   id: string;
@@ -115,17 +116,24 @@ export default function CandidatesPage() {
   };
 
   // Exports cover ALL matching candidates (every page), not just the page in
-  // view — fetch the full filtered set with all=1 before building the file.
+  // view. They come through the export route (#1740), which is gated by the
+  // org's REPORT_EXPORT entitlement server-side; the buttons below only
+  // reflect that answer.
+  const entitlements = useAnalyticsEntitlements();
+  const canExport = entitlements?.reportExport === true;
   const fetchAllForExport = async (): Promise<Candidate[]> => {
-    const params = buildFilterParams();
-    params.set('all', '1');
-    const res = await fetch(`/api/candidates?${params}`);
+    const res = await fetch(`/api/admin/export/candidates?${buildFilterParams()}`);
+    if (!res.ok) {
+      setError(res.status === 403 ? t.common.exportLocked : t.common.error);
+      return [];
+    }
     const data = await res.json();
     return (data.candidates || []) as Candidate[];
   };
 
   const exportCsv = async () => {
     const rows0 = await fetchAllForExport();
+    if (rows0.length === 0) return;
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = rows0.map((c) => toRow(c).map(esc).join(','));
     const csv = [COLS.join(','), ...rows].join('\n');
@@ -139,6 +147,7 @@ export default function CandidatesPage() {
 
   const exportExcel = async () => {
     const rows0 = await fetchAllForExport();
+    if (rows0.length === 0) return;
     const { exportXlsx } = await import('@/lib/excel');
     await exportXlsx(`candidates-${new Date().toISOString().slice(0, 10)}`, COLS, rows0.map(toRow), 'Candidates');
   };
@@ -336,14 +345,17 @@ export default function CandidatesPage() {
         )}
         </div>
         <div className="flex max-w-full flex-wrap gap-2">
-          <Button variant="outline" onClick={exportCsv} disabled={candidates.length === 0}>
+          <Button variant="outline" onClick={exportCsv} disabled={candidates.length === 0 || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>
             <Download className="h-4 w-4" />
             {t.candidates.exportCsv}
           </Button>
-          <Button variant="outline" onClick={exportExcel} disabled={candidates.length === 0}>
+          <Button variant="outline" onClick={exportExcel} disabled={candidates.length === 0 || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>
             <Download className="h-4 w-4" />
             {t.candidates.exportExcel}
           </Button>
+          {entitlements && !canExport && (
+            <p className="w-full text-xs text-gray-500" data-testid="export-locked-note">{t.common.exportLocked}</p>
+          )}
         </div>
       </div>
 
