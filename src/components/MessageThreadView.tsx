@@ -6,7 +6,7 @@ import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2,
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDateTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
@@ -693,7 +693,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
                       </>
                     )}
                     <p className={`text-[10px] mt-1 flex items-center gap-1 ${mine ? 'text-blue-100' : 'text-gray-400'}`}>
-                      {m.channel === 'EMAIL' ? '✉ ' : ''}{formatDateTime(m.createdAt, locale)}
+                      {m.channel === 'EMAIL' ? '✉ ' : ''}<RelativeTime date={m.createdAt} />
                       {m.editedAt && !m.deleted && <span>· {t.messages.edited}</span>}
                       {mine && !m.deleted && (
                         <span

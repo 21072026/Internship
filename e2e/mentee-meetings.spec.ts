@@ -94,7 +94,7 @@ test('GET /api/meetings serves the mentee their own meetings only; POST stays cl
   expect([401, 403]).toContain(post.status());
 });
 
-test('portal card: mentee sees the meeting, RSVPs in-app, downloads the .ics (#914)', { tag: '@smoke' }, async ({ page }) => {
+test('portal card: mentee sees the meeting, RSVPs in-app, downloads the .ics (#914)', async ({ page }) => {
   await signIn(page, menteeEmail, '/portal');
 
   const card = page.getByTestId('upcoming-meetings-card');

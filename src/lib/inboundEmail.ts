@@ -18,6 +18,13 @@ export type InboundEmail = {
   text?: string;
   /** RFC Message-ID, when known. Used to make delivery idempotent. */
   messageId?: string | null;
+  // Read by the BCC-to-CRM path only (src/lib/crmBcc.ts, #2809); a thread
+  // reply ignores them.
+  /** The Cc header, so a customer copied rather than addressed still matches. */
+  cc?: string | null;
+  subject?: string | null;
+  /** The mail's Date header (RFC 2822 or ISO). */
+  date?: string | null;
 };
 
 export type InboundResult =

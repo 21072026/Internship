@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 
 const ARCHIVE_PAGE_SIZE = 10;
 
@@ -168,7 +169,7 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
             <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
               {g.createdByRole === 'MENTOR' && <span>{t.goals.byMentor}</span>}
               {g.createdByRole === 'MENTEE' && <span>{t.goals.byMentee}</span>}
-              <span>· {formatDate(g.createdAt, locale)}</span>
+              <span>· <RelativeTime date={g.createdAt} /></span>
               {g.dueDate && <span>· {t.goals.dueDate}: {formatDate(g.dueDate, locale)}</span>}
             </span>
           </>

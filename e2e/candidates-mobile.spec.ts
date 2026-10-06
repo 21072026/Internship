@@ -13,7 +13,7 @@ async function expectTouchTarget(locator: import('@playwright/test').Locator) {
   expect(box!.height).toBeGreaterThanOrEqual(44);
 }
 
-test('candidates are usable without horizontal overflow on mobile and keep the desktop list', { tag: '@smoke' }, async ({ page }) => {
+test('candidates are usable without horizontal overflow on mobile and keep the desktop list', async ({ page }) => {
   const adminEmail = uniqueEmail('candidates-mobile-admin');
   const mentorEmail = uniqueEmail('candidates-mobile-mentor');
   const menteeEmail = uniqueEmail('candidates-mobile-mentee');

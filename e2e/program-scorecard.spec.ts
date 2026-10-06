@@ -42,7 +42,7 @@ test.describe('programme health scorecard', () => {
     await prisma.$disconnect();
   });
 
-  test('a band at the threshold boundary, a link when it slips, and honest gaps', { tag: '@smoke' }, async ({ page }) => {
+  test('a band at the threshold boundary, a link when it slips, and honest gaps', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
 
     const before = (await (await page.request.get('/api/admin/analytics/scorecard')).json()).rows;

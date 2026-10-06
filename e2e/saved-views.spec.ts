@@ -35,7 +35,7 @@ test.describe('saved views', () => {
     await prisma.$disconnect();
   });
 
-  test('a shared view reaches the second admin, a private one does not, and only the author may change either', { tag: '@smoke' }, async ({ browser }) => {
+  test('a shared view reaches the second admin, a private one does not, and only the author may change either', async ({ browser }) => {
     const a = await (await browser.newContext()).newPage();
     await signInAndSettle(a, adminA, PW, '/admin');
     // Saved through the dialog, shared with the team.

@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { redactCompanyForReader, redactContactForReader } from '@/lib/companyVisibility';
 import { stageLabel, type ResolvedStage } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import type { CompanyDetailData } from '@/lib/companyDetail';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { Locale } from '@/i18n/config';
@@ -26,7 +28,7 @@ import { CONTACT_CHANNELS, marketingEmailAllowed } from '@/lib/contactPermission
 
 type Relation = CompanyDetailData['company']['mentorships'][number];
 
-function Field({ label, value, testId }: { label: string; value?: string | number | null; testId?: string }) {
+function Field({ label, value, testId }: { label: string; value?: ReactNode; testId?: string }) {
   if (value === undefined || value === null || value === '') return null;
   return (
     <div data-testid={testId}>
@@ -139,7 +141,7 @@ export function CompanyDetailView({
             <Field label={d.fields.address} value={company.address} />
             <Field label={d.fields.vatId} value={company.vatId} testId="company-detail-vat-id" />
             <Field label={d.fields.quota} value={company.quota} />
-            <Field label={d.fields.createdAt} value={date(company.createdAt)} />
+            <Field label={d.fields.createdAt} value={<RelativeTime date={company.createdAt} />} />
           </dl>
           {company.description && (
             <div className="mb-6" data-testid="company-detail-description">

@@ -17,7 +17,7 @@ function dayFromNow(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
-test('a slot is edited in place: no self-collision, the overlap rule still names the clash', { tag: '@smoke' }, async ({ page }) => {
+test('a slot is edited in place: no self-collision, the overlap rule still names the clash', async ({ page }) => {
   const email = uniqueEmail('av-edit');
   const mentor = await seedUser(email, PW, 'MENTOR', 'Av Edit Mentor');
   try {

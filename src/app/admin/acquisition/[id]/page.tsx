@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
@@ -224,6 +226,8 @@ export default function PostCampaignPage({ params }: { params: Promise<{ id: str
           {notice}
         </p>
       )}
+      {/* Stays a date: "Sent on {date}" / "{date} tarihinde" is the record's
+          own wording, and it does not read with "3 days ago" in the slot. */}
       {!isDraft && campaign.sentAt && (
         <p className="mb-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-700" data-testid="post-campaign-locked">
           {c.lockedNote.replace('{date}', date(campaign.sentAt))}
@@ -288,7 +292,7 @@ export default function PostCampaignPage({ params }: { params: Promise<{ id: str
                   <div className="min-w-0">
                     <Link href={`/admin/companies/${r.companyId}`} className="text-sm font-medium text-blue-600 hover:underline">{r.companyName}</Link>
                     <p className="whitespace-pre-line text-xs text-gray-500">{r.addressBlock}</p>
-                    {r.sentAt && <p className="text-xs text-green-700">{c.statuses.SENT} {date(r.sentAt)}</p>}
+                    {r.sentAt && <p className="text-xs text-green-700">{c.statuses.SENT} <RelativeTime date={r.sentAt} /></p>}
                   </div>
                   {isDraft && (
                     <Button size="sm" variant="ghost" onClick={() => void takeOff(r.companyId)} disabled={busy}>{c.remove}</Button>
@@ -368,7 +372,7 @@ export default function PostCampaignPage({ params }: { params: Promise<{ id: str
                           {c.reasons[reason as keyof typeof c.reasons] ?? reason}
                         </Badge>
                       )}
-                      {x.lastSentAt && <span className="text-xs text-gray-500">{c.lastLetter.replace('{date}', date(x.lastSentAt))}</span>}
+                      {x.lastSentAt && <span className="text-xs text-gray-500">{fillTemplate(c.lastLetter, { date: <RelativeTime date={x.lastSentAt} /> })}</span>}
                     </div>
                   </li>
                 );

@@ -54,7 +54,7 @@ test.describe('survey completion', () => {
     await prisma.$disconnect();
   });
 
-  test('two reminders on schedule, never a third, and every link still answers', { tag: '@smoke' }, async ({ page }) => {
+  test('two reminders on schedule, never a third, and every link still answers', async ({ page }) => {
     const surveyId = await openSurvey('cap', 'CONFIDENTIAL');
     const invites = await Promise.all(mentees.map((email, i) => invite(surveyId, email, menteeIds[i])));
     // Mentee 2 answers straight away and is never reminded.

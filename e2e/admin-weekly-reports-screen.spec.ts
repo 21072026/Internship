@@ -50,7 +50,7 @@ test.describe('admin weekly-reports screen', () => {
     await prisma.organization.deleteMany({ where: { id: orgId } });
   });
 
-  test('the matrix shows the term, and the chase-up sends one reminder however often it is clicked', { tag: '@smoke' }, async ({ page }) => {
+  test('the matrix shows the term, and the chase-up sends one reminder however often it is clicked', async ({ page }) => {
     await signInAndSettle(page, emails.admin, PW, '/admin');
     await page.goto('/admin/weekly-reports');
     const row = page.getByTestId(`weekly-reports-row-${relationId}`);

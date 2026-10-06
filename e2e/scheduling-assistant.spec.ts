@@ -24,7 +24,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('suggestions skip busy hours and night-time clocks, say why when empty, and a pick books through the request path', { tag: '@smoke' }, async ({ page }) => {
+test('suggestions skip busy hours and night-time clocks, say why when empty, and a pick books through the request path', async ({ page }) => {
   test.slow();
   const stamp = `${Date.now()}`;
   const org = await prisma.organization.create({ data: { name: `SA ${stamp}`, slug: `sa-${stamp}` } });

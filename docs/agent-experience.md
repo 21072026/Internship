@@ -8268,3 +8268,11 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **e2e specs with three or four sign-ins blow the 60s budget.** Use `test.slow()`. A test that relied on an earlier test's rows broke after a worker restart, so make each test seed its own data.
 - **Prisma interactive transactions return a union of object literals.** `'x' in outcome` does not narrow it, because TS normalises the missing keys to `?: undefined`. Test the property itself: `if (outcome.conflict)`.
 - **Row locks for "check then insert":** run `SELECT … FOR UPDATE` on the participants' `User` rows, sorted by id, as the first statement of the transaction. The InnoDB read view is created by the first non-locking read, which then runs after the lock is held, so the check sees a concurrent booking that has already committed (#1995).
+
+## 2026-10-06 — EAS setup for apps/mobile (#2775)
+
+- **`eas init` cannot write to a dynamic `app.config.ts`.** Put `owner` in the config *first*, then run `npx eas-cli@latest init --non-interactive --force`. It creates the project under that owner, prints the `projectId` and exits non-zero ("Cannot automatically write to dynamic config"). That exit is expected: add `extra.eas.projectId` by hand, then confirm with `eas project:info`.
+- **Org vs. personal owner:** `eas account:view` lists every account you can act as. An org project needs `owner: '<org slug>'` in the config, or `init` creates it under the personal account.
+- **Credentials never pass through the agent.** The user ran `npx expo login` and `gh secret set EXPO_TOKEN` (stdin prompt) in their own terminal. Verify afterwards with `expo whoami` and `gh secret list`, and never read the terminal while a secret prompt is open.
+- **`mobile.yml`'s `eas` job runs with `--no-wait`.** A green Actions run only means the build was *queued*. The build link is in the run log (`grep -Eo 'https://expo.dev/[^ ]*builds/[^ ]*'`). Follow the build with `eas build:view <id> --json` (`status` FINISHED/ERRORED; `artifacts.buildUrl` is the APK). Free-plan queues can take a while.
+- **A dirty shared working tree:** use `git worktree add -b <branch> ../<dir> origin/main` rather than `checkout -b`, which would carry another session's uncommitted edits onto your branch.

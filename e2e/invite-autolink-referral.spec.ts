@@ -18,7 +18,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('an invitation carrying a mentor connects the two on registration', { tag: '@smoke' }, async ({ request }) => {
+test('an invitation carrying a mentor connects the two on registration', async ({ request }) => {
   const adminEmail = uniqueEmail('link-admin');
   const mentorEmail = uniqueEmail('link-mentor');
   const inviteeEmail = uniqueEmail('link-invitee');

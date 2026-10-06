@@ -16,7 +16,9 @@ import { ACCENT_COLORS, ACCENT_SWATCH, defaultAccentFor, resolveAccent } from '@
 import { useVertical } from '@/lib/verticalClient';
 import { applyTheme, readStoredTheme, resolveTheme, type Theme } from '@/lib/theme';
 import { applyDensity, readStoredDensity, resolveDensity, type Density } from '@/lib/density';
-import { durationSince, relativeTime } from '@/lib/relativeTime';
+import { durationSince, formatDateTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { fillTemplate } from '@/components/ui/fillTemplate';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 import { currentPushEndpoint, pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
@@ -881,7 +883,13 @@ export function AccountSettings() {
         <h1 className="text-2xl font-bold text-gray-900">{t.account.title}</h1>
         <p className="text-gray-500 mt-1">{t.account.subtitle}</p>
         {membershipLabel && (
-          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1" data-testid="membership-duration">{membershipLabel}</p>
+          <p
+            className="text-xs text-gray-600 dark:text-gray-400 mt-1"
+            data-testid="membership-duration"
+            title={me?.createdAt ? formatDateTime(me.createdAt, locale) : undefined}
+          >
+            {membershipLabel}
+          </p>
         )}
       </div>
 
@@ -1022,7 +1030,7 @@ export function AccountSettings() {
                       {d.current && <Badge variant="success" className="ml-2">{t.account.thisDevice}</Badge>}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {t.account.deviceLastUsed.replace('{when}', relativeTime(d.lastUsedAt, locale))}
+                      {fillTemplate(t.account.deviceLastUsed, { when: <RelativeTime date={d.lastUsedAt} /> })}
                       {d.lastIp ? ` · ${d.lastIp}` : ''}
                     </p>
                   </div>
@@ -1072,7 +1080,11 @@ export function AccountSettings() {
                     {a.adminName || t.account.accessHistoryAdminUnknown}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {formatInTimeZone(new Date(a.startedAt), timezone, undefined, language)} · {relativeTime(a.startedAt, locale)}
+                    {/* The hover keeps the account's own zone, which the default title would not. */}
+                    <RelativeTime
+                      date={a.startedAt}
+                      title={formatInTimeZone(new Date(a.startedAt), timezone, undefined, language)}
+                    />
                   </p>
                   <p className="text-xs text-gray-500" data-testid={`access-history-outcome-${a.id}`}>
                     {accessOutcomeText(a)}
@@ -1370,9 +1382,10 @@ export function AccountSettings() {
                           {d.current && <Badge variant="success" className="ml-2">{t.account.thisDevice}</Badge>}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {t.account.pushDeviceSeen
-                            .replace('{added}', relativeTime(d.createdAt, locale))
-                            .replace('{when}', relativeTime(d.lastSeenAt, locale))}
+                          {fillTemplate(t.account.pushDeviceSeen, {
+                            added: <RelativeTime date={d.createdAt} />,
+                            when: <RelativeTime date={d.lastSeenAt} />,
+                          })}
                         </p>
                       </div>
                       <Button

@@ -70,7 +70,7 @@ test('project members: add, promote, last-owner guard, legacy-owner repointing',
   }
 });
 
-test('project members: mentor can only list and add their own mentees', { tag: '@smoke' }, async ({ browser }) => {
+test('project members: mentor can only list and add their own mentees', async ({ browser }) => {
   const adminEmail = uniqueEmail('pm-scope-admin');
   const mentorEmail = uniqueEmail('pm-scope-mentor');
   const otherMentorEmail = uniqueEmail('pm-scope-other-mentor');

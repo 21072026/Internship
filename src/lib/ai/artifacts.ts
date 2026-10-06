@@ -34,6 +34,9 @@ export const TASK_TTL_MS: Record<string, number> = {
   // view keeps re-reading one answer.
   evaluation_insights: 1 * DAY,
   weekly_report_digest: 1 * DAY,
+  survey_summary: 1 * DAY,
+  // Keyed on the dashboard figures: a new interaction is a new paragraph.
+  analytics_narrative: 1 * DAY,
   interaction_summary: 1 * DAY,
   mentor_match: 1 * DAY,
 };
@@ -45,7 +48,7 @@ export const TASK_TTL_MS: Record<string, number> = {
  * they are a cache, regenerated on the next request, and a quote of an erased
  * person must not outlive them.
  */
-export const OPEN_TEXT_TASKS = ['evaluation_insights', 'weekly_report_digest'] as const;
+export const OPEN_TEXT_TASKS = ['evaluation_insights', 'weekly_report_digest', 'survey_summary'] as const;
 
 /** sha256 over a stable JSON rendering — key order never changes the hash. */
 export function hashInput(value: unknown): string {

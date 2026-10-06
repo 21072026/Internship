@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Bell } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDateTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { showBrowserNotification } from '@/lib/browserNotifications';
 import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
 import { renderNotification } from '@/lib/notificationText';
@@ -132,7 +132,7 @@ export function NotificationBell() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className={n.read ? '' : 'font-medium'}>{renderNotification(n, t, locale)}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(n.createdAt, locale)}</p>
+                    <p className="text-xs text-gray-400 mt-0.5"><RelativeTime date={n.createdAt} /></p>
                   </div>
                 </div>
               );

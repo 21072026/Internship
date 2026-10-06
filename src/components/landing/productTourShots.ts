@@ -34,11 +34,16 @@ export const MARKETING_TOUR_SHOTS: TourShot[] = [
   { name: 'mkt-insights', path: '/admin/analytics' },
 ];
 
-export function shotPath(name: TourShotName, device: Device, theme: Theme) {
-  return `/screenshots/${name}-${device}-${theme}.webp`;
+export type TourLocale = 'en' | 'tr' | 'de';
+
+/** English keeps the original unsuffixed names; Turkish and German captures carry `-tr` / `-de`. */
+const suffix = (locale: TourLocale) => (locale === 'en' ? '' : `-${locale}`);
+
+export function shotPath(name: TourShotName, device: Device, theme: Theme, locale: TourLocale = 'en') {
+  return `/screenshots/${name}-${device}-${theme}${suffix(locale)}.webp`;
 }
 
 /** The desktop clip of a screen (WebM first, MP4 for the browsers without VP9). */
-export function clipPath(name: TourShotName, theme: Theme, ext: 'webm' | 'mp4') {
-  return `/screenshots/${name}-desktop-${theme}.${ext}`;
+export function clipPath(name: TourShotName, theme: Theme, ext: 'webm' | 'mp4', locale: TourLocale = 'en') {
+  return `/screenshots/${name}-desktop-${theme}${suffix(locale)}.${ext}`;
 }

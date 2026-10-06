@@ -16,9 +16,9 @@ test('landing footer links to the AI page', async ({ page }) => {
 
 test('the AI page names every task and what it withholds', async ({ page }) => {
   await page.goto('/ai');
-  // All six AI features (the open-text themes of #2046 included), not just the CV one the privacy notice used
+  // All seven AI features (the open-text themes and the analytics narrative of #2046 included), not just the CV one the privacy notice used
   // to mention on its own.
-  await expect(page.getByTestId('ai-tasks').locator('li')).toHaveCount(6);
+  await expect(page.getByTestId('ai-tasks').locator('li')).toHaveCount(7);
   await expect(page.getByRole('heading', { name: 'A person decides, always' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Model training' })).toBeVisible();
   // The honesty section is the point of the page: it must stay non-empty, and
@@ -43,7 +43,7 @@ for (const [locale, heading] of [
     await page.reload();
     await expect(page.getByRole('heading', { name: heading, level: 1 }))
       .toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('ai-tasks').locator('li')).toHaveCount(6);
+    await expect(page.getByTestId('ai-tasks').locator('li')).toHaveCount(7);
   });
 }
 
@@ -59,6 +59,8 @@ test('every surface that renders model output carries the ✨ marker', () => {
     'src/components/CvSuggestPanel.tsx',
     'src/components/admin/AssignMentorInline.tsx',
     'src/app/admin/insights/page.tsx',
+    'src/app/admin/surveys/[id]/results/page.tsx',
+    'src/components/analytics/AnalyticsNarrative.tsx',
   ];
   for (const file of surfaces) {
     const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8');

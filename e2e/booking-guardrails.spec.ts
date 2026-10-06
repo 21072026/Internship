@@ -49,7 +49,7 @@ async function seedWorld(prefix: string) {
   };
 }
 
-test('the mentor sets the rules once; short notice and a full week are refused by name', { tag: '@smoke' }, async ({ page }) => {
+test('the mentor sets the rules once; short notice and a full week are refused by name', async ({ page }) => {
   test.slow();
   const w = await seedWorld('bg-rules');
   try {

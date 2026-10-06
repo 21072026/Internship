@@ -43,7 +43,7 @@ const render = (props: Partial<Parameters<typeof AsyncSection>[0]> = {}) => reso
     ...props,
   }));
 
-test('AsyncSection enforces state precedence, retries, and renders every skeleton variant', { tag: '@smoke' }, () => {
+test('AsyncSection enforces state precedence, retries, and renders every skeleton variant', () => {
   const loading = render({ loading: true, error: 'failed', empty: true });
   expect(allNodes(loading).some((node) => node.props?.['data-testid'] === 'async-section-loading')).toBe(true);
   expect(textContent(loading)).not.toContain('failed');

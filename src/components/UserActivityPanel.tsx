@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { useT } from '@/i18n/client';
 
 interface Item {
   id: string;
@@ -18,7 +18,6 @@ interface Item {
 // user hasn't been active for a while.
 export function UserActivityPanel({ userId, flagInactive = false }: { userId: string; flagInactive?: boolean }) {
   const t = useT();
-  const locale = useLocale();
   const [items, setItems] = useState<Item[]>([]);
   const [lastActiveAt, setLastActiveAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +57,7 @@ export function UserActivityPanel({ userId, flagInactive = false }: { userId: st
               <Badge variant={i.level === 'WARNING' ? 'warning' : i.level === 'ERROR' ? 'danger' : 'info'} className="text-[10px]">{i.level}</Badge>
               <span className="font-mono text-xs text-gray-700">{i.action}</span>
               {i.detail && <span className="text-xs text-gray-400 truncate">· {i.detail}</span>}
-              <span className="ml-auto text-[11px] text-gray-400 flex-shrink-0">{formatDate(i.createdAt, locale)}</span>
+              <RelativeTime date={i.createdAt} className="ml-auto text-[11px] text-gray-400 flex-shrink-0" />
             </div>
           ))}
         </div>

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocked';
@@ -103,6 +104,8 @@ export default function ReportSubscriptionsPage() {
     const tpl = s.cadence === 'MONTHLY' ? U.scheduleMonthly : U.scheduleQuarterly;
     return tpl.replace('{day}', String(s.dayOfMonth)).replace('{hour}', String(s.hour).padStart(2, '0'));
   };
+  // Absolute on purpose: the German sentence is "Zuletzt gesendet am {date}",
+  // which cannot take "vor 5 Tagen". The delivery history below is relative.
   const date = (iso: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
 
   const create = async (e: React.FormEvent) => {
@@ -242,7 +245,7 @@ export default function ReportSubscriptionsPage() {
                     <ul className="mt-2 space-y-1" data-testid="report-sub-history">
                       {s.sends.map((h) => (
                         <li key={h.periodKey} className="text-gray-600 dark:text-gray-300">
-                          <span className="font-mono text-xs">{h.periodKey.startsWith('test-') ? U.test_period : h.periodKey}</span> · {date(h.sentAt)} ·{' '}
+                          <span className="font-mono text-xs">{h.periodKey.startsWith('test-') ? U.test_period : h.periodKey}</span> · <RelativeTime date={h.sentAt} /> ·{' '}
                           <strong>{U.statuses[h.status]}</strong>
                           {h.error && h.error !== 'test' ? ` — ${reasonText(h.error)}` : ''}
                         </li>

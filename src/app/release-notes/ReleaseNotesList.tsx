@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { Locale } from '@/i18n/config';
 import { ReleaseNoteMedia } from '@/components/ReleaseNoteMedia';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { GITHUB_URL } from '@/components/landing/links';
 import type { LocalizedReleaseNote, ReleaseNotesSlice } from '@/lib/releaseNotesPaging';
 
@@ -121,6 +122,26 @@ export function ReleaseNotesList({ initial, total, pageSize, locale, labels }: P
   );
 }
 
+/**
+ * "3 gün önce", with the stamp it was derived from ("2026-08-25 09:25 UTC",
+ * #1457) on hover. The releases before #1457 carry a day and no minute, so
+ * those are anchored at noon UTC — at most twelve hours either way, which no
+ * reading of "2 months ago" can tell apart — and their hover keeps the bare day.
+ * A pending release that git cannot date yet (an uncommitted fragment, a
+ * shallow clone) has an empty `date` and shows none rather than "27 years ago".
+ */
+function ReleaseDate({ date, time, locale }: { date: string; time?: string; locale: Locale }) {
+  if (!date) return null;
+  return (
+    <RelativeTime
+      date={`${date}T${time ?? '12:00'}:00Z`}
+      title={time ? `${date} ${time} UTC` : date}
+      locale={locale}
+      data-testid="release-date"
+    />
+  );
+}
+
 function ReleaseCard({ note: r, locale }: { note: LocalizedReleaseNote; locale: Locale }) {
   return (
     <div
@@ -130,13 +151,12 @@ function ReleaseCard({ note: r, locale }: { note: LocalizedReleaseNote; locale: 
       data-testid="release-card"
       className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 scroll-mt-20"
     >
-      {/* Stacks on a phone: version + "2026-08-25 09:25 UTC · b174c20"
-          side by side is wider than 360px (e2e/mobile-layout-audit). */}
+      {/* Stacks on a phone: version + "3 gün önce · b174c20" side by side
+          is wider than 360px in German (e2e/mobile-layout-audit). */}
       <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-3 mb-3">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">v{r.version}</h2>
         <span className="text-xs text-gray-400 sm:text-right">
-          {r.date}
-          {r.time ? ` ${r.time} UTC` : ''}
+          <ReleaseDate date={r.date} time={r.time} locale={locale} />
           {r.commit ? (
             <>
               {' · '}

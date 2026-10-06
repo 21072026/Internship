@@ -7,7 +7,7 @@ test.afterAll(async () => {
 
 // #1102/#1104: the company door. Companies have no self-service sign-up, so the
 // public page ends in an enquiry that has to be captured — not a register link.
-test('the company page is public and the landing CTA points at it', { tag: '@smoke' }, async ({ page }) => {
+test('the company page is public and the landing CTA points at it', async ({ page }) => {
   await page.goto('/');
   const cta = page.getByRole('link', { name: /Talk to us as a company/i }).first();
   await expect(cta).toBeVisible();

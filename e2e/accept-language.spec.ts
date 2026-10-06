@@ -12,7 +12,7 @@ test.afterAll(async () => {
 
 const langOf = (html: string) => /<html[^>]*\blang="([a-z]+)"/.exec(html)?.[1];
 
-test('a cookieless first visit answers in the browser language, falling back to English', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+test('a cookieless first visit answers in the browser language, falling back to English', async ({ playwright, baseURL }) => {
   // A fresh request context: no locale cookie, no session.
   const ctx = await playwright.request.newContext({ baseURL });
   try {

@@ -5,11 +5,14 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ImportPreview, type PreviewReport } from '@/components/ImportPreview';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
+import { CrmBccCard } from '@/components/CrmBccCard';
 import { DEFAULT_BOARD_WIP_LIMIT } from '@/lib/boardWip';
 import { useVertical } from '@/lib/verticalClient';
 import { useSession } from 'next-auth/react';
@@ -21,7 +24,9 @@ import { isValidWonTargetInput, SALES_TARGET_MAX } from '@/lib/salesTargetRule';
 // The delivery log answers "did our mail actually go out, and when?", and a
 // newsletter or announcement send writes one EmailLog row per recipient — 50
 // rows all stamped "25.08.2026 16:30" cannot tell a burst apart from a stall.
-// The old `toLocaleString()` here carried seconds; keep them (#1422).
+// The old `toLocaleString()` here carried seconds; keep them (#1422). For the
+// same reason the log rows stay absolute: fifty rows reading "5 min. ago" say
+// even less than fifty identical minutes.
 const WITH_SECONDS: Intl.DateTimeFormatOptions = { second: '2-digit' };
 
 export default function AdminSettingsPage() {
@@ -613,7 +618,9 @@ export default function AdminSettingsPage() {
             <div className="text-sm" data-testid="email-delivery-health">
               <span className="text-gray-600 dark:text-gray-300">
                 {emailHealth.lastOkAt
-                  ? t.settings.deliveryLastOk.replace('{t}', formatDateTime(emailHealth.lastOkAt, locale, WITH_SECONDS))
+                  ? fillTemplate(t.settings.deliveryLastOk, {
+                      t: <RelativeTime date={emailHealth.lastOkAt} title={formatDateTime(emailHealth.lastOkAt, locale, WITH_SECONDS)} />,
+                    })
                   : t.settings.deliveryNeverOk}
               </span>
               {emailHealth.failuresSinceOk > 0 ? (
@@ -738,6 +745,9 @@ export default function AdminSettingsPage() {
           )}
         </div>
       </Card>
+
+      {/* BCC-to-CRM address (#2809): on by default for MARKETING, opt-in elsewhere. */}
+      <CrmBccCard />
 
       {/* The org's competency framework (#822) — criteria as data, not code.
           Only where the vertical scores anyone (#2558): MARKETING carries no

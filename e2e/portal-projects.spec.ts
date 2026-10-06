@@ -13,7 +13,7 @@ test.afterAll(async () => {
 //
 // Both membership sources must work (mergeTeam unions them): a ProjectMember row
 // and a legacy MentorshipRelation.projectId.
-test('mentee portal: own private projects are listed, foreign ones are not', { tag: '@smoke' }, async ({ page }) => {
+test('mentee portal: own private projects are listed, foreign ones are not', async ({ page }) => {
   const adminEmail = uniqueEmail('pp-admin');
   const menteeEmail = uniqueEmail('pp-mentee');
   const otherEmail = uniqueEmail('pp-other');

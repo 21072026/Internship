@@ -145,7 +145,7 @@ test('the owner cannot re-point their relation at another company, project or co
   expect(await targetsOfRelation()).toEqual(ORIGINAL());
 });
 
-test("an admin cannot attach another tenant's company, and learns nothing about it", { tag: '@smoke' }, async ({ page }) => {
+test("an admin cannot attach another tenant's company, and learns nothing about it", async ({ page }) => {
   test.slow();
   await signInAsFreshUser(page, users.aAdmin.email, PASSWORD, '/admin');
 

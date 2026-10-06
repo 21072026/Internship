@@ -22,7 +22,7 @@ async function signIn(page: import('@playwright/test').Page, email: string, pass
   await page.click('button[type="submit"]');
 }
 
-test('a mentee creates a project from the portal and edits the one they own', { tag: '@smoke' }, async ({ page }) => {
+test('a mentee creates a project from the portal and edits the one they own', async ({ page }) => {
   const email = uniqueEmail('mo-mentee');
   const pw = 'MenteeOwn123';
   const mentee = await seedUser(email, pw, 'MENTEE', 'MO Mentee');

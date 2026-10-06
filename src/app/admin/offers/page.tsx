@@ -7,6 +7,7 @@ import { FileSignature, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { DECLINE_REASON_CODES, OFFER_STATUSES } from '@/lib/offers';
@@ -337,7 +338,7 @@ function OffersIndex() {
                         {t.offers.status[offer.status as keyof typeof t.offers.status] ?? offer.status}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{offer.sentAt ? formatDate(offer.sentAt, locale) : '—'}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{offer.sentAt ? <RelativeTime date={offer.sentAt} className="whitespace-nowrap" /> : '—'}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                       {offer.expiresAt ? (
                         <span className="whitespace-nowrap">
@@ -346,7 +347,7 @@ function OffersIndex() {
                         </span>
                       ) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{offer.decidedAt ? formatDate(offer.decidedAt, locale) : '—'}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{offer.decidedAt ? <RelativeTime date={offer.decidedAt} className="whitespace-nowrap" /> : '—'}</td>
                     <td className="px-4 py-3 text-gray-500">
                       {offer.declineReasonCode
                         ? t.offerDeclineReasons[offer.declineReasonCode as keyof typeof t.offerDeclineReasons] ?? offer.declineReasonCode

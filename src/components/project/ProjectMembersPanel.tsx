@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { useT } from '@/i18n/client';
-import { durationSince } from '@/lib/relativeTime';
+import { useT, useLocale } from '@/i18n/client';
+import { durationSince, formatDateTime } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // Managing who is on the project (#617/#618/#51).
@@ -48,6 +48,7 @@ export function ProjectMembersPanel({
   isPublic?: boolean;
 }) {
   const t = useT();
+  const locale = useLocale();
   const [members, setMembers] = useState<Member[]>([]);
   const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
   const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
@@ -127,7 +128,13 @@ export function ProjectMembersPanel({
               {m.addedAt && (() => {
                 const { count, unit } = durationSince(m.addedAt);
                 const noun = count === 1 ? t.membership[unit] : t.membership[`${unit}s` as 'days' | 'months' | 'years'];
-                return <span className="ml-1.5 text-xs text-gray-400">· {t.membership.inProjectFor.replace('{d}', `${count} ${noun}`)}</span>;
+                // Already a distance ("for 3 months"), so it only gains the exact
+                // moment on hover; a "… ago" RelativeTime would not fit the sentence.
+                return (
+                  <span className="ml-1.5 text-xs text-gray-400" title={formatDateTime(m.addedAt, locale)}>
+                    · {t.membership.inProjectFor.replace('{d}', `${count} ${noun}`)}
+                  </span>
+                );
               })()}
             </span>
             <button

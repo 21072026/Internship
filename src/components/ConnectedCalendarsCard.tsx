@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { CalendarCheck, Link2, Unlink, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { useT, useLocale } from '@/i18n/client';
-import { relativeTime } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { fillTemplate } from '@/components/ui/fillTemplate';
 
 interface ProviderRow {
   provider: string;
@@ -47,7 +48,6 @@ interface ProviderRow {
 export function ConnectedCalendarsCard() {
   const t = useT();
   const c = t.connectedCalendars;
-  const locale = useLocale();
   const [rows, setRows] = useState<ProviderRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // The STATUS KEY, not the translated sentence. Keeping the key here is what
@@ -186,7 +186,7 @@ export function ConnectedCalendarsCard() {
                       className="mt-0.5 text-xs text-gray-500 dark:text-gray-400"
                     >
                       {row.lastSyncAt
-                        ? c.lastSynced.replace('{when}', relativeTime(row.lastSyncAt, locale))
+                        ? fillTemplate(c.lastSynced, { when: <RelativeTime date={row.lastSyncAt} /> })
                         : c.neverSynced}
                     </p>
 
