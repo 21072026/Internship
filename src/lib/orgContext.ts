@@ -82,6 +82,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Survey',
   'SurveyInvitation',
   'SurveyResponse',
+  // Post-meeting ratings (#1896).
+  'MeetingFeedback',
   'Requisition',
   'InterviewRequest',
   'MessageTemplate',

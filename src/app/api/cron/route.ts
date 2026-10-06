@@ -17,6 +17,7 @@ import {
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
+import { askForMeetingFeedback } from '@/lib/meetingFeedback';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
@@ -52,7 +53,10 @@ export async function GET(request: Request) {
     // wants the backlog of already-held meetings logged now, not one batch per
     // quarter-hourly tick.
     if (job === 'meeting-logs') {
-      return NextResponse.json({ message: 'Meeting interaction logs ran', meetingLogs: await sweepMeetingInteractionLogs() });
+      const meetingLogs = await sweepMeetingInteractionLogs();
+      // The meetings nobody ended get their one feedback ask (#1896).
+      const feedbackAsked = await askForMeetingFeedback(meetingLogs.loggedIds);
+      return NextResponse.json({ message: 'Meeting interaction logs ran', meetingLogs, feedbackAsked });
     }
     // Retention re-consent reminders alone — the same function the batch runs,
     // idempotent by `retentionReminderSentAt`. Named so an operator (and
@@ -170,6 +174,9 @@ export async function GET(request: Request) {
       checkReEngagementReminders(),
       dispatchDueNewsletters(),
     ]);
+    // Asked after the sweep, never alongside it: it reads the ids the sweep
+    // just logged (#1896).
+    const feedbackAsked = await askForMeetingFeedback(meetingLogs.loggedIds);
 
     return NextResponse.json({
       message: 'Scheduled jobs ran',
@@ -179,6 +186,7 @@ export async function GET(request: Request) {
       meetings,
       projectMeetings,
       meetingLogs,
+      feedbackAsked,
       digests,
       deadlines,
       retention,

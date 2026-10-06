@@ -161,7 +161,10 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'task_reminders',
     essential: false,
     bulk: true,
-    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder'],
+    // 'meeting-feedback' (#1896): the one "how was it?" ask after a meeting is a
+    // nudge about the reader's own task — and declining it must not silence
+    // the meeting reminders themselves, which live in their own group.
+    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback'],
     legacy: ['deadlines', 'documents', 'weeklyReports', 'interactions'],
   },
   {

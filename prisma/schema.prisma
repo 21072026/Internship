@@ -169,6 +169,7 @@ model Organization {
   surveys                 Survey[]
   surveyInvitations       SurveyInvitation[]
   surveyResponses         SurveyResponse[]
+  meetingFeedback         MeetingFeedback[]
   offers                  Offer[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
@@ -544,6 +545,7 @@ model User {
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
   surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
+  meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
@@ -3048,6 +3050,9 @@ model Meeting {
   // 60-minute window run out. Null = never marked; the window still applies.
   endedAt             DateTime?
   endedById           String?
+  // When the one "how was it?" e-mail went to this row's mentee (#1896). The
+  // sweep claims the row by setting it, so a meeting is asked about once.
+  feedbackAskedAt     DateTime?
   // Called off, not held and not deleted (#1980). Every reader that answers
   // "is there a meeting?" — the dashboard banner, the reminder cron, the
   // calendar, the ICS feed, the auto-log sweep — filters CANCELLED out, while
@@ -3077,6 +3082,7 @@ model Meeting {
   notes        PersonalNote[]
   googleEvents GoogleCalendarEventLink[]
   guests       MeetingGuest[]
+  feedback     MeetingFeedback[]
 
   @@index([relationId])
   @@index([projectId])
@@ -5059,4 +5065,35 @@ model SurveyAnswer {
 
   @@unique([responseId, questionKey])
   @@index([questionKey])
+}
+
+// One participant's answer to "how was the meeting?" (#1896). Two questions at
+// most: did it actually happen, and how helpful was it (1-5). `happened =
+// false` is its own answer — a meeting that did not take place is valuable
+// data and is never scored as a bad meeting (helpfulness stays NULL).
+//
+// One row per (meeting, rater): answering again updates it. Only the two
+// people of the relation rate a relation meeting; external MeetingGuest
+// invitees are never asked (no account, no relation). Who may read what is
+// src/lib/meetingFeedback.ts — a mentor gets aggregates above the response
+// floor, never one mentee's answer.
+model MeetingFeedback {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id])
+  meetingId   String
+  meeting     Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  raterId     String
+  rater       User          @relation("MeetingFeedbackRater", fields: [raterId], references: [id], onDelete: Cascade)
+  // Denormalised from the meeting so the health score reads one table.
+  relationId  String?
+  happened    Boolean
+  helpfulness Int?
+  note        String?       @db.Text
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([meetingId, raterId])
+  @@index([relationId, createdAt])
+  @@index([orgId])
 }

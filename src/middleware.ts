@@ -46,6 +46,9 @@ function isAllowlisted(pathname: string) {
     // Login-free survey answering (#1881): the invitation token is the
     // credential. Exact path.
     pathname === '/api/surveys/respond' ||
+    // The one-click "how was the meeting?" links (#1896): the signed token is
+    // the credential. A prefix with the trailing slash, so only token paths match.
+    pathname.startsWith('/api/meeting-feedback/') ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.

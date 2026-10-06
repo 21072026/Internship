@@ -444,6 +444,31 @@ test.describe('release media', () => {
     }
   });
 
+  // #1896: the "how was the meeting?" card right after a meeting is ended.
+  test('poster: the meeting feedback card', async ({ page }) => {
+    const stamp = Date.now();
+    const mentorEmail = uniqueEmail('media-mf-mentor');
+    const menteeEmail = uniqueEmail('media-mf-mentee');
+    const mentor = await seedUser(mentorEmail, 'MediaFeedback123!', 'MENTOR', 'Dr. Lena Hoffmann');
+    const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Aylin Demir');
+    const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, pipelineStatus: 'INTERVIEW_PENDING_250' } });
+    try {
+      await prisma.meeting.create({
+        data: { relationId: rel.id, title: 'CV review', scheduledAt: new Date(Date.now() - 20 * 60 * 1000), meetLink: `https://example.com/r-${stamp}`, rsvpToken: `media-mf-${stamp}`, createdById: mentor.id },
+      });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await signInAndSettle(page, mentorEmail, 'MediaFeedback123!', '/mentor');
+      page.once('dialog', (d) => d.accept());
+      await page.getByTestId('upcoming-meeting-end').click();
+      await page.getByTestId('meeting-feedback-happened-yes').click();
+      await page.getByTestId('meeting-feedback-rate-4').click();
+      await capturePoster(page.getByTestId('meeting-feedback-card'), 'meeting-feedback');
+    } finally {
+      await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
+      for (const e of [mentorEmail, menteeEmail]) await cleanupByEmail(e);
+    }
+  });
+
   /**
    * TEMPLATE — a clip, for a change where motion is the point.
    *

@@ -97,6 +97,8 @@ const VERIFY_EXEMPT = [
   '/api/report-subscriptions/unsubscribe',
   // Login-free survey answering (#1881): the invitation token is the credential.
   '/api/surveys/respond',
+  // The one-click meeting-feedback links (#1896): the signed token is the credential.
+  '/api/meeting-feedback/',
   // The unsubscribe surface (#1444). Two entries, mirroring the two clauses in
   // src/middleware.ts exactly: an exact match for the bare path and a prefix for
   // everything under it. A single prefix entry would also exempt a future

@@ -106,6 +106,10 @@
     "methods": ["GET", "POST"],
     "why": "Answering a survey from the mailed link with no login (#1881) — a survey behind a password is a survey nobody answers. The single-use invitation token is the credential (only its hash is stored); both methods are rate-limited, GET never returns an answer, and POST writes one response through the shared validator."
   },
+  "src/app/api/meeting-feedback/[token]/route.ts": {
+    "methods": ["GET", "POST"],
+    "why": "The one-click \"how was the meeting?\" buttons in the feedback e-mail (#1896); the signed token names the meeting, the rater and the rating and is only ever mailed to that rater. GET only reads (mail scanners prefetch links); POST records that one rating, idempotently."
+  },
   "src/app/api/report-subscriptions/unsubscribe/route.ts": {
     "methods": ["POST"],
     "why": "Leave a scheduled report straight out of the e-mail (#1905); the recipient may have no account at all, so the signed token is the authorisation, and it can only switch that one subscription off."
