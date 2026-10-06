@@ -65,6 +65,280 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.276.0-beta',
+    date: '2026-10-06',
+    time: '13:14',
+    commit: '5fccf6b',
+    highlights: {
+      en: [
+        "Analytics now opens with a Programme health card: each indicator measured against a published target, marked on track, watch or act now — with a link straight to the screen where a slipping one is fixed.",
+      ],
+      tr: [
+        "Analitik artık bir Program sağlığı kartıyla açılıyor: her gösterge yayımlanmış bir hedefe göre ölçülüyor ve yolunda, izlenmeli ya da hemen ilgilen olarak işaretleniyor — geride kalanın düzeltileceği ekrana doğrudan bağlantıyla.",
+      ],
+      de: [
+        "Die Analysen beginnen jetzt mit einer Karte „Programm-Gesundheit“: Jeder Indikator wird an einem veröffentlichten Ziel gemessen und als im Plan, beobachten oder handeln markiert — mit einem direkten Link zur Seite, auf der ein abrutschender behoben wird.",
+      ],
+    },
+    media: {
+      poster: "release-media/program-scorecard.png",
+      alt: {
+        en: "The programme health card: invitations accepted, participants matched and at-risk relationships on track; time to first meeting and monthly meetings to watch; stalled relationships to act on now, each slipping row with a link; evaluation coverage, survey response rate and NPS marked not yet measurable",
+        tr: "Program sağlığı kartı: kabul edilen davetler, eşleşen katılımcılar ve risk altındaki ilişkiler yolunda; ilk görüşmeye kadar geçen süre ve aylık görüşmeler izlenmeli; ilerlemeyen ilişkiler için hemen ilgilenilmeli, geride kalan her satırda bir bağlantı; değerlendirme kapsamı, anket yanıt oranı ve NPS henüz ölçülemiyor",
+        de: "Die Karte „Programm-Gesundheit“: angenommene Einladungen, zugeordnete Teilnehmende und gefährdete Beziehungen im Plan; Zeit bis zum ersten Termin und monatliche Termine zu beobachten; stockende Beziehungen zum Handeln, jede abrutschende Zeile mit Link; Bewertungsabdeckung, Rücklaufquote und NPS noch nicht messbar",
+      },
+      width: 960,
+      height: 537,
+    },
+  },
+  {
+    version: '0.275.0-beta',
+    date: '2026-10-06',
+    time: '12:42',
+    commit: '68f9676',
+    highlights: {
+      en: [
+        "New Executive dashboard for admins: Engagement, Progression and Placement as scores from 0 to 100, each with its trend and the exact arithmetic behind it — ready to print on one page for sponsors.",
+      ],
+      tr: [
+        "Yöneticiler için yeni Yönetici panosu: Etkileşim, İlerleme ve Yerleştirme 0–100 arası skorlar olarak, her biri eğilimi ve arkasındaki hesapla birlikte — sponsorlar için tek sayfada yazdırılabilir.",
+      ],
+      de: [
+        "Neues Executive-Dashboard für Admins: Engagement, Fortschritt und Vermittlung als Scores von 0 bis 100, jeweils mit Verlauf und der genauen Rechnung dahinter — für Förderer auf einer Seite druckbar.",
+      ],
+    },
+    media: {
+      poster: "release-media/executive-dashboard.png",
+      alt: {
+        en: "The executive dashboard: Engagement 67, Progression 33 and Placement 25, each with a bar trend over six periods and a sentence comparing it with the previous period, beside a Capability card marked not yet measurable",
+        tr: "Yönetici panosu: Etkileşim 67, İlerleme 33 ve Yerleştirme 25; her biri altı dönemlik çubuk eğilimi ve önceki dönemle karşılaştıran bir cümleyle, yanında henüz ölçülemiyor olarak işaretli Yetkinlik kartı",
+        de: "Das Executive-Dashboard: Engagement 67, Fortschritt 33 und Vermittlung 25, jeweils mit Balkenverlauf über sechs Zeiträume und einem Satz zum Vergleich mit dem vorherigen Zeitraum, daneben die Karte Kompetenz als noch nicht messbar",
+      },
+      width: 960,
+      height: 378,
+    },
+  },
+  {
+    version: '0.274.0-beta',
+    date: '2026-10-06',
+    time: '12:33',
+    commit: '8bd0882',
+    highlights: {
+      en: [
+        "New Programme ROI report for admins: what the programme cost, what it returned and every step of the calculation in between — with the assumptions on screen to adjust, and a one-page printout for sponsors.",
+      ],
+      tr: [
+        "Yöneticiler için yeni Program yatırım getirisi raporu: programın maliyeti, getirisi ve aradaki hesabın her adımı — ekranda ayarlanabilen varsayımlarla ve sponsorlar için tek sayfalık çıktıyla.",
+      ],
+      de: [
+        "Neuer Bericht „Programm-ROI“ für Admins: was das Programm gekostet und eingebracht hat und jeder Rechenschritt dazwischen — mit anpassbaren Annahmen auf dem Bildschirm und einem einseitigen Ausdruck für Förderer.",
+      ],
+    },
+    media: {
+      poster: "release-media/roi-executive-dashboards.png",
+      alt: {
+        en: "The programme ROI working: recorded costs, placements, recorded and assumed placement value, cost per placement, net return and a 146% return on investment, each with its calculation, beside the cost broken down by category",
+        tr: "Program yatırım getirisi hesabı: kayıtlı maliyetler, yerleştirmeler, kayıtlı ve varsayılan yerleştirme değeri, yerleştirme başına maliyet, net getiri ve %146 yatırım getirisi; her biri hesabıyla, yanında kategoriye göre maliyet",
+        de: "Der Rechenweg des Programm-ROI: erfasste Kosten, Vermittlungen, erfasster und angenommener Vermittlungswert, Kosten pro Vermittlung, Nettoertrag und 146 % Return on Investment, jeweils mit Rechnung, daneben die Kosten nach Kategorie",
+      },
+      width: 960,
+      height: 572,
+    },
+  },
+  {
+    version: '0.273.0-beta',
+    date: '2026-10-06',
+    time: '12:04',
+    commit: '974ab70',
+    highlights: {
+      en: [
+        "New Relationship health screen for admins: every active mentoring relationship, worst first, with the reasons it is slipping and one click to the fix — message the mentor, reassign, set a stage deadline or record why it ended.",
+      ],
+      tr: [
+        "Yöneticiler için yeni İlişki sağlığı ekranı: tüm aktif mentorluk ilişkileri en kötüden başlayarak, neden zayıfladıkları ve tek tıkla çözümü — mentöre yaz, yeniden ata, aşama son tarihi koy ya da neden bittiğini kaydet.",
+      ],
+      de: [
+        "Neue Ansicht „Beziehungs-Health“ für Admins: alle aktiven Mentoring-Beziehungen, die schwächsten zuerst, mit den Gründen und einem Klick zur Lösung — Mentor anschreiben, neu zuordnen, Phasenfrist setzen oder den Abbruchgrund erfassen.",
+      ],
+    },
+    media: {
+      poster: "release-media/admin-health-monitor.png",
+      alt: {
+        en: "The relationship health queue: three mentoring relationships ranked worst first, each with its score, a 30-day trend in bars, the reasons it is slipping and one next action such as recording a drop-off reason or setting a stage deadline",
+        tr: "İlişki sağlığı kuyruğu: en kötüden başlayarak sıralanmış üç mentorluk ilişkisi; her birinde skor, çubuklarla 30 günlük eğilim, zayıflama nedenleri ve ayrılma nedenini kaydetmek ya da aşama son tarihi koymak gibi tek bir sonraki adım",
+        de: "Die Warteschlange „Beziehungs-Health“: drei Mentoring-Beziehungen, die schwächste zuerst, jeweils mit Score, 30-Tage-Verlauf als Balken, den Gründen und einem nächsten Schritt wie „Abbruchgrund erfassen“ oder „Phasenfrist setzen“",
+      },
+      width: 958,
+      height: 355,
+    },
+  },
+  {
+    version: '0.272.0-beta',
+    date: '2026-10-06',
+    time: '11:48',
+    commit: '69965e7',
+    highlights: {
+      en: [
+        "Admins now get one short e-mail when a mentoring relationship turns at-risk — with the reasons, such as how long the pair has been out of touch — instead of having to check every relationship themselves.",
+      ],
+      tr: [
+        "Bir mentorluk ilişkisi riskli banda geçtiğinde yöneticiler artık gerekçeleriyle (örneğin eşleşmenin kaç gündür temasta olmadığı) kısa bir e-posta alıyor; her ilişkiyi tek tek kontrol etmek gerekmiyor.",
+      ],
+      de: [
+        "Admins erhalten jetzt eine kurze E-Mail, wenn eine Mentoring-Beziehung in den Risikobereich rutscht – mit den Gründen, etwa wie lange das Paar keinen Kontakt hatte –, statt jede Beziehung selbst prüfen zu müssen.",
+      ],
+    },
+  },
+  {
+    version: '0.270.0-beta',
+    date: '2026-10-06',
+    time: '10:36',
+    commit: 'fed42eb',
+    highlights: {
+      en: [
+        "The public API and webhooks are now part of Program Plus and Enterprise. Organisations already using them keep them; taking an integration down always works.",
+      ],
+      tr: [
+        "Public API ve webhook'lar artık Program Plus ve Enterprise planlarının parçası. Bunları zaten kullanan kuruluşlar kullanmaya devam ediyor; bir entegrasyonu kapatmak her zaman mümkün.",
+      ],
+      de: [
+        "Die öffentliche API und Webhooks sind jetzt Teil von Program Plus und Enterprise. Organisationen, die sie bereits nutzen, behalten sie; eine Integration abzuschalten ist immer möglich.",
+      ],
+    },
+  },
+  {
+    version: '0.269.0-beta',
+    date: '2026-10-06',
+    time: '09:25',
+    commit: 'e73fa63',
+    highlights: {
+      en: [
+        "The weekly analytics e-mail is now a scheduled report you can manage: every admin who received it keeps it, in their own language, and can change the day, the format or unsubscribe on the Scheduled reports page.",
+      ],
+      tr: [
+        "Haftalık analiz e-postası artık yönetebileceğiniz bir zamanlanmış rapor: onu alan her yönetici kendi dilinde almaya devam ediyor ve günü, biçimi değiştirebilir ya da Zamanlanmış raporlar sayfasından abonelikten çıkabilir.",
+      ],
+      de: [
+        "Die wöchentliche Analyse-E-Mail ist jetzt ein geplanter Bericht, den Sie verwalten können: Alle Admins, die sie bisher erhielten, bekommen sie weiter in ihrer Sprache und können Tag und Format ändern oder sie auf der Seite „Geplante Berichte“ abbestellen.",
+      ],
+    },
+  },
+  {
+    version: '0.268.0-beta',
+    date: '2026-10-06',
+    time: '08:56',
+    commit: '9a04c47',
+    highlights: {
+      en: [
+        "Scheduled reports: send any report weekly, monthly or quarterly to someone on your team or to an outside stakeholder — a dean, a sponsor, a funder — in their language, as a table in the e-mail or as an Excel/CSV file. Recipients without an account can unsubscribe with one click.",
+      ],
+      tr: [
+        "Zamanlanmış raporlar: herhangi bir raporu haftalık, aylık ya da üç aylık olarak ekibinizden birine veya dışarıdan bir paydaşa — dekan, sponsor, fon veren — kendi dilinde, e-postada tablo ya da Excel/CSV dosyası olarak gönderin. Hesabı olmayan alıcılar tek tıkla abonelikten çıkabilir.",
+      ],
+      de: [
+        "Geplante Berichte: Senden Sie jeden Bericht wöchentlich, monatlich oder vierteljährlich an jemanden aus Ihrem Team oder an externe Beteiligte – Dekanat, Sponsor, Förderer – in deren Sprache, als Tabelle in der E-Mail oder als Excel-/CSV-Datei. Empfänger ohne Konto können sich mit einem Klick abmelden.",
+      ],
+    },
+    media: {
+      poster: "release-media/report-subscriptions-ui.png",
+      alt: {
+        en: "The scheduled reports screen: a weekly compliance report to a team member and a monthly cohort comparison to a dean, with its delivery history open",
+        tr: "Zamanlanmış raporlar ekranı: bir ekip üyesine haftalık uyum raporu ve bir dekana aylık grup karşılaştırması, gönderim geçmişi açık",
+        de: "Die Seite „Geplante Berichte“: ein wöchentlicher Compliance-Bericht an ein Teammitglied und ein monatlicher Kohortenvergleich an ein Dekanat, mit geöffnetem Versandverlauf",
+      },
+      width: 780,
+      height: 388,
+    },
+  },
+  {
+    version: '0.266.1-beta',
+    date: '2026-10-06',
+    time: '08:11',
+    commit: 'd807488',
+    highlights: {
+      en: [
+        "Bulk CSV import: a row that cannot be saved (for example an over-long name) is now listed with its reason instead of stopping the whole import, the test run promises exactly what the real run creates, and large files import much faster.",
+      ],
+      tr: [
+        "Toplu CSV içe aktarım: kaydedilemeyen bir satır (örneğin çok uzun bir isim) artık tüm aktarımı durdurmak yerine nedeniyle birlikte listeleniyor, deneme çalıştırması gerçek çalıştırmanın oluşturacağını birebir gösteriyor ve büyük dosyalar çok daha hızlı aktarılıyor.",
+      ],
+      de: [
+        "CSV-Massenimport: Eine Zeile, die nicht gespeichert werden kann (z. B. ein zu langer Name), wird jetzt mit Begründung aufgeführt, statt den ganzen Import abzubrechen; der Testlauf verspricht genau, was der echte Lauf anlegt, und große Dateien werden deutlich schneller importiert.",
+      ],
+    },
+  },
+  {
+    version: '0.266.0-beta',
+    date: '2026-10-06',
+    time: '08:07',
+    commit: 'cff3a52',
+    highlights: {
+      en: [
+        "The SaleVali home page now shows the product in action: the pipeline board, a rep's dashboard and the funnel analytics.",
+        "On a phone, a long workspace name no longer covers the buttons in the top bar.",
+      ],
+      tr: [
+        "SaleVali ana sayfası artık ürünü çalışırken gösteriyor: pipeline panosu, satışçı paneli ve huni analizi.",
+        "Telefonda uzun bir çalışma alanı adı artık üst çubuktaki düğmelerin üstüne binmiyor.",
+      ],
+      de: [
+        "Die SaleVali-Startseite zeigt das Produkt jetzt in Aktion: das Pipeline-Board, das Dashboard im Vertrieb und die Funnel-Analyse.",
+        "Auf dem Handy verdeckt ein langer Name des Arbeitsbereichs nicht mehr die Schaltflächen in der oberen Leiste.",
+      ],
+    },
+  },
+  {
+    version: '0.265.0-beta',
+    date: '2026-10-06',
+    time: '08:02',
+    commit: '933a31b',
+    highlights: {
+      en: [
+        "Exported analytics reports now combine groups of fewer than 5 people into one row, so no individual can be singled out — the totals still add up, and the analytics page notes it.",
+      ],
+      tr: [
+        "Dışa aktarılan analiz raporları artık 5 kişiden küçük grupları tek satırda birleştiriyor; böylece kimse tek başına ayırt edilemiyor — toplamlar yine tutuyor ve analiz sayfası bunu belirtiyor.",
+      ],
+      de: [
+        "Exportierte Analyseberichte fassen Gruppen mit weniger als 5 Personen jetzt zu einer Zeile zusammen, damit niemand einzeln erkennbar ist – die Summen stimmen weiterhin, und die Analyseseite weist darauf hin.",
+      ],
+    },
+  },
+  {
+    version: '0.262.0-beta',
+    date: '2026-10-06',
+    time: '07:02',
+    commit: '910ef31',
+    highlights: {
+      en: [
+        "Accounts now show which marketplaces, shop systems and carriers a merchant uses — from the import or set by hand — and a postal campaign can target, say, every OTTO seller.",
+      ],
+      tr: [
+        "Hesaplar artık tüccarın hangi pazaryeri, mağaza sistemi ve kargo firmasını kullandığını gösteriyor — içe aktarımdan ya da elle — ve bir posta kampanyası örneğin tüm OTTO satıcılarını hedefleyebiliyor.",
+      ],
+      de: [
+        "Accounts zeigen jetzt, welche Marktplätze, Shopsysteme und Versanddienstleister ein Händler nutzt — aus dem Import oder von Hand gepflegt — und eine Briefkampagne kann z. B. gezielt alle OTTO-Händler ansprechen.",
+      ],
+    },
+  },
+  {
+    version: '0.260.1-beta',
+    date: '2026-10-06',
+    time: '06:50',
+    commit: '5c8d236',
+    highlights: {
+      en: [
+        "A new public page explains how to delete your account, what is deleted and what stays — linked from the privacy policy.",
+      ],
+      tr: [
+        "Yeni bir herkese açık sayfa, hesabını nasıl sileceğini, nelerin silinip nelerin kaldığını anlatıyor — gizlilik politikasından bağlantılı.",
+      ],
+      de: [
+        "Eine neue öffentliche Seite erklärt, wie Sie Ihr Konto löschen, was gelöscht wird und was bleibt – verlinkt in der Datenschutzerklärung.",
+      ],
+    },
+  },
+  {
     version: '0.260.0-beta',
     date: '2026-10-05',
     time: '17:38',

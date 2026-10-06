@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Deleting a stage-history entry is audited** (#1562, security). `DELETE /api/status-changes/[id]` now writes a warning-level `pipeline.history_delete` ActivityLog row (actor, entry id, relation and the transition) in the relation's tenant. The rest of #1562 had already shipped: the stage write in `PUT /api/mentorship/[id]` runs in one transaction, and the delete is scoped through the relation's org (another tenant's id answers 404). Covered by `e2e/admin-history-edit.spec.ts`."
-}
