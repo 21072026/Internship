@@ -166,6 +166,9 @@ model Organization {
   reportSubscriptionSends ReportSubscriptionSend[]
   // Nightly relationship-health snapshots (#1901).
   relationHealthSnapshots RelationHealthSnapshot[]
+  surveys                 Survey[]
+  surveyInvitations       SurveyInvitation[]
+  surveyResponses         SurveyResponse[]
   offers                  Offer[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
@@ -539,6 +542,8 @@ model User {
   reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
   // Report subscriptions this user receives (#1905); removed with the user.
   reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
+  surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
+  surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
@@ -4892,4 +4897,166 @@ model RelationHealthSnapshot {
 
   @@unique([relationId, takenOn])
   @@index([orgId, takenOn])
+}
+
+// ── Surveys (#1879, epic #1877) ──────────────────────────────────────────────
+//
+// The survey engine's data model. NOT an Evaluation: an evaluation is one named
+// person assessing another against a framework, and is read by the people
+// involved; a survey is many people answering about their own experience, and
+// is read in aggregate. docs/surveys.md has the full design, including what
+// each anonymity mode promises. Who may read which answer is decided in ONE
+// place, src/lib/surveyPrivacy.ts, never in a component.
+
+enum SurveyAudience {
+  MENTEE
+  MENTOR
+  BOTH
+  COMPANY
+}
+
+// IDENTIFIED   — the respondent is known and an ADMIN may read their answer.
+// CONFIDENTIAL — the respondent is known to the system (for completion and
+//                follow-up) but individual answers are read only by the
+//                respondent; staff see aggregates above the response floor.
+// ANONYMOUS    — the link between a person and their answer is never written:
+//                SurveyResponse.respondentId and .invitationId are NULL at
+//                insert (src/lib/surveys.ts), not filtered on read.
+enum SurveyAnonymity {
+  IDENTIFIED
+  CONFIDENTIAL
+  ANONYMOUS
+}
+
+enum SurveyStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+model Survey {
+  id    String        @id @default(cuid())
+  orgId String?
+  org   Organization? @relation(fields: [orgId], references: [id])
+
+  // e.g. `program_post`. Not unique: an org runs the same instrument more than once.
+  key          String          @db.VarChar(80)
+  // Which built-in instrument it came from (src/lib/surveyTemplates.ts), if any.
+  templateKey  String?         @db.VarChar(80)
+  // { en?, tr?, de? }. No @default: Prisma drops Json defaults against MariaDB
+  // (prisma/backfill-json-columns.mjs), so every writer sets them.
+  title        Json
+  intro        Json?
+  audience     SurveyAudience
+  anonymity    SurveyAnonymity
+  status       SurveyStatus    @default(DRAFT)
+  opensAt      DateTime?
+  closesAt     DateTime?
+  // The response floor for this survey. Raised per survey, never lowered below
+  // SURVEY_MIN_RESPONSES — effectiveMinResponses() enforces it on read.
+  minResponses Int             @default(5)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  questions   SurveyQuestion[]
+  invitations SurveyInvitation[]
+  responses   SurveyResponse[]
+
+  @@index([orgId, status])
+}
+
+// Deliberately NOT in TENANT_MODELS: a question is only ever reached through
+// its Survey, which is scoped — the same reasoning as MeetingGuest. Adding it
+// would make every nested write need an orgId it has no use for.
+model SurveyQuestion {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  // The answer join key. Immutable once the survey has opened — refused with
+  // 409 at the write boundary (src/lib/surveys.ts) — so an answer always
+  // resolves to the question it answered, whatever its wording became.
+  key       String  @db.VarChar(80)
+  // A FormFieldType (src/lib/forms/schema.ts) or NPS. A String, validated by
+  // the shared union, so adding a type is not a schema change.
+  type      String  @db.VarChar(20)
+  labels    Json
+  helpText  Json?
+  // [{ value, labels: { en?, tr?, de? } }] for choice questions; null otherwise.
+  options   Json?
+  required  Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  @@unique([surveyId, key])
+  @@index([surveyId, sortOrder])
+}
+
+// One row per person invited to one survey — the completion-tracking table.
+// The TOKEN is never stored, only its hash (the TrustedDevice discipline).
+model SurveyInvitation {
+  id       String        @id @default(cuid())
+  orgId    String?
+  org      Organization? @relation(fields: [orgId], references: [id])
+  surveyId String
+  survey   Survey        @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  // Null for an external recipient with no account.
+  userId        String?
+  user          User?     @relation("SurveyInvitee", fields: [userId], references: [id], onDelete: SetNull)
+  email         String    @db.VarChar(191)
+  locale        String?   @db.VarChar(5)
+  tokenHash     String    @unique @db.VarChar(64)
+  sentAt        DateTime?
+  remindersSent Int       @default(0)
+  // Stamped on submit in EVERY mode — completion still works for an anonymous
+  // survey, without the response knowing which invitation it came from.
+  respondedAt   DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+
+  response SurveyResponse?
+
+  @@unique([surveyId, email])
+  @@index([orgId])
+}
+
+model SurveyResponse {
+  id       String        @id @default(cuid())
+  orgId    String?
+  org      Organization? @relation(fields: [orgId], references: [id])
+  surveyId String
+  survey   Survey        @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  // Both NULL for an ANONYMOUS survey, written that way at insert.
+  invitationId   String?           @unique
+  invitation     SurveyInvitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+  respondentId   String?
+  respondent     User?             @relation("SurveyRespondent", fields: [respondentId], references: [id], onDelete: SetNull)
+  // MENTEE | MENTOR | COMPANY | GUEST — kept in every mode: it is what the
+  // aggregates are broken down by, and alone it identifies nobody.
+  respondentRole String            @db.VarChar(20)
+  // The pairing the answer is about, when there is one. A plain id, not a
+  // foreign key: an answer outlives the relation it was about.
+  relationId     String?
+  submittedAt    DateTime          @default(now())
+
+  answers SurveyAnswer[]
+
+  @@index([orgId, surveyId])
+  @@index([surveyId, submittedAt])
+}
+
+// Not in TENANT_MODELS for the same reason as SurveyQuestion: reached only
+// through its SurveyResponse. Keyed by questionKey, not question id, so
+// re-wording a question never orphans an answer.
+model SurveyAnswer {
+  id          String         @id @default(cuid())
+  responseId  String
+  response    SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionKey String         @db.VarChar(80)
+  value       Json
+  text        String?        @db.Text
+
+  @@unique([responseId, questionKey])
+  @@index([questionKey])
 }
