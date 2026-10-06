@@ -1,10 +1,13 @@
 # Agent Experience Log
 
-A running retrospective for AI agents (Claude Code) working in this repo. **Standing
-convention: at the end of each session, append a short dated entry here** with the
-concrete, reusable lessons you learned — environment quirks, tooling limits, process
-gotchas — so the next session starts smarter. Keep tactical, fast-changing tips here;
-promote anything that becomes a durable rule into `CLAUDE.md`.
+> **Frozen archive (2026-10-06, #2804). Do not append here.** New entries go in
+> [`docs/agent-experience/`](agent-experience/README.md), one file per session. Every PR
+> appended to the end of this one file, so any two open PRs conflicted here, and GitHub runs no
+> CI on a conflicted PR. The lessons below still apply; read them.
+
+A running retrospective for AI agents (Claude Code) working in this repo, up to 2026-10-06.
+Keep tactical, fast-changing tips here; promote anything that becomes a durable rule into
+`CLAUDE.md`.
 
 Newest entries on top.
 
