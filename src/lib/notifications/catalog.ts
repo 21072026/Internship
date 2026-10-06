@@ -231,6 +231,10 @@ export const NOTIFICATION_EVENTS = [
   { key: 'goal.assigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['title'] },
   { key: 'goal.completed', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['title'] },
   { key: 'evaluation.added', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: [] },
+  // Evaluation due reminders to the mentor (#1891): at most two per evaluation;
+  // the mail goes in the existing `goals-evaluation` category (src/lib/evaluationDue.ts).
+  { key: 'evaluation.dueInterim', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
+  { key: 'evaluation.dueFinal', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['menteeName'] },
   { key: 'testimonial.approvalRequested', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'testimonial.declined', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'project.goalAssigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'project', params: ['title'] },

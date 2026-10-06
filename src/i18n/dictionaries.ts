@@ -1598,6 +1598,8 @@ const en = {
       trialNoEndDate: 'Trial end date missing — enter it',
       // #2563: the follow-up date the owner wrote on the record has passed.
       nextActionDue: 'Follow-up overdue',
+      // #1891: an INTERIM/FINAL evaluation past its due date and not written.
+      evaluationDue: 'Evaluation due — write it',
       daysAgo: '{d} days since last interaction',
       dormantHidden: '{n} first contacts hidden — messaged, never replied',
     },
@@ -2799,6 +2801,8 @@ const en = {
       'goal.assigned': 'A new goal was added to your mentorship: "{title}".',
       'goal.completed': 'Goal marked as done: "{title}".',
       'evaluation.added': 'A new evaluation was added about your mentorship.',
+      'evaluation.dueInterim': 'The interim evaluation for {menteeName} is due — write it now.',
+      'evaluation.dueFinal': 'The final evaluation for {menteeName} is due — write it now.',
       'interview.assigned': 'You are on the interview panel for {name}. Score independently — you will see the others once everyone has.',
       'interview.assignedBlind': 'You are on an interview panel. The candidate is anonymous until you submit your own scores.',
       'interview.panelComplete': 'The interview panel is complete. The scorecards are now side by side.',
@@ -4770,6 +4774,19 @@ const en = {
     continueLabel: 'Continue',
   },
   settings: {
+    evaluationSchedule: {
+      title: 'Evaluation schedule',
+      subtitle: 'When the interim and final evaluations fall due. Whoever writes them is reminded on the due date and once more a week later.',
+      interimStage: 'Interim evaluation: after entering stage',
+      interimDays: 'Interim evaluation: due after (days)',
+      finalStage: 'Final evaluation: due on entering stage',
+      defaultStage: 'Default — {stage}',
+      defaultMissing: 'Default — this pipeline has no such stage, so no reminders',
+      off: 'Off — no reminders',
+      unknownStage: 'This stage no longer exists in your pipeline — choose another.',
+      capNote: 'Never more than two reminders per evaluation, and none once it is written.',
+      saved: 'Saved.',
+    },
     title: 'System settings',
     subtitle: 'Configure reminders, support contact and bulk import users',
     system: 'System',
@@ -6579,6 +6596,15 @@ const en = {
     noteSave: 'Add note',
     noteSaved: 'Note saved.',
   },
+  // Evaluation due reminders to the mentor (#1891) — at most two.
+  evaluationDue: {
+    subjectInterim: 'Interim evaluation due for {mentee}',
+    subjectFinal: 'Final evaluation due for {mentee}',
+    bodyInterim: 'Hi {mentor},\n\nThe interim evaluation for {mentee} is due. It takes a few minutes, and it is what the programme\'s competency report is built from.',
+    bodyFinal: 'Hi {mentor},\n\n{mentee} has completed the internship, so the final evaluation is due. It takes a few minutes, and it is what the programme\'s competency report is built from.',
+    cta: 'Write the evaluation',
+    lastReminder: 'This is the last reminder about this evaluation.',
+  },
   // Survey campaign invitation mail (#1887).
   surveyCampaign: {
     cta: 'Answer the survey',
@@ -8210,6 +8236,8 @@ const tr: Dict = {
       trialExpired: 'Deneme süresi doldu — karar verin',
       trialNoEndDate: 'Deneme bitiş tarihi eksik — tarihi girin',
       nextActionDue: 'Takip tarihi geçti',
+      // #1891: an INTERIM/FINAL evaluation past its due date and not written.
+      evaluationDue: 'Değerlendirme zamanı — yaz',
       daysAgo: 'Son etkileşimden bu yana {d} gün',
       dormantHidden: '{n} ilk temas gizlendi — mesaj gönderildi, yanıt gelmedi',
     },
@@ -9377,6 +9405,8 @@ const tr: Dict = {
       'goal.assigned': 'Mentorluğuna yeni bir hedef eklendi: "{title}".',
       'goal.completed': 'Hedef tamamlandı olarak işaretlendi: "{title}".',
       'evaluation.added': 'Mentorluğun hakkında yeni bir değerlendirme eklendi.',
+      'evaluation.dueInterim': '{menteeName} için ara değerlendirmenin zamanı geldi — şimdi yaz.',
+      'evaluation.dueFinal': '{menteeName} için final değerlendirmenin zamanı geldi — şimdi yaz.',
       'interview.assigned': '{name} için mülakat panelindesin. Bağımsız puanla — herkes puanladığında diğerlerini göreceksin.',
       'interview.assignedBlind': 'Bir mülakat panelindesin. Kendi puanlarını gönderene kadar aday anonim.',
       'interview.panelComplete': 'Mülakat paneli tamamlandı. Scorecard’lar artık yan yana.',
@@ -11294,6 +11324,19 @@ const tr: Dict = {
     continueLabel: 'Devam et',
   },
   settings: {
+    evaluationSchedule: {
+      title: 'Değerlendirme takvimi',
+      subtitle: 'Ara ve final değerlendirmenin ne zaman yazılması gerektiği. Yazacak kişiye vade gününde ve bir hafta sonra bir kez daha hatırlatılır.',
+      interimStage: 'Ara değerlendirme: şu aşamaya girdikten sonra',
+      interimDays: 'Ara değerlendirme: kaç gün sonra',
+      finalStage: 'Final değerlendirme: şu aşamaya girildiğinde',
+      defaultStage: 'Varsayılan — {stage}',
+      defaultMissing: 'Varsayılan — bu süreçte böyle bir aşama yok, hatırlatma gitmez',
+      off: 'Kapalı — hatırlatma yok',
+      unknownStage: 'Bu aşama artık sürecinde yok — başka birini seç.',
+      capNote: 'Değerlendirme başına asla ikiden fazla hatırlatma gitmez; yazıldığında hiç gitmez.',
+      saved: 'Kaydedildi.',
+    },
     title: 'Sistem ayarları',
     subtitle: 'Hatırlatmaları, destek iletişimini yapılandır ve toplu kullanıcı içe aktar',
     system: 'Sistem',
@@ -13078,6 +13121,14 @@ const tr: Dict = {
     noteSave: 'Not ekle',
     noteSaved: 'Not kaydedildi.',
   },
+  evaluationDue: {
+    subjectInterim: '{mentee} için ara değerlendirme zamanı',
+    subjectFinal: '{mentee} için final değerlendirme zamanı',
+    bodyInterim: 'Merhaba {mentor},\n\n{mentee} için ara değerlendirmenin zamanı geldi. Birkaç dakika sürüyor ve programın yetkinlik raporu bu değerlendirmelerden oluşuyor.',
+    bodyFinal: 'Merhaba {mentor},\n\n{mentee} stajını tamamladı; final değerlendirmenin zamanı geldi. Birkaç dakika sürüyor ve programın yetkinlik raporu bu değerlendirmelerden oluşuyor.',
+    cta: 'Değerlendirmeyi yaz',
+    lastReminder: 'Bu değerlendirmeyle ilgili son hatırlatmamız bu.',
+  },
   // Anket kampanyası davet e-postası (#1887).
   surveyCampaign: {
     cta: 'Anketi cevapla',
@@ -14704,6 +14755,8 @@ const de: Dict = {
       trialExpired: 'Testphase abgelaufen — entscheiden',
       trialNoEndDate: 'Enddatum der Testphase fehlt — bitte eintragen',
       nextActionDue: 'Wiedervorlage überfällig',
+      // #1891: an INTERIM/FINAL evaluation past its due date and not written.
+      evaluationDue: 'Bewertung fällig — schreiben',
       daysAgo: '{d} Tage seit der letzten Interaktion',
       dormantHidden: '{n} Erstkontakte ausgeblendet — angeschrieben, keine Antwort',
     },
@@ -15871,6 +15924,8 @@ const de: Dict = {
       'goal.assigned': 'Zu deinem Mentoring wurde ein neues Ziel hinzugefügt: "{title}".',
       'goal.completed': 'Ziel als erledigt markiert: "{title}".',
       'evaluation.added': 'Zu deinem Mentoring wurde eine neue Bewertung hinzugefügt.',
+      'evaluation.dueInterim': 'Die Zwischenbewertung für {menteeName} ist fällig — schreib sie jetzt.',
+      'evaluation.dueFinal': 'Die Abschlussbewertung für {menteeName} ist fällig — schreib sie jetzt.',
       'interview.assigned': 'Du bist im Interview-Panel für {name}. Bewerte unabhängig — die anderen siehst du, sobald alle bewertet haben.',
       'interview.assignedBlind': 'Du bist in einem Interview-Panel. Die Person bleibt anonym, bis du deine eigene Bewertung abgibst.',
       'interview.panelComplete': 'Das Interview-Panel ist vollständig. Die Scorecards liegen jetzt nebeneinander.',
@@ -17789,6 +17844,19 @@ const de: Dict = {
     continueLabel: 'Weiter',
   },
   settings: {
+    evaluationSchedule: {
+      title: 'Bewertungsplan',
+      subtitle: 'Wann die Zwischen- und Abschlussbewertung fällig sind. Wer sie schreibt, wird am Fälligkeitstag und eine Woche später noch einmal erinnert.',
+      interimStage: 'Zwischenbewertung: nach Eintritt in die Phase',
+      interimDays: 'Zwischenbewertung: fällig nach (Tagen)',
+      finalStage: 'Abschlussbewertung: fällig bei Eintritt in die Phase',
+      defaultStage: 'Standard — {stage}',
+      defaultMissing: 'Standard — diese Pipeline hat keine solche Phase, daher keine Erinnerungen',
+      off: 'Aus — keine Erinnerungen',
+      unknownStage: 'Diese Phase gibt es in deiner Pipeline nicht mehr — wähle eine andere.',
+      capNote: 'Nie mehr als zwei Erinnerungen pro Bewertung, und keine mehr, sobald sie geschrieben ist.',
+      saved: 'Gespeichert.',
+    },
     title: 'Systemeinstellungen',
     subtitle: 'Erinnerungen, Support-Kontakt konfigurieren und Benutzer im Stapel importieren',
     system: 'System',
@@ -19573,6 +19641,14 @@ const de: Dict = {
     invalid: 'Dieser Link ist ungültig.',
     noteSave: 'Notiz hinzufügen',
     noteSaved: 'Notiz gespeichert.',
+  },
+  evaluationDue: {
+    subjectInterim: 'Zwischenbewertung für {mentee} fällig',
+    subjectFinal: 'Abschlussbewertung für {mentee} fällig',
+    bodyInterim: 'Hallo {mentor},\n\ndie Zwischenbewertung für {mentee} ist fällig. Sie dauert nur ein paar Minuten, und aus ihr entsteht der Kompetenzbericht des Programms.',
+    bodyFinal: 'Hallo {mentor},\n\n{mentee} hat das Praktikum abgeschlossen, damit ist die Abschlussbewertung fällig. Sie dauert nur ein paar Minuten, und aus ihr entsteht der Kompetenzbericht des Programms.',
+    cta: 'Bewertung schreiben',
+    lastReminder: 'Das ist unsere letzte Erinnerung zu dieser Bewertung.',
   },
   // Einladungs-E-Mail einer Umfrage-Kampagne (#1887).
   surveyCampaign: {

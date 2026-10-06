@@ -11,6 +11,7 @@ import { EVALUATION_TYPES, isWithinEditWindow } from '@/lib/evaluation';
 import { allowedCriterionKeys, criteriaByTemplate, resolveTemplateId } from '@/lib/evaluationTemplates';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { notifyIfAllowed } from '@/lib/notify';
+import { markEvaluationCompleted } from '@/lib/evaluationDue';
 
 // GET ?relationId= — evaluations for a relation (participants/admin).
 export async function GET(request: Request) {
@@ -148,6 +149,10 @@ export async function POST(request: Request) {
       templateId: await resolveTemplateId(rel.orgId, scope),
     },
   });
+  // The due row of this type stops reminding the moment the mentor (or an
+  // admin) writes it (#1891) — stamped here, never polled for. The mentee's
+  // own review of their mentor is not that task.
+  await markEvaluationCompleted(rel.id, evaluation.type, session.user.id === rel.menteeId ? 'mentee' : 'staff');
   await dispatchWebhook('evaluation.added', { relationId: rel.id, type: evaluation.type, authorId: session.user.id }, rel.orgId);
   // The evaluated side learns an evaluation exists (#925): mentee wrote it →
   // mentor is told, mentor/admin wrote it → mentee is told. Privacy rule: the
