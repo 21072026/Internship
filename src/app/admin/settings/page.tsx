@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ImportPreview, type PreviewReport } from '@/components/ImportPreview';
+import { StarterPackCard } from '@/components/admin/StarterPackCard';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
@@ -756,6 +757,8 @@ export default function AdminSettingsPage() {
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationFrameworkEditor />}
       {/* When INTERIM/FINAL fall due, and their reminders (#1891). */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationScheduleEditor />}
+      {/* The tenant starter pack (#2066): safe to apply again at any time. */}
+      {session?.user?.orgId && <StarterPackCard orgId={session.user.orgId} />}
 
       {/* Per-stage service levels (#817) — how long anyone may wait. */}
       <StageSlaEditor />
