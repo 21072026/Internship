@@ -12,6 +12,7 @@
 // reasons) are screen-specific KPI tables, moved here unchanged.
 
 import type { Dictionary } from '@/i18n/dictionaries';
+import type { ScorecardRow } from '@/lib/programScorecard';
 import { getReportDefinition } from './definitions';
 import { loadReport, ReportUnavailable, type ReportContext } from './registry';
 import { renderReport, reportSheet, type Cell, type Sheet } from './render';
@@ -78,6 +79,32 @@ interface AnalyticsSources {
   analytics: { trends?: { months: string[]; newRelations: number[]; interactions: number[] } | null };
   aging: { dropReasons?: { pipelineStatus: string; reasonCode: string; count: number }[] } | null;
   funnel: FunnelKpi | null;
+  /** The programme health scorecard (#1908) — the first sheet when present. */
+  scorecard?: ScorecardRow[] | null;
+}
+
+// The programme health scorecard (#1908) as a sheet, so the verdict reaches
+// the sponsor's deck with the numbers: value, the count behind it, the
+// target and the band — or why there is no value.
+function scorecardSheet(rows: ScorecardRow[] | null | undefined, t: Dictionary): Sheet[] {
+  if (!rows || rows.length === 0) return [];
+  const s = t.scorecard;
+  const fmt = (v: number, unit: 'percent' | 'days') => s.units[unit].replace('{v}', String(v));
+  const target = (r: { target: number; direction: 'higher' | 'lower'; unit: 'percent' | 'days' }) =>
+    (r.direction === 'higher' ? s.targetAtLeast : s.targetAtMost).replace('{v}', fmt(r.target, r.unit));
+  return [
+    {
+      name: 'Programme health',
+      columns: [s.colIndicator, s.colValue, s.colTarget, s.colBand, s.colBasis],
+      rows: rows.map((r): Cell[] =>
+        r.status === 'ok'
+          ? [s.indicators[r.key], fmt(r.value, r.unit), target(r), s.bands[r.band], r.basis]
+          : r.status === 'insufficient'
+            ? [s.indicators[r.key], s.notEnough, target(r), '', r.basis]
+            : [s.indicators[r.key], s.notMeasurable, r.dependsOn.map((n) => s.needs.replace('{n}', String(n))).join(' · '), '', ''],
+      ),
+    },
+  ];
 }
 
 // KPI rows shared by both workbooks (#815) — the ratios travel with the counts
@@ -152,7 +179,7 @@ function dropReasonSheet(src: AnalyticsSources['aging'], t: Dictionary, stageLab
 /** The basic analytics workbook: funnel, KPI tables, drop reasons. */
 export async function analyticsWorkbook(src: AnalyticsSources, ctx: ReportContext, t: Dictionary, stageLabel: StageLabel): Promise<Sheet[]> {
   const funnel = await registrySheet('Funnel', 'pipeline-funnel', ctx, t);
-  return [...(funnel ? [funnel] : []), ...kpiSheets(src.funnel, t, stageLabel), ...dropReasonSheet(src.aging, t, stageLabel)];
+  return [...scorecardSheet(src.scorecard, t), ...(funnel ? [funnel] : []), ...kpiSheets(src.funnel, t, stageLabel), ...dropReasonSheet(src.aging, t, stageLabel)];
 }
 
 /**
@@ -170,6 +197,7 @@ export async function fullAnalyticsWorkbook(src: AnalyticsSources, ctx: ReportCo
     registrySheet('Sources', 'source-conversion', ctx, t),
   ]);
   return [
+    ...scorecardSheet(src.scorecard, t),
     ...(funnel ? [funnel] : []),
     ...kpiSheets(src.funnel, t, stageLabel),
     ...(trends

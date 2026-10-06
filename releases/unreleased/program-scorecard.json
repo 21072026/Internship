@@ -1,0 +1,17 @@
+{
+  "bump": "minor",
+  "changelog": "**Programme health scorecard at the top of `/admin/analytics`** (#1908; docs/program-scorecard.md). `src/lib/programScorecard.ts` (pure, `scripts/test/program-scorecard.test.mjs`) holds ONE threshold table — each green/amber line with the comment that justifies it, checked against the doc by the test — the inclusive band rule, the not-enough-data floor (`MIN_TO_JUDGE` = 5) and a destination per indicator. `GET /api/admin/analytics/scorecard` (ADMIN in the handler, tenant as a hand-written conjunct, free on every plan) loads six measured indicators — invitations accepted, participants matched, time to first meeting, monthly meeting kept, stalled relationships, at-risk relationships (scored through the shared `relationHealthLive`) — and reports evaluation coverage, survey response rate and NPS as not yet measurable (#1891, #1910) instead of 0. Every amber/red row links to where it is fixed; `/admin/health?band=AT_RISK` now preselects the band. The card is shared by the analytics screen and its print report, and is the first sheet of both XLSX exports.",
+  "notes": {
+    "en": ["Analytics now opens with a Programme health card: each indicator measured against a published target, marked on track, watch or act now — with a link straight to the screen where a slipping one is fixed."],
+    "tr": ["Analitik artık bir Program sağlığı kartıyla açılıyor: her gösterge yayımlanmış bir hedefe göre ölçülüyor ve yolunda, izlenmeli ya da hemen ilgilen olarak işaretleniyor — geride kalanın düzeltileceği ekrana doğrudan bağlantıyla."],
+    "de": ["Die Analysen beginnen jetzt mit einer Karte „Programm-Gesundheit“: Jeder Indikator wird an einem veröffentlichten Ziel gemessen und als im Plan, beobachten oder handeln markiert — mit einem direkten Link zur Seite, auf der ein abrutschender behoben wird."]
+  },
+  "media": {
+    "poster": "release-media/program-scorecard.png",
+    "alt": {
+      "en": "The programme health card: invitations accepted, participants matched and at-risk relationships on track; time to first meeting and monthly meetings to watch; stalled relationships to act on now, each slipping row with a link; evaluation coverage, survey response rate and NPS marked not yet measurable",
+      "tr": "Program sağlığı kartı: kabul edilen davetler, eşleşen katılımcılar ve risk altındaki ilişkiler yolunda; ilk görüşmeye kadar geçen süre ve aylık görüşmeler izlenmeli; ilerlemeyen ilişkiler için hemen ilgilenilmeli, geride kalan her satırda bir bağlantı; değerlendirme kapsamı, anket yanıt oranı ve NPS henüz ölçülemiyor",
+      "de": "Die Karte „Programm-Gesundheit“: angenommene Einladungen, zugeordnete Teilnehmende und gefährdete Beziehungen im Plan; Zeit bis zum ersten Termin und monatliche Termine zu beobachten; stockende Beziehungen zum Handeln, jede abrutschende Zeile mit Link; Bewertungsabdeckung, Rücklaufquote und NPS noch nicht messbar"
+    }
+  }
+}

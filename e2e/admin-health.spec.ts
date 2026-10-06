@@ -81,6 +81,12 @@ test.describe('admin health monitor', () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.nth(0)).toHaveAttribute('data-testid', `health-row-${rel.amber}`);
 
+    // A deep link preselects the band — the scorecard's at-risk action (#1908).
+    await page.goto('/admin/health?band=WATCH');
+    await expect(page.getByTestId('health-filter-band')).toHaveValue('WATCH');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.nth(0)).toHaveAttribute('data-testid', `health-row-${rel.amber}`);
+
     // The page says what the score is and links the published rules.
     await page.getByTestId('health-how').locator('summary').click();
     await expect(page.getByTestId('health-rules-link')).toHaveAttribute('href', /docs\/relationship-health\.md$/);
