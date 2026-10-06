@@ -9,6 +9,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { StartConversationPicker } from '@/components/StartConversationPicker';
 import { MessagesLiveRefresh } from '@/components/MessagesLiveRefresh';
+import { MessageSearch } from '@/components/MessageSearch';
 import { loadInbox } from '@/lib/inbox';
 
 // Unified message inbox for every role: lists the viewer's conversation
@@ -45,6 +46,8 @@ export default async function MessagesInboxPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.messages.title}</h1>
         <p className="text-gray-500 mt-1">{t.messages.inboxSubtitle}</p>
       </div>
+      {/* Search across the viewer's own threads (#1609). */}
+      <MessageSearch />
       <Card>
         <CardHeader><CardTitle>{t.messages.threads}</CardTitle></CardHeader>
         {/* Pinned support conversation (#593) — every role's line to the admins. */}

@@ -33,10 +33,17 @@ import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { accountState, type AccountState } from '@/lib/accountState';
+import { decodePageCursor, olderThan, parsePageLimit, toPage } from '@/lib/messagePage';
 
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
 // GET ?relationId= — messages in a thread (participants/admin only).
+//
+// Paged (#1609): `?limit=` (default 50, max 100) newest messages, oldest first
+// in the response, plus `{ hasMore, nextCursor }`; `?before=<nextCursor>` asks
+// for the page older than that. A page request is only a read of history — it
+// returns the messages and nothing else, and does not mark the thread read
+// (opening the thread, the cursor-less request, already did).
 //
 // The request-correlation context (#1601) wraps the tenant scope, so the two are
 // established together at the top of the handler and every log line below
@@ -56,6 +63,10 @@ async function handleGet(request: Request) {
     if (!relationId && !conversationId) {
       return NextResponse.json({ error: 'relationId or conversationId required' }, { status: 400 });
     }
+    const limit = parsePageLimit(params.get('limit'));
+    const rawBefore = params.get('before');
+    const before = decodePageCursor(rawBefore);
+    if (rawBefore && !before) return NextResponse.json({ error: 'invalid cursor' }, { status: 400 });
 
     // Authorize through whichever layer the caller addressed: a mentorship
     // thread (legacy relationId) or a conversation (#769). Both fail closed.
@@ -67,12 +78,16 @@ async function handleGet(request: Request) {
     // messages from the sibling layer into this thread's view.
     const scope = rel ? { relationId: rel.id } : { conversationId: conversation!.id };
 
-    const rows = await prisma.message.findMany({
+    // Bounded (#1609): newest first in keyset order, one row past the page to
+    // know whether there is more, then flipped back to reading order.
+    const newestFirst = await prisma.message.findMany({
       // Exclude messages this viewer deleted "for me".
-      where: { ...scope, hiddenFor: { none: { userId: session.user.id } } },
-      orderBy: { createdAt: 'asc' },
+      where: { ...scope, hiddenFor: { none: { userId: session.user.id } }, ...(before ? olderThan(before) : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
       include: { attachments: { select: ATTACHMENT_SELECT }, reactions: { select: { emoji: true, userId: true } } },
     });
+    const { messages: rows, hasMore, nextCursor } = toPage(newestFirst, limit);
 
     // Summarize reactions per message: emoji → { count, mine }.
     const summarizeReactions = (reactions: { emoji: string; userId: string }[]) => {
@@ -115,6 +130,9 @@ async function handleGet(request: Request) {
             reactions: summarizeReactions(m.reactions),
           },
     );
+
+    // An older page is history only: no roster, no read marker, no counterpart.
+    if (before) return NextResponse.json({ messages, hasMore, nextCursor });
 
     // A group chat is a room, so it has to say who is in it (#51): the roster is
     // the project's team, annotated onto the participant list so the chat header
@@ -204,6 +222,8 @@ async function handleGet(request: Request) {
             canPost: await canPostToConversation(session.user, conversation!),
           }),
       messages,
+      hasMore,
+      nextCursor,
     });
   });
 }

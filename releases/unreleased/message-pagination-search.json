@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "**Paged message threads and message search (#1609, part 1):** `GET /api/messages` no longer reads a whole thread. It returns the newest `?limit=` messages (default 50, max 100), oldest first, with `{ hasMore, nextCursor }`, and `?before=<nextCursor>` returns the page before that one. The cursor is a keyset on `(createdAt, id)`, so a message that arrives or is deleted while someone scrolls back neither duplicates nor skips a row. Older-page requests return history only: no roster and no read marker. New composite indexes `Message(conversationId, createdAt)` and `(relationId, createdAt)` sit beside the FK-backing single-column ones (additive). The thread view loads the newest page, loads older pages when you scroll up or press *Load older messages*, keeps your reading position, and merges live refreshes onto pages you already scrolled back to (`src/lib/messagePage.ts`, unit-tested). New `GET /api/messages/search?q=`: a bounded, LIKE-escaped `contains` over the caller's own threads only (mentorships they are in and conversations they take part in), with every hit's thread re-checked through `getThreadIfAllowed` / `getConversationIfAllowed`. It never returns messages deleted for everyone or deleted for yourself, and nothing is plan-gated. Each hit links to `…?m=<id>`; the thread pages back to that message and highlights it. The inbox gets a search box.",
+  "notes": {
+    "en": [
+      "Long conversations open instantly: you see the newest messages first, and older ones load as you scroll up.",
+      "Search your messages from the inbox. A result opens the conversation at that exact message."
+    ],
+    "tr": [
+      "Uzun sohbetler anında açılıyor: önce en yeni mesajları görüyorsun, eskiler yukarı kaydırdıkça yükleniyor.",
+      "Gelen kutusundan mesajlarında arama yapabilirsin. Bir sonuç, sohbeti tam o mesajda açar."
+    ],
+    "de": [
+      "Lange Unterhaltungen öffnen sich sofort: Du siehst zuerst die neuesten Nachrichten, ältere werden beim Hochscrollen nachgeladen.",
+      "Durchsuche deine Nachrichten direkt im Posteingang. Ein Treffer öffnet die Unterhaltung genau bei dieser Nachricht."
+    ]
+  }
+}

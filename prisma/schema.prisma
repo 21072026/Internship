@@ -865,6 +865,13 @@ model Message {
 
   @@index([conversationId])
   @@index([relationId])
+  // A thread is read a page at a time, newest first (#1609): these let MySQL
+  // walk one thread's rows in createdAt order and stop after a page, instead of
+  // sorting the whole thread on every open. Added BESIDE the single-column
+  // indexes, never in place of them — those back the foreign keys, and asking
+  // db push to drop or rename an FK-backing index is what MySQL refuses (#784).
+  @@index([conversationId, createdAt])
+  @@index([relationId, createdAt])
 }
 
 // A single emoji reaction on a message by one user (WhatsApp/Slack style).
