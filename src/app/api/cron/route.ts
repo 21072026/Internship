@@ -18,6 +18,7 @@ import {
 import { expireOffers } from '@/lib/offerNotify';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { askForMeetingFeedback } from '@/lib/meetingFeedback';
+import { dispatchDueSurveyCampaigns } from '@/lib/surveyCampaigns';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
@@ -123,6 +124,16 @@ export async function GET(request: Request) {
       const at = new URL(request.url).searchParams.get('at');
       const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
       return NextResponse.json({ message: 'Relation health sweep ran', relationHealth: await sweepRelationHealth({ orgIds: [orgId], now }) });
+    }
+    // Survey campaigns (#1887): the caller's own org only, and only this
+    // sweep. `?at=` pins the clock so a trigger's window can be exercised.
+    if (job === 'surveys') {
+      const orgId = await settingsOrgOf(session);
+      const at = new URL(request.url).searchParams.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      // `?batch=` can only LOWER the per-tick cap (dispatchDueSurveyCampaigns clamps it).
+      const batch = parseInt(new URL(request.url).searchParams.get('batch') ?? '', 10);
+      return NextResponse.json({ message: 'Survey campaigns ran', surveys: await dispatchDueSurveyCampaigns(now, { orgIds: [orgId], batch: Number.isFinite(batch) && batch > 0 ? batch : undefined }) });
     }
     if (job === 'report-subscriptions') {
       const orgId = await settingsOrgOf(session);

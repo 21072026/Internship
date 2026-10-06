@@ -2421,6 +2421,7 @@ const en = {
     opportunities: { name: 'Matches & openings', desc: 'Company needs that match, and other openings worth a look.' },
     inbound_requests: { name: 'Requests addressed to you', desc: 'Someone is asking something of you: a contact form, a company inquiry, a join request, a mentor application.' },
     newsletter: { name: 'Career newsletter', desc: 'The scheduled newsletter: career content and openings, on a regular rhythm.' },
+    surveys: { name: 'Surveys', desc: 'Short surveys the programme sends at a stage or on a schedule — one link, no login.' },
     announcements: { name: 'Announcements & product news', desc: 'Broadcast announcements, product news and the occasional “we miss you” nudge.' },
   },
   unsubscribe: {
@@ -6470,6 +6471,11 @@ const en = {
     noteSave: 'Add note',
     noteSaved: 'Note saved.',
   },
+  // Survey campaign invitation mail (#1887).
+  surveyCampaign: {
+    cta: 'Answer the survey',
+    expires: 'The link works once and expires on {date}.',
+  },
   roi: {
     title: 'Programme ROI',
     subtitle: 'What the programme cost, what it returned, and every step in between.',
@@ -8890,6 +8896,7 @@ const tr: Dict = {
     opportunities: { name: 'Eşleşmeler ve açık pozisyonlar', desc: 'Profiline uyan şirket ihtiyaçları ve bakmaya değer diğer açık pozisyonlar.' },
     inbound_requests: { name: 'Sana gelen talepler', desc: 'Biri senden bir şey istiyor: iletişim formu, bir şirketin talebi, projeye katılma isteği, mentör başvurusu.' },
     newsletter: { name: 'Kariyer bülteni', desc: 'Düzenli aralıklarla gönderilen bülten: kariyer içerikleri ve açık pozisyonlar.' },
+    surveys: { name: 'Anketler', desc: 'Programın bir aşamada ya da düzenli aralıklarla gönderdiği kısa anketler — tek bağlantı, giriş yok.' },
     announcements: { name: 'Duyurular ve ürün haberleri', desc: 'Genel duyurular, ürün haberleri ve arada bir gelen “seni özledik” hatırlatması.' },
   },
   unsubscribe: {
@@ -12851,6 +12858,11 @@ const tr: Dict = {
     noteSave: 'Not ekle',
     noteSaved: 'Not kaydedildi.',
   },
+  // Anket kampanyası davet e-postası (#1887).
+  surveyCampaign: {
+    cta: 'Anketi cevapla',
+    expires: 'Bağlantı yalnızca bir kez çalışır ve {date} tarihinde sona erer.',
+  },
   roi: {
     title: 'Program yatırım getirisi',
     subtitle: 'Programın maliyeti, getirisi ve aradaki her adım.',
@@ -15267,6 +15279,7 @@ const de: Dict = {
     opportunities: { name: 'Treffer & offene Stellen', desc: 'Passende Unternehmensbedarfe und andere offene Stellen, die einen Blick wert sind.' },
     inbound_requests: { name: 'Anfragen an dich', desc: 'Jemand möchte etwas von dir: ein Kontaktformular, eine Unternehmensanfrage, eine Beitrittsanfrage, eine Mentor-Bewerbung.' },
     newsletter: { name: 'Karriere-Newsletter', desc: 'Der planmäßige Newsletter: Karriereinhalte und offene Stellen, in festem Rhythmus.' },
+    surveys: { name: 'Umfragen', desc: 'Kurze Umfragen, die das Programm in einer Phase oder regelmäßig verschickt — ein Link, keine Anmeldung.' },
     announcements: { name: 'Ankündigungen & Produktnews', desc: 'Rundmails, Produktnews und gelegentlich ein „wir vermissen dich“-Hinweis.' },
   },
   unsubscribe: {
@@ -19229,6 +19242,11 @@ const de: Dict = {
     invalid: 'Dieser Link ist ungültig.',
     noteSave: 'Notiz hinzufügen',
     noteSaved: 'Notiz gespeichert.',
+  },
+  // Einladungs-E-Mail einer Umfrage-Kampagne (#1887).
+  surveyCampaign: {
+    cta: 'Zur Umfrage',
+    expires: 'Der Link funktioniert einmal und läuft am {date} ab.',
   },
   roi: {
     title: 'Programm-ROI',

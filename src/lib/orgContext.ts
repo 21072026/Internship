@@ -82,6 +82,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Survey',
   'SurveyInvitation',
   'SurveyResponse',
+  // Survey campaigns (#1887). SurveyCampaignSend is reached only through its
+  // campaign and is deliberately not listed.
+  'SurveyCampaign',
   // Post-meeting ratings (#1896).
   'MeetingFeedback',
   'Requisition',
