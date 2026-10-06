@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, acceptContributorTerms } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 /**
  * The admin due-diligence report (#1027).
@@ -45,6 +46,11 @@ test('the report shows an acceptance, flags who has not accepted, and filters', 
 
   try {
     await signInAndSettle(page, adminEmail, PASSWORD, '/admin');
+    // Exports need REPORT_EXPORT (#1740). The default org has it in every
+    // real deployment (grandfathered on the deploy that added the gate), so it
+    // is granted, and left granted: revoking it here would race the other
+    // export specs running in parallel against the same org.
+    await setOrgFeatureFor(page, 'REPORT_EXPORT', true);
     await page.goto('/admin/contributor-terms');
 
     const table = page.getByTestId('terms-report-table');

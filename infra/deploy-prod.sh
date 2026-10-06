@@ -790,6 +790,12 @@ run_tool node prisma/backfill-org-subscription.mjs || true
 # nothing (a global 'true' row would otherwise leak the tier to every new org).
 run_tool node prisma/backfill-premium-analytics-entitlement.mjs || true
 
+# Grandfather every org that exists when the REPORT_EXPORT gate goes live
+# (#1740): exports were free until now. Runs ONCE — its grants carry a marker
+# note and a later run that finds one does nothing, so orgs created after the
+# gate do not inherit it.
+run_tool node prisma/backfill-report-export-grandfather.mjs || true
+
 # Re-split skill lists stored as one blob before anything split them (#2314).
 # Every form used to write `skills.split(',')` from a single-line input, and a
 # browser drops the line breaks out of a multi-line paste — so a pasted CV list

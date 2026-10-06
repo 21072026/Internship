@@ -402,6 +402,7 @@ const en = {
   },
   offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.', home: 'Go to the home page' },
   common: {
+    exportLocked: 'Exports (CSV / Excel) are part of the Program plan.',
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'System',
     loading: 'Loading...',
@@ -6576,6 +6577,7 @@ const tr: Dict = {
   },
   offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.', home: 'Ana sayfaya git' },
   common: {
+    exportLocked: 'Dışa aktarma (CSV / Excel) Program planına dahildir.',
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'Sistem',
     loading: 'Yükleniyor...',
@@ -12588,6 +12590,7 @@ const de: Dict = {
   },
   offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.', home: 'Zur Startseite' },
   common: {
+    exportLocked: 'Exporte (CSV / Excel) sind im Program-Tarif enthalten.',
     // A stage move made by an unattended job, not a person (#2527).
     systemActor: 'System',
     loading: 'Wird geladen...',

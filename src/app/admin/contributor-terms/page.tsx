@@ -48,6 +48,8 @@ export default async function AdminContributorTermsPage() {
         labels={{
           none: a.none,
           export: a.export,
+          exportLocked: t.common.exportLocked,
+          exportFailed: t.common.error,
           filterStatus: a.filterStatus,
           filterProject: a.filterProject,
           filterAll: a.filterAll,
