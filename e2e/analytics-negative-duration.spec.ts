@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -162,8 +163,7 @@ test('admin cohort comparison excludes a negative-duration hire and reports null
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
-    const enable = await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } });
-    expect(enable.ok()).toBeTruthy();
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
 
     const res = await page.request.get('/api/admin/analytics/cohorts');
     expect(res.ok()).toBeTruthy();
@@ -180,7 +180,7 @@ test('admin cohort comparison excludes a negative-duration hire and reports null
     expect(onlyNeg!.hired).toBe(1);
     expect(onlyNeg!.avgDaysToHired).toBeNull();
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await prisma.mentorshipRelation.deleteMany({ where: { cohortId: { in: [mixedCohort.id, onlyNegativeCohort.id] } } });
     await prisma.cohort.deleteMany({ where: { id: { in: [mixedCohort.id, onlyNegativeCohort.id] } } });
     await cleanupByEmail(validEmail);

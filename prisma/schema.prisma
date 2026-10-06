@@ -147,41 +147,56 @@ model Organization {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  users                User[]
-  sources              Source[]
-  cohorts              Cohort[]
-  companies            Company[]
-  projects             Project[]
-  relations            MentorshipRelation[]
-  pipelineStages       PipelineStage[]
-  evaluationTemplates  EvaluationTemplate[]
-  stageSlas            StageSla[]
-  tags                 Tag[]
-  mentorApplications   MentorApplication[]
-  companyInquiries     CompanyInquiry[]
-  documentRequirements DocumentRequirement[]
-  weeklyReports        WeeklyReport[]
-  offers               Offer[]
-  requisitions         Requisition[]
-  interviewRequests    InterviewRequest[]
-  messageTemplates     MessageTemplate[]
-  apiKeys              ApiKey[]
-  matchFeedback        MatchFeedback[]
-  settings             Setting[]
-  programCosts         ProgramCost[]
-  placements           Placement[]
-  rosterFeeds          RosterFeed[]
-  subscription         Subscription?
-  orgEntitlements      OrgEntitlement[]
-  usageRollups         UsageRollup[]
-  companyUsage         CompanyUsage[]
-  contactPermissions   ContactPermission[]
-  webhooks             Webhook[]
-  announcements        Announcement[]
-  newsletters          Newsletter[]
-  trialReminders       TrialReminder[]
-  relationValues       RelationValue[]
-  ssoClaimMappings     SsoClaimMapping[]
+  users                   User[]
+  sources                 Source[]
+  cohorts                 Cohort[]
+  companies               Company[]
+  projects                Project[]
+  relations               MentorshipRelation[]
+  pipelineStages          PipelineStage[]
+  evaluationTemplates     EvaluationTemplate[]
+  stageSlas               StageSla[]
+  tags                    Tag[]
+  mentorApplications      MentorApplication[]
+  companyInquiries        CompanyInquiry[]
+  documentRequirements    DocumentRequirement[]
+  weeklyReports           WeeklyReport[]
+  // Scheduled report delivery (#1905).
+  reportSubscriptions     ReportSubscription[]
+  reportSubscriptionSends ReportSubscriptionSend[]
+  // Nightly relationship-health snapshots (#1901).
+  relationHealthSnapshots RelationHealthSnapshot[]
+  surveys                 Survey[]
+  surveyInvitations       SurveyInvitation[]
+  surveyResponses         SurveyResponse[]
+  meetingFeedback         MeetingFeedback[]
+  offers                  Offer[]
+  requisitions            Requisition[]
+  interviewRequests       InterviewRequest[]
+  messageTemplates        MessageTemplate[]
+  apiKeys                 ApiKey[]
+  matchFeedback           MatchFeedback[]
+  settings                Setting[]
+  programCosts            ProgramCost[]
+  placements              Placement[]
+  rosterFeeds             RosterFeed[]
+  subscription            Subscription?
+  orgEntitlements         OrgEntitlement[]
+  usageRollups            UsageRollup[]
+  companyUsage            CompanyUsage[]
+  contactPermissions      ContactPermission[]
+  integrationEvents       IntegrationEvent[]
+  companyContacts         CompanyContact[]
+  postCampaigns           PostCampaign[]
+  postRecipients          PostCampaignRecipient[]
+  contactSuppressions     ContactSuppression[]
+  companyChannels         CompanyChannel[]
+  webhooks                Webhook[]
+  announcements           Announcement[]
+  newsletters             Newsletter[]
+  trialReminders          TrialReminder[]
+  relationValues          RelationValue[]
+  ssoClaimMappings        SsoClaimMapping[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -526,6 +541,11 @@ model User {
   createdOffers                     Offer[]                       @relation("OfferCreatedBy")
   decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
   reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
+  // Report subscriptions this user receives (#1905); removed with the user.
+  reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
+  surveyInvitations                 SurveyInvitation[]            @relation("SurveyInvitee")
+  surveyResponses                   SurveyResponse[]              @relation("SurveyRespondent")
+  meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
@@ -1314,13 +1334,13 @@ model Document {
 }
 
 model Company {
-  orgId        String?
-  org          Organization? @relation(fields: [orgId], references: [id])
-  id           String        @id @default(cuid())
-  name         String
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id])
+  id              String        @id @default(cuid())
+  name            String
   // TEXT: the company form offers 2 000 characters, far past VARCHAR(191).
-  description  String?       @db.Text
-  contactEmail String?
+  description     String?       @db.Text
+  contactEmail    String?
   // The primary contact on the account (#2407) — "who do we call", beside the
   // address column that already existed. Three plain columns rather than a
   // `CompanyContact` table on purpose: there is no Contact model here, a
@@ -1342,8 +1362,12 @@ model Company {
   // through the tenant boundary (docs/tenant-isolation.md): two tenants may each
   // hold the same merchant, and one would then be unable to save its own row.
   // Were uniqueness ever wanted here it could only be `@@unique([orgId, ...])`.
-  contactName  String?
-  contactPhone String?
+  contactName     String?
+  contactPhone    String?
+  // The primary contact's role at the account ("Geschäftsführer"). The three
+  // contact columns plus this one ARE the primary contact; CompanyContact holds
+  // everyone else (#2442, docs/company-contacts.md).
+  contactPosition String?
   // VAT identification number (#2405). The account's strongest identity across
   // systems, and therefore the account import's FIRST matching key; the fallback
   // is normalized name + country (docs/marketing-import.md).
@@ -1353,16 +1377,16 @@ model Company {
   // accounts that carry no VAT number are unconstrained — which is every row the
   // internship product has today, and why this can be added to a populated
   // table at all.
-  vatId        String?
+  vatId           String?
   // ISO-3166-1 alpha-2, upper case. The other half of the fallback match key:
   // `address` is free text and cannot answer "which country is this account
   // in", so two merchants of the same name in two countries were one row.
-  country      String?       @db.VarChar(2)
-  industry     String?
-  logoUrl      String?
-  size         String?
-  address      String?
-  quota        Int?
+  country         String?       @db.VarChar(2)
+  industry        String?
+  logoUrl         String?
+  size            String?
+  address         String?
+  quota           Int?
   // The id this account carries in the product the tenant sells (#2446) — the
   // SaleVali merchant id for a MARKETING org, whatever a later feed keys on for
   // anyone else. Nullable and unbackfilled: a company typed in by hand, or
@@ -1383,14 +1407,14 @@ model Company {
   // sample), never guessed at and never turned into a failed chunk at 03:00.
   // The index below is what that lookup reads ("which company of THIS org is
   // external id X?"). Contract: docs/marketing-vertical/salevali-usage-feed.md.
-  externalId   String?       @db.VarChar(191)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  externalId      String?       @db.VarChar(191)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   needs              CompanyNeed[]
   mentorships        MentorshipRelation[]
-  users              User[]               @relation("CompanyUsers")
-  projects           Project[]            @relation("CompanyProjects")
+  users              User[]                  @relation("CompanyUsers")
+  projects           Project[]               @relation("CompanyProjects")
   interests          CompanyInterest[]
   entitlements       CompanyEntitlement[]
   needAlerts         CompanyNeedAlert[]
@@ -1401,11 +1425,16 @@ model Company {
   // The enquiries this company was created from (#1863). A list rather than a
   // single row because nothing stops a second enquiry from the same company
   // later being linked to the account it already has.
-  fromInquiries      CompanyInquiry[]     @relation("ConvertedFromInquiry")
+  fromInquiries      CompanyInquiry[]        @relation("ConvertedFromInquiry")
   usage              CompanyUsage[]
   // May we write to / call this account, and on what basis (#2577)? One row
   // per channel; docs/contact-permission.md.
   contactPermissions ContactPermission[]
+  // The postal campaigns this account was a recipient of (#2697).
+  postRecipients     PostCampaignRecipient[]
+  contacts           CompanyContact[]
+  // The marketplaces, shop systems and carriers it works on (#2408).
+  channels           CompanyChannel[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -1414,6 +1443,27 @@ model Company {
   // `findMany({ where: { externalId } })`, and without this it would filter the
   // whole table row by row.
   @@index([orgId, externalId])
+}
+
+// One sales channel of one account (#2408): a marketplace, a shop system or a
+// carrier the merchant works on. `channel` is a STRING key from
+// src/lib/salesChannels.ts, never an enum — a new marketplace is a code change,
+// not a schema change. `status`: USING / INTERESTED / DROPPED. The import
+// writes USING and only ADDS rows (a file never removes a channel or overrides
+// a status a person set); people edit them on the account page.
+model CompanyChannel {
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id])
+  id        String        @id @default(cuid())
+  companyId String
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  channel   String        @db.VarChar(40)
+  status    String        @default("USING") @db.VarChar(16)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([companyId, channel])
+  @@index([orgId, channel, status])
 }
 
 // One day of product usage for one account (#2446, story #2399).
@@ -1740,6 +1790,61 @@ enum ContactPermissionSource {
   INGEST
 }
 
+// An account's address book beyond its primary contact (#2442). The primary
+// contact stays in Company.contactName/Email/Phone/Position — the columns the
+// contact permission (#2577), letter campaigns, the import and the export
+// already read — so "exactly one primary" is structural: making a row primary
+// SWAPS it with those columns in one transaction (src/lib/companyContacts.ts).
+// Deliberately not a User: a contact is no auth principal and never signs in.
+// Deliberately not a funnel carrier (docs/marketing-vertical/pipeline-record.md).
+model CompanyContact {
+  // Registered in TENANT_MODELS; every writer passes the company's own orgId.
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id])
+  id        String        @id @default(cuid())
+  // Cascade: deleting the account deletes its address book.
+  companyId String
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  // Lower-cased on write. Unique per COMPANY, never globally: two tenants may
+  // hold the same merchant (see Company.contactEmail).
+  email     String?
+  phone     String?
+  position  String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([companyId, email])
+  @@index([orgId])
+}
+
+// One event a machine source sent us (#2450/#2451): the idempotency claim and
+// the per-account high-water mark. The row is inserted FIRST (the unique index
+// is the claim, the CompanyInquiry `convertedCompanyId` pattern), so a repeated
+// `event_id` writes nothing a second time; `outcome` records what the event did.
+// Written only by src/lib/salevaliIngest.ts, which always passes `orgId`.
+model IntegrationEvent {
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  id         String       @id @default(cuid())
+  // The machine source, e.g. "salevali".
+  provider   String       @db.VarChar(40)
+  // The source's own event id (SaleVali: the outbox document's _id).
+  eventId    String       @db.VarChar(64)
+  eventType  String       @db.VarChar(40)
+  // Lower-cased, as Company.externalId stores it.
+  externalId String?      @db.VarChar(191)
+  occurredAt DateTime
+  // processing | applied | stale | refused_backward | recorded | unknown_account | conflict
+  outcome    String       @db.VarChar(40)
+  detail     String?      @db.VarChar(500)
+  companyId  String?
+  createdAt  DateTime     @default(now())
+
+  @@unique([orgId, provider, eventId])
+  @@index([orgId, provider, externalId, occurredAt])
+}
+
 model ContactPermission {
   // Nullable like Company's own orgId. Registered in TENANT_MODELS; every
   // sessionless writer (the DOI click, an inquiry placed by the form, the
@@ -1792,6 +1897,88 @@ model ContactPermission {
 // submits cannot both insert it. Deliberately no orgId: the cap protects the
 // RECIPIENT, whose inbox is not per tenant. Rows older than a day are swept on
 // the next insert.
+// ── Outbound acquisition: postal advertising (#2697) ────────────────────────
+//
+// In Germany the one lawful COLD outbound channel to a business is the letter
+// (Briefwerbung): e-mail, LinkedIn DM and list-dialled phone calls need a
+// consent we do not have (UWG § 7 Abs. 2; docs/marketing-vertical/
+// outreach-compliance.md § 2). A letter needs no UWG consent but it does need
+// the DSGVO record: where the address came from (Art. 14 Abs. 2 lit. f), a
+// written balancing of interests (Art. 6 Abs. 1 lit. f), the Art. 14 notice on
+// the letter and a permanent block list for whoever objects (Art. 21 Abs. 3).
+// These three tables are that record. Rule: src/lib/postCampaignRule.ts; store:
+// src/lib/postCampaign.ts; design: docs/marketing-vertical/postal-campaigns.md.
+
+enum PostCampaignStatus {
+  DRAFT
+  // Printed and posted. From here the campaign is EVIDENCE: what was sent, to
+  // whom, on what stated basis — no edit, no recipient change, no delete.
+  SENT
+}
+
+model PostCampaign {
+  orgId         String?
+  org           Organization?      @relation(fields: [orgId], references: [id])
+  id            String             @id @default(cuid())
+  name          String             @db.VarChar(120)
+  // Art. 14 Abs. 2 lit. f: where the addresses came from, printed on the back
+  // of every letter of this campaign.
+  dataSource    String             @db.Text
+  // Art. 6 Abs. 1 lit. f: the written balancing of interests. Not printed —
+  // kept as the accountability record (Art. 5 Abs. 2).
+  balancingNote String             @db.Text
+  letterBody    String             @db.Text
+  // The campaign code: utm_campaign on the letter's link and the short path
+  // /b/<code>. Lower-case [a-z0-9-]; unique per org.
+  code          String             @db.VarChar(60)
+  status        PostCampaignStatus @default(DRAFT)
+  sentAt        DateTime?
+  createdById   String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  recipients PostCampaignRecipient[]
+
+  @@unique([orgId, code])
+  @@index([orgId, createdAt])
+}
+
+model PostCampaignRecipient {
+  orgId         String?
+  org           Organization? @relation(fields: [orgId], references: [id])
+  id            String        @id @default(cuid())
+  campaignId    String
+  campaign      PostCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // The address block as it was printed — the account's address may change
+  // after the letter went out, and the record is of the letter.
+  recipientName String?       @db.VarChar(191)
+  addressBlock  String        @db.Text
+  sentAt        DateTime?
+  createdAt     DateTime      @default(now())
+
+  @@unique([campaignId, companyId])
+  @@index([orgId, companyId, sentAt])
+}
+
+// The block list (Sperrliste, Art. 21 Abs. 3 DSGVO). A person who objected to
+// direct marketing must never be written to again — also after their account
+// is deleted, which is exactly when an ordinary "revoked" row disappears with
+// it (onDelete: Cascade). So this table holds only a keyed HMAC of each
+// identifying key (VAT id, name+country, e-mail, postal address), never the
+// key itself: it can answer "is this one blocked?" and nothing else.
+model ContactSuppression {
+  orgId     String?
+  org       Organization?  @relation(fields: [orgId], references: [id])
+  id        String         @id @default(cuid())
+  channel   ContactChannel
+  keyHash   String         @db.VarChar(64)
+  createdAt DateTime       @default(now())
+
+  @@unique([orgId, channel, keyHash])
+}
+
 model ContactConfirmationMailCap {
   key       String   @id @db.VarChar(80)
   createdAt DateTime @default(now())
@@ -2457,11 +2644,11 @@ model MentorshipRelation {
   // work to the incoming one — InteractionLog has no author column of its own.
   previousRelationId      String?
 
-  mentor                User                   @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee                User                   @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company               Company?               @relation(fields: [companyId], references: [id])
-  project               Project?               @relation(fields: [projectId], references: [id])
-  cohort                Cohort?                @relation(fields: [cohortId], references: [id])
+  mentor                User                     @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee                User                     @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company               Company?                 @relation(fields: [companyId], references: [id])
+  project               Project?                 @relation(fields: [projectId], references: [id])
+  cohort                Cohort?                  @relation(fields: [cohortId], references: [id])
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
   meetings              Meeting[]
@@ -2479,13 +2666,15 @@ model MentorshipRelation {
   // The record's ESTIMATED monthly value (#2422) — its own row, never a scalar
   // here; see model RelationValue for why.
   value                 RelationValue?
-  rematchRequests       MentorshipRequest[]    @relation("RematchRequests")
-  previousRelation      MentorshipRelation?    @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
+  rematchRequests       MentorshipRequest[]      @relation("RematchRequests")
+  previousRelation      MentorshipRelation?      @relation("RelationChain", fields: [previousRelationId], references: [id], onDelete: SetNull)
   // At most one successor in practice (a closed relation is transferred once),
   // but the FK cannot express that, so Prisma types it as a list.
-  nextRelations         MentorshipRelation[]   @relation("RelationChain")
+  nextRelations         MentorshipRelation[]     @relation("RelationChain")
   // Standing 1:1 rules on this pairing (#2013).
   meetingSeries         MeetingSeries[]
+  // Nightly health snapshots (#1901); removed with the relation.
+  healthSnapshots       RelationHealthSnapshot[]
 
   @@index([status])
   @@index([lifecycleState])
@@ -2861,6 +3050,9 @@ model Meeting {
   // 60-minute window run out. Null = never marked; the window still applies.
   endedAt             DateTime?
   endedById           String?
+  // When the one "how was it?" e-mail went to this row's mentee (#1896). The
+  // sweep claims the row by setting it, so a meeting is asked about once.
+  feedbackAskedAt     DateTime?
   // Called off, not held and not deleted (#1980). Every reader that answers
   // "is there a meeting?" — the dashboard banner, the reminder cron, the
   // calendar, the ICS feed, the auto-log sweep — filters CANCELLED out, while
@@ -2890,6 +3082,7 @@ model Meeting {
   notes        PersonalNote[]
   googleEvents GoogleCalendarEventLink[]
   guests       MeetingGuest[]
+  feedback     MeetingFeedback[]
 
   @@index([relationId])
   @@index([projectId])
@@ -3519,6 +3712,13 @@ model WeeklyReport {
   hoursSpent    Int?
   blockers      String?            @db.Text
   status        WeeklyReportStatus @default(DRAFT)
+  // FIRST time the report left DRAFT (#1917). "Late" is measured against the
+  // week the report covers, so it needs the moment of submission — updatedAt
+  // moves on every edit and review. Kept on a resubmission after
+  // CHANGES_REQUESTED: the deadline was about the first hand-in. NULL on rows
+  // from before the column existed; src/lib/weeklyReportCompliance.ts reads
+  // that as "unknown", never as late.
+  submittedAt   DateTime?
   mentorComment String?            @db.Text
   reviewedById  String?
   reviewedAt    DateTime?
@@ -4606,4 +4806,294 @@ model RosterRowResult {
   @@unique([runId, rowNumber])
   @@index([runId, status])
   @@index([orgId, createdAt])
+}
+
+// ── Scheduled report delivery (#1905) ────────────────────────────────────────
+// A named report from the registry (src/lib/reports/definitions.ts) mailed on a
+// cadence to ONE recipient: a user of the org (`recipientUserId`, whose
+// `analytics-report` opt-out keeps applying) or an address with no account
+// (`recipientEmail` — the dean, the funder), who leaves through a signed link.
+// The rules (cadence, period key, due-ness) live in src/lib/reportSubscriptions.ts;
+// the sender is src/lib/jobs/reportSubscriptions.ts. docs/report-subscriptions.md.
+//
+// Vocabularies are VARCHAR + a whitelist in code, never a Prisma enum, for the
+// reason `pipelineStatus` is (#747): growing an enum is an ENUM→VARCHAR migration.
+model ReportSubscription {
+  id              String                   @id @default(cuid())
+  orgId           String?
+  org             Organization?            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// A key of REPORT_DEFINITIONS; an unknown key is refused when written.
+  reportKey       String                   @db.VarChar(64)
+  params          Json?
+  /// WEEKLY | MONTHLY | QUARTERLY
+  cadence         String                   @db.VarChar(16)
+  /// ISO weekday, 1 = Monday … 7 = Sunday (WEEKLY only).
+  dayOfWeek       Int?
+  /// 1–28 (MONTHLY and QUARTERLY), so every month has the day.
+  dayOfMonth      Int?
+  /// Hour of the day, UTC, 0–23.
+  hour            Int
+  /// en | tr | de — the language of the mail, labels included.
+  locale          String                   @db.VarChar(8)
+  /// EMAIL_SUMMARY | CSV | XLSX — a table in the body, or the file attached.
+  format          String                   @db.VarChar(16)
+  recipientUserId String?
+  recipientUser   User?                    @relation("ReportSubscriptionRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipientEmail  String?                  @db.VarChar(320)
+  recipientName   String?                  @db.VarChar(191)
+  /// The admin who set it up — an id, deliberately not a relation, so the
+  /// subscription outlives that admin's account.
+  createdById     String?
+  isActive        Boolean                  @default(true)
+  lastSentAt      DateTime?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  sends           ReportSubscriptionSend[]
+
+  @@index([orgId, isActive])
+  @@index([recipientUserId])
+}
+
+/// One row per subscription per period — the idempotency marker. The job
+/// CLAIMS the period by inserting it before sending, so a second run (a retry,
+/// a second replica) collides on the unique and sends nothing.
+model ReportSubscriptionSend {
+  id             String             @id @default(cuid())
+  orgId          String?
+  org            Organization?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   ReportSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  /// "2026-W41", "2026-10", "2026-Q4" — or "test-<ms>" for a send-me-a-test.
+  periodKey      String             @db.VarChar(32)
+  /// CLAIMED | SENT | SKIPPED | FAILED
+  status         String             @db.VarChar(16)
+  /// Why it was skipped or failed — a code, never a recipient's data.
+  error          String?            @db.VarChar(191)
+  sentAt         DateTime           @default(now())
+
+  @@unique([subscriptionId, periodKey])
+  @@index([orgId, sentAt])
+}
+
+// ── Relationship-health snapshots (#1901) ────────────────────────────────────
+// One row per ACTIVE relation per UTC day, written by the nightly sweep
+// (src/lib/jobs/relationHealthSweep.ts) from scoreRelation() (#1898). The
+// unique makes a re-run of the same day an upsert, not a second row; rows
+// older than the retention window are pruned by the same sweep — this is the
+// one table here that grows without bound otherwise.
+model RelationHealthSnapshot {
+  id           String             @id @default(cuid())
+  orgId        String?
+  org          Organization?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  relationId   String
+  relation     MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  /// The UTC day the snapshot describes (midnight UTC).
+  takenOn      DateTime           @db.Date
+  /// 0-100, or null for a pair no rule could judge yet.
+  score        Int?
+  /// HEALTHY | WATCH | AT_RISK
+  band         String             @db.VarChar(16)
+  /// The rule flags behind the score (HealthReason[]).
+  reasons      Json
+  rulesVersion Int
+  /// Set on the snapshot whose crossing into AT_RISK was put in an admin
+  /// digest — the marker that keeps it to one alert per crossing.
+  alertedAt    DateTime?
+  createdAt    DateTime           @default(now())
+
+  @@unique([relationId, takenOn])
+  @@index([orgId, takenOn])
+}
+
+// ── Surveys (#1879, epic #1877) ──────────────────────────────────────────────
+//
+// The survey engine's data model. NOT an Evaluation: an evaluation is one named
+// person assessing another against a framework, and is read by the people
+// involved; a survey is many people answering about their own experience, and
+// is read in aggregate. docs/surveys.md has the full design, including what
+// each anonymity mode promises. Who may read which answer is decided in ONE
+// place, src/lib/surveyPrivacy.ts, never in a component.
+
+enum SurveyAudience {
+  MENTEE
+  MENTOR
+  BOTH
+  COMPANY
+}
+
+// IDENTIFIED   — the respondent is known and an ADMIN may read their answer.
+// CONFIDENTIAL — the respondent is known to the system (for completion and
+//                follow-up) but individual answers are read only by the
+//                respondent; staff see aggregates above the response floor.
+// ANONYMOUS    — the link between a person and their answer is never written:
+//                SurveyResponse.respondentId and .invitationId are NULL at
+//                insert (src/lib/surveys.ts), not filtered on read.
+enum SurveyAnonymity {
+  IDENTIFIED
+  CONFIDENTIAL
+  ANONYMOUS
+}
+
+enum SurveyStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+model Survey {
+  id    String        @id @default(cuid())
+  orgId String?
+  org   Organization? @relation(fields: [orgId], references: [id])
+
+  // e.g. `program_post`. Not unique: an org runs the same instrument more than once.
+  key          String          @db.VarChar(80)
+  // Which built-in instrument it came from (src/lib/surveyTemplates.ts), if any.
+  templateKey  String?         @db.VarChar(80)
+  // { en?, tr?, de? }. No @default: Prisma drops Json defaults against MariaDB
+  // (prisma/backfill-json-columns.mjs), so every writer sets them.
+  title        Json
+  intro        Json?
+  audience     SurveyAudience
+  anonymity    SurveyAnonymity
+  status       SurveyStatus    @default(DRAFT)
+  opensAt      DateTime?
+  closesAt     DateTime?
+  // The response floor for this survey. Raised per survey, never lowered below
+  // SURVEY_MIN_RESPONSES — effectiveMinResponses() enforces it on read.
+  minResponses Int             @default(5)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  questions   SurveyQuestion[]
+  invitations SurveyInvitation[]
+  responses   SurveyResponse[]
+
+  @@index([orgId, status])
+}
+
+// Deliberately NOT in TENANT_MODELS: a question is only ever reached through
+// its Survey, which is scoped — the same reasoning as MeetingGuest. Adding it
+// would make every nested write need an orgId it has no use for.
+model SurveyQuestion {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  // The answer join key. Immutable once the survey has opened — refused with
+  // 409 at the write boundary (src/lib/surveys.ts) — so an answer always
+  // resolves to the question it answered, whatever its wording became.
+  key       String  @db.VarChar(80)
+  // A FormFieldType (src/lib/forms/schema.ts) or NPS. A String, validated by
+  // the shared union, so adding a type is not a schema change.
+  type      String  @db.VarChar(20)
+  labels    Json
+  helpText  Json?
+  // [{ value, labels: { en?, tr?, de? } }] for choice questions; null otherwise.
+  options   Json?
+  required  Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  @@unique([surveyId, key])
+  @@index([surveyId, sortOrder])
+}
+
+// One row per person invited to one survey — the completion-tracking table.
+// The TOKEN is never stored, only its hash (the TrustedDevice discipline).
+model SurveyInvitation {
+  id       String        @id @default(cuid())
+  orgId    String?
+  org      Organization? @relation(fields: [orgId], references: [id])
+  surveyId String
+  survey   Survey        @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  // Null for an external recipient with no account.
+  userId        String?
+  user          User?     @relation("SurveyInvitee", fields: [userId], references: [id], onDelete: SetNull)
+  email         String    @db.VarChar(191)
+  locale        String?   @db.VarChar(5)
+  tokenHash     String    @unique @db.VarChar(64)
+  sentAt        DateTime?
+  remindersSent Int       @default(0)
+  // Stamped on submit in EVERY mode — completion still works for an anonymous
+  // survey, without the response knowing which invitation it came from.
+  respondedAt   DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+
+  response SurveyResponse?
+
+  @@unique([surveyId, email])
+  @@index([orgId])
+}
+
+model SurveyResponse {
+  id       String        @id @default(cuid())
+  orgId    String?
+  org      Organization? @relation(fields: [orgId], references: [id])
+  surveyId String
+  survey   Survey        @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  // Both NULL for an ANONYMOUS survey, written that way at insert.
+  invitationId   String?           @unique
+  invitation     SurveyInvitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+  respondentId   String?
+  respondent     User?             @relation("SurveyRespondent", fields: [respondentId], references: [id], onDelete: SetNull)
+  // MENTEE | MENTOR | COMPANY | GUEST — kept in every mode: it is what the
+  // aggregates are broken down by, and alone it identifies nobody.
+  respondentRole String            @db.VarChar(20)
+  // The pairing the answer is about, when there is one. A plain id, not a
+  // foreign key: an answer outlives the relation it was about.
+  relationId     String?
+  submittedAt    DateTime          @default(now())
+
+  answers SurveyAnswer[]
+
+  @@index([orgId, surveyId])
+  @@index([surveyId, submittedAt])
+}
+
+// Not in TENANT_MODELS for the same reason as SurveyQuestion: reached only
+// through its SurveyResponse. Keyed by questionKey, not question id, so
+// re-wording a question never orphans an answer.
+model SurveyAnswer {
+  id          String         @id @default(cuid())
+  responseId  String
+  response    SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionKey String         @db.VarChar(80)
+  value       Json
+  text        String?        @db.Text
+
+  @@unique([responseId, questionKey])
+  @@index([questionKey])
+}
+
+// One participant's answer to "how was the meeting?" (#1896). Two questions at
+// most: did it actually happen, and how helpful was it (1-5). `happened =
+// false` is its own answer — a meeting that did not take place is valuable
+// data and is never scored as a bad meeting (helpfulness stays NULL).
+//
+// One row per (meeting, rater): answering again updates it. Only the two
+// people of the relation rate a relation meeting; external MeetingGuest
+// invitees are never asked (no account, no relation). Who may read what is
+// src/lib/meetingFeedback.ts — a mentor gets aggregates above the response
+// floor, never one mentee's answer.
+model MeetingFeedback {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id])
+  meetingId   String
+  meeting     Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  raterId     String
+  rater       User          @relation("MeetingFeedbackRater", fields: [raterId], references: [id], onDelete: Cascade)
+  // Denormalised from the meeting so the health score reads one table.
+  relationId  String?
+  happened    Boolean
+  helpfulness Int?
+  note        String?       @db.Text
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([meetingId, raterId])
+  @@index([relationId, createdAt])
+  @@index([orgId])
 }

@@ -154,6 +154,8 @@ function memoryWriter(store) {
   return {
     async createAccount(row) {
       const account = { id: `co-${store.nextId++}`, name: row.value.input.name, ...blank, ...row.value.account.changes };
+      // Channels as the Prisma writer adds them (#2408): additive, keys only.
+      account.channels = [...(row.value.account.channelsToAdd ?? [])];
       store.accounts.push(account);
       place(row, account.id);
       return account.id;
@@ -161,6 +163,7 @@ function memoryWriter(store) {
     async updateAccount(row) {
       const account = store.accounts.find((a) => a.id === row.value.account.targetId);
       Object.assign(account, row.value.account.changes);
+      account.channels = [...(account.channels ?? []), ...(row.value.account.channelsToAdd ?? [])];
       place(row, account.id);
       return account.id;
     },
@@ -212,7 +215,7 @@ test('no column names a tenant: one run is one organization', () => {
 
 test('the columns with no database column yet are named, not silently dropped', () => {
   assert.deepEqual([...MARKETING_COLUMNS_WITHOUT_TARGET].sort(), [
-    'channels', 'legal_name', 'monthly_transactions', 'mrr', 'website',
+    'legal_name', 'monthly_transactions', 'mrr', 'website',
   ]);
 });
 
@@ -278,6 +281,28 @@ test('money is parsed to integer minor units in both separator conventions', () 
 test('channels split on ";", trim and de-duplicate', () => {
   assert.deepEqual(parseChannels('Amazon; eBay ;OTTO; amazon'), ['Amazon', 'eBay', 'OTTO']);
   assert.deepEqual(parseChannels(''), []);
+});
+
+// ── sales channels land (#2408) ──────────────────────────────────────────────
+
+test('channels resolve to keys and are written as the account\'s, additively', async () => {
+  const store = memoryStore();
+  const first = await runFile(`${HEADER}\nKanal GmbH,,DE,,DE111222333,,,,,,,,,Amazon FBA; ebay.de ;Shopware 6;DHL,,,\n`, store, { apply: true });
+  assert.equal(first.counts.CREATE, 1);
+  assert.deepEqual(store.accounts[0].channels, ['amazon', 'ebay', 'shopware', 'dhl']);
+  // The same file again: nothing to add, so the row is UNCHANGED.
+  const again = await runFile(`${HEADER}\nKanal GmbH,,DE,,DE111222333,,,,,,,,,Amazon;eBay;Shopware;DHL,,,\n`, store, { apply: true });
+  assert.equal(again.counts.UNCHANGED, 1);
+  // A file naming fewer channels removes none; a new one is added.
+  const more = await runFile(`${HEADER}\nKanal GmbH,,DE,,DE111222333,,,,,,,,,OTTO,,,\n`, store, { apply: true });
+  assert.equal(more.counts.UPDATE, 1);
+  assert.deepEqual(store.accounts[0].channels, ['amazon', 'ebay', 'shopware', 'dhl', 'otto']);
+});
+
+test('an unknown channel is a row ERROR that names the valid list', async () => {
+  const report = await runFile(`${HEADER}\nKanal GmbH,,DE,,,,,,,,,,,Amazon;Wish,,,\n`, memoryStore());
+  assert.equal(report.counts.ERROR, 1);
+  assert.match(report.rows[0].reason, /channel "Wish" is not a known sales channel \(Amazon, eBay, OTTO/);
 });
 
 // ── resolve: the match key (#2405) ───────────────────────────────────────────

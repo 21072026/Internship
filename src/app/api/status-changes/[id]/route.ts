@@ -4,9 +4,10 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import { logActivity } from '@/lib/activity';
 
 // DELETE — admin removes an incorrect stage-history entry.
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,7 +18,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   // stage-history entry reads as not found and is never deleted (#2542).
   const entry = await prisma.statusChange.findUnique({
     where: { id },
-    select: { relation: { select: { orgId: true } } },
+    select: { relationId: true, fromStatus: true, toStatus: true, createdAt: true, relation: { select: { orgId: true } } },
   });
   if (!entry || !(await inCallerTenant(entry.relation.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
@@ -27,5 +28,19 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   } catch {
     return NextResponse.json({ error: 'Entry not found' }, { status: 404 });
   }
+  // Deleting audit history is itself audited (#1562): every aging, conversion
+  // and drop-off number is derived from these rows, so a removed one must leave
+  // a trace of who removed which transition. Stage keys only — no free text.
+  await logActivity({
+    action: 'pipeline.history_delete',
+    level: 'warning',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'statusChange',
+    targetId: id,
+    detail: `relation ${entry.relationId}: ${entry.fromStatus} → ${entry.toStatus} (${entry.createdAt.toISOString()})`,
+    orgId: entry.relation.orgId,
+    request,
+  });
   return NextResponse.json({ ok: true });
 }

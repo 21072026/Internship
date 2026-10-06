@@ -6,6 +6,8 @@ import { REMEMBER_COOKIES, REMEMBER_HINT_COOKIE, clearRememberCookies } from '@/
 import { REQUEST_ID_HEADER, resolveRequestId } from '@/lib/requestId';
 import { hostnameOf, servedHosts } from '@/lib/servedHosts';
 import { writeOriginVerdict } from '@/lib/writeOrigin';
+import { LOCALE_HEADER, LOCALE_PATH_HEADER, isPrefixablePath, splitLocalePrefix } from '@/lib/localePath';
+import type { Locale } from '@/i18n/config';
 
 // Methods that mutate state. Unverified users are limited to reads.
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -39,6 +41,11 @@ function isAllowlisted(pathname: string) {
     // same argument as the unsubscribe routes above. Exact paths.
     pathname === '/api/contact-permission/confirm' ||
     pathname === '/api/contact-permission/opt-out' ||
+    // Leaving a scheduled report (#1905) — same argument, exact path.
+    pathname === '/api/report-subscriptions/unsubscribe' ||
+    // The one-click "how was the meeting?" links (#1896): the signed token is
+    // the credential. A prefix with the trailing slash, so only token paths match.
+    pathname.startsWith('/api/meeting-feedback/') ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.
@@ -89,9 +96,41 @@ function wantsResume(req: NextRequest, pathname: string): boolean {
  * validation of an inbound value live in `@/lib/requestId`, which imports
  * nothing and is therefore edge-safe.
  */
-function nextWithRequestId(req: NextRequest, requestId: string): NextResponse {
+/**
+ * Where a page request goes, language-wise (#1386). `/tr/features` and
+ * `/de/features` are REWRITTEN to `/features`, with the language and the
+ * prefix-less path passed on as request headers: `getLocale()` reads the
+ * language first (so a prefixed link always opens in its own language, cookie
+ * or no cookie), and the root metadata builds the canonical and hreflang URLs
+ * from the path. An unprefixed page request carries the path alone. A prefix on
+ * a page that is not public (`/tr/admin`) is not rewritten — it 404s, because
+ * only the public site has language URLs. The pure rules are in
+ * src/lib/localePath.ts.
+ */
+type PageRouting = { locale: Locale | null; path: string; rewriteTo: string | null };
+
+function pageRouting(pathname: string): PageRouting | null {
+  if (pathname.startsWith('/api/')) return null;
+  const { locale, rest } = splitLocalePrefix(pathname);
+  if (locale && isPrefixablePath(rest)) return { locale, path: rest, rewriteTo: rest };
+  return { locale: null, path: pathname, rewriteTo: null };
+}
+
+function nextWithRequestId(req: NextRequest, requestId: string, page: PageRouting | null = null): NextResponse {
   const headers = new Headers(req.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
+  // Never trusted from outside: only this function says which language a URL is in.
+  headers.delete(LOCALE_HEADER);
+  headers.delete(LOCALE_PATH_HEADER);
+  if (page) {
+    headers.set(LOCALE_PATH_HEADER, page.path);
+    if (page.locale) headers.set(LOCALE_HEADER, page.locale);
+    if (page.rewriteTo) {
+      const url = req.nextUrl.clone();
+      url.pathname = page.rewriteTo;
+      return NextResponse.rewrite(url, { request: { headers } });
+    }
+  }
   return NextResponse.next({ request: { headers } });
 }
 
@@ -107,6 +146,17 @@ export async function middleware(req: NextRequest) {
 
 async function handle(req: NextRequest, requestId: string): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
+  const page = pageRouting(pathname);
+
+  // English has no prefix (#1386), so `/en/features` is somebody's guess at
+  // one: send it to the real URL rather than a 404. Public pages only, like
+  // every other language rule here.
+  const enPrefixed = /^\/en(\/.*)?$/.exec(pathname);
+  if (enPrefixed && isPrefixablePath(enPrefixed[1] || '/')) {
+    const url = req.nextUrl.clone();
+    url.pathname = enPrefixed[1] || '/';
+    return NextResponse.redirect(url, 308);
+  }
 
   if (wantsResume(req, pathname)) {
     const url = req.nextUrl.clone();
@@ -148,13 +198,13 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
   // in. Only the cookies: the edge runtime has no database, so the row is left
   // to expire (it is unreachable without the secret).
   if (req.method === 'POST' && pathname === '/api/auth/signout') {
-    const res = nextWithRequestId(req, requestId);
+    const res = nextWithRequestId(req, requestId, page);
     clearRememberCookies(res);
     return res;
   }
 
   if (!WRITE_METHODS.has(req.method) || isAllowlisted(pathname)) {
-    return nextWithRequestId(req, requestId);
+    return nextWithRequestId(req, requestId, page);
   }
 
   // Public demo (#966): writes are allowed by default — a demo where every
@@ -198,7 +248,7 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
     );
   }
 
-  return nextWithRequestId(req, requestId);
+  return nextWithRequestId(req, requestId, page);
 }
 
 export const config = {

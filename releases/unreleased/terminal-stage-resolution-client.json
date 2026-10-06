@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "The cohorts table and the candidate page's deadline line read the tenant's own stages (#1884, slice 2). `/admin/cohorts` counted \"hired\" as `['HIRED_660','EMPLOYED_700']`, which is 0 on a renamed pipeline. It now uses `outcomeStageKeysFrom(useResolvedStages()).finished` (the #1882 rule). The \"⚠ Overdue — past the stage deadline\" line on `/admin/candidates/[id]` now uses the one stage-clock rule, `isStageOverdue(…, stages)` (#1724), instead of an inline key list, so a placed candidate on a custom terminal stage is no longer flagged. On the default catalogue this also stops flagging dropped / found-elsewhere relations, which the board chip already treated as stopped. `outcomeStageKeysFrom` moved into the client-safe `src/lib/pipeline.ts` and is re-exported from `pipelineStages.ts`. Two more files leave the `check:stage-keys` baseline. Covered by `e2e/custom-pipeline-terminal-client.spec.ts`.",
-  "notes": {
-    "en": ["On a customised pipeline, the cohorts page now counts hires correctly, and a placed candidate is no longer shown as past their stage deadline."],
-    "tr": ["Özelleştirilmiş aşamalarda kohort sayfası işe yerleşenleri artık doğru sayıyor; yerleşmiş bir aday aşama süresi geçmiş olarak gösterilmiyor."],
-    "de": ["Bei einer angepassten Pipeline zählt die Kohortenseite Einstellungen jetzt korrekt, und eine vermittelte Person wird nicht mehr als über der Phasenfrist angezeigt."]
-  }
-}

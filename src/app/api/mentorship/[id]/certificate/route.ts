@@ -82,7 +82,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Internship is not completed yet' }, { status: 400 });
     }
 
-    const branding = await getOrgBranding(session.user.orgId);
+    // The issuer printed on the certificate is the RELATION's tenant, not the
+    // generating user's home org: a super admin acting inside another tenant
+    // must not stamp their own org's name on that tenant's certificate. It is
+    // also the org the mentee's portal card reads back (PortalCertificateCard),
+    // so the PDF and the LinkedIn organizationName agree.
+    const branding = await getOrgBranding(relation.orgId ?? session.user.orgId);
     const title = certificateTitle(variant, locale);
     const pdfBytes = await generateCertificatePdf({
       title,

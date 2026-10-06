@@ -382,3 +382,30 @@ export async function cleanupMenteeWithRelation(seeded: SeededRelation) {
   for (const email of seeded.emails) await cleanupByEmail(email);
   await prisma.company.delete({ where: { id: seeded.companyId } }).catch(() => {});
 }
+
+/**
+ * Switch a paid feature on or off for an org (#1740) — the test-side stand-in
+ * for a plan or a grant (an `OrgEntitlement` row, which `entitled()` reads).
+ * `orgId` null/undefined = the default org, where an org-less admin's
+ * entitlements live (the settingsOrgOf rule). Returns the org it touched.
+ */
+export async function setOrgFeature(orgId: string | null | undefined, feature: string, on: boolean): Promise<string> {
+  const org = orgId ?? (await prisma.organization.upsert({
+    where: { slug: 'default' }, update: {}, create: { slug: 'default', name: 'Default Organization' }, select: { id: true },
+  })).id;
+  if (on) {
+    await prisma.orgEntitlement.upsert({
+      where: { orgId_feature: { orgId: org, feature } },
+      create: { orgId: org, feature, note: 'e2e' },
+      update: { expiresAt: null },
+    });
+  } else {
+    await prisma.orgEntitlement.deleteMany({ where: { orgId: org, feature } });
+  }
+  return org;
+}
+
+/** The org a user's entitlements live in: their own, or the default org (null). */
+export async function orgOfUser(email: string): Promise<string | null> {
+  return (await prisma.user.findFirst({ where: { email }, select: { orgId: true } }))?.orgId ?? null;
+}

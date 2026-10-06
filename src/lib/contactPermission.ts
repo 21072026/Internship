@@ -25,6 +25,7 @@ import {
   MARKETING_EMAIL_BASES,
   marketingEmailAllowed,
   normalizeAddress,
+  ownerObjected,
   refuseWrite,
   writeReplaces,
   type ContactBasis,
@@ -141,7 +142,8 @@ export async function revokeContactPermission(input: {
   orgId: string | null;
   companyId: string;
   channel: ContactChannel;
-  via: 'LINK' | 'ADMIN';
+  /** LINK = the owner's click; OBJECTION = the owner's objection recorded by an admin (#2697); ADMIN = our own decision. */
+  via: 'LINK' | 'OBJECTION' | 'ADMIN';
   address?: string | null;
   inquiryId?: string | null;
   actor?: { id: string; email: string | null } | null;
@@ -152,7 +154,7 @@ export async function revokeContactPermission(input: {
   const key = { companyId_channel: { companyId: input.companyId, channel: input.channel } };
   const existing = await prisma.contactPermission.findUnique({
     where: key,
-    select: { orgId: true, revokedAt: true, revokedVia: true },
+    select: { orgId: true, basis: true, revokedAt: true, revokedVia: true },
   });
   if (existing && existing.orgId !== input.orgId) return;
   if (existing?.revokedAt) {
@@ -162,8 +164,8 @@ export async function revokeContactPermission(input: {
     // admin could otherwise write § 7(3) over it later. Keep the earlier
     // revocation's date (that is when the permission stopped); only the "who"
     // becomes the person. Anything else is already as revoked as it gets.
-    if (input.via !== 'LINK' || existing.revokedVia === 'LINK') return;
-    await prisma.contactPermission.update({ where: key, data: { revokedVia: 'LINK' } });
+    if (input.via === 'ADMIN' || ownerObjected(existing)) return;
+    await prisma.contactPermission.update({ where: key, data: { revokedVia: input.via } });
   } else if (existing) {
     await prisma.contactPermission.update({ where: key, data: { revokedAt: now, revokedVia: input.via } });
   } else {
@@ -189,7 +191,7 @@ export async function revokeContactPermission(input: {
     targetId: input.companyId,
     detail: `channel=${input.channel} via=${input.via}`,
     // Only an admin's request: a public click carries no IP (see the header).
-    ...(input.via === 'ADMIN' && input.request ? { request: input.request } : {}),
+    ...(input.via !== 'LINK' && input.request ? { request: input.request } : {}),
   });
 }
 

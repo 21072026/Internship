@@ -2,9 +2,10 @@ import {
   Activity, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
-  Handshake, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
+  Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
+  Send,
   type LucideIcon,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -49,11 +50,16 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/duplicates', icon: GitMerge, key: 'duplicates' },
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
+  // The org-wide at-risk queue (#1902): every pair, worst first, one next action.
+  { href: '/admin/health', icon: HeartPulse, key: 'health', capability: 'mentorship' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
   // The enquiry inbox is shared since #2569: on an internship tenant it holds the
   // /for-companies enquiries, on a MARKETING tenant the landing's demo requests
   // (and is the "unowned leads" list, #2580) — both are the `companies` module.
   { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'companies' },
+  // Outbound acquisition by letter (#2697) — the companies module, so both
+  // products have it: SaleVali writes to merchants, InternCRM to institutions.
+  { href: '/admin/acquisition', icon: Send, key: 'acquisition', capability: 'companies' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
   // templates, programme cohorts and mentor/mentee success stories are
   // internship modules (#2499). A MARKETING
@@ -85,7 +91,11 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/support', icon: LifeBuoy, key: 'support' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
+  // Term compliance of the weekly diaries (#1918) — an internship-only screen.
+  { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
+  // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
+  { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },

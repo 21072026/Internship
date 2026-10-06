@@ -5,7 +5,7 @@ import { ShieldCheck, Server, Users, Globe, FileText, AlertTriangle } from 'luci
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
-import { operatorIdentity } from '@/lib/imprint';
+import { operatorIdentityForRequest } from '@/lib/imprintRequest';
 import {
   getSubprocessors,
   CONTROL_KEYS,
@@ -41,7 +41,7 @@ export default async function TrustPage() {
   const { t } = await getServerDictionary();
   const p = t.trust;
 
-  const operator = operatorIdentity();
+  const operator = await operatorIdentityForRequest();
   const operatorBody = operator
     ? p.operatorBody.replace('{operator}', operator.name)
     : p.operatorUnset;

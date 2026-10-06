@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 
 // Webhook tenant isolation (#2357, epic #2349). A webhook belongs to the tenant
@@ -19,6 +19,8 @@ async function orgWithAdmin(tag: string) {
   const email = uniqueEmail(`wh-${tag}`);
   const admin = await seedUser(email, 'WhPass123', 'ADMIN', `${tag} Admin`);
   await prisma.user.update({ where: { id: admin.id }, data: { orgId: org.id } });
+  // Webhook subscriptions are the INTEGRATIONS_API feature (#1744).
+  await setOrgFeature(org.id, 'INTEGRATIONS_API', true);
   return { org, email };
 }
 

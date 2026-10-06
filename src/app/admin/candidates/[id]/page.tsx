@@ -273,6 +273,15 @@ export default function AdminMenteeDetailPage() {
     load();
   }, [load]);
 
+  // /admin/health links here with #relation-stage (set a deadline, record a
+  // drop-off). The card renders only after the fetch, so the browser's own
+  // jump to the anchor has already missed it — scroll once it exists.
+  useEffect(() => {
+    if (!loading && window.location.hash === '#relation-stage') {
+      document.getElementById('relation-stage')?.scrollIntoView({ block: 'start' });
+    }
+  }, [loading]);
+
   useEffect(() => {
     fetch('/api/projects')
       .then((r) => (r.ok ? r.json() : { projects: [] }))
@@ -422,7 +431,7 @@ export default function AdminMenteeDetailPage() {
           </div>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 scroll-mt-20" id="relation-stage">
           <CardHeader>
             <CardTitle>{t.candidateDetail.mentorship}</CardTitle>
           </CardHeader>

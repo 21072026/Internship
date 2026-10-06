@@ -163,7 +163,7 @@ jobs:
           touch "/tmp/digests/${DIGEST#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: digest-${{ inputs.tag }}-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -178,7 +178,7 @@ jobs:
       image: ${{ needs.prep.outputs.image }}
     steps:
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
           pattern: digest-${{ inputs.tag }}-*

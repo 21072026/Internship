@@ -1,19 +1,34 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import {
   __testable,
   checkCompanyNeedMatches,
   emailBrand,
   sendDailyActivityDigests,
-  sendWeeklyAnalyticsReport,
   sendWeeklyMentorDigests,
 } from '@/services/emailService';
 import { getSystemMenteeActivity } from '@/lib/activityReport';
 import { orgWhere } from '@/lib/tenantFilter';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
-import { setSetting } from '@/lib/settings';
 import { prisma as appPrisma } from '@/lib/prisma';
 import { getDictionary } from '../src/i18n/dictionaries';
+import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
+import { loadReport } from '@/lib/reports/registry';
+import { getReportDefinition } from '@/lib/reports/definitions';
+
+/** Monday `weeks` from this one, 09:00 UTC — after the seeded subscriptions' 08:00. */
+function mondayAt9(weeks: number): Date {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 9));
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) + weeks * 7);
+  return d;
+}
+
+/** Seed the weekly report for these orgs, then let the next Monday send it (#1905). */
+async function weeklyReportFor(orgIds: string[]) {
+  await runReportSubscriptions({ orgIds, now: mondayAt9(0) });
+  return runReportSubscriptions({ orgIds, now: mondayAt9(1) });
+}
 
 // The scheduled mail builders and "whatever an action produces stays in its
 // world" (docs/worlds.md): a cron sweeps every tenant with no session, so each
@@ -187,12 +202,12 @@ test.describe('admin digests and summaries describe one org', () => {
   });
 
   test("the weekly analytics report follows each org's own opt-in and names its own product", async () => {
-    await setSetting('premiumAnalytics', 'true', mktOrgId);
-    await setSetting('premiumAnalytics', 'false', intOrgId);
-    await sendWeeklyAnalyticsReport();
+    await setOrgFeature(mktOrgId, 'ADVANCED_ANALYTICS', true);
+    await setOrgFeature(intOrgId, 'ADVANCED_ANALYTICS', false);
+    await weeklyReportFor([mktOrgId, intOrgId]);
     const mkt = await logsTo(emails.mktAdmin, 'analytics-report');
     expect(mkt.length).toBeGreaterThanOrEqual(1);
-    for (const row of mkt) expect(row.subject).toBe(`Weekly analytics report — ${BRAND}`);
+    for (const row of mkt) expect(row.subject).toBe(`Pipeline summary — ${BRAND}`);
     expect(await logsTo(emails.intAdmin, 'analytics-report')).toHaveLength(0);
   });
 });
@@ -212,4 +227,50 @@ test('an open-position alert names only its own tenant’s candidate, and an org
   expect(await alertedOf(mktCompanyId)).toEqual([]);
   expect(await bellOf(ids.mktCompanyUser)).toEqual([]);
   expect(await logsTo(emails.mktCompanyUser, 'company-need-alert')).toHaveLength(0);
+});
+
+// #2715: the report used to be English for every reader. The words now follow
+// the recipient's own language, the stage table included — and a marketing
+// funnel provisioned in English reads back in Turkish (#2710).
+test('the weekly analytics report speaks its reader’s language, stage table included', async () => {
+  const stamp = `${STAMP}-tr`;
+  const org = await prisma.organization.create({
+    data: { name: `World Cron TR ${stamp}`, slug: `world-cron-tr-${stamp}`, vertical: 'MARKETING', brandName: `TR Sales ${stamp}` },
+  });
+  const adminEmail = uniqueEmail('wc-tr-admin');
+  const repEmail = uniqueEmail('wc-tr-rep');
+  const leadEmail = uniqueEmail('wc-tr-lead');
+  try {
+    await prisma.pipelineStage.createMany({
+      data: [
+        { orgId: org.id, key: 'LEAD_NEW', label: 'New lead', order: 0 },
+        { orgId: org.id, key: 'DEAL_PROPOSAL', label: 'Proposal sent', order: 1 },
+      ],
+    });
+    const admin = await seedUser(adminEmail, PW, 'ADMIN', 'Cron TR Admin', org.id);
+    await prisma.user.update({ where: { id: admin.id }, data: { preferredLanguage: 'tr' } });
+    const rep = await seedUser(repEmail, PW, 'MENTOR', 'Cron TR Rep', org.id);
+    const lead = await seedUser(leadEmail, PW, 'MENTEE', 'Cron TR Lead', org.id);
+    await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: rep.id, menteeId: lead.id, pipelineStatus: 'LEAD_NEW' } });
+    await setOrgFeature(org.id, 'ADVANCED_ANALYTICS', true);
+
+    const summary = getReportDefinition('pipeline-summary')!;
+    const tr = (await loadReport(summary, { orgId: org.id, locale: 'tr' })).rows.map((r) => String(r.metric)).join(' | ');
+    expect(tr).toContain('Yeni aday');
+    expect(tr).not.toContain('New lead');
+    expect((await loadReport(summary, { orgId: org.id, locale: 'de' })).rows.map((r) => String(r.metric)).join(' | ')).toContain('Neuer Lead');
+
+    // The admin reads Turkish, so the seeded subscription does too.
+    await weeklyReportFor([org.id]);
+    const rows = await logsTo(adminEmail, 'analytics-report');
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    for (const row of rows) expect(row.subject).toBe(`Pipeline özeti — TR Sales ${stamp}`);
+  } finally {
+    await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });
+    for (const email of [adminEmail, repEmail, leadEmail]) await cleanupByEmail(email);
+    await prisma.pipelineStage.deleteMany({ where: { orgId: org.id } });
+    await prisma.reportSubscription.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    await prisma.setting.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
+  }
 });

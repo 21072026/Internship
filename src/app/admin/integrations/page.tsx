@@ -87,6 +87,14 @@ export default function IntegrationsPage() {
   const [editUrl, setEditUrl] = useState('');
   const [editEvents, setEditEvents] = useState<string[]>([]);
   const [testResult, setTestResult] = useState<Record<string, string>>({});
+  // The plan lacks INTEGRATIONS_API (#1744): set when a write answers 403
+  // feature_locked, so the refusal is explained instead of swallowed.
+  const [apiLocked, setApiLocked] = useState(false);
+  const noteLocked = async (res: Response) => {
+    if (res.status !== 403) return;
+    const d = await res.clone().json().catch(() => ({}));
+    if (d.code === 'feature_locked') setApiLocked(true);
+  };
 
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
   const [health, setHealth] = useState<ConnectorHealth[]>([]);
@@ -114,14 +122,16 @@ export default function IntegrationsPage() {
     const res = await fetch('/api/admin/webhooks', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, events }),
     });
+    await noteLocked(res);
     if (res.ok) { const d = await res.json(); setSecret(d.secret); setUrl(''); setEvents([]); await load(); }
   };
   const delHook = async (id: string) => { await fetch(`/api/admin/webhooks?id=${id}`, { method: 'DELETE' }); await load(); };
 
   const patchHook = async (id: string, body: Record<string, unknown>) => {
-    await fetch(`/api/admin/webhooks?id=${id}`, {
+    const res = await fetch(`/api/admin/webhooks?id=${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
+    await noteLocked(res);
     await load();
   };
   const startEdit = (h: Hook) => { setEditing(h.id); setEditUrl(h.url); setEditEvents(h.events); };
@@ -156,6 +166,7 @@ export default function IntegrationsPage() {
         expiresAt: keyExpiry ? new Date(`${keyExpiry}T23:59:59.000Z`).toISOString() : null,
       }),
     });
+    await noteLocked(res);
     if (res.ok) {
       const d = await res.json();
       setNewKey(d.key);
@@ -192,6 +203,12 @@ export default function IntegrationsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.integrations.title}</h1>
         <p className="text-gray-500 mt-1">{t.integrations.subtitle}</p>
       </div>
+
+      {apiLocked && (
+        <div role="alert" data-testid="integrations-locked" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          {t.integrations.apiLocked}
+        </div>
+      )}
 
       <Card className="mb-6" data-testid="integration-health">
         <CardHeader><CardTitle>{t.integrations.health}</CardTitle></CardHeader>

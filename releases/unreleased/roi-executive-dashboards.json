@@ -1,0 +1,23 @@
+{
+  "bump": "minor",
+  "changelog": "**`/admin/analytics/roi` — programme ROI with the working shown** (#1895, part 1 of 2; docs/roi.md). `GET /api/admin/analytics/roi` (ADMIN-only in the handler, `entitled(orgId, 'ADVANCED_ANALYTICS')` → 403 `feature_locked`, tenant as a hand-written conjunct) selects the window's rows in `src/lib/roiReport.ts` and computes through the one ROI model, `computeRoi()` (#1892): cost lines whose period overlaps the window count in full; placements are ledger rows in the window plus relations without a ledger row that FIRST entered the tenant's resolved finished stage (`outcomeStageKeys`, #1882) in it. The screen shows the ROI, net and cost per placement, every step with its expression, cost by category, how many placements were valued from the assumptions, and the assumption set with defaults and one-line reasons — editable as query state, never saved. A mixed-currency window is a sentence plus a currency filter, never a number. Prints to one A4 page in EN/TR/DE (`#roi-print`), asserted by `e2e/admin-roi.spec.ts`; the app's mobile top bar and drawer no longer print on any page.",
+  "notes": {
+    "en": [
+      "New Programme ROI report for admins: what the programme cost, what it returned and every step of the calculation in between — with the assumptions on screen to adjust, and a one-page printout for sponsors."
+    ],
+    "tr": [
+      "Yöneticiler için yeni Program yatırım getirisi raporu: programın maliyeti, getirisi ve aradaki hesabın her adımı — ekranda ayarlanabilen varsayımlarla ve sponsorlar için tek sayfalık çıktıyla."
+    ],
+    "de": [
+      "Neuer Bericht „Programm-ROI“ für Admins: was das Programm gekostet und eingebracht hat und jeder Rechenschritt dazwischen — mit anpassbaren Annahmen auf dem Bildschirm und einem einseitigen Ausdruck für Förderer."
+    ]
+  },
+  "media": {
+    "poster": "release-media/roi-executive-dashboards.png",
+    "alt": {
+      "en": "The programme ROI working: recorded costs, placements, recorded and assumed placement value, cost per placement, net return and a 146% return on investment, each with its calculation, beside the cost broken down by category",
+      "tr": "Program yatırım getirisi hesabı: kayıtlı maliyetler, yerleştirmeler, kayıtlı ve varsayılan yerleştirme değeri, yerleştirme başına maliyet, net getiri ve %146 yatırım getirisi; her biri hesabıyla, yanında kategoriye göre maliyet",
+      "de": "Der Rechenweg des Programm-ROI: erfasste Kosten, Vermittlungen, erfasster und angenommener Vermittlungswert, Kosten pro Vermittlung, Nettoertrag und 146 % Return on Investment, jeweils mit Rechnung, daneben die Kosten nach Kategorie"
+    }
+  }
+}

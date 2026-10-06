@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { BrandMark } from '@/components/BrandMark';
-import { getServerDictionary, resolveRequestVertical } from '@/i18n/server';
+import { getServerDictionary, resolveRequestVertical, urlLocale } from '@/i18n/server';
+import { localizeHref } from '@/lib/localePath';
 import { productNameFor } from '@/lib/verticals';
 import { VersionFooter } from '@/components/VersionFooter';
 import { APP_VERSION } from '@/lib/version';
-import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from './links';
+import { GITHUB_URL } from './links';
 import { IS_DEMO_MODE, demoUrl } from '@/lib/demoMode';
 import { DemoLink } from './DemoLink';
 
@@ -20,6 +21,8 @@ import { DemoLink } from './DemoLink';
  */
 export async function PublicFooter() {
   const { t } = await getServerDictionary();
+  // On a language URL (#1386) the footer's own links stay in that language.
+  const lang = await urlLocale();
   const n = t.publicNav;
   // Vertical product name (#2498): a marketing host's footer wordmark and
   // copyright read "SaleVali", not "InternshipCRM". INTERNSHIP is unchanged.
@@ -101,25 +104,11 @@ export async function PublicFooter() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
           <div className="col-span-2 sm:col-span-1">
-            <Link href="/" className="flex items-center gap-2 min-w-0">
+            <Link href={localizeHref('/', lang)} className="flex items-center gap-2 min-w-0">
               <BrandMark className="h-6 w-6 text-blue-600 flex-shrink-0" />
               <span className="font-bold text-gray-900 dark:text-gray-100 truncate">{productName}</span>
             </Link>
             <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{n.tagline}</p>
-            {/* Founder identity (#1097): a real person by name — the sole
-                rights holder is a natural person, never a company (CLAUDE.md
-                → Licensing & IP). */}
-            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400" data-testid="footer-founder">
-              {n.builtBy}{' '}
-              <a
-                href={FOUNDER_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white underline underline-offset-2"
-              >
-                {FOUNDER_NAME}
-              </a>
-            </p>
           </div>
 
           {columns.map((col) => (
@@ -156,7 +145,7 @@ export async function PublicFooter() {
                       </a>
                     ) : (
                       <Link
-                        href={l.href}
+                        href={localizeHref(l.href, lang)}
                         className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
                       >
                         {l.label}

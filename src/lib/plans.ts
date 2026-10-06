@@ -102,10 +102,11 @@ const PLAN_FEATURES: Record<PlanKey, readonly PremiumFeature[]> = {
   program: ['ADVANCED_ANALYTICS', 'REPORT_EXPORT'],
   // Adds the two org-scope features the premium model puts above Program:
   // white-label incl. custom domain, and SSO.
-  program_plus: ['ADVANCED_ANALYTICS', 'REPORT_EXPORT', 'WHITE_LABEL', 'SSO_SAML'],
+  // and the public API + webhooks (#1744).
+  program_plus: ['ADVANCED_ANALYTICS', 'REPORT_EXPORT', 'WHITE_LABEL', 'SSO_SAML', 'INTEGRATIONS_API'],
   // Enterprise buys assurances, not extra feature flags: EU-only hosting, DPA,
   // SLA, audit export, named onboarding. Feature-wise it is Program Plus.
-  enterprise: ['ADVANCED_ANALYTICS', 'REPORT_EXPORT', 'WHITE_LABEL', 'SSO_SAML'],
+  enterprise: ['ADVANCED_ANALYTICS', 'REPORT_EXPORT', 'WHITE_LABEL', 'SSO_SAML', 'INTEGRATIONS_API'],
   // Employer side. Free: a brand page and answering a mentor-gated shortlist.
   employer_free: [],
   employer: ['TALENT_POOL_SEARCH', 'VERIFIED_CANDIDATE_CARD', 'COMPANY_NEED_MATCH_ALERTS'],
@@ -116,6 +117,7 @@ const PLAN_FEATURES: Record<PlanKey, readonly PremiumFeature[]> = {
     'ADVANCED_ANALYTICS',
     'REPORT_EXPORT',
     'EARLY_ACCESS',
+    'INTEGRATIONS_API',
   ],
 };
 

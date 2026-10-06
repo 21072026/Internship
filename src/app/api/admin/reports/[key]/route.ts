@@ -1,0 +1,92 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { entitled } from '@/lib/entitlements';
+import { settingsOrgOf } from '@/lib/settingsOrg';
+import { withTenantScope } from '@/lib/orgContext';
+import { getServerDictionary } from '@/i18n/server';
+import { getReportDefinition } from '@/lib/reports/definitions';
+import { loadReport, ReportUnavailable } from '@/lib/reports/registry';
+import { renderReport, reportSheet, toCsv } from '@/lib/reports/render';
+
+// GET /api/admin/reports/[key]?format=json|csv|xlsx — one route for every named
+// report in the registry (#1903; definitions in src/lib/reports/definitions.ts,
+// loaders in src/lib/reports/registry.ts). Scheduled delivery (#1905), the BI
+// extract and saved views read the same definitions through here instead of
+// three parallel implementations.
+//
+// GATES, server-side, never by hiding a button:
+//   json      → ADVANCED_ANALYTICS (the org's plan or a grant);
+//   csv/xlsx  → additionally REPORT_EXPORT (#1740).
+// A report whose module the org's vertical lacks is a 404.
+//
+// LABELS resolve here, from the caller's locale — the registry stores keys —
+// so one definition serves EN, TR and DE.
+//
+// PRIVACY FLOOR: an aggregate report's small groups arrive already merged
+// into one bucket (privacyFloor.ts); the response names the floor so every
+// surface can footnote it. It is not a parameter.
+
+type Format = 'json' | 'csv' | 'xlsx';
+
+export async function GET(request: Request, { params }: { params: Promise<{ key: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const def = getReportDefinition((await params).key);
+  if (!def) return NextResponse.json({ error: 'Unknown report' }, { status: 404 });
+  const format = (new URL(request.url).searchParams.get('format') || 'json') as Format;
+  if (!['json', 'csv', 'xlsx'].includes(format)) return NextResponse.json({ error: 'format must be json, csv or xlsx' }, { status: 400 });
+
+  const orgId = await settingsOrgOf(session);
+  for (const feature of format === 'json' ? (['ADVANCED_ANALYTICS'] as const) : (['ADVANCED_ANALYTICS', 'REPORT_EXPORT'] as const)) {
+    if (!(await entitled(orgId, feature))) {
+      return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature }, { status: 403 });
+    }
+  }
+
+  const { t, locale } = await getServerDictionary();
+  const R = t.reports;
+  return withTenantScope(session, async () => {
+    let loaded;
+    try {
+      loaded = await loadReport(def, { orgId, locale, stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null });
+    } catch (error) {
+      if (error instanceof ReportUnavailable) {
+        return NextResponse.json({ error: error.status === 403 ? 'feature_locked' : 'Report not available' }, { status: error.status });
+      }
+      throw error;
+    }
+    const view = renderReport(def, loaded, R);
+
+    if (format === 'json') {
+      return NextResponse.json({
+        key: def.key,
+        title: view.title,
+        description: view.description,
+        columns: view.columns,
+        rows: loaded.rows,
+        privacyFloor: loaded.minCohort
+          ? { minCohort: loaded.minCohort, suppressedGroups: loaded.suppressedGroups, bucketLabel: view.bucketLabel, note: view.floorNote }
+          : null,
+      });
+    }
+
+    const sheet = reportSheet(view.title, view, loaded);
+    const filename = `${def.key}-${new Date().toISOString().slice(0, 10)}.${format}`;
+    if (format === 'csv') {
+      return new NextResponse(toCsv(sheet), {
+        headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}"` },
+      });
+    }
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sheet.columns, ...sheet.rows]), sheet.name.slice(0, 31));
+    const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  });
+}

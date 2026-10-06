@@ -65,6 +65,1030 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.260.0-beta',
+    date: '2026-10-05',
+    time: '17:38',
+    commit: '3a682c6',
+    highlights: {
+      en: [
+        "The home page's product tour now shows each screen in action, in a clean browser or phone frame.",
+        "In dark mode the SaleVali home page keeps its magenta accent.",
+      ],
+      tr: [
+        "Ana sayfadaki ürün turu artık her ekranı çalışırken, temiz bir tarayıcı veya telefon çerçevesinde gösteriyor.",
+        "Koyu temada SaleVali ana sayfası magenta vurgu rengini koruyor.",
+      ],
+      de: [
+        "Die Produkttour auf der Startseite zeigt jeden Bildschirm jetzt in Aktion, in einem sauberen Browser- oder Handyrahmen.",
+        "Im Dunkelmodus behält die SaleVali-Startseite ihren Magenta-Akzent.",
+      ],
+    },
+  },
+  {
+    version: '0.258.0-beta',
+    date: '2026-10-05',
+    time: '16:39',
+    commit: 'd1bf531',
+    highlights: {
+      en: [
+        "Accounts can now hold several contacts. Mark one as the primary contact, edit or remove the others, or move a person to another account when they change jobs.",
+      ],
+      tr: [
+        "Hesaplar artık birden fazla muhatap tutabiliyor. Birini birincil muhatap olarak işaretle, diğerlerini düzenle ya da kaldır; iş değiştiren birini başka bir hesaba taşı.",
+      ],
+      de: [
+        "Konten können jetzt mehrere Ansprechpartner haben. Markiere einen als Hauptkontakt, bearbeite oder entferne die anderen, oder verschiebe eine Person zu einem anderen Konto, wenn sie den Job wechselt.",
+      ],
+    },
+  },
+  {
+    version: '0.257.3-beta',
+    date: '2026-10-05',
+    time: '16:23',
+    commit: 'b444b55',
+    highlights: {
+      en: [
+        "The weekly analytics report e-mail now arrives in your own language, stage names included.",
+      ],
+      tr: [
+        "Haftalık analiz raporu e-postası artık aşama adları dahil kendi dilinizde geliyor.",
+      ],
+      de: [
+        "Der wöchentliche Analysebericht per E-Mail kommt jetzt in Ihrer Sprache an – einschließlich der Phasennamen.",
+      ],
+    },
+  },
+  {
+    version: '0.257.2-beta',
+    date: '2026-10-05',
+    time: '16:19',
+    commit: '8c18f41',
+    highlights: {
+      en: [
+        "The sales leaderboard now always lists your admins too, not only in months they close a deal.",
+      ],
+      tr: [
+        "Satış sıralaması artık yöneticileri de her zaman listeliyor; yalnızca anlaşma kazandıkları aylarda değil.",
+      ],
+      de: [
+        "Die Vertriebsrangliste zeigt jetzt auch Ihre Admins immer an – nicht nur in Monaten, in denen sie einen Deal abschließen.",
+      ],
+    },
+  },
+  {
+    version: '0.257.1-beta',
+    date: '2026-10-05',
+    time: '16:18',
+    commit: 'b58d452',
+    highlights: {
+      en: [
+        "The site footer is simpler: the “Built and maintained by” line is gone.",
+      ],
+      tr: [
+        "Site alt bilgisi sadeleşti: “Geliştiren ve yaşatan” satırı kaldırıldı.",
+      ],
+      de: [
+        "Die Fußzeile ist schlanker: Die Zeile „Gebaut und gepflegt von“ entfällt.",
+      ],
+    },
+  },
+  {
+    version: '0.256.1-beta',
+    date: '2026-10-05',
+    time: '16:11',
+    commit: 'b815803',
+    highlights: {
+      en: [
+        "Notifications about a lead changing stage now name the stages in your own language.",
+      ],
+      tr: [
+        "Bir müşteri adayının aşama değiştirdiğini bildiren bildirimler artık aşamaları kendi dilinizde gösteriyor.",
+      ],
+      de: [
+        "Benachrichtigungen über einen Phasenwechsel eines Leads nennen die Phasen jetzt in Ihrer Sprache.",
+      ],
+    },
+  },
+  {
+    version: '0.256.0-beta',
+    date: '2026-10-05',
+    time: '15:24',
+    commit: '6ecf029',
+    highlights: {
+      en: [
+        "Coordinators get a new Weekly reports screen: every intern’s weekly reports for the term in one matrix, a reminder for those who are behind (never sent twice in a week), an Excel export and a printable report booklet per intern.",
+      ],
+      tr: [
+        "Koordinatörler için yeni Haftalık raporlar ekranı: dönem boyunca her stajyerin haftalık raporları tek bir matriste, geride kalanlara hatırlatma (aynı hafta asla iki kez gönderilmez), Excel dışa aktarma ve stajyer başına yazdırılabilir rapor defteri.",
+      ],
+      de: [
+        "Neue Seite Wochenberichte für Koordinatoren: die Wochenberichte aller Praktikanten im Zeitraum in einer Matrix, eine Erinnerung für alle im Rückstand (nie zweimal pro Woche), ein Excel-Export und ein druckbares Berichtsheft je Praktikant.",
+      ],
+    },
+    media: {
+      poster: "release-media/weekly-report-oversight-screen.png",
+      alt: {
+        en: "The Weekly reports screen: filters, a summary band with the submission rate, a legend and a matrix of three interns with one coloured, lettered cell per week",
+        tr: "Haftalık raporlar ekranı: filtreler, teslim oranlı özet bandı, açıklama ve üç stajyerin her hafta için renkli, harfli bir hücre gösterdiği matris",
+        de: "Die Seite Wochenberichte: Filter, eine Übersicht mit der Abgabequote, eine Legende und eine Matrix mit drei Praktikanten und einer farbigen, beschrifteten Zelle pro Woche",
+      },
+      width: 960,
+      height: 678,
+    },
+  },
+  {
+    version: '0.254.1-beta',
+    date: '2026-10-05',
+    time: '12:34',
+    commit: '783d663',
+    highlights: {
+      en: [
+        "Sales pipeline stages now appear in your own language instead of always in English.",
+      ],
+      tr: [
+        "Satış hattındaki aşamalar artık her zaman İngilizce değil, kendi dilinizde görünüyor.",
+      ],
+      de: [
+        "Die Phasen der Vertriebspipeline erscheinen jetzt in Ihrer Sprache statt immer auf Englisch.",
+      ],
+    },
+  },
+  {
+    version: '0.254.0-beta',
+    date: '2026-10-05',
+    time: '06:20',
+    commit: 'ca1d338',
+    highlights: {
+      en: [
+        "The home page now shows the product itself: three real screens — what a mentee sees of their journey, the mentor’s board and a company’s candidate view — in your theme and sized for your device.",
+      ],
+      tr: [
+        "Ana sayfa artık ürünün kendisini gösteriyor: üç gerçek ekran — mentee’nin yolculuğu, mentorun panosu ve şirketin aday görünümü — sizin temanızda ve cihazınıza uygun boyutta.",
+      ],
+      de: [
+        "Die Startseite zeigt jetzt das Produkt selbst: drei echte Ansichten – die Reise eines Mentees, das Board des Mentors und die Kandidatenansicht eines Unternehmens – in Ihrem Farbschema und passend für Ihr Gerät.",
+      ],
+    },
+    media: {
+      poster: "release-media/landing-product-tour.png",
+      alt: {
+        en: "The landing’s product tour: a company’s candidate view with the candidate’s profile and the Interested, Shortlisted and Pass buttons, under the caption “Companies review candidates, not CVs in an inbox”",
+        tr: "Ana sayfanın ürün turu: “Şirketler gelen kutusundaki CV’leri değil, adayları değerlendirir” başlığı altında, aday profili ve ilgi düğmeleriyle şirketin aday ekranı",
+        de: "Die Produkttour der Startseite: die Kandidatenansicht eines Unternehmens mit Profil und den Schaltflächen für eine Rückmeldung, unter der Überschrift „Unternehmen sichten Kandidaten statt Lebensläufe im Postfach“",
+      },
+      width: 1024,
+      height: 683,
+    },
+  },
+  {
+    version: '0.253.0-beta',
+    date: '2026-10-05',
+    time: '01:43',
+    commit: 'bd46ea4',
+    highlights: {
+      en: [
+        "Sales teams can set a monthly target for won deals: every rep sees how many they have won this month against it, with a progress bar. Admins can also switch on a team leaderboard for reps — names and counts only.",
+      ],
+      tr: [
+        "Satış ekipleri kazanılan anlaşmalar için aylık bir hedef belirleyebilir: her temsilci bu ay kaç anlaşma kazandığını hedefe karşı bir ilerleme çubuğuyla görür. Yöneticiler temsilciler için bir ekip sıralamasını da açabilir — yalnızca isimler ve sayılar.",
+      ],
+      de: [
+        "Vertriebsteams können ein Monatsziel für gewonnene Deals festlegen: Jede Vertriebsperson sieht mit einem Fortschrittsbalken, wie viele sie diesen Monat gewonnen hat. Admins können zusätzlich eine Team-Rangliste für das Team einschalten — nur Namen und Anzahlen.",
+      ],
+    },
+  },
+  {
+    version: '0.252.0-beta',
+    date: '2026-10-05',
+    time: '01:43',
+    commit: 'bd46ea4',
+    highlights: {
+      en: [
+        "Your portal now shows how complete your profile is, with a short list of the fields that are still empty — each one takes you straight to the field. The fuller your profile, the more matching and the people reviewing it have to work with.",
+      ],
+      tr: [
+        "Portalın artık profilinin ne kadar dolu olduğunu ve hâlâ boş olan alanların kısa bir listesini gösteriyor — her madde seni doğrudan o alana götürür. Profilin ne kadar doluysa eşleştirme ve profilini inceleyenler o kadar çok bilgiyle çalışır.",
+      ],
+      de: [
+        "Dein Portal zeigt jetzt, wie vollständig dein Profil ist, mit einer kurzen Liste der noch leeren Felder — jeder Eintrag führt dich direkt zum Feld. Je vollständiger dein Profil, desto mehr haben das Matching und alle, die es ansehen, in der Hand.",
+      ],
+    },
+  },
+  {
+    version: '0.251.0-beta',
+    date: '2026-10-05',
+    time: '01:43',
+    commit: 'bd46ea4',
+    highlights: {
+      en: [
+        "Your completion certificate is now in your portal: download the PDF or add it to your LinkedIn profile in one click, with the name, issuer and date already filled in.",
+      ],
+      tr: [
+        "Tamamlama belgen artık portalında: PDF olarak indir ya da adı, düzenleyen kurumu ve tarihi hazır doldurulmuş şekilde tek tıkla LinkedIn profiline ekle.",
+      ],
+      de: [
+        "Dein Abschlusszertifikat ist jetzt in deinem Portal: als PDF herunterladen oder mit einem Klick zu deinem LinkedIn-Profil hinzufügen – Name, Aussteller und Datum sind bereits ausgefüllt.",
+      ],
+    },
+  },
+  {
+    version: '0.250.0-beta',
+    date: '2026-10-05',
+    time: '01:43',
+    commit: 'bd46ea4',
+    highlights: {
+      en: [
+        "Mentors now see a private summary of their own impact on the dashboard: how many people they have guided, how many they guide now, and how many reached an internship or a hire. Only you see it — no points, no rankings, no comparisons.",
+      ],
+      tr: [
+        "Mentorlar artık panolarında kendi katkılarının özel bir özetini görüyor: kaç kişiye yol gösterdikleri, şu an kaç kişiyle çalıştıkları ve kaç kişinin staja ya da işe ulaştığı. Bunu yalnızca sen görürsün — puan yok, sıralama yok, karşılaştırma yok.",
+      ],
+      de: [
+        "Mentoren sehen auf ihrem Dashboard jetzt eine private Übersicht ihrer eigenen Wirkung: wie viele Personen sie begleitet haben, wie viele sie gerade begleiten und wie viele ein Praktikum oder eine Einstellung erreicht haben. Nur du siehst sie — keine Punkte, kein Ranking, keine Vergleiche.",
+      ],
+    },
+  },
+  {
+    version: '0.249.0-beta',
+    date: '2026-10-05',
+    time: '00:16',
+    commit: '7cfa87c',
+    highlights: {
+      en: [
+        "Postal campaigns: win new customers by letter — the one cold channel German law allows. Pick accounts, print letters with the privacy notice on the back, and see every demo request that came through the letter’s link.",
+        "Record an advertising objection on an account: every channel is blocked for good, even if the account is later deleted.",
+      ],
+      tr: [
+        "Posta kampanyaları: Alman hukukunun izin verdiği tek soğuk kanalla, mektupla yeni müşteri kazanın. Hesapları seçin, arkasında gizlilik notu olan mektupları yazdırın ve mektubun linkinden gelen her demo talebini görün.",
+        "Bir hesapta reklam itirazını kaydedin: hesap sonradan silinse bile bütün kanallar kalıcı olarak kapanır.",
+      ],
+      de: [
+        "Briefkampagnen: Neukunden per Brief gewinnen — über den einzigen kalten Kanal, den das deutsche Recht erlaubt. Accounts auswählen, Briefe mit Datenschutzhinweis auf der Rückseite drucken und jede Demo-Anfrage sehen, die über den Link im Brief kam.",
+        "Werbewiderspruch am Account erfassen: Alle Kanäle sind dauerhaft gesperrt, auch wenn der Account später gelöscht wird.",
+      ],
+    },
+  },
+  {
+    version: '0.248.0-beta',
+    date: '2026-10-04',
+    time: '23:06',
+    commit: 'db2deba',
+    highlights: {
+      en: [
+        "A simpler home page: one idea per section, pick your side in one tap.",
+      ],
+      tr: [
+        "Daha sade ana sayfa: her bölümde tek fikir, tarafını tek dokunuşla seç.",
+      ],
+      de: [
+        "Eine einfachere Startseite: eine Idee pro Abschnitt, deine Seite mit einem Tipp wählen.",
+      ],
+    },
+  },
+  {
+    version: '0.247.0-beta',
+    date: '2026-10-04',
+    time: '22:41',
+    commit: 'e581efa',
+    highlights: {
+      en: [
+        "The public site now has its own address in each language — for example /tr for Turkish and /de for German. A link you share opens in the language you sent it in, and switching language keeps you on the same page.",
+      ],
+      tr: [
+        "Herkese açık sitenin artık her dil için kendi adresi var — örneğin Türkçe için /tr, Almanca için /de. Paylaştığınız bir bağlantı, gönderdiğiniz dilde açılır; dil değiştirmek sizi aynı sayfada tutar.",
+      ],
+      de: [
+        "Die öffentliche Website hat jetzt für jede Sprache eine eigene Adresse — zum Beispiel /de für Deutsch und /tr für Türkisch. Ein geteilter Link öffnet sich in der Sprache, in der Sie ihn geschickt haben, und ein Sprachwechsel bleibt auf derselben Seite.",
+      ],
+    },
+  },
+  {
+    version: '0.246.0-beta',
+    date: '2026-10-04',
+    time: '22:22',
+    commit: '9b3b00e',
+    highlights: {
+      en: [
+        "The \"What's new\" page now opens much faster: it shows the latest 20 releases and loads older ones when you tap \"Load more\".",
+      ],
+      tr: [
+        "\"Yenilikler\" sayfası artık çok daha hızlı açılıyor: son 20 sürümü gösteriyor, eskileri \"Daha fazla yükle\"ye dokundukça yükleniyor.",
+      ],
+      de: [
+        "Die Seite „Neuigkeiten“ öffnet jetzt deutlich schneller: Sie zeigt die neuesten 20 Versionen, ältere werden mit „Mehr laden“ nachgeladen.",
+      ],
+    },
+  },
+  {
+    version: '0.245.0-beta',
+    date: '2026-10-02',
+    time: '19:37',
+    commit: '22f7cda',
+    highlights: {
+      en: [
+        "The SaleVali home page now answers the most common questions in an FAQ, and every public page tells search engines and AI assistants its one true address.",
+      ],
+      tr: [
+        "SaleVali ana sayfası artık en sık sorulan soruları bir SSS bölümünde yanıtlıyor; her herkese açık sayfa da arama motorlarına ve yapay zekâ asistanlarına tek ve doğru adresini bildiriyor.",
+      ],
+      de: [
+        "Die SaleVali-Startseite beantwortet die häufigsten Fragen jetzt in einem FAQ, und jede öffentliche Seite nennt Suchmaschinen und KI-Assistenten ihre eine richtige Adresse.",
+      ],
+    },
+  },
+  {
+    version: '0.244.8-beta',
+    date: '2026-10-01',
+    time: '13:23',
+    commit: '9a2db9c',
+    highlights: {
+      en: [
+        "Each organization's monthly AI allowance now counts only its own AI calls. Another organization's usage no longer uses up yours.",
+      ],
+      tr: [
+        "Her kuruluşun aylık yapay zekâ kotası artık yalnızca kendi çağrılarını sayıyor; başka bir kuruluşun kullanımı sizin kotanızdan düşmüyor.",
+      ],
+      de: [
+        "Das monatliche KI-Kontingent jeder Organisation zählt jetzt nur noch ihre eigenen KI-Aufrufe. Die Nutzung anderer Organisationen verbraucht Ihr Kontingent nicht mehr.",
+      ],
+    },
+  },
+  {
+    version: '0.244.7-beta',
+    date: '2026-10-01',
+    time: '08:24',
+    commit: '16cc084',
+    highlights: {
+      en: [
+        "The data-retention page now shows only your own organization's candidates and applicants.",
+      ],
+      tr: [
+        "Veri saklama sayfası artık yalnızca kendi kuruluşunuzun adaylarını ve başvuranlarını gösteriyor.",
+      ],
+      de: [
+        "Die Seite zur Datenaufbewahrung zeigt jetzt nur noch Kandidaten und Bewerber Ihrer eigenen Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.244.6-beta',
+    date: '2026-10-01',
+    time: '06:30',
+    commit: '1ae5157',
+    highlights: {
+      en: [
+        "Settings saved by an administrator now apply only to their own organisation.",
+      ],
+      tr: [
+        "Bir yöneticinin kaydettiği ayarlar artık yalnızca kendi kuruluşunda geçerli.",
+      ],
+      de: [
+        "Von einer Administratorin oder einem Administrator gespeicherte Einstellungen gelten jetzt nur noch für die eigene Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.244.5-beta',
+    date: '2026-10-01',
+    time: '06:07',
+    commit: 'e279e8d',
+    highlights: {
+      en: [
+        "Everything you do on SaleVali now stays in SaleVali (and the same for Internship CRM): password-reset and verification e-mails, notifications, reminders, calendar entries and links always come from the product you are using.",
+      ],
+      tr: [
+        "SaleVali'de yaptığın her şey artık SaleVali'de kalıyor (Internship CRM için de aynısı): şifre sıfırlama ve doğrulama e-postaları, bildirimler, hatırlatmalar, takvim kayıtları ve bağlantılar her zaman kullandığın üründen geliyor.",
+      ],
+      de: [
+        "Alles, was du in SaleVali tust, bleibt jetzt in SaleVali (und genauso bei Internship CRM): Passwort-Reset- und Bestätigungsmails, Benachrichtigungen, Erinnerungen, Kalendereinträge und Links kommen immer aus dem Produkt, das du gerade nutzt.",
+      ],
+    },
+  },
+  {
+    version: '0.244.3-beta',
+    date: '2026-09-30',
+    time: '22:33',
+    commit: '8a31aeb',
+    highlights: {
+      en: [
+        "The weekly analytics email now follows your own organization's premium analytics setting.",
+      ],
+      tr: [
+        "Haftalık analiz e-postası artık kendi kuruluşunuzun premium analiz ayarına göre gönderiliyor.",
+      ],
+      de: [
+        "Die wöchentliche Analyse-E-Mail richtet sich jetzt nach der Premium-Analyse-Einstellung Ihrer eigenen Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.244.2-beta',
+    date: '2026-09-30',
+    time: '22:27',
+    commit: '62753e7',
+    highlights: {
+      en: [
+        "In the marketing product, admins switch between the admin view and their own sales view; the mentor view and the project field on invites are gone there.",
+      ],
+      tr: [
+        "Pazarlama ürününde yöneticiler yönetici görünümü ile kendi satış görünümü arasında geçiş yapar; mentor görünümü ve davetteki proje alanı orada artık yok.",
+      ],
+      de: [
+        "Im Marketing-Produkt wechseln Admins zwischen Admin-Ansicht und ihrer eigenen Vertriebsansicht; die Mentor-Ansicht und das Projektfeld in Einladungen entfallen dort.",
+      ],
+    },
+  },
+  {
+    version: '0.244.0-beta',
+    date: '2026-09-30',
+    time: '21:30',
+    commit: 'cc63dfb',
+    highlights: {
+      en: [
+        "Sharing a page on LinkedIn, WhatsApp, Slack or X now shows a proper preview card with the page's title and a short description, instead of a bare link.",
+      ],
+      tr: [
+        "Bir sayfayı LinkedIn, WhatsApp, Slack ya da X'te paylaştığınızda artık çıplak bir link yerine sayfanın başlığını ve kısa açıklamasını gösteren bir önizleme kartı çıkıyor.",
+      ],
+      de: [
+        "Wer eine Seite auf LinkedIn, WhatsApp, Slack oder X teilt, sieht jetzt statt eines nackten Links eine Vorschaukarte mit dem Titel der Seite und einer kurzen Beschreibung.",
+      ],
+    },
+    media: {
+      poster: "release-media/og-share-cards.png",
+      alt: {
+        en: "The share card for the features page: the product name at the top, the page title and a one-line description",
+        tr: "Özellikler sayfasının paylaşım kartı: üstte ürün adı, altında sayfa başlığı ve tek satırlık açıklama",
+        de: "Die Vorschaukarte der Funktionsseite: oben der Produktname, darunter der Seitentitel und eine einzeilige Beschreibung",
+      },
+      width: 1200,
+      height: 630,
+    },
+  },
+  {
+    version: '0.243.3-beta',
+    date: '2026-09-30',
+    time: '20:48',
+    commit: '5dfde9d',
+    highlights: {
+      en: [
+        "Every public page now has its own title in your browser tab and in search results — in English, Turkish or German, matching the language you read it in.",
+      ],
+      tr: [
+        "Her genel sayfanın artık tarayıcı sekmesinde ve arama sonuçlarında kendi başlığı var — okuduğunuz dile göre Türkçe, Almanca ya da İngilizce.",
+      ],
+      de: [
+        "Jede öffentliche Seite hat jetzt ihren eigenen Titel im Browser-Tab und in Suchergebnissen – auf Deutsch, Türkisch oder Englisch, passend zur gewählten Sprache.",
+      ],
+    },
+  },
+  {
+    version: '0.243.2-beta',
+    date: '2026-09-30',
+    time: '20:12',
+    commit: '6d05bff',
+    highlights: {
+      en: [
+        "Better contrast in the mentee portal: the mentor and company labels, the RSVP buttons in dark mode and the filter pills on your notes are now easier to read.",
+      ],
+      tr: [
+        "Mentee portalında daha iyi kontrast: mentor ve şirket etiketleri, koyu temadaki katılım (RSVP) butonları ve notlardaki filtre düğmeleri artık daha kolay okunuyor.",
+      ],
+      de: [
+        "Besserer Kontrast im Mentee-Portal: Die Beschriftungen für Mentor und Unternehmen, die Zu-/Absage-Buttons im Dunkelmodus und die Filter bei Ihren Notizen sind jetzt besser lesbar.",
+      ],
+    },
+  },
+  {
+    version: '0.243.1-beta',
+    date: '2026-09-30',
+    time: '19:39',
+    commit: '397ba8f',
+    highlights: {
+      en: [
+        "Creating or editing a project in the portal now keeps the form open until the updated list is shown, instead of briefly showing the old list.",
+      ],
+      tr: [
+        "Portalda proje oluştururken veya düzenlerken form artık güncellenmiş liste görünene kadar açık kalıyor; kısa süreliğine eski listenin görünmesi sona erdi.",
+      ],
+      de: [
+        "Beim Anlegen oder Bearbeiten eines Projekts im Portal bleibt das Formular jetzt offen, bis die aktualisierte Liste angezeigt wird – statt kurz die alte Liste zu zeigen.",
+      ],
+    },
+  },
+  {
+    version: '0.243.0-beta',
+    date: '2026-09-30',
+    time: '19:03',
+    commit: 'e655f9a',
+    highlights: {
+      en: [
+        "You can now turn a 1:1 into a recurring meeting — every week or every few weeks, open-ended, until a date or for a set number of meetings. Both of you get it on your calendar, with reminders the day before and an hour before.",
+      ],
+      tr: [
+        "Artık birebir görüşmeyi tekrarlayan bir toplantıya dönüştürebilirsiniz: her hafta ya da birkaç haftada bir, süresiz, belirli bir tarihe kadar veya belirli sayıda görüşme için. Toplantı ikinizin de takvimine düşer ve bir gün ile bir saat önce hatırlatma gelir.",
+      ],
+      de: [
+        "Ein Einzelgespräch lässt sich jetzt als wiederkehrender Termin anlegen: jede Woche oder alle paar Wochen, unbefristet, bis zu einem Datum oder für eine feste Anzahl Termine. Der Termin steht in beiden Kalendern, mit Erinnerungen am Vortag und eine Stunde vorher.",
+      ],
+    },
+  },
+  {
+    version: '0.241.1-beta',
+    date: '2026-09-30',
+    time: '15:51',
+    commit: '968bf90',
+    highlights: {
+      en: [
+        "Calendar: screen readers now announce each day's full date and its events, and the view buttons say which one is active.",
+      ],
+      tr: [
+        "Takvim: ekran okuyucular artık her günün tam tarihini ve etkinliklerini okuyor; görünüm düğmeleri de hangisinin seçili olduğunu söylüyor.",
+      ],
+      de: [
+        "Kalender: Screenreader lesen jetzt das vollständige Datum jedes Tages samt Terminen vor, und die Ansichtsschalter sagen, welcher aktiv ist.",
+      ],
+    },
+  },
+  {
+    version: '0.241.0-beta',
+    date: '2026-09-30',
+    time: '15:14',
+    commit: 'e0e2fb5',
+    highlights: {
+      en: [
+        "A project's weekly meeting now appears in each member's connected Google Calendar as one recurring event — and moves or disappears with it.",
+      ],
+      tr: [
+        "Projenin haftalık toplantısı artık Google Takvimi bağlı her üyenin takviminde tek bir tekrarlayan etkinlik olarak görünüyor — ve toplantıyla birlikte taşınıyor ya da kalkıyor.",
+      ],
+      de: [
+        "Das wöchentliche Projekttreffen erscheint jetzt im verbundenen Google Kalender jedes Mitglieds als ein einziger Serientermin — und wird mit ihm verschoben oder entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.240.0-beta',
+    date: '2026-09-30',
+    time: '14:47',
+    commit: '506f1d6',
+    highlights: {
+      en: [
+        "New setting: when an offer is accepted, the record can move to the hired stage by itself — with the usual stage history and notifications. Off by default.",
+      ],
+      tr: [
+        "Yeni ayar: bir teklif kabul edildiğinde kayıt kendiliğinden işe alındı aşamasına geçebilir — olağan aşama geçmişi ve bildirimleriyle. Varsayılan kapalı.",
+      ],
+      de: [
+        "Neue Einstellung: Wird ein Angebot angenommen, kann der Datensatz von selbst in die Phase „Eingestellt“ wechseln — mit dem üblichen Phasenverlauf und den Benachrichtigungen. Standardmäßig aus.",
+      ],
+    },
+  },
+  {
+    version: '0.239.0-beta',
+    date: '2026-09-30',
+    time: '14:28',
+    commit: '6170e36',
+    highlights: {
+      en: [
+        "Enterprise SSO: map a group from your identity provider to a role, so mentors and company contacts land in the right place on their first sign-in.",
+      ],
+      tr: [
+        "Kurumsal SSO: kimlik sağlayıcınızdaki bir grubu bir role eşleyin — mentorlar ve şirket temsilcileri ilk girişte doğru yere düşsün.",
+      ],
+      de: [
+        "Enterprise-SSO: Ordnen Sie eine Gruppe Ihres Identitätsanbieters einer Rolle zu, damit Mentoren und Firmenkontakte schon bei der ersten Anmeldung am richtigen Ort landen.",
+      ],
+    },
+  },
+  {
+    version: '0.238.0-beta',
+    date: '2026-09-30',
+    time: '14:16',
+    commit: '7d3e89e',
+    highlights: {
+      en: [
+        "The board now opens on your own people: empty stages fold into a slim strip (you can still drop cards onto them), so everyone in three different stages is visible at once. \"Show empty stages\" brings the full width back.",
+      ],
+      tr: [
+        "Pano artık doğrudan kendi kişilerinle açılıyor: boş aşamalar ince bir şeride katlanıyor (kartları yine üzerlerine bırakabilirsin), böylece üç farklı aşamadaki herkes aynı anda görünüyor. \"Boş aşamaları göster\" tam genişliği geri getirir.",
+      ],
+      de: [
+        "Das Board öffnet jetzt direkt bei deinen Leuten: Leere Phasen klappen zu einem schmalen Streifen zusammen (Karten lassen sich weiterhin darauf ablegen), sodass alle in drei verschiedenen Phasen gleichzeitig sichtbar sind. \"Leere Phasen anzeigen\" stellt die volle Breite wieder her.",
+      ],
+    },
+    media: {
+      poster: "release-media/board-empty-stages-collapsed.png",
+      alt: {
+        en: "The mentor board with three occupied stage columns side by side and the empty stages folded into slim strips between them",
+        tr: "Yan yana üç dolu aşama sütunu ve aralarında ince şeritlere katlanmış boş aşamalarla mentor panosu",
+        de: "Das Mentor-Board mit drei belegten Phasenspalten nebeneinander und den leeren Phasen als schmale Streifen dazwischen",
+      },
+      width: 960,
+      height: 476,
+    },
+  },
+  {
+    version: '0.237.2-beta',
+    date: '2026-09-30',
+    time: '13:43',
+    commit: '741ef1c',
+    highlights: {
+      en: [
+        "The site now opens in your browser's language (English, Turkish or German) on your first visit — no need to find the language switch first.",
+      ],
+      tr: [
+        "Site artık ilk ziyaretinizde tarayıcınızın dilinde açılıyor (Türkçe, Almanca ya da İngilizce) — önce dil düğmesini bulmanız gerekmiyor.",
+      ],
+      de: [
+        "Die Seite öffnet sich beim ersten Besuch jetzt in der Sprache Ihres Browsers (Deutsch, Türkisch oder Englisch) — ohne vorher den Sprachschalter suchen zu müssen.",
+      ],
+    },
+  },
+  {
+    version: '0.237.1-beta',
+    date: '2026-09-30',
+    time: '13:15',
+    commit: 'a2280ab',
+    highlights: {
+      en: [
+        "If a mentor page cannot load its data, it now says so and offers a retry, instead of showing \"Loading…\" forever.",
+      ],
+      tr: [
+        "Bir mentor sayfası verisini yükleyemezse artık bunu söylüyor ve tekrar deneme sunuyor; sonsuza kadar \"Yükleniyor…\" göstermiyor.",
+      ],
+      de: [
+        "Kann eine Mentor-Seite ihre Daten nicht laden, sagt sie das jetzt und bietet einen neuen Versuch an, statt endlos \"Wird geladen…\" anzuzeigen.",
+      ],
+    },
+  },
+  {
+    version: '0.237.0-beta',
+    date: '2026-09-30',
+    time: '12:53',
+    commit: 'b7d2020',
+    highlights: {
+      en: [
+        "Meetings now have a length you choose (15–90 minutes) — and it is the same everywhere: in the app, in the calendar file you download or subscribe to, and in your Google Calendar. Downloaded meetings no longer end half an hour early.",
+      ],
+      tr: [
+        "Toplantıların artık seçtiğiniz bir süresi var (15–90 dakika) ve bu süre her yerde aynı: uygulamada, indirdiğiniz ya da abone olduğunuz takvim dosyasında ve Google Takvim'inizde. İndirilen toplantılar artık yarım saat erken bitmiyor.",
+      ],
+      de: [
+        "Besprechungen haben jetzt eine wählbare Dauer (15–90 Minuten) — und zwar überall dieselbe: in der App, in der heruntergeladenen oder abonnierten Kalenderdatei und in Ihrem Google Kalender. Heruntergeladene Termine enden nicht mehr eine halbe Stunde zu früh.",
+      ],
+    },
+  },
+  {
+    version: '0.236.0-beta',
+    date: '2026-09-30',
+    time: '11:17',
+    commit: '88ddfb2',
+    highlights: {
+      en: [
+        "When a candidate accepts an offer, its requisition's filled count goes up by itself — and the requisition closes as filled when the last seat is taken.",
+      ],
+      tr: [
+        "Aday bir teklifi kabul ettiğinde iş talebinin dolu kontenjanı kendiliğinden artıyor; son yer dolduğunda talep \"dolu\" olarak kapanıyor.",
+      ],
+      de: [
+        "Nimmt eine Kandidatin oder ein Kandidat ein Angebot an, zählt die Stellenanforderung die besetzte Stelle automatisch mit — und schließt sich als besetzt, sobald die letzte Stelle vergeben ist.",
+      ],
+    },
+  },
+  {
+    version: '0.235.0-beta',
+    date: '2026-09-30',
+    time: '11:16',
+    commit: 'c4e6136',
+    highlights: {
+      en: [
+        "Each product now has its own super admin: the internship and the marketing operator see and manage only their own product's organizations, and a new organization is always created with its product chosen explicitly. Internship-only screens — the newsletter, e-mail to mentees, re-engagement, testimonials — no longer open for a marketing organization, not even by typing their address.",
+      ],
+      tr: [
+        "Her ürünün artık kendi süper yöneticisi var: internship ve marketing operatörü yalnızca kendi ürünlerinin organizasyonlarını görür ve yönetir; yeni bir organizasyon her zaman ürünü açıkça seçilerek oluşturulur. Yalnızca internship'e ait ekranlar — bülten, mentilere e-posta, yeniden kazanım, başarı hikâyeleri — bir marketing organizasyonunda artık açılmıyor, adresi doğrudan yazıldığında bile.",
+      ],
+      de: [
+        "Jedes Produkt hat jetzt einen eigenen Super-Admin: Die Betreiber von Internship und Marketing sehen und verwalten nur die Organisationen ihres eigenen Produkts, und eine neue Organisation wird immer mit ausdrücklich gewähltem Produkt angelegt. Reine Internship-Seiten — Newsletter, E-Mail an Mentees, Reaktivierung, Erfolgsgeschichten — öffnen sich für eine Marketing-Organisation nicht mehr, auch nicht über die direkte Adresse.",
+      ],
+    },
+  },
+  {
+    version: '0.234.12-beta',
+    date: '2026-09-30',
+    time: '11:16',
+    commit: 'c4e6136',
+    highlights: {
+      en: [
+        "Each organization now sees only its own mentorships, meetings and calendar entries.",
+      ],
+      tr: [
+        "Her kurum artık yalnızca kendi mentorluklarını, toplantılarını ve takvim kayıtlarını görüyor.",
+      ],
+      de: [
+        "Jede Organisation sieht jetzt nur noch ihre eigenen Mentorings, Termine und Kalendereinträge.",
+      ],
+    },
+  },
+  {
+    version: '0.234.11-beta',
+    date: '2026-09-30',
+    time: '11:16',
+    commit: 'c4e6136',
+    highlights: {
+      en: [
+        "Admin notifications and summary e-mails now only ever cover your own organization.",
+      ],
+      tr: [
+        "Yönetici bildirimleri ve özet e-postaları artık yalnızca kendi kuruluşunuzu kapsıyor.",
+      ],
+      de: [
+        "Admin-Benachrichtigungen und Zusammenfassungs-E-Mails betreffen jetzt ausschließlich Ihre eigene Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.234.10-beta',
+    date: '2026-09-30',
+    time: '11:16',
+    commit: 'c4e6136',
+    highlights: {
+      en: [
+        "Each organization now sees only its own activity log, support tickets and templates.",
+      ],
+      tr: [
+        "Her kurum artık yalnızca kendi etkinlik günlüğünü, destek taleplerini ve şablonlarını görüyor.",
+      ],
+      de: [
+        "Jede Organisation sieht jetzt nur noch ihr eigenes Aktivitätsprotokoll, ihre Support-Tickets und Vorlagen.",
+      ],
+    },
+  },
+  {
+    version: '0.234.7-beta',
+    date: '2026-09-30',
+    time: '10:33',
+    commit: '93b8d35',
+    highlights: {
+      en: [
+        "If you connected Google Calendar, meetings accepted from a request now appear there too, and meetings that are removed disappear from it.",
+      ],
+      tr: [
+        "Google Takvim'i bağladıysanız, bir talepten kabul edilen toplantılar artık orada da görünüyor; kaldırılan toplantılar takvimden siliniyor.",
+      ],
+      de: [
+        "Wenn Sie Google Kalender verbunden haben, erscheinen aus einer Anfrage angenommene Termine jetzt auch dort, und entfernte Termine verschwinden daraus.",
+      ],
+    },
+  },
+  {
+    version: '0.234.6-beta',
+    date: '2026-09-30',
+    time: '10:20',
+    commit: '1be0906',
+    highlights: {
+      en: [
+        "On a customised pipeline, the cohorts page now counts hires correctly, and a placed candidate is no longer shown as past their stage deadline.",
+      ],
+      tr: [
+        "Özelleştirilmiş aşamalarda kohort sayfası işe yerleşenleri artık doğru sayıyor; yerleşmiş bir aday aşama süresi geçmiş olarak gösterilmiyor.",
+      ],
+      de: [
+        "Bei einer angepassten Pipeline zählt die Kohortenseite Einstellungen jetzt korrekt, und eine vermittelte Person wird nicht mehr als über der Phasenfrist angezeigt.",
+      ],
+    },
+  },
+  {
+    version: '0.234.5-beta',
+    date: '2026-09-30',
+    time: '10:00',
+    commit: '0b236a6',
+    highlights: {
+      en: [
+        "On a customised pipeline, mentors no longer get deadline reminders for candidates on a final stage, and the weekly analytics mail shows your own organisation's figures and stage names.",
+      ],
+      tr: [
+        "Özelleştirilmiş aşamalarda mentörlere son aşamadaki adaylar için artık süre hatırlatması gitmiyor; haftalık analiz maili yalnızca kendi kurumunuzun rakamlarını ve aşama adlarını gösteriyor.",
+      ],
+      de: [
+        "Bei einer angepassten Pipeline erhalten Mentoren für Kandidaten in einer Endphase keine Fristerinnerungen mehr, und die wöchentliche Analyse-Mail zeigt die Zahlen und Phasennamen Ihrer eigenen Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.234.4-beta',
+    date: '2026-09-30',
+    time: '08:58',
+    commit: 'f4bbddb',
+    highlights: {
+      en: [
+        "The duplicate-candidates page opens much faster on large candidate lists and shows 25 pairs at a time.",
+      ],
+      tr: [
+        "Yinelenen adaylar sayfası büyük aday listelerinde çok daha hızlı açılıyor ve çiftleri 25'er 25'er gösteriyor.",
+      ],
+      de: [
+        "Die Seite „Doppelte Kandidaten“ öffnet sich bei großen Kandidatenlisten deutlich schneller und zeigt 25 Paare auf einmal.",
+      ],
+    },
+  },
+  {
+    version: '0.234.1-beta',
+    date: '2026-09-30',
+    time: '08:32',
+    commit: 'cf3ffe9',
+    highlights: {
+      en: [
+        "Deleting or anonymising an account now also removes the person's evaluations, weekly reports, questions, goals, offer and interview notes, and their notifications.",
+      ],
+      tr: [
+        "Bir hesabı silmek ya da anonimleştirmek artık kişinin değerlendirmelerini, haftalık raporlarını, sorularını, hedeflerini, teklif ve görüşme notlarını ve bildirimlerini de temizliyor.",
+      ],
+      de: [
+        "Beim Löschen oder Anonymisieren eines Kontos werden jetzt auch Bewertungen, Wochenberichte, Fragen, Ziele, Angebots- und Interviewnotizen sowie die Benachrichtigungen der Person entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.234.0-beta',
+    date: '2026-09-30',
+    time: '08:25',
+    commit: '1a96720',
+    highlights: {
+      en: [
+        "The analytics page has a new Trial → paid card for sales pipelines with a trial stage: of the trials that started in a month, how many became paying customers — and, on the premium tier, the same rate by lead source.",
+        "A month shows a dash until every trial started in it has ended, because a trial that is still running has not had its chance to convert yet. Handing an account over to a new owner now counts as one customer, not two, in the funnel conversion, cohort, retention and trial reports.",
+      ],
+      tr: [
+        "Analitik sayfasına deneme aşaması olan satış pipeline'ları için yeni bir Deneme → ücretli kartı eklendi: bir ayda başlayan denemelerin kaçı ücretli müşteriye döndü — premium pakette aynı oran müşteri adayı kaynağına göre de.",
+        "Bir ayda başlayan denemelerin hepsi bitene kadar o ay tire gösterir, çünkü süren bir deneme henüz dönüşme fırsatı bulmadı. Bir hesabın yeni bir sorumluya devri artık funnel dönüşümü, kohort, elde tutma ve deneme raporlarında iki değil tek müşteri sayılıyor.",
+      ],
+      de: [
+        "Die Analyse-Seite hat eine neue Karte Testphase → zahlend für Vertriebspipelines mit einer Testphase: Wie viele der in einem Monat begonnenen Testphasen wurden zu zahlenden Kunden — und im Premium-Paket dieselbe Quote nach Lead-Quelle.",
+        "Ein Monat zeigt einen Strich, bis jede darin begonnene Testphase geendet hat, denn eine laufende Testphase hatte noch keine Gelegenheit zu konvertieren. Die Übergabe eines Accounts an einen neuen Verantwortlichen zählt in den Berichten zu Funnel-Konversion, Kohorten, Bindung und Testphasen jetzt als ein Kunde, nicht als zwei.",
+      ],
+    },
+  },
+  {
+    version: '0.233.0-beta',
+    date: '2026-09-30',
+    time: '08:25',
+    commit: '1a96720',
+    highlights: {
+      en: [
+        "Super admins can now invite the first administrator of any organization straight from the Organizations screen — including from a phone: the registration link appears with Copy and Share buttons, and the invitation is emailed too.",
+      ],
+      tr: [
+        "Süper adminler artık herhangi bir organizasyonun ilk yöneticisini doğrudan Organizasyonlar ekranından davet edebiliyor — telefondan da: kayıt bağlantısı Kopyala ve Paylaş düğmeleriyle görünür, davet ayrıca e-postayla gönderilir.",
+      ],
+      de: [
+        "Super-Admins können den ersten Administrator jeder Organisation jetzt direkt in der Organisationsübersicht einladen — auch vom Handy: Der Registrierungslink erscheint mit Kopieren- und Teilen-Schaltfläche, und die Einladung wird zusätzlich per E-Mail verschickt.",
+      ],
+    },
+  },
+  {
+    version: '0.232.1-beta',
+    date: '2026-09-30',
+    time: '08:25',
+    commit: '1a96720',
+    highlights: {
+      en: [
+        "For a marketing organisation, the invite, users, analytics, settings and account screens — and the invitation, assignment and reminder e-mails — now talk about leads and sales reps instead of mentees and mentors.",
+      ],
+      tr: [
+        "Pazarlama organizasyonlarında davet, kullanıcılar, analiz, ayarlar ve hesap ekranları — davet, atama ve hatırlatma e-postaları da — artık mentee ve mentor yerine müşteri adayı ve satış temsilcisinden söz ediyor.",
+      ],
+      de: [
+        "In einer Marketing-Organisation sprechen die Einladungs-, Benutzer-, Analyse-, Einstellungs- und Kontoseiten — und die Einladungs-, Zuweisungs- und Erinnerungs-E-Mails — jetzt von Leads und Vertriebsmitarbeitern statt von Mentees und Mentoren.",
+      ],
+    },
+  },
+  {
+    version: '0.231.0-beta',
+    date: '2026-09-30',
+    time: '08:25',
+    commit: '1a96720',
+    highlights: {
+      en: [
+        "Marketing organisations can import their customer table themselves: Settings → import → \"Marketing accounts\". Preview the file first — nothing is written — then apply it; running the same file again changes nothing.",
+        "Imported accounts can carry their product id and their trial and customer-since dates, so imported trials get their reminders like any other.",
+      ],
+      tr: [
+        "Pazarlama organizasyonları müşteri tablolarını artık kendileri içe aktarabiliyor: Ayarlar → içe aktarma → \"Pazarlama hesapları\". Önce dosyayı önizleyin — hiçbir şey yazılmaz — sonra uygulayın; aynı dosyayı yeniden çalıştırmak hiçbir şeyi değiştirmez.",
+        "İçe aktarılan hesaplar ürün kimliklerini, deneme ve müşteri olma tarihlerini taşıyabiliyor; böylece içe aktarılan denemeler de hatırlatmalarını alıyor.",
+      ],
+      de: [
+        "Marketing-Organisationen können ihre Kundentabelle jetzt selbst importieren: Einstellungen → Import → „Marketing-Konten“. Zuerst die Vorschau prüfen — dabei wird nichts geschrieben —, dann übernehmen; derselbe Lauf ein zweites Mal ändert nichts.",
+        "Importierte Konten können ihre Produkt-ID sowie Test- und Kunde-seit-Daten mitbringen, sodass importierte Testphasen ihre Erinnerungen wie alle anderen erhalten.",
+      ],
+    },
+  },
+  {
+    version: '0.230.0-beta',
+    date: '2026-09-30',
+    time: '08:25',
+    commit: '1a96720',
+    highlights: {
+      en: [
+        "Leads from the website demo form, the account import and the manual lead form are now attributed to a source automatically — the campaign they came from, or the source you typed — so the source report on the analytics page counts them. Leads with no known source are listed separately.",
+        "Two organisations can now each have a source with the same name, such as \"Google Ads\".",
+      ],
+      tr: [
+        "Web sitesindeki demo formundan, hesap içe aktarımından ve elle girilen lead formundan gelen lead'ler artık otomatik olarak bir kaynağa bağlanıyor — geldikleri kampanyaya ya da yazdığınız kaynağa — ve analitik sayfasındaki kaynak raporu onları sayıyor. Kaynağı bilinmeyen lead'ler ayrıca gösteriliyor.",
+        "İki organizasyon artık aynı adlı bir kaynağa, örneğin \"Google Ads\"e, ayrı ayrı sahip olabiliyor.",
+      ],
+      de: [
+        "Leads aus dem Demo-Formular der Website, dem Konto-Import und dem manuellen Lead-Formular werden jetzt automatisch einer Quelle zugeordnet — der Kampagne, über die sie kamen, oder der Quelle, die Sie eingetragen haben — und der Quellenbericht auf der Analyseseite zählt sie. Leads ohne bekannte Quelle werden gesondert ausgewiesen.",
+        "Zwei Organisationen können jetzt jeweils eine Quelle mit demselben Namen haben, etwa „Google Ads“.",
+      ],
+    },
+  },
+  {
+    version: '0.229.1-beta',
+    date: '2026-09-30',
+    time: '08:25',
+    commit: '1a96720',
+    highlights: {
+      en: [
+        "Signing in with your company's SSO, or connecting Google Calendar, from SaleVali now brings you back to SaleVali — and the unsubscribe and preference links in SaleVali e-mails open SaleVali too.",
+      ],
+      tr: [
+        "SaleVali'den şirketinin SSO'suyla giriş yapmak ya da Google Takvim'i bağlamak artık seni yine SaleVali'ye döndürüyor; SaleVali e-postalarındaki abonelikten çıkma ve tercih bağlantıları da SaleVali'yi açıyor.",
+      ],
+      de: [
+        "Die Anmeldung per Firmen-SSO und das Verbinden von Google Kalender aus SaleVali führen jetzt zurück zu SaleVali – und die Abmelde- und Einstellungslinks in SaleVali-E-Mails öffnen ebenfalls SaleVali.",
+      ],
+    },
+  },
+  {
+    version: '0.229.0-beta',
+    date: '2026-09-30',
+    time: '08:25',
+    commit: '1a96720',
+    highlights: {
+      en: [
+        "Sales records can now carry an estimated monthly value, and the analytics page shows month by month what was won, what was lost and the estimated monthly value of the accounts you hold.",
+      ],
+      tr: [
+        "Satış kayıtlarına artık tahmini bir aylık değer girilebiliyor; analiz sayfası ay ay neyin kazanıldığını, neyin kaybedildiğini ve elde tutulan hesapların tahmini aylık değerini gösteriyor.",
+      ],
+      de: [
+        "Vertriebsdatensätze können jetzt einen geschätzten Monatswert tragen, und die Analyseseite zeigt Monat für Monat, was gewonnen und was verloren wurde und wie viel die gehaltenen Accounts geschätzt pro Monat wert sind.",
+      ],
+    },
+  },
+  {
+    version: '0.228.0-beta',
+    date: '2026-09-30',
+    time: '08:25',
+    commit: '1a96720',
+    highlights: {
+      en: [
+        "Every account now shows on what basis you may contact it — a confirmed double opt-in, a §7(3) existing-customer record with its reason, or only a reply to their own request — with the proof, and a warning when there is no provable e-mail permission. The product-news box on the demo form sends one confirmation e-mail and only counts once the person clicks it; imports never create a permission. The company list can be filtered to the accounts you may actually e-mail.",
+      ],
+      tr: [
+        "Her hesap artık onunla hangi dayanakla iletişim kurabileceğinizi gösteriyor — onaylanmış çift onay (DOI), gerekçesiyle §7(3) mevcut müşteri kaydı ya da yalnızca kendi talebine yanıt — kanıtıyla birlikte; kanıtlanabilir e-posta izni yoksa uyarı çıkar. Demo formundaki ürün haberleri kutusu tek bir onay e-postası gönderir ve ancak kişi tıkladığında geçerli olur; içe aktarmalar asla izin üretmez. Şirket listesi, gerçekten e-posta gönderebileceğiniz hesaplara göre süzülebilir.",
+      ],
+      de: [
+        "Jeder Account zeigt jetzt, auf welcher Grundlage Sie ihn kontaktieren dürfen — ein bestätigtes Double-Opt-in, ein Bestandskunden-Eintrag nach §7 Abs. 3 UWG mit Begründung oder nur die Antwort auf die eigene Anfrage — samt Nachweis, und warnt, wenn keine nachweisbare E-Mail-Erlaubnis besteht. Das Kästchen für Produktneuigkeiten im Demo-Formular versendet eine Bestätigungs-E-Mail und zählt erst mit dem Klick der Person; Importe erzeugen nie eine Erlaubnis. Die Firmenliste lässt sich auf die Accounts filtern, die Sie wirklich anschreiben dürfen.",
+      ],
+    },
+  },
+  {
+    version: '0.227.4-beta',
+    date: '2026-09-30',
+    time: '08:03',
+    commit: 'ef6e884',
+    highlights: {
+      en: [
+        "Message notification e-mails no longer invite you to reply by e-mail when replies can't be received; they point you to the app instead.",
+      ],
+      tr: [
+        "Mesaj bildirimi e-postaları, yanıtlar alınamadığında artık \"bu e-postayı yanıtla\" demiyor; bunun yerine uygulamaya yönlendiriyor.",
+      ],
+      de: [
+        "Benachrichtigungs-Mails zu Nachrichten fordern nicht mehr zum Antworten per E-Mail auf, wenn Antworten nicht ankommen können, sondern verweisen auf die App.",
+      ],
+    },
+  },
+  {
+    version: '0.227.3-beta',
+    date: '2026-09-30',
+    time: '07:51',
+    commit: '3e1fef4',
+    highlights: {
+      en: [
+        "The e-mail delivery log in the settings is now shown only to the platform operator. Workspace admins no longer see mail sent to other workspaces.",
+      ],
+      tr: [
+        "Ayarlardaki e-posta teslim kaydı artık yalnızca platform yöneticisine gösteriliyor; çalışma alanı yöneticileri başka alanlara giden mailleri görmüyor.",
+      ],
+      de: [
+        "Das E-Mail-Zustellprotokoll in den Einstellungen sieht jetzt nur noch der Plattformbetreiber; Admins eines Arbeitsbereichs sehen keine Mails an andere Arbeitsbereiche mehr.",
+      ],
+    },
+  },
+  {
     version: '0.227.2-beta',
     date: '2026-09-30',
     time: '07:44',

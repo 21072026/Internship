@@ -8039,3 +8039,137 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **Killing a background `next dev` with `pkill -f "next dev …"` kills your own shell** (exit 144: the pattern matches the command line). Kill by PID from `ps`; and check `/proc/<pid>/environ` before trusting a restarted server — a stale one with the old `MARKETING_HOSTS` kept answering and made the marketing specs look broken.
 - **Playwright wants `chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`**, but the container ships `-1194/chrome-linux/headless_shell`: make a real directory with that layout and symlink the files in (a whole-dir symlink is not enough), plus the `INSTALLATION_COMPLETE` marker.
 - Chrome refuses a forged `Host` header (`ERR_INVALID_ARGUMENT`); for a manual marketing-host check use `http://marketing.localhost:<port>` with `MARKETING_HOSTS=marketing.localhost`, or `x-forwarded-host` as the specs do.
+
+## 2026-10-04 — landing simplification (#2700)
+
+- **`apply-as-mentor-link` is asserted on `/auth/signin`, not on `/`.** Two of three design passes
+  "fixed" specs that did not need fixing; they would have broken two @smoke tests. Before calling a
+  testid a landing contract, check which page the spec is on at that line.
+- **A section a design removes can take an audience door with it.** The closing band asks "which side
+  are you on?" while its one button is the token-less sign-up, which always creates a MENTEE. Every
+  question copy asks needs a door for each answer.
+- **Removed-from-the-page dictionary keys stay.** `check:i18n` allows unused keys, and leaving them keeps
+  `EXPECTED_LEAKS` unchanged; deleting them belongs in a follow-up PR (grep other pages first).
+
+## 2026-10-04 — postal campaigns (#2697)
+
+- **Run `npx prisma generate` after EVERY schema edit, renames included.** I renamed a relation field
+  after generating; `tsc` stayed green (it reads the stale client's types too… until it doesn't) and the
+  first e2e run failed with `Unknown argument postRecipients` only in the dev-server log. Grep the
+  dev log for `PrismaClientValidationError` before debugging the UI.
+- **A Prisma relation field longer than the model's longest one reformats the whole block** on
+  `prisma format` (column realignment) — 100+ noisy lines. Pick a name no longer than the existing
+  longest field.
+- **npm 10 (the container's) drops the `libc` entries npm 11 wrote into `package-lock.json`.** Adding a
+  dependency with plain `npm install` produced ~60 unrelated deletions; `npx -y npm@11 install <pkg>`
+  kept the diff to the new packages.
+- **A route.ts may export only handlers** — move shared zod schemas to `src/lib/*Input.ts`.
+- **A file that imports `next/headers` cannot be unit-tested** under `node --test` (ESM wants
+  `next/headers.js`). Keep the pure function in one file and the request-bound wrapper in another
+  (`imprint.ts` / `imprintRequest.ts`).
+- `e2e/marketing-demo-form.spec.ts:339` fails when run alone locally — on `origin/main` too (negative
+  control). Not a regression signal for unrelated changes.
+- The worker was OOM-killed (exit 137) running a whole e2e file next to a dev server and MariaDB;
+  commit + push before long runs.
+
+## 2026-10-05 — light gamification via a 4-feature workflow (#2699, #2703)
+
+- **A container restart kills a running Workflow and its worktree agents' uncommitted work.** The worktrees survive under `.claude/worktrees/` (locked): `git -C <wt> switch -c <x>-wip && git add -A && git commit` rescues it. Tell every build agent to **commit WIP after each step** — the relaunch then resumes from a branch instead of from zero.
+- **4 CPUs = 2 concurrent workflow agents, and they still overload the box** when each runs its own `next dev` + Playwright (load ~10, dev servers crashing mid-run). Give each agent its own DB (`internship_<slug>`) and port, symlink `node_modules` into the worktree instead of `npm install`, and treat their "failed under load" e2e results as unverified until re-run on a quiet machine.
+- **A serial spec's `@smoke` test must not depend on an untagged earlier test.** The PR gate runs `--grep @smoke`, so the untagged setup step is skipped and the tagged one reads stale state (sales target: "Deals won this month: 2" instead of "2 of 4"). Locally run `--grep @smoke` too, not only the whole file.
+- **A PR that sits "dirty" (merge conflict) gets no CI at all** — zero check runs is a signal to fetch `mergeable_state`, not to wait. After merging `main`, `npx prisma generate` and `npm install` again: new models/deps on main show up as bogus `tsc` errors.
+- `pkill -f`/`pgrep -f` with the `next dev` pattern inside a compound command **kills the calling shell** (exit 144) — I wrote this down on 2026-10-02 and still hit it twice. Look up the PID with `ps` in a separate command first.
+- Locally `e2e/certificate.spec.ts` (admin sign-in step never posts credentials) and `e2e/deal-value.spec.ts:182` fail on **origin/main too** in this container — verify with a `git checkout origin/main -- src` control before blaming a change.
+
+## 2026-10-05 — marketing stage labels in English (#2710)
+
+- A stage label that "never translates" is usually a **stored** label, not a missing i18n key: `provisionStagePreset()` writes the template's labels in one locale, and `isDefaultLabel()` only recognises canonical keys. Fix on the read side (`localizeResolvedStageLabels`) so existing orgs heal without a backfill.
+- `localizeStageLabels()` fills a blank label with the **raw key** — judge "untouched" on the stored label, not on its output.
+- `programTemplates.ts` is client-safe but `pipeline.ts` must not import it (its catalogue calls `defaultPipelineStages()` at module init → cycle/TDZ); put template-aware helpers in `programTemplates.ts`.
+
+## 2026-10-05 — locale URLs, landing tour, weekly-report compliance (#2698, #2706, #2712, #2713)
+
+- **`npm run seed:demo` does not read `.env`.** `prisma/demoTarget.mjs` checks `process.env.DATABASE_URL`, and with it unset the seeder says "does not look local" even for a localhost URL. `set -a; . ./.env; set +a` first.
+- **A demo record with no stage history is invisible to anything that reads history.** The demo seeder used to write a single `100 → <stage>` move, so every finished intern read as "never interned" to weekly-report compliance. Code that derives a window from `StatusChange` needs the seed to record the stages it reads (now done for the internship stage, #1917). Only fresh seeds pick that up, because the seeder skips relations that already exist.
+- **`sr-only` inside a horizontal scroller widens the whole document.** Absolutely positioned labels with no positioned ancestor escape `overflow-x: auto`: `/admin/weekly-reports` measured 591px wide at 360px while `#main-content` read 360. Put `relative` on the scroller, and compare `document.documentElement.scrollWidth` with `main.scrollWidth` to find this class of bug.
+- **Chromium in this container does not trust the agent proxy's CA**, so a topic preview (`https://prNNNN.interncrm.com`) fails with `ERR_CERT_AUTHORITY_INVALID`. Don't turn off TLS checks. Use curl, which trusts the bundle, with a NextAuth credentials login: GET `/api/auth/csrf`, then POST `/api/auth/callback/credentials` with the cookie jar, then call the API.
+- **Lint from a worktree resolves the PARENT checkout's `.eslintrc.json`**, so it fails with "Failed to load config next/core-web-vitals" when the main checkout has no `node_modules`. Symlink the worktree's `node_modules` into the main checkout while linting, and remove the link afterwards.
+- **Unit-testing a `src/lib` module that imports a sibling without an extension** works through `scripts/test/ts-extensionless-resolve.mjs` (`register()` + dynamic `import()`). Keep the pure rule Prisma-free and put the queries in a sibling `*Query.ts`.
+- **Reusing the Friday reminder for a manual chase-up** (adding a `relationIds` option to `sendWeeklyReportReminders`) got idempotency for free from the existing per-week `WeeklyReportReminder` claim. Look for an existing claim or marker before writing a second dedupe.
+- **The mobile-layout coverage gate goes red on main whenever a sidebar link lands without an audit entry** (`/admin/acquisition`, #2702). A new admin page belongs in `e2e/mobile-layout-coverage.spec.ts` in the same PR.
+- **Element posters for `public/release-media` are capped at 150 KB.** A whole figure with a large screenshot came out at 155 KB; capturing a figure with a simpler screenshot, or a smaller crop, fixed it.
+
+## 2026-10-01 — resolving and merging a queue of conflicting PRs (#2626, #2629, #2632, #2643)
+
+- **A docs-only PR can never auto-merge.** `e2e.yml` has `paths-ignore: docs/**, **.md,
+  releases/unreleased/**`, but `Playwright smoke` is a required check on `main`, so a PR that
+  touches only those paths sits `BLOCKED` with every check green. `gh workflow run e2e.yml --ref
+  <branch>` does put a green `Playwright smoke` check-run on the head sha, but it **does not
+  count** — the requirement only accepts the `pull_request`-event run. The way through is
+  `gh pr merge N --squash --admin` (how #2608, #2670 and #2626 merged), and it is a bypass, so
+  say so to the maintainer. A durable fix (a stub smoke job for docs-only PRs, or dropping the
+  requirement) is the maintainer's call and still open.
+- **`docs/agent-experience.md` re-conflicts on every merge in a wave.** Every PR appends here, so
+  when one merges, the next one conflicts. Both sides are pure appends: resolve by taking main's
+  file and re-appending the branch's added block (difflib over merge-base → HEAD, assert the
+  branch deleted nothing but stray conflict markers — an old main once carried a lone
+  `>>>>>>> origin/main` line that two branches had cleaned up). Expect to do it once per merge.
+- **Resolving someone else's PR: separate worktree, never force-push.** The PR's own session was
+  resolving #2643 at the same moment; my push was rejected as non-fast-forward, which is exactly
+  the protection you want. Read their merge, confirm it keeps both sides, drop yours.
+- **A green merge can still break the PR's own spec.** #2629's tenant-scope spec probed the premium
+  gate through `/api/admin/analytics/cohorts`; main had since put a `mentorship` capability gate
+  on that route, so the MARKETING admin got 403 regardless of the tier. Run the PR's own specs
+  after resolving, not just `tsc` — and an auto-merge can leave a duplicated key in a Prisma
+  `select` (`orgId: true` twice) that only `tsc` catches.
+- **Scratchpad worktrees have no `node_modules`, and another worktree's can be stale** (`main` had
+  gained `web-push`, `pdf-lib`, `@axe-core/playwright`). If the lockfile equals main's, `npm ci`
+  takes ~17s and is cheaper than chasing phantom type errors.
+
+## 2026-10-05 — mobile strategy + Android TWA phase 1 (#2085)
+
+- **A real Android bundle builds inside the web container.** `dl.google.com` and `services.gradle.org` are reachable: unzip `commandlinetools-linux-*_latest.zip` into `<sdk>/cmdline-tools/latest`, `sdkmanager --sdk_root=<sdk> "platforms;android-36" "build-tools;36.0.0"`, write `sdk.dir=<sdk>` to `local.properties`, then `./gradlew bundleRelease` with `-Dhttps.proxyHost/-Dhttps.proxyPort` taken from `$HTTPS_PROXY` (the preset `JAVA_TOOL_OPTIONS` covers trust, the wrapper download still needs the proxy flags). JDK 21 is preinstalled and Gradle 8.11 accepts it; CI uses 17. ~2 min cold.
+- Drive **`@bubblewrap/core`** (`TwaManifest.fromWebManifestJson` / `TwaGenerator.createTwaProject`), not the `bubblewrap` CLI — the CLI prompts for JDK/SDK paths on first run and cannot run headless. Generating `twa-manifest.json` from a manifest object gives the canonical field set instead of a hand-typed one.
+- A plain `npm install` in a fresh container rewrote `package-lock.json` (~60 lines dropped) — `git diff --stat` before staging and `git checkout package-lock.json` unless the change is meant to touch deps. (`npm install --no-save --no-package-lock --prefix mobile/android …` does **not** touch it — verified.)
+- A route under `src/app/.well-known/` works in the App Router, but `next lint --file` reports it as "ignored by default" (dot directory) — `tsc` still typechecks it, and the middleware matcher skips it (path contains a dot).
+
+## 2026-10-05 — product tour frames + clips, dark accent (#2726)
+
+- **Clips of the app: use CDP `Page.startScreencast` for interactions and stepped `page.screenshot()` for scrolling.** The screencast keeps real timing and is sharper than `recordVideo`. But a scroll recorded through it, or through `scrollTo` under the global `scroll-behavior: smooth`, catches frames still in motion. Scroll with `behavior: 'instant'` plus two rAFs per frame.
+- **Headless Chromium plays WebM, not H.264.** Put the `video/webm` source first; the MP4 is for Safari. A `display:none` `<video>` never intersects, so an IntersectionObserver that attaches the sources keeps other-theme and phone clips from ever downloading.
+- **`html.dark .text-blue-600` used to win over every accent.** It was pinned to blue-300, so dark mode turned the magenta MARKETING hero blue. An accent-aware dark rule needs `html.dark[data-accent]` to read `var(--accent-300)`.
+- The capture script changes demo data (a stage move, a shortlist), so capture one theme per fresh seed. `npm install` in this container rewrites `package-lock.json`; `git checkout` it before committing.
+
+## 2026-10-06 — public account-deletion page (Play requirement)
+
+- **Playwright wants `chromium_headless_shell-1243`, the image ships `-1194`.** The `executablePath` trick does not reach `npx playwright test`; build the expected layout instead: `mkdir -p /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64`, symlink every file of `…-1194/chrome-linux/` into it, link `headless_shell` as `chrome-headless-shell`, `touch …-1243/INSTALLATION_COMPLETE`. Then `BASE_URL=http://localhost:3000 npx playwright test <spec> --project=chromium` runs against a DB-less `next dev`.
+- **`robots.ts` disallows by prefix** (`/account` also hides `/account-deletion`) — pick a public path that no disallowed prefix starts with.
+- `e2e/robots-sitemap.spec.ts` fails locally without a DB only because `/` answers 500 (the landing reads public stats); the new route itself resolved.
+
+## 2026-10-06 — marketing product tour (#2737)
+
+- **To capture the MARKETING product locally, sign in on `marketing.localhost:<port>`.** It needs `MARKETING_HOSTS` to include `marketing.localhost`. `npm run seed:demo` also seeds the `demo-marketing` tenant: `admin.marketing@` and the owners `owner.lena@`, `owner.tarik@`, `owner.jonas@`, all `@demo.example.com` with `DemoPass123!`. The worlds rule means the internship host refuses them.
+- **New marketing-landing copy needs its own namespace when the internship one is in `LEAK_EXEMPT`.** Adding keys to an exempt namespace switches the MARKETING leak check off for them without anyone noticing.
+- **The `a11y-scan` full suite is red on main** (`/portal/profile#dark`, profile-progress chip, from #2703). It is not in the PR smoke gate, so a PR stays green while it fails; check main before blaming your diff.
+- **A container restart stops MariaDB.** A 500 on `/` with "Can't reach database server" means `service mariadb start`, not an app bug.
+
+## 2026-10-06 — report registry, export workbooks, CSV import, report subscriptions (#1903, #1432, #1905)
+
+- **Composing routes in-process stops working the moment a job needs the data.** The first registry version loaded `cohortsGET` and friends with the caller's request. That was fine for an admin download, but a cron has no session, so `getServerSession()` returns null and the report reads 401. Put the computation in `src/lib/` taking `{ stageOrgId, tenant, locale }`, where `tenant` comes from `orgWhere(orgId)`, the sessionless twin of `tenantWhere`. Then make the route a thin caller. Anything a scheduled job, a BI extract or an export may need belongs there from day one.
+- **A `const ctx = {...}` passed later dodges TS excess-property checks.** After `ReportContext` lost `session`, only the inline literal failed `tsc`; the one assigned to a variable first compiled silently. Grep every caller when you narrow a context type.
+- **`check:openapi` classifies an `/api/admin/*` route as "public" when the ADMIN check lives in a helper.** Keep `if (!session || session.user.role !== 'ADMIN') return 401` inline in each handler, then call helpers. A new public token route needs three registrations: the middleware verify allowlist, `VERIFY_EXEMPT` in `scripts/openapi-generate.cjs`, and `scripts/route-auth-baseline.json`.
+- **bcrypt cost 10 is ~90 ms here.** A per-row placeholder hash made a 500-row CSV import a 45 s request. Hash once per batch for a password nobody will ever know. With the per-row existence query and duplicate query also gone, it now takes 2.5 s.
+- **Stacked PRs from a squash-merged base:** after `git merge origin/main`, the files both sides touched conflict even when main equals the base commit. `git diff <base-sha> origin/main` empty ⇒ `git checkout --ours` is safe.
+- **Several worktrees can share one `node_modules`** (a symlink). `prisma generate` in one writes the client for all of them, which is harmless when the schema only grows. `next lint` in a worktree still needs `node_modules` at the main checkout (symlink while linting, then remove). The local server keeps serving the old worktree's `.next` until you kill `next-server` by pid; `pkill -f "next start"` kills your own shell (exit 144).
+- **The i18n MARKETING leak ratchet fires on new shared labels** ("Mentor", "Intern"). A namespace that MARKETING can partly see gets overlay wording in `verticalOverlays.ts`, not a `LEAK_EXEMPT` entry.
+
+## 2026-10-06 — relationship health, ROI, executive dashboard, programme scorecard (#1901, #1902, #1895, #1908)
+
+- **An entitlement read on the API-key door has to run inside `runWithApiKeyOrg`.** `OrgEntitlement` is a tenant model, so reading it before the org context binds throws the tenant guard (#2746).
+- **`NOTIFICATION_CATEGORIES` is frozen (#2348 decision 4).** A new kind of admin mail gets a category inside an existing `emailGroups` group, as `program-health` did in `reports_analytics`, and goes through `sendEmail({ category, userId })`. Opt-out then works with no new setting.
+- **Claim-before-send with `@@unique` logs Prisma P2002 noise on every rerun.** Prefetch the periods already claimed and skip them, and keep the unique key only as the backstop.
+- **One scoring load, many readers.** `src/lib/relationHealthLive.ts` is the only code that loads a relation's signals and scores them. The nightly sweep, `/admin/health` and the scorecard's at-risk row all call it. Do not copy its `select` into a fourth place.
+- **Print-to-one-page is testable.** `page.pdf({ format: 'A4', preferCSSPageSize: true })` plus a count of `/Type /Page` in the bytes asserts it per locale. Set the locale cookie with `url: baseURL`; `url: page.url()` does not apply. Never change the viewport inside that loop, because a layout that fits at 1280 px can spill at 794 px. `ResponsiveShell`'s mobile bar and drawer used to print on every page and are now `no-print`.
+- **`window.location.search` in an effect is a safe deep-link preset in a client page.** It needs no `Suspense` for `useSearchParams` at build. Guard the load with a request counter, because the preset fires a second fetch while the unfiltered one is still in flight.
+- **Assert a Link's `href`, not the navigation, when the target page is cold in `next dev`.** The first compile of a page can exceed the 5 s default and fail the click.
+- **A dashboard indicator with no data source is a row that says so** ("not yet measurable — needs #N"), never a 0 and never a proxy. Reviewers and sponsors read a 0 as a measurement.

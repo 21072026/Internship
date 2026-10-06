@@ -72,6 +72,7 @@ export async function POST(request: Request) {
           hoursSpent: parsed.data.hoursSpent ?? null,
           blockers: parsed.data.blockers?.trim() || null,
           status: parsed.data.status,
+          submittedAt: parsed.data.status === 'SUBMITTED' ? new Date() : null,
         },
       });
       return NextResponse.json({ report }, { status: 201 });

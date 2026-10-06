@@ -85,7 +85,7 @@ console.log(`Pipeline stages : ${stageKeys.join(', ')}`);
 console.log(`Field policy    : ${args.authoritative === true ? 'authoritative (overwrites)' : 'fill gaps only'}`);
 console.log(`Columns known   : ${MARKETING_IMPORT_COLUMNS.map((c) => c.header).join(', ')}`);
 console.log(
-  `Not stored yet  : ${MARKETING_COLUMNS_WITHOUT_TARGET.join(', ')} — validated and carried in --report, no column yet (channels: #2408)`,
+  `Not stored yet  : ${MARKETING_COLUMNS_WITHOUT_TARGET.join(', ')} — validated and carried in --report, no column yet`,
 );
 
 console.log(`\nRows: ${report.total}`);

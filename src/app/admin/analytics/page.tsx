@@ -1,5 +1,6 @@
 'use client';
 
+import { ProgramScorecard } from '@/components/admin/ProgramScorecard';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
@@ -16,10 +17,11 @@ import { MatchQuality } from '@/components/admin/MatchQuality';
 import { TrialConversionCard, type TrialConversionData } from '@/components/admin/TrialConversionCard';
 import { DealValueCard } from '@/components/admin/DealValueCard';
 import { useT } from '@/i18n/client';
-import { usePremiumAnalytics } from '@/lib/premiumAnalyticsClient';
+import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { VerticalCapability } from '@/lib/verticals';
+import { DEFAULT_MIN_COHORT } from '@/lib/reports/definitions';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -172,14 +174,16 @@ export default function AdminAnalyticsPage() {
   // one request that answers the question, where this used to probe the gated
   // cohorts endpoint and infer the tier from a 403 (#1442). `null` = not known
   // yet, so neither the premium cards nor the locked panel is drawn.
-  const premium = usePremiumAnalytics();
+  const entitlements = useAnalyticsEntitlements();
+  const premium = entitlements === null ? null : entitlements.advancedAnalytics;
+  // REPORT_EXPORT (#1740): the export buttons reflect it; the export route enforces it.
+  const canExport = entitlements?.reportExport === true;
 
   // The word this screen uses for "reached the outcome". A tenant that renamed
   // its last pipeline stage gets ITS name; everyone else keeps the translated
   // strings that were here before #1882, so a default-catalogue tenant sees
   // exactly the same text as before.
   const outcomeName = data?.finishedLabelIsCustom ? data.finishedLabel : undefined;
-  const outcomeHeading = outcomeName ?? t.analytics.cohortHired;
   const outcomeWord = outcomeName ?? t.analytics.hired;
   const conversionLabel = outcomeName
     ? t.analytics.conversionToStage.replace('{stage}', outcomeName)
@@ -222,122 +226,24 @@ export default function AdminAnalyticsPage() {
   // Drop-off reason label (#810), falling back to the raw code for anything
   // outside the current whitelist (defensive — should not normally happen).
   const reasonLabel = (code: string) => (t.dropoff.reasons as Record<string, string>)[code] ?? code;
-  // KPI rows shared by both exports (#815) — the ratios travel with the counts
-  // rather than living only on screen.
-  const kpiSheets = () => {
-    if (!kpi) return [];
-    const k = t.analytics.funnelKpi;
-    const sheets = [
-      {
-        name: 'Conversion',
-        columns: [k.stage, k.entered, k.advanced, k.conversion],
-        rows: kpi.conversions.map((c) => [
-          label(c.key),
-          c.entered,
-          c.advanced,
-          c.rate === null ? (c.terminal ? '—' : k.noData) : `${c.rate}%`,
-        ]),
-      },
-    ];
-    if (kpi.timeToHire.completed > 0) {
-      sheets.push({
-        name: 'Time to hire',
-        columns: [k.timeToHireMedian, k.timeToHireAvg, k.entered],
-        // The population comes along, so a spreadsheet cannot quote the median
-        // without the caveat the screen shows.
-        rows: [[
-          kpi.timeToHire.medianDays ?? '—',
-          kpi.timeToHire.avgDays ?? '—',
-          `${kpi.timeToHire.completed}/${kpi.timeToHire.considered}`,
-        ]],
-      });
+  // The workbooks come from the export route (#1740) as finished sheets — rows
+  // and localized labels built server-side (src/lib/reports/workbooks.ts,
+  // #1903), gated by the org's REPORT_EXPORT entitlement (the full report also
+  // by ADVANCED_ANALYTICS). This screen only writes the file.
+  const exportWorkbook = async (dataset: 'analytics' | 'analytics-full') => {
+    const res = await fetch(`/api/admin/export/${dataset}${rangeQuery(range)}`);
+    if (!res.ok) {
+      setError(res.status === 403 ? t.common.exportLocked : t.common.error);
+      return;
     }
-    // Trial → paid (#2556): one row per trial month, and the source split
-    // when the tier includes it. An immature month exports "—", not a rate
-    // the screen would not show.
-    if (kpi.trialConversion) {
-      const tk = t.analytics.trialKpi;
-      sheets.push({
-        name: 'Trial to paid',
-        columns: [tk.month, tk.started, tk.paid, tk.rate],
-        rows: kpi.trialConversion.months.map((m) => [m.month, m.started, m.paid, m.rate === null ? '—' : `${m.rate}%`]),
-      });
-      if (kpi.trialConversion.bySource && kpi.trialConversion.bySource.length > 0) {
-        sheets.push({
-          name: 'Trial by source',
-          columns: [tk.source, tk.started, tk.paid, tk.rate],
-          rows: kpi.trialConversion.bySource.map((s) => [
-            s.name ?? tk.noSource,
-            s.trials,
-            s.paid,
-            s.rate === null ? '—' : `${s.rate}%`,
-          ]),
-        });
-      }
-    }
-    if (kpi.capacity.length > 0) {
-      sheets.push({
-        name: 'Capacity',
-        columns: [k.mentor, k.activeMentees, k.ceiling, k.overloaded],
-        rows: kpi.capacity.map((m) => [
-          m.fullName,
-          m.activeMenteeCount,
-          m.capacityKnown ? (m.mentorCapacity as number) : k.noCeiling,
-          m.overloaded ? '!' : '',
-        ]),
-      });
-    }
-    return sheets;
-  };
-  const dropReasonRows = (aging?.dropReasons ?? []).map((d) => [label(d.pipelineStatus), reasonLabel(d.reasonCode), d.count]);
-
-  const exportExcel = async () => {
-    if (!data) return;
+    const { sheets } = await res.json();
     const { exportXlsxSheets } = await import('@/lib/excel');
-    await exportXlsxSheets(`analytics-${new Date().toISOString().slice(0, 10)}`, [
-      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), data.funnel[s.key] || 0]) },
-      ...kpiSheets(),
-      ...(dropReasonRows.length > 0
-        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
-        : []),
-    ]);
+    await exportXlsxSheets(`${dataset}-${new Date().toISOString().slice(0, 10)}`, sheets);
   };
-
-  // Premium full-report Excel (#540): one workbook covering funnel, trends,
-  // mentor workload plus the premium cohort/source reports.
-  const exportFullExcel = async () => {
-    if (!data) return;
-    // Cohorts are only read for a vertical that has them — the route refuses
-    // every other one (leak audit WP3), and the workbook then has no such sheet.
-    const [cohortsRes, sourcesRes] = await Promise.all([
-      showMentorship ? fetch('/api/admin/analytics/cohorts') : Promise.resolve(null),
-      fetch('/api/admin/analytics/sources'),
-    ]);
-    if ((cohortsRes && !cohortsRes.ok) || !sourcesRes.ok) return; // tier switched off mid-session
-    const cohorts = (cohortsRes ? (await cohortsRes.json()).cohorts : []) as { name: string; term?: string | null; total: number; inProgress: number; hired: number; conversionToHired: number; avgDaysToHired: number | null; interactionsPerRelation: number }[];
-    const sources = (await sourcesRes.json()).sources as { name: string; mentees: number; inPipeline: number; hired: number; conversionToHired: number }[];
-    const { exportXlsxSheets } = await import('@/lib/excel');
-    const a = t.analytics;
-    await exportXlsxSheets(`analytics-full-${new Date().toISOString().slice(0, 10)}`, [
-      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), data.funnel[s.key] || 0]) },
-      ...kpiSheets(),
-      ...(data.trends ? [{
-        name: 'Trends',
-        columns: [a.fullReportMonth, a.trendNewRelations, a.trendInteractions],
-        rows: data.trends.months.map((m, i) => [m, data.trends!.newRelations[i], data.trends!.interactions[i]]),
-      }] : []),
-      ...(showMentorship
-        ? [{ name: 'Mentors', columns: ['Mentor', a.active, outcomeWord], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) }]
-        : []),
-      ...(showMentorship
-        ? [{ name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, outcomeHeading, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) }]
-        : []),
-      { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, outcomeHeading, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
-      ...(dropReasonRows.length > 0
-        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
-        : []),
-    ]);
-  };
+  const exportExcel = () => exportWorkbook('analytics');
+  // Premium full-report Excel (#540): funnel, KPIs, trends, mentor workload
+  // and the cohort/source reports — the latter two behind the privacy floor.
+  const exportFullExcel = () => exportWorkbook('analytics-full');
 
   return (
     <div>
@@ -363,18 +269,30 @@ export default function AdminAnalyticsPage() {
               { value: 'all', label: t.analytics.allTime },
             ]}
           />
-          <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data}>{t.analytics.exportExcel}</Button>
+          <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>{t.analytics.exportExcel}</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
           {premium && (
             <>
-              <Button variant="outline" size="sm" onClick={exportFullExcel} disabled={!data} data-testid="full-report-excel">{t.analytics.fullReportExcel}</Button>
+              <Button variant="outline" size="sm" onClick={exportFullExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined} data-testid="full-report-excel">{t.analytics.fullReportExcel}</Button>
               <Link href="/admin/analytics/report" className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors" data-testid="full-report-link">
                 {t.analytics.fullReport}
+              </Link>
+              <Link href="/admin/analytics/roi" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="roi-link">
+                {t.roi.screen.openFromAnalytics}
+              </Link>
+              <Link href="/admin/analytics/executive" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="executive-link">
+                {t.executive.openFromAnalytics}
+              </Link>
+              <Link href="/admin/reports/subscriptions" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="schedule-reports-link">
+                {t.reportSubscriptions.ui.openFromAnalytics}
               </Link>
             </>
           )}
         </div>
       </div>
+
+      {/* "Is this programme healthy?" (#1908) — the verdict first, the detail below. */}
+      <ProgramScorecard />
 
       {error && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
@@ -958,6 +876,12 @@ export default function AdminAnalyticsPage() {
         <>
           <ProgramBenchmark />
           <SourceConversion />
+          {/* The privacy floor (#1903): the cards above show every cohort and
+              source to the admin, but the exported reports merge small groups
+              — say so where the export buttons' output is described. */}
+          <p className="mb-6 text-xs text-gray-500 dark:text-gray-400" data-testid="report-floor-footnote">
+            {t.reports.exportFootnote.replace('{n}', String(DEFAULT_MIN_COHORT))}
+          </p>
         </>
       )}
         </>

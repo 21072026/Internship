@@ -101,9 +101,13 @@ const LEAK_EXEMPT: Record<string, string> = {
   portal: 'The mentee portal shell: src/app/portal/layout.tsx redirects every org without the `mentorship` capability to /account.',
   portalInsights: 'Rendered only inside /portal (see `portal`).',
   mentorAnalytics: 'Read only by the mentor shell (src/app/mentor), whose layout sends a MARKETING MENTOR to /sales.',
+  mentorImpact: 'The private impact card on /mentor only (src/app/mentor/page.tsx) — the mentor layout sends a MARKETING MENTOR to /sales, and getMentorImpact() returns null without the `mentorship` capability.',
   offers: 'Offer management — `/api/offers` refuses an org without the `placements` capability (requireCapability).',
   offersAdmin: 'The admin offer screen over the same `placements`-gated API.',
   offerEmail: 'Sent only by src/lib/offerNotify.ts, i.e. by the `placements`-gated offer API.',
+  adminWeeklyReports: '/admin/weekly-reports (#1918) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
+  adminHealth: '/admin/health (#1902) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
+  productTour: 'The internship landing\'s product tour (#1399): ProductTour reads it only for an INTERNSHIP host, and its screenshots show the internship product. The MARKETING tour reads `productTourMarketing`, which is deliberately not exempt.',
 };
 
 // The pinned counts. Lower them when a change removes leaks; never raise them

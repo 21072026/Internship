@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server';
-import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
+import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
-import { outcomeStageKeys } from '@/lib/pipelineStages';
-import { attributedLeadWhere, sourceAttributionRows } from '@/lib/leadAttribution';
+import { sourceConversion } from '@/lib/analyticsReports';
 import { getLocale } from '@/i18n/server';
-import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { tenantWhere } from '@/lib/tenantFilter';
 
 // GET — lead attribution: per referral source, how many people came in and what
 // share of them reached the tenant's finished stage (Faz 2, #539; generalised to
@@ -38,8 +35,8 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 //
 // 2. THE PREMIUM GATE STAYS. A MARKETING tenant does NOT get attribution for
 //    free. Which reports a tenant has paid for is a plan/entitlement question,
-//    and `premiumAnalytics` is already resolved per tenant (src/lib/settings.ts
-//    reads the org row first, then the global one), so an org that buys the tier
+//    and ADVANCED_ANALYTICS is resolved per tenant (entitled() in
+//    src/lib/entitlements.ts: the org's plan or a grant), so an org that buys the tier
 //    gets the report whatever its vertical is. Making the answer depend on the
 //    vertical instead would be a second, parallel entitlement system whose rules
 //    nobody could state — and it would price a feature by which product the
@@ -51,71 +48,18 @@ export async function GET() {
   }
   // The CALLER's tier, org passed explicitly: this runs before the tenant
   // scope binds, so a bare call read only the global row.
-  if ((await getSetting('premiumAnalytics', await settingsOrgOf(session))) !== 'true') {
-    return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
+  if (!(await entitled(await settingsOrgOf(session), 'ADVANCED_ANALYTICS'))) {
+    return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });
   }
 
   const locale = await getLocale();
 
   return await withTenantScope(session, async () => {
     const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
-    const outcome = await outcomeStageKeys(orgId, locale);
     // The caller's tenant, by hand (#2570) — the middleware is dormant, and
-    // both halves of this report are tenant data: another tenant's sources and
-    // (worse) its count of unsourced leads were returned here until now.
-    const tenant = await tenantWhere(session);
-
-    const sources = await prisma.source.findMany({
-      where: withinTenant({}, tenant),
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        users: {
-          where: withinTenant(attributedLeadWhere(), tenant),
-          select: { menteeRelations: { select: { pipelineStatus: true } } },
-        },
-      },
-    });
-
-    const rows = sourceAttributionRows(
-      sources.map((s) => ({
-        id: s.id,
-        name: s.name,
-        leads: s.users.map((u) => ({ stages: u.menteeRelations.map((r) => r.pipelineStatus) })),
-      })),
-      outcome.finished,
-    );
-
-    // People with no source at all, so the report accounts for everyone — the
-    // untracked share is itself the answer to "how much of this do we know?",
-    // and it is the reason no separate "no campaign" bucket is needed.
-    //
-    // A lead whose channel is not known is counted HERE and nowhere else: the
-    // attribution writers (src/lib/leadSource.ts) leave `sourceId` NULL for an
-    // unknown channel rather than creating an "unknown" Source (#2570).
-    //
-    // "No source" means no source OF THIS TENANT: a lead whose `sourceId`
-    // points at another tenant's row (a source the deploy backfill gave to the
-    // default org, attached through the pre-#2570 unscoped picker) is filtered
-    // out of the list above, so it is counted here instead of vanishing from
-    // both halves. `prisma/check-tenant-misattribution.mjs` sizes those rows.
-    // An `AND` of conjuncts, so neither `OR` can replace the tenant fragment's.
-    // The "outside" half is spelled per case because SQL's NOT over a NULL is
-    // NULL: `NOT (orgId = 'm')` would silently skip a NULL-org source, which
-    // for a non-default tenant is exactly the outside row to count.
-    const outsideTenant: Prisma.SourceWhereInput | null =
-      'orgId' in tenant
-        ? { OR: [{ orgId: null }, { orgId: { not: tenant.orgId } }] }
-        : 'OR' in tenant
-          ? { AND: [{ orgId: { not: null } }, { orgId: { not: tenant.OR[0].orgId } }] }
-          : null;
-    const noSourceHere: Prisma.UserWhereInput = outsideTenant
-      ? { OR: [{ sourceId: null }, { source: { is: outsideTenant } }] }
-      : { sourceId: null };
-    const unsourced = await prisma.user.count({
-      where: withinTenant({ AND: [attributedLeadWhere(), noSourceHere] }, tenant),
-    });
+    // both halves of this report are tenant data. The computation, including
+    // who counts as "unsourced", is src/lib/analyticsReports.ts's (#1905).
+    const { rows, unsourced, outcome } = await sourceConversion({ stageOrgId: orgId, tenant: await tenantWhere(session), locale });
 
     return NextResponse.json({
       sources: rows,

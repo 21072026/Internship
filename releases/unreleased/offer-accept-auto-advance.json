@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Accepted offer → hired stage, opt-in** (#2658, part 1). New org setting `autoAdvanceOnOfferAccept` (default `false`, on `/admin/settings` for verticals with `placements`). When on, accepting an offer moves its relation to `HIRED_660` after the acceptance commits, through the stage write path extracted from `PUT /api/mentorship/[id]` into `src/lib/stageMove.ts` (`stageMoveData` + `recordStageMove`: StatusChange row, activity entry, notification/webhook, stage SLA) — the PUT now calls the same two functions. The decision is pure and unit-tested (`src/lib/offerAutoAdvanceRule.ts`, `scripts/test/offer-auto-advance.test.mjs`): never invents a stage (a pipeline without `HIRED_660` is a logged skip), never moves backwards, never rewrites a completed relation; the write is a conditional `updateMany` on the stage it read, so a concurrent hand-made move wins. The move is the system's (`changedById: null`, #2527) and can never fail the acceptance. Every skip is logged as `offer.auto_advance_skipped` with its reason. Part 2 (linked `Application` → HIRED) waits on #1828. e2e: `e2e/offer-auto-advance.spec.ts`.",
-  "notes": {
-    "en": ["New setting: when an offer is accepted, the record can move to the hired stage by itself — with the usual stage history and notifications. Off by default."],
-    "tr": ["Yeni ayar: bir teklif kabul edildiğinde kayıt kendiliğinden işe alındı aşamasına geçebilir — olağan aşama geçmişi ve bildirimleriyle. Varsayılan kapalı."],
-    "de": ["Neue Einstellung: Wird ein Angebot angenommen, kann der Datensatz von selbst in die Phase „Eingestellt“ wechseln — mit dem üblichen Phasenverlauf und den Benachrichtigungen. Standardmäßig aus."]
-  }
-}

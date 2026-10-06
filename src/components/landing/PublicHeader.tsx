@@ -12,6 +12,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { GITHUB_URL } from './links';
 import { useVertical } from '@/lib/verticalClient';
 import { productNameFor } from '@/lib/verticals';
+import { localizeHref, splitLocalePrefix } from '@/lib/localePath';
+import type { Locale } from '@/i18n/config';
 
 /**
  * The one header every public page wears (#1197).
@@ -37,6 +39,7 @@ export function PublicHeader({
   showRegister = true,
   dashboardHref,
   hideInternshipLinks = false,
+  urlLocale = null,
 }: {
   showRegister?: boolean;
   /** Set when the visitor is signed in — the route to their own dashboard. */
@@ -47,6 +50,11 @@ export function PublicHeader({
    * because this client component cannot read the vertical itself.
    */
   hideInternshipLinks?: boolean;
+  /**
+   * The language of the URL this page was served on (#1386), from PublicShell:
+   * on `/tr/…` the nav stays in Turkish URLs. Null on an unprefixed page.
+   */
+  urlLocale?: Locale | null;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -106,9 +114,14 @@ export function PublicHeader({
     ...(hideInternshipLinks ? [] : [{ href: '/for-companies', label: n.forCompanies }]),
     ...(hideInternshipLinks ? [] : [{ href: '/pricing', label: n.pricing }]),
     ...(hideInternshipLinks ? [] : [{ href: '/projects', label: n.showcase }]),
-  ];
+  ].map((l) => ({ ...l, href: localizeHref(l.href, urlLocale) }));
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  // Compared without the language prefix, so `/tr/features` marks Features.
+  const here = splitLocalePrefix(pathname ?? '/').rest;
+  const isActive = (href: string) => {
+    const target = splitLocalePrefix(href).rest;
+    return here === target || here.startsWith(`${target}/`);
+  };
 
   return (
     <header
@@ -118,7 +131,7 @@ export function PublicHeader({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="h-16 flex items-center justify-between gap-2">
           <Link
-            href="/"
+            href={localizeHref('/', urlLocale)}
             data-testid="public-home-link"
             aria-label={n.homeLink}
             className="flex items-center gap-2 min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"

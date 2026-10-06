@@ -76,7 +76,7 @@ test('an admin forgets an account-less contact in their own tenant only (#2559)'
     // A differently-cased retype is the same address.
     const ok = await post({ email: s.contact.toUpperCase(), confirmEmail: s.contact, adminPassword: PW });
     expect(ok.status(), await ok.text()).toBe(200);
-    expect(await ok.json()).toMatchObject({ ok: true, inquiries: 1, companies: 1 });
+    expect(await ok.json()).toMatchObject({ ok: true, inquiries: 1, companies: 1, contacts: 0 });
 
     const inquiry = await prisma.companyInquiry.findUniqueOrThrow({ where: { id: s.own.inquiry.id } });
     expect(inquiry.contactName).toBe('Erased contact');
@@ -95,7 +95,7 @@ test('an admin forgets an account-less contact in their own tenant only (#2559)'
 
     // One audit row, and it does not keep the address it was asked to forget.
     const log = await prisma.activityLog.findFirstOrThrow({ where: { action: 'company_contact.forget', actorId: s.admin.id } });
-    expect(log.detail).toBe('1 enquiries, 1 companies');
+    expect(log.detail).toBe('1 enquiries, 1 companies, 0 address-book entries');
     expect(JSON.stringify(log)).not.toContain(s.contact);
 
     // Nothing left to forget here now.

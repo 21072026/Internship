@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
@@ -23,6 +24,11 @@ test('candidates: city filter narrows results and CSV export downloads', async (
     await page.fill('input[type="password"]', ADMIN_PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
+    // Exports need REPORT_EXPORT (#1740). The default org has it in every
+    // real deployment (grandfathered on the deploy that added the gate), so it
+    // is granted, and left granted: revoking it here would race the other
+    // export specs running in parallel against the same org.
+    await setOrgFeatureFor(page, 'REPORT_EXPORT', true);
 
     await page.goto('/admin/candidates');
     await page.getByPlaceholder('Filter by city').fill(`Cologne${tag}`);

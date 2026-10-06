@@ -1,0 +1,23 @@
+{
+  "bump": "minor",
+  "changelog": "**`/admin/health` — the org-wide at-risk queue** (#1902; docs/relationship-health.md § The admin monitor). `GET /api/admin/health` (ADMIN-only in the handler, `requireCapability('mentorship')`, tenant as a hand-written conjunct) scores every ACTIVE relation of the tenant now — through `src/lib/relationHealthLive.ts`, which the nightly sweep now shares — and returns them worst first (`compareHealthRows`), filterable by band, mentor, cohort and stage, with reasons, the 30-day series and 7/30-day delta from the #1901 snapshots, header counters (healthy / watch / at-risk / crossed into red in 7 days) and exclusion counts (dormant, not active, nothing to do). Each row carries exactly one next action from `src/lib/healthNextAction.ts` — reassign (deactivated mentor; `/admin/mentorship?transfer=<id>` now opens the change-mentor dialog), record a drop-off reason, message the mentor (opens the DM), set a stage deadline (`/admin/candidates/[id]#relation-stage`). New nav entry (HeartPulse), EN/TR/DE strings including the rule descriptions, and a \"how this score is computed\" disclosure linking the published rules. Covered by `scripts/test/admin-health.test.mjs` and `e2e/admin-health.spec.ts`.",
+  "notes": {
+    "en": [
+      "New Relationship health screen for admins: every active mentoring relationship, worst first, with the reasons it is slipping and one click to the fix — message the mentor, reassign, set a stage deadline or record why it ended."
+    ],
+    "tr": [
+      "Yöneticiler için yeni İlişki sağlığı ekranı: tüm aktif mentorluk ilişkileri en kötüden başlayarak, neden zayıfladıkları ve tek tıkla çözümü — mentöre yaz, yeniden ata, aşama son tarihi koy ya da neden bittiğini kaydet."
+    ],
+    "de": [
+      "Neue Ansicht „Beziehungs-Health“ für Admins: alle aktiven Mentoring-Beziehungen, die schwächsten zuerst, mit den Gründen und einem Klick zur Lösung — Mentor anschreiben, neu zuordnen, Phasenfrist setzen oder den Abbruchgrund erfassen."
+    ]
+  },
+  "media": {
+    "poster": "release-media/admin-health-monitor.png",
+    "alt": {
+      "en": "The relationship health queue: three mentoring relationships ranked worst first, each with its score, a 30-day trend in bars, the reasons it is slipping and one next action such as recording a drop-off reason or setting a stage deadline",
+      "tr": "İlişki sağlığı kuyruğu: en kötüden başlayarak sıralanmış üç mentorluk ilişkisi; her birinde skor, çubuklarla 30 günlük eğilim, zayıflama nedenleri ve ayrılma nedenini kaydetmek ya da aşama son tarihi koymak gibi tek bir sonraki adım",
+      "de": "Die Warteschlange „Beziehungs-Health“: drei Mentoring-Beziehungen, die schwächste zuerst, jeweils mit Score, 30-Tage-Verlauf als Balken, den Gründen und einem nächsten Schritt wie „Abbruchgrund erfassen“ oder „Phasenfrist setzen“"
+    }
+  }
+}

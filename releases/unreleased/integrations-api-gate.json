@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**INTEGRATIONS_API entitlement over the public API and webhooks** (#1744; docs/api-explorer.md § Which plan includes the API). New feature key in Program Plus, Enterprise and Employer Plus. `withApiKey()` checks it once the key's org is bound, keyed to the route's scope (`SCOPE_ENTITLEMENT` in `src/lib/apiScopes.ts`): a live key of an unentitled org gets `403 { code: 'feature_locked', feature: 'INTEGRATIONS_API' }`, never a 401, and is not revoked. `check:api-key-routes` fails an `/api/v1` route whose scope is not gated. Creating a webhook, changing its URL/events, re-activating it and issuing a key with a public-API scope are refused without the feature; pausing/deleting webhooks, revoking keys, rotating secrets, delivery of existing webhooks, `GET /api/v1/openapi.json` and the SaleVali ingest scope `companies:write` stay open. `/admin/integrations` explains the refusal. Orgs holding a live public-API key or an active webhook are grandfathered once on deploy (`prisma/backfill-integrations-api-grandfather.mjs`). Covered by `e2e/integrations-api-gate.spec.ts`; the specs that mint keys or webhooks on the default org now grant it.",
+  "notes": {
+    "en": ["The public API and webhooks are now part of Program Plus and Enterprise. Organisations already using them keep them; taking an integration down always works."],
+    "tr": ["Public API ve webhook'lar artık Program Plus ve Enterprise planlarının parçası. Bunları zaten kullanan kuruluşlar kullanmaya devam ediyor; bir entegrasyonu kapatmak her zaman mümkün."],
+    "de": ["Die öffentliche API und Webhooks sind jetzt Teil von Program Plus und Enterprise. Organisationen, die sie bereits nutzen, behalten sie; eine Integration abzuschalten ist immer möglich."]
+  }
+}

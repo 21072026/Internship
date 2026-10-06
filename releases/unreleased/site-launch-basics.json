@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Site launch basics on both products** (#2692). Every page now carries a canonical URL and `og:url` (`alternates.canonical: './'` in the root layout, resolved against the request host, query string dropped). New `/llms.txt` (llmstxt.org), per host like the sitemap: the marketing host describes SaleVali and lists only its own pages. Both are fed by one route list, `src/lib/publicRoutes.ts`, which also adds the footer-linked `/trust`, `/ai` and `/accessibility` to the sitemap. The marketing landing gets its own six-question FAQ with FAQPage JSON-LD; the marketing home description is localized (TR/DE overlay strings were unused); `/ai` gets its own title and description. Pinned by `e2e/site-launch-basics.spec.ts`.",
-  "notes": {
-    "en": ["The SaleVali home page now answers the most common questions in an FAQ, and every public page tells search engines and AI assistants its one true address."],
-    "tr": ["SaleVali ana sayfası artık en sık sorulan soruları bir SSS bölümünde yanıtlıyor; her herkese açık sayfa da arama motorlarına ve yapay zekâ asistanlarına tek ve doğru adresini bildiriyor."],
-    "de": ["Die SaleVali-Startseite beantwortet die häufigsten Fragen jetzt in einem FAQ, und jede öffentliche Seite nennt Suchmaschinen und KI-Assistenten ihre eine richtige Adresse."]
-  }
-}

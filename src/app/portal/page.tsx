@@ -26,6 +26,8 @@ import { ArchivedNotice } from '@/components/ArchivedNotice';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 import { daysInStage } from '@/lib/stageClock';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
+import { profileCompleteness } from '@/lib/profileCompleteness';
+import { ProfileProgressMeter } from '@/components/ProfileProgressMeter';
 
 // #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
 // deep links and the back button work and the phone page stays short:
@@ -38,7 +40,11 @@ async function getMenteeData(menteeId: string, locale: Locale) {
   const [user, relations, visibilityConsent, projects, missingDocuments] = await Promise.all([
     prisma.user.findUnique({
       where: { id: menteeId },
-      select: { university: true, skills: true },
+      // Exactly the fields the completeness rule reads (src/lib/profileCompleteness.ts).
+      select: {
+        skills: true, targetPosition: true, cvUrl: true, university: true, department: true,
+        interests: true, city: true, graduationYear: true, bio: true,
+      },
     }),
     // ACTIVE, else the latest COMPLETED one shown as an archive (#1408) — a
     // finished mentorship is a record, not an empty portal.
@@ -95,7 +101,9 @@ export default async function PortalDashboard({
   // is a dead end.
   const requestedMentorId = (await searchParams).mentor ?? '';
 
-  const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
+  // Light gamification: a true, data-derived meter instead of the old
+  // university-and-skills boolean. Renders nothing once the profile is full.
+  const completeness = profileCompleteness(user);
 
   return (
     <div>
@@ -124,22 +132,7 @@ export default async function PortalDashboard({
         </Card>
       )}
 
-      {!profileComplete && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center justify-between">
-          <div>
-            <p className="font-medium text-yellow-800">{t.portal.completeProfile}</p>
-            <p className="text-sm text-yellow-800 mt-0.5">
-              {t.portal.completeProfileHint}
-            </p>
-          </div>
-          <Link
-            href="/onboarding"
-            className="bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-800 transition-colors flex-shrink-0 ml-4"
-          >
-            {t.portal.completeProfileCta}
-          </Link>
-        </div>
-      )}
+      <ProfileProgressMeter completeness={completeness} labels={t.portal.profileProgress} variant="dashboard" />
 
       {/* Company-visibility nudge (#527): shown only while the mentee has never
           decided on the TALENT_POOL_VISIBILITY consent. Granting OR declining

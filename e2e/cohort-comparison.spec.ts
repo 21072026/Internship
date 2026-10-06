@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// Premium Faz 2 (#538): cohort comparison is locked behind the premiumAnalytics
-// setting (off by default — basic analytics stay free); once enabled, the API
+// Premium Faz 2 (#538): cohort comparison is locked behind the org's
+// ADVANCED_ANALYTICS entitlement (#1740) (off by default — basic analytics stay free); once enabled, the API
 // returns side-by-side metrics per cohort. Serial: it toggles a global Setting
 // and restores it in finally.
 test('cohort comparison is locked by default and returns metrics once enabled', async ({ page }) => {
@@ -48,8 +49,7 @@ test('cohort comparison is locked by default and returns metrics once enabled', 
     expect((await page.request.get('/api/admin/analytics')).ok()).toBeTruthy();
 
     // Enable the premium tier via settings.
-    const enable = await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'true' } });
-    expect(enable.ok()).toBeTruthy();
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
 
     const res = await page.request.get('/api/admin/analytics/cohorts');
     expect(res.ok()).toBeTruthy();
@@ -65,7 +65,7 @@ test('cohort comparison is locked by default and returns metrics once enabled', 
     expect(mine!.conversionToHired).toBe(50);
     expect(mine!.avgDaysToHired).toBe(30);
   } finally {
-    await page.request.put('/api/admin/settings', { data: { premiumAnalytics: 'false' } }).catch(() => {});
+    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
     await prisma.mentorshipRelation.deleteMany({ where: { cohortId: cohort.id } });
     await prisma.cohort.delete({ where: { id: cohort.id } }).catch(() => {});
     await cleanupByEmail(hiredEmail);

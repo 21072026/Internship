@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { apiKeyStatus, parseScopes, type ApiScope } from '@/lib/apiScopes';
+import { SCOPE_ENTITLEMENT, apiKeyStatus, parseScopes, type ApiScope } from '@/lib/apiScopes';
+import { entitled } from '@/lib/entitlements';
 import { assertApiKeyRequestContext, runAsApiKeyRequest, runWithApiKeyOrg } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 
@@ -86,6 +87,8 @@ export function requireApiScope(key: ApiKeyIdentity, scope: ApiScope): NextRespo
  *   - key does not hold `scope`            → 403
  *   - key resolves to no organisation      → 403, never an unscoped read (the
  *     #831 "allowlist by omission" lesson: an unlisted case is rejected)
+ *   - the org's plan lacks the feature the scope belongs to (#1744) → 403
+ *     `feature_locked`
  */
 export async function withApiKey(
   request: Request,
@@ -119,6 +122,23 @@ export async function withApiKey(
       );
     }
 
-    return runWithApiKeyOrg(orgId, () => handler({ ...key, orgId }));
+    return runWithApiKeyOrg(orgId, async () => {
+      // The plan (#1744), checked once the org is bound — there is nothing to
+      // check an entitlement against before it, and OrgEntitlement is a tenant
+      // model the unbound guard above would refuse. Keyed to the SCOPE the
+      // route asks for (SCOPE_ENTITLEMENT), so every route that reads the
+      // public API is gated without having to remember to be. A key whose org
+      // lost the feature is not revoked: it answers 403 naming the feature,
+      // which tells an integration partner what happened where a 401 would only
+      // say "wrong key".
+      const feature = SCOPE_ENTITLEMENT[scope];
+      if (feature && !(await entitled(orgId, feature))) {
+        return NextResponse.json(
+          { error: 'Your plan does not include API access', code: 'feature_locked', feature },
+          { status: 403 },
+        );
+      }
+      return handler({ ...key, orgId });
+    });
   });
 }

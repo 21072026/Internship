@@ -5,16 +5,17 @@
 // server-only. The server-side helpers that touch the DB live in lib/apiKey.ts.
 //
 // Naming shape: `<resource>:<action>`, lowercase, singular action verbs
-// (`read`, later `write`). Exactly ONE scope exists today because exactly one
-// /api/v1 route exists (`GET /api/v1/candidates`) — the point of fixing the
-// shape now is that adding `companies:read` or `candidates:write` later is a
-// list entry, not a format migration. A key carrying an unknown scope string is
-// treated as holding nothing.
+// (`read`, `write`). `candidates:read` is `GET /api/v1/candidates`;
+// `companies:write` (#2450) is the first WRITE scope — the machine-to-machine
+// account ingest, `POST /api/integrations/salevali/events`, deliberately outside
+// the frozen /api/v1. Never a default: an admin grants it to the one key a
+// source system uses. A key carrying an unknown scope string is treated as
+// holding nothing.
 //
 // NOTE: nothing here enforces anything. Checking a scope at the door of an
 // /api/v1 route is #1546; this module defines and parses the vocabulary.
 
-export const API_SCOPES = ['candidates:read'] as const;
+export const API_SCOPES = ['candidates:read', 'companies:write'] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
 
@@ -22,6 +23,25 @@ export type ApiScope = (typeof API_SCOPES)[number];
 // rows minted before scopes existed): exactly the surface those keys could
 // already read.
 export const DEFAULT_API_SCOPES: readonly ApiScope[] = ['candidates:read'];
+
+// Which paid feature a scope belongs to (#1744), or null with the reason it is
+// not sold. A Record over every scope, so a new scope cannot be added without
+// deciding: the door (withApiKey) and API-key issuing both read this, and
+// scripts/check-api-key-routes.mjs fails an /api/v1 route whose scope maps to
+// anything but INTEGRATIONS_API.
+//   candidates:read  — the public API the plans sell ("public API + webhooks").
+//   companies:write  — NOT the public API: SaleVali's own account ingest
+//                      (#2450), the marketing product's provider contract.
+//                      Gating it would switch off the product's own data feed.
+export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
+  'candidates:read': 'INTEGRATIONS_API',
+  'companies:write': null,
+};
+
+/** The scopes among `scopes` that need INTEGRATIONS_API. */
+export function publicApiScopes(scopes: readonly string[]): ApiScope[] {
+  return scopes.filter((s): s is ApiScope => isApiScope(s) && SCOPE_ENTITLEMENT[s] === 'INTEGRATIONS_API');
+}
 
 export function isApiScope(value: string): value is ApiScope {
   return (API_SCOPES as readonly string[]).includes(value);

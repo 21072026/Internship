@@ -21,6 +21,7 @@ import { LanguageBadge } from '@/components/LanguageBadge';
 import { TagFilter, TagChips, type TagOption } from '@/components/TagFilter';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { clipSkillLabel } from '@/lib/skills';
+import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 
 interface Candidate {
   id: string;
@@ -103,33 +104,29 @@ export default function CandidatesPage() {
   const [mine, setMine] = useState(false);
   const [bulkOwnerId, setBulkOwnerId] = useState('');
 
-  const COLS = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
-  const toRow = (c: Candidate) => {
-    const rel = c.menteeRelations[0];
-    return [
-      c.fullName, c.email, c.phone, c.whatsapp, c.city, c.university, c.department,
-      c.graduationYear, c.skills.join('; '),
-      rel?.pipelineStatus ? label(rel.pipelineStatus) : '',
-      rel?.company?.name ?? '', rel?.mentor?.fullName ?? '',
-    ];
-  };
-
   // Exports cover ALL matching candidates (every page), not just the page in
-  // view — fetch the full filtered set with all=1 before building the file.
-  const fetchAllForExport = async (): Promise<Candidate[]> => {
+  // view. They come through the export route (#1740), which is gated by the
+  // org's REPORT_EXPORT entitlement server-side; the buttons below only
+  // reflect that answer.
+  const entitlements = useAnalyticsEntitlements();
+  const canExport = entitlements?.reportExport === true;
+  // The rows (and, for CSV, the file itself) are built server-side
+  // (src/lib/reports/workbooks.ts, #1903); this screen only saves them.
+  const fetchExport = async (format: 'csv' | 'json'): Promise<Response | null> => {
     const params = buildFilterParams();
-    params.set('all', '1');
-    const res = await fetch(`/api/candidates?${params}`);
-    const data = await res.json();
-    return (data.candidates || []) as Candidate[];
+    if (format === 'csv') params.set('format', 'csv');
+    const res = await fetch(`/api/admin/export/candidates?${params}`);
+    if (!res.ok) {
+      setError(res.status === 403 ? t.common.exportLocked : t.common.error);
+      return null;
+    }
+    return res;
   };
 
   const exportCsv = async () => {
-    const rows0 = await fetchAllForExport();
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = rows0.map((c) => toRow(c).map(esc).join(','));
-    const csv = [COLS.join(','), ...rows].join('\n');
-    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    const res = await fetchExport('csv');
+    if (!res) return;
+    const url = URL.createObjectURL(await res.blob());
     const a = document.createElement('a');
     a.href = url;
     a.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -138,9 +135,12 @@ export default function CandidatesPage() {
   };
 
   const exportExcel = async () => {
-    const rows0 = await fetchAllForExport();
-    const { exportXlsx } = await import('@/lib/excel');
-    await exportXlsx(`candidates-${new Date().toISOString().slice(0, 10)}`, COLS, rows0.map(toRow), 'Candidates');
+    const res = await fetchExport('json');
+    if (!res) return;
+    const { sheets } = await res.json();
+    if (!sheets?.[0]?.rows.length) return;
+    const { exportXlsxSheets } = await import('@/lib/excel');
+    await exportXlsxSheets(`candidates-${new Date().toISOString().slice(0, 10)}`, sheets);
   };
 
   // Read an optional ?status= filter from the URL (e.g. from dashboard pipeline bars)
@@ -336,14 +336,17 @@ export default function CandidatesPage() {
         )}
         </div>
         <div className="flex max-w-full flex-wrap gap-2">
-          <Button variant="outline" onClick={exportCsv} disabled={candidates.length === 0}>
+          <Button variant="outline" onClick={exportCsv} disabled={candidates.length === 0 || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>
             <Download className="h-4 w-4" />
             {t.candidates.exportCsv}
           </Button>
-          <Button variant="outline" onClick={exportExcel} disabled={candidates.length === 0}>
+          <Button variant="outline" onClick={exportExcel} disabled={candidates.length === 0 || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>
             <Download className="h-4 w-4" />
             {t.candidates.exportExcel}
           </Button>
+          {entitlements && !canExport && (
+            <p className="w-full text-xs text-gray-500" data-testid="export-locked-note">{t.common.exportLocked}</p>
+          )}
         </div>
       </div>
 

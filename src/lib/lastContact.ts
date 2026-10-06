@@ -62,3 +62,36 @@ export async function getLastContacts(
     ),
   });
 }
+
+/**
+ * Which of the given relations were in contact at least once in
+ * [from, toExclusive) — the same three signals as getLastContacts, bounded by
+ * a window instead of reduced to the latest. The executive dashboard's
+ * engagement score (#1895) reads it per period, so "engaged" there and
+ * "last contact" everywhere else can never mean two different things.
+ */
+export async function relationsInContactBetween(
+  relations: LastContactRelation[],
+  from: Date,
+  toExclusive: Date,
+): Promise<Set<string>> {
+  const engaged = new Set<string>();
+  if (relations.length === 0) return engaged;
+  const relationIds = relations.map((r) => r.id);
+  const menteeIds = [...new Set(relations.map((r) => r.menteeId))];
+  const inWindow = { gte: from, lt: toExclusive };
+
+  const [interactions, directMessages, menteeGroupPosts] = await Promise.all([
+    prisma.interactionLog.groupBy({ by: ['relationId'], where: { relationId: { in: relationIds }, date: inWindow } }),
+    prisma.message.groupBy({
+      by: ['relationId'],
+      where: { relationId: { in: relationIds }, createdAt: inWindow, OR: [{ conversationId: null }, { conversation: { type: 'DIRECT' } }] },
+    }),
+    prisma.message.groupBy({ by: ['senderId'], where: { senderId: { in: menteeIds }, createdAt: inWindow, conversation: { type: 'GROUP' } } }),
+  ]);
+  for (const row of interactions) if (row.relationId) engaged.add(row.relationId);
+  for (const row of directMessages) if (row.relationId) engaged.add(row.relationId);
+  const postingMentees = new Set(menteeGroupPosts.map((row) => row.senderId));
+  for (const r of relations) if (postingMentees.has(r.menteeId)) engaged.add(r.id);
+  return engaged;
+}

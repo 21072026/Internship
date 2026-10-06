@@ -50,6 +50,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The ROI screen's donated-time inputs (#1895), in the rep wording.
+      roi: {
+        screen: {
+          mentorHours: 'Unbilled rep hours to price',
+          hints: {
+            mentorHourValue: 'Prices donated rep time so a volunteer-run programme does not look free.',
+            mentorHours: 'Leave at 0 unless your organisation counts donated rep time as a cost.',
+          },
+        },
+      },
       // #1376: the MARKETING home title comes from the root layout's own
       // branch; these keep the internship copy out of the resolved dictionary.
       seo: {
@@ -272,6 +282,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Bulk import people',
         importModeMentees: 'People (leads)',
       },
+      // The report registry (#1903): the mentorship-only reports are refused for
+      // a tenant without `mentorship`, but the column labels are shared.
+      reports: {
+        mentorWorkload: { title: 'Rep workload', description: 'Active deals per rep and how many reached the final stage.' },
+        weeklyReportCompliance: { description: 'Owed, handed-in, missing and late weekly reports per person this term.' },
+        col: { mentor: 'Rep', intern: 'Person' },
+      },
       analytics: {
         subtitle: 'Funnel, rep workload and activity insights',
         cohortTotal: 'Leads',
@@ -367,7 +384,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       //
       // Stage NAMES need nothing here, deliberately: a MARKETING org is
       // provisioned with MARKETING_FUNNEL (provisionStagePreset), whose stages
-      // carry their own en/tr/de labels that stageLabel() resolves. A second
+      // carry their own en/tr/de labels; the stored (single-language) copy is
+      // read back in the viewer's locale by localizeResolvedStageLabels()
+      // (src/lib/programTemplates.ts, #2710). A second
       // translation layer for stage names is exactly what #2427 rules out.
       //
       // `board.emptyStage` has no reader in src today — the admin board renders
@@ -633,6 +652,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      // ROI ekranının gönüllü zaman alanları (#1895), temsilci diliyle.
+      roi: {
+        screen: {
+          mentorHours: 'Fiyatlandırılacak ücretsiz temsilci saati',
+          hints: {
+            mentorHourValue: 'Gönüllü temsilci zamanını fiyatlar; gönüllülerle yürüyen bir program bedava görünmesin.',
+            mentorHours: 'Kurumunuz gönüllü temsilci zamanını maliyet saymıyorsa 0 bırakın.',
+          },
+        },
+      },
       seo: {
         homeTitle: 'SaleVali — Pazarlama CRM',
         homeDescription: 'Müşterileri ilk temastan kapanışa kadar bir pazarlama hattında izleyen CRM.',
@@ -822,6 +851,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         // MARKETING org's leads — so the card says people.
         bulkImport: 'Toplu kişi içe aktar',
         importModeMentees: 'Kişiler (lead)',
+      },
+      // Rapor kaydı (#1903): mentorluk raporları `mentorship` yeteneği olmayan
+      // kiracıya kapalı, ama sütun etiketleri ortak.
+      reports: {
+        mentorWorkload: { title: 'Temsilci iş yükü', description: 'Temsilci başına aktif fırsatlar ve kaçının son aşamaya ulaştığı.' },
+        weeklyReportCompliance: { description: 'Bu dönem kişi başına beklenen, teslim edilen, eksik ve geç haftalık raporlar.' },
+        col: { mentor: 'Temsilci', intern: 'Kişi' },
       },
       analytics: {
         subtitle: 'Satış hunisi, temsilci iş yükü ve etkinlik içgörüleri',
@@ -1076,6 +1112,16 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      // Die Eingaben für gespendete Zeit auf der ROI-Seite (#1895), im Vertriebs-Wortlaut.
+      roi: {
+        screen: {
+          mentorHours: 'Unbezahlte Vertriebsstunden, die bewertet werden',
+          hints: {
+            mentorHourValue: 'Bewertet gespendete Vertriebszeit, damit ein ehrenamtlich getragenes Programm nicht kostenlos wirkt.',
+            mentorHours: 'Bei 0 lassen, sofern Ihre Organisation gespendete Vertriebszeit nicht als Kosten zählt.',
+          },
+        },
+      },
       seo: {
         homeTitle: 'SaleVali — Marketing-CRM',
         homeDescription: 'Ein CRM, das Kunden durch eine Marketing-Pipeline begleitet – vom ersten Kontakt bis zum Abschluss.',
@@ -1263,6 +1309,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         // MARKETING org's leads — so the card says people.
         bulkImport: 'Personen im Stapel importieren',
         importModeMentees: 'Personen (Leads)',
+      },
+      // The report registry (#1903): the mentorship-only reports are refused for
+      // a tenant without `mentorship`, but the column labels are shared.
+      reports: {
+        mentorWorkload: { title: 'Vertriebler-Auslastung', description: 'Aktive Deals je Vertriebler und wie viele die letzte Phase erreicht haben.' },
+        weeklyReportCompliance: { description: 'Fällige, abgegebene, fehlende und verspätete Wochenberichte je Person im laufenden Zeitraum.' },
+        col: { mentor: 'Vertriebler', intern: 'Person' },
       },
       analytics: {
         subtitle: 'Funnel, Auslastung der Vertriebsmitarbeiter und Aktivitäts-Insights',

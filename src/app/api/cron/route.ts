@@ -9,7 +9,6 @@ import {
   checkStageDeadlineReminders,
   checkRetentionReminders,
   checkCompanyNeedMatches,
-  sendWeeklyAnalyticsReport,
   sendWeeklyReportReminders,
   sendWeeklyMissingDocumentReminders,
   runEmailHealthCheck,
@@ -18,25 +17,16 @@ import {
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
+import { askForMeetingFeedback } from '@/lib/meetingFeedback';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runRetentionPrune } from '@/lib/retentionEntries';
 import { runUsageRollup } from '@/lib/jobs/usageRollup';
 import { runTrialReminders } from '@/lib/jobs/trialReminders';
+import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
+import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { settingsOrgOf } from '@/lib/settingsOrg';
-
-// The weekly analytics report runs for every org (#2542), but any tenant's admin
-// may call this route: answer with the caller's own org's entry only, never the
-// other tenants' counts.
-async function ownAnalyticsReport(
-  session: Parameters<typeof settingsOrgOf>[0],
-  report: Awaited<ReturnType<typeof sendWeeklyAnalyticsReport>>,
-) {
-  const orgId = await settingsOrgOf(session);
-  const own = report.orgs.find((r) => r.orgId === orgId);
-  return own ?? { orgId, locked: true, sent: 0, total: 0 };
-}
 
 export async function GET(request: Request) {
   try {
@@ -47,9 +37,6 @@ export async function GET(request: Request) {
     }
 
     const job = new URL(request.url).searchParams.get('job');
-    if (job === 'analytics-report') {
-      return NextResponse.json({ message: 'Weekly analytics report ran', analyticsReport: await ownAnalyticsReport(session, await sendWeeklyAnalyticsReport()) });
-    }
     if (job === 'weekly-reports') {
       return NextResponse.json({ message: 'Weekly report reminders ran', weeklyReports: await sendWeeklyReportReminders() });
     }
@@ -66,7 +53,10 @@ export async function GET(request: Request) {
     // wants the backlog of already-held meetings logged now, not one batch per
     // quarter-hourly tick.
     if (job === 'meeting-logs') {
-      return NextResponse.json({ message: 'Meeting interaction logs ran', meetingLogs: await sweepMeetingInteractionLogs() });
+      const meetingLogs = await sweepMeetingInteractionLogs();
+      // The meetings nobody ended get their one feedback ask (#1896).
+      const feedbackAsked = await askForMeetingFeedback(meetingLogs.loggedIds);
+      return NextResponse.json({ message: 'Meeting interaction logs ran', meetingLogs, feedbackAsked });
     }
     // Retention re-consent reminders alone — the same function the batch runs,
     // idempotent by `retentionReminderSentAt`. Named so an operator (and
@@ -123,6 +113,23 @@ export async function GET(request: Request) {
     // stages (the auto-expiry, #2417), which is not what "run the mail jobs
     // now" should quietly do. An admin runs it when they want today's trial
     // sweep now rather than at 05:20.
+    // Report subscriptions (#1905): the caller's own org only — an admin may
+    // fire their tenant's due reports, never another tenant's. `?at=` pins the
+    // clock so the idempotency of a period can be exercised.
+    // Relationship health (#1901): the caller's own org only. `?at=` pins the
+    // clock so the snapshot day and the crossing rule can be exercised.
+    if (job === 'relation-health') {
+      const orgId = await settingsOrgOf(session);
+      const at = new URL(request.url).searchParams.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      return NextResponse.json({ message: 'Relation health sweep ran', relationHealth: await sweepRelationHealth({ orgIds: [orgId], now }) });
+    }
+    if (job === 'report-subscriptions') {
+      const orgId = await settingsOrgOf(session);
+      const at = new URL(request.url).searchParams.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      return NextResponse.json({ message: 'Report subscriptions ran', reportSubscriptions: await runReportSubscriptions({ orgIds: [orgId], now }) });
+    }
     if (job === 'trial-reminders') {
       // `orgId` NARROWS the sweep to one tenant; it can never broaden it, and
       // the route is already ADMIN-only. Two callers want it: an operator
@@ -152,7 +159,7 @@ export async function GET(request: Request) {
     const dormantSweep = await sweepDormantFirstContacts();
     const dormantCheckIns = await sendDormantCheckIns();
 
-    const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
+    const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
@@ -161,13 +168,15 @@ export async function GET(request: Request) {
       checkStageDeadlineReminders(),
       checkRetentionReminders(),
       checkCompanyNeedMatches(),
-      sendWeeklyAnalyticsReport(),
       sendWeeklyMissingDocumentReminders(),
       expireOffers(),
       sendWeeklyReportReminders(),
       checkReEngagementReminders(),
       dispatchDueNewsletters(),
     ]);
+    // Asked after the sweep, never alongside it: it reads the ids the sweep
+    // just logged (#1896).
+    const feedbackAsked = await askForMeetingFeedback(meetingLogs.loggedIds);
 
     return NextResponse.json({
       message: 'Scheduled jobs ran',
@@ -177,11 +186,14 @@ export async function GET(request: Request) {
       meetings,
       projectMeetings,
       meetingLogs,
+      feedbackAsked,
       digests,
       deadlines,
       retention,
       needMatches,
-      analyticsReport: await ownAnalyticsReport(session, analyticsReport),
+      // The weekly analytics report is a subscription now (#1905): the
+      // caller's own org's due subscriptions, never another tenant's.
+      reportSubscriptions: await runReportSubscriptions({ orgIds: [await settingsOrgOf(session)] }),
       missingDocuments,
       offers,
       weeklyReports,

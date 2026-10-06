@@ -348,13 +348,23 @@ app_env_args() {
     -e OPERATOR_RESPONSIBLE="${OPERATOR_RESPONSIBLE:-}" \
     -e OPERATOR_VAT_ID="${OPERATOR_VAT_ID:-}" \
     -e OPERATOR_REGISTER="${OPERATOR_REGISTER:-}" \
-    -e OPERATOR_DPO="${OPERATOR_DPO:-}"
+    -e OPERATOR_DPO="${OPERATOR_DPO:-}" \
+    -e MARKETING_OPERATOR_NAME="${MARKETING_OPERATOR_NAME:-}" \
+    -e MARKETING_OPERATOR_ADDRESS="${MARKETING_OPERATOR_ADDRESS:-}" \
+    -e MARKETING_OPERATOR_EMAIL="${MARKETING_OPERATOR_EMAIL:-}" \
+    -e MARKETING_OPERATOR_PHONE="${MARKETING_OPERATOR_PHONE:-}" \
+    -e MARKETING_OPERATOR_RESPONSIBLE="${MARKETING_OPERATOR_RESPONSIBLE:-}" \
+    -e MARKETING_OPERATOR_VAT_ID="${MARKETING_OPERATOR_VAT_ID:-}" \
+    -e MARKETING_OPERATOR_REGISTER="${MARKETING_OPERATOR_REGISTER:-}" \
+    -e MARKETING_OPERATOR_DPO="${MARKETING_OPERATOR_DPO:-}"
 }
 # OPERATOR_* (#1396) publishes /imprint and names the GDPR controller on
 # /privacy. They live in the env file rather than the source because the project
 # is AGPL and other people run their own instances. This forwarding line is the
 # whole feature on a deployed host: unset here, the container would keep saying
-# "no imprint published" no matter what the env file holds.
+# "no imprint published" no matter what the env file holds. MARKETING_OPERATOR_*
+# (#2697) is the marketing product's own provider (BCS-IT GmbH for SaleVali),
+# shown on the marketing hosts and printed on postal campaign letters.
 mapfile -d '' -t APP_ENV_ARGS < <(app_env_args)
 
 # Wait for /api/health?db=1 and assert what it says. Used for the canary, for
@@ -773,6 +783,23 @@ run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
 # converges to a no-op — and the app's own getOrCreateSubscription() covers any
 # org created after this ran.
 run_tool node prisma/backfill-org-subscription.mjs || true
+
+# Retire the premiumAnalytics setting into ADVANCED_ANALYTICS org grants (#1740).
+# Analytics gating moved to entitled(orgId, …); an org that had the tier on gets
+# a permanent grant, then the dead setting rows are deleted so a re-run grants
+# nothing (a global 'true' row would otherwise leak the tier to every new org).
+run_tool node prisma/backfill-premium-analytics-entitlement.mjs || true
+
+# Grandfather every org that exists when the REPORT_EXPORT gate goes live
+# (#1740): exports were free until now. Runs ONCE — its grants carry a marker
+# note and a later run that finds one does nothing, so orgs created after the
+# gate do not inherit it.
+run_tool node prisma/backfill-report-export-grandfather.mjs || true
+
+# Grandfather every org already running an integration when the
+# INTEGRATIONS_API gate goes live (#1744): a live public-API key or an active
+# webhook. Runs ONCE (marker note), for the same reason as the one above.
+run_tool node prisma/backfill-integrations-api-grandfather.mjs || true
 
 # Re-split skill lists stored as one blob before anything split them (#2314).
 # Every form used to write `skills.split(',')` from a single-line input, and a

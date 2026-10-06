@@ -63,8 +63,16 @@ const TEST_DIR = 'scripts/test';
 // act on is a gate that gets deleted.
 const FLOORS = new Map([
   [
+    'src/lib/mentorImpactRule.ts',
+    { floor: 95, measured: 100.0, why: "a mentor's private impact counts: tenant's own stages, 'ever reached', people not relations" },
+  ],
+  [
     'src/lib/companySort.ts',
     { floor: 95, measured: 99.12, why: 'company list ordering: unknown sort falls back, never-moved accounts last (#2436)' },
+  ],
+  [
+    'src/lib/profileCompleteness.ts',
+    { floor: 95, measured: 100.0, why: 'the portal completeness meter: blanks never count as filled, weights sum to 100, missing list is deterministic' },
   ],
   [
     'src/lib/verticals.ts',
@@ -140,8 +148,20 @@ const FLOORS = new Map([
     { floor: 95, measured: 100.0, why: 'a date-only `to` covers the whole day it names — the default analytics view dropped today (#1501)' },
   ],
   [
+    'src/lib/certificateLinkedIn.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'only an ISSUED certificate reaches LinkedIn — never a self-uploaded file or a reference letter',
+    },
+  ],
+  [
     'src/lib/lastContactRule.ts',
     { floor: 95, measured: 100.0, why: 'what counts as contact: 1:1 yes, group only if the mentee wrote it (#2275)' },
+  ],
+  [
+    'src/lib/weeklyReportCompliance.ts',
+    { floor: 95, measured: 100.0, why: 'weekly-report compliance: owed weeks, late vs the covered week, null rate before the first owed week (#1917)' },
   ],
   [
     'src/lib/skills.ts',
@@ -261,6 +281,30 @@ const FLOORS = new Map([
       floor: 95,
       measured: 100.0,
       why: 'the company access log is de-noised, never silenced: no setting value turns it off, a failed lookup records the read, and an impersonated read is attributed to the admin behind it (#2433)',
+    },
+  ],
+  [
+    'src/lib/companyContactsRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'one primary contact by construction: the swap neither loses nor invents a person, and the duplicate test sees the primary as well as the rows (#2442)',
+    },
+  ],
+  [
+    'src/lib/stageDirection.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a machine never moves a funnel record backwards, and never reopens a lost one — order alone would call lost→won forward (#2451)',
+    },
+  ],
+  [
+    'src/lib/salevaliIngestRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'only decided SaleVali events move the funnel, and SaleVali trial dates never overwrite a window the record already carries (#2450)',
     },
   ],
   [

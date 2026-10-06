@@ -3,9 +3,9 @@
 import { useMemo, useState } from 'react';
 import { Download, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
 import { Select } from '@/components/ui/Select';
-import { exportXlsx } from '@/lib/excel';
 import { formatDate } from '@/lib/relativeTime';
 import type { AcceptanceStatus } from '@/lib/contributorTermsReport';
+import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 
 export interface ReportRowDTO {
   userId: string;
@@ -51,17 +51,20 @@ export function ContributorTermsReport({
     return [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [rows]);
 
+  // "open" is the working filter: everything still owed, whether it was
+  // never accepted or was accepted against wording that no longer governs.
+  const matches = (r: ReportRowDTO) =>
+    !(status === 'open' ? r.status === 'accepted' : status !== 'all' && r.status !== status) &&
+    !(project === 'platform' ? r.projectId !== null : project !== 'all' && r.projectId !== project);
   const filtered = useMemo(
-    () =>
-      rows.filter((r) => {
-        // "open" is the working filter: everything still owed, whether it was
-        // never accepted or was accepted against wording that no longer governs.
-        if (status === 'open' ? r.status === 'accepted' : status !== 'all' && r.status !== status) return false;
-        if (project === 'platform' ? r.projectId !== null : project !== 'all' && r.projectId !== project) return false;
-        return true;
-      }),
+    () => rows.filter(matches),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `matches` reads exactly these
     [rows, status, project]
   );
+  // REPORT_EXPORT (#1740): the button reflects it, the export route enforces it.
+  const entitlements = useAnalyticsEntitlements();
+  const canExport = entitlements?.reportExport === true;
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const counts = useMemo(
     () => ({
@@ -75,15 +78,25 @@ export function ContributorTermsReport({
   const statusLabel = (s: AcceptanceStatus) =>
     ({ accepted: labels.statusAccepted, outdated: labels.statusOutdated, missing: labels.statusMissing })[s];
 
-  const download = () => {
-    exportXlsx(
+  // The file's rows come from the export route, not from the props this
+  // screen was rendered with — the server is where the gate lives.
+  const download = async () => {
+    setExportError(null);
+    const res = await fetch('/api/admin/export/contributor-terms');
+    if (!res.ok) {
+      setExportError(res.status === 403 ? labels.exportLocked : labels.exportFailed);
+      return;
+    }
+    const fresh = ((await res.json()).rows as ReportRowDTO[]).filter(matches);
+    const { exportXlsx } = await import('@/lib/excel');
+    await exportXlsx(
       `contributor-terms-${new Date().toISOString().slice(0, 10)}.xlsx`,
       [
         labels.colName, labels.colEmail, labels.colRole, labels.colScope, labels.colTerms,
         labels.colCurrentVersion, labels.colAcceptedVersion, labels.colAcceptedAt,
         labels.colStatus, labels.colEvidence,
       ],
-      filtered.map((r) => [
+      fresh.map((r) => [
         r.fullName, r.email, r.role,
         r.projectName ?? labels.scopePlatform,
         r.termsKey, r.currentVersion, r.acceptedVersion ?? '',
@@ -127,13 +140,17 @@ export function ContributorTermsReport({
           type="button"
           onClick={download}
           data-testid="terms-report-export"
-          disabled={filtered.length === 0}
+          disabled={filtered.length === 0 || !canExport}
+          title={entitlements && !canExport ? labels.exportLocked : undefined}
           className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40"
         >
           <Download className="h-4 w-4" />
           {labels.export}
         </button>
       </div>
+      {(exportError || (entitlements && !canExport)) && (
+        <p className="mb-4 text-xs text-gray-500" data-testid="terms-report-export-note">{exportError ?? labels.exportLocked}</p>
+      )}
 
       {filtered.length === 0 ? (
         <div

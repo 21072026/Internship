@@ -95,6 +95,9 @@ const FUNNEL: Route[] = [
     '/admin/duplicates',
     '/admin/mentor-applications',
     '/admin/company-inquiries',
+    // Postal outreach to companies (#2697) — added to the sidebar without an
+    // entry here, which turned this file's coverage gate red on main.
+    '/admin/acquisition',
     '/admin/invitations'
   ),
   // An AdminNav destination that is NOT an admin page: interview panels live
@@ -133,6 +136,10 @@ const OUTBOUND: Route[] = shell(
 /** Operations, integrations and the settings tail of the sidebar. */
 const OPERATIONS: Route[] = shell(
   '/admin/mentee-activity',
+  // A week matrix 20+ columns wide: they scroll in their own container (#1918).
+  '/admin/weekly-reports',
+  // Report subscriptions (#1905) — in the sidebar without an entry here.
+  '/admin/reports/subscriptions',
   '/admin/integrations',
   '/admin/api-explorer',
   '/admin/retention',
