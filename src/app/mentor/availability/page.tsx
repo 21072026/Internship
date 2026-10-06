@@ -10,6 +10,7 @@ import { Trash2, Globe, Pencil, Plane } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { apiErrorMessage } from '@/lib/apiErrorMessage';
 import { calendarDate } from '@/lib/availabilitySlots';
+import { BookingRulesCard } from '@/components/availability/BookingRulesCard';
 
 interface Slot { id: string; weekday: number; startTime: string; endTime: string; date?: string | null; note?: string | null }
 interface Away { id: string; startDate: string; endDate: string; reason?: string | null }
@@ -300,6 +301,8 @@ export default function AvailabilityPage() {
           <Button type="submit" loading={saving}>{t.availability.add}</Button>
         </form>
       </Card>
+
+      <BookingRulesCard />
 
       <Card className="mb-6">
         <CardHeader><CardTitle>{t.availability.yourSlots} ({slots.length})</CardTitle></CardHeader>

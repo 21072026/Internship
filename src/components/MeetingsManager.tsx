@@ -19,7 +19,7 @@ import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/Meetin
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 import { copyToClipboard } from '@/lib/clipboard';
 import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
-import { ConflictNotice, readConflict, useConflictText, type MeetingConflict } from '@/components/meeting/ConflictNotice';
+import { ConflictNotice, PolicyNotice, readConflict, readPolicy, useConflictText, usePolicyText, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
 
 interface Relation {
@@ -79,6 +79,8 @@ export function MeetingsManager() {
   const [result, setResult] = useState<string | null>(null);
   const [conflict, setConflict] = useState<MeetingConflict | null>(null);
   const conflictText = useConflictText();
+  const [refusal, setRefusal] = useState<MeetingPolicyRefusal | null>(null);
+  const policyText = usePolicyText();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -135,6 +137,7 @@ export function MeetingsManager() {
     setBusy(true);
     setResult(null);
     setConflict(null);
+    setRefusal(null);
     try {
       const res = await fetch('/api/meetings', {
         method: 'POST',
@@ -167,8 +170,10 @@ export function MeetingsManager() {
           lines.push(t.meetings.guests.isMember.replace('{email}', email));
         }
         // A bulk schedule books the free pairs and names the ones it skipped (#1995).
-        for (const c of (data.conflicts ?? []) as { menteeName: string; conflictsWith: MeetingConflict }[]) {
-          lines.push(conflictText(c.conflictsWith, c.menteeName));
+        for (const c of (data.conflicts ?? []) as { menteeName: string; conflictsWith?: MeetingConflict; policy?: MeetingPolicyRefusal }[]) {
+          if (c.conflictsWith) lines.push(conflictText(c.conflictsWith, c.menteeName));
+          // A mentor's booking rule (#2003) skipped this pair.
+          else if (c.policy) lines.push(`${c.menteeName}: ${policyText(c.policy)}`);
         }
         setResult(lines.join(' '));
         setTitle('');
@@ -180,6 +185,8 @@ export function MeetingsManager() {
         await load();
       } else if (readConflict(data)) {
         setConflict(readConflict(data));
+      } else if (readPolicy(data)) {
+        setRefusal(readPolicy(data));
       } else {
         setResult(data.error || 'Failed');
       }
@@ -208,6 +215,11 @@ export function MeetingsManager() {
       {conflict && (
         <div className="mb-4">
           <ConflictNotice conflict={conflict} busy={busy} onForce={() => schedule(true)} />
+        </div>
+      )}
+      {refusal && (
+        <div className="mb-4">
+          <PolicyNotice refusal={refusal} busy={busy} onForce={() => schedule(true)} />
         </div>
       )}
 

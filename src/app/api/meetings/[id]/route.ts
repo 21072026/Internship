@@ -11,6 +11,8 @@ import { pushMeetingInBackground, pushableSelect, withdrawMeetings } from '@/lib
 import { durationMinutesField, meetingEnd } from '@/lib/meetingDuration';
 import { conflictBody, findConflictFor, lockParticipants, recordForcedBooking } from '@/lib/busyWindows';
 import type { BusyWindow } from '@/lib/busyWindowsRule';
+import { findPolicyViolation, policyBody, policyExempt, recordPolicyOverride } from '@/lib/bookingPolicy';
+import type { PolicyViolation } from '@/lib/bookingPolicyRule';
 import { recordLateCancel } from '@/lib/meetingAttendance';
 
 // The three verbs a meeting never had (#1980).
@@ -284,8 +286,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const outcome = await prisma.$transaction(
       async (tx) => {
         let forcedOver: BusyWindow | null = null;
+        let forcedRule: PolicyViolation | null = null;
         if (pairs.length > 0) {
           await lockParticipants(tx, pairs);
+          const ruled = new Set<string>();
           for (const t of targets) {
             const start = when ?? t.scheduledAt;
             if (!start || !t.relation) continue;
@@ -296,6 +300,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             });
             if (conflict && !force) return { conflict };
             forcedOver ??= conflict;
+            // The mentor's booking rules (#2003), once per mentor: a whole
+            // session moved is one booking for them, not one per row.
+            if (ruled.has(t.relation.mentorId) || policyExempt(session.user, t.relation.mentorId)) continue;
+            ruled.add(t.relation.mentorId);
+            const violation = await findPolicyViolation(tx, { mentorId: t.relation.mentorId, start: window.start, end: window.end, excludeMeetingIds: ids, excludeBatchKey: row.batchKey ?? undefined });
+            if (violation && !force) return { policy: violation };
+            forcedRule ??= violation;
           }
         }
         const moved: Target[] = [];
@@ -326,14 +337,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           })) as Target;
           moved.push(updated);
         }
-        return { moved, forcedOver };
+        return { moved, forcedOver, forcedRule };
       },
       // A whole session is up to MAX_BATCH_ROWS rows, each checked and written.
       { timeout: 30_000 },
     );
     if (outcome.conflict) return NextResponse.json(conflictBody(outcome.conflict), { status: 409 });
-    const { moved, forcedOver } = outcome;
+    if (outcome.policy) return NextResponse.json(policyBody(outcome.policy), { status: 409 });
+    const { moved, forcedOver, forcedRule } = outcome;
     if (forcedOver) await recordForcedBooking(session.user.id, row.id, forcedOver);
+    if (forcedRule) await recordPolicyOverride(session.user.id, row.id, forcedRule);
     // The mirror follows the meeting. An existing GoogleCalendarEventLink
     // makes this a PATCH of the event that is already on their calendar
     // rather than a second one appearing next to the stale first.
