@@ -13,6 +13,8 @@ import { getServerDictionary } from '@/i18n/server';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { analyticsWorkbook, candidatesSheet, fullAnalyticsWorkbook } from '@/lib/reports/workbooks';
 import { toCsv } from '@/lib/reports/render';
+import { tenantWhere } from '@/lib/tenantFilter';
+import { loadProgramScorecard } from '@/lib/programScorecardData';
 
 // GET /api/admin/export/[dataset] — the ONE door every admin export goes
 // through (#1740), gated by the org's REPORT_EXPORT entitlement (its plan or a
@@ -100,7 +102,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
           internal(funnelGET, request, '/api/admin/analytics/funnel'),
         ]);
         if (!analytics.ok) return NextResponse.json({ error: 'Export failed' }, { status: analytics.status });
-        const src = { analytics: analytics.body, aging: aging.body, funnel: funnel.body };
+        const scorecard = await loadProgramScorecard(await tenantWhere(session));
+        const src = { analytics: analytics.body, aging: aging.body, funnel: funnel.body, scorecard };
         const ctx = { orgId, locale, stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null };
         const sheets = dataset === 'analytics'
           ? await analyticsWorkbook(src, ctx, t, label)
