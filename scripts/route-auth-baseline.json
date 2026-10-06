@@ -102,6 +102,10 @@
     "methods": ["POST"],
     "why": "Unsubscribe from the newsletter straight out of the email (#1469); the signed token is the authorisation. Demanding a password first is how a reader reaches for the spam button instead, which costs the deliverability of every message this app sends, password resets included."
   },
+  "src/app/api/report-subscriptions/unsubscribe/route.ts": {
+    "methods": ["POST"],
+    "why": "Leave a scheduled report straight out of the e-mail (#1905); the recipient may have no account at all, so the signed token is the authorisation, and it can only switch that one subscription off."
+  },
   "src/app/api/public-contact/[userId]/route.ts": {
     "methods": ["POST"],
     "why": "The contact form on a public profile: the sender has no account. Anti-spam is a honeypot field, a minimum render-to-submit time and 3 messages/hour/IP; the message goes to the profile owner's own notifications, nowhere else."

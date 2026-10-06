@@ -3,41 +3,40 @@
 // returns plain rows — no formatting, no locale words; the route resolves the
 // labels and the privacy floor runs on top (privacyFloor.ts).
 //
-// Where a screen already computes the numbers, the loader calls that screen's
-// endpoint in-process instead of re-deriving them: the cohort and source
-// reports ARE the cohort-comparison and source-conversion cards, and must not
-// drift into a second definition of "converted". Tenant scoping, the
-// capability gates and the stage vocabulary (outcomeStageKeys, #1882) come
-// with them.
+// Where a screen already computes the numbers, the loader calls the SAME
+// function the screen's route does (src/lib/analyticsReports.ts) instead of
+// re-deriving them: the cohort and source reports ARE the cohort-comparison and
+// source-conversion cards, and must not drift into a second definition of
+// "converted". Loaders take an org, never a session (#1905): the scheduled
+// report subscriptions run with no request at all.
 
-import type { Session } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import type { Locale } from '@/i18n/config';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
-import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE, complianceRows } from '@/lib/weeklyReportComplianceQuery';
-import { GET as analyticsGET } from '@/app/api/admin/analytics/route';
-import { GET as cohortsGET } from '@/app/api/admin/analytics/cohorts/route';
-import { GET as sourcesGET } from '@/app/api/admin/analytics/sources/route';
+import { cohortComparison, mentorWorkload, sourceConversion, type AnalyticsScope } from '@/lib/analyticsReports';
 import { DEFAULT_MIN_COHORT, type ReportDefinition } from './definitions';
 import { applyMinCohort, type Row } from './privacyFloor';
 
 export interface ReportContext {
-  session: Session;
+  /** The org the report is about — its rows, its capabilities. */
   orgId: string;
   locale: Locale;
-  request: Request;
+  /**
+   * The org whose stage set names the stages, when it differs from `orgId`:
+   * an org-less admin's screens read the built-in catalogue (null), and a
+   * report they download must say what their screen says. Defaults to `orgId`.
+   */
+  stageOrgId?: string | null;
 }
 
 /** Hard cap on rows any one report returns — a report is a summary, not a dump. */
 const MAX_ROWS = 5000;
 
-async function viaEndpoint(handler: (req: Request) => Promise<Response>, ctx: ReportContext, path: string) {
-  const target = new URL(path, new URL(ctx.request.url).origin);
-  const res = await handler(new Request(target, { headers: ctx.request.headers }));
-  if (!res.ok) throw new ReportUnavailable(res.status);
-  return res.json();
+async function scopeOf(ctx: ReportContext): Promise<AnalyticsScope> {
+  return { stageOrgId: ctx.stageOrgId === undefined ? ctx.orgId : ctx.stageOrgId, tenant: await orgWhere(ctx.orgId), locale: ctx.locale };
 }
 
 /** A report the caller cannot have (capability, entitlement) — the route answers with this status. */
@@ -51,9 +50,9 @@ const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) 
 
 const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
   async 'pipeline-funnel'(ctx) {
-    const tenant = await tenantWhere(ctx.session);
+    const { tenant, stageOrgId } = await scopeOf(ctx);
     const [stages, counts] = await Promise.all([
-      resolvePipelineStages(ctx.orgId, ctx.locale),
+      resolvePipelineStages(stageOrgId, ctx.locale),
       prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({}, tenant), _count: { _all: true } }),
     ]);
     const byKey = new Map(counts.map((c) => [c.pipelineStatus, c._count._all]));
@@ -61,8 +60,8 @@ const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
   },
 
   async 'cohort-comparison'(ctx) {
-    const body = await viaEndpoint(cohortsGET, ctx, '/api/admin/analytics/cohorts');
-    return (body.cohorts as { name: string; term: string | null; total: number; inProgress: number; hired: number; dropped: number; conversionToHired: number; avgDaysToHired: number | null }[]).map((c) => ({
+    const { rows } = await cohortComparison(await scopeOf(ctx));
+    return rows.map((c) => ({
       cohort: c.term ? `${c.name} (${c.term})` : c.name,
       total: c.total,
       inProgress: c.inProgress,
@@ -74,8 +73,8 @@ const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
   },
 
   async 'source-conversion'(ctx) {
-    const body = await viaEndpoint(sourcesGET, ctx, '/api/admin/analytics/sources');
-    return (body.sources as { name: string; mentees: number; inPipeline: number; hired: number }[]).map((s) => ({
+    const { rows } = await sourceConversion(await scopeOf(ctx));
+    return rows.map((s) => ({
       source: s.name,
       total: s.mentees,
       inPipeline: s.inPipeline,
@@ -85,8 +84,7 @@ const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
   },
 
   async 'mentor-workload'(ctx) {
-    const body = await viaEndpoint(analyticsGET, ctx, '/api/admin/analytics');
-    return (body.mentorWorkload as { fullName: string; active: number; hired: number }[]).map((m) => ({
+    return (await mentorWorkload(await scopeOf(ctx))).map((m) => ({
       mentor: m.fullName,
       active: m.active,
       reachedOutcome: m.hired,
@@ -94,7 +92,7 @@ const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
   },
 
   async 'placement-outcomes'(ctx) {
-    const tenant = await tenantWhere(ctx.session);
+    const { tenant } = await scopeOf(ctx);
     const groups = await prisma.placement.groupBy({
       by: ['companyId'],
       where: withinTenant({}, tenant),
@@ -110,7 +108,7 @@ const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
   },
 
   async 'weekly-report-compliance'(ctx) {
-    const tenant = await tenantWhere(ctx.session);
+    const { tenant } = await scopeOf(ctx);
     const relations = await prisma.mentorshipRelation.findMany({
       where: withinTenant(INTERNED_WHERE, tenant),
       select: COMPLIANCE_RELATION_SELECT,

@@ -93,6 +93,8 @@ const VERIFY_EXEMPT = [
   '/api/apply',
   '/api/profile-view',
   '/api/inbound-email',
+  // Leaving a scheduled report (#1905): the signed token is the credential.
+  '/api/report-subscriptions/unsubscribe',
   // The unsubscribe surface (#1444). Two entries, mirroring the two clauses in
   // src/middleware.ts exactly: an exact match for the bare path and a prefix for
   // everything under it. A single prefix entry would also exempt a future

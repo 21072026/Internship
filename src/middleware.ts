@@ -41,6 +41,8 @@ function isAllowlisted(pathname: string) {
     // same argument as the unsubscribe routes above. Exact paths.
     pathname === '/api/contact-permission/confirm' ||
     pathname === '/api/contact-permission/opt-out' ||
+    // Leaving a scheduled report (#1905) — same argument, exact path.
+    pathname === '/api/report-subscriptions/unsubscribe' ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.

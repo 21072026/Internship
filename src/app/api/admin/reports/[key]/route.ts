@@ -49,7 +49,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
   return withTenantScope(session, async () => {
     let loaded;
     try {
-      loaded = await loadReport(def, { session, orgId, locale, request });
+      loaded = await loadReport(def, { orgId, locale, stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null });
     } catch (error) {
       if (error instanceof ReportUnavailable) {
         return NextResponse.json({ error: error.status === 403 ? 'feature_locked' : 'Report not available' }, { status: error.status });
