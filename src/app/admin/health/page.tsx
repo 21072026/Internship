@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { HeartPulse, ArrowRight } from 'lucide-react';
@@ -71,7 +71,11 @@ export default function AdminHealthPage() {
   const [page, setPage] = useState(1);
   const [opening, setOpening] = useState('');
 
+  // Only the latest request may land: a band preset from the URL fires a
+  // second load while the first (unfiltered) one is still in flight.
+  const latest = useRef(0);
   const load = useCallback(async () => {
+    const request = ++latest.current;
     setLoading(true);
     setError('');
     const params = new URLSearchParams({ page: String(page) });
@@ -82,17 +86,25 @@ export default function AdminHealthPage() {
     try {
       const res = await fetch(`/api/admin/health?${params}`);
       if (!res.ok) throw new Error(String(res.status));
-      setData(await res.json());
+      const body = await res.json();
+      if (request === latest.current) setData(body);
     } catch {
-      setError(t.common.error);
+      if (request === latest.current) setError(t.common.error);
     } finally {
-      setLoading(false);
+      if (request === latest.current) setLoading(false);
     }
   }, [band, mentorId, cohortId, stage, page, t.common.error]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // A deep link may preselect the band — the programme scorecard's "at-risk
+  // relationships" action opens /admin/health?band=AT_RISK (#1908).
+  useEffect(() => {
+    const preset = new URLSearchParams(window.location.search).get('band');
+    if (preset === 'AT_RISK' || preset === 'WATCH' || preset === 'HEALTHY') setBand(preset);
+  }, []);
 
   // Any filter change returns to the first page.
   useEffect(() => {

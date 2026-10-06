@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PremiumAnalyticsLocked } from '@/components/admin/PremiumAnalyticsLocked';
+import { ProgramScorecard } from '@/components/admin/ProgramScorecard';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 import { useAdvancedAnalytics } from '@/lib/analyticsEntitlementsClient';
@@ -113,6 +114,8 @@ export default function AnalyticsReportPage() {
       <p className="text-sm text-gray-500 mb-8">
         {data.range ? `${data.range.from} → ${data.range.to} · ` : ''}{formatDate(new Date(), locale)}
       </p>
+
+      <ProgramScorecard />
 
       <Section title={c.funnel}>
         <table className="w-full"><thead><tr>

@@ -367,6 +367,50 @@ test.describe('release media', () => {
     }
   });
 
+  // #1908: the programme health scorecard — bands against published targets,
+  // and a link on every row that slipped.
+  test('poster: the programme health scorecard', async ({ page }) => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const stamp = Date.now();
+    const org = await prisma.organization.create({ data: { name: `Media Scorecard ${stamp}`, slug: `media-sc-${stamp}` } });
+    const adminEmail = uniqueEmail('media-sc-admin');
+    const emails = [adminEmail];
+    try {
+      const admin = await seedUser(adminEmail, 'MediaScore123!', 'ADMIN', 'Media Scorecard Admin', org.id);
+      const mentorEmail = uniqueEmail('media-sc-mentor');
+      emails.push(mentorEmail);
+      const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Dr. Lena Hoffmann', org.id);
+      const ago = (d: number) => new Date(Date.now() - d * DAY);
+      for (let i = 0; i < 10; i++) {
+        const email = uniqueEmail('media-sc-mentee');
+        emails.push(email);
+        const mentee = await seedUser(email, 'x', 'MENTEE', `Participant ${i + 1}`, org.id);
+        if (i >= 8) continue; // two waiting for a match
+        const rel = await prisma.mentorshipRelation.create({
+          data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, pipelineStatus: 'INTERVIEW_PENDING_250', startDate: ago(40 + i * 15) },
+        });
+        if (i % 3 !== 2) await prisma.interactionLog.create({ data: { relationId: rel.id, date: ago(3 + i), notes: 'Check-in', type: 'Call' } });
+        await prisma.goal.create({ data: { relationId: rel.id, title: 'CV review' } });
+        if (i % 2 === 0) await prisma.statusChange.create({ data: { relationId: rel.id, fromStatus: 'APPLICATION_100', toStatus: 'INTERVIEW_PENDING_250', createdAt: ago(10 + i) } });
+        await prisma.meeting.create({ data: { relationId: rel.id, title: 'Intro', scheduledAt: ago(30 + i * 15 - 8 - i), rsvpToken: `media-sc-${stamp}-${i}-a`, createdById: mentor.id } });
+        if (i % 2 === 0) await prisma.meeting.create({ data: { relationId: rel.id, title: 'Monthly', scheduledAt: ago(5 + i), rsvpToken: `media-sc-${stamp}-${i}-b`, createdById: mentor.id } });
+      }
+      for (let i = 0; i < 8; i++) {
+        await prisma.invitationToken.create({ data: { orgId: org.id, token: `media-sc-${stamp}-inv-${i}`, role: 'MENTEE', used: i < 6, createdAt: ago(40), expiresAt: ago(33), invitedById: admin.id } });
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await signInAndSettle(page, adminEmail, 'MediaScore123!', '/admin');
+      await page.goto('/admin/analytics');
+      await expect(page.getByTestId('scorecard-row-matchRate')).toBeVisible();
+      await capturePoster(page.getByTestId('program-scorecard'), 'program-scorecard');
+    } finally {
+      await prisma.invitationToken.deleteMany({ where: { orgId: org.id } });
+      await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });
+      for (const e of emails) await cleanupByEmail(e);
+      await prisma.organization.deleteMany({ where: { id: org.id } });
+    }
+  });
+
   /**
    * TEMPLATE — a clip, for a change where motion is the point.
    *
