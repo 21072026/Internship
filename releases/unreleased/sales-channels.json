@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Sales channels on the account** (#2408). New `CompanyChannel` (string key from `src/lib/salesChannels.ts`, status `USING`/`INTERESTED`/`DROPPED`, `@@unique([companyId, channel])`, in `TENANT_MODELS`). The marketing import's `channels` column now lands: names resolve through the vocabulary's aliases (`Amazon FBA`, `ebay.de`, `Shopware 6` …), an unknown name fails its row with the valid list, and a run only ADDS missing channels as `USING` — a re-run is UNCHANGED and never removes a channel or changes a status set by hand. The account page shows the channels; an ADMIN adds, re-statuses and removes them (`PUT`/`DELETE /api/admin/companies/[id]/channels`). The postal-campaign account picker filters on \"sells on\" a channel (USING only). Trendyol joins SaleVali's integration list as a tracked marketplace.",
-  "notes": {
-    "en": ["Accounts now show which marketplaces, shop systems and carriers a merchant uses — from the import or set by hand — and a postal campaign can target, say, every OTTO seller."],
-    "tr": ["Hesaplar artık tüccarın hangi pazaryeri, mağaza sistemi ve kargo firmasını kullandığını gösteriyor — içe aktarımdan ya da elle — ve bir posta kampanyası örneğin tüm OTTO satıcılarını hedefleyebiliyor."],
-    "de": ["Accounts zeigen jetzt, welche Marktplätze, Shopsysteme und Versanddienstleister ein Händler nutzt — aus dem Import oder von Hand gepflegt — und eine Briefkampagne kann z. B. gezielt alle OTTO-Händler ansprechen."]
-  }
-}

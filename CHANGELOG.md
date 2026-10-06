@@ -23,6 +23,136 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.277.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 13:36 UTC · commit [cf0c975](https://github.com/21072026/Internship/commit/cf0c975e16cf8e3aaeff8fb79012eb2d2bee48aa)_
+
+**Survey engine data model and the anonymity library** (#1879, epic #1877; docs/surveys.md). Five new tables — `Survey`, `SurveyQuestion`, `SurveyInvitation`, `SurveyResponse`, `SurveyAnswer` (new tables only; `Survey`, `SurveyInvitation`, `SurveyResponse` in `TENANT_MODELS`, the two child models deliberately not, as the schema comment explains). Three anonymity modes: IDENTIFIED, CONFIDENTIAL and ANONYMOUS — for ANONYMOUS, `submitSurveyResponse()` (`src/lib/surveys.ts`) writes `respondentId` and `invitationId` NULL at insert and stamps the invitation `respondedAt` instead, proven by `e2e/survey-schema.spec.ts` reading the row back. `src/lib/surveyPrivacy.ts` (pure) decides who reads an individual answer — never for ANONYMOUS, never the respondent's own mentor in any mode, ADMIN only on IDENTIFIED — and applies the response floor (`SURVEY_MIN_RESPONSES` = 5, raised per survey, never lowered) with residual suppression so a hidden group cannot be derived by subtraction. Question keys and types freeze once a survey leaves DRAFT (409 `questions_locked`). The shared field-type union and `validateResponse()` land in `src/lib/forms/schema.ts` in #1800's shape; NPS validates as a 0–10 scale through it. Invitation tokens are stored as SHA-256 hashes. Admin API `GET/POST /api/admin/surveys`, `GET/PATCH /api/admin/surveys/[id]`; no screen yet.
+
+## [0.276.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 13:14 UTC · commit [5fccf6b](https://github.com/21072026/Internship/commit/5fccf6be77bfc316aff894ebd86cf78ce09c4a42)_
+
+**Programme health scorecard at the top of `/admin/analytics`** (#1908; docs/program-scorecard.md). `src/lib/programScorecard.ts` (pure, `scripts/test/program-scorecard.test.mjs`) holds ONE threshold table — each green/amber line with the comment that justifies it, checked against the doc by the test — the inclusive band rule, the not-enough-data floor (`MIN_TO_JUDGE` = 5) and a destination per indicator. `GET /api/admin/analytics/scorecard` (ADMIN in the handler, tenant as a hand-written conjunct, free on every plan) loads six measured indicators — invitations accepted, participants matched, time to first meeting, monthly meeting kept, stalled relationships, at-risk relationships (scored through the shared `relationHealthLive`) — and reports evaluation coverage, survey response rate and NPS as not yet measurable (#1891, #1910) instead of 0. Every amber/red row links to where it is fixed; `/admin/health?band=AT_RISK` now preselects the band. The card is shared by the analytics screen and its print report, and is the first sheet of both XLSX exports.
+
+![The programme health card: invitations accepted, participants matched and at-risk relationships on track; time to first meeting and monthly meetings to watch; stalled relationships to act on now, each slipping row with a link; evaluation coverage, survey response rate and NPS marked not yet measurable](public/release-media/program-scorecard.png)
+
+## [0.275.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 12:42 UTC · commit [68f9676](https://github.com/21072026/Internship/commit/68f9676e7bc889be75b9f85463cbd19332150eaf)_
+
+**`/admin/analytics/executive` — four deterministic sponsor scores** (#1895, part 2 of 2; docs/executive-dashboard.md). `GET /api/admin/analytics/executive` (ADMIN-only in the handler, `entitled(orgId, 'ADVANCED_ANALYTICS')` → 403 `feature_locked`, tenant as a hand-written conjunct) returns Engagement, Progression and Placement as `100 × numerator ÷ denominator` over the relations active in each of six equally long periods (the selected one and the five before it), with both counts. Engagement uses the one contact rule — `relationsInContactBetween()` added to `src/lib/lastContact.ts`; Progression counts forward moves on the tenant's on-path order; Placement counts first entries into the resolved finished stage (#1882). Capability is reported as not measurable until #1822/#1823 exist — no proxy metric. The arithmetic is pure in `src/lib/executiveScores.ts` (`scripts/test/executive-scores.test.mjs`). Each card shows its trend as CSS bars, a one-line delta and a "How is this computed?" affordance with the sentence and the expression; nothing is labelled predictive. Prints to one A4 page in EN/TR/DE (`#executive-print`), asserted by `e2e/admin-executive.spec.ts`.
+
+![The executive dashboard: Engagement 67, Progression 33 and Placement 25, each with a bar trend over six periods and a sentence comparing it with the previous period, beside a Capability card marked not yet measurable](public/release-media/executive-dashboard.png)
+
+## [0.274.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 12:33 UTC · commit [8bd0882](https://github.com/21072026/Internship/commit/8bd088285d6fa0a06efcfa2586a5dcc9520a1018)_
+
+**`/admin/analytics/roi` — programme ROI with the working shown** (#1895, part 1 of 2; docs/roi.md). `GET /api/admin/analytics/roi` (ADMIN-only in the handler, `entitled(orgId, 'ADVANCED_ANALYTICS')` → 403 `feature_locked`, tenant as a hand-written conjunct) selects the window's rows in `src/lib/roiReport.ts` and computes through the one ROI model, `computeRoi()` (#1892): cost lines whose period overlaps the window count in full; placements are ledger rows in the window plus relations without a ledger row that FIRST entered the tenant's resolved finished stage (`outcomeStageKeys`, #1882) in it. The screen shows the ROI, net and cost per placement, every step with its expression, cost by category, how many placements were valued from the assumptions, and the assumption set with defaults and one-line reasons — editable as query state, never saved. A mixed-currency window is a sentence plus a currency filter, never a number. Prints to one A4 page in EN/TR/DE (`#roi-print`), asserted by `e2e/admin-roi.spec.ts`; the app's mobile top bar and drawer no longer print on any page.
+
+![The programme ROI working: recorded costs, placements, recorded and assumed placement value, cost per placement, net return and a 146% return on investment, each with its calculation, beside the cost broken down by category](public/release-media/roi-executive-dashboards.png)
+
+## [0.273.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 12:04 UTC · commit [974ab70](https://github.com/21072026/Internship/commit/974ab7023e053eb08a6ac99db26494eb983b45da)_
+
+**`/admin/health` — the org-wide at-risk queue** (#1902; docs/relationship-health.md § The admin monitor). `GET /api/admin/health` (ADMIN-only in the handler, `requireCapability('mentorship')`, tenant as a hand-written conjunct) scores every ACTIVE relation of the tenant now — through `src/lib/relationHealthLive.ts`, which the nightly sweep now shares — and returns them worst first (`compareHealthRows`), filterable by band, mentor, cohort and stage, with reasons, the 30-day series and 7/30-day delta from the #1901 snapshots, header counters (healthy / watch / at-risk / crossed into red in 7 days) and exclusion counts (dormant, not active, nothing to do). Each row carries exactly one next action from `src/lib/healthNextAction.ts` — reassign (deactivated mentor; `/admin/mentorship?transfer=<id>` now opens the change-mentor dialog), record a drop-off reason, message the mentor (opens the DM), set a stage deadline (`/admin/candidates/[id]#relation-stage`). New nav entry (HeartPulse), EN/TR/DE strings including the rule descriptions, and a "how this score is computed" disclosure linking the published rules. Covered by `scripts/test/admin-health.test.mjs` and `e2e/admin-health.spec.ts`.
+
+![The relationship health queue: three mentoring relationships ranked worst first, each with its score, a 30-day trend in bars, the reasons it is slipping and one next action such as recording a drop-off reason or setting a stage deadline](public/release-media/admin-health-monitor.png)
+
+## [0.272.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 11:48 UTC · commit [69965e7](https://github.com/21072026/Internship/commit/69965e7798229bda68829a54b6f5fedba7c0224f)_
+
+**Relationship-health snapshots, trend and at-risk alerts** (#1901; docs/relationship-health.md § History and alerts). New tenant model `RelationHealthSnapshot` (`@@unique([relationId, takenOn])`). A nightly sweep (`src/lib/jobs/relationHealthSweep.ts`, 02:00, registered from `/api/cron/start`; `GET /api/cron?job=relation-health` for the caller's org, `&at=` pins the clock) scores every ACTIVE relation with the #1898 rules table, upserts today's snapshot and prunes rows older than 180 days. `GET /api/admin/relation-health/[id]?days=` returns the measured daily series, the 7/30-day delta and the latest reasons. A pair that crosses into AT_RISK goes into one daily digest per admin of its org — localized, with stage labels and the reasons — once per crossing (again only after recovery or 30 days; the first sweep is a baseline and mails nobody), under the new `program-health` e-mail category in the Reports & analytics group. The open-to-do rule is shared (`src/lib/openWork.ts`) by the sweep and the mentor attention queue. Covered by `scripts/test/relation-health-trend.test.mjs` and `e2e/relation-health-snapshots.spec.ts`.
+
+## [0.271.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 11:14 UTC · commit [734ba7e](https://github.com/21072026/Internship/commit/734ba7e48746667fe41226f3b15d01fdc4ee0571)_
+
+**Relationship-health rules table** (#1898; docs/relationship-health.md). New pure `src/lib/relationHealth.ts`: a versioned (`HEALTH_RULES_VERSION = 1`) table of seven rules — recent contact (against the org's `reminderDays`), stage deadline, answered questions, answered meeting requests, open work, weekly reports in the internship stage, stage movement in 60 days — each with a weight (summing to 100), a window and a one-sentence reason; `scoreRelation()` returns a 0-100 score, a band (HEALTHY ≥70 / WATCH ≥40 / AT_RISK) and the named reasons. A rule with no data drops out of the denominator instead of scoring zero, so a new pair reads healthy; dormant first contacts and non-active relations are excluded. The mentor attention queue (`src/lib/mentorAttention.ts`) now takes its six mentorship reasons from the same table — same reasons, same dormant footnote. Deterministic and published; no model. Foundation for #1901/#1902. Covered by `scripts/test/relation-health.test.mjs` (incl. a doc-sync check).
+
+## [0.270.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 10:43 UTC · commit [4d15fee](https://github.com/21072026/Internship/commit/4d15fee5454ca547d0badc7c71d58fa7f8603ee3)_
+
+**Deleting a stage-history entry is audited** (#1562, security). `DELETE /api/status-changes/[id]` now writes a warning-level `pipeline.history_delete` ActivityLog row (actor, entry id, relation and the transition) in the relation's tenant. The rest of #1562 had already shipped: the stage write in `PUT /api/mentorship/[id]` runs in one transaction, and the delete is scoped through the relation's org (another tenant's id answers 404). Covered by `e2e/admin-history-edit.spec.ts`.
+
+## [0.270.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 10:36 UTC · commit [fed42eb](https://github.com/21072026/Internship/commit/fed42eb9c2dad3a8c072c0b9e386e9920d92b19e)_
+
+**INTEGRATIONS_API entitlement over the public API and webhooks** (#1744; docs/api-explorer.md § Which plan includes the API). New feature key in Program Plus, Enterprise and Employer Plus. `withApiKey()` checks it once the key's org is bound, keyed to the route's scope (`SCOPE_ENTITLEMENT` in `src/lib/apiScopes.ts`): a live key of an unentitled org gets `403 { code: 'feature_locked', feature: 'INTEGRATIONS_API' }`, never a 401, and is not revoked. `check:api-key-routes` fails an `/api/v1` route whose scope is not gated. Creating a webhook, changing its URL/events, re-activating it and issuing a key with a public-API scope are refused without the feature; pausing/deleting webhooks, revoking keys, rotating secrets, delivery of existing webhooks, `GET /api/v1/openapi.json` and the SaleVali ingest scope `companies:write` stay open. `/admin/integrations` explains the refusal. Orgs holding a live public-API key or an active webhook are grandfathered once on deploy (`prisma/backfill-integrations-api-grandfather.mjs`). Covered by `e2e/integrations-api-gate.spec.ts`; the specs that mint keys or webhooks on the default org now grant it.
+
+## [0.269.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 09:25 UTC · commit [e73fa63](https://github.com/21072026/Internship/commit/e73fa639200e4bccc8ba2d7ab784cd311ac26a5a)_
+
+**The weekly analytics e-mail is a report subscription** (#1905, part 3; docs/report-subscriptions.md). `sendWeeklyAnalyticsReport()`, `weeklyAnalyticsStats()`, its Monday cron, `GET /api/cron?job=analytics-report` and the `analyticsReportEmail` strings are removed. New registry report `pipeline-summary` (totals, reached the final stage with share, new records and interactions in the last 7 days, every stage with its share — stage labels in the reader's language). Every active admin of an org with `ADVANCED_ANALYTICS` is seeded one weekly `pipeline-summary` subscription (Monday 08:00 UTC, their own language) by `seedLegacyWeeklyReports()` at the start of each job pass — once per org (a `Setting` claim), only while entitled (an org that gains the tier later is seeded then), with the period of the swap recorded as `SKIPPED · seeded` so nobody is mailed twice. Opt-outs keep applying; a deleted subscription stays deleted. The all-jobs `GET /api/cron` now reports `reportSubscriptions` for the caller's org instead of `analyticsReport`. Covered by `e2e/scheduled-analytics-report.spec.ts` (rewritten), `e2e/world-cron-builders.spec.ts` and `e2e/custom-pipeline-terminal-stages.spec.ts`.
+
+## [0.268.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 08:56 UTC · commit [9a04c47](https://github.com/21072026/Internship/commit/9a04c47053fb7aa89ca1e142c7fbf73ed58e8a06)_
+
+**Scheduled reports screen** (`/admin/reports/subscriptions`, #1905 part 2). Admins with advanced analytics create a scheduled report for a team member or an outside address (report, cadence, weekday or day of month, UTC hour, language, e-mail table / CSV / Excel), send themselves a test, pause / resume, delete, and read each subscription's delivery history with the reason a delivery was skipped. Locked panel without the tier; the API's write-time refusals (unknown report, export add-on missing, foreign recipient) are shown in the form. Linked from the admin nav ("Scheduled reports") and from `/admin/analytics`. Covered by `e2e/report-subscriptions.spec.ts`.
+
+![The scheduled reports screen: a weekly compliance report to a team member and a monthly cohort comparison to a dean, with its delivery history open](public/release-media/report-subscriptions-ui.png)
+
+## [0.267.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 08:42 UTC · commit [f20c115](https://github.com/21072026/Internship/commit/f20c1155eb60372744f4087005e5bb815006eda6)_
+
+**Report subscriptions — scheduled delivery of registry reports** (#1905, part 1; docs/report-subscriptions.md). New tenant models `ReportSubscription` + `ReportSubscriptionSend` (`@@unique([subscriptionId, periodKey])`). An admin with `ADVANCED_ANALYTICS` subscribes a user of the org or an external address to any registry report — weekly / monthly / quarterly at a UTC hour, in EN/TR/DE, as an e-mail table or a CSV/XLSX attachment (the latter needs `REPORT_EXPORT`) — via `/api/admin/report-subscriptions` (CRUD + send-me-a-test). Everything is validated when written (unknown report → 400). An hourly job (`src/lib/jobs/reportSubscriptions.ts`, registered from `/api/cron/start`, manual `GET /api/cron?job=report-subscriptions`) claims each period before sending, so a retry sends nothing; it re-checks the entitlement, the user's `analytics-report` opt-out and the org's e-mail block list, and renders stage labels in the recipient's language behind the privacy floor. External recipients leave through an HMAC-signed link (`/reports/unsubscribe`, POST `/api/report-subscriptions/unsubscribe`). The cohort/source/mentor computations moved out of their routes into `src/lib/analyticsReports.ts`, so the report registry no longer needs a session. Covered by `scripts/test/report-subscriptions.test.mjs` and `e2e/report-subscriptions.spec.ts`.
+
+## [0.266.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 08:11 UTC · commit [d807488](https://github.com/21072026/Internship/commit/d8074883703d70c7c249c7d60339ce6e5827432f)_
+
+**CSV import no longer dies half-way through a file** (#1432). A row with a field longer than its column (a 250-character name) used to pass the dry run and then end the real run with an empty 500 after the rows before it were already written. The row rules now live in one pure module (`src/lib/csvImport.ts`) that both modes call: every field is checked against `TEXT_LIMITS` (new `userFullName`, `userEmail`, `userPhone`), a bad row is reported as `error` with a reason, an address repeated inside the file is `skip` (`duplicate in file`), a BOM / quoted header is handled, a non-JSON body is a 400, and a write that still fails marks its row and the import carries on — so the dry run's `willCreate` equals the real run's `created`. Existing addresses are checked in one query per 1 000 rows and duplicate detection reads the org's candidates once (`loadDuplicatePool` + `rankDuplicates`) instead of per row; the placeholder password is hashed once per import. A 500-row file now takes ~0.2 s to dry-run and ~2.5 s to import. Covered by `scripts/test/csv-import.test.mjs` (incl. fuzz) and `e2e/import-dryrun.spec.ts`.
+
+## [0.266.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 08:07 UTC · commit [cff3a52](https://github.com/21072026/Internship/commit/cff3a5218d13e6b1512e834581438fc9154b5182)_
+
+**Marketing landing product tour**: the SaleVali landing now has its own three-screen tour (`mkt-pipeline` funnel board, `mkt-rep` sales dashboard, `mkt-insights` funnel analytics), in the same browser/phone frames, with desktop loops: a lead dragged from New lead to Contacted, and the dashboard and analytics read top to bottom. They are captured on `marketing.localhost` against the `demo-marketing` tenant. Copy lives in a new `productTourMarketing` namespace, which is not leak-exempt. **Fix:** in the mobile app bar, a long tenant name now ends in an ellipsis instead of running under the messages and notification buttons.
+
+## [0.265.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 08:02 UTC · commit [933a31b](https://github.com/21072026/Internship/commit/933a31bf9b6377f67d2ba936e7cbce9370cbead1)_
+
+**Export workbooks built on the report registry** (#1903, part 2; docs/reports.md). `GET /api/admin/export/[dataset]` now returns finished sheets (`{ sheets }`, labels in the caller's locale) from `src/lib/reports/workbooks.ts`; `/admin/analytics` and `/admin/candidates` only hand them to `src/lib/excel.ts`, and the hand-rolled candidates CSV is gone (the route serves `?format=csv`). The Funnel, Mentors, Cohorts and Sources sheets load through the registry, so the full report's cohort and source sheets now apply the privacy floor (groups under 5 merged, totals reconcile, note row). `analytics-full` answers `403 feature ADVANCED_ANALYTICS` without the premium tier instead of a workbook with null sheets. Shared rendering extracted to `src/lib/reports/render.ts`. `/admin/analytics` footnotes the floor under the premium cards. Covered by `e2e/report-registry.spec.ts` and `e2e/report-export-gate.spec.ts`.
+
+## [0.264.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 07:46 UTC · commit [a5aefa7](https://github.com/21072026/Internship/commit/a5aefa7e3ce447c5c5ba0664b71cfe37c845a979)_
+
+**Report registry with a privacy floor** (#1903, part 1; docs/reports.md). Named report definitions (`src/lib/reports/definitions.ts`: key, typed columns, i18n keys, capability) loaded by one server registry (`src/lib/reports/registry.ts`) and served by `GET /api/admin/reports/[key]?format=json|csv|xlsx` — JSON behind `ADVANCED_ANALYTICS`, CSV/XLSX additionally behind `REPORT_EXPORT`, a report whose module the vertical lacks is a 404. Six reports: pipeline funnel, cohort comparison, source conversion, mentor workload, placement outcomes, weekly-report compliance; loaders reuse the screens' own routes in-process so no metric exists twice. Aggregate reports apply a minimum group size (default 5, never lowered): smaller groups merge into one labelled bucket whose count columns are summed, so totals reconcile, and whose averages/rates are blank; every response names the floor. New CI guard `npm run check:reports` (labels in EN/TR/DE, a loader per definition, a floor that can suppress). MARKETING overlay wording for the shared report labels. Covered by `scripts/test/report-privacy-floor.test.mjs` and `e2e/report-registry.spec.ts`.
+
+## [0.263.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 07:12 UTC · commit [c83abcc](https://github.com/21072026/Internship/commit/c83abccc80210d8fdb9d67da57a191809f0697df)_
+
+**Admin exports go through one gated route: `GET /api/admin/export/[dataset]`** (#1740, part 2; epic #1727). Exports were built entirely in the browser from data the page already held, so `REPORT_EXPORT` gated nothing. The candidates CSV/XLSX, the analytics workbook, the full analytics report workbook and the contributor-terms report now fetch their data from `/api/admin/export/{candidates,analytics,analytics-full,contributor-terms}`, which asks `entitled(orgId, 'REPORT_EXPORT')` and answers `403 { code: 'feature_locked', feature: 'REPORT_EXPORT' }` otherwise. Each dataset is the response of the endpoint the screen already reads, called in-process — tenant scoping, the `mentorship` capability and the `ADVANCED_ANALYTICS` gate on the premium sheets all stay where they are (a locked cohort/source sheet is `null`). The pages keep turning the data into the file with `src/lib/excel.ts` (SheetJS stays code-split); moving the row shapes server-side is the report registry's job (#1903). The export buttons are disabled with a note ("Exports (CSV / Excel) are part of the Program plan.", EN/TR/DE) when the org lacks the entitlement; the paged candidate list and the analytics numbers stay free to view. **Existing orgs keep their exports** (maintainer's call): `prisma/backfill-report-export-grandfather.mjs` grants every org that exists on the deploy `REPORT_EXPORT`, once — its grants carry a marker note and any later run that finds one does nothing, so orgs created after the gate do not inherit it (unit-tested). New `e2e/report-export-gate.spec.ts`; the export specs grant `REPORT_EXPORT` to the default org through `setOrgFeatureFor()`.
+
+## [0.262.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 07:02 UTC · commit [910ef31](https://github.com/21072026/Internship/commit/910ef31657986d0a128b14d7df5f126e3513de85)_
+
+**Sales channels on the account** (#2408). New `CompanyChannel` (string key from `src/lib/salesChannels.ts`, status `USING`/`INTERESTED`/`DROPPED`, `@@unique([companyId, channel])`, in `TENANT_MODELS`). The marketing import's `channels` column now lands: names resolve through the vocabulary's aliases (`Amazon FBA`, `ebay.de`, `Shopware 6` …), an unknown name fails its row with the valid list, and a run only ADDS missing channels as `USING` — a re-run is UNCHANGED and never removes a channel or changes a status set by hand. The account page shows the channels; an ADMIN adds, re-statuses and removes them (`PUT`/`DELETE /api/admin/companies/[id]/channels`). The postal-campaign account picker filters on "sells on" a channel (USING only). Trendyol joins SaleVali's integration list as a tracked marketplace.
+
+## [0.261.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 06:55 UTC · commit [f69149d](https://github.com/21072026/Internship/commit/f69149df0aaa6557d2413183f61970704991c648)_
+
+- **SaleVali accounts arrive in the CRM on their own** (#2450, #2451, #2452; `docs/marketing-vertical/salevali-ingest.md`). New machine-to-machine endpoint `POST /api/integrations/salevali/events` (outside the frozen `/api/v1`) behind the first WRITE API scope, `companies:write`, plus the `companies` capability; the tenant is the key's org. `account_created`/`trial_started` create the account + stand-in lead + funnel record in `TRIAL_ACTIVE` through the import's own create-only writer (SaleVali's trial dates, `externalId`, the lead's `Source`, a machine NONE contact permission) or move an existing record there; `converted` moves to `DEAL_WON`; every other event type is recorded only until its open decision is taken. Each event is claimed once (`IntegrationEvent`, unique per org × provider × event id), stale snapshots change nothing, and a machine never moves a record backwards (`isBackwardMove`, unit-tested): a lost record gets a NEW chained journey instead of being reopened, and a refused move is logged. `check:api-key-routes` now also lists key routes outside `/api/v1`.
+
+## [0.260.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 06:50 UTC · commit [5c8d236](https://github.com/21072026/Internship/commit/5c8d236357d4f66ba58d5cc55017c6a1072e4213)_
+
+**Public account-deletion page** (`/delete-account`, docs/mobile-strategy.md). Google Play requires every app with accounts to link a deletion explanation reachable without the app; the page describes exactly what `hardDeleteUser` does — the in-app path (`/account` → `DELETE /api/account`), the e-mail route when signing in is impossible (operator address from the imprint env, Art. 12(3) GDPR), what is deleted, what stays (org-owned records detached, rolling encrypted backups ≤ 12 months) and the last-admin limit. Per host product name, EN/TR/DE, in `PUBLIC_ROUTES` (sitemap + llms.txt), linked from `/privacy`. `/account`'s sign-in redirect now carries `callbackUrl=/account` so the page's call to action lands back on the settings. Covered by `e2e/delete-account.spec.ts`.
+
 ## [0.260.0-beta] - 2026-10-05
 
 _Shipped 2026-10-05 17:38 UTC · commit [3a682c6](https://github.com/21072026/Internship/commit/3a682c68b3364429140f53a8fb351035faf5e30c)_
