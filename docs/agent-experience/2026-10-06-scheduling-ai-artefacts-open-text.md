@@ -29,3 +29,19 @@
 - **A cold `next dev` compile can blow a 10 s `toBeVisible`** on a page's first visit
   (`/mentor/mentees/[id]`, `/api/availability`). Re-run on a warm server before calling it a
   regression; it passed unchanged both times here.
+- **`Write` on a path that exists replaces it — look first.** `src/lib/importPreview.ts` (the shared
+  engine of #1965/#2072) already existed and the tool's "updated" was the only hint. `git checkout
+  -- <file>` saved it. Before writing a new module, `ls`/`git log -- <path>` the path, and read an
+  issue's "Current state" against `origin/main`, not against the issue's date: #2072's engine had
+  landed weeks after the issue was filed.
+- **Auto-merge can land a PR between your push and your next one.** #2816 merged while a perf fix
+  was still local; the fix then had to travel as its own PR (#2820) from a fresh branch off
+  `origin/main` (`git checkout -B <new> origin/main && git cherry-pick <sha>`). Check
+  `merged` before pushing a follow-up to a PR with auto-merge on.
+- **Don't edit `src/i18n/dictionaries.ts` while a long local e2e run is going.** Every save
+  recompiles half the app under `next dev`, and the run then reports a wave of 30 s `page.goto`
+  timeouts that have nothing to do with the change. Re-run those on a fresh server before judging.
+- **A "peek" endpoint that recomputes a page's data doubles that page's load.** The narrative GET
+  recomputed every dashboard figure to look up a cached paragraph, next to the dashboard computing
+  them itself; two page-level specs timed out. Ask the cheap question (does any cached row exist
+  at all?) before the expensive one.

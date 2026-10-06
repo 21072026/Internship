@@ -1,0 +1,8 @@
+## 2026-10-07 — mobile app on the Android emulator, dev-build loop (#2775, #2824)
+
+- **`apps/mobile` exists only on `main`; older feature branches don't have it.** The shared checkout was on a stale branch with someone else's uncommitted work, so the work went into its own worktree (`git worktree add -b docs/2775-emulator-setup ../Internship-emu origin/main`).
+- **Read the SDK levels from `node_modules/react-native/gradle/libs.versions.toml`, not from Expo's autolinking defaults.** The autolinking plugin's fallbacks say 35; RN 0.86's catalog says compileSdk/targetSdk 36, build-tools 36.0.0, NDK 27.1.12297006, and the catalog wins.
+- **Android Studio's first-run wizard is GUI-only; use `sdkmanager` instead.** Unzip the command-line tools to `$ANDROID_HOME/cmdline-tools/latest` and run them with Android Studio's bundled JBR as `JAVA_HOME`. No JDK install is needed for that step.
+- **`brew install --cask zulu@17` is a .pkg that asks for sudo; the agent cannot type the password.** Hand that one command to the user, and do everything else (Android Studio cask, SDK, AVD) without sudo.
+- **An Intel Mac on macOS 26 is a Homebrew Tier 3 setup: `watchman` and `cmake` compile from source.** That fought the first Gradle build for CPU, and the cold `run:android` took 31 min. Metro does not need Watchman.
+- **Drive the emulator headlessly with adb.** The pieces: `adb exec-out screencap -p` for screenshots, `adb exec-out uiautomator dump /dev/tty | grep text=` to read the screen as text, and `input tap` (the device is 1080×2400, 3× the 360×800 thumbnail). A `uiautomator` poll loop timed Fast Refresh at about 6 s from file save to the new text on screen. Signing in to the preview hosts is the user's step: they are not a local dev host.
