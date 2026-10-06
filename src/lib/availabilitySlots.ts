@@ -18,6 +18,38 @@ export interface WeeklySlot {
   weekday: number; // 0 = Sunday .. 6 = Saturday
   startTime: string; // "HH:MM"
   endTime: string; // "HH:MM"
+  /**
+   * Set → a ONE-OFF on that calendar date (#2001), offered once and never
+   * repeated; `weekday` is then derived from it and ignored here. Accepts what
+   * the API serialises (an ISO string at UTC midnight) as well as a bare
+   * "YYYY-MM-DD" or a Date, since a `@db.Date` column round-trips as any of them.
+   */
+  date?: string | Date | null;
+}
+
+/**
+ * A stretch of days the mentor is away (#2001): every occurrence whose date —
+ * in the MENTOR's zone — falls in [startDate, endDate] is suppressed. Both
+ * ends inclusive, both calendar dates in the same loose shapes as `date` above.
+ */
+export interface AvailabilityExceptionRange {
+  startDate: string | Date;
+  endDate: string | Date;
+}
+
+/** "YYYY-MM-DD" from a calendar-date value (a `@db.Date` is UTC midnight). */
+export function calendarDate(v: string | Date): string {
+  return (typeof v === 'string' ? v : v.toISOString()).slice(0, 10);
+}
+
+/** Whether `date` ("YYYY-MM-DD") falls inside any away window. */
+export function isAway(date: string, exceptions: AvailabilityExceptionRange[] | undefined): boolean {
+  return (exceptions ?? []).some((e) => calendarDate(e.startDate) <= date && date <= calendarDate(e.endDate));
+}
+
+/** Sunday-based weekday of a calendar date — no zone involved, a date is a date. */
+export function weekdayOfDate(date: string): number {
+  return new Date(`${calendarDate(date)}T00:00:00Z`).getUTCDay();
 }
 
 export interface SlotOccurrence {
@@ -34,7 +66,7 @@ export interface SlotOccurrence {
 const DAY_MS = 86_400_000;
 
 /** "YYYY-MM-DD" for an instant, read in `timeZone`. */
-function dateInZone(at: Date, timeZone: string): string {
+export function dateInZone(at: Date, timeZone: string): string {
   // en-CA formats as YYYY-MM-DD, which is the one locale that gives the ISO
   // date shape directly rather than needing the parts reassembled.
   return new Intl.DateTimeFormat('en-CA', {
@@ -62,7 +94,12 @@ function weekdayInZone(at: Date, timeZone: string): number {
 export function expandSlots(
   slots: WeeklySlot[],
   timezone: string | null | undefined,
-  { from, weeks = 3, limit = 30 }: { from: Date; weeks?: number; limit?: number }
+  {
+    from,
+    weeks = 3,
+    limit = 30,
+    exceptions,
+  }: { from: Date; weeks?: number; limit?: number; exceptions?: AvailabilityExceptionRange[] }
 ): SlotOccurrence[] {
   if (slots.length === 0) return [];
   const zone = resolveTimeZone(timezone);
@@ -77,10 +114,13 @@ export function expandSlots(
     const date = dateInZone(cursor, zone);
     if (seen.has(date)) continue;
     seen.add(date);
+    // Away that day: nothing on it is offered, weekly or one-off (#2001).
+    if (isAway(date, exceptions)) continue;
     const weekday = weekdayInZone(cursor, zone);
 
     for (const slot of slots) {
-      if (slot.weekday !== weekday) continue;
+      // A one-off lives on its date alone; a weekly slot on its weekday.
+      if (slot.date ? calendarDate(slot.date) !== date : slot.weekday !== weekday) continue;
       const start = parseWallClockInZone(`${date}T${slot.startTime}`, zone);
       if (!start || start.getTime() <= from.getTime()) continue;
       out.push({
@@ -112,6 +152,7 @@ export function matchesSlot(
 ): WeeklySlot | null {
   const zone = resolveTimeZone(timezone);
   const weekday = weekdayInZone(instant, zone);
+  const date = dateInZone(instant, zone);
   const time = new Intl.DateTimeFormat('en-GB', {
     timeZone: zone,
     hour: '2-digit',
@@ -119,6 +160,8 @@ export function matchesSlot(
     hour12: false,
   }).format(instant);
   return (
-    slots.find((s) => s.weekday === weekday && time >= s.startTime && time < s.endTime) ?? null
+    slots.find(
+      (s) => (s.date ? calendarDate(s.date) === date : s.weekday === weekday) && time >= s.startTime && time < s.endTime
+    ) ?? null
   );
 }

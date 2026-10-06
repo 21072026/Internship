@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Availability: edit, one-off, away (#2001):** `PATCH /api/availability` changes a slot in place (day, times, date, note) under the same half-open overlap rule and `409 { code: 'overlap', clash }` contract, minus the row being edited. `AvailabilitySlot.date` (`@db.Date`) makes a row a one-off on that date, with `weekday` derived from it on write, and `AvailabilitySlot.note` labels it. The new `AvailabilityException` model, with `GET/POST/DELETE /api/availability/exceptions`, is an away window that suppresses every occurrence on its dates, evaluated in the mentor's own zone. It carries no `orgId` on purpose; access goes through `mentorId → User` in `src/lib/availabilityAccess.ts`. `expandSlots()` takes `exceptions` as an argument and stays pure. `GET /api/availability` returns the live rows only: past one-offs and ended windows are filtered out on read rather than swept by a cron. A booker gets the away dates without the reason. An ADMIN can do all of this for a mentor of their own org (`mentorId` on create).",
+  "notes": {
+    "en": ["You can now edit an availability slot in place, offer a one-off time on a specific date, and mark days you're away: none of your hours are offered then, and your weekly pattern stays as it is."],
+    "tr": ["Artık bir uygunluk slotunu yerinde düzenleyebilir, belirli bir tarihe tek seferlik saat açabilir ve uzakta olacağın günleri işaretleyebilirsin: o günlerde hiçbir saatin önerilmez, haftalık düzenin olduğu gibi kalır."],
+    "de": ["Du kannst einen Verfügbarkeits-Slot jetzt direkt bearbeiten, an einem bestimmten Datum eine einmalige Zeit anbieten und Tage markieren, an denen du abwesend bist: Dann werden keine deiner Zeiten angeboten, und dein Wochenmuster bleibt, wie es ist."]
+  }
+}

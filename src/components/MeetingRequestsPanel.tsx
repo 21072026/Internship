@@ -12,7 +12,7 @@ import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { ConflictNotice, readConflict, type MeetingConflict } from '@/components/meeting/ConflictNotice';
 import { filterBookedOccurrences } from '@/lib/busyWindowsRule';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
-import { expandSlots, matchesSlot, type SlotOccurrence, type WeeklySlot } from '@/lib/availabilitySlots';
+import { expandSlots, matchesSlot, type AvailabilityExceptionRange, type SlotOccurrence, type WeeklySlot } from '@/lib/availabilitySlots';
 
 interface MReq {
   id: string;
@@ -58,6 +58,8 @@ export function MeetingRequestsPanel({
   // gets free-text requests, which is how this worked before.
   const [slots, setSlots] = useState<WeeklySlot[] | null>(null);
   const [slotZone, setSlotZone] = useState<string | null>(null);
+  // The mentor's away windows (#2001): no hour on those dates is offered.
+  const [awayDates, setAwayDates] = useState<AvailabilityExceptionRange[]>([]);
   // A picked occurrence is kept as an exact instant, NOT as a datetime-local
   // string. The slot's wall clock belongs to the mentor's zone; round-tripping
   // it through the date field would re-read it on the mentee's clock and move
@@ -86,6 +88,7 @@ export function MeetingRequestsPanel({
         if (cancelled) return;
         setSlots(d.slots ?? []);
         setSlotZone(d.timezone ?? null);
+        setAwayDates(d.exceptions ?? []);
         setBusyHours(d.busy ?? []);
       })
       // A failed read must not strand the form: fall back to free text rather
@@ -139,7 +142,7 @@ export function MeetingRequestsPanel({
   const offers =
     slots && slots.length > 0
       ? filterBookedOccurrences(
-          expandSlots(slots, slotZone, { from: new Date(), weeks: 3, limit: 30 }).map((o) => {
+          expandSlots(slots, slotZone, { from: new Date(), weeks: 3, limit: 30, exceptions: awayDates }).map((o) => {
             const start = new Date(o.startISO);
             return { ...o, start, end: new Date(start.getTime() + DEFAULT_MEETING_MINUTES * 60_000) };
           }),

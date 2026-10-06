@@ -525,6 +525,7 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         ['projectTaskTemplate', 'createdById'],
         ['projectJoinRequest', 'decidedById'],
         ['availabilitySlot', 'mentorId'],
+        ['availabilityException', 'mentorId'],
         ['relationNote', 'authorId'],
         ['statusChange', 'changedById'],
         ['invitationToken', 'invitedById'],

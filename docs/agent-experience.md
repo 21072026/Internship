@@ -8253,3 +8253,15 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
   `scan()` now handles each one: it parks the pointer, scrolls to the top and freezes transitions.
 - **`page.mouse.move(-1, -1)` really clears `:hover` in Chromium.** Checked with `document.querySelectorAll(':hover')`.
 - **A hover-state check must also freeze transitions.** Otherwise it reads the colour mid-fade, and the first version missed the footer link because of that.
+
+## 2026-10-06 — surveys/evaluations/attendance/AI/double-booking/availability run (#1889–#2001)
+
+- **Killing a dev server:** use `ps -eo pid,args | grep "[.]bin/next" | awk '{print $1}' | xargs -r kill`. `pkill -f "next dev"` and `pgrep -f` match the invoking shell's own command line, so they kill your shell (exit 144) instead.
+- **Shared `node_modules` across worktrees means one Prisma client.** `npx prisma generate` in worktree B silently swaps the client under a dev server, and under a running e2e suite, started from worktree A. Never regenerate while a background run is going. Wait for it, then regenerate before the next `tsc`.
+- **`prisma format` realigns the whole block you touched.** A long new field name in `User` or `MentorshipRelation` re-pads every line around it, and the PR then conflicts with everyone. Put new fields in their own blank-line-separated group with a comment; `format` aligns per group.
+- **New notification event keys must be in `src/lib/notifications/catalog.ts`**, or `notification-catalog.test.mjs` fails. Also check the MARKETING leak ratchet before writing mentor or mentee wording into a new string. If a mail genuinely has to say it, add a `LEAK_EXEMPT` entry with a reason.
+- **Node's TS type stripping (the `scripts/test` runner) rejects TS parameter properties** (`constructor(private x)`). Use a plain field.
+- **A Next route file may export only handlers and config.** A helper exported from `route.ts` fails the build, so move it to `src/lib`.
+- **e2e specs with three or four sign-ins blow the 60s budget.** Use `test.slow()`. A test that relied on an earlier test's rows broke after a worker restart, so make each test seed its own data.
+- **Prisma interactive transactions return a union of object literals.** `'x' in outcome` does not narrow it, because TS normalises the missing keys to `?: undefined`. Test the property itself: `if (outcome.conflict)`.
+- **Row locks for "check then insert":** run `SELECT … FOR UPDATE` on the participants' `User` rows, sorted by id, as the first statement of the transaction. The InnoDB read view is created by the first non-locking read, which then runs after the lock is held, so the check sees a concurrent booking that has already committed (#1995).
