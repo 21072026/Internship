@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Erasure reaches the rest of the per-person free text (#2106). `scrubFreeTextOps()` in `src/lib/accountErasure.ts` now covers every per-person column in the `scripts/sanitize-db.mjs` \"Emptied\" inventory, on both paths. Written by the person (tombstoned): `MentorQuestion.question`, `MeetingRequest.topic`, `ProjectJoinRequest.message`, and as an author `Evaluation.comment`/`publicExcerpt`, `MentorQuestion.answer`, `WeeklyReport.mentorComment`; their own `Notification` rows are deleted. Written about them (scrubbed, rows, dates and scores kept): evaluations, weekly reports, questions, meeting requests, `Meeting.title`/`cancelReason` (their relation or 1:1), `Goal.description`, offer notes, `StatusChange.reasonNote`, `CompanyInterest.note`, `InterviewRequest` notes and `ProjectJoinRequest.decisionNote`. Most of these cascaded on a hard delete but all survived anonymise. The `KNOWN GAPS` block is now a `COVERAGE` block that records each deliberate exclusion with its reason, including the decision to keep the audit trail (`ActivityLog`/`AuditLog`, bounded by `activityLogRetentionDays`). `docs/pii-access-lifecycle.md` matches. `e2e/erasure-free-text.spec.ts` asserts every new surface on both paths, plus a mentor-erasure case. No schema change.",
-  "notes": {
-    "en": ["Deleting or anonymising an account now also removes the person's evaluations, weekly reports, questions, goals, offer and interview notes, and their notifications."],
-    "tr": ["Bir hesabı silmek ya da anonimleştirmek artık kişinin değerlendirmelerini, haftalık raporlarını, sorularını, hedeflerini, teklif ve görüşme notlarını ve bildirimlerini de temizliyor."],
-    "de": ["Beim Löschen oder Anonymisieren eines Kontos werden jetzt auch Bewertungen, Wochenberichte, Fragen, Ziele, Angebots- und Interviewnotizen sowie die Benachrichtigungen der Person entfernt."]
-  }
-}

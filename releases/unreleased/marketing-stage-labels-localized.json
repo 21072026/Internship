@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Marketing pipeline stages follow the reader's language** (#2710). A MARKETING org is provisioned with the funnel's labels stored in English, and the read-side localizer only recognised the canonical keys — so a Turkish or German admin saw \"New lead\", \"Proposal sent\", … on the dashboard and boards. New `localizeResolvedStageLabels()` (`src/lib/programTemplates.ts`) extends the #2268 rule to every curated template stage: a stored label that is blank or matches our curated label in any locale reads back in the viewer's locale; a label the tenant typed stays verbatim. Used by `resolvePipelineStages()` and the client `useResolvedStages()` hook; no data migration needed. Unit-tested in `scripts/test/template-stage-labels.test.mjs`.",
-  "notes": {
-    "en": ["Sales pipeline stages now appear in your own language instead of always in English."],
-    "tr": ["Satış hattındaki aşamalar artık her zaman İngilizce değil, kendi dilinizde görünüyor."],
-    "de": ["Die Phasen der Vertriebspipeline erscheinen jetzt in Ihrer Sprache statt immer auf Englisch."]
-  }
-}

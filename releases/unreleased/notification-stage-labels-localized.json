@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Stage-change notifications follow the reader's language for marketing stages** (#2710, follow-up). A stage change snapshots a non-canonical stage's label into the notification params in the writer's locale, so a Turkish reader's bell said \"New lead → Proposal sent\". `notificationText.ts` now reads an untouched curated snapshot back through `curatedStageLabel()` (`src/lib/programTemplates.ts`); a label the tenant typed still renders verbatim. Also corrects the `verticalOverlays.ts` comment that claimed `stageLabel()` already localized the funnel.",
-  "notes": {
-    "en": ["Notifications about a lead changing stage now name the stages in your own language."],
-    "tr": ["Bir müşteri adayının aşama değiştirdiğini bildiren bildirimler artık aşamaları kendi dilinizde gösteriyor."],
-    "de": ["Benachrichtigungen über einen Phasenwechsel eines Leads nennen die Phasen jetzt in Ihrer Sprache."]
-  }
-}

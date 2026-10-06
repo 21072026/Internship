@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Sales leaderboard: the org's active admins are always listed** (follow-up to #2699, maintainer decision 2026-10-05). Before, an ADMIN appeared only in a month in which they owned a won deal; now every active MENTOR and ADMIN of the org is on the board, at 0 when they have no win yet (`src/lib/salesTarget.ts`). The counting rule is unchanged: a deal carried over by a transfer, or imported straight into a won stage, is still not a win this month.",
-  "notes": {
-    "en": ["The sales leaderboard now always lists your admins too, not only in months they close a deal."],
-    "tr": ["Satış sıralaması artık yöneticileri de her zaman listeliyor; yalnızca anlaşma kazandıkları aylarda değil."],
-    "de": ["Die Vertriebsrangliste zeigt jetzt auch Ihre Admins immer an – nicht nur in Monaten, in denen sie einen Deal abschließen."]
-  }
-}

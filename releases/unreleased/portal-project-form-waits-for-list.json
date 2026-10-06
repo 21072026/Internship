@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**The portal's project form closes on a list that already shows the change** (#2481). `PortalProjectCreate`/`PortalProjectEdit` (`src/components/project/PortalProjectActions.tsx`) used to close the form and fire `router.refresh()` without waiting for it. The list exists only in that refresh's RSC payload, so on a loaded server it stayed stale for seconds after the form was gone. This is what the scheduled suite hit twice in one run: the list missed the new project after create, then missed the new name after edit on the retry. The refresh now runs in a transition, and ProjectForm awaits it with the button still busy. The form closes once the refreshed list has committed, with a 15s fallback, and a second click can no longer re-submit. e2e: `project-mentee-owner.spec.ts` waits on the form closing instead of an arbitrary list timeout, and gets a regression test that holds every RSC refresh back 3s: it fails on the old code (the form closed at once) and passes now. The `MO Ungated` lookup is scoped to its own owner, since two parallel runs picked up each other's row.",
-  "notes": {
-    "en": ["Creating or editing a project in the portal now keeps the form open until the updated list is shown, instead of briefly showing the old list."],
-    "tr": ["Portalda proje oluştururken veya düzenlerken form artık güncellenmiş liste görünene kadar açık kalıyor; kısa süreliğine eski listenin görünmesi sona erdi."],
-    "de": ["Beim Anlegen oder Bearbeiten eines Projekts im Portal bleibt das Formular jetzt offen, bis die aktualisierte Liste angezeigt wird – statt kurz die alte Liste zu zeigen."]
-  }
-}
