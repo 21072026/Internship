@@ -3,13 +3,17 @@ import { prisma } from '@/lib/prisma';
 import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
 import { getSetting } from '@/lib/settings';
-import { addUtcWeeks, firstFullUtcWeek, utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
+import { scoreRelation } from '@/lib/relationHealth';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 import { isTrialMissingEndDate } from '@/lib/trialReminderRule';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
 
 export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due';
+
+// The relationship-health flags this queue shows (#1898) — every one the
+// table raises except `stage_stalled`, which belongs to the admin monitor.
+const QUEUE_HEALTH_REASONS = ['inactive', 'overdue', 'unanswered_question', 'pending_meeting', 'no_open_goal', 'missing_weekly_reports'] as const;
 
 export interface AttentionItem {
   relationId: string;
@@ -56,7 +60,6 @@ export async function getAttentionItems(
 ): Promise<AttentionQueue> {
   const reminderDays = parseInt(await getSetting('reminderDays', options.orgId), 10) || 14;
   const now = Date.now();
-  const staleCutoff = new Date(now - reminderDays * 24 * 60 * 60 * 1000);
   const ownerWhere: Prisma.MentorshipRelationWhereInput = { mentorId, status: 'ACTIVE' };
 
   const relations = await prisma.mentorshipRelation.findMany({
@@ -125,15 +128,36 @@ export async function getAttentionItems(
       dormantCount += 1;
       continue;
     }
-    const reasons: AttentionReason[] = [];
     const last = lastContacts.get(r.id)?.at ?? null;
     const daysSince = last ? Math.floor((now - last.getTime()) / (24 * 60 * 60 * 1000)) : null;
 
-    if (!last || last < staleCutoff) reasons.push('inactive');
-    if (r.stageDeadline && r.stageDeadline.getTime() < now) reasons.push('overdue');
-    if (r.questions.length > 0) reasons.push('unanswered_question');
-    if (r.meetingRequests.length > 0) reasons.push('pending_meeting');
-    if (r.goals.length === 0 && !hasOpenTodo.has(r.mentee.id)) reasons.push('no_open_goal');
+    // The mentorship reasons come from the relationship-health rules table
+    // (#1898, src/lib/relationHealth.ts), so this queue and the admin health
+    // monitor can never disagree about what is wrong with a pair. The table's
+    // flags carry exactly this queue's semantics; its score is not used here.
+    // Stage movement is the monitor's concern, not this queue's: it is not
+    // loaded, and its flag is dropped by the filter below.
+    const health = scoreRelation({
+      now,
+      reminderDays,
+      status: 'ACTIVE',
+      dormant: false,
+      startDate: r.startDate,
+      lastContactAt: last,
+      stageDeadline: r.stageDeadline,
+      unansweredQuestions: r.questions.length,
+      pendingMeetingRequests: r.meetingRequests.length,
+      hasOpenWork: r.goals.length > 0 || hasOpenTodo.has(r.mentee.id),
+      weeklyReports:
+        r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450'
+          ? { submittedWeekStarts: r.weeklyReports.map((report) => report.weekStart.getTime()) }
+          : null,
+      lastStageMoveAt: null,
+    });
+    const reasons: AttentionReason[] = health.excluded
+      ? []
+      : health.reasons.filter((reason): reason is (typeof QUEUE_HEALTH_REASONS)[number] => (QUEUE_HEALTH_REASONS as readonly string[]).includes(reason));
+
     // A trial that has run out (#2418). The sweep in lib/jobs/trialReminders.ts
     // parks the record in TRIAL_EXPIRED and then stops: nothing else happens to
     // it until a human turns it into a proposal or a loss, so it belongs in the
@@ -162,17 +186,6 @@ export async function getAttentionItems(
     // lands here from the next day on, and leaves the moment the date is moved
     // or cleared. Independent of `overdue` above, which is the stage SLA.
     if (isNextActionOverdue(r.nextActionAt, now)) reasons.push('next_action_due');
-    if (r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450') {
-      const currentWeek = utcWeekStart(new Date(now));
-      const firstEligibleWeek = firstFullUtcWeek(r.startDate);
-      const lastWeek = addUtcWeeks(currentWeek, -1);
-      const previousWeek = addUtcWeeks(currentWeek, -2);
-      const submitted = new Set(r.weeklyReports.map((report) => report.weekStart.getTime()));
-      if (previousWeek >= firstEligibleWeek && !submitted.has(lastWeek.getTime()) && !submitted.has(previousWeek.getTime())) {
-        reasons.push('missing_weekly_reports');
-      }
-    }
-
     const kept = options.reasons ? reasons.filter((reason) => options.reasons!.includes(reason)) : reasons;
     if (kept.length > 0) {
       items.push({
