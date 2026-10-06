@@ -1,0 +1,5 @@
+# The frozen agent-experience archive (#2804). New entries live in docs/agent-experience/, one
+# file per session, and that is what actually prevents conflicts: GitHub's mergeability check
+# ignores merge drivers, so a PR that still appends here shows as conflicted on GitHub. `union`
+# only spares a local `git merge origin/main` the hand-resolution for a straggler entry.
+docs/agent-experience.md merge=union
