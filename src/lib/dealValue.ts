@@ -280,6 +280,20 @@ export interface DealValueMonth {
   activeAtEnd: ValueTally;
 }
 
+/**
+ * A month's net change in the estimated monthly value of the book (#2424):
+ * what was newly won minus what was lost. Because every month values a journey
+ * at its CURRENT estimate (rule 2 above), this is exactly the difference
+ * between this month's and the previous month's `activeAtEnd` value — the
+ * table can show it without a running total that would drift on re-estimates.
+ * `null` for a month in which nothing was won or lost: the table shows "—",
+ * never a fabricated 0.
+ */
+export function netChangeMinor(month: DealValueMonth): number | null {
+  if (month.won.count === 0 && month.lost.count === 0) return null;
+  return month.won.valueMinor - month.lost.valueMinor;
+}
+
 export interface DealValueSeries {
   ok: true;
   /** The one currency every counted estimate is in (the default when none has one). */
