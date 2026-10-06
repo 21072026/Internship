@@ -4843,6 +4843,10 @@ export function initCronJobs() {
       const a = await sweepMeetingInteractionLogs();
       if (a.logged) {
         console.log(`[Cron] Meeting interaction logs written: ${a.logged}`);
+        // …and their mentees get the one "how was it?" e-mail (#1896).
+        // Imported lazily: meetingFeedback imports this module's sendEmail.
+        const { askForMeetingFeedback } = await import('@/lib/meetingFeedback');
+        await askForMeetingFeedback(a.loggedIds);
       }
     } catch (e) {
       console.error('[Cron] Meeting reminder error:', e);

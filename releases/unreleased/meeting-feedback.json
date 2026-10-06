@@ -1,0 +1,17 @@
+{
+  "bump": "minor",
+  "changelog": "**Post-meeting feedback — one tap, two questions** (#1896; docs/surveys.md § Meeting feedback). New tenant model `MeetingFeedback` (`@@unique([meetingId, raterId])`, `relationId` denormalised) and nullable `Meeting.feedbackAskedAt`. Ending a meeting in the dashboard banner shows `MeetingFeedbackCard` (did it take place? how helpful, 1–5? optional note) → `POST /api/meetings/[id]/feedback`. When nobody ended it, the auto-log sweep now returns `loggedIds` and `askForMeetingFeedback()` mails the mentee once — the meeting row is claimed before sending, a second sweep asks nobody, guests are never asked — with six signed one-click links (`src/lib/meetingFeedbackToken.ts`, own HMAC domain) to `/meeting-feedback/<token>`, which records from the browser (`GET /api/meeting-feedback/[token]` only reads; mail scanners prefetch). \"We didn't meet\" is stored as `happened = false` and never scored. A mentor reads only `GET /api/mentor/meeting-feedback`: the aggregate of other people's answers above the response floor (`surveyPrivacy.effectiveMinResponses`), never a rating, rater or note; `meetingQualityFor(relationId, windowDays)` returns null under the floor for the health score. Mail category `meeting-feedback` in the task-reminders group. Free — no entitlement check.",
+  "notes": {
+    "en": ["After a meeting you can now say in one tap whether it happened and how helpful it was — in the app right after ending it, or from a single e-mail without logging in. The other person only ever sees an average of several answers."],
+    "tr": ["Bir toplantıdan sonra artık tek dokunuşla toplantının gerçekleşip gerçekleşmediğini ve ne kadar faydalı olduğunu söyleyebilirsin — bitirdikten hemen sonra uygulamada ya da giriş yapmadan tek bir e-postadan. Karşı taraf yalnızca birkaç cevabın ortalamasını görür."],
+    "de": ["Nach einem Termin kannst du jetzt mit einem Tipp angeben, ob er stattgefunden hat und wie hilfreich er war — direkt nach dem Beenden in der App oder ohne Anmeldung aus einer einzigen E-Mail. Die andere Person sieht immer nur einen Durchschnitt aus mehreren Antworten."]
+  },
+  "media": {
+    "poster": "release-media/meeting-feedback.png",
+    "alt": {
+      "en": "The meeting feedback card: did it take place, answered yes; how helpful was it, 4 of 5 selected; an optional note field; Send and Skip; and a line saying the other person only sees an average",
+      "tr": "Toplantı geri bildirim kartı: gerçekleşti mi sorusuna evet; ne kadar faydalıydı sorusunda 5 üzerinden 4 seçili; isteğe bağlı not alanı; Gönder ve Geç; karşı tarafın yalnızca ortalamayı gördüğünü söyleyen bir satır",
+      "de": "Die Feedback-Karte zum Termin: Hat er stattgefunden, mit Ja beantwortet; wie hilfreich war er, 4 von 5 gewählt; ein optionales Notizfeld; Senden und Überspringen; und ein Hinweis, dass die andere Person nur einen Durchschnitt sieht"
+    }
+  }
+}

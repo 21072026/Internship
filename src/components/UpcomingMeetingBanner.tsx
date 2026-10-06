@@ -5,6 +5,7 @@ import { CalendarClock, CheckCircle2, Users, Video } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { endUpcomingMeeting, useUpcomingMeeting } from '@/hooks/useUpcomingMeeting';
+import { MeetingFeedbackCard } from '@/components/meeting/MeetingFeedbackCard';
 
 // The dashboard's "you have a meeting" strip (#51 follow-up): appears half an
 // hour before the start and stays for as long as the meeting is running, with the
@@ -20,7 +21,11 @@ export function UpcomingMeetingBanner() {
   const locale = useLocale();
   const { meeting } = useUpcomingMeeting();
   const [ending, setEnding] = useState(false);
+  // The meeting just marked as ended, while its "how was it?" card is up
+  // (#1896). Kept here because ending it removes the banner's own meeting.
+  const [feedbackFor, setFeedbackFor] = useState<string | null>(null);
 
+  if (feedbackFor) return <MeetingFeedbackCard meetingId={feedbackFor} onDone={() => setFeedbackFor(null)} />;
   if (!meeting) return null;
 
   const markEnded = async () => {
@@ -28,8 +33,11 @@ export function UpcomingMeetingBanner() {
     // one explicit "are you sure" — there is no undo.
     if (!window.confirm(t.upcomingMeeting.markEndedConfirm)) return;
     setEnding(true);
-    await endUpcomingMeeting(meeting.id);
+    const ended = await endUpcomingMeeting(meeting.id);
     setEnding(false);
+    // A recurring occurrence (`<seriesId>:<instant>`) has no Meeting row to
+    // rate, and a project room has no relation; the card is for the rest.
+    if (ended && !meeting.id.includes(':') && !meeting.projectId) setFeedbackFor(meeting.id);
   };
 
   const when = meeting.ongoing
