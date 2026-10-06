@@ -94,3 +94,123 @@ test('a saved result answers again at no cost, survives a reload, and is shared 
   // Erasing the person erased what was generated about them (the cascade).
   expect(await prisma.aiArtifact.count({ where: { subjectUserId: mentee.id } })).toBe(0);
 });
+
+test('an unchanged interaction log re-opens its kept summary, free, for the pair only', { tag: '@smoke' }, async ({ page }) => {
+  test.slow();
+  const menteeEmail = uniqueEmail('sum-mentee');
+  const mentorEmail = uniqueEmail('sum-mentor');
+  const otherMentorEmail = uniqueEmail('sum-other');
+  const mentee = await seedUser(menteeEmail, PW, 'MENTEE', 'Sum Mentee');
+  const mentor = await seedUser(mentorEmail, PW, 'MENTOR', 'Sum Mentor');
+  await seedUser(otherMentorEmail, PW, 'MENTOR', 'Sum Other');
+  await prisma.userConsent.create({ data: { userId: mentee.id, type: 'AI_INTERACTION_SUMMARY', grantedAt: new Date() } });
+  const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE' } });
+  const date = new Date('2026-09-01T10:00:00.000Z');
+  await prisma.interactionLog.create({ data: { relationId: rel.id, date, type: 'Meeting', notes: 'Walked through the first API task.' } });
+  try {
+    // What the route hashes: this relation, this mentee, this exact log.
+    const saved = await prisma.aiArtifact.create({
+      data: {
+        orgId: mentee.orgId ?? (await defaultOrgId()),
+        taskId: 'interaction_summary',
+        subjectUserId: mentee.id,
+        createdById: mentor.id,
+        relationId: rel.id,
+        inputHash: hashInput({
+          relationId: rel.id,
+          mentee: 'Sum Mentee',
+          log: [{ date: date.toISOString(), type: 'Meeting', subject: '', notes: 'Walked through the first API task.' }],
+        }),
+        content: '- Steady start on the API task.',
+      },
+    });
+
+    await signInAndSettle(page, mentorEmail, PW, '/mentor');
+    const usageBefore = await prisma.aiUsage.count();
+    const again = await page.request.post('/api/interactions/summary', { data: { relationId: rel.id } });
+    expect(await again.json()).toMatchObject({ summary: saved.content, cached: true, artifact: { id: saved.id } });
+    expect(await prisma.aiUsage.count()).toBe(usageBefore);
+    // Regenerate is a real call; so is a log with one more entry.
+    expect((await page.request.post('/api/interactions/summary', { data: { relationId: rel.id, regenerate: true } })).status()).toBe(501);
+    // The card opens on the kept summary, with when it was made.
+    await page.goto(`/mentor/mentees/${rel.id}`);
+    const card = page.getByTestId('interaction-summary');
+    await expect(card).toContainText('Steady start on the API task.');
+    await expect(card.getByTestId('ai-artifact-generated')).toBeVisible();
+    await prisma.interactionLog.create({ data: { relationId: rel.id, date: new Date(), type: 'Call', notes: 'Second check-in.' } });
+    expect((await page.request.post('/api/interactions/summary', { data: { relationId: rel.id } })).status()).toBe(501);
+
+    // A mentor who is not this pair's reads nothing back.
+    await signInAsFreshUser(page, otherMentorEmail, PW, '/mentor');
+    expect((await page.request.get(`/api/interactions/summary?relationId=${rel.id}`)).status()).toBe(403);
+  } finally {
+    await prisma.interactionLog.deleteMany({ where: { relationId: rel.id } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(otherMentorEmail);
+  }
+});
+
+test('the same candidates re-use the kept match rationale; a stale or changed one does not', async ({ page }) => {
+  test.slow();
+  // An org of its own, so the candidate pool is exactly this admin and this
+  // mentor — the hash covers the pool, and a shared org's pool moves under
+  // parallel workers.
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const org = await prisma.organization.create({ data: { name: `Match Org ${stamp}`, slug: `match-${stamp}` } });
+  const adminEmail = uniqueEmail('match-admin');
+  const mentorEmail = uniqueEmail('match-mentor');
+  const menteeEmail = uniqueEmail('match-mentee');
+  const admin = await seedUser(adminEmail, PW, 'ADMIN', 'Match Admin', org.id);
+  const mentor = await seedUser(mentorEmail, PW, 'MENTOR', 'Match Mentor', org.id);
+  const mentee = await seedUser(menteeEmail, PW, 'MENTEE', 'Match Mentee', org.id);
+  await prisma.user.update({ where: { id: mentor.id }, data: { skills: ['Go'] } });
+  await prisma.user.update({ where: { id: mentee.id }, data: { skills: ['Go'] } });
+  const candidate = (label: string, id: string, skills: string[]) => ({ label, skills, interests: null, activeMentees: 0, capacity: null, mentorId: id });
+  try {
+    const saved = await prisma.aiArtifact.create({
+      data: {
+        orgId: org.id,
+        taskId: 'mentor_match',
+        subjectUserId: mentee.id,
+        createdById: admin.id,
+        // Skill overlap first: the mentor is A, the admin (no overlap) is B.
+        inputHash: hashInput({
+          mentee: { skills: ['Go'], targetPosition: '', interests: '' },
+          candidates: [candidate('A', mentor.id, ['Go']), candidate('B', admin.id, [])],
+        }),
+        content: JSON.stringify([{ label: 'A', reason: 'Both work in Go.' }]),
+      },
+    });
+
+    await signInAndSettle(page, adminEmail, PW, '/admin');
+    const usageBefore = await prisma.aiUsage.count();
+    const res = await (await page.request.post('/api/admin/mentor-suggest', { data: { menteeId: mentee.id } })).json();
+    expect(res).toMatchObject({ aiUsed: true, cached: true, artifact: { id: saved.id } });
+    expect(res.suggestions[0]).toMatchObject({ mentorId: mentor.id, reason: 'Both work in Go.' });
+    expect(await prisma.aiUsage.count()).toBe(usageBefore);
+
+    // On the candidate row: the rationale, and that it is the saved copy.
+    await page.goto('/admin/candidates');
+    const desktop = page.getByTestId('candidates-desktop-list');
+    await desktop.getByTestId('suggest-mentor').first().click();
+    await expect(desktop.getByTestId('mentor-suggestion').first()).toContainText('Both work in Go.');
+    await expect(desktop.getByTestId('ai-artifact-cached').first()).toBeVisible();
+
+    // Regenerate goes to the provider (none here): the rule-based fallback.
+    expect((await (await page.request.post('/api/admin/mentor-suggest', { data: { menteeId: mentee.id, regenerate: true } })).json()).aiUsed).toBe(false);
+    // A stored ranking that no longer decodes is a miss, never a 500.
+    await prisma.aiArtifact.update({ where: { id: saved.id }, data: { content: 'not a ranking' } });
+    const stale = await page.request.post('/api/admin/mentor-suggest', { data: { menteeId: mentee.id } });
+    expect(stale.status()).toBe(200);
+    expect((await stale.json()).aiUsed).toBe(false);
+  } finally {
+    await prisma.matchFeedback.deleteMany({ where: { menteeId: mentee.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(adminEmail);
+    await prisma.aiArtifact.deleteMany({ where: { orgId: org.id } });
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
+  }
+});
