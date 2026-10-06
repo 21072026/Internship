@@ -8173,3 +8173,35 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **`window.location.search` in an effect is a safe deep-link preset in a client page.** It needs no `Suspense` for `useSearchParams` at build. Guard the load with a request counter, because the preset fires a second fetch while the unfiltered one is still in flight.
 - **Assert a Link's `href`, not the navigation, when the target page is cold in `next dev`.** The first compile of a page can exceed the 5 s default and fail the click.
 - **A dashboard indicator with no data source is a row that says so** ("not yet measurable — needs #N"), never a 0 and never a proxy. Reviewers and sponsors read a 0 as a measurement.
+
+## 2026-10-06 — Dünya sızıntıları, adres defteri, SaleVali ingest (#2643, #2729, #2733)
+
+- **Açık görünen bir issue'ya başlamadan önce kodu ve `git log`'u oku.** #2570 açıktı ama
+  #2633 onu zaten tamamen sevk etmişti (eşleme, birim test, org başına tekillik, e2e). Kapatmak
+  için kanıt yazmak beş dakika, yeniden yazmak bir gün sürerdi. `grep -rn "#<issue>" src docs`
+  ilk adım.
+- **`src/lib/marketingImport.ts` bir ikili bayt içeriyor** — `file` onu `data` diye görür ve
+  `grep` sessizce **hiçbir şey** bulmaz. `grep -a` kullan; Python ile düzenlerken `rb`/`wb`.
+- **`check:route-auth` oturum okumasını rotanın KENDİ dosyasında arar.** Yardımcı bir fonksiyona
+  taşınan `getServerSession()` guard'ı kırar; oturumu handler'da oku, yardımcıya parametre geç.
+- **Mutasyonla "guard'sız kırmızı" kanıtı (#2452 kabul kriteri):** guard'ı geçici olarak bozup
+  spec'i koş, sonra dosyayı geri yükle (`cp` yedek → geri). `test.describe.configure({ mode:
+  'serial' })` ilk hatada durur — her mutasyonu ayrı `--grep` ile koş, yoksa ikinci iddia hiç
+  çalışmaz ve "yeşil" sanırsın.
+- **main paralel olarak aynı yerleri düzelttiyse** (dünya/tenant sızıntıları: #2653, #2633,
+  #2680): main'in yardımcılarını kanonik al (`tenantAdminIds`), kendininkini sil, yalnızca
+  main'de olmayan **deltayı** geri ekle. Büyük, yalnızca-ekleme içeren bir dosyada (overlay'ler)
+  kör "iki tarafı tut" kilit ayraçları kaydırır: main'in dosyasını al, kendi diff'ini
+  `git apply --reject -C1 --recount` ile uygula, yanlış yere düşen bloğu `tsc`'nin
+  "duplicate property / unknown key" hataları gösterir.
+- **Port 3000 başka oturumların dev sunucusuyla paylaşılıyor**: koşudan önce
+  `lsof -iTCP:3000 -sTCP:LISTEN`. `reuseExistingServer` yabancı bir worktree'nin sunucusunu
+  sessizce benimser ve sonuçlar o kodun sonucudur. Doluysa CI'da `gh workflow run e2e.yml
+  --ref <dal> -f grep='…'` yetkili koşudur.
+- **Yerel `npm install` `package-lock.json`'daki `libc` girişlerini siler** (npm sürümü farkı) —
+  commit'leme, `git checkout -- package-lock.json`.
+- **macOS'ta `core.ignorecase=true`**: `gitignore-exports` birim testi yerelde kırmızı, CI'da
+  (Linux) yeşil. Yerel `test:unit:coverage` bu yüzden floor'u değerlendirmez; tek başarısızlık
+  buysa sorun yok.
+- **Yerel MariaDB `/api/cron`'un paralel işlerinde 1020 ("Record has changed since last read")
+  verir**; CI/prod MySQL 8 vermez. Yerel smoke'taki bu kırmızı bir regresyon değil.
