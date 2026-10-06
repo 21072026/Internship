@@ -54,7 +54,7 @@ The `android/` and `ios/` folders are generated (`npx expo prebuild`) and git-ig
 One-time setup (maintainer):
 
 1. Create an Expo account, preferably an organisation account for bcsit GmbH.
-2. Run `npx eas-cli@latest init` in `apps/mobile`. It writes `extra.eas.projectId` into the config. Commit that change.
+2. Done (#2775): the project is `@bcsit-gmbh/interncrm` (org account). `app.config.ts` is dynamic, so `eas init` cannot write to it — `owner` and `extra.eas.projectId` were added by hand. To re-link, run `npx eas-cli@latest init --id <projectId>` and update both fields.
 3. Add `EXPO_TOKEN` (expo.dev → Access tokens) as a GitHub secret.
 4. Run Actions → *Mobile app* → `profile` / `platform`.
 
