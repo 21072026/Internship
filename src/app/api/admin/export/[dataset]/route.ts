@@ -101,7 +101,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
         ]);
         if (!analytics.ok) return NextResponse.json({ error: 'Export failed' }, { status: analytics.status });
         const src = { analytics: analytics.body, aging: aging.body, funnel: funnel.body };
-        const ctx = { session, orgId, locale, request };
+        const ctx = { orgId, locale, stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null };
         const sheets = dataset === 'analytics'
           ? await analyticsWorkbook(src, ctx, t, label)
           : await fullAnalyticsWorkbook(src, ctx, t, label);

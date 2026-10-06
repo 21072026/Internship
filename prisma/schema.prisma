@@ -147,47 +147,50 @@ model Organization {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  users                User[]
-  sources              Source[]
-  cohorts              Cohort[]
-  companies            Company[]
-  projects             Project[]
-  relations            MentorshipRelation[]
-  pipelineStages       PipelineStage[]
-  evaluationTemplates  EvaluationTemplate[]
-  stageSlas            StageSla[]
-  tags                 Tag[]
-  mentorApplications   MentorApplication[]
-  companyInquiries     CompanyInquiry[]
-  documentRequirements DocumentRequirement[]
-  weeklyReports        WeeklyReport[]
-  offers               Offer[]
-  requisitions         Requisition[]
-  interviewRequests    InterviewRequest[]
-  messageTemplates     MessageTemplate[]
-  apiKeys              ApiKey[]
-  matchFeedback        MatchFeedback[]
-  settings             Setting[]
-  programCosts         ProgramCost[]
-  placements           Placement[]
-  rosterFeeds          RosterFeed[]
-  subscription         Subscription?
-  orgEntitlements      OrgEntitlement[]
-  usageRollups         UsageRollup[]
-  companyUsage         CompanyUsage[]
-  contactPermissions   ContactPermission[]
-  integrationEvents    IntegrationEvent[]
-  companyContacts      CompanyContact[]
-  postCampaigns        PostCampaign[]
-  postRecipients       PostCampaignRecipient[]
-  contactSuppressions  ContactSuppression[]
-  companyChannels      CompanyChannel[]
-  webhooks             Webhook[]
-  announcements        Announcement[]
-  newsletters          Newsletter[]
-  trialReminders       TrialReminder[]
-  relationValues       RelationValue[]
-  ssoClaimMappings     SsoClaimMapping[]
+  users                   User[]
+  sources                 Source[]
+  cohorts                 Cohort[]
+  companies               Company[]
+  projects                Project[]
+  relations               MentorshipRelation[]
+  pipelineStages          PipelineStage[]
+  evaluationTemplates     EvaluationTemplate[]
+  stageSlas               StageSla[]
+  tags                    Tag[]
+  mentorApplications      MentorApplication[]
+  companyInquiries        CompanyInquiry[]
+  documentRequirements    DocumentRequirement[]
+  weeklyReports           WeeklyReport[]
+  // Scheduled report delivery (#1905).
+  reportSubscriptions     ReportSubscription[]
+  reportSubscriptionSends ReportSubscriptionSend[]
+  offers                  Offer[]
+  requisitions            Requisition[]
+  interviewRequests       InterviewRequest[]
+  messageTemplates        MessageTemplate[]
+  apiKeys                 ApiKey[]
+  matchFeedback           MatchFeedback[]
+  settings                Setting[]
+  programCosts            ProgramCost[]
+  placements              Placement[]
+  rosterFeeds             RosterFeed[]
+  subscription            Subscription?
+  orgEntitlements         OrgEntitlement[]
+  usageRollups            UsageRollup[]
+  companyUsage            CompanyUsage[]
+  contactPermissions      ContactPermission[]
+  integrationEvents       IntegrationEvent[]
+  companyContacts         CompanyContact[]
+  postCampaigns           PostCampaign[]
+  postRecipients          PostCampaignRecipient[]
+  contactSuppressions     ContactSuppression[]
+  companyChannels         CompanyChannel[]
+  webhooks                Webhook[]
+  announcements           Announcement[]
+  newsletters             Newsletter[]
+  trialReminders          TrialReminder[]
+  relationValues          RelationValue[]
+  ssoClaimMappings        SsoClaimMapping[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -532,6 +535,8 @@ model User {
   createdOffers                     Offer[]                       @relation("OfferCreatedBy")
   decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
   reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
+  // Report subscriptions this user receives (#1905); removed with the user.
+  reportSubscriptions               ReportSubscription[]          @relation("ReportSubscriptionRecipient")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
@@ -4786,4 +4791,71 @@ model RosterRowResult {
   @@unique([runId, rowNumber])
   @@index([runId, status])
   @@index([orgId, createdAt])
+}
+
+// ── Scheduled report delivery (#1905) ────────────────────────────────────────
+// A named report from the registry (src/lib/reports/definitions.ts) mailed on a
+// cadence to ONE recipient: a user of the org (`recipientUserId`, whose
+// `analytics-report` opt-out keeps applying) or an address with no account
+// (`recipientEmail` — the dean, the funder), who leaves through a signed link.
+// The rules (cadence, period key, due-ness) live in src/lib/reportSubscriptions.ts;
+// the sender is src/lib/jobs/reportSubscriptions.ts. docs/report-subscriptions.md.
+//
+// Vocabularies are VARCHAR + a whitelist in code, never a Prisma enum, for the
+// reason `pipelineStatus` is (#747): growing an enum is an ENUM→VARCHAR migration.
+model ReportSubscription {
+  id              String                   @id @default(cuid())
+  orgId           String?
+  org             Organization?            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// A key of REPORT_DEFINITIONS; an unknown key is refused when written.
+  reportKey       String                   @db.VarChar(64)
+  params          Json?
+  /// WEEKLY | MONTHLY | QUARTERLY
+  cadence         String                   @db.VarChar(16)
+  /// ISO weekday, 1 = Monday … 7 = Sunday (WEEKLY only).
+  dayOfWeek       Int?
+  /// 1–28 (MONTHLY and QUARTERLY), so every month has the day.
+  dayOfMonth      Int?
+  /// Hour of the day, UTC, 0–23.
+  hour            Int
+  /// en | tr | de — the language of the mail, labels included.
+  locale          String                   @db.VarChar(8)
+  /// EMAIL_SUMMARY | CSV | XLSX — a table in the body, or the file attached.
+  format          String                   @db.VarChar(16)
+  recipientUserId String?
+  recipientUser   User?                    @relation("ReportSubscriptionRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipientEmail  String?                  @db.VarChar(320)
+  recipientName   String?                  @db.VarChar(191)
+  /// The admin who set it up — an id, deliberately not a relation, so the
+  /// subscription outlives that admin's account.
+  createdById     String?
+  isActive        Boolean                  @default(true)
+  lastSentAt      DateTime?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  sends           ReportSubscriptionSend[]
+
+  @@index([orgId, isActive])
+  @@index([recipientUserId])
+}
+
+/// One row per subscription per period — the idempotency marker. The job
+/// CLAIMS the period by inserting it before sending, so a second run (a retry,
+/// a second replica) collides on the unique and sends nothing.
+model ReportSubscriptionSend {
+  id             String             @id @default(cuid())
+  orgId          String?
+  org            Organization?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   ReportSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  /// "2026-W41", "2026-10", "2026-Q4" — or "test-<ms>" for a send-me-a-test.
+  periodKey      String             @db.VarChar(32)
+  /// CLAIMED | SENT | SKIPPED | FAILED
+  status         String             @db.VarChar(16)
+  /// Why it was skipped or failed — a code, never a recipient's data.
+  error          String?            @db.VarChar(191)
+  sentAt         DateTime           @default(now())
+
+  @@unique([subscriptionId, periodKey])
+  @@index([orgId, sentAt])
 }

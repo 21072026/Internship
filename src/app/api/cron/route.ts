@@ -24,6 +24,7 @@ import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 import { runRetentionPrune } from '@/lib/retentionEntries';
 import { runUsageRollup } from '@/lib/jobs/usageRollup';
 import { runTrialReminders } from '@/lib/jobs/trialReminders';
+import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 
 // The weekly analytics report runs for every org (#2542), but any tenant's admin
@@ -123,6 +124,15 @@ export async function GET(request: Request) {
     // stages (the auto-expiry, #2417), which is not what "run the mail jobs
     // now" should quietly do. An admin runs it when they want today's trial
     // sweep now rather than at 05:20.
+    // Report subscriptions (#1905): the caller's own org only — an admin may
+    // fire their tenant's due reports, never another tenant's. `?at=` pins the
+    // clock so the idempotency of a period can be exercised.
+    if (job === 'report-subscriptions') {
+      const orgId = await settingsOrgOf(session);
+      const at = new URL(request.url).searchParams.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      return NextResponse.json({ message: 'Report subscriptions ran', reportSubscriptions: await runReportSubscriptions({ orgIds: [orgId], now }) });
+    }
     if (job === 'trial-reminders') {
       // `orgId` NARROWS the sweep to one tenant; it can never broaden it, and
       // the route is already ADMIN-only. Two callers want it: an operator

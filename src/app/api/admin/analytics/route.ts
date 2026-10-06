@@ -10,6 +10,7 @@ import { getLocale } from '@/i18n/server';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { interactionInTenant, meetingInTenant } from '@/lib/analyticsScope';
+import { mentorWorkload as mentorWorkloadRows } from '@/lib/analyticsReports';
 
 // GET — aggregate analytics for the admin dashboard:
 // pipeline funnel, mentor workload/outcomes, engagement and RSVP rate.
@@ -63,16 +64,8 @@ export async function GET(request: Request) {
   const interactionWhere = { date: inRange, ...interactionInTenant(tenant) };
   const meetingWhere = { scheduledAt: inRange, ...meetingInTenant(tenant) };
 
-  const [byStage, mentors, interactions, meetings, rsvpGroups, projectRows, relDates, interactionDates] = await Promise.all([
+  const [byStage, interactions, meetings, rsvpGroups, projectRows, relDates, interactionDates] = await Promise.all([
     prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({}, tenant), _count: { _all: true } }),
-    prisma.user.findMany({
-      where: withinTenant({ role: 'MENTOR' as const }, tenant),
-      select: {
-        id: true,
-        fullName: true,
-        mentorRelations: { where: withinTenant({}, tenant), select: { pipelineStatus: true } },
-      },
-    }),
     prisma.interactionLog.count({ where: interactionWhere }),
     prisma.meeting.count({ where: meetingWhere }),
     prisma.meeting.groupBy({ by: ['rsvp'], where: meetingWhere, _count: { _all: true } }),
@@ -138,15 +131,8 @@ export async function GET(request: Request) {
     // its payload and screen are unchanged.
     shellCapabilities(orgId),
   ]);
-  const finished = new Set(outcome.finished);
-  const mentorWorkload = mentors
-    .map((m) => ({
-      id: m.id,
-      fullName: m.fullName,
-      active: m.mentorRelations.length,
-      hired: m.mentorRelations.filter((r) => finished.has(r.pipelineStatus)).length,
-    }))
-    .sort((a, b) => b.active - a.active);
+  // Shared with the report registry and the scheduled subscriptions (#1905).
+  const mentorWorkload = await mentorWorkloadRows({ stageOrgId: orgId, tenant, locale }, outcome);
 
   const rsvp = Object.fromEntries(rsvpGroups.map((g) => [g.rsvp, g._count._all]));
   // Acceptance rate is over those who actually responded (accepted + declined).
