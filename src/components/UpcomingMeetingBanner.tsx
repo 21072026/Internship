@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { CalendarClock, CheckCircle2, Users, Video } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { endUpcomingMeeting, useUpcomingMeeting } from '@/hooks/useUpcomingMeeting';
 import { MeetingFeedbackCard } from '@/components/meeting/MeetingFeedbackCard';
+import { AttendanceStep } from '@/components/meeting/AttendanceStep';
 
 // The dashboard's "you have a meeting" strip (#51 follow-up): appears half an
 // hour before the start and stays for as long as the meeting is running, with the
@@ -24,7 +25,17 @@ export function UpcomingMeetingBanner() {
   // The meeting just marked as ended, while its "how was it?" card is up
   // (#1896). Kept here because ending it removes the banner's own meeting.
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null);
+  // Before that card: who was there (#2014) — any pair meeting, a recurring
+  // occurrence included. The step hides itself for a meeting that is not a pair's.
+  const [attendanceFor, setAttendanceFor] = useState<{ id: string; thenFeedback: boolean } | null>(null);
+  const afterAttendance = useCallback(() => {
+    setAttendanceFor((current) => {
+      if (current?.thenFeedback) setFeedbackFor(current.id);
+      return null;
+    });
+  }, []);
 
+  if (attendanceFor) return <AttendanceStep meetingId={attendanceFor.id} onDone={afterAttendance} />;
   if (feedbackFor) return <MeetingFeedbackCard meetingId={feedbackFor} onDone={() => setFeedbackFor(null)} />;
   if (!meeting) return null;
 
@@ -37,7 +48,8 @@ export function UpcomingMeetingBanner() {
     setEnding(false);
     // A recurring occurrence (`<seriesId>:<instant>`) has no Meeting row to
     // rate, and a project room has no relation; the card is for the rest.
-    if (ended && !meeting.id.includes(':') && !meeting.projectId) setFeedbackFor(meeting.id);
+    // Attendance comes first, for every pair meeting (occurrences too).
+    if (ended && !meeting.projectId) setAttendanceFor({ id: meeting.id, thenFeedback: !meeting.id.includes(':') });
   };
 
   const when = meeting.ongoing

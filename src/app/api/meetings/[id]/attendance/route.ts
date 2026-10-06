@@ -49,7 +49,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const resolved = await resolveAttendanceTarget(session.user, id);
     if ('error' in resolved) return NextResponse.json({ error: resolved.error }, { status: STATUS[resolved.error] });
     const { target } = resolved;
-    return NextResponse.json({ participants: [target.mentorId, target.menteeId], attendance: await rowsFor(target) });
+    // The pair, named — the end flow's attendance step lists them (#2014).
+    const people = await prisma.user.findMany({ where: { id: { in: [target.mentorId, target.menteeId] } }, select: { id: true, fullName: true } });
+    const nameOf = (id: string) => people.find((p) => p.id === id)?.fullName ?? '';
+    return NextResponse.json({
+      participants: [
+        { id: target.mentorId, name: nameOf(target.mentorId), role: 'MENTOR' },
+        { id: target.menteeId, name: nameOf(target.menteeId), role: 'MENTEE' },
+      ],
+      attendance: await rowsFor(target),
+    });
   });
 }
 
