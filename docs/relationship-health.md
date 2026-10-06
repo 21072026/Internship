@@ -117,6 +117,22 @@ without the `mentorship` capability, like the page) takes `band`, `mentorId`,
 
 - **Trend column:** the last 30 measured days as the product's CSS bars and the
   30-day delta, from the snapshots above.
+- **Negative feedback flag (#2046).** When the newest open-text summary on
+  `/admin/insights` (evaluation comments, weekly-report blockers; at most
+  `FEEDBACK_FLAG_WINDOW_DAYS` = 30 days old) has a theme whose sentiment is
+  `negative`, every pair whose rows sit in it gets a *Negative feedback: <theme>*
+  chip that links to Insights (`src/lib/insights/feedbackFlags.ts`; the rule is
+  `feedbackFlagRule.ts`).
+  - It is a **note, not a rule.** It does not enter the score, the band, the
+    snapshot or `HEALTH_RULES_VERSION`. Nothing on the relation is written, so
+    the published rules table above stays exactly true.
+  - It **lists** a pair that has no other reason, because a cluster of negative
+    feedback is something to read. Such a pair is not counted as quiet.
+    `counts.feedback` says how many pairs carry one.
+  - Only the newest summary of each kind counts, and only `negative`; `unclear`
+    never flags. It is read at request time from the artefacts, so it disappears
+    on its own when the next summary no longer finds the cluster, at the org's
+    retention, or when an erasure wipes the org's open-text artefacts.
 
 ## Version history
 
