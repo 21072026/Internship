@@ -131,6 +131,8 @@ test.describe('meeting feedback', () => {
     await expect(page.getByTestId('upcoming-meeting-banner')).toContainText(`Live ${stamp}`);
     page.once('dialog', (d) => d.accept());
     await page.getByTestId('upcoming-meeting-end').click();
+    // Who was there comes first since #2014 — everyone defaults to attended.
+    await page.getByTestId('attendance-save').click();
     await expect(page.getByTestId('meeting-feedback-card')).toBeVisible();
     await page.getByTestId('meeting-feedback-happened-yes').click();
     await page.getByTestId('meeting-feedback-rate-5').click();
