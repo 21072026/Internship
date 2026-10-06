@@ -135,6 +135,36 @@ test.describe('survey results', () => {
     await expect(page.getByTestId('breakdown-mentor-row')).toHaveCount(1);
   });
 
+  test('the AI summary runs only above the floor and degrades to the plain list when AI is unavailable', async ({ page }) => {
+    const survey = await createSurvey(orgId, { key: 'ai', title: { en: `AI survey ${stamp}` }, audience: 'MENTEE', anonymity: 'ANONYMOUS', questions: QUESTIONS });
+    await prisma.survey.update({ where: { id: survey.id }, data: { status: 'OPEN' } });
+    const answer = (best: string) => submitSurveyResponse({ surveyId: survey.id, respondentRole: 'MENTEE', answers: { nps: 9, best } });
+    for (const best of ['Pairing sessions', 'The weekly check-ins', 'Mock interviews', 'Code reviews']) await answer(best);
+
+    await signInAndSettle(page, admin, PW, '/admin');
+    const summarise = () => page.request.post(`/api/admin/surveys/${survey.id}/summary`, { data: { questionKey: 'best' } });
+    // Four responses: under the floor, so nothing is summarised either.
+    const under = await summarise();
+    expect(under.status()).toBe(409);
+    expect((await under.json()).code).toBe('below_floor');
+
+    await answer('Feedback on my CV');
+    // A question that is not free text is refused.
+    expect((await page.request.post(`/api/admin/surveys/${survey.id}/summary`, { data: { questionKey: 'nps' } })).status()).toBe(400);
+    // No provider in this environment: a typed reason, never an error.
+    const res = await summarise();
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.summary).toBeNull();
+    expect(['quota_exceeded', 'not_configured']).toContain(body.reason);
+
+    await page.goto(`/admin/surveys/${survey.id}/results`);
+    await page.getByTestId('ai-summarise-best').click();
+    await expect(page.getByTestId('ai-note-best')).toBeVisible();
+    // The plain list is still all there.
+    await expect(page.getByTestId('texts-best').locator('li')).toHaveCount(5);
+  });
+
   test('an anonymous response stores no relation, so there is no cohort or mentor breakdown', async ({ page }) => {
     const survey = await createSurvey(orgId, { key: 'anon', title: { en: `Anonymous survey ${stamp}` }, audience: 'MENTEE', anonymity: 'ANONYMOUS', questions: QUESTIONS });
     await prisma.survey.update({ where: { id: survey.id }, data: { status: 'OPEN' } });
@@ -158,5 +188,6 @@ test.describe('survey results', () => {
     await page.context().clearCookies();
     await signInAndSettle(page, mentors[0], PW, '/mentor');
     expect((await page.request.get(`/api/admin/surveys/${mine.id}/results`)).status()).toBe(403);
+    expect((await page.request.post(`/api/admin/surveys/${mine.id}/summary`, { data: { questionKey: 'best' } })).status()).toBe(403);
   });
 });
