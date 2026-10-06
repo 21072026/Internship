@@ -13,6 +13,7 @@ const env = process.env.APP_ENV === 'preview' ? 'preview' : 'production';
 const config: ExpoConfig = {
   name: 'Internship CRM',
   slug: 'interncrm',
+  owner: 'bcsit-gmbh',
   scheme: 'interncrm',
   version: '0.1.0',
   orientation: 'portrait',
@@ -33,7 +34,10 @@ const config: ExpoConfig = {
   },
   plugins: ['expo-router', 'expo-localization'],
   experiments: { typedRoutes: true },
-  extra: { appEnv: env },
+  extra: {
+    appEnv: env,
+    eas: { projectId: '9a2ef811-d3ef-4135-9b3e-51695a4d9c0f' },
+  },
 };
 
 export default config;
