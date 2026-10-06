@@ -112,9 +112,9 @@ The prompt is never stored. Since #2044 some generated text **is** kept, as an
 |---|---|
 | CV field suggestions | rendered next to an "Apply" button; stored only in the profile field the person chose to apply |
 | CV feedback | **kept** as an `AiArtifact` (7-day cache TTL), shown again on reload |
-| Interaction summary | rendered in the mentor's browser, gone on reload (moves to an artefact in #2044 part 2) |
+| Interaction summary | **kept** as an `AiArtifact` about the mentee, tied to the relation (1-day cache TTL); the card opens on it |
 | Interview prep | **kept** as an `AiArtifact` (7-day cache TTL), shown again on reload |
-| Match rationale | rendered next to the suggestion, gone on reload (moves to an artefact in #2044 part 2) |
+| Match rationale | **kept** as an `AiArtifact` about the mentee (1-day cache TTL), keyed on the exact candidate list |
 | Open-text themes (evaluation comments, weekly-report blockers) | **kept** as an org-level `AiArtifact` with no subject (1-day cache TTL); wiped for the whole org the moment any person in it is erased or anonymized, since it may quote them |
 
 The only row written per call is `AiUsage` — `scope`, `userId`, `companyId`,
