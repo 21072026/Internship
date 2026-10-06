@@ -9,7 +9,7 @@
 // before a file arrives); the script writes exactly these, so they only change
 // together with it.
 
-export type TourShotName = 'mentee' | 'mentor' | 'company';
+export type TourShotName = 'mentee' | 'mentor' | 'company' | 'mkt-pipeline' | 'mkt-rep' | 'mkt-insights';
 type Device = 'desktop' | 'phone';
 type Theme = 'light' | 'dark';
 
@@ -18,11 +18,20 @@ export const TOUR_SIZE: Record<Device, { width: number; height: number }> = {
   phone: { width: 780, height: 1688 },
 };
 
-/** The address shown in the desktop frame's address bar — where the screen lives. */
-export const PRODUCT_TOUR_SHOTS: { name: TourShotName; path: string }[] = [
+export type TourShot = { name: TourShotName; path: string };
+
+/** The internship landing's three screens. `path` is the address shown in the desktop frame's address bar — where the screen lives. */
+export const PRODUCT_TOUR_SHOTS: TourShot[] = [
   { name: 'mentee', path: '/portal/journey' },
   { name: 'mentor', path: '/mentor/board' },
   { name: 'company', path: '/company/candidates' },
+];
+
+/** The MARKETING (SaleVali) landing's three screens, captured on the marketing host against the `demo-marketing` tenant. */
+export const MARKETING_TOUR_SHOTS: TourShot[] = [
+  { name: 'mkt-pipeline', path: '/admin/board' },
+  { name: 'mkt-rep', path: '/sales' },
+  { name: 'mkt-insights', path: '/admin/analytics' },
 ];
 
 export function shotPath(name: TourShotName, device: Device, theme: Theme) {

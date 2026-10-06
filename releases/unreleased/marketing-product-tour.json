@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Marketing landing product tour**: the SaleVali landing now has its own three-screen tour (`mkt-pipeline` funnel board, `mkt-rep` sales dashboard, `mkt-insights` funnel analytics), in the same browser/phone frames, with desktop loops: a lead dragged from New lead to Contacted, and the dashboard and analytics read top to bottom. They are captured on `marketing.localhost` against the `demo-marketing` tenant. Copy lives in a new `productTourMarketing` namespace, which is not leak-exempt. **Fix:** in the mobile app bar, a long tenant name now ends in an ellipsis instead of running under the messages and notification buttons.",
+  "notes": {
+    "en": ["The SaleVali home page now shows the product in action: the pipeline board, a rep's dashboard and the funnel analytics.", "On a phone, a long workspace name no longer covers the buttons in the top bar."],
+    "tr": ["SaleVali ana sayfası artık ürünü çalışırken gösteriyor: pipeline panosu, satışçı paneli ve huni analizi.", "Telefonda uzun bir çalışma alanı adı artık üst çubuktaki düğmelerin üstüne binmiyor."],
+    "de": ["Die SaleVali-Startseite zeigt das Produkt jetzt in Aktion: das Pipeline-Board, das Dashboard im Vertrieb und die Funnel-Analyse.", "Auf dem Handy verdeckt ein langer Name des Arbeitsbereichs nicht mehr die Schaltflächen in der oberen Leiste."]
+  }
+}
