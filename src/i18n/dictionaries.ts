@@ -1200,12 +1200,15 @@ const en = {
   // fails on a key a definition names but this block lacks.
   reports: {
     pipelineFunnel: { title: 'Pipeline funnel', description: 'How many records sit in each stage of your pipeline right now.' },
+    pipelineSummary: { title: 'Pipeline summary', description: 'Totals, how many reached the final stage, the last seven days’ activity and every stage’s share.' },
+    metric: { total: 'Records in the pipeline', reached: 'Reached the final stage', new7: 'New in the last 7 days', interactions7: 'Interactions in the last 7 days', stage: 'Stage: {stage}' },
     cohortComparison: { title: 'Cohort comparison', description: 'Outcomes per cohort: in progress, reached the final stage, dropped, conversion and average time to the final stage.' },
     sourceConversion: { title: 'Source conversion', description: 'How many people each source brought in and how many of them reached the final stage.' },
     mentorWorkload: { title: 'Mentor workload', description: 'Active relations per mentor and how many reached the final stage.' },
     placementOutcomes: { title: 'Placement outcomes', description: 'Placements per company and how many of them have a recorded value.' },
     weeklyReportCompliance: { title: 'Weekly report compliance', description: 'Owed, handed-in, missing and late weekly reports per intern this term.' },
     col: {
+      metric: 'Measure', value: 'Value', share: 'Share',
       stage: 'Stage', count: 'Count', cohort: 'Cohort', total: 'Total', inProgress: 'In progress', reachedOutcome: 'Reached final stage',
       dropped: 'Dropped', conversion: 'Conversion', avgDaysToOutcome: 'Avg. days to final stage', source: 'Source', inPipeline: 'In pipeline',
       mentor: 'Mentor', active: 'Active', company: 'Company', placements: 'Placements', valued: 'With recorded value',
@@ -1290,6 +1293,7 @@ const en = {
         unknown_report: 'the report no longer exists',
         no_recipient: 'there is no recipient',
         send_failed: 'the e-mail could not be sent',
+        seeded: 'moved over from the old weekly e-mail — it starts next week',
       },
       errors: {
         unknown_report: 'This report is not available for your organisation.',
@@ -2748,13 +2752,6 @@ const en = {
     },
     // #2715 — the weekly analytics report to admins. Placeholders in `summary`
     // are filled with <strong>-wrapped numbers by the sender.
-    analyticsReportEmail: {
-      subject: 'Weekly analytics report — {product}',
-      heading: 'Weekly analytics report',
-      greeting: 'Hi {name},',
-      summary: '{total} mentorship relations · {conversion}% hired conversion · last 7 days: {newRelations} new relations, {interactions} interactions.',
-      cta: 'Open the analytics dashboard',
-    },
     deadlineEmail: {
       subject: "Overdue: {mentee}'s stage deadline",
       greeting: 'Hi {mentor},',
@@ -7477,12 +7474,15 @@ const tr: Dict = {
   },
   reports: {
     pipelineFunnel: { title: 'Pipeline hunisi', description: 'Pipeline\'ınızın her aşamasında şu anda kaç kayıt olduğu.' },
+    pipelineSummary: { title: 'Pipeline özeti', description: 'Toplamlar, son aşamaya ulaşanlar, son yedi günün hareketi ve her aşamanın payı.' },
+    metric: { total: 'Pipeline\'daki kayıtlar', reached: 'Son aşamaya ulaşan', new7: 'Son 7 günde yeni', interactions7: 'Son 7 günde etkileşim', stage: 'Aşama: {stage}' },
     cohortComparison: { title: 'Grup karşılaştırması', description: 'Grup başına sonuçlar: devam eden, son aşamaya ulaşan, ayrılan, dönüşüm ve son aşamaya ortalama süre.' },
     sourceConversion: { title: 'Kaynak dönüşümü', description: 'Her kaynağın kaç kişi getirdiği ve bunların kaçının son aşamaya ulaştığı.' },
     mentorWorkload: { title: 'Mentor iş yükü', description: 'Mentor başına aktif ilişkiler ve kaçının son aşamaya ulaştığı.' },
     placementOutcomes: { title: 'Yerleştirme sonuçları', description: 'Şirket başına yerleştirmeler ve kaçının kayıtlı bir değeri olduğu.' },
     weeklyReportCompliance: { title: 'Haftalık rapor uyumu', description: 'Bu dönem stajyer başına beklenen, teslim edilen, eksik ve geç haftalık raporlar.' },
     col: {
+      metric: 'Ölçüt', value: 'Değer', share: 'Pay',
       stage: 'Aşama', count: 'Sayı', cohort: 'Grup', total: 'Toplam', inProgress: 'Devam eden', reachedOutcome: 'Son aşamaya ulaşan',
       dropped: 'Ayrılan', conversion: 'Dönüşüm', avgDaysToOutcome: 'Son aşamaya ort. gün', source: 'Kaynak', inPipeline: 'Pipeline\'da',
       mentor: 'Mentor', active: 'Aktif', company: 'Şirket', placements: 'Yerleştirme', valued: 'Kayıtlı değeri olan',
@@ -7567,6 +7567,7 @@ const tr: Dict = {
         unknown_report: 'rapor artık yok',
         no_recipient: 'alıcı yok',
         send_failed: 'e-posta gönderilemedi',
+        seeded: 'eski haftalık e-postadan taşındı — gelecek hafta başlıyor',
       },
       errors: {
         unknown_report: 'Bu rapor kuruluşunuz için mevcut değil.',
@@ -8952,13 +8953,6 @@ const tr: Dict = {
       greeting: 'Merhaba {mentee},',
       body: '{mentor} artık senin mentorun. Merhaba demek ve mentorluğu başlatmak için portalını aç.',
       cta: 'Portalını aç',
-    },
-    analyticsReportEmail: {
-      subject: 'Haftalık analiz raporu — {product}',
-      heading: 'Haftalık analiz raporu',
-      greeting: 'Merhaba {name},',
-      summary: '{total} mentorluk ilişkisi · %{conversion} işe yerleşme oranı · son 7 gün: {newRelations} yeni ilişki, {interactions} etkileşim.',
-      cta: 'Analiz panosunu aç',
     },
     deadlineEmail: {
       subject: 'Gecikmiş: {mentee} için aşama son tarihi',
@@ -13611,12 +13605,15 @@ const de: Dict = {
   },
   reports: {
     pipelineFunnel: { title: 'Pipeline-Trichter', description: 'Wie viele Datensätze gerade in jeder Phase Ihrer Pipeline stehen.' },
+    pipelineSummary: { title: 'Pipeline-Übersicht', description: 'Summen, wie viele die letzte Phase erreicht haben, die Aktivität der letzten sieben Tage und der Anteil jeder Phase.' },
+    metric: { total: 'Datensätze in der Pipeline', reached: 'Letzte Phase erreicht', new7: 'Neu in den letzten 7 Tagen', interactions7: 'Interaktionen in den letzten 7 Tagen', stage: 'Phase: {stage}' },
     cohortComparison: { title: 'Kohortenvergleich', description: 'Ergebnisse je Kohorte: laufend, letzte Phase erreicht, abgebrochen, Konversion und durchschnittliche Dauer bis zur letzten Phase.' },
     sourceConversion: { title: 'Quellen-Konversion', description: 'Wie viele Personen jede Quelle gebracht hat und wie viele davon die letzte Phase erreicht haben.' },
     mentorWorkload: { title: 'Mentoren-Auslastung', description: 'Aktive Beziehungen je Mentor und wie viele die letzte Phase erreicht haben.' },
     placementOutcomes: { title: 'Vermittlungsergebnisse', description: 'Vermittlungen je Unternehmen und wie viele davon einen erfassten Wert haben.' },
     weeklyReportCompliance: { title: 'Wochenbericht-Abgaben', description: 'Fällige, abgegebene, fehlende und verspätete Wochenberichte je Praktikant im laufenden Zeitraum.' },
     col: {
+      metric: 'Kennzahl', value: 'Wert', share: 'Anteil',
       stage: 'Phase', count: 'Anzahl', cohort: 'Kohorte', total: 'Gesamt', inProgress: 'Laufend', reachedOutcome: 'Letzte Phase erreicht',
       dropped: 'Abgebrochen', conversion: 'Konversion', avgDaysToOutcome: 'Ø Tage bis zur letzten Phase', source: 'Quelle', inPipeline: 'In der Pipeline',
       mentor: 'Mentor', active: 'Aktiv', company: 'Unternehmen', placements: 'Vermittlungen', valued: 'Mit erfasstem Wert',
@@ -13701,6 +13698,7 @@ const de: Dict = {
         unknown_report: 'den Bericht gibt es nicht mehr',
         no_recipient: 'es gibt keinen Empfänger',
         send_failed: 'die E-Mail konnte nicht gesendet werden',
+        seeded: 'aus der alten Wochen-E-Mail übernommen – startet nächste Woche',
       },
       errors: {
         unknown_report: 'Dieser Bericht ist für Ihre Organisation nicht verfügbar.',
@@ -15087,13 +15085,6 @@ const de: Dict = {
       greeting: 'Hallo {mentee},',
       body: '{mentor} ist jetzt dein Mentor. Öffne dein Portal, um Hallo zu sagen und das Mentoring zu starten.',
       cta: 'Portal öffnen',
-    },
-    analyticsReportEmail: {
-      subject: 'Wöchentlicher Analysebericht — {product}',
-      heading: 'Wöchentlicher Analysebericht',
-      greeting: 'Hallo {name},',
-      summary: '{total} Mentoring-Beziehungen · {conversion} % Vermittlungsquote · letzte 7 Tage: {newRelations} neue Beziehungen, {interactions} Interaktionen.',
-      cta: 'Analyse-Dashboard öffnen',
     },
     deadlineEmail: {
       subject: 'Überfällig: Phasenfrist für {mentee}',

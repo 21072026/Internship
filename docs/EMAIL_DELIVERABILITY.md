@@ -378,7 +378,8 @@ on every path. The price is one extra `User` query per suppressed recipient: the
 guards read a batch the job has already loaded, while `sendEmail()` re-reads the
 preferences one recipient at a time. Four jobs put the guard ahead of a counter
 that e2e specs assert — `sendWeeklyMentorDigests`, `sendDailyActivityDigests`,
-`checkCompanyNeedMatches`, `sendWeeklyAnalyticsReport` — and
+`checkCompanyNeedMatches`, and the report-subscription job (which replaced
+`sendWeeklyAnalyticsReport`, #1905) — and
 `POST /api/admin/announcements` filters its recipient list the same way. N
 queries per run in exchange for full auditability is a maintainer decision, and
 it has deliberately **not** been taken here.

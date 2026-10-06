@@ -50,7 +50,10 @@ test('a bucket that is itself small is still emitted — its members cannot be t
 test('every aggregate definition names its size and label columns, and keys are unique', () => {
   const keys = REPORT_DEFINITIONS.map((d) => d.key);
   assert.equal(new Set(keys).size, keys.length);
-  assert.equal(keys.length, 6);
+  // The six the Program tier promises (#1903) are always there; more may join.
+  for (const k of ['pipeline-funnel', 'cohort-comparison', 'source-conversion', 'mentor-workload', 'placement-outcomes', 'weekly-report-compliance']) {
+    assert.ok(keys.includes(k), k);
+  }
   for (const d of REPORT_DEFINITIONS.filter((d) => d.aggregate)) {
     const cols = d.columns.map((c) => c.key);
     assert.ok(cols.includes(d.sizeColumn), `${d.key} sizeColumn`);
