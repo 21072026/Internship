@@ -158,6 +158,28 @@ test('GET /api/notifications enforces the caller\'s own userId and paginates', a
   }
 });
 
+// The native app (#2775) cannot carry the web dictionary, so the API renders
+// each row for it: `display` is the sentence the bell would show, in the
+// reader's locale. A templated row renders from type + params; a text row
+// (announcement / legacy) keeps its text.
+test('GET /api/notifications carries each row rendered for display', async ({ page }) => {
+  const meEmail = uniqueEmail('notifhist-display');
+  const me = await seedUser(meEmail, 'MenteePass123', 'MENTEE', 'Notif Display Me');
+  try {
+    await prisma.notification.create({ data: { userId: me.id, type: 'message.new', params: { from: 'Aylin' } } });
+    await prisma.notification.create({ data: { userId: me.id, type: 'announcement', text: 'Plain announcement text' } });
+    await signIn(page, meEmail, 'MenteePass123');
+
+    const res = await page.request.get('/api/notifications', { headers: { 'Accept-Language': 'en' } });
+    const body = (await res.json()) as { items: { type: string; display: string }[] };
+    expect(body.items.find((n) => n.type === 'message.new')?.display).toBe('New message from Aylin.');
+    expect(body.items.find((n) => n.type === 'announcement')?.display).toBe('Plain announcement text');
+  } finally {
+    await prisma.notification.deleteMany({ where: { userId: me.id } });
+    await cleanupByEmail(meEmail);
+  }
+});
+
 // ── Search (#1646) ───────────────────────────────────────────────────────────
 //
 // `data-testid`, never `input[type="search"]`: AdminNav renders its own sidebar
