@@ -92,7 +92,8 @@ export async function loadSurveyResults(surveyId: string, locale: string): Promi
     floor,
     n,
     suppressed: n < floor,
-    responseRate: { invited, responded, rate: invited > 0 ? Math.round((responded / invited) * 100) : null },
+    // Below the floor the rate is not a rate (#1889): the same rule as the completion console.
+    responseRate: { invited, responded, rate: invited > 0 && responded >= floor ? Math.round((responded / invited) * 100) : null },
     questions: survey.questions.map((q) => ({ key: q.key, type: q.type, label: pickLocalized(q.labels, locale), answered: 0 })),
     breakdowns: null,
   };

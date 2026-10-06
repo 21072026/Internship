@@ -19,6 +19,7 @@ import { expireOffers } from '@/lib/offerNotify';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { askForMeetingFeedback } from '@/lib/meetingFeedback';
 import { dispatchDueSurveyCampaigns } from '@/lib/surveyCampaigns';
+import { sendDueSurveyReminders } from '@/lib/surveyReminders';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
@@ -133,7 +134,10 @@ export async function GET(request: Request) {
       const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
       // `?batch=` can only LOWER the per-tick cap (dispatchDueSurveyCampaigns clamps it).
       const batch = parseInt(new URL(request.url).searchParams.get('batch') ?? '', 10);
-      return NextResponse.json({ message: 'Survey campaigns ran', surveys: await dispatchDueSurveyCampaigns(now, { orgIds: [orgId], batch: Number.isFinite(batch) && batch > 0 ? batch : undefined }) });
+      const opts = { orgIds: [orgId], batch: Number.isFinite(batch) && batch > 0 ? batch : undefined };
+      const surveys = await dispatchDueSurveyCampaigns(now, opts);
+      // The reminder pass (#1889) runs in the same tick, after the invitations.
+      return NextResponse.json({ message: 'Survey campaigns ran', surveys, surveyReminders: await sendDueSurveyReminders(now, opts) });
     }
     if (job === 'report-subscriptions') {
       const orgId = await settingsOrgOf(session);
