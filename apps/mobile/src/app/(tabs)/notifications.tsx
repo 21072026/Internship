@@ -11,12 +11,15 @@ import {
   type NotificationItem,
   type NotificationPage,
 } from '../../lib/notifications';
+import { nativeRouteFor } from '../../lib/nativeRoutes';
+import { openNative } from '../../lib/openNative';
 import { useSession } from '../../lib/session';
 import { useAppTheme, type Palette } from '../../lib/theme';
 import { useUnread } from '../../lib/unread';
 
 // Native notification list (#2775). The text is rendered by the server in the
-// reader's locale (`display`); a tap marks the row read and opens its page.
+// reader's locale (`display`); a tap marks the row read and opens its page —
+// natively when there is a native screen for it (lib/nativeRoutes.ts).
 export default function NotificationsTab() {
   const { c } = useAppTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
@@ -64,7 +67,11 @@ export default function NotificationsTab() {
       apiPost(origin, '/api/notifications', { id: n.id }).then(refreshBadge, () => {});
     }
     const target = notificationTarget(n.link);
-    if (target) router.push({ pathname: '/web', params: { path: target, title: t.notifications } });
+    if (!target) return;
+    // A message notification opens the native thread, not the web page.
+    const route = nativeRouteFor(target);
+    if (route) openNative(route);
+    else router.push({ pathname: '/web', params: { path: target, title: t.notifications } });
   };
 
   const markAll = async () => {

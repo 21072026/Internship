@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_BODY, previewLine, sendableBody, senderName, threadChanged, type InboxThread, type ThreadMessage } from './messages.ts';
+import { MAX_BODY, previewLine, sendableBody, senderName, threadChanged, threadTitle, type InboxThread, type ThreadMessage } from './messages.ts';
 
 const msg = (id: string, body = 'x', deleted = false): ThreadMessage => ({
   id, senderId: 's', body, createdAt: '2026-10-06T00:00:00Z', editedAt: null, deleted, attachments: [],
@@ -31,4 +31,14 @@ test('an unchanged poll does not re-render; a new, edited or deleted last messag
   assert.equal(threadChanged([msg('a')], [msg('a'), msg('b')]), true);
   assert.equal(threadChanged([msg('a', 'x')], [msg('a', 'y')]), true);
   assert.equal(threadChanged([msg('a')], [msg('a', '', true)]), true);
+});
+
+test('a thread opened from a link names itself', () => {
+  const people = [
+    { id: 'me', fullName: 'Me' },
+    { id: 'o', fullName: 'Other Person' },
+  ];
+  assert.equal(threadTitle({ type: 'DIRECT', participants: people }, 'me'), 'Other Person');
+  assert.equal(threadTitle({ type: 'GROUP', participants: people, projectName: 'Website' }, 'me'), 'Website');
+  assert.equal(threadTitle({ type: 'GROUP', participants: people, projectName: null }, 'me'), '');
 });

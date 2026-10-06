@@ -13,7 +13,7 @@ export default function WebRoute() {
   return (
     <>
       <Stack.Screen options={{ title: fallback }} />
-      <WebScreen path={safePath} onMeta={onMeta} />
+      <WebScreen path={safePath} onMeta={onMeta} replaceable />
     </>
   );
 }

@@ -1,9 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signInWithPassword } from '../lib/authClient';
 import { strings } from '../lib/i18n';
@@ -56,7 +55,8 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      {/* keyboard-controller's: React Native's own does nothing on edge-to-edge Android. */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Text style={[styles.brand, { color: product.color }]} accessibilityRole="header">
             {product.name}

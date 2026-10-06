@@ -37,6 +37,7 @@ export interface Thread {
   conversationId: string;
   type?: 'DIRECT' | 'GROUP';
   participants?: { id: string; fullName: string }[];
+  projectName?: string | null;
   canPost?: boolean;
   messages: ThreadMessage[];
 }
@@ -59,6 +60,16 @@ export function previewLine(thread: InboxThread, me: string, you: string, empty:
   if (!thread.last) return empty;
   const text = thread.last.body.replace(/\s+/g, ' ').trim();
   return thread.last.senderId === me ? `${you}: ${text}` : text;
+}
+
+/**
+ * The header of a thread opened without a name — from a link inside a web page
+ * or a notification, not from the inbox row that knows it: the other person in
+ * a 1:1, the project in a group room.
+ */
+export function threadTitle(thread: Pick<Thread, 'type' | 'participants' | 'projectName'>, me: string): string {
+  if (thread.type === 'GROUP') return thread.projectName ?? '';
+  return thread.participants?.find((p) => p.id !== me)?.fullName ?? '';
 }
 
 /** Sender label inside a group room; a 1:1 thread needs none. */
