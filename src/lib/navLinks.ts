@@ -3,7 +3,7 @@ import {
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
   Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
-  ScrollText, Settings, ShieldCheck, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
+  ScrollText, Settings, ShieldCheck, Smile, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
   Send,
   type LucideIcon,
@@ -85,6 +85,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Tagging also closes the URL (pageCapabilityGate) and the APIs gate on it.
   { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
   { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship' },
+  // Survey results (#1910). Untagged: a survey's audience may be companies, and
+  // the engine (#1879) is not a mentorship module.
+  { href: '/admin/surveys', icon: Smile, key: 'surveys' },
   // "E-mail your mentees" — addressed through mentorship relations.
   { href: '/admin/email', icon: Mail, key: 'email', capability: 'mentorship' },
   { href: '/admin/documents', icon: FileText, key: 'documents' },

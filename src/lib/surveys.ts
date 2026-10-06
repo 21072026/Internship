@@ -213,8 +213,8 @@ export interface SubmitInput {
 /**
  * Record one response. The survey must be OPEN; every answer is validated
  * with the shared validator; an invitation can be answered once. For an
- * ANONYMOUS survey the respondent and the invitation are NOT written onto the
- * response — the invitation is stamped `respondedAt` in the same transaction
+ * ANONYMOUS survey the respondent, the invitation and the relation are NOT
+ * written onto the response — the invitation is stamped `respondedAt` in the same transaction
  * so completion tracking still works.
  */
 export async function submitSurveyResponse(input: SubmitInput) {
@@ -255,7 +255,9 @@ export async function submitSurveyResponse(input: SubmitInput) {
         invitationId: anonymous ? null : (input.invitationId ?? null),
         respondentId: anonymous ? null : (input.respondentId ?? null),
         respondentRole: input.respondentRole,
-        relationId: input.relationId ?? null,
+        // The pairing identifies the person as surely as their id does — a
+        // relation has exactly one mentee — so it is severed with them.
+        relationId: anonymous ? null : (input.relationId ?? null),
         answers: {
           // Free text lives in `text` (a TEXT column, no JSON length games);
           // every other answer is its JSON value.

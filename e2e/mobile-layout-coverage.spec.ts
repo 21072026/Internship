@@ -98,6 +98,8 @@ const FUNNEL: Route[] = [
     // Postal outreach to companies (#2697) — added to the sidebar without an
     // entry here, which turned this file's coverage gate red on main.
     '/admin/acquisition',
+    // The at-risk queue (#1902) — the same miss as the line above.
+    '/admin/health',
     '/admin/invitations'
   ),
   // An AdminNav destination that is NOT an admin page: interview panels live
@@ -129,6 +131,7 @@ const OUTBOUND: Route[] = shell(
   '/admin/announcements',
   '/admin/newsletters',
   '/admin/testimonials',
+  '/admin/surveys',
   '/admin/email',
   '/admin/documents'
 );

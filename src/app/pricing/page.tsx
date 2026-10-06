@@ -22,6 +22,7 @@ import {
   type Plan,
 } from '@/lib/plans';
 import { formatCount, formatDecimal, formatEur, formatEurCents, formatPercent } from '@/lib/money';
+import { MARKETING_PLANS, type MarketingPlan } from '@/lib/marketingPlans';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,6 +132,31 @@ export default async function PricingPage() {
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 leading-tight">{p.heroTitle}</h1>
           <p className="text-lg text-gray-600 mt-4 leading-relaxed">{p.heroSubtitle}</p>
         </div>
+
+        {/* The MARKETING product's own price list (src/lib/marketingPlans.ts):
+            per user, invoiced after a conversation. Every number comes from
+            that file and goes through money.ts, like the internship plans. */}
+        {isMarketing && (
+          <section className="mt-12" data-testid="pricing-marketing-plans">
+            <div className="text-center max-w-2xl mx-auto">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{p.mktPlansTitle}</h2>
+              <p className="mt-3 text-gray-600">{p.mktPlansSubtitle}</p>
+            </div>
+            <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-5">
+              {MARKETING_PLANS.map((plan, i) => (
+                <MarketingPlanCard
+                  key={plan.key}
+                  plan={plan}
+                  previous={i > 0 ? MARKETING_PLANS[i - 1] : null}
+                  p={p}
+                  eur={eur}
+                  highlighted={plan.key === 'business'}
+                />
+              ))}
+            </div>
+            <p className="mt-6 text-center text-sm text-gray-500" data-testid="pricing-marketing-net">{p.mktNetNote}</p>
+          </section>
+        )}
 
         {/* Everything from here to the discounts states the INTERNSHIP price
             model — the free core, the plan bands, the meter, the overage, the
@@ -362,6 +388,67 @@ export default async function PricingPage() {
 }
 
 type PricingCopy = Awaited<ReturnType<typeof getServerDictionary>>['t']['pricing'];
+
+const MKT_COPY = {
+  team: { name: 'mktTeamName', desc: 'mktTeamDesc', f: ['mktTeamF1', 'mktTeamF2', 'mktTeamF3', 'mktTeamF4'] },
+  business: { name: 'mktBusinessName', desc: 'mktBusinessDesc', f: ['mktBusinessF1', 'mktBusinessF2', 'mktBusinessF3', 'mktBusinessF4'] },
+  enterprise: { name: 'mktEnterpriseName', desc: 'mktEnterpriseDesc', f: ['mktEnterpriseF1', 'mktEnterpriseF2', 'mktEnterpriseF3', 'mktEnterpriseF4'] },
+} as const satisfies Record<MarketingPlan['key'], { name: keyof PricingCopy; desc: keyof PricingCopy; f: readonly (keyof PricingCopy)[] }>;
+
+/** One column of the marketing price list. Features stack: each plan lists what it adds. */
+function MarketingPlanCard({
+  plan, previous, p, eur, highlighted,
+}: {
+  plan: MarketingPlan;
+  previous: MarketingPlan | null;
+  p: PricingCopy;
+  eur: (n: number) => string;
+  highlighted: boolean;
+}) {
+  const copy = MKT_COPY[plan.key];
+  const str = (k: keyof PricingCopy) => p[k] as string;
+  return (
+    <div
+      className={`flex flex-col rounded-2xl border bg-white p-6 ${highlighted ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'}`}
+      data-testid={`mkt-plan-${plan.key}`}
+    >
+      <h3 className="text-lg font-bold text-gray-900">{str(copy.name)}</h3>
+      <p className="mt-1.5 text-sm text-gray-600 leading-relaxed min-h-[3rem]">{str(copy.desc)}</p>
+      <div className="mt-4 pb-4 border-b border-gray-100">
+        <p className="text-3xl font-bold text-gray-900">
+          {eur(plan.annualSeatEur)}
+          <span className="text-base font-medium text-gray-500">{p.mktPerSeat}</span>
+        </p>
+        <p className="mt-1 text-sm text-gray-500">
+          {plan.monthlySeatEur == null ? p.mktAnnualOnly : p.mktMonthly.replace('{amount}', eur(plan.monthlySeatEur))}
+        </p>
+        <p className="mt-1 text-sm text-gray-500">{p.mktMinSeats.replace('{n}', String(plan.minSeats))}</p>
+        <p className="mt-1 text-sm text-gray-500">
+          {plan.onboardingEur > 0 ? p.mktOnboarding.replace('{amount}', eur(plan.onboardingEur)) : p.mktOnboardingNone}
+        </p>
+      </div>
+      {previous && (
+        <p className="mt-4 text-sm font-medium text-gray-700">
+          {p.mktEverythingIn.replace('{plan}', str(MKT_COPY[previous.key].name))}
+        </p>
+      )}
+      <ul className="mt-3 space-y-2 flex-1">
+        {copy.f.map((k) => (
+          <li key={k} className="flex items-start gap-2 text-sm text-gray-600">
+            <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <span>{str(k)}</span>
+          </li>
+        ))}
+      </ul>
+      <Link
+        href="/#demo"
+        className="mt-6 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+      >
+        {p.mktTalk}
+      </Link>
+    </div>
+  );
+}
 type Loc = Awaited<ReturnType<typeof getServerDictionary>>['locale'];
 
 /** The price line of an add-on. INCLUDED prints a promise, not a zero. */

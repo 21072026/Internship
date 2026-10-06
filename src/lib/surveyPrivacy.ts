@@ -61,17 +61,22 @@ export type FlooredBucket<T = unknown> =
 /**
  * Apply the response floor to a breakdown. Every bucket under the floor is
  * suppressed — its count with it, since "3 people" is itself the leak — and
- * so is the residual: when exactly one bucket would be hidden next to a
- * published total, it could be recovered by subtraction, so the smallest of
- * the shown buckets is hidden with it. A "everyone else" bucket is just a
- * bucket here and gets no exemption.
+ * so is the residual: next to a published total, the hidden buckets TOGETHER
+ * can be recovered by subtraction, so while they add up to fewer than the
+ * floor the smallest shown bucket is hidden with them (#1910 — #1879 only did
+ * this for a single hidden bucket, which left two hidden buckets of 1 and 2
+ * readable as a group of 3). A "everyone else" bucket is just a bucket here
+ * and gets no exemption.
  */
 export function applyResponseFloor<T>(buckets: ResponseBucket<T>[], minResponses?: number | null): FlooredBucket<T>[] {
   const floor = effectiveMinResponses(minResponses);
   const hidden = new Set(buckets.filter((b) => b.n < floor).map((b) => b.key));
-  if (hidden.size === 1 && buckets.length > 1) {
-    const smallestShown = buckets.filter((b) => !hidden.has(b.key)).sort((a, b) => a.n - b.n || a.key.localeCompare(b.key))[0];
-    if (smallestShown) hidden.add(smallestShown.key);
+  const shown = buckets.filter((b) => !hidden.has(b.key)).sort((a, b) => a.n - b.n || a.key.localeCompare(b.key));
+  let hiddenTotal = buckets.filter((b) => hidden.has(b.key)).reduce((sum, b) => sum + b.n, 0);
+  while (hidden.size > 0 && hiddenTotal < floor && shown.length > 0) {
+    const next = shown.shift()!;
+    hidden.add(next.key);
+    hiddenTotal += next.n;
   }
   return buckets.map((b) => (hidden.has(b.key) ? { key: b.key, suppressed: true as const } : { key: b.key, suppressed: false as const, n: b.n, data: b.data }));
 }

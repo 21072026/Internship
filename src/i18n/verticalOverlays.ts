@@ -70,6 +70,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         profileMentorTitle: '{name}',
         profileMenteeTitle: '{name}',
       },
+      // Survey results (#1910): the breakdown labels name the roles, so they
+      // take the same rep/lead words as everywhere else.
+      surveyResults: {
+        byMentor: 'By sales rep',
+        noRelationBreakdowns: 'Anonymous responses carry no cohort or owner, so those breakdowns do not exist for this survey.',
+        role_MENTEE: 'Leads',
+        role_MENTOR: 'Sales reps',
+      },
       nav: { candidates: 'Leads', companyInquiries: 'Demo requests', myCompanies: 'My accounts' },
       // The lead detail's relation card (#2557): "Mentorship / Not assigned to a
       // mentor yet / Mentor" on the screen a rep uses most.
@@ -540,17 +548,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           inviteLinks: { d: 'Invite someone whose address you do not know: leave the field empty and a single-use, 7-day link is minted to hand over in person. Whoever registers with it is connected to the sender straight away, and a private note keeps a wall of links legible.' },
         },
       },
-      // /pricing (#2475). The marketing product has NO published price list —
-      // the packaging has not been decided — so the page hides every section
-      // that would have to state one (see src/app/pricing/page.tsx) and these
-      // strings replace the internship framing of what is left. Nothing here
-      // invents a number, a plan or a seat: the two claims that survive are the
-      // ones that are true whatever the packaging turns out to be (self-hosting
-      // is free; there is no checkout, you get an invoice after a conversation).
+      // /pricing (#2475). The marketing product's price list lives in
+      // src/lib/marketingPlans.ts (published 2026-10-06); the internship
+      // sections stay hidden there (see src/app/pricing/page.tsx) and these
+      // strings frame the page for a sales team.
       pricing: {
-        heroBadge: 'Marketing pricing is not published yet',
-        heroTitle: 'What we can tell you about the price today',
-        heroSubtitle: 'The packaging for the marketing product has not been set yet, so there is no price list on this page — we would rather show you nothing than a number we would have to take back. What is already true, whatever the packaging turns out to be, is below.',
+        heroBadge: 'SaleVali pricing',
+        heroTitle: 'One price per user, no surprises',
+        heroSubtitle: 'Three plans for sales teams, billed per user. No hidden add-ons — and if you would rather run it yourself, the code is open source.',
         discountsTitle: 'What is already true',
       },
       bulkInvite: { roleMentee: 'Lead', roleMentor: 'Sales rep' },
@@ -672,6 +677,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
+      surveyResults: {
+        byMentor: 'Satış temsilcisine göre',
+        noRelationBreakdowns: 'Anonim yanıtlar dönem ya da sorumlu bilgisi taşımaz; bu yüzden bu ankette o kırılımlar yok.',
+        role_MENTEE: 'Müşteri adayları',
+        role_MENTOR: 'Satış temsilcileri',
+      },
       nav: { candidates: 'Müşteri Adayları', companyInquiries: 'Demo talepleri', myCompanies: 'Hesaplarım' },
       invite: {
         subtitle: 'Satış temsilcilerini ve müşteri adaylarını davet et',
@@ -1022,9 +1033,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
       },
       pricing: {
-        heroBadge: 'Pazarlama fiyatlandırması henüz yayınlanmadı',
-        heroTitle: 'Fiyat hakkında bugün söyleyebileceklerimiz',
-        heroSubtitle: 'Pazarlama ürününün paketlemesi henüz belirlenmedi; bu yüzden bu sayfada fiyat listesi yok — geri almak zorunda kalacağımız bir rakam göstermektense hiçbir şey göstermemeyi tercih ederiz. Paketleme ne olursa olsun bugün de doğru olanlar aşağıda.',
+        heroBadge: 'SaleVali fiyatları',
+        heroTitle: 'Kullanıcı başına tek fiyat, sürpriz yok',
+        heroSubtitle: 'Satış ekipleri için kullanıcı başına faturalanan üç paket. Gizli ek ücret yok — kendiniz çalıştırmak isterseniz kod açık kaynak.',
         discountsTitle: 'Şimdiden doğru olanlar',
       },
       bulkInvite: { roleMentee: 'Müşteri adayı', roleMentor: 'Satış temsilcisi' },
@@ -1129,6 +1140,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         applyAsMentorDescription: 'Bewerben Sie sich für das Programm.',
         profileMentorTitle: '{name}',
         profileMenteeTitle: '{name}',
+      },
+      surveyResults: {
+        byMentor: 'Nach Vertriebsmitarbeiter',
+        noRelationBreakdowns: 'Anonyme Antworten tragen weder Kohorte noch Zuständige, deshalb gibt es diese Aufschlüsselungen für diese Umfrage nicht.',
+        role_MENTEE: 'Leads',
+        role_MENTOR: 'Vertriebsmitarbeiter',
       },
       nav: { candidates: 'Leads', companyInquiries: 'Demo-Anfragen', myCompanies: 'Meine Accounts' },
       invite: {
@@ -1478,9 +1495,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
       },
       pricing: {
-        heroBadge: 'Die Marketing-Preise sind noch nicht veröffentlicht',
-        heroTitle: 'Was wir heute über den Preis sagen können',
-        heroSubtitle: 'Die Paketierung des Marketing-Produkts steht noch nicht fest, deshalb gibt es auf dieser Seite keine Preisliste — lieber zeigen wir nichts als eine Zahl, die wir zurücknehmen müssten. Was unabhängig von der Paketierung schon heute gilt, steht unten.',
+        heroBadge: 'SaleVali-Preise',
+        heroTitle: 'Ein Preis pro Nutzer, keine Überraschungen',
+        heroSubtitle: 'Drei Pläne für Vertriebsteams, abgerechnet pro Nutzer. Keine versteckten Zusatzkosten — und wer es selbst betreiben will: Der Code ist Open Source.',
         discountsTitle: 'Was schon heute gilt',
       },
       bulkInvite: { roleMentee: 'Lead', roleMentor: 'Vertriebsmitarbeiter' },

@@ -94,13 +94,13 @@ test('the internship host keeps the published price list and its nav entry', asy
   await expect(page.getByTestId('public-header').getByRole('link', { name: 'Pricing' })).toHaveCount(1);
 });
 
-test('the marketing host is told there is no price list yet, and is shown no invented one', async ({ page }) => {
+test('the marketing host shows its own price list, and none of the internship model', async ({ page }) => {
   await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST });
   await page.goto('/pricing');
 
-  await expect(page.getByRole('heading', { name: 'What we can tell you about the price today' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'One price per user, no surprises' })).toBeVisible();
 
-  // Not a single section that would have to state a price.
+  // The internship price model (free core, pairs, meter, employer wallet) stays hidden.
   for (const section of [
     'pricing-free-core',
     'pricing-program-plans',
@@ -113,18 +113,25 @@ test('the marketing host is told there is no price list yet, and is shown no inv
   ]) {
     await expect(page.getByTestId(section)).toHaveCount(0);
   }
-  // …and no currency on the page at all, which is the assertion that survives
-  // someone adding a new priced section without reading this file.
-  await expect(page.locator('main')).not.toContainText('€');
+  await expect(page.locator('main')).not.toContainText('active pair');
 
-  // What is left is true whatever the packaging turns out to be.
+  // The published marketing list (src/lib/marketingPlans.ts): three plans,
+  // per user, net of VAT, each with a way to talk to us.
+  const plans = page.getByTestId('pricing-marketing-plans');
+  await expect(plans).toBeVisible();
+  await expect(page.getByTestId('mkt-plan-team')).toContainText('€149');
+  await expect(page.getByTestId('mkt-plan-business')).toContainText('€249');
+  await expect(page.getByTestId('mkt-plan-enterprise')).toContainText('€390');
+  await expect(page.getByTestId('mkt-plan-enterprise')).toContainText('Annual contract only');
+  await expect(page.getByTestId('pricing-marketing-net')).toContainText('plus VAT');
+  await expect(plans.getByRole('link', { name: 'Talk to us' })).toHaveCount(3);
+
+  // What was already true is still there.
   await expect(page.getByTestId('pricing-discounts')).toContainText('Self-hosting is free forever');
   await expect(page.getByTestId('pricing-faq').locator('dt')).toHaveCount(2);
-  await expect(page.getByTestId('pricing-faq')).toContainText('Can we host it ourselves?');
-  await expect(page.getByTestId('pricing-faq')).not.toContainText('active pair');
 
-  // The nav entry is gone with the price list it promised.
-  await expect(page.getByTestId('public-header').getByRole('link', { name: 'Pricing' })).toHaveCount(0);
+  // The nav entry is back now that there is a price list to point at.
+  await expect(page.getByTestId('public-header').getByRole('link', { name: 'Pricing' })).toHaveCount(1);
 });
 
 // ── /projects ────────────────────────────────────────────────────────────────
