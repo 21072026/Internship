@@ -102,15 +102,16 @@ is what we do instead" is the format.
 
 ## Retention
 
-Neither the prompt nor the generated text is stored:
+The prompt is never stored. Since #2044 some generated text **is** kept, as an
+`AiArtifact` row (see § Artefacts below):
 
 | Output | Where it goes |
 |---|---|
 | CV field suggestions | rendered next to an "Apply" button; stored only in the profile field the person chose to apply |
-| CV feedback | rendered in the mentee's browser, gone on reload |
-| Interaction summary | rendered in the mentor's browser, gone on reload |
-| Interview prep | rendered in the mentee's browser, gone on reload |
-| Match rationale | rendered next to the suggestion, gone on reload |
+| CV feedback | **kept** as an `AiArtifact` (7-day cache TTL), shown again on reload |
+| Interaction summary | rendered in the mentor's browser, gone on reload (moves to an artefact in #2044 part 2) |
+| Interview prep | **kept** as an `AiArtifact` (7-day cache TTL), shown again on reload |
+| Match rationale | rendered next to the suggestion, gone on reload (moves to an artefact in #2044 part 2) |
 
 The only row written per call is `AiUsage` — `scope`, `userId`, `companyId`,
 `createdAt` and `outcome` (`ok`, `parse_error` when the reply was not the JSON
@@ -119,6 +120,42 @@ answered — the last one is recorded for the console but **does not consume
 quota**). **No prompt, no completion, no excerpt.** It exists to meter the
 monthly quota and to answer "how much did this cost us", and it is the reason a
 usage figure can be shown without keeping anyone's CV around.
+
+## Artefacts (#2044)
+
+`AiArtifact` holds what a call **produced**. `AiUsage` stays the meter.
+`runAiGated({ persist })` handles the artefact in four steps:
+
+1. **Consent first.** A withdrawn consent is not answered from a stored copy.
+2. **Cache.** An artefact with the same `taskId` (the gate's `scope`) and
+   `inputHash`, younger than the task's TTL (`TASK_TTL_MS` in
+   `src/lib/ai/artifacts.ts`), is returned with `cached: true`. That skips the
+   provider call and the quota.
+3. **Regenerate.** `force` (the UI's *Regenerate*) bypasses the cache.
+4. **Write-through.** A successful call is written through, best-effort like the
+   meter: a failed write never breaks the response. A `parse_error` fallback is
+   not kept, because it would answer the next identical request with the
+   fallback.
+
+**Who reads one** is decided by `canReadArtifact` in the route, never in a
+component:
+
+- the subject (the person it is about) and the creator;
+- the subject's ACTIVE mentor, once the subject shared it (`SHARED_WITH_MENTOR`);
+- an admin of the org, once it was shared;
+- never anyone across an org line.
+
+Only the subject changes visibility (`PATCH /api/ai/artifacts/[id]`, audited as
+`ai_artifact.visibility`). The mentor sees shared ones on the mentee's page.
+
+**Erasure and retention:**
+
+- `subjectUserId` is a real relation with `onDelete: Cascade`, so a hard delete
+  takes the person's artefacts with it.
+- `anonymizeUser` deletes them explicitly.
+- A merge carries them to the primary account.
+- A daily sweep (03:20, `sweepAiArtifacts`) deletes every artefact older than
+  its org's `retentionMonths`. Pinned ones are not exempt.
 
 ## The degradation contract
 

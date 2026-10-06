@@ -10,6 +10,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { hashInput, latestArtifact, toArtifactDto } from '@/lib/ai/artifacts';
 
 // AI interview-prep assistant (Faz 2, #536) — mentee-facing and FREE for the
 // mentee: cost is metered on the org's AI quota; quota exhaustion surfaces as
@@ -17,18 +18,22 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 // the mentee triggers it for themselves, and only position/skills strings are
 // sent to the provider (no identifiers, no CV).
 
-// GET — availability: the portal card hides itself when no provider is set.
+// GET — availability (the portal card hides itself when no provider is set)
+// and the mentee's last prep (#2044), so a reload does not throw it away.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
-    return NextResponse.json({ configured: isAiConfigured() });
+    const latest = await latestArtifact({ orgId: await settingsOrgOf(session), taskId: 'interview_prep', subjectUserId: session.user.id });
+    return NextResponse.json({ configured: isAiConfigured(), latest: latest ? toArtifactDto(latest, session.user.id) : null });
   });
 }
 
 const schema = z.object({
   position: z.string().max(120).optional(),
   focus: z.string().max(300).optional(),
+  // The explicit Regenerate: skip the stored answer for the same input (#2044).
+  regenerate: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -67,6 +72,14 @@ export async function POST(request: Request) {
       scope: 'interview_prep',
       userId: session.user.id,
       call: () => aiInterviewPrep(position, skills, parsed.data.focus),
+      // Kept (#2044): the same position, skills and focus inside the TTL are
+      // answered from the stored prep — no provider call, no quota.
+      persist: {
+        subjectUserId: session.user.id,
+        createdById: session.user.id,
+        inputHash: hashInput({ position, skills, focus: parsed.data.focus ?? '' }),
+        force: parsed.data.regenerate,
+      },
     });
 
     if (!gated.ok) {
@@ -80,6 +93,6 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ error: 'AI is not configured', code: 'not_configured' }, { status: 501 });
     }
-    return NextResponse.json({ prep: gated.result });
+    return NextResponse.json({ prep: gated.result, cached: gated.cached ?? false, artifact: gated.artifact ?? null });
   });
 }

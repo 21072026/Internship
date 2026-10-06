@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
+import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 
 // AI interview-prep card on the mentee portal (Faz 2, #536). Free for the
 // mentee (quota problems surface as a neutral "unavailable", never a paywall).
@@ -19,27 +20,40 @@ export function InterviewPrep({ defaultPosition }: { defaultPosition?: string | 
   const [prep, setPrep] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // The kept prep (#2044): loaded on mount, so a reload does not throw it away.
+  const [artifact, setArtifact] = useState<ArtifactInfo | null>(null);
+  const [cached, setCached] = useState(false);
 
   useEffect(() => {
     fetch('/api/interview-prep')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setConfigured(!!d?.configured))
+      .then((d) => {
+        setConfigured(!!d?.configured);
+        if (d?.latest) {
+          setPrep(d.latest.content);
+          setArtifact(d.latest);
+        }
+      })
       .catch(() => setConfigured(false));
   }, []);
 
   if (!configured) return null;
 
-  const run = async () => {
+  const run = async (regenerate = false) => {
     setLoading(true);
     setNotice(null);
     try {
       const res = await fetch('/api/interview-prep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ position: position.trim() || undefined, focus: focus.trim() || undefined }),
+        body: JSON.stringify({ position: position.trim() || undefined, focus: focus.trim() || undefined, ...(regenerate ? { regenerate: true } : {}) }),
       });
       const body = await res.json();
-      if (res.ok) setPrep(body.prep);
+      if (res.ok) {
+        setPrep(body.prep);
+        setArtifact(body.artifact ?? null);
+        setCached(!!body.cached);
+      }
       else if (body.code === 'no_position') setNotice(c.noPosition);
       else setNotice(c.unavailable);
     } catch {
@@ -73,7 +87,7 @@ export function InterviewPrep({ defaultPosition }: { defaultPosition?: string | 
           placeholder={c.focusPlaceholder}
           className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3 py-2 text-sm"
         />
-        <Button type="button" size="sm" loading={loading} onClick={run}>
+        <Button type="button" size="sm" loading={loading} onClick={() => run()}>
           <Sparkles className="h-4 w-4 mr-1" /> {c.button}
         </Button>
       </div>
@@ -84,6 +98,7 @@ export function InterviewPrep({ defaultPosition }: { defaultPosition?: string | 
               wrote them (#2034). */}
           <AiBadge note className="mb-2" />
           <div className="whitespace-pre-line">{prep}</div>
+          {artifact && <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={() => run(true)} regenerating={loading} canShare />}
         </div>
       )}
     </Card>

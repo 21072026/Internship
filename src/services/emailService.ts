@@ -27,6 +27,7 @@ import { orgWhere } from '@/lib/tenantFilter';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
+import { sweepAiArtifacts } from '@/lib/ai/artifacts';
 import { getLastContacts } from '@/lib/lastContact';
 import { overdueBefore } from '@/lib/taskDue';
 import { visibleToViewer } from '@/lib/todoVisibility';
@@ -4887,6 +4888,18 @@ export function initCronJobs() {
     }
   });
   scheduledTasks.set('missing-document-reminders', documentTask);
+
+  // AI artefact retention (#2044) — daily at 03:20: nothing generated about a
+  // person outlives the org's retentionMonths.
+  const artifactRetention = cron.schedule('20 3 * * *', async () => {
+    try {
+      const r = await sweepAiArtifacts();
+      if (r.deleted) console.log(`[Cron] AI artefacts past retention removed: ${r.deleted}`);
+    } catch (e) {
+      console.error('[Cron] AI artefact retention error:', e);
+    }
+  });
+  scheduledTasks.set('ai-artifact-retention', artifactRetention);
 
   // Daily mentee-activity digest — every day at 7:30.
   const activityTask = cron.schedule('30 7 * * *', async () => {

@@ -532,6 +532,8 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         ['projectTaskTemplate', 'createdById'],
         ['projectJoinRequest', 'decidedById'],
         ['availabilitySlot', 'mentorId'],
+        // AI artefacts about the person travel with them (#2044).
+        ['aiArtifact', 'subjectUserId'],
         ['availabilityException', 'mentorId'],
         ['relationNote', 'authorId'],
         ['statusChange', 'changedById'],
@@ -546,6 +548,7 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         ['message', 'senderId'],
         ['announcement', 'sentById'],
         ['aiUsage', 'userId'],
+        ['aiArtifact', 'createdById'],
         ['evaluation', 'authorId'],
         ['mentorQuestion', 'askedById'],
         ['meetingRequest', 'requestedById'],

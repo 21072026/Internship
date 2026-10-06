@@ -10,6 +10,7 @@ import { runAiGated } from '@/lib/aiGate';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { hashInput, latestArtifact, toArtifactDto } from '@/lib/ai/artifacts';
 
 // AI CV improvement feedback (Faz 2, #535) — the mentee's own CV only, and
 // FREE for the mentee: the cost is metered against the org's AI quota via the
@@ -21,11 +22,13 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const [cv, consent] = await Promise.all([
+  const [cv, consent, latest] = await Promise.all([
     prisma.cvFile.findUnique({ where: { userId: session.user.id }, select: { id: true } }),
     hasConsent(session.user.id, 'AI_CV_PARSING'),
+    // The last feedback (#2044) — survives a reload, shows when it was written.
+    settingsOrgOf(session).then((orgId) => latestArtifact({ orgId, taskId: 'cv_feedback', subjectUserId: session.user.id })),
   ]);
-  return NextResponse.json({ configured: isAiConfigured(), hasCv: !!cv, consent });
+  return NextResponse.json({ configured: isAiConfigured(), hasCv: !!cv, consent, latest: latest ? toArtifactDto(latest, session.user.id) : null });
 }
 
 // POST — generate feedback for the caller's own uploaded CV.
@@ -47,6 +50,8 @@ export async function POST(request: Request) {
     if (orgLimited) return orgLimited;
   }
 
+  // `{ regenerate: true }` is the explicit Regenerate (#2044); no body is a normal ask.
+  const regenerate = ((await request.json().catch(() => null)) as { regenerate?: unknown } | null)?.regenerate === true;
   const cv = await prisma.cvFile.findUnique({ where: { userId: session.user.id } });
   if (!cv) return NextResponse.json({ error: 'No CV uploaded' }, { status: 404 });
 
@@ -64,6 +69,14 @@ export async function POST(request: Request) {
     consent: { userId: session.user.id, type: 'AI_CV_PARSING' },
     userId: session.user.id,
     call: () => aiCvFeedback(text),
+    // Kept (#2044): the same CV text inside the TTL is answered from the
+    // stored feedback — no provider call, no quota — unless Regenerate asks.
+    persist: {
+      subjectUserId: session.user.id,
+      createdById: session.user.id,
+      inputHash: hashInput({ text }),
+      force: regenerate,
+    },
   });
 
   if (!gated.ok) {
@@ -81,5 +94,5 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: 'AI is not configured', code: 'not_configured' }, { status: 501 });
   }
-  return NextResponse.json({ feedback: gated.result });
+  return NextResponse.json({ feedback: gated.result, cached: gated.cached ?? false, artifact: gated.artifact ?? null });
 }

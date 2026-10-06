@@ -8,6 +8,7 @@ import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
 import { callProvider, trackParseErrors } from '@/lib/ai/provider';
 import type { ConsentType } from '@prisma/client';
+import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts';
 
 // Central AI gate (Faz 2, #537) — the single wrapper every AI feature goes
 // through: consent check → provider configured → monthly quota → call →
@@ -36,9 +37,39 @@ import type { ConsentType } from '@prisma/client';
 // breaker is open. Like the other three it is a typed denial, never a throw.
 export type AiDenialReason = 'no_consent' | 'not_configured' | 'quota_exceeded' | 'provider_error';
 
+/** The stored artefact behind a result (#2044), when the call persisted one. */
+export interface AiArtifactRef {
+  id: string;
+  createdAt: string;
+  visibility: string;
+}
+
 export type AiGateResult<T> =
-  | { ok: true; result: T }
+  | { ok: true; result: T; cached?: boolean; artifact?: AiArtifactRef }
   | { ok: false; reason: AiDenialReason };
+
+/**
+ * Keep what the call produced (#2044). With it, an identical request inside the
+ * task's TTL (`TASK_TTL_MS`, src/lib/ai/artifacts.ts) is answered from the
+ * stored artefact — no provider call, no quota — unless `force` asks for a
+ * fresh one; and a successful call is written through. Persisting is
+ * best-effort exactly like the meter: a failed write never breaks a result.
+ */
+export interface AiPersist<T> {
+  subjectUserId: string | null;
+  createdById: string;
+  inputHash: string;
+  relationId?: string | null;
+  requisitionId?: string | null;
+  visibility?: ArtifactVisibility;
+  /** Skip the cache and generate again (the explicit Regenerate). */
+  force?: boolean;
+  /** How the result is stored and read back; plain text by default. */
+  serialize?: (result: T) => string;
+  deserialize?: (content: string) => T;
+}
+
+const refOf = (a: { id: string; createdAt: Date; visibility: string }): AiArtifactRef => ({ id: a.id, createdAt: a.createdAt.toISOString(), visibility: a.visibility });
 
 async function quotaOrgId(orgId: string | null | undefined): Promise<string> {
   return orgId ?? ambientOrgId() ?? (await defaultOrgId());
@@ -69,9 +100,18 @@ export async function runAiGated<T>(opts: {
   userId?: string | null;
   companyId?: string | null;
   call: () => Promise<T>;
+  persist?: AiPersist<T>;
 }): Promise<AiGateResult<T>> {
   if (opts.consent && !(await hasConsent(opts.consent.userId, opts.consent.type))) {
     return { ok: false, reason: 'no_consent' };
+  }
+  // Consent first, cache second: a withdrawn consent is not answered from a
+  // stored copy either. A hit costs nothing — no provider call, no quota.
+  const persist = opts.persist;
+  const decode = persist?.deserialize ?? ((c: string) => c as unknown as T);
+  if (persist && !persist.force) {
+    const hit = await findCachedArtifact({ orgId: await quotaOrgId(opts.orgId), taskId: opts.scope, subjectUserId: persist.subjectUserId, inputHash: persist.inputHash }).catch(() => null);
+    if (hit) return { ok: true, result: decode(hit.content), cached: true, artifact: refOf(hit) };
   }
   // Quota before configuration (the issue's order: consent → flag → quota →
   // provider): quota 0 means "AI off" regardless of key, and quota behaviour
@@ -90,7 +130,26 @@ export async function runAiGated<T>(opts: {
   try {
     const { result, parseError } = await trackParseErrors(() => callProvider(opts.call));
     await record(parseError ? 'parse_error' : 'ok');
-    return { ok: true, result };
+    // A fallback result (the reply was not what was asked for) is not worth
+    // keeping: it would answer the next identical request with the fallback.
+    if (!persist || parseError) return { ok: true, result };
+    const stored = await prisma.aiArtifact
+      .create({
+        data: {
+          orgId,
+          taskId: opts.scope,
+          subjectUserId: persist.subjectUserId,
+          createdById: persist.createdById,
+          relationId: persist.relationId ?? null,
+          requisitionId: persist.requisitionId ?? null,
+          inputHash: persist.inputHash,
+          content: persist.serialize ? persist.serialize(result) : String(result),
+          visibility: persist.visibility ?? 'PRIVATE',
+        },
+        select: { id: true, createdAt: true, visibility: true },
+      })
+      .catch(() => null); // persisting must never break a successful call
+    return { ok: true, result, ...(stored ? { artifact: refOf(stored) } : {}) };
   } catch (error) {
     console.error('[ai] provider call failed', { scope: opts.scope, error: String(error) });
     await record('provider_error');

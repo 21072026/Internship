@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**AI artefacts — keep, re-use and share AI results (#2044, part 1):** new `AiArtifact` model (tenant-registered, cascades with its subject) written through by `runAiGated`'s new `persist` option. An identical request inside the task's TTL (`TASK_TTL_MS` in `src/lib/ai/artifacts.ts`) is answered from the saved copy after the consent check and before the quota, so it costs no provider call and no unit of quota; `regenerate: true` forces a fresh call. CV feedback and interview prep load their latest result on mount and show when it was generated. Visibility (`PRIVATE` / `SHARED_WITH_MENTOR` / `SHARED_WITH_ADMIN`) is changed only by the subject (`PATCH /api/ai/artifacts/[id]`, audited as `ai_artifact.visibility`); `canReadArtifact` is the single read rule (subject and creator always, an ADMIN when shared, the ACTIVE mentor when shared with them, never across an org line). A shared artefact appears on `/mentor/mentees/[id]`. Retention: a daily sweep (`ai-artifact-retention`, 03:20) deletes artefacts older than the org's `retentionMonths`; account erasure and record merges cover the table. The `/ai` retention statement was updated to match.",
+  "notes": {
+    "en": ["Your CV feedback and interview prep are now kept: they are still there after a reload, asking the same question again answers from the saved copy at no cost, and you can choose to share a result with your mentor."],
+    "tr": ["CV geri bildirimin ve mülakat hazırlığın artık saklanıyor: sayfayı yenilesen de duruyor, aynı soruyu tekrar sorduğunda kayıtlı kopyadan ücretsiz yanıt geliyor ve istersen bir sonucu mentorunla paylaşabiliyorsun."],
+    "de": ["Dein CV-Feedback und deine Interviewvorbereitung werden jetzt gespeichert: Sie bleiben nach dem Neuladen erhalten, dieselbe Frage wird kostenlos aus der gespeicherten Kopie beantwortet, und du kannst ein Ergebnis mit deinem Mentor teilen."]
+  }
+}

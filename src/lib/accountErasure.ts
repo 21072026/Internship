@@ -348,6 +348,9 @@ export async function anonymizeUser(userId: string): Promise<void> {
   await prisma.$transaction([
     // Remove uploaded file bytes; anonymize doesn't need the CV/photo to remain.
     prisma.cvFile.deleteMany({ where: { userId } }),
+    // What an AI wrote about the person (#2044): the row stays, the person's
+    // data does not. A hard delete takes these with the cascade.
+    prisma.aiArtifact.deleteMany({ where: { subjectUserId: userId } }),
     prisma.avatarFile.deleteMany({ where: { userId } }),
     prisma.document.deleteMany({ where: { ownerId: userId } }),
     // Every free-text surface outside the User row — see scrubFreeTextOps. This
