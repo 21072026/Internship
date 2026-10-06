@@ -4,6 +4,8 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { hashSurveyToken, submitSurveyResponse, SurveyAnswerInvalid, SurveyConflict, surveyAcceptsAnswers } from '@/lib/surveys';
 import { resolveSurveyInvitation, type ResolvedInvitation } from '@/lib/surveyTokens';
+import { OUTCOME_TEMPLATE_KEY } from '@/lib/outcomeDestination';
+import { destinationPrefill } from '@/lib/outcomesData';
 import { pickLocalized } from '@/lib/surveySchema';
 
 // Login-free survey answering (#1881). No session: the invitation token is the
@@ -45,9 +47,13 @@ export async function GET(request: Request) {
 
   const locale = localeOf(inv);
   const state = stateOf(inv);
+  // First destination (#1912): a hire our own pipeline recorded opens the
+  // destination question pre-selected — a starting value, never an answer.
+  const prefill = state === 'open' && inv.survey.templateKey === OUTCOME_TEMPLATE_KEY ? await destinationPrefill(inv.userId, inv.orgId) : null;
   return NextResponse.json({
     state,
     locale,
+    ...(prefill ? { prefill } : {}),
     survey:
       state === 'open'
         ? {

@@ -18,6 +18,7 @@ export const SCORECARD_KEYS = [
   'evaluationCoverage',
   'surveyResponseRate',
   'nps',
+  'destinationKnown',
 ] as const;
 export type ScorecardKey = (typeof SCORECARD_KEYS)[number];
 
@@ -82,6 +83,12 @@ export const SCORECARD_THRESHOLDS: Record<ScorecardKey, Threshold> = {
   // built from these: four in five is a report that speaks for the cohort;
   // under half, it speaks for whoever happened to write one.
   evaluationCoverage: { direction: 'higher', green: 80, amber: 50, unit: 'percent' },
+  // Participants whose relation completed in the last twelve months whose
+  // destination we know, with consent to report it (#1912). Funders read a
+  // destination table only next to its knowledge rate: under 40 % it speaks
+  // for whoever answered, 60 % is what a programme that asks at 90 days with
+  // two reminders should reach.
+  destinationKnown: { direction: 'higher', green: 60, amber: 40, unit: 'percent' },
 };
 
 /** Indicators that cannot be measured yet, and the work that makes them measurable. */
@@ -107,6 +114,7 @@ export const SCORECARD_ACTIONS: Record<keyof typeof SCORECARD_THRESHOLDS, string
   nps: '/admin/surveys',
   // Low coverage is mentors not writing — their list is where it is chased.
   evaluationCoverage: '/admin/mentors',
+  destinationKnown: '/admin/analytics/outcomes',
 };
 
 export interface ScorecardMetric {
