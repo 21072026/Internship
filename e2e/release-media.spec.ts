@@ -324,6 +324,49 @@ test.describe('release media', () => {
     }
   });
 
+  // #1895 part 2: the executive dashboard — four scores, each with its trend.
+  test('poster: the executive dashboard', async ({ page }) => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const stamp = Date.now();
+    const org = await prisma.organization.create({ data: { name: `Media Exec ${stamp}`, slug: `media-exec-${stamp}` } });
+    await prisma.orgEntitlement.create({ data: { orgId: org.id, feature: 'ADVANCED_ANALYTICS', note: 'release media' } });
+    const adminEmail = uniqueEmail('media-exec-admin');
+    const emails = [adminEmail];
+    try {
+      await seedUser(adminEmail, 'MediaExec123!', 'ADMIN', 'Media Exec Admin', org.id);
+      const mentorEmail = uniqueEmail('media-exec-mentor');
+      emails.push(mentorEmail);
+      const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Dr. Lena Hoffmann', org.id);
+      const ago = (d: number) => new Date(Date.now() - d * DAY);
+      // Twelve pairs over a year: contact, moves and hires spread so every
+      // 90-day period has a different, plausible shape.
+      for (let i = 0; i < 12; i++) {
+        const email = uniqueEmail('media-exec-mentee');
+        emails.push(email);
+        const mentee = await seedUser(email, 'x', 'MENTEE', `Participant ${i + 1}`, org.id);
+        const hired = i % 4 === 0;
+        const rel = await prisma.mentorshipRelation.create({
+          data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, startDate: ago(560 - i * 20), pipelineStatus: hired ? 'HIRED_660' : 'INTERVIEW_PENDING_250' },
+        });
+        for (let k = 0; k < 6; k++) {
+          if ((i + k) % 3 !== 0) await prisma.interactionLog.create({ data: { relationId: rel.id, date: ago(10 + k * 90 + i), notes: 'Check-in', type: 'Call' } });
+        }
+        await prisma.statusChange.create({ data: { relationId: rel.id, fromStatus: 'APPLICATION_100', toStatus: 'INTERVIEW_PENDING_250', createdAt: ago(40 + (i % 6) * 90) } });
+        if (hired) await prisma.statusChange.create({ data: { relationId: rel.id, fromStatus: 'INTERVIEW_PENDING_250', toStatus: 'HIRED_660', createdAt: ago(20 + i * 7) } });
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await signInAndSettle(page, adminEmail, 'MediaExec123!', '/admin');
+      await page.goto('/admin/analytics/executive');
+      await expect(page.getByTestId('executive-capability')).toBeVisible();
+      await capturePoster(page.getByTestId('executive-capability').locator('xpath=..'), 'executive-dashboard');
+    } finally {
+      await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });
+      for (const e of emails) await cleanupByEmail(e);
+      await prisma.orgEntitlement.deleteMany({ where: { orgId: org.id } });
+      await prisma.organization.deleteMany({ where: { id: org.id } });
+    }
+  });
+
   /**
    * TEMPLATE — a clip, for a change where motion is the point.
    *
