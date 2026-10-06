@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Mid-programme migration API (#2073, part 1):** `POST /api/admin/migrate` (ADMIN, `mentorship`) takes four CSV sheets — `people`, `pairs`, `stageHistory`, `interactions` — with a per-run column `mapping` and an explicit `stageMap` onto the org's own stage keys, on the shared import engine (#2072). Dry run by default, `confirm: true` writes. An unmapped source stage is an ERROR row, never defaulted; no `StatusChange` from X to X (#934) and no future dates; history keeps its original timestamps and each pair's `pipelineStatus` is the target of its last move; people keyed by e-mail and pairs by both e-mails so a re-run is UNCHANGED; ACTIVE pairs respect the one-active-mentor rule inside the write's transaction (#419); addresses of another tenant are reported, never linked; every created row carries the admin's org; nothing is mailed; one real run per org at a time (JobLease). Rules in `src/lib/migration/migrationRules.ts` (unit-tested), writer in `runMigration.ts`; format and the not-migrated list in `docs/migration.md`.",
+  "notes": {
+    "en": ["Moving from another platform mid-programme: people, pairs, their stage history and session notes can now be migrated in one rehearsable run — with nothing e-mailed until you decide to invite."],
+    "tr": ["Program ortasında başka bir platformdan geçiş: kişiler, eşleşmeler, aşama geçmişleri ve görüşme notları artık provası yapılabilen tek bir çalıştırmayla taşınabiliyor — siz davet etmeye karar verene kadar hiç e-posta gitmeden."],
+    "de": ["Wechsel von einer anderen Plattform mitten im Programm: Personen, Paare, ihre Phasenhistorie und Gesprächsnotizen lassen sich jetzt in einem probefähigen Lauf übernehmen — ohne dass eine E-Mail rausgeht, bis Sie einladen."]
+  }
+}
