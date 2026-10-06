@@ -15,7 +15,7 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 // tenant's OWN stage set here, so a campaign can never name a key the org does
 // not have (which would silently never fire).
 
-const TRIGGERS = ['STAGE_ENTERED', 'DAYS_AFTER_START', 'DAYS_BEFORE_END', 'RECURRING', 'MANUAL'] as const;
+const TRIGGERS = ['STAGE_ENTERED', 'DAYS_AFTER_START', 'DAYS_BEFORE_END', 'DAYS_AFTER_END', 'RECURRING', 'MANUAL'] as const;
 const AUDIENCES = ['MENTEE', 'MENTOR', 'BOTH'] as const;
 const oneOf = <T extends readonly string[]>(values: T) => z.string().refine((v): v is T[number] => (values as readonly string[]).includes(v), 'not allowed');
 
@@ -36,7 +36,7 @@ const createSchema = z
       if (v[field] == null) ctx.addIssue({ code: 'custom', path: [field], message: `${field} is required for ${v.trigger}` });
     };
     if (v.trigger === 'STAGE_ENTERED') need('stageKey');
-    if (v.trigger === 'DAYS_AFTER_START' || v.trigger === 'DAYS_BEFORE_END') need('dayOffset');
+    if (v.trigger === 'DAYS_AFTER_START' || v.trigger === 'DAYS_BEFORE_END' || v.trigger === 'DAYS_AFTER_END') need('dayOffset');
     if (v.trigger === 'RECURRING') need('everyDays');
   });
 
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         name: input.name,
         trigger: input.trigger as SurveyTrigger,
         stageKey: input.trigger === 'STAGE_ENTERED' ? input.stageKey : null,
-        dayOffset: input.trigger === 'DAYS_AFTER_START' || input.trigger === 'DAYS_BEFORE_END' ? input.dayOffset : null,
+        dayOffset: input.trigger === 'DAYS_AFTER_START' || input.trigger === 'DAYS_BEFORE_END' || input.trigger === 'DAYS_AFTER_END' ? input.dayOffset : null,
         everyDays: input.trigger === 'RECURRING' ? input.everyDays : null,
         audience: (input.audience ?? null) as SurveyAudience | null,
         active: input.active ?? true,
