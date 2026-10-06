@@ -141,6 +141,7 @@ MENTOR or BOTH) gets **which** survey **when**.
 | `STAGE_ENTERED` | a `StatusChange` into `stageKey` — the tenant's own key, checked against its resolved stages at create (`unknown_stage` otherwise) | `stage:<key>` |
 | `DAYS_AFTER_START` | `dayOffset` days after the relation started | `day:<n>` |
 | `DAYS_BEFORE_END` | `dayOffset` days before the relation's stage deadline (a moved deadline is a new period) | `before:<deadline day>` |
+| `DAYS_AFTER_END` | `dayOffset` days after the relation **completed** (`completedAt`); the first-destination survey (#1912) | `after:<n>` |
 | `MANUAL` | once to the whole active audience, as soon as the campaign is active | `manual` |
 | `RECURRING` | every `everyDays` days (7–365), one round per period from the campaign's creation day | `pulse:<n>` |
 
@@ -272,3 +273,58 @@ first mail's link answers the same invitation, once.
   next to the response timestamps is exactly the link the promise says does not
   exist — and "remind now" exists only for the whole survey (naming an
   invitation is **400 `anonymous_bulk_only`**).
+
+## First destination (#1912)
+
+"Where did your participants end up six months later" is the report that a
+university, a chamber of commerce or a publicly funded programme has to file. A
+pipeline stage records what *our* process did. This instrument records what
+happened to the person.
+
+- **The instrument** is the built-in `outcome_destination` template
+  (`src/lib/surveyTemplates.ts`). It has three questions, within the cap:
+  - the destination, a single choice with stable codes `EMPLOYED_HERE | EMPLOYED_ELSEWHERE | CONTINUING_STUDY | SEEKING | NOT_SEEKING | OTHER`;
+  - employer and role, as one optional line;
+  - consent to include the answer, without a name, in reports (yes/no, required).
+
+  It is IDENTIFIED, because the report breaks results down by cohort and source.
+- **Set up in one call:** `POST /api/admin/analytics/outcomes { dayOffset?: 30 | 90 | 180 }`
+  (default 90) creates the survey (open) and a `DAYS_AFTER_END` campaign. The
+  call is idempotent: calling it again returns the same survey, and a new offset
+  adds a second campaign.
+- **The report:** `GET /api/admin/analytics/outcomes?from=&to=` covers
+  completions in the period (default: the last twelve months).
+  `src/lib/outcomeDestination.ts` does the arithmetic and `src/lib/outcomesData.ts`
+  loads the rows.
+  - **Eligible:** a mentee whose relation completed in the period, counted once.
+  - **Their answer:** the latest response, so a 180-day answer replaces the 90-day one.
+  - **Known:** a consented answer. An answer without consent is counted as
+    `withheld`, a number that is never broken down.
+  - Every bucket (overall, by cohort, by source) carries its **knowledge rate**
+    (known / eligible) next to it. **The floor applies per bucket**: below
+    `SURVEY_MIN_RESPONSES` known answers, a bucket shows its counts and rate but
+    no destination table.
+
+### Retention of destination answers
+
+A destination answer is personal data with a long life. It sits in
+`SurveyResponse`/`SurveyAnswer` like every identified survey answer, and it
+follows the person:
+
+- **Erased (hard delete):** `respondentId` is set to null by the foreign key.
+  The answer remains only as an unattributed row and drops out of the report,
+  because nobody eligible owns it any more.
+- **Anonymised (`anonymizeUser`):** the answer stays attached to a row with no
+  personal data and keeps counting in the aggregates.
+- **The GDPR retention review** (`src/lib/retention.ts`) is per person, by
+  consent date, and manual by design (`docs/pii-access-lifecycle.md`). Erasing or
+  anonymising someone through it covers their destination answers as above.
+  There is no separate timer.
+- **Withdrawal:** a participant can take their answer back at any time by asking
+  the programme. An admin calls `DELETE /api/admin/analytics/outcomes?userId=`,
+  which deletes that person's destination responses in the admin's tenant. From
+  the next report on, they are eligible and unknown again, neither known nor
+  withheld.
+
+Only consented answers ever reach a report, and only in aggregate above the
+floor.

@@ -126,6 +126,18 @@ export async function dueCampaignTargets(now = new Date(), opts: { orgIds?: stri
         }
         break;
       }
+      case 'DAYS_AFTER_END': {
+        if (campaign.dayOffset == null) break;
+        // The relations that completed `dayOffset` days ago (within the
+        // window) — the first-destination survey (#1912). One send per
+        // completion: a relation is completed once.
+        const rels = await prisma.mentorshipRelation.findMany({
+          where: { ...scope, status: 'COMPLETED', completedAt: { gte: new Date(since.getTime() - campaign.dayOffset * DAY), lte: new Date(now.getTime() - campaign.dayOffset * DAY) } },
+          select: relSelect,
+        });
+        for (const r of rels) push(r, `after:${campaign.dayOffset}`);
+        break;
+      }
       case 'RECURRING': {
         if (!campaign.everyDays || campaign.everyDays < 1) break;
         // Round n starts at createdAt + n·everyDays; round 0 is the first sweep.

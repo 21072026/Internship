@@ -48,7 +48,7 @@ export type SurveyAudience = 'MENTEE' | 'MENTOR' | 'BOTH';
 export type SurveyAnonymity = 'IDENTIFIED' | 'CONFIDENTIAL' | 'ANONYMOUS';
 
 /** Mirrors the question types these instruments need (#1879). */
-export type SurveyQuestionType = 'NPS' | 'SCALE' | 'SINGLE_CHOICE' | 'TEXT';
+export type SurveyQuestionType = 'NPS' | 'SCALE' | 'SINGLE_CHOICE' | 'TEXT' | 'BOOLEAN';
 
 export type SurveyTemplateKey =
   | 'program_pre'
@@ -56,7 +56,8 @@ export type SurveyTemplateKey =
   | 'program_post'
   | 'pulse'
   | 'nps_only'
-  | 'post_meeting';
+  | 'post_meeting'
+  | 'outcome_destination';
 
 /** A dictionary selector — see "HOW THE WORDING IS RESOLVED" above. */
 type Text = (d: Dictionary) => string;
@@ -78,6 +79,12 @@ export interface SurveyTemplateQuestion {
   scaleLabels?: { low: Text; high: Text };
   /** Choices for `SINGLE_CHOICE`, in the order they are shown. */
   options?: Text[];
+  /**
+   * Stable stored values for `options`, index for index, where an answer is
+   * aggregated by code rather than read as text (#1912's destination codes).
+   * Without them a choice is stored as its position.
+   */
+  optionValues?: string[];
   required: boolean;
 }
 
@@ -266,6 +273,51 @@ export const SURVEY_TEMPLATES: SurveyTemplate[] = [
       },
     ],
   },
+  {
+    // First destination (#1912): where a participant ended up, asked 30/90/180
+    // days after the relation completed (the DAYS_AFTER_END trigger). Identified
+    // on purpose — the report breaks it down by cohort and source — and only
+    // ever shown in aggregate, above the response floor, and only for people
+    // who said yes to the consent question. src/lib/outcomeDestination.ts owns
+    // the codes and the report.
+    key: 'outcome_destination',
+    audience: 'MENTEE',
+    anonymityDefault: 'IDENTIFIED',
+    title: (d) => d.surveyTemplates.outcomeDestination.title,
+    description: (d) => d.surveyTemplates.outcomeDestination.description,
+    questions: [
+      {
+        key: 'destination',
+        type: 'SINGLE_CHOICE',
+        label: (d) => d.surveyTemplates.outcomeDestination.q.destination,
+        options: [
+          (d) => d.surveyTemplates.outcomeDestination.options.employedHere,
+          (d) => d.surveyTemplates.outcomeDestination.options.employedElsewhere,
+          (d) => d.surveyTemplates.outcomeDestination.options.continuingStudy,
+          (d) => d.surveyTemplates.outcomeDestination.options.seeking,
+          (d) => d.surveyTemplates.outcomeDestination.options.notSeeking,
+          (d) => d.surveyTemplates.outcomeDestination.options.other,
+        ],
+        optionValues: ['EMPLOYED_HERE', 'EMPLOYED_ELSEWHERE', 'CONTINUING_STUDY', 'SEEKING', 'NOT_SEEKING', 'OTHER'],
+        required: true,
+      },
+      {
+        // Employer and role in one line: the issue's start date and separate
+        // role field would make it five, and a long destination form is an
+        // unanswered one (the cap above).
+        key: 'employer_role',
+        type: 'TEXT',
+        label: (d) => d.surveyTemplates.outcomeDestination.q.employerRole,
+        required: false,
+      },
+      {
+        key: 'consent',
+        type: 'BOOLEAN',
+        label: (d) => d.surveyTemplates.outcomeDestination.q.consent,
+        required: true,
+      },
+    ],
+  },
 ];
 
 export function listSurveyTemplates(): SurveyTemplate[] {
@@ -285,6 +337,7 @@ export interface ResolvedSurveyQuestion {
   scale?: { min: number; max: number };
   scaleLabels?: { low: string; high: string };
   options?: string[];
+  optionValues?: string[];
   required: boolean;
 }
 
@@ -322,6 +375,7 @@ export function renderSurveyTemplate(
         ? { scaleLabels: { low: q.scaleLabels.low(d), high: q.scaleLabels.high(d) } }
         : {}),
       ...(q.options ? { options: q.options.map((o) => o(d)) } : {}),
+      ...(q.optionValues ? { optionValues: q.optionValues } : {}),
       required: q.required,
     })),
   };

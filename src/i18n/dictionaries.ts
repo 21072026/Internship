@@ -2710,6 +2710,23 @@ const en = {
         note: 'Anything you want to add about this meeting?',
       },
     },
+    outcomeDestination: {
+      title: 'Where are you now?',
+      description: 'Sent a while after the program ends: where each participant ended up. Four taps, no essay.',
+      q: {
+        destination: 'What are you doing now?',
+        employerRole: 'If you are working: where, and in what role? (optional)',
+        consent: 'May we include your answer, without your name, in our program reports?',
+      },
+      options: {
+        employedHere: 'Working at the organisation I was placed with',
+        employedElsewhere: 'Working somewhere else',
+        continuingStudy: 'Studying or training further',
+        seeking: 'Looking for work',
+        notSeeking: 'Not looking for work right now',
+        other: 'Something else',
+      },
+    },
   },
   cv: {
     title: 'CV / Resume',
@@ -9380,6 +9397,23 @@ const tr: Dict = {
       title: 'Sadece tavsiye puanı',
       description: 'Bir puan ve bir neden — yine de bir şey öğreten en kısa anket.',
     },
+    outcomeDestination: {
+      title: 'Şimdi neredesin?',
+      description: 'Program bittikten bir süre sonra gönderilir: her katılımcının nereye vardığı. Dört dokunuş, uzun yazı yok.',
+      q: {
+        destination: 'Şu anda ne yapıyorsun?',
+        employerRole: 'Çalışıyorsan: nerede ve hangi rolde? (isteğe bağlı)',
+        consent: 'Cevabını, adın olmadan, program raporlarımıza dahil edebilir miyiz?',
+      },
+      options: {
+        employedHere: 'Yerleştirildiğim kurumda çalışıyorum',
+        employedElsewhere: 'Başka bir yerde çalışıyorum',
+        continuingStudy: 'Eğitimime devam ediyorum',
+        seeking: 'İş arıyorum',
+        notSeeking: 'Şu an iş aramıyorum',
+        other: 'Başka bir şey',
+      },
+    },
     postMeeting: {
       title: 'Görüşme sonrası',
       description: 'Görüşmenin hemen ardından, henüz akıldayken gönderilir.',
@@ -15964,6 +15998,23 @@ const de: Dict = {
     npsOnly: {
       title: 'Nur Empfehlungswert',
       description: 'Eine Zahl und ein Grund — die kürzeste Umfrage, die noch etwas verrät.',
+    },
+    outcomeDestination: {
+      title: 'Wo stehst du heute?',
+      description: 'Wird eine Weile nach Programmende verschickt: wo jede Teilnehmerin und jeder Teilnehmer gelandet ist. Vier Klicks, kein Aufsatz.',
+      q: {
+        destination: 'Was machst du gerade?',
+        employerRole: 'Falls du arbeitest: wo und in welcher Rolle? (optional)',
+        consent: 'Dürfen wir deine Antwort ohne deinen Namen in unsere Programmberichte aufnehmen?',
+      },
+      options: {
+        employedHere: 'Ich arbeite bei der Organisation, bei der ich platziert war',
+        employedElsewhere: 'Ich arbeite woanders',
+        continuingStudy: 'Ich studiere oder bilde mich weiter',
+        seeking: 'Ich suche Arbeit',
+        notSeeking: 'Ich suche gerade keine Arbeit',
+        other: 'Etwas anderes',
+      },
     },
     postMeeting: {
       title: 'Nach einem Gespräch',
