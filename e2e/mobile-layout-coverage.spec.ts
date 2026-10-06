@@ -138,6 +138,8 @@ const OPERATIONS: Route[] = shell(
   '/admin/mentee-activity',
   // A week matrix 20+ columns wide: they scroll in their own container (#1918).
   '/admin/weekly-reports',
+  // Report subscriptions (#1905) — in the sidebar without an entry here.
+  '/admin/reports/subscriptions',
   '/admin/integrations',
   '/admin/api-explorer',
   '/admin/retention',
