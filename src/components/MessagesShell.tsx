@@ -92,7 +92,7 @@ export function MessagesShell({
               href={backHref}
               data-testid="messages-back"
               aria-label={backLabel}
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg p-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 lg:p-0 lg:hover:bg-transparent"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg p-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-100 lg:p-0 lg:hover:bg-transparent"
             >
               <ArrowLeft className="h-5 w-5 lg:h-4 lg:w-4" />
               {!narrow && <span>{backLabel}</span>}

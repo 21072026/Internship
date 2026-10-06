@@ -8217,3 +8217,14 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **On MariaDB you cannot replace a unique whose leftmost column is a foreign key in one `db push`.** Prisma drops the old index before it creates the new one, and MariaDB refuses with `Cannot drop index '…_key': needed in a foreign key constraint`. `check:schema-push` does not catch this, and a fresh topic-env database never shows it. Expand first: give the FK its own `@@index([fk])` in one deploy, then change the unique in the next. Prove a transition by pushing `git show origin/main:prisma/schema.prisma` (via `--schema`) and then the branch schema into a scratch database.
 - **`npx tsc --noEmit` includes `e2e/*.ts`.** A spec that builds a typed literal (for example a `questions` array passed to a zod-typed helper) needs an explicit type annotation, or CI's typecheck fails even though Playwright ran it fine.
 - **Merging two PRs that both appended blocks to the same anchor loses the shared closing lines.** This hit the dictionaries, the route-auth baseline JSON and release-media. Keeping both sides of `<<<<<<< / >>>>>>>` drops one `},`. Re-run `tsc` and `JSON.parse` before committing the merge.
+
+## 2026-10-06 — deterministic a11y gate + hover-contrast check (#2785)
+
+- **The a11y gate was already in the PR job** ("Accessibility regression gate" in `e2e.yml`). Saying it was not was wrong; read the workflow before claiming a check is missing.
+- **axe measures the page as it is at that moment.** Three things made the same commit scan differently from run to run:
+  - where the pointer was left (a hovered element);
+  - the scroll position (a reload keeps it, and the sticky header is translucent);
+  - `transition-colors` mid-fade right after the theme class lands.
+  `scan()` now handles each one: it parks the pointer, scrolls to the top and freezes transitions.
+- **`page.mouse.move(-1, -1)` really clears `:hover` in Chromium.** Checked with `document.querySelectorAll(':hover')`.
+- **A hover-state check must also freeze transitions.** Otherwise it reads the colour mid-fade, and the first version missed the footer link because of that.

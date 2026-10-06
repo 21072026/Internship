@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**A11y gate, deterministic and hover-aware (#2785):** before each axe scan, `e2e/a11y-scan.spec.ts` now moves the pointer off the page, scrolls to the top and freezes CSS transitions, so a result no longer depends on where the pointer was left, a translucent sticky header over scrolled content, or a colour mid-transition. A new hover-contrast check (`e2e/helpers/hoverContrast.ts`) hovers every visible `hover:text-*` / `group-hover:text-*` element on each scanned page in both themes and enforces WCAG 1.4.3 against the real background. Without the #2765 fix it reports all nine profile chips at 2.03:1. Its first run found three hover bugs, all fixed here: `hover:text-blue-600` in dark mode (the footer's release-notes link, the mentor e-mail on the journey card) now reads the accent's -300, and the messages back link gets `dark:hover:text-gray-100`.",
+  "notes": {
+    "en": ["In dark mode, links stay readable when you hover them: the footer's release-notes link, your mentor's e-mail address and the back button in Messages."],
+    "tr": ["Koyu temada bağlantılar üzerine gelince de okunur kalıyor: alt bilgideki sürüm notları bağlantısı, mentorunun e-posta adresi ve Mesajlar'daki geri düğmesi."],
+    "de": ["Im Dunkelmodus bleiben Links auch beim Überfahren lesbar: der Link zu den Versionshinweisen in der Fußzeile, die E-Mail-Adresse deines Mentors und die Zurück-Schaltfläche in Nachrichten."]
+  }
+}
