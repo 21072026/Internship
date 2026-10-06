@@ -9,7 +9,7 @@ import { useLocale, useT } from '@/i18n/client';
 import { pickLocalized } from '@/lib/surveySchema';
 
 // The programme's surveys (#1910): how many have answered each one, and the
-// way into its results. Creating and editing a survey is the builder's job
+// way into its completion console (#1889) and its results. Creating and editing a survey is the builder's job
 // (#1877) — this screen only reads.
 
 interface SurveyRow {
@@ -60,6 +60,13 @@ export default function AdminSurveysPage() {
                     <span>{s.responses.replace('{n}', String(row._count.responses))}</span>
                   </div>
                 </div>
+                <Link
+                  href={`/admin/surveys/${row.id}`}
+                  className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400"
+                  data-testid={`survey-completion-link-${row.id}`}
+                >
+                  {t.surveyCompletion.completionLink}
+                </Link>
                 <Link
                   href={`/admin/surveys/${row.id}/results`}
                   className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400"

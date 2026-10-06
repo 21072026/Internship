@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Estimated deal value: net change, both XLSX exports and the printed report** (#2424). The month × value table is one component (`DealValueTable`), shared by the `/admin/analytics` card and the full report at `/admin/analytics/report`; it gains a \"Net change (estimated)\" column (`netChangeMinor()` in `src/lib/dealValue.ts` = won − lost, unit-tested to equal the month-end book's delta) and shows \"—\" instead of a fabricated 0 for a month with nothing in a column. Both `analytics` and `analytics-full` exports carry an \"Estimated value\" sheet (counts, values in major units, net change, currency); a range that mixes currencies exports the typed refusal, never a total. MARKETING only — `enabled: false` elsewhere writes no sheet.",
+  "notes": {
+    "en": ["The estimated deal value now shows the net change per month and comes along in both Excel exports and the printable report."],
+    "tr": ["Tahmini iş değeri artık her ay için net değişimi gösteriyor; iki Excel dışa aktarımında ve yazdırılabilir raporda da yer alıyor."],
+    "de": ["Der geschätzte Deal-Wert zeigt jetzt die monatliche Nettoveränderung und ist in beiden Excel-Exporten sowie im druckbaren Bericht enthalten."]
+  }
+}

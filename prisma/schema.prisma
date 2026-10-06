@@ -5008,6 +5008,14 @@ model SurveyInvitation {
   surveyId String
   survey   Survey        @relation(fields: [surveyId], references: [id], onDelete: Cascade)
 
+  // Reminders (#1889). `remindersSent` below is capped at SURVEY_MAX_REMINDERS
+  // (src/lib/surveyReminders.ts), and every reminder — scheduled or "remind
+  // now" — is claimed by ONE conditional UPDATE on it, so the two paths can
+  // never both send the same reminder. Each reminder mints its own link
+  // (`tokens`); `tokenHash` below is the first one.
+  lastRemindedAt DateTime?
+  tokens         SurveyInvitationToken[]
+
   // Null for an external recipient with no account.
   userId        String?
   user          User?     @relation("SurveyInvitee", fields: [userId], references: [id], onDelete: SetNull)
@@ -5063,6 +5071,22 @@ model SurveyResponse {
 
   @@index([orgId, surveyId])
   @@index([surveyId, submittedAt])
+}
+
+// A link minted by a survey reminder (#1889). The database keeps only the
+// hash, like SurveyInvitation.tokenHash: the token cannot be re-derived, so a
+// reminder mints a new one rather than resending the first — and the first
+// keeps working, because people click whichever mail they find. Every token
+// answers the same invitation, once. Not in TENANT_MODELS: reached only
+// through its SurveyInvitation, which is scoped.
+model SurveyInvitationToken {
+  id           String           @id @default(cuid())
+  invitationId String
+  invitation   SurveyInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  tokenHash    String           @unique @db.VarChar(64)
+  createdAt    DateTime         @default(now())
+
+  @@index([invitationId])
 }
 
 // Not in TENANT_MODELS for the same reason as SurveyQuestion: reached only

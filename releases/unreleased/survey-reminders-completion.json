@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Survey reminders & completion console (#1889):** unanswered survey invitations get at most two reminders (day 3 and day 7, `SURVEY_MAX_REMINDERS = 2`), never two within 24 hours. The scheduled pass and the admin's \"remind now\" (`POST /api/admin/surveys/[id]/remind`) claim each reminder with one conditional UPDATE, so neither can send a third or double-send. Each reminder mints its own link (`SurveyInvitationToken`) and the first link keeps working. `/admin/surveys/[id]` (API `GET /api/admin/surveys/[id]/completion`) shows answered/invited (suppressed below the floor), reminder state and the non-responders, except on an ANONYMOUS survey, whose payload names nobody.",
+  "notes": {
+    "en": ["Surveys now remind people who have not answered — twice at most — and a new completion screen shows who still owes an answer, with a \"remind now\" button. Anonymous surveys show only the numbers."],
+    "tr": ["Anketler artık yanıtlamayanlara en fazla iki kez hatırlatıyor; yeni tamamlanma ekranı kimin henüz yanıtlamadığını gösteriyor ve \"şimdi hatırlat\" düğmesi sunuyor. Anonim anketlerde yalnızca sayılar görünür."],
+    "de": ["Umfragen erinnern jetzt alle, die noch nicht geantwortet haben — höchstens zweimal — und eine neue Rücklauf-Seite zeigt, wer noch aussteht, mit einem „Jetzt erinnern“-Knopf. Bei anonymen Umfragen sind nur die Zahlen sichtbar."]
+  }
+}
