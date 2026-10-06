@@ -3,10 +3,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Coins } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { useT, useLocale } from '@/i18n/client';
+import { useT } from '@/i18n/client';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
-import { formatMinorAmount } from '@/lib/money';
-import type { DealValueMonth, ValueTally } from '@/lib/dealValue';
+import type { DealValueMonth } from '@/lib/dealValue';
+import { DealValueTable } from '@/components/admin/DealValueTable';
 
 type Payload =
   | { enabled: false }
@@ -26,7 +26,6 @@ type Payload =
 export function DealValueCard({ query }: { query: string }) {
   const t = useT();
   const c = t.dealValue.card;
-  const locale = useLocale();
   const label = useStageLabel();
   const [data, setData] = useState<Payload | null>(null);
 
@@ -46,15 +45,6 @@ export function DealValueCard({ query }: { query: string }) {
   if (!data || !data.enabled) return null;
 
   const stage = data.wonKeys.length > 0 ? label(data.wonKeys[0]) : '—';
-  const money = (tally: ValueTally, currency: string) => (
-    <>
-      <span className="font-medium text-gray-900 dark:text-gray-100">{formatMinorAmount(tally.valueMinor, currency, locale)}</span>
-      {tally.unvalued > 0 && (
-        <span className="block text-xs text-gray-500 dark:text-gray-400">{c.unvalued.replace('{n}', String(tally.unvalued))}</span>
-      )}
-    </>
-  );
-
   let body: ReactNode;
   if (!data.ok) {
     body = (
@@ -67,37 +57,7 @@ export function DealValueCard({ query }: { query: string }) {
   } else if (data.months.every((m) => m.activeAtEnd.count === 0 && m.won.count === 0 && m.lost.count === 0)) {
     body = <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="deal-value-card-empty">{c.empty}</p>;
   } else {
-    const currency = data.currency;
-    body = (
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm" data-testid="deal-value-table">
-          <thead>
-            <tr className="border-b border-gray-100 text-left text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
-              <th className="py-2 pr-3">{c.month}</th>
-              <th className="py-2 pr-3">{c.won}</th>
-              <th className="py-2 pr-3">{c.lost}</th>
-              <th className="py-2 pr-3">{c.active}</th>
-              <th className="py-2">{c.value}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-            {data.months.map((m) => (
-              <tr key={m.month} data-testid={`deal-value-${m.month}`}>
-                <td className="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{m.month}</td>
-                <td className="py-2 pr-3" data-testid={`deal-value-${m.month}-won`}>
-                  {m.won.count} · {money(m.won, currency)}
-                </td>
-                <td className="py-2 pr-3" data-testid={`deal-value-${m.month}-lost`}>
-                  {m.lost.count} · {money(m.lost, currency)}
-                </td>
-                <td className="py-2 pr-3" data-testid={`deal-value-${m.month}-active`}>{m.activeAtEnd.count}</td>
-                <td className="py-2" data-testid={`deal-value-${m.month}-mrr`}>{money(m.activeAtEnd, currency)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
+    body = <DealValueTable months={data.months} currency={data.currency} />;
   }
 
   return (

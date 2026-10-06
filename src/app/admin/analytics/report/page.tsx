@@ -12,6 +12,14 @@ import { useAdvancedAnalytics } from '@/lib/analyticsEntitlementsClient';
 import { formatDate } from '@/lib/relativeTime';
 import type { VerticalCapability } from '@/lib/verticals';
 import type { TrialConversionData } from '@/components/admin/TrialConversionCard';
+import type { SurveyOverviewRow } from '@/lib/surveyOverview';
+import { DealValueTable } from '@/components/admin/DealValueTable';
+import type { DealValueMonth } from '@/lib/dealValue';
+
+type DealValuePayload =
+  | { enabled: false }
+  | { enabled: true; ok: true; currency: string; months: DealValueMonth[] }
+  | { enabled: true; ok: false; error: string; currencies?: string[] };
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -40,6 +48,42 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 const th = 'text-left text-xs text-gray-500 py-1.5 pr-4 border-b border-gray-200';
 const td = 'py-1.5 pr-4 text-sm border-b border-gray-100';
 
+// The surveys (#1910), floored like the results screen: no rate and no NPS
+// under a survey's floor. Renders nothing when the programme has no surveys.
+function SurveysBlock() {
+  const t = useT();
+  const s = t.surveyResults;
+  const [rows, setRows] = useState<SurveyOverviewRow[] | null>(null);
+  useEffect(() => {
+    fetch('/api/admin/analytics/surveys')
+      .then((r) => (r.ok ? r.json() : { surveys: [] }))
+      .then((d) => setRows(d.surveys ?? []))
+      .catch(() => setRows([]));
+  }, []);
+  if (!rows || rows.length === 0) return null;
+  const label = (prefix: string, v: string) => (s as Record<string, string>)[`${prefix}_${v}`] ?? v;
+  return (
+    <Section title={s.reportTitle}>
+      <table className="w-full" data-testid="report-surveys"><thead><tr>
+        <th className={th}>{s.colSurvey}</th><th className={th}>{s.colStatus}</th><th className={th}>{s.colInvited}</th>
+        <th className={th}>{s.colResponses}</th><th className={th}>{s.colRate}</th><th className={th}>{s.colNps}</th>
+      </tr></thead><tbody>
+        {rows.map((r) => (
+          <tr key={r.id} data-testid={`report-survey-${r.id}`}>
+            <td className={td}>{r.title}</td>
+            <td className={td}>{label('status', r.status)}</td>
+            <td className={td}>{r.invited}</td>
+            <td className={td}>{r.responses}</td>
+            <td className={td}>{r.rate === null ? s.belowFloor : `${r.rate}%`}</td>
+            <td className={td}>{r.nps === null ? (r.npsN > 0 ? s.belowFloor : '—') : `${r.nps} (n=${r.npsN})`}</td>
+          </tr>
+        ))}
+      </tbody></table>
+      <p className="mt-2 text-xs text-gray-500">{s.reportNote}</p>
+    </Section>
+  );
+}
+
 // Premium full analytics report (Faz 2, #540) — a print-friendly page covering
 // funnel, trends, mentor workload, cohort comparison and source conversion.
 // PDF is produced via the browser's print pipeline (#357 pattern — no
@@ -61,6 +105,8 @@ export default function AnalyticsReportPage() {
   const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
   const [sources, setSources] = useState<SourceRow[] | null>(null);
   const [trial, setTrial] = useState<TrialConversionData | null>(null);
+  // The estimated value of won deals (#2424) — MARKETING only (`enabled: false` elsewhere).
+  const [dealValue, setDealValue] = useState<DealValuePayload | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -72,8 +118,10 @@ export default function AnalyticsReportPage() {
       fetch('/api/admin/analytics/sources').then(async (r) => (r.ok ? (await r.json()).sources : null)),
       // Trial → paid (#2556): null for a tenant with no trial stage.
       fetch('/api/admin/analytics/funnel').then(async (r) => (r.ok ? (await r.json()).trialConversion ?? null : null)),
+      fetch('/api/admin/analytics/deal-value').then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([a, co, so, tr]) => {
+      .then(([a, co, so, tr, dv]) => {
+        setDealValue(dv);
         setData(a);
         setCohorts(co ?? []);
         setSources(so ?? []);
@@ -116,6 +164,21 @@ export default function AnalyticsReportPage() {
       </p>
 
       <ProgramScorecard />
+      <SurveysBlock />
+
+      {dealValue?.enabled && (
+        <Section title={t.dealValue.card.title}>
+          {dealValue.ok ? (
+            <DealValueTable months={dealValue.months} currency={dealValue.currency} />
+          ) : (
+            <p className="text-sm text-amber-700" data-testid="report-deal-value-error">
+              {dealValue.error === 'mixed_currency'
+                ? t.dealValue.card.mixedCurrency.replace('{currencies}', (dealValue.currencies ?? []).join(', '))
+                : t.dealValue.card.error}
+            </p>
+          )}
+        </Section>
+      )}
 
       <Section title={c.funnel}>
         <table className="w-full"><thead><tr>

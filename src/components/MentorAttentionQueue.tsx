@@ -20,6 +20,8 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   trial_no_end_date: 'danger',
   // Red like `overdue`: a date the owner promised themselves has gone by.
   next_action_due: 'danger',
+  // Amber: a task waiting to be done, with reminders on the way (#1891).
+  evaluation_due: 'warning',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
@@ -49,6 +51,7 @@ export function MentorAttentionQueue({
     trial_expired: labels.trialExpired,
     trial_no_end_date: labels.trialNoEndDate,
     next_action_due: labels.nextActionDue,
+    evaluation_due: labels.evaluationDue,
   };
 
   return (

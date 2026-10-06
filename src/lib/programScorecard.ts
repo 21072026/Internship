@@ -22,6 +22,8 @@ export const SCORECARD_KEYS = [
 export type ScorecardKey = (typeof SCORECARD_KEYS)[number];
 
 export type ScorecardBand = 'GREEN' | 'AMBER' | 'RED';
+/** `score` is NPS: a signed number with no unit (−100..100). */
+export type ScorecardUnit = 'percent' | 'days' | 'score';
 
 interface Threshold {
   /** `higher`: a bigger value is better; `lower`: a smaller one is. */
@@ -30,13 +32,13 @@ interface Threshold {
   green: number;
   /** At or past this (but short of green) it is AMBER; beyond it RED. */
   amber: number;
-  unit: 'percent' | 'days';
+  unit: ScorecardUnit;
 }
 
 /** Below this many items in the denominator a ratio is noise, not a verdict. */
 export const MIN_TO_JUDGE = 5;
 
-export const SCORECARD_THRESHOLDS: Record<Exclude<ScorecardKey, 'evaluationCoverage' | 'surveyResponseRate' | 'nps'>, Threshold> = {
+export const SCORECARD_THRESHOLDS: Record<Exclude<ScorecardKey, 'evaluationCoverage'>, Threshold> = {
   // Invitations with a known outcome (used, or expired unused) that were used.
   // 40 % is the signup funnel's own "the door looks broken" line
   // (LOW_VERIFICATION_RATE, src/lib/signupFunnel.ts) — below it something is
@@ -65,6 +67,16 @@ export const SCORECARD_THRESHOLDS: Record<Exclude<ScorecardKey, 'evaluationCover
   // (#1898). One in ten needing a rescue is a normal load for a coordinator;
   // one in five is more than one person can work through in a week.
   atRisk: { direction: 'lower', green: 10, amber: 20, unit: 'percent' },
+  // Survey invitations sent 7-90 days ago that were answered (#1910) — 7 days
+  // so both reminders (day 3, day 7, src/lib/surveyReminders.ts) have had
+  // their chance. Under 30 % the answers stop speaking for the cohort; half is
+  // what a programme people chose to join, asking twice, should reach.
+  surveyResponseRate: { direction: 'higher', green: 50, amber: 30, unit: 'percent' },
+  // Net Promoter Score of the last 90 days (#1910), −100..100. Above 0 there
+  // are more promoters than detractors — below it the programme is talked
+  // down more than up. 30 is the usual "good" line for education and
+  // professional services; a number above it is worth putting in a deck.
+  nps: { direction: 'higher', green: 30, amber: 0, unit: 'score' },
 };
 
 /** Indicators that cannot be measured yet, and the work that makes them measurable. */
@@ -72,10 +84,6 @@ export const NOT_YET_MEASURABLE: Partial<Record<ScorecardKey, number[]>> = {
   // Needs stage-triggered evaluation due dates — without a due date there is
   // no "outstanding", only "not written", which is not the same thing.
   evaluationCoverage: [1891],
-  // Needs survey responses stored and analysed; until then there is nothing
-  // to count, and a 0 would read as "nobody answered".
-  surveyResponseRate: [1910],
-  nps: [1910],
 };
 
 export function bandFor(key: keyof typeof SCORECARD_THRESHOLDS, value: number): ScorecardBand {
@@ -92,6 +100,8 @@ export const SCORECARD_ACTIONS: Record<keyof typeof SCORECARD_THRESHOLDS, string
   meetingCadence: '/admin/meetings',
   stalledPairs: '/admin/health',
   atRisk: '/admin/health?band=AT_RISK',
+  surveyResponseRate: '/admin/surveys',
+  nps: '/admin/surveys',
 };
 
 export interface ScorecardMetric {

@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getServerDictionary } from '@/i18n/server';
+import { renderNotification } from '@/lib/notificationText';
 
 const markReadSchema = z.object({
   id: z.string().min(1).optional(),
@@ -74,8 +76,15 @@ export async function GET(request: Request) {
     }),
   ]);
 
+  // `display` is each row rendered in the reader's locale and vertical — the
+  // sentence the bell shows. Added for the native app (#2775), which cannot
+  // carry the web dictionary; the web keeps rendering from `type`/`params`
+  // itself, so the field is additive and the default shape is otherwise as it
+  // was.
+  const { t, locale } = await getServerDictionary();
+
   return NextResponse.json({
-    items,
+    items: items.map((n) => ({ ...n, display: renderNotification(n, t, locale) })),
     unread,
     total,
     page,

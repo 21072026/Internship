@@ -12,7 +12,9 @@
 // reasons) are screen-specific KPI tables, moved here unchanged.
 
 import type { Dictionary } from '@/i18n/dictionaries';
-import type { ScorecardRow } from '@/lib/programScorecard';
+import type { ScorecardRow, ScorecardUnit } from '@/lib/programScorecard';
+import type { SurveyOverviewRow } from '@/lib/surveyOverview';
+import { netChangeMinor, type DealValueMonth } from '@/lib/dealValue';
 import { getReportDefinition } from './definitions';
 import { loadReport, ReportUnavailable, type ReportContext } from './registry';
 import { renderReport, reportSheet, type Cell, type Sheet } from './render';
@@ -75,12 +77,46 @@ interface FunnelKpi {
   } | null;
 }
 
+/** GET /api/admin/analytics/deal-value's body (#2422) — absent or disabled outside MARKETING. */
+type DealValueSource =
+  | { enabled: false }
+  | { enabled: true; ok: true; currency: string; months: DealValueMonth[] }
+  | { enabled: true; ok: false; error: string; currencies?: string[] };
+
 interface AnalyticsSources {
+  /** The estimated value of won deals (#2424); omitted or `enabled: false` → no sheet. */
+  dealValue?: DealValueSource | null;
   analytics: { trends?: { months: string[]; newRelations: number[]; interactions: number[] } | null };
   aging: { dropReasons?: { pipelineStatus: string; reasonCode: string; count: number }[] } | null;
   funnel: FunnelKpi | null;
   /** The programme health scorecard (#1908) — the first sheet when present. */
   scorecard?: ScorecardRow[] | null;
+  /** Every survey, floored like the results screen (#1910). */
+  surveys?: SurveyOverviewRow[] | null;
+}
+
+// The surveys (#1910): counts always, the rate and the NPS only at or above
+// each survey's floor — a blank there is "fewer than the floor", said in words.
+function surveysSheet(rows: SurveyOverviewRow[] | null | undefined, t: Dictionary): Sheet[] {
+  if (!rows || rows.length === 0) return [];
+  const s = t.surveyResults;
+  const label = (prefix: string, v: string) => (s as Record<string, string>)[`${prefix}_${v}`] ?? v;
+  return [
+    {
+      name: 'Surveys',
+      columns: [s.colSurvey, s.colStatus, s.colAnonymity, s.colInvited, s.colResponses, s.colRate, s.colNps, s.colNpsN],
+      rows: rows.map((r): Cell[] => [
+        r.title,
+        label('status', r.status),
+        label('anonymity', r.anonymity),
+        r.invited,
+        r.responses,
+        r.rate === null ? s.belowFloor : `${r.rate}%`,
+        r.nps === null ? (r.npsN > 0 ? s.belowFloor : '—') : r.nps,
+        r.npsN,
+      ]),
+    },
+  ];
 }
 
 // The programme health scorecard (#1908) as a sheet, so the verdict reaches
@@ -89,8 +125,8 @@ interface AnalyticsSources {
 function scorecardSheet(rows: ScorecardRow[] | null | undefined, t: Dictionary): Sheet[] {
   if (!rows || rows.length === 0) return [];
   const s = t.scorecard;
-  const fmt = (v: number, unit: 'percent' | 'days') => s.units[unit].replace('{v}', String(v));
-  const target = (r: { target: number; direction: 'higher' | 'lower'; unit: 'percent' | 'days' }) =>
+  const fmt = (v: number, unit: ScorecardUnit) => s.units[unit].replace('{v}', String(v));
+  const target = (r: { target: number; direction: 'higher' | 'lower'; unit: ScorecardUnit }) =>
     (r.direction === 'higher' ? s.targetAtLeast : s.targetAtMost).replace('{v}', fmt(r.target, r.unit));
   return [
     {
@@ -170,6 +206,41 @@ function kpiSheets(src: FunnelKpi | null, t: Dictionary, stageLabel: StageLabel)
   return sheets;
 }
 
+// The estimated value of won deals, month by month (#2424) — the same rows the
+// card and the printed report show. Amounts are major units (exact: integer
+// minor units / 100, two-digit currencies only) with the currency in its own
+// column. A range that mixes currencies exports the refusal, never a total;
+// a month with nothing in a column exports "—", never a fabricated 0.
+function dealValueSheet(src: DealValueSource | null | undefined, t: Dictionary): Sheet[] {
+  if (!src || !src.enabled) return [];
+  const c = t.dealValue.card;
+  if (!src.ok) {
+    const message = src.error === 'mixed_currency' ? c.mixedCurrency.replace('{currencies}', (src.currencies ?? []).join(', ')) : c.error;
+    return [{ name: c.sheet, columns: [c.title], rows: [[message]] }];
+  }
+  const major = (minor: number) => minor / 100;
+  return [
+    {
+      name: c.sheet,
+      columns: [c.month, c.wonCount, c.wonValue, c.lostCount, c.lostValue, c.heldCount, c.value, c.net, c.currency],
+      rows: src.months.map((m): Cell[] => {
+        const net = netChangeMinor(m);
+        return [
+          m.month,
+          m.won.count,
+          m.won.count === 0 ? '—' : major(m.won.valueMinor),
+          m.lost.count,
+          m.lost.count === 0 ? '—' : major(m.lost.valueMinor),
+          m.activeAtEnd.count,
+          m.activeAtEnd.count === 0 ? '—' : major(m.activeAtEnd.valueMinor),
+          net === null ? '—' : major(net),
+          src.currency,
+        ];
+      }),
+    },
+  ];
+}
+
 function dropReasonSheet(src: AnalyticsSources['aging'], t: Dictionary, stageLabel: StageLabel): Sheet[] {
   const reasons = t.dropoff.reasons as Record<string, string>;
   const rows: Cell[][] = (src?.dropReasons ?? []).map((d) => [stageLabel(d.pipelineStatus), reasons[d.reasonCode] ?? d.reasonCode, d.count]);
@@ -179,7 +250,14 @@ function dropReasonSheet(src: AnalyticsSources['aging'], t: Dictionary, stageLab
 /** The basic analytics workbook: funnel, KPI tables, drop reasons. */
 export async function analyticsWorkbook(src: AnalyticsSources, ctx: ReportContext, t: Dictionary, stageLabel: StageLabel): Promise<Sheet[]> {
   const funnel = await registrySheet('Funnel', 'pipeline-funnel', ctx, t);
-  return [...scorecardSheet(src.scorecard, t), ...(funnel ? [funnel] : []), ...kpiSheets(src.funnel, t, stageLabel), ...dropReasonSheet(src.aging, t, stageLabel)];
+  return [
+    ...scorecardSheet(src.scorecard, t),
+    ...surveysSheet(src.surveys, t),
+    ...(funnel ? [funnel] : []),
+    ...kpiSheets(src.funnel, t, stageLabel),
+    ...dealValueSheet(src.dealValue, t),
+    ...dropReasonSheet(src.aging, t, stageLabel),
+  ];
 }
 
 /**
@@ -198,8 +276,10 @@ export async function fullAnalyticsWorkbook(src: AnalyticsSources, ctx: ReportCo
   ]);
   return [
     ...scorecardSheet(src.scorecard, t),
+    ...surveysSheet(src.surveys, t),
     ...(funnel ? [funnel] : []),
     ...kpiSheets(src.funnel, t, stageLabel),
+    ...dealValueSheet(src.dealValue, t),
     ...(trends
       ? [{
           name: 'Trends',

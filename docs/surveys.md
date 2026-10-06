@@ -195,3 +195,80 @@ number leaves the server — the screen only draws what it gets:
 
 Per-question distributions of a survey that passed the floor are shown in
 full: they are counts over at least *floor* people, not a group of them.
+
+### Where else the numbers go (#1910)
+
+- **The programme scorecard** (`docs/program-scorecard.md`): `nps` is the
+  last 90 days' answers to every survey's first NPS question, pooled — a
+  survey counts only once its own answers reach its own floor, so a survey
+  that raised its floor is not read below it through a pooled number.
+  `surveyResponseRate` is the invitations sent 7–90 days ago (both reminders
+  have had their chance) that were answered. Both are on `/admin/analytics`,
+  in the print report and in the XLSX "Programme health" sheet.
+- **One row per survey** (`loadSurveyOverview`, `src/lib/surveyOverview.ts`;
+  `GET /api/admin/analytics/surveys`): the print report's Surveys block and
+  the XLSX "Surveys" sheet — counts always, the rate and the NPS only at or
+  above that survey's floor.
+
+### Summarising free text with AI (#1910)
+
+A free-text question on the results screen has **Summarise with AI**
+(`POST /api/admin/surveys/[id]/summary`, ADMIN only): themes, most frequent
+first, each with up to three quotes.
+
+- **Only above the floor** — the same `suppressed` verdict as the screen
+  (409 `below_floor`), so a summary can never be read where the answers could
+  not.
+- **What leaves:** the unattributed, alphabetically sorted texts from
+  `loadSurveyResults`, with e-mail addresses, phone numbers and links masked
+  (`redactAnswerText`, `src/lib/surveyTextRules.ts`). No respondent id, name,
+  relation or timestamp.
+- **What comes back:** `parseSummary` keeps a quote only when an answer
+  contains it **verbatim** — a quote the model made up is dropped, so the
+  summary can only say what the answers say. The prompt also forbids naming
+  anyone.
+- **Through `runAiGated`** (scope `survey_summary`): metered against the
+  org's AI quota, no per-person consent because no person is processed (the
+  footing of `mentor_match`'s anonymous labels). When AI is off, out of quota
+  or fails, the reply carries the reason and the screen keeps the plain list —
+  the answers are always complete without it. An org-side feature: nothing a
+  participant sees depends on it.
+- Not stored: every click is a fresh, metered call.
+
+## Reminders and completion (#1889)
+
+**Two reminders, never three.** `SURVEY_MAX_REMINDERS = 2`
+(`src/lib/surveyReminders.ts`) — the same ceiling as the dormant first-contact
+check-ins, for the same reason: two well-timed reminders roughly double a
+response rate, a third burns the sending domain. Reminder 1 is due 3 days after
+the invitation, reminder 2 after 7, only while the survey is open and in its
+window, the invitation unanswered and unexpired, and the person active and not
+opted out of the `surveys` e-mail group. Never two within 24 hours.
+
+**One claim for both paths.** The scheduled pass (with the campaign sweep,
+daily 10:00 UTC; `GET /api/cron?job=surveys` → `surveyReminders`) and "remind
+now" (`POST /api/admin/surveys/[id]/remind`) both claim reminder *k+1* with the
+same conditional UPDATE (`remindersSent = k AND respondedAt IS NULL`, plus the
+`lastRemindedAt` it read). Exactly one caller wins: two clicks at once send one
+mail, and a manual nudge moves the schedule along — it is reminder 1, not an
+extra. `remind now` waives only the day-3/day-7 timing.
+
+**Every link keeps working.** Only token hashes are stored, so a reminder mints
+its own link (`SurveyInvitationToken`) instead of resending the first; the
+first mail's link answers the same invitation, once.
+
+**The completion console** — `/admin/surveys/[id]`, API
+`GET /api/admin/surveys/[id]/completion` (ADMIN only, tenant-scoped):
+
+- invited, answered and the rate **answered / invited** — not shown below the
+  survey's floor (2 of 30 is noise, not a rate). The same rule now applies to
+  the response rate on the results screen. The counts of who is still pending
+  stay visible: completion is not an answer, and the floor protects answers;
+- the unanswered invitations by reminders received (0 / 1 / 2);
+- **IDENTIFIED / CONFIDENTIAL:** the people who have not answered, each with
+  its reminder state and a "remind now" that the cap still governs. Who did
+  answer is not listed — the console's job is the next nudge;
+- **ANONYMOUS:** no per-person list **in the payload at all** — "who answered"
+  next to the response timestamps is exactly the link the promise says does not
+  exist — and "remind now" exists only for the whole survey (naming an
+  invitation is **400 `anonymous_bulk_only`**).

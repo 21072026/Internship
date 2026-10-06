@@ -10,7 +10,7 @@ import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 import { isTrialMissingEndDate } from '@/lib/trialReminderRule';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due';
 
 // The relationship-health flags this queue shows (#1898) — every one the
 // table raises except `stage_stalled`, which belongs to the admin monitor.
@@ -78,6 +78,8 @@ export async function getAttentionItems(
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
       goals: { where: { status: 'OPEN' }, select: { id: true } },
       weeklyReports: { where: { status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } }, select: { weekStart: true } },
+      // An INTERIM/FINAL evaluation past its due date and not yet written (#1891).
+      evaluationDues: { where: { completedAt: null, dueAt: { lte: new Date(now) } }, select: { id: true } },
     },
   });
 
@@ -167,6 +169,10 @@ export async function getAttentionItems(
     // lands here from the next day on, and leaves the moment the date is moved
     // or cleared. Independent of `overdue` above, which is the stage SLA.
     if (isNextActionOverdue(r.nextActionAt, now)) reasons.push('next_action_due');
+    // An evaluation the programme's schedule says is due (#1891) — the same
+    // EvaluationDue row the reminders read, so the in-app nudge and the mail
+    // agree, and it leaves the queue the moment the evaluation is written.
+    if (r.evaluationDues.length > 0) reasons.push('evaluation_due');
     const kept = options.reasons ? reasons.filter((reason) => options.reasons!.includes(reason)) : reasons;
     if (kept.length > 0) {
       items.push({

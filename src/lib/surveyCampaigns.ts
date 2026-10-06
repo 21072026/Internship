@@ -31,6 +31,7 @@ import { emailGroupAllowed } from '@/lib/emailGroups';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { surveyAcceptsAnswers } from '@/lib/surveys';
 import { createSurveyInvitation, surveyInviteUrl, SURVEY_INVITE_TTL_DAYS } from '@/lib/surveyTokens';
+import { sendDueSurveyReminders } from '@/lib/surveyReminders';
 import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { formatDate } from '@/lib/relativeTime';
@@ -247,6 +248,10 @@ export function initSurveyCampaignsCron() {
     try {
       const r = await dispatchDueSurveyCampaigns();
       if (r.due) logger.warning('Survey campaigns ran', { ...r });
+      // Reminders after the invitations (#1889): today's new invitations are
+      // not due for days, so the order only keeps one log line per pass.
+      const reminders = await sendDueSurveyReminders();
+      if (reminders.due) logger.warning('Survey reminders ran', { ...reminders });
     } catch (error) {
       logger.error('Survey campaigns failed', { error: String(error) });
     }

@@ -10,3 +10,6 @@ npm-debug.log*
 
 # The Android TWA shell is built by android-build.yml, not into the web image.
 mobile
+
+# The native app (apps/mobile, #2775) is built by EAS, not into the web image.
+apps

@@ -8218,6 +8218,21 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **`npx tsc --noEmit` includes `e2e/*.ts`.** A spec that builds a typed literal (for example a `questions` array passed to a zod-typed helper) needs an explicit type annotation, or CI's typecheck fails even though Playwright ran it fine.
 - **Merging two PRs that both appended blocks to the same anchor loses the shared closing lines.** This hit the dictionaries, the route-auth baseline JSON and release-media. Keeping both sides of `<<<<<<< / >>>>>>>` drops one `},`. Re-run `tsc` and `JSON.parse` before committing the merge.
 
+## 2026-10-06 — error-boundary digest → prod log in one grep (#2773)
+- A user screenshot of `RouteErrorBoundary` carries the **digest**; `ssh ubuntu@s.interncrm.com` and
+  `docker logs --since 72h internship-crm 2>&1 | grep -B3 -A25 <digest>` gives the real server stack
+  in seconds — faster than guessing a repro. Here it was a `P2034` deadlock, not navigation logic.
+- Local MariaDB did **not** reproduce the MySQL 8 InnoDB deadlock (6×parallel renders, old code green).
+  For concurrency bugs on prod, the log is the evidence; don't burn time trying to force it locally.
+- A server page that writes on every render (lazy-create upserts) is a deadlock waiting for two
+  concurrent renders (double back, `router.refresh`). Read first, write only when something is missing.
+
+## 2026-10-06 — "wrong wording" was a wrong recipient (#2781)
+
+- Before rewording a notification, check **who receives it** (`notifyIfAllowed(<userId>, …)` call site). "Your stage changed" read oddly for MARKETING because it went to the *prospect*, who has no portal — the fix was not to send it, not to reword it.
+- A cross-world notification check: `verticalHasCapability(await verticalFor(orgId), 'mentorship')` is the "does this person have a portal" question; `verticalHasCapability(null, …)` falls back to INTERNSHIP, so null-org callers keep their behaviour.
+- Prove a new e2e assertion bites by temporarily restoring the file from `origin/main` (`git show origin/main:<path> > <path>`), running the one test, then copying your version back — never `git checkout origin/main -- .`, which wipes every uncommitted edit in the tree.
+
 ## 2026-10-06 — deterministic a11y gate + hover-contrast check (#2785)
 
 - **The a11y gate was already in the PR job** ("Accessibility regression gate" in `e2e.yml`). Saying it was not was wrong; read the workflow before claiming a check is missing.
