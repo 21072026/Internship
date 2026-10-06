@@ -445,6 +445,11 @@ html.dark[data-accent] .bg-blue-50.text-blue-700,
 html.dark[data-accent] .bg-blue-50 .text-blue-700,
 html.dark[data-accent] .bg-blue-50 .text-blue-600,
 html.dark[data-accent] .hover\:text-blue-700:hover,
+/* -800 too: without it a hovered `hover:text-blue-800` link fell through to the
+   accent remap above (accent-800, dark text on a dark card) — the
+   profile-progress chips on /portal/profile hovered to rgb(30,64,175) on
+   gray-900, which the a11y scan caught (#2703). */
+html.dark[data-accent] .hover\:text-blue-800:hover,
 html.dark[data-accent] .group:hover .group-hover\:text-blue-600 { color: var(--accent-300); }
 
 /*
