@@ -85,3 +85,19 @@ export function healthTrendFrom(
   };
   return { series, delta7: delta(7), delta30: delta(30) };
 }
+
+/**
+ * Did this pair cross into AT_RISK on a day on or after `since`? A crossing is
+ * an AT_RISK snapshot whose previous snapshot (on any earlier day) was not
+ * AT_RISK — the same "moved into red" the nightly alert uses, read back from
+ * history rather than from the alert mark, so a crossing the baseline rule did
+ * not mail (or a repeat the 30-day rule held back) still counts here.
+ */
+export function crossedIntoRiskSince(snapshots: { takenOn: Date; band: string }[], since: Date): boolean {
+  const sorted = [...snapshots].sort((a, b) => a.takenOn.getTime() - b.takenOn.getTime());
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].takenOn.getTime() < since.getTime()) continue;
+    if (sorted[i].band === 'AT_RISK' && sorted[i - 1].band !== 'AT_RISK') return true;
+  }
+  return false;
+}

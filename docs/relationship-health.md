@@ -83,6 +83,41 @@ still told "no recent contact" — it just does not lose points for it yet.
   analytics reports off gets neither. (A separate in-app notification category
   was not added — `NOTIFICATION_CATEGORIES` is frozen, #2348 decision 4.)
 
+## The admin monitor: /admin/health (#1902)
+
+The org-wide sibling of the mentor's attention queue (which is unchanged): every
+`ACTIVE` relation in the admin's tenant, scored **now** — the same computation
+the nightly sweep runs (`src/lib/relationHealthLive.ts`, shared by both), so the
+screen and the snapshot never disagree about what a signal means.
+`GET /api/admin/health` (ADMIN only, checked in the handler; closed for a vertical
+without the `mentorship` capability, like the page) takes `band`, `mentorId`,
+`cohortId`, `stage`, `page`, `pageSize`.
+
+- **Worst first:** band, then score (a pair too new to score last in its band),
+  then the number of reasons, then the longest silence (`compareHealthRows`).
+- **Listed = has a reason.** A pair with nothing wrong has nothing to do; it is
+  counted ("N relationships with nothing to do are not listed"), as are dormant
+  first contacts and non-active relations — the footnote under the list, so a
+  short queue never looks like a broken one.
+- **Counters** honour every filter except the band, plus how many pairs crossed
+  into `AT_RISK` in the last 7 days — read from the snapshot history (an
+  `AT_RISK` day after a non-`AT_RISK` one), not from the alert mark, so a
+  crossing the baseline rule did not mail still counts.
+- **Exactly one next action per row, and it is a destination**
+  (`src/lib/healthNextAction.ts`, in this order):
+
+  | Situation | Action | Goes to |
+  |---|---|---|
+  | The mentor's account is deactivated | Reassign the mentee | `/admin/mentorship?transfer=<id>` — opens the change-mentor dialog (#2289) |
+  | No contact for 60+ days (or ever, on a pair that old) | Record a drop-off reason | the candidate page's mentorship card (`#relation-stage`) |
+  | An unanswered question or meeting request | Message the mentor | opens the DM with the mentor |
+  | The stage deadline passed | Set a stage deadline | `#relation-stage` |
+  | No contact / no weekly reports / nothing open | Message the mentor | opens the DM |
+  | The stage has not moved in 60 days | Set a stage deadline | `#relation-stage` |
+
+- **Trend column:** the last 30 measured days as the product's CSS bars and the
+  30-day delta, from the snapshots above.
+
 ## Version history
 
 - **1** (2026-10) — the table above; nightly snapshots and at-risk alerts added without changing the rules (#1901).

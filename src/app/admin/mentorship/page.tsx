@@ -159,6 +159,29 @@ export default function MentorshipPage() {
     fetchPickers();
   }, []);
 
+  // /admin/health links here with ?transfer=<relationId> when a pair's mentor
+  // account is deactivated (#1902): open the change-mentor dialog for that
+  // pairing straight away, whatever page of the list it would sit on.
+  useEffect(() => {
+    const relationId = new URLSearchParams(window.location.search).get('transfer');
+    if (!relationId) return;
+    fetch(`/api/mentorship/${encodeURIComponent(relationId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const rel = d?.relation;
+        if (!rel || rel.status !== 'ACTIVE') return;
+        openTransfer({
+          relationId: rel.id,
+          menteeId: rel.mentee?.id ?? null,
+          menteeName: rel.mentee?.fullName ?? '',
+          mentorId: rel.mentor?.id ?? null,
+          mentorName: rel.mentor?.fullName ?? null,
+        });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
+
   useEffect(() => {
     const timeout = setTimeout(fetchRelations, 300);
     return () => clearTimeout(timeout);
