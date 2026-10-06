@@ -276,6 +276,9 @@ export default function AdminAnalyticsPage() {
               <Link href="/admin/analytics/report" className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors" data-testid="full-report-link">
                 {t.analytics.fullReport}
               </Link>
+              <Link href="/admin/reports/subscriptions" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="schedule-reports-link">
+                {t.reportSubscriptions.ui.openFromAnalytics}
+              </Link>
             </>
           )}
         </div>

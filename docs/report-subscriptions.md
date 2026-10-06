@@ -12,6 +12,7 @@ a funder, a sponsor) who leaves through a signed link.
 | `src/lib/jobs/reportSubscriptions.ts` | The sender — `runReportSubscriptions()`, `sendReportSubscription()`, the hourly cron |
 | `src/lib/reportSubscriptionAdmin.ts` | Who may manage them and the write-time checks |
 | `/api/admin/report-subscriptions` (+ `/[id]`, `/[id]/test`) | Admin CRUD and "send me a test" |
+| `/admin/reports/subscriptions` | The admin screen: create, test, pause, delete, delivery history |
 | `/reports/unsubscribe` + `POST /api/report-subscriptions/unsubscribe` | The account-less way out |
 | `src/lib/analyticsReports.ts` | The cohort / source / mentor computations, sessionless, shared by the screens, the registry and this job |
 
@@ -67,7 +68,3 @@ reached the final stage, the last seven days' activity and every stage's share
   first period as `SKIPPED · seeded`; the deploy may land on a Monday after the
   old job already sent.
 - An admin who joins later subscribes on `/admin/reports/subscriptions`.
-
-## Not yet
-
-- The admin screen (`/admin/reports/subscriptions`) — follow-up PR.

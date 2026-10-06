@@ -92,6 +92,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Term compliance of the weekly diaries (#1918) — an internship-only screen.
   { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
+  // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
+  { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
   { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
