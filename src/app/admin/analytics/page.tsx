@@ -272,6 +272,10 @@ export default function AdminAnalyticsPage() {
           />
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>{t.analytics.exportExcel}</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
+          {/* First destination (#1912) is a compliance report, not an upsell. */}
+          <Link href="/admin/analytics/outcomes" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="outcomes-link">
+            {t.outcomes.link}
+          </Link>
           {premium && (
             <>
               <Button variant="outline" size="sm" onClick={exportFullExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined} data-testid="full-report-excel">{t.analytics.fullReportExcel}</Button>

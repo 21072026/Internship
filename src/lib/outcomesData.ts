@@ -11,6 +11,7 @@
 // where they were.
 
 import { prisma } from '@/lib/prisma';
+import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import {
   OUTCOME_TEMPLATE_KEY,
@@ -54,4 +55,24 @@ export async function loadOutcomeReport(tenant: TenantWhere, period: { from: Dat
     }
   }
   return { ...summarizeOutcomes(people, answers), from: period.from.toISOString(), to: period.to.toISOString() };
+}
+
+/**
+ * A hire we already saw happen (#1912): when the person's most recent relation
+ * reached the org's own "finished" stages (HIRED_660 / EMPLOYED_700, or a
+ * custom pipeline's equivalent — `outcomeStageKeys`), the destination question
+ * opens with EMPLOYED_HERE selected, so the participant confirms rather than
+ * types. Only a starting value: they can pick anything else, and nothing is
+ * stored until they submit.
+ */
+export async function destinationPrefill(userId: string | null, orgId: string | null): Promise<{ destination: 'EMPLOYED_HERE' } | null> {
+  if (!userId) return null;
+  const latest = await prisma.mentorshipRelation.findFirst({
+    where: { menteeId: userId },
+    orderBy: [{ completedAt: { sort: 'desc', nulls: 'last' } }, { startDate: 'desc' }],
+    select: { pipelineStatus: true },
+  });
+  if (!latest?.pipelineStatus) return null;
+  const { finished } = await outcomeStageKeys(orgId);
+  return finished.includes(latest.pipelineStatus) ? { destination: 'EMPLOYED_HERE' } : null;
 }

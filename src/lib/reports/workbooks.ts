@@ -14,6 +14,7 @@
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { ScorecardRow, ScorecardUnit } from '@/lib/programScorecard';
 import type { SurveyOverviewRow } from '@/lib/surveyOverview';
+import { DESTINATIONS, destinationLabels, type OutcomeBucket, type OutcomeSummary } from '@/lib/outcomeDestination';
 import { netChangeMinor, type DealValueMonth } from '@/lib/dealValue';
 import { getReportDefinition } from './definitions';
 import { loadReport, ReportUnavailable, type ReportContext } from './registry';
@@ -93,6 +94,38 @@ interface AnalyticsSources {
   scorecard?: ScorecardRow[] | null;
   /** Every survey, floored like the results screen (#1910). */
   surveys?: SurveyOverviewRow[] | null;
+  /** First destination (#1912); omitted or nobody eligible → no sheet. */
+  outcomes?: OutcomeSummary | null;
+}
+
+// First destination (#1912): the knowledge rate first, then the table — and a
+// bucket under the floor says so in words instead of showing counts.
+function outcomesSheet(src: OutcomeSummary | null | undefined, t: Dictionary, locale: string): Sheet[] {
+  if (!src || src.overall.eligible === 0) return [];
+  const o = t.outcomes;
+  const labels = destinationLabels(locale === 'tr' || locale === 'de' ? locale : 'en');
+  const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
+  const below = o.belowFloor.replace('{n}', String(src.floor));
+  const bucketRow = (kind: string, b: OutcomeBucket): Cell[] => [
+    kind,
+    b.label ?? o.noGroup,
+    b.eligible,
+    b.known,
+    b.withheld,
+    pct(b.knowledgeRate),
+    ...DESTINATIONS.map((d) => (b.destinations ? b.destinations[d] : below)),
+  ];
+  return [
+    {
+      name: 'Destinations',
+      columns: [o.colGroup, '', o.colEligible, o.colKnown, o.withheld, o.colRate, ...DESTINATIONS.map((d) => labels[d])],
+      rows: [
+        bucketRow(o.overall, { ...src.overall, label: null }).map((c, i) => (i === 1 ? '' : c)),
+        ...src.byCohort.map((b) => bucketRow(o.byCohort, b)),
+        ...src.bySource.map((b) => bucketRow(o.bySource, b)),
+      ],
+    },
+  ];
 }
 
 // The surveys (#1910): counts always, the rate and the NPS only at or above
@@ -253,6 +286,7 @@ export async function analyticsWorkbook(src: AnalyticsSources, ctx: ReportContex
   return [
     ...scorecardSheet(src.scorecard, t),
     ...surveysSheet(src.surveys, t),
+    ...outcomesSheet(src.outcomes, t, ctx.locale),
     ...(funnel ? [funnel] : []),
     ...kpiSheets(src.funnel, t, stageLabel),
     ...dealValueSheet(src.dealValue, t),
@@ -277,6 +311,7 @@ export async function fullAnalyticsWorkbook(src: AnalyticsSources, ctx: ReportCo
   return [
     ...scorecardSheet(src.scorecard, t),
     ...surveysSheet(src.surveys, t),
+    ...outcomesSheet(src.outcomes, t, ctx.locale),
     ...(funnel ? [funnel] : []),
     ...kpiSheets(src.funnel, t, stageLabel),
     ...dealValueSheet(src.dealValue, t),

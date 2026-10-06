@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**First destination: screen, report pack, XLSX, scorecard (#1912, part 2):** `/admin/analytics/outcomes` (linked from Analytics for every plan, since it is a compliance report and not an upsell) sets up the destination survey in one click (30/90/180 days after completion). It shows the headline tiles (eligible, known, knowledge rate, working or studying), the destination table above the response floor, and breakdowns by cohort and by source, with the floor applied per bucket. \"Print report\" lays the page out as a one-page report pack (`#outcomes-print`) that includes the period, the programme NPS from the scorecard and the counting rule. Both analytics XLSX exports gain a `Destinations` sheet. The programme scorecard gains `destinationKnown` (green at 60%, amber at 40%, links to the screen). When a participant's latest relation reached the org's own finished stages (`outcomeStageKeys`, e.g. `HIRED_660`), the survey link opens with \"working at the organisation I was placed with\" pre-selected. This is only a starting value.",
+  "notes": {
+    "en": ["New First destination screen in Analytics: where participants ended up, with the share you actually know about, by cohort and source. It prints as a one-page report and is included in the Excel export."],
+    "tr": ["Analitik'te yeni İlk varış yeri ekranı: katılımcıların nereye vardığı ve bunun ne kadarını gerçekten bildiğin, kohort ve kaynağa göre. Tek sayfalık rapor olarak yazdırılabiliyor ve Excel dışa aktarımında yer alıyor."],
+    "de": ["Neue Ansicht Verbleib in der Analyse: wo Teilnehmende gelandet sind und für welchen Anteil du es wirklich weißt, nach Kohorte und Quelle. Sie lässt sich als einseitiger Bericht drucken und ist im Excel-Export enthalten."]
+  }
+}
