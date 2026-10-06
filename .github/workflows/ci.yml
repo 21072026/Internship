@@ -39,6 +39,10 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # Report registry (#1903): label keys in all three dictionaries, a loader
+      # per definition, and a privacy floor that can actually suppress.
+      - name: Report registry
+        run: npm run check:reports
       # The starter skill vocabulary is the thing every skill filter will
       # normalise to, and every way of breaking it is invisible to TypeScript:
       # the fields are all `string`, so a duplicated key, an alias two skills
