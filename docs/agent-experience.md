@@ -8173,3 +8173,9 @@ taşındı. Taşımanın kendisi iki satırlık bir sabit değişikliği; zor ol
 - **`window.location.search` in an effect is a safe deep-link preset in a client page.** It needs no `Suspense` for `useSearchParams` at build. Guard the load with a request counter, because the preset fires a second fetch while the unfiltered one is still in flight.
 - **Assert a Link's `href`, not the navigation, when the target page is cold in `next dev`.** The first compile of a page can exceed the 5 s default and fail the click.
 - **A dashboard indicator with no data source is a row that says so** ("not yet measurable — needs #N"), never a 0 and never a proxy. Reviewers and sponsors read a 0 as a measurement.
+
+## 2026-10-06 — survey campaigns (#1887)
+
+- **On MariaDB you cannot replace a unique whose leftmost column is a foreign key in one `db push`.** Prisma drops the old index before it creates the new one, and MariaDB refuses with `Cannot drop index '…_key': needed in a foreign key constraint`. `check:schema-push` does not catch this, and a fresh topic-env database never shows it. Expand first: give the FK its own `@@index([fk])` in one deploy, then change the unique in the next. Prove a transition by pushing `git show origin/main:prisma/schema.prisma` (via `--schema`) and then the branch schema into a scratch database.
+- **`npx tsc --noEmit` includes `e2e/*.ts`.** A spec that builds a typed literal (for example a `questions` array passed to a zod-typed helper) needs an explicit type annotation, or CI's typecheck fails even though Playwright ran it fine.
+- **Merging two PRs that both appended blocks to the same anchor loses the shared closing lines.** This hit the dictionaries, the route-auth baseline JSON and release-media. Keeping both sides of `<<<<<<< / >>>>>>>` drops one `},`. Re-run `tsc` and `JSON.parse` before committing the merge.

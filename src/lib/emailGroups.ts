@@ -32,6 +32,7 @@ export type EmailGroupId =
   | 'opportunities'
   | 'inbound_requests'
   | 'newsletter'
+  | 'surveys'
   | 'announcements';
 
 export interface EmailGroupDef {
@@ -221,6 +222,17 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     bulk: true,
     categories: ['newsletter'],
     legacy: ['newsletter'],
+  },
+  {
+    // Survey invitations a campaign sends (#1887). Their own switch, because a
+    // survey is content somebody can reasonably decline without losing their
+    // pipeline or meeting mail — the newsletter argument. (In-app notification
+    // categories are frozen, #2348 decision 4, so the switch lives here.)
+    id: 'surveys',
+    essential: false,
+    bulk: true,
+    categories: ['survey-invite'],
+    legacy: [],
   },
   {
     id: 'announcements',

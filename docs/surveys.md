@@ -126,3 +126,41 @@ again updates it.
   own experience. The mail is category `meeting-feedback` in the
   *task reminders* group, so it can be switched off without silencing the
   meeting reminders.
+
+## Campaigns (#1887)
+
+A campaign turns a survey from something an admin sends into something the
+programme sends: **who** (the survey's audience, or an override: MENTEE,
+MENTOR or BOTH) gets **which** survey **when**.
+
+| Trigger | Fires | Period key |
+|---|---|---|
+| `STAGE_ENTERED` | a `StatusChange` into `stageKey` — the tenant's own key, checked against its resolved stages at create (`unknown_stage` otherwise) | `stage:<key>` |
+| `DAYS_AFTER_START` | `dayOffset` days after the relation started | `day:<n>` |
+| `DAYS_BEFORE_END` | `dayOffset` days before the relation's stage deadline (a moved deadline is a new period) | `before:<deadline day>` |
+| `MANUAL` | once to the whole active audience, as soon as the campaign is active | `manual` |
+| `RECURRING` | every `everyDays` days — **not yet enabled**, see below | `pulse:<n>` |
+
+`dispatchDueSurveyCampaigns()` (`src/lib/surveyCampaigns.ts`, daily 10:00 UTC
+from `/api/cron/start`, and `GET /api/cron?job=surveys` for an admin's own org):
+
+- **claims first** — a `SurveyCampaignSend` row, unique on (campaign, person,
+  period), before the invitation is minted or the mail sent; two sweeps send one
+  invitation;
+- **never backfills** — a trigger looks back at most 7 days and never before
+  the campaign was created;
+- **caps a tick** at 50 invitations (`?batch=` may only lower it); the rest go
+  next tick;
+- **skips opt-outs** — the mail is category `survey-invite` in its own
+  `surveys` e-mail group, and a person who switched it off (or an inactive
+  account) is not claimed and not invited.
+
+**Why RECURRING waits (expand → contract).** A pulse needs one invitation per
+person *per round*, so `SurveyInvitation`'s unique has to become
+`[surveyId, email, round]`. MariaDB refuses to drop the old
+`[surveyId, email]` unique while the `surveyId` foreign key is served by it
+(`Cannot drop index … needed in a foreign key constraint`), and Prisma drops
+before it creates — so a one-step change would fail the deploy. This change is
+the **expand** step: the `round` column and a dedicated `@@index([surveyId])`.
+The **contract** step widens the unique and flips `RECURRING_ENABLED`; until
+then the API refuses RECURRING with `recurring_not_yet`.

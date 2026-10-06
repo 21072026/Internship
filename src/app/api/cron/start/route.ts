@@ -8,6 +8,7 @@ import { initUsageRollupCron } from '@/lib/jobs/usageRollup';
 import { initTrialRemindersCron } from '@/lib/jobs/trialReminders';
 import { initReportSubscriptionsCron } from '@/lib/jobs/reportSubscriptions';
 import { initRelationHealthCron } from '@/lib/jobs/relationHealthSweep';
+import { initSurveyCampaignsCron } from '@/lib/surveyCampaigns';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -63,5 +64,7 @@ export async function POST(request: Request) {
   // The nightly relationship-health sweep (#1901), 02:00 — it mails the
   // at-risk digest through emailService, so it is registered here too.
   initRelationHealthCron();
+  // Survey campaigns (#1887), daily 10:00 — they mail through emailService too.
+  initSurveyCampaignsCron();
   return NextResponse.json({ ok: true, started: true });
 }
