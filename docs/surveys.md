@@ -75,6 +75,27 @@ Admin API: `GET/POST /api/admin/surveys`, `GET/PATCH /api/admin/surveys/[id]`.
 The builder screen, login-free answering (#1881) and campaigns (#1887) build
 on this.
 
+## Answering by link, no login (#1881)
+
+A survey behind a password is a survey nobody answers, so an invitation is a
+link: `createSurveyInvitation()` (`src/lib/surveyTokens.ts`) mints a random
+256-bit token, stores only its SHA-256 hash in `SurveyInvitation.tokenHash`,
+and returns the token once for the mail (`surveyInviteUrl()` →
+`/s/<token>`, default lifetime 30 days). A random token looked up by its hash
+cannot be re-derived from the server secret and is revoked by deleting one row
+— the `TrustedDevice` discipline rather than a third token scheme.
+
+- `GET /api/surveys/respond?token=` returns the survey in the recipient's
+  language and the invitation's state — `open`, `alreadyAnswered`, `closed`
+  (status or `opensAt`/`closesAt`, the one rule `surveyAcceptsAnswers()`),
+  `expired` (410) or `invalid` (404). It never returns an answer.
+- `POST /api/surveys/respond` validates through the shared validator and
+  writes through `submitSurveyResponse()`; the invitation is claimed, so a
+  second submit is `{ state: 'alreadyAnswered' }`, never a second row. Both are
+  rate-limited per IP; POST also per token.
+- `/s/<token>` shows one question per screen on a phone and all of them from
+  `sm` up; NPS renders as a 0–10 row. Partial answers stay in component state
+  only — an unfinished anonymous draft saved anywhere would be a stored identity.
 ## Meeting feedback (#1896)
 
 The smallest survey in the product: after a relation meeting, each of its two

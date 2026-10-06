@@ -5,6 +5,8 @@ import path from 'path';
 // spec's static import graph (see e2e/erasure-free-text.spec.ts).
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
+import { createSurvey } from '../src/lib/surveys';
+import { createSurveyInvitation } from '../src/lib/surveyTokens';
 
 /**
  * Release-note media capture (#2233) — a PRODUCER, not a test.
@@ -407,6 +409,37 @@ test.describe('release media', () => {
       await prisma.invitationToken.deleteMany({ where: { orgId: org.id } });
       await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });
       for (const e of emails) await cleanupByEmail(e);
+      await prisma.organization.deleteMany({ where: { id: org.id } });
+    }
+  });
+
+  // #1881: answering a survey from the mailed link, no login.
+  test('poster: answering a survey by link', async ({ page }) => {
+    const stamp = Date.now();
+    const org = await prisma.organization.create({ data: { name: `Media Survey ${stamp}`, slug: `media-survey-${stamp}` } });
+    try {
+      const survey = await createSurvey(org.id, {
+        key: 'program_post',
+        title: { en: 'How was your programme?' },
+        intro: { en: 'Two minutes, three questions.' },
+        audience: 'MENTEE',
+        anonymity: 'ANONYMOUS',
+        questions: [
+          { key: 'nps', type: 'NPS', labels: { en: 'How likely are you to recommend the programme to a friend?' }, required: true },
+          { key: 'expectations', type: 'SCALE', labels: { en: 'How well did it match what you expected?' } },
+          { key: 'best', type: 'LONG_TEXT', labels: { en: 'What worked best?' } },
+        ],
+      });
+      await prisma.survey.update({ where: { id: survey.id }, data: { status: 'OPEN' } });
+      const invite = await createSurveyInvitation({ surveyId: survey.id, orgId: org.id, email: `media-${stamp}@example.com`, locale: 'en' });
+      await page.setViewportSize({ width: 1280, height: 1000 });
+      await page.goto(`/s/${invite!.token}`);
+      await page.getByTestId('survey-nps-9').click();
+      await page.getByTestId('survey-expectations-4').click();
+      await page.getByTestId('survey-best-text').fill('The weekly check-ins with my mentor.');
+      await capturePoster(page.getByTestId('survey-respond'), 'survey-token-answering');
+    } finally {
+      await prisma.survey.deleteMany({ where: { orgId: org.id } });
       await prisma.organization.deleteMany({ where: { id: org.id } });
     }
   });

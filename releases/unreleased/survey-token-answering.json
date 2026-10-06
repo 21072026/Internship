@@ -1,0 +1,17 @@
+{
+  "bump": "minor",
+  "changelog": "**Answer a survey from the mailed link, no login** (#1881; docs/surveys.md § Answering by link). `src/lib/surveyTokens.ts` mints a random 256-bit invitation token (`createSurveyInvitation`, 30-day default), stores only its SHA-256 hash and resolves it; `surveyInviteUrl()` builds `/s/<token>`. `GET /api/surveys/respond?token=` returns the survey in the recipient's language and the invitation state (`open` / `alreadyAnswered` / `closed` / `expired` 410 / `invalid` 404), never an answer; `POST` validates through the shared validator and writes through `submitSurveyResponse()` — single-use (a replay is `{ state: 'alreadyAnswered' }`), identity severed for ANONYMOUS — rate-limited per IP and per token. New `surveyAcceptsAnswers()` makes the survey window (`opensAt`/`closesAt`) part of the one write rule. `/s/<token>`: one question per screen on a phone, all on one from `sm` up, NPS as a 0–10 row, answers checked in the browser with the same validator, no autosave. Public route registered in the middleware verify allowlist, `VERIFY_EXEMPT` and the route-auth baseline.",
+  "notes": {
+    "en": ["Surveys can now be answered straight from the e-mail link — no login, one question per screen on a phone, and a link that works once."],
+    "tr": ["Anketler artık doğrudan e-postadaki bağlantıdan cevaplanabiliyor — giriş yok, telefonda her ekranda bir soru ve yalnızca bir kez çalışan bir bağlantı."],
+    "de": ["Umfragen lassen sich jetzt direkt über den Link in der E-Mail beantworten — ohne Anmeldung, auf dem Handy eine Frage pro Bildschirm, und der Link funktioniert genau einmal."]
+  },
+  "media": {
+    "poster": "release-media/survey-token-answering.png",
+    "alt": {
+      "en": "A survey opened from an e-mail link: a note that answers are anonymous, a 0 to 10 recommendation scale with 9 selected, a 1 to 5 expectation scale with 4 selected, a free-text answer and a Send answers button",
+      "tr": "E-posta bağlantısından açılmış bir anket: cevapların anonim olduğunu belirten not, 9 seçili 0–10 tavsiye ölçeği, 4 seçili 1–5 beklenti ölçeği, serbest metin cevabı ve Cevapları gönder düğmesi",
+      "de": "Eine über einen E-Mail-Link geöffnete Umfrage: ein Hinweis, dass die Antworten anonym sind, eine Empfehlungsskala von 0 bis 10 mit 9 gewählt, eine Erwartungsskala von 1 bis 5 mit 4 gewählt, eine Freitextantwort und die Schaltfläche Antworten senden"
+    }
+  }
+}

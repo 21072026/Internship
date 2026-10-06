@@ -6413,6 +6413,35 @@ const en = {
       atRisk: 'Open at-risk relationships',
     },
   },
+  // Answering a survey from the mailed link, no login (#1881). The thank-you
+  // reuses programSurvey.thankYou.
+  surveyRespond: {
+    progress: 'Question {n} of {total}',
+    next: 'Next',
+    back: 'Back',
+    submit: 'Send answers',
+    yes: 'Yes',
+    no: 'No',
+    selectPlaceholder: 'Choose…',
+    alreadyAnswered: 'You have already answered this survey. Thank you!',
+    closed: 'This survey is closed and no longer takes answers.',
+    expired: 'This survey link has expired.',
+    invalid: 'This survey link is not valid.',
+    anonymity: {
+      IDENTIFIED: 'Your name is shown with your answers.',
+      CONFIDENTIAL: 'Your answers are seen only in totals of several people.',
+      ANONYMOUS: 'Your answers are anonymous — they are not linked to you anywhere.',
+    },
+    errors: {
+      required: 'Please answer this question.',
+      invalid_type: 'This answer is not valid.',
+      too_long: 'This answer is too long.',
+      not_an_option: 'Please choose one of the options.',
+      out_of_range: 'Please choose a value on the scale.',
+      invalid_date: 'Please enter a valid date.',
+      unknown_question: 'This question is no longer part of the survey.',
+    },
+  },
   // Post-meeting feedback (#1896): the inline card, the one e-mail, the one-click page.
   meetingFeedback: {
     cardTitle: 'How was the meeting?',
@@ -12765,6 +12794,35 @@ const tr: Dict = {
       atRisk: 'Risk altındaki ilişkileri aç',
     },
   },
+  // E-postadaki bağlantıdan, giriş yapmadan anket cevaplama (#1881). Teşekkür
+  // ekranı programSurvey.thankYou'yu kullanır.
+  surveyRespond: {
+    progress: 'Soru {n} / {total}',
+    next: 'İleri',
+    back: 'Geri',
+    submit: 'Cevapları gönder',
+    yes: 'Evet',
+    no: 'Hayır',
+    selectPlaceholder: 'Seçin…',
+    alreadyAnswered: 'Bu anketi zaten cevapladın. Teşekkürler!',
+    closed: 'Bu anket kapandı, artık cevap almıyor.',
+    expired: 'Bu anket bağlantısının süresi doldu.',
+    invalid: 'Bu anket bağlantısı geçerli değil.',
+    anonymity: {
+      IDENTIFIED: 'Cevaplarının yanında adın görünür.',
+      CONFIDENTIAL: 'Cevapların yalnızca birkaç kişinin toplamı içinde görülür.',
+      ANONYMOUS: 'Cevapların anonim — hiçbir yerde seninle ilişkilendirilmez.',
+    },
+    errors: {
+      required: 'Lütfen bu soruyu cevapla.',
+      invalid_type: 'Bu cevap geçerli değil.',
+      too_long: 'Bu cevap çok uzun.',
+      not_an_option: 'Lütfen seçeneklerden birini seç.',
+      out_of_range: 'Lütfen ölçekte bir değer seç.',
+      invalid_date: 'Lütfen geçerli bir tarih gir.',
+      unknown_question: 'Bu soru artık ankette yok.',
+    },
+  },
   // Toplantı sonrası geri bildirim (#1896): satır içi kart, tek e-posta, tek tık sayfası.
   meetingFeedback: {
     cardTitle: 'Toplantı nasıldı?',
@@ -19113,6 +19171,35 @@ const de: Dict = {
       meetingCadence: 'Termine prüfen',
       stalledPairs: 'Health-Warteschlange öffnen',
       atRisk: 'Gefährdete Beziehungen öffnen',
+    },
+  },
+  // Eine Umfrage über den Link aus der E-Mail beantworten, ohne Anmeldung
+  // (#1881). Der Dank nutzt programSurvey.thankYou.
+  surveyRespond: {
+    progress: 'Frage {n} von {total}',
+    next: 'Weiter',
+    back: 'Zurück',
+    submit: 'Antworten senden',
+    yes: 'Ja',
+    no: 'Nein',
+    selectPlaceholder: 'Auswählen…',
+    alreadyAnswered: 'Du hast diese Umfrage bereits beantwortet. Danke!',
+    closed: 'Diese Umfrage ist geschlossen und nimmt keine Antworten mehr an.',
+    expired: 'Dieser Umfrage-Link ist abgelaufen.',
+    invalid: 'Dieser Umfrage-Link ist ungültig.',
+    anonymity: {
+      IDENTIFIED: 'Dein Name wird zusammen mit deinen Antworten angezeigt.',
+      CONFIDENTIAL: 'Deine Antworten werden nur in Summen mehrerer Personen gesehen.',
+      ANONYMOUS: 'Deine Antworten sind anonym — sie werden nirgends mit dir verknüpft.',
+    },
+    errors: {
+      required: 'Bitte beantworte diese Frage.',
+      invalid_type: 'Diese Antwort ist ungültig.',
+      too_long: 'Diese Antwort ist zu lang.',
+      not_an_option: 'Bitte wähle eine der Optionen.',
+      out_of_range: 'Bitte wähle einen Wert auf der Skala.',
+      invalid_date: 'Bitte gib ein gültiges Datum ein.',
+      unknown_question: 'Diese Frage gehört nicht mehr zur Umfrage.',
     },
   },
   // Feedback nach dem Termin (#1896): die Karte, die eine E-Mail, die Ein-Klick-Seite.
