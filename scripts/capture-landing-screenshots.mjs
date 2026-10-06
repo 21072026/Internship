@@ -54,6 +54,22 @@ for (const url of [BASE_URL, MARKETING_BASE_URL]) {
   }
 }
 
+// The UI language of the captures (#2808). English keeps the historical
+// unsuffixed file names; Turkish and German get a `-tr` / `-de` suffix, so a
+// visitor who reads the landing in their language also sees the product in it.
+const LOCALE = process.argv.find((a) => a.startsWith('--locale='))?.split('=')[1] ?? 'en';
+if (!['en', 'tr', 'de'].includes(LOCALE)) {
+  console.error(`capture-landing-screenshots: --locale=${LOCALE} — one of en, tr, de.`);
+  process.exit(1);
+}
+const SUFFIX = LOCALE === 'en' ? '' : `-${LOCALE}`;
+/** The few visible strings a clip types or clicks, per language. */
+const TEXT = {
+  en: { shortlisted: 'Shortlisted', note: 'Strong .NET basics, good fit for our backend team.' },
+  tr: { shortlisted: 'Kısa listeye aldım', note: 'Sağlam .NET temeli, backend ekibimize uygun.' },
+  de: { shortlisted: 'Auf die Shortlist', note: 'Solide .NET-Grundlagen, passt gut ins Backend-Team.' },
+}[LOCALE];
+
 const OUT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'screenshots');
 const PASSWORD = 'DemoPass123!';
 /** Per-file budgets; a larger output fails the run. */
@@ -165,7 +181,8 @@ const SCREENS = {
       await installCursor(page);
       await dragGhost(page, card, target);
       // The real move — the same request the drop makes.
-      await card.getByRole('combobox').selectOption({ label: '450 · Internship in progress' });
+      // By stage key, not label: the label is in the capture's language.
+      await card.getByRole('combobox').selectOption({ value: 'INTERNSHIP_IN_PROGRESS_450' });
       await page.getByTestId('board-card').filter({ hasText: 'Deniz Demo' }).first().waitFor();
       await cursorTo(page, 640, 620, 900);
     },
@@ -178,14 +195,14 @@ const SCREENS = {
       await page.getByText('Hakan Demo', { exact: true }).click();
       await page.waitForURL(/\/company\/candidates\/[^/]+$/);
     },
-    ready: (page) => page.getByRole('button', { name: 'Shortlisted' }),
+    ready: (page) => page.getByRole('button', { name: TEXT.shortlisted }),
     play: async (page) => {
       await installCursor(page);
-      await clickLike(page, page.getByRole('button', { name: 'Shortlisted' }));
+      await clickLike(page, page.getByRole('button', { name: TEXT.shortlisted }));
       await page.waitForTimeout(500);
       const note = page.getByRole('textbox');
       await clickLike(page, note);
-      await note.pressSequentially('Strong .NET basics, good fit for our backend team.', { delay: 45 });
+      await note.pressSequentially(TEXT.note, { delay: 45 });
     },
   },
   // ── MARKETING (SaleVali) ──────────────────────────────────────────────────
@@ -200,7 +217,7 @@ const SCREENS = {
       const target = page.getByTestId('board-card').filter({ hasText: 'Tim Petersen' });
       await installCursor(page);
       await dragGhost(page, card, target);
-      await card.getByRole('combobox').selectOption({ label: 'Contacted' });
+      await card.getByRole('combobox').selectOption({ value: 'LEAD_CONTACTED' });
       await page.getByTestId('board-card').filter({ hasText: 'Jonas Weber' }).first().waitFor();
       await cursorTo(page, 760, 640, 900);
     },
@@ -218,7 +235,7 @@ const SCREENS = {
     email: 'admin.marketing@demo.example.com',
     landing: '/admin',
     open: (page, base) => page.goto(`${base}/admin/analytics`),
-    ready: (page) => page.getByText('Funnel KPIs'),
+    ready: (page) => page.getByTestId('funnel-kpi-card'),
     scroll: { distance: 560, seconds: 2.4, hold: 1.4 },
   },
 };
@@ -227,14 +244,14 @@ const CONSENT = JSON.stringify({ version: 3, necessary: true, analytics: false, 
 
 async function signedInPage(browser, screen, device, theme) {
   const { out, ...contextOptions } = VIEWPORTS[device];
-  const context = await browser.newContext({ ...contextOptions, locale: 'en-US', colorScheme: theme, reducedMotion: 'reduce' });
+  const context = await browser.newContext({ ...contextOptions, locale: { en: 'en-US', tr: 'tr-TR', de: 'de-DE' }[LOCALE], colorScheme: theme, reducedMotion: 'reduce' });
   // A returning visitor: no consent banner over the screen. The theme cookie is
   // what the no-flash script in src/app/layout.tsx reads first.
   await context.addInitScript((consent) => localStorage.setItem('cookie_consent', consent), CONSENT);
   const base = screen.base ?? BASE_URL;
   await context.addCookies([
     { name: 'theme', value: theme, url: base },
-    { name: 'locale', value: 'en', url: base },
+    { name: 'locale', value: LOCALE, url: base },
   ]);
   const page = await context.newPage();
   await page.goto(`${base}/auth/signin`);
@@ -242,6 +259,10 @@ async function signedInPage(browser, screen, device, theme) {
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => u.pathname.startsWith(screen.landing), { timeout: 30_000 });
+  // Let the post-sign-in redirect finish: when the screen IS the landing page
+  // (/sales), navigating there mid-redirect aborts with "interrupted by another
+  // navigation".
+  await page.waitForLoadState('load');
   await screen.open(page, base);
   await screen.ready(page).waitFor({ state: 'visible', timeout: 30_000 });
   // Fonts and the post-mount fetches (badges, counts) settle.
@@ -260,7 +281,7 @@ async function still(browser, name, device, theme) {
   const { context, page, out } = await signedInPage(browser, SCREENS[name], device, theme);
   try {
     const png = await page.screenshot({ animations: 'disabled' });
-    const file = path.join(OUT_DIR, `${name}-${device}-${theme}.webp`);
+    const file = path.join(OUT_DIR, `${name}-${device}-${theme}${SUFFIX}.webp`);
     await sharp(png).resize(out.width, out.height).webp({ quality: 78, effort: 6 }).toFile(file);
     console.log(`still  ${path.basename(file)}  ${out.width}×${out.height}  ${checkSize(file, MAX_STILL_KB).toFixed(0)} KB`);
   } finally {
@@ -271,7 +292,7 @@ async function still(browser, name, device, theme) {
 /** A concat list of PNG frames → the WebM + MP4 pair for one clip. */
 function encode(list, out, name, theme) {
   const vf = `scale=${out.width}:${out.height}:flags=lanczos,fps=30,format=yuv420p`;
-  const base = path.join(OUT_DIR, `${name}-desktop-${theme}`);
+  const base = path.join(OUT_DIR, `${name}-desktop-${theme}${SUFFIX}`);
   const ff = (args) => execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-vf', vf, '-an', ...args], { stdio: 'inherit' });
   ff(['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '38', '-row-mt', '1', '-deadline', 'good', '-cpu-used', '2', `${base}.webm`]);
   ff(['-c:v', 'libx264', '-preset', 'slow', '-crf', '27', '-profile:v', 'high', '-movflags', '+faststart', `${base}.mp4`]);

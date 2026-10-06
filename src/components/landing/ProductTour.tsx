@@ -1,6 +1,6 @@
 import { getImageProps } from 'next/image';
 import type { Dictionary } from '@/i18n/dictionaries';
-import { MARKETING_TOUR_SHOTS, PRODUCT_TOUR_SHOTS, TOUR_SIZE, clipPath, shotPath, type TourShotName } from './productTourShots';
+import { MARKETING_TOUR_SHOTS, PRODUCT_TOUR_SHOTS, TOUR_SIZE, clipPath, shotPath, type TourLocale, type TourShotName } from './productTourShots';
 import { TourClip } from './TourClip';
 
 // The landing's product tour (#1399): three real screens, so a visitor sees
@@ -28,10 +28,10 @@ import { TourClip } from './TourClip';
 
 const PHONE_MEDIA = '(max-width: 639px)';
 
-function Shot({ name, alt, theme }: { name: TourShotName; alt: string; theme: 'light' | 'dark' }) {
+function Shot({ name, alt, theme, locale }: { name: TourShotName; alt: string; theme: 'light' | 'dark'; locale: TourLocale }) {
   // `unoptimized` leaves no srcSet to merge: the <img> is the desktop file.
   const { props: img } = getImageProps({
-    src: shotPath(name, 'desktop', theme),
+    src: shotPath(name, 'desktop', theme, locale),
     width: TOUR_SIZE.desktop.width,
     height: TOUR_SIZE.desktop.height,
     alt,
@@ -43,7 +43,7 @@ function Shot({ name, alt, theme }: { name: TourShotName; alt: string; theme: 'l
     <picture className={theme === 'dark' ? 'hidden dark:block' : 'block dark:hidden'}>
       <source
         media={PHONE_MEDIA}
-        srcSet={shotPath(name, 'phone', theme)}
+        srcSet={shotPath(name, 'phone', theme, locale)}
         width={TOUR_SIZE.phone.width}
         height={TOUR_SIZE.phone.height}
       />
@@ -52,7 +52,9 @@ function Shot({ name, alt, theme }: { name: TourShotName; alt: string; theme: 'l
   );
 }
 
-export function ProductTour({ t, marketing = false }: { t: Dictionary; marketing?: boolean }) {
+// The captures exist in every landing language (#2808): a German visitor sees
+// the product's German screens, not the English ones under a German caption.
+export function ProductTour({ t, locale, marketing = false }: { t: Dictionary; locale: TourLocale; marketing?: boolean }) {
   const T = t.productTour;
   const M = t.productTourMarketing;
   const copy: Partial<Record<TourShotName, { title: string; body: string; alt: string }>> = marketing
@@ -99,16 +101,16 @@ export function ProductTour({ t, marketing = false }: { t: Dictionary; marketing
                     </span>
                   </div>
                   <div className="relative overflow-hidden rounded-[1.6rem] sm:rounded-none">
-                    <Shot name={shot.name} alt={c.alt} theme="light" />
-                    <Shot name={shot.name} alt={c.alt} theme="dark" />
+                    <Shot name={shot.name} alt={c.alt} theme="light" locale={locale} />
+                    <Shot name={shot.name} alt={c.alt} theme="dark" locale={locale} />
                     <TourClip
-                      webm={clipPath(shot.name, 'light', 'webm')}
-                      mp4={clipPath(shot.name, 'light', 'mp4')}
+                      webm={clipPath(shot.name, 'light', 'webm', locale)}
+                      mp4={clipPath(shot.name, 'light', 'mp4', locale)}
                       className="hidden sm:block dark:sm:hidden"
                     />
                     <TourClip
-                      webm={clipPath(shot.name, 'dark', 'webm')}
-                      mp4={clipPath(shot.name, 'dark', 'mp4')}
+                      webm={clipPath(shot.name, 'dark', 'webm', locale)}
+                      mp4={clipPath(shot.name, 'dark', 'mp4', locale)}
                       className="hidden dark:sm:block"
                     />
                   </div>
