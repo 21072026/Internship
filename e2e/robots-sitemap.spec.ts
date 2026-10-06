@@ -83,14 +83,14 @@ function isClosed(body: string): boolean {
   return /^Disallow:\s*\/$/m.test(body);
 }
 
-test('robots.txt is served', { tag: '@smoke' }, async ({ request }) => {
+test('robots.txt is served', async ({ request }) => {
   const res = await request.get('/robots.txt');
   expect(res.status()).toBe(200);
   expect(contentType(res)).toContain('text/plain');
   expect(await res.text()).toContain('User-Agent: *');
 });
 
-test('a crawlable deployment links the sitemap and fences off the app', { tag: '@smoke' }, async ({ request }) => {
+test('a crawlable deployment links the sitemap and fences off the app', async ({ request }) => {
   const body = await robotsText(request);
   test.skip(isClosed(body), 'this deployment is non-production and closed to crawlers entirely');
 
@@ -116,7 +116,7 @@ test('a preview or demo deployment is closed to crawlers', async ({ request }) =
   expect(body).not.toMatch(/^Sitemap:/m);
 });
 
-test('sitemap.xml lists the public pages and nothing behind a login', { tag: '@smoke' }, async ({ request }) => {
+test('sitemap.xml lists the public pages and nothing behind a login', async ({ request }) => {
   const res = await request.get('/sitemap.xml');
   expect(res.status()).toBe(200);
   expect(contentType(res)).toContain('xml');

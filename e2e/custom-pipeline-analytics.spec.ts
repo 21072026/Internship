@@ -35,7 +35,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('the hiring funnel reports on a tenant’s renamed pipeline', { tag: '@smoke' }, async ({ page }) => {
+test('the hiring funnel reports on a tenant’s renamed pipeline', async ({ page }) => {
   await signInAndSettle(page, seeded.adminEmail, PASSWORD, '/admin');
 
   const res = await page.request.get('/api/admin/analytics/funnel');

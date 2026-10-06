@@ -60,7 +60,7 @@ async function seedMeeting(opts: {
   });
 }
 
-test('a mentor moves a meeting and then calls it off — a mentee may do neither', { tag: '@smoke' }, async ({ page }) => {
+test('a mentor moves a meeting and then calls it off — a mentee may do neither', async ({ page }) => {
   const { mentorEmail, menteeEmail, mentor, relation } = await seedPair('resched');
   const meeting = await seedMeeting({
     relationId: relation.id,

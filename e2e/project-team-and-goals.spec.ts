@@ -17,7 +17,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('a mentee member sees the roster on their project and their goals on their to-do list', { tag: '@smoke' }, async ({ page }) => {
+test('a mentee member sees the roster on their project and their goals on their to-do list', async ({ page }) => {
   // Two sign-ins plus five navigations: ~50s on an idle machine, over the 60s
   // default when the suite is loaded. Nothing here is waiting on a timeout.
   test.slow();

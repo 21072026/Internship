@@ -15,7 +15,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('one referrer field: pick a person, then create a source in place', { tag: '@smoke' }, async ({ page }) => {
+test('one referrer field: pick a person, then create a source in place', async ({ page }) => {
   const adminEmail = uniqueEmail('ref-admin');
   const mentorEmail = uniqueEmail('ref-mentor');
   const menteeEmail = uniqueEmail('ref-mentee');

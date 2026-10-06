@@ -16,7 +16,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('a saved result answers again at no cost, survives a reload, and is shared only by its subject', { tag: '@smoke' }, async ({ page }) => {
+test('a saved result answers again at no cost, survives a reload, and is shared only by its subject', async ({ page }) => {
   test.slow();
   const menteeEmail = uniqueEmail('art-mentee');
   const mentorEmail = uniqueEmail('art-mentor');
@@ -95,7 +95,7 @@ test('a saved result answers again at no cost, survives a reload, and is shared 
   expect(await prisma.aiArtifact.count({ where: { subjectUserId: mentee.id } })).toBe(0);
 });
 
-test('an unchanged interaction log re-opens its kept summary, free, for the pair only', { tag: '@smoke' }, async ({ page }) => {
+test('an unchanged interaction log re-opens its kept summary, free, for the pair only', async ({ page }) => {
   test.slow();
   const menteeEmail = uniqueEmail('sum-mentee');
   const mentorEmail = uniqueEmail('sum-mentor');

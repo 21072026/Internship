@@ -29,7 +29,7 @@ async function head(page: Page) {
   };
 }
 
-test('/tr and /de open in their own language, whatever the cookie says', { tag: '@smoke' }, async ({ page, baseURL }) => {
+test('/tr and /de open in their own language, whatever the cookie says', async ({ page, baseURL }) => {
   // An English cookie: the URL must still win.
   await setLocaleCookie(page, baseURL!, 'en');
 

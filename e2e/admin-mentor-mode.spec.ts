@@ -7,7 +7,7 @@ test.afterAll(async () => {
 
 const switcher = 'mode-switcher';
 
-test('an admin can switch between the admin and mentor views', { tag: '@smoke' }, async ({ page }) => {
+test('an admin can switch between the admin and mentor views', async ({ page }) => {
   const adminEmail = uniqueEmail('mode-admin');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Mode Admin');
 

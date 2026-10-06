@@ -72,7 +72,7 @@ test.describe('survey results', () => {
     await prisma.$disconnect();
   });
 
-  test('floor − 1 shows only counts; at the floor the score, distributions and floored breakdowns appear', { tag: '@smoke' }, async ({ page }) => {
+  test('floor − 1 shows only counts; at the floor the score, distributions and floored breakdowns appear', async ({ page }) => {
     const survey = await createSurvey(orgId, { key: 'post', title: { en: `Programme survey ${stamp}` }, audience: 'MENTEE', anonymity: 'CONFIDENTIAL', questions: QUESTIONS });
     await prisma.survey.update({ where: { id: survey.id }, data: { status: 'OPEN' } });
     const scores = [[10, 10, 9, 9, 8, 3], [2, 1], [9, 9, 7, 6, 10]];

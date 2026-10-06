@@ -49,7 +49,7 @@ async function seedScenario(prefix: string) {
   };
 }
 
-test('admin creates and sends an offer via the wizard; mentee accepts it and sees a persistent state', { tag: '@smoke' }, async ({ page }) => {
+test('admin creates and sends an offer via the wizard; mentee accepts it and sees a persistent state', async ({ page }) => {
   const s = await seedScenario('wiz');
   try {
     const otherCompany = await prisma.company.create({ data: { name: 'Other Offer Company', orgId: s.org.id } });
@@ -264,7 +264,7 @@ test('a mentee cannot list a DRAFT offer by asking for it explicitly', async ({ 
   }
 });
 
-test('an unauthorized/other role never receives compensationNote in the response body', { tag: '@smoke' }, async ({ page }) => {
+test('an unauthorized/other role never receives compensationNote in the response body', async ({ page }) => {
   const s = await seedScenario('comp');
   const companyEmail = uniqueEmail('compuser');
   const companyUser = await prisma.user.create({

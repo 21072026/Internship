@@ -24,7 +24,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('a block only in the real calendar refuses a booking; no scope or a failing provider degrades to the database', { tag: '@smoke' }, async ({ page, request }) => {
+test('a block only in the real calendar refuses a booking; no scope or a failing provider degrades to the database', async ({ page, request }) => {
   test.slow();
   const mentorEmail = uniqueEmail('fb-mentor');
   const menteeEmail = uniqueEmail('fb-mentee');

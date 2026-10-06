@@ -48,7 +48,7 @@ test.describe('first destination', () => {
     await prisma.$disconnect();
   });
 
-  test('set up in one call, sent 90 days after the end, reported with its knowledge rate and floor', { tag: '@smoke' }, async ({ page }) => {
+  test('set up in one call, sent 90 days after the end, reported with its knowledge rate and floor', async ({ page }) => {
     test.slow();
     await signInAndSettle(page, admin, PW, '/admin');
 

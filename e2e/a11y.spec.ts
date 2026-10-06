@@ -31,7 +31,7 @@ test('a skip-to-content link targets the main landmark', async ({ page }) => {
 // baseline bookkeeping — just "did we ship a critical violation on the page
 // every visitor sees first?". The nine-page role scan (e2e/a11y-scan.spec.ts)
 // stays in the scheduled full suite so the PR gate keeps its ~15-20 tests.
-test('the sign-in page has no critical accessibility violations', { tag: '@smoke' }, async ({ page }) => {
+test('the sign-in page has no critical accessibility violations', async ({ page }) => {
   await page.goto('/auth/signin');
   await page.waitForLoadState('domcontentloaded');
   const results = await new AxeBuilder({ page })

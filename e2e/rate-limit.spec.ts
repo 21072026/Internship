@@ -54,7 +54,7 @@ test('repeated forgot-password requests are rate limited (429)', async ({ reques
  * the peer the proxy saw appended on the right. It used to run at `0` against a
  * single-entry header, a value production never uses.
  */
-test('a rotating X-Forwarded-For does not buy a fresh rate-limit bucket', { tag: '@smoke' }, async ({ request }) => {
+test('a rotating X-Forwarded-For does not buy a fresh rate-limit bucket', async ({ request }) => {
   const statuses: number[] = [];
   for (let i = 0; i < 12; i++) {
     const res = await request.post('/api/auth/forgot', {

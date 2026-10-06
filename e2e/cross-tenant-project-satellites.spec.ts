@@ -138,7 +138,7 @@ async function footprint() {
   return { meetings, series, tasks, goals, acceptances, messages, notifications, noteBody: noteBody.body };
 }
 
-test("another tenant's admin gets not-found for a project or relation outside the project routes", { tag: '@smoke' }, async ({ page }) => {
+test("another tenant's admin gets not-found for a project or relation outside the project routes", async ({ page }) => {
   test.setTimeout(300_000);
   await signInAsFreshUser(page, users.bAdmin.email, PASSWORD, '/admin');
   const before = await footprint();

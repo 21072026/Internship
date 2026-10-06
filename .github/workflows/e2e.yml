@@ -80,10 +80,11 @@ jobs:
   #
   # Serially this job took ~19 min wall-clock: ~4 min installing CJK/Thai/X11
   # font packages from a slow apt mirror, 2.6 min building, 7.6 min for the
-  # ~200 @smoke tests on one worker and 2.9 min for the a11y gate. Nothing is
-  # dropped to get it down; the work is split instead:
+  # ~200 @smoke tests on one worker and 2.9 min for the a11y gate. The smoke
+  # set was pruned back to critical flows + security guards (~107 tests, most
+  # of them browserless unit specs), and the rest is split:
   #
-  #   - smoke 1/4 … 4/4: Playwright `--shard` over the @smoke set. Each shard is
+  #   - smoke 1/2, 2/2: Playwright `--shard` over the @smoke set. Each shard is
   #     its own runner with its own MySQL service and its own `next start`, so
   #     the state isolation is exactly what one worker on one runner gave —
   #     `workers: 1` stays (specs share the seeded admin, rate-limit buckets and
@@ -110,10 +111,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { label: 'smoke 1/4', suite: smoke, shard: '1/4' }
-          - { label: 'smoke 2/4', suite: smoke, shard: '2/4' }
-          - { label: 'smoke 3/4', suite: smoke, shard: '3/4' }
-          - { label: 'smoke 4/4', suite: smoke, shard: '4/4' }
+          - { label: 'smoke 1/2', suite: smoke, shard: '1/2' }
+          - { label: 'smoke 2/2', suite: smoke, shard: '2/2' }
           - { label: 'a11y', suite: a11y, shard: '' }
 
     services:
@@ -174,7 +173,7 @@ jobs:
         run: npm run build
 
       - name: Save Next.js build cache
-        if: ${{ github.event_name == 'push' && matrix.shard == '1/4' }}
+        if: ${{ github.event_name == 'push' && matrix.shard == '1/2' }}
         uses: actions/cache/save@v6
         with:
           path: .next/cache

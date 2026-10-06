@@ -54,7 +54,7 @@ test.describe('admin health monitor', () => {
     await prisma.$disconnect();
   });
 
-  test('worst first, one next action per row, and the exclusions as a footnote', { tag: '@smoke' }, async ({ page }) => {
+  test('worst first, one next action per row, and the exclusions as a footnote', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
 
     const api = await (await page.request.get('/api/admin/health')).json();

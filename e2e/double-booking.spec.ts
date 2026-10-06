@@ -60,7 +60,7 @@ function seedMeeting(data: { relationId?: string; projectId?: string; title: str
   return prisma.meeting.create({ data: { ...data, rsvpToken: randomBytes(16).toString('hex') } });
 }
 
-test('an overlapping booking is refused with the collision named; back to back and force go through', { tag: '@smoke' }, async ({ page }) => {
+test('an overlapping booking is refused with the collision named; back to back and force go through', async ({ page }) => {
   const s = await seedPair('db-basic');
   const rel = s.relations[0];
   const at = slotAt(20, 9);

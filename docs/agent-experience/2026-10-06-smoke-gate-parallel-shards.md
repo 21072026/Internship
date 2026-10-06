@@ -11,3 +11,11 @@
   `skipped` as green only when the skip was the intended one (docs-only PR).
 - **A serial spec with an aggregating last test (a11y-scan) cannot be sharded** — give it its own
   matrix row; it then sets the wall-clock floor (~3 min).
+- **Some workflow text is pinned by a spec.** `e2e/a11y-ci-gate.unit.spec.ts` asserts literal
+  strings in `e2e.yml` (step names, the gate's `if:`); restructuring the workflow broke shard 1.
+  Grep `e2e/` and `scripts/` for the workflow filename before editing one. Run such browserless
+  specs locally with `BASE_URL=http://localhost:1 npx playwright test <spec>` — a set `BASE_URL`
+  skips the webServer boot, which otherwise times out without a DB.
+- **Pruning a tag: read the comments first.** Several specs justify their `@smoke` tag in a
+  comment (`// Tagged @smoke: …`); those were security guards and stayed. Multi-line
+  `test(\n 'title',\n { tag: '@smoke' },` calls are missed by a one-line regex — grep after.

@@ -41,7 +41,7 @@ async function seedMeeting(relationId: string, scheduledAt: Date, title: string)
   });
 }
 
-test('a meeting starting within half an hour shows on the dashboard, without the header pill', { tag: '@smoke' }, async ({ page }) => {
+test('a meeting starting within half an hour shows on the dashboard, without the header pill', async ({ page }) => {
   const { mentorEmail, menteeEmail, relation } = await seedPair('soon');
   await seedMeeting(relation.id, minutesFromNow(20), 'Kickoff soon');
 
@@ -63,7 +63,7 @@ test('a meeting starting within half an hour shows on the dashboard, without the
   }
 });
 
-test('while a meeting is running the header carries a join link on every page', { tag: '@smoke' }, async ({ page }) => {
+test('while a meeting is running the header carries a join link on every page', async ({ page }) => {
   const { mentorEmail, menteeEmail, relation } = await seedPair('now');
   // Started 10 minutes ago: inside the 60-minute window.
   await seedMeeting(relation.id, minutesFromNow(-10), 'Running now');
