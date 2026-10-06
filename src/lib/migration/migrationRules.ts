@@ -21,6 +21,7 @@
 import { headerIndex, parseDelimited, type ParsedRow, type ParsedTable, type ValidatedRow } from '@/lib/importPreview';
 import { INTERACTION_TYPES, type InteractionType } from '@/lib/interactionTypes';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { transliterate } from '@/lib/transliterate';
 
 export const SHEETS = ['people', 'pairs', 'stageHistory', 'interactions'] as const;
 export type Sheet = (typeof SHEETS)[number];
@@ -295,3 +296,62 @@ export function validateInteraction(row: ParsedRow, now: Date): ValidatedRow<Int
 
 /** The identity of an interaction for a re-run: the pair, the moment, the type and the text. */
 export const interactionKey = (relationKey: string, at: Date, type: string, notes: string) => `${relationKey}|${at.toISOString()}|${type}|${notes}`;
+
+// ── Proposing a mapping ──────────────────────────────────────────────────────
+
+const norm = (s: string) => transliterate(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * The words an incumbent's export uses for each of our fields, in the three
+ * languages we sell in. A proposal only — the admin corrects it before the
+ * preview, and nothing about it is stored.
+ */
+const FIELD_SYNONYMS: Record<string, string[]> = {
+  email: ['email', 'e-mail', 'mail', 'eposta', 'e-posta', 'emailaddress', 'mailadresse'],
+  fullName: ['fullname', 'name', 'full name', 'adsoyad', 'ad soyad', 'isim', 'vollstandigername', 'vorname nachname'],
+  role: ['role', 'rolle', 'rol', 'type', 'usertype'],
+  phone: ['phone', 'telefon', 'tel', 'mobile', 'handy', 'cep'],
+  university: ['university', 'universitat', 'universite', 'school', 'hochschule', 'okul'],
+  department: ['department', 'bolum', 'abteilung', 'fachbereich', 'studiengang', 'major'],
+  mentorEmail: ['mentoremail', 'mentor', 'mentormail', 'mentore-mail', 'betreuer', 'mentoreposta'],
+  menteeEmail: ['menteeemail', 'mentee', 'intern', 'stajyer', 'praktikant', 'menteemail', 'internemail', 'student'],
+  status: ['status', 'state', 'durum', 'zustand'],
+  startDate: ['startdate', 'start', 'started', 'baslangic', 'beginn', 'startdatum'],
+  fromStage: ['fromstage', 'from', 'previousstage', 'oncekiasama', 'vorherigephase', 'von'],
+  toStage: ['tostage', 'stage', 'phase', 'asama', 'step', 'to', 'nach', 'newstage'],
+  date: ['date', 'when', 'tarih', 'datum', 'timestamp', 'changedat', 'at'],
+  type: ['type', 'kind', 'tur', 'art', 'channel', 'kanal'],
+  subject: ['subject', 'topic', 'konu', 'betreff', 'title', 'baslik'],
+  notes: ['notes', 'note', 'notlar', 'not', 'notiz', 'notizen', 'text', 'comment', 'description', 'aciklama'],
+};
+
+/**
+ * A proposed mapping for a sheet from its header row: an exact (normalized)
+ * synonym first, then a header that contains one. Each source column is
+ * proposed for one field at most, in our field order.
+ */
+export function suggestMapping(sheet: Sheet, header: string[]): Record<string, string> {
+  const columns = header.map((h) => ({ raw: h, key: norm(h) })).filter((c) => c.key);
+  const taken = new Set<string>();
+  const out: Record<string, string> = {};
+  for (const pass of ['exact', 'contains'] as const) {
+    for (const { field } of SHEET_FIELDS[sheet]) {
+      if (out[field]) continue;
+      const words = [norm(field), ...(FIELD_SYNONYMS[field] ?? []).map(norm)];
+      const hit = columns.find((c) => !taken.has(c.raw) && (pass === 'exact' ? words.includes(c.key) : words.some((w) => w.length >= 4 && c.key.includes(w))));
+      if (hit) {
+        out[field] = hit.raw;
+        taken.add(hit.raw);
+      }
+    }
+  }
+  return out;
+}
+
+/** The distinct source stage names a history sheet uses, through its mapping. */
+export function sourceStages(text: string, mapping: ColumnMapping = {}): string[] {
+  const t = mappedTable('stageHistory', text, mapping);
+  const from = SHEET_FIELDS.stageHistory.findIndex((f) => f.field === 'fromStage');
+  const to = SHEET_FIELDS.stageHistory.findIndex((f) => f.field === 'toStage');
+  return [...new Set(t.rows.flatMap((r) => [r.values[from], r.values[to]]).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b));
+}

@@ -10,6 +10,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { getLocale } from '@/i18n/server';
 import { SHEETS, SHEET_FIELDS } from '@/lib/migration/migrationRules';
 import { MigrationError, runMigration } from '@/lib/migration/runMigration';
+import { resolvePipelineStages } from '@/lib/pipelineStages';
 
 // POST /api/admin/migrate — a mid-programme migration (#2073): people, pairs,
 // stage history and interaction logs from an incumbent's export, on the shared
@@ -41,6 +42,18 @@ const bodySchema = z
     confirm: z.boolean().optional(),
   })
   .strict();
+
+// GET — this organization's stages, so the screen can offer them as stage-map
+// targets before the first preview. Same gate as POST.
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
+  const stages = await resolvePipelineStages(await settingsOrgOf(session), await getLocale());
+  return NextResponse.json({ stages: stages.map((s) => ({ key: s.key, label: s.label })) });
+}
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
