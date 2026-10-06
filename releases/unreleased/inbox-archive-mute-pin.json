@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Inbox filters: archive, mute, pin (#1609, part 2):** `ConversationParticipant` gains nullable `archivedAt`, `mutedUntil` and `pinnedAt` (additive columns only, no index, per the FK-index warning on that model). The rules live in `src/lib/conversationState.ts` (unit-tested). Pinned threads sort first. A mute (8 hours, a week, or until turned back on) means no push, no e-mail mirror, no bell row and no unread-digest line for that viewer; the digest still marks the line digested, so unmuting does not deliver a backlog. Inbox unread counts are unchanged. An archived thread leaves the main list and returns on its own when someone else writes into it, unless it is also muted. That return is derived at read time and never written. New `PATCH /api/conversations/[id]/state` writes only the caller's own row, in a conversation that opens for them. `loadInbox` (the page and `GET /api/conversations`) returns `pinned / muted / mutedUntil / archived` per thread in pinned-first order. `/messages` gets *All / Unread / Pinned / Archived* chips (`?filter=`) and a per-row options menu. Not plan-gated.",
+  "notes": {
+    "en": [
+      "Pin important conversations to the top of your inbox, archive the ones you are done with, and mute a conversation for 8 hours, a week or until you turn it back on. Filter your inbox by Unread, Pinned or Archived."
+    ],
+    "tr": [
+      "Önemli sohbetleri gelen kutunun en üstüne sabitle, işin biten sohbetleri arşivle, bir sohbeti 8 saat, 1 hafta ya da sen açana kadar sessize al. Gelen kutunu Okunmamış, Sabitlenmiş veya Arşiv olarak filtrele."
+    ],
+    "de": [
+      "Hefte wichtige Unterhaltungen oben in deinem Posteingang an, archiviere erledigte und schalte eine Unterhaltung für 8 Stunden, eine Woche oder bis auf Weiteres stumm. Filtere deinen Posteingang nach Ungelesen, Angeheftet oder Archiviert."
+    ]
+  }
+}

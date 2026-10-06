@@ -13,6 +13,7 @@ import {
   directCounterpartId,
   directKeyFor,
   latestMentorshipFor,
+  mutedParticipants,
 } from '@/lib/conversations';
 import { markThreadRead } from '@/lib/threadRead';
 import { publishRealtime } from '@/lib/realtimeBus';
@@ -375,12 +376,17 @@ async function handlePost(request: Request) {
     // chat's POST. Still awaited before responding, so a slow push service
     // cannot log after the response is gone; never able to fail the send,
     // because sendNewMessagePush swallows everything.
-    const pushes = recipients.map((recipient) =>
-      sendNewMessagePush(recipient, { senderName, link, preview: body }),
-    );
+    // Whoever muted this thread (#1609) is not interrupted by it at all: no
+    // push, no e-mail mirror, no bell. The realtime publish above still went to
+    // them — it only refreshes a tab that already has the thread open.
+    const muted = await mutedParticipants(threadConversationId, recipients);
+    const pushes = recipients
+      .filter((recipient) => !muted.has(recipient))
+      .map((recipient) => sendNewMessagePush(recipient, { senderName, link, preview: body }));
 
 
     for (const recipient of recipients) {
+      if (muted.has(recipient)) continue;
       // Read the recipient's preferences BEFORE either channel (#1426). The
       // "Messages" switch on /account is documented — in all three locales — as
       // applying to e-mail and in-app alike, but the in-app insert below used to
