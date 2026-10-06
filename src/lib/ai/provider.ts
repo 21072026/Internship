@@ -153,6 +153,16 @@ export async function trackParseErrors<T>(fn: () => Promise<T>): Promise<{ resul
   return { result, parseError: store.parseError };
 }
 
+/**
+ * Mark the running call parse_error from a parser that is not
+ * safeParseModelJson (e.g. one that also verifies the reply against its
+ * input). runAiGated then meters it as parse_error and keeps no artefact.
+ */
+export function noteParseError(): void {
+  const store = parseTracking.getStore();
+  if (store) store.parseError = true;
+}
+
 /** Strip one surrounding ``` fence (with or without a language tag). */
 export function stripCodeFence(raw: string): string {
   const m = raw.trim().match(/^```[a-zA-Z0-9_-]*\s*\n?([\s\S]*?)\n?```$/);

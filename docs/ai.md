@@ -54,6 +54,9 @@ operator-level cost control that happens to be editable per tenant.
 | `interaction_summary` | `POST /api/interactions/summary` | mentor / admin on their own relation | the 30 newest log entries: date, type, subject, notes; the mentee's display name | attachments, documents, e-mail addresses, phone numbers, CV | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | yes |
 | `interview_prep` | `POST /api/interview-prep` | mentee, for themselves | the target position, the skills on the profile, an optional free-text focus (≤300 chars) | name, contact data, CV, employer names, anything about the mentor | none — no identifier is sent | yes — never a paywall |
 | `mentor_match` | `POST /api/admin/mentor-suggest` | admin | the mentee's skills / target position / interests, and up to five mentors as **anonymous labels A–E** with skills, interests and load | every name, e-mail and id on both sides; labels are mapped back to mentor ids locally, after the response | none — no identifier is sent | n/a (admin tool) |
+| `survey_summary` | `POST /api/admin/surveys/[id]/summary` | admin | one free-text question's answers, unattributed, contact details masked; only above the survey's response floor | respondent ids, names, timestamps | none — no identifier is sent | n/a (admin tool) |
+| `evaluation_insights` | `POST /api/admin/insights/evaluations` | admin | up to 400 evaluation comments in range, under labels `r1…`, with contact details **and every known name** (author, mentee, mentor) masked; capped at 24 000 chars | database ids, who wrote which row, interview scorecards (no relation) | none — names are masked and the rows are the programme's own records | n/a (admin tool) |
+| `weekly_report_digest` | `POST /api/admin/insights/weekly-reports` | admin | the `blockers` of up to 400 submitted weekly reports in range, same masking and cap | the report summary, hours, mentor comments, ids | none — as above | n/a (admin tool) |
 
 Two of these carry no consent type because there is no personal identifier in
 the payload to consent to. That is not an oversight and it is not a loophole:
@@ -109,9 +112,10 @@ The prompt is never stored. Since #2044 some generated text **is** kept, as an
 |---|---|
 | CV field suggestions | rendered next to an "Apply" button; stored only in the profile field the person chose to apply |
 | CV feedback | **kept** as an `AiArtifact` (7-day cache TTL), shown again on reload |
-| Interaction summary | rendered in the mentor's browser, gone on reload (moves to an artefact in #2044 part 2) |
+| Interaction summary | **kept** as an `AiArtifact` about the mentee, tied to the relation (1-day cache TTL); the card opens on it |
 | Interview prep | **kept** as an `AiArtifact` (7-day cache TTL), shown again on reload |
-| Match rationale | rendered next to the suggestion, gone on reload (moves to an artefact in #2044 part 2) |
+| Match rationale | **kept** as an `AiArtifact` about the mentee (1-day cache TTL), keyed on the exact candidate list |
+| Open-text themes (evaluation comments, weekly-report blockers) | **kept** as an org-level `AiArtifact` with no subject (1-day cache TTL); wiped for the whole org the moment any person in it is erased or anonymized, since it may quote them |
 
 The only row written per call is `AiUsage` — `scope`, `userId`, `companyId`,
 `createdAt` and `outcome` (`ok`, `parse_error` when the reply was not the JSON
@@ -176,6 +180,54 @@ Only the subject changes visibility (`PATCH /api/ai/artifacts/[id]`, audited as
 - A merge carries them to the primary account.
 - A daily sweep (03:20, `sweepAiArtifacts`) deletes every artefact older than
   its org's `retentionMonths`. Pinned ones are not exempt.
+
+## Open-text insights (#2046)
+
+One engine reads many free-text rows at once:
+[`src/lib/ai/openTextRules.ts`](../src/lib/ai/openTextRules.ts) holds the
+pure rules (what is sent, what is kept, the floor), and
+[`src/lib/ai/summarizeOpenText.ts`](../src/lib/ai/summarizeOpenText.ts) holds the
+one prompt and `runOpenTextSummary`. The consumers today are the evaluation
+themes and the weekly-report digest on `/admin/insights`. The survey summary
+(#1910) and the analytics narrative move onto it in #2046 part 2.
+
+**What leaves.** Each row's text, with contact details masked (the survey rules)
+and every known person's name masked. That means the full name and each part of
+three letters or more, on letter boundaries. Rows go under local labels
+`r1, r2, …`; database ids never reach the provider.
+
+**What comes back is verified, not trusted:**
+
+- A theme keeps only labels that were sent. Its `count` is the number of those
+  labels, never a number the model typed. A theme with no valid label is dropped.
+- Sentiment is a **flag**, never a score. Each row gets one of `positive`,
+  `neutral`, `negative` or `unclear`, and anything else counts as `unclear`.
+  A theme's sentiment is the majority of its rows; a tie is `unclear`. `overall`
+  is a count per bucket. There is no decimal anywhere, on purpose.
+- A quote survives only if it appears verbatim in the row it names, as it was
+  sent, so a quote shows `[name]` and never the name behind the mask.
+- `caveats` are codes the screen translates (`below_floor`, `truncated`,
+  `names_masked`, `quotes_dropped`), not model prose.
+
+**The floor.** Below the caller's floor, nothing is sent, nothing is metered and
+nothing is stored. The response says only that there were too few rows. For
+named rows (evaluations, weekly reports) the floor is `NAMED_ROWS_FLOOR` = 3.
+Anonymous survey answers use the survey's own k-anonymity floor.
+
+**Cost.** `GET` never calls the provider. It returns the numbers and, when one
+is stored for *exactly* the rows in range (`openTextInputHash`: purpose,
+language, the sent text), the summary. `POST` runs the gate, and an unchanged
+set is still answered from the artefact. A reply that is not the JSON asked for
+is metered `parse_error` (`noteParseError()`) and never kept.
+
+**Graceful degradation.** The weekly digest's figures (submissions per week, who
+owed last week and did not hand it in) come from the compliance rule
+(`src/lib/weeklyReportCompliance.ts`) and render with AI off. Only the themes
+are absent, and `reason` says why.
+
+**Click-through.** Every theme lists the ids of its rows, and the screen opens
+them with the person and a link to the record. A summary you cannot check is
+worse than none.
 
 ## The degradation contract
 

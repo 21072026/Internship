@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Open-text insights (#2046, part 1):** one engine for reading many free-text rows at once — pure rules in `src/lib/ai/openTextRules.ts` (contact details and every known name masked, local row labels instead of ids, a floor below which nothing is sent, and a reply that is verified rather than trusted: theme counts are the number of valid row labels, sentiment is a four-bucket flag with `unclear` and no decimal, quotes must be verbatim) and the one prompt in `src/lib/ai/summarizeOpenText.ts`, run through `runAiGated` and cached as a subject-less `AiArtifact` keyed on exactly the text sent. New `/admin/insights` (nav, `mentorship` capability) with `GET|POST /api/admin/insights/[kind]` for `evaluations` (themes across evaluation comments) and `weekly-reports` (recurring blockers, week-by-week figures, who owed last week and did not hand it in — from the compliance rule, rendered with AI off). GET never calls the provider. Each theme opens its source rows. Erasing or anonymizing a person wipes their org's open-text artefacts. `noteParseError()` lets a custom parser meter `parse_error`. `/ai` and the privacy notice now list the feature and no longer claim generated text is never stored.",
+  "notes": {
+    "en": ["New Insights page for admins: see the recurring themes in evaluation comments and weekly-report blockers, open the rows behind every theme, and see who has not handed in last week's report."],
+    "tr": ["Yöneticiler için yeni İçgörüler sayfası: değerlendirme yorumlarında ve haftalık rapor engellerinde tekrarlayan temaları gör, her temanın arkasındaki satırları aç ve geçen haftanın raporunu kimin teslim etmediğini gör."],
+    "de": ["Neue Seite „Einblicke“ für Admins: wiederkehrende Themen in Bewertungskommentaren und Hindernissen aus Wochenberichten sehen, die Zeilen hinter jedem Thema öffnen und sehen, wer den Bericht der letzten Woche nicht abgegeben hat."]
+  }
+}
