@@ -84,3 +84,46 @@ test('dry run and real run agree; an over-long row is reported, not a 500', asyn
     await cleanupByEmail(adminEmail);
   }
 });
+
+// #2072: the importer runs on the shared engine and the settings screen draws
+// its report with the shared <ImportPreview> — the preview and the finished
+// run are the same table, differing only in the note above it.
+test('the settings importer previews on the shared engine, then writes exactly what it previewed', async ({ page }) => {
+  const adminEmail = uniqueEmail('ip-admin');
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'IP Admin');
+  const tag = Date.now();
+  const good = `ip-good-${tag}@example.com`;
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', adminEmail);
+    await page.fill('input[type="password"]', 'AdminPass123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    // A German Excel export: `;` as the delimiter and a quoted name — the
+    // hand-rolled splitter this replaces read it as one column.
+    const csv = `email;fullName\n${good};"Good; One"\nnot-an-email;Bad`;
+    const dry = await (await page.request.post('/api/admin/import', { data: { csv, dryRun: true } })).json();
+    expect(dry).toMatchObject({ willCreate: 1, errors: 1, report: { dryRun: true, counts: { CREATE: 1, ERROR: 1 } } });
+    expect(dry.report.rows.map((r: { status: string }) => r.status)).toEqual(['CREATE', 'ERROR']);
+
+    await page.goto('/admin/settings');
+    await page.getByTestId('import-csv').fill(csv);
+    await page.getByTestId('import-dry-run').click();
+    const preview = page.getByTestId('import-preview');
+    await expect(preview).toHaveAttribute('data-dry-run', 'true');
+    await expect(preview.getByTestId('import-preview-counts').locator('[data-status="CREATE"]')).toHaveAttribute('data-count', '1');
+    await expect(preview.getByTestId('import-preview-row-2')).toHaveAttribute('data-status', 'ERROR');
+    await expect(preview.getByTestId('import-preview-row-2')).toContainText('Not a valid e-mail address');
+    expect(await prisma.user.findFirst({ where: { email: good } })).toBeNull();
+
+    await page.getByTestId('import-run').click();
+    await expect(page.getByTestId('import-preview')).toHaveAttribute('data-dry-run', 'false');
+    await expect(page.getByTestId('import-preview-row-1')).toHaveAttribute('data-status', 'CREATE');
+    const written = await prisma.user.findFirst({ where: { email: good } });
+    expect(written).toMatchObject({ fullName: 'Good; One', role: 'MENTEE' });
+  } finally {
+    await prisma.user.deleteMany({ where: { email: good } });
+    await cleanupByEmail(adminEmail);
+  }
+});

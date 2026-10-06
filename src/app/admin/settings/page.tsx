@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { ImportPreview, type PreviewReport } from '@/components/ImportPreview';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
@@ -118,14 +119,9 @@ export default function AdminSettingsPage() {
   const [csv, setCsv] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
-  const [importRows, setImportRows] = useState<{
-    row: number;
-    email: string;
-    status: string;
-    reason?: string;
-    // Look-alike existing candidates the API flagged for this row (#841).
-    possibleDuplicates?: { id: string; fullName: string; matchedOn: string[] }[];
-  }[]>([]);
+  // The engine's shared report (#2072), drawn by <ImportPreview>; look-alike
+  // existing candidates (#841) ride on its rows.
+  const [importReport, setImportReport] = useState<PreviewReport | null>(null);
 
   const [smtpInfo, setSmtpInfo] = useState<{
     smtp?: { ok: boolean; error?: string };
@@ -323,7 +319,7 @@ export default function AdminSettingsPage() {
 
   const runImport = async (dryRun: boolean) => {
     if (!csv.trim()) return;
-    setImporting(true); setImportResult(null); setImportRows([]);
+    setImporting(true); setImportResult(null); setImportReport(null);
     try {
       const res = await fetch('/api/admin/import', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -331,7 +327,7 @@ export default function AdminSettingsPage() {
       });
       const d = await res.json();
       if (res.ok) {
-        setImportRows(d.rows ?? []);
+        setImportReport(d.report ?? null);
         if (dryRun) {
           setImportResult(t.settings.dryRunResult.replace('{c}', String(d.willCreate)).replace('{s}', String(d.skipped)).replace('{e}', String(d.errors)));
         } else {
@@ -555,47 +551,16 @@ export default function AdminSettingsPage() {
               value={csv}
               onChange={(e) => setCsv(e.target.value)}
               rows={8}
+              data-testid="import-csv"
               placeholder={'fullName,email,phone,university,department\nAyşe Yılmaz,ayse@example.com,,Boğaziçi,CS'}
               className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
             />
             <div className="flex gap-2">
-              <Button type="button" variant="outline" loading={importing} disabled={!csv.trim()} onClick={() => runImport(true)}>{t.settings.preview}</Button>
-              <Button type="button" loading={importing} disabled={!csv.trim()} onClick={() => runImport(false)}>{t.settings.import}</Button>
+              <Button type="button" variant="outline" loading={importing} disabled={!csv.trim()} onClick={() => runImport(true)} data-testid="import-dry-run">{t.settings.preview}</Button>
+              <Button type="button" loading={importing} disabled={!csv.trim()} onClick={() => runImport(false)} data-testid="import-run">{t.settings.import}</Button>
             </div>
             {importResult && <p className="text-sm text-gray-700">{importResult}</p>}
-            {importRows.length > 0 && (
-              <div className="max-h-56 overflow-y-auto border border-gray-100 rounded-lg text-xs">
-                {importRows.map((r) => (
-                  <div key={r.row} className="border-b border-gray-50 last:border-0">
-                    <div className="flex items-center gap-2 px-2 py-1">
-                      <span className="w-6 text-gray-400">{r.row}</span>
-                      {/* 700, not 600, on every status colour on this page (#2131):
-                          green-600 (#16a34a) is 3.3:1 on white and amber-600
-                          (#d97706) 3.2:1, both under the 4.5:1 AA asks of body
-                          text — axe caught the green one on the e-mail-log
-                          summary below. The -700 shades are ~5:1; dark mode
-                          keeps the -400 companions, which the class-strategy
-                          `dark:` utility still wins on specificity. */}
-                      <span className={`w-16 font-medium ${r.status === 'error' ? 'text-red-600 dark:text-red-400' : r.status === 'skip' ? 'text-amber-700 dark:text-amber-400' : 'text-green-700 dark:text-green-400'}`}>{r.status}</span>
-                      <span className="flex-1 truncate text-gray-600">{r.email}{r.reason ? ` · ${r.reason}` : ''}</span>
-                    </div>
-                    {r.possibleDuplicates && r.possibleDuplicates.length > 0 && (
-                      <div className="mx-2 mb-1 px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-800">
-                        {t.duplicates.possibleDuplicatesTitle}:{' '}
-                        {r.possibleDuplicates.map((d, i) => (
-                          <span key={d.id}>
-                            {i > 0 && '; '}
-                            <span className="font-medium">{d.fullName}</span>
-                            {' '}({t.duplicates.matchedOn}:{' '}
-                            {d.matchedOn.map((s) => t.duplicates.signals[s as keyof typeof t.duplicates.signals] ?? s).join(', ')})
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            {importReport && <ImportPreview report={importReport} maxHeight="max-h-56" />}
           </div>
           )}
         </Card>
