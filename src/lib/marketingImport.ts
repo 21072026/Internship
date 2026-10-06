@@ -602,6 +602,7 @@ export type ManualAccountFields = Partial<
     | 'stage'
     | 'city'
     | 'industry'
+    | 'externalId'
   >
 >;
 

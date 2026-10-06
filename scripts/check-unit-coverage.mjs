@@ -292,6 +292,22 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/stageDirection.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'a machine never moves a funnel record backwards, and never reopens a lost one — order alone would call lost→won forward (#2451)',
+    },
+  ],
+  [
+    'src/lib/salevaliIngestRule.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'only decided SaleVali events move the funnel, and SaleVali trial dates never overwrite a window the record already carries (#2450)',
+    },
+  ],
+  [
     'src/lib/companyContactErasure.ts',
     {
       floor: 95,

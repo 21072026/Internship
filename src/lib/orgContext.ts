@@ -145,6 +145,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // which passes the company's own orgId; the erasure match is tenant-scoped
   // by hand (src/lib/companyContactErasure.ts).
   'CompanyContact',
+  // Machine-source events (#2450): the idempotency claim is per org. The only
+  // writer (src/lib/salevaliIngest.ts) runs under an API key's bound org and
+  // passes `orgId` itself.
+  'IntegrationEvent',
   // Postal campaigns, their recipients and the objection block list (#2697).
   // A campaign names the accounts it wrote to — one tenant's prospect list —
   // and the block list must answer "blocked?" only for the tenant that was

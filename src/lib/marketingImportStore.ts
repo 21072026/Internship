@@ -735,7 +735,7 @@ export async function createMarketingAccount(input: {
    * marketing form, converted by an admin or by the default owner, #2569).
    * Same writer either way — only the log line differs.
    */
-  origin?: 'manual' | 'inquiry';
+  origin?: 'manual' | 'inquiry' | 'ingest';
   /**
    * Who did it, when that is not the owner — an admin typing a lead in for the
    * org's default owner (#2580), or a web request placed on the default
