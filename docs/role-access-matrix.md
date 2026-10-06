@@ -422,7 +422,7 @@ ellenmedi; en kritikleri:
 
 ## Yapay zekâ uçları / AI endpoints
 
-Yedi uç bir dil modeline metin gönderir. Hepsi rol kapılı **ve** ayrıca
+Sekiz uç bir dil modeline metin gönderir. Hepsi rol kapılı **ve** ayrıca
 [`runAiGated`](../src/lib/aiGate.ts) üzerinden geçer: rıza → aylık kota →
 sağlayıcı. Rol kontrolünü geçmek tek başına yetmez.
 
@@ -435,6 +435,7 @@ sağlayıcı. Rol kontrolünü geçmek tek başına yetmez.
 | `POST /api/admin/mentor-suggest` | yalnız `ADMIN` | rıza yok — mentorlar A–E harfleriyle anonim gider |
 | `POST /api/admin/surveys/[id]/summary` | yalnız `ADMIN`, kendi kiracısındaki anket | anketin yanıt tabanı (`suppressed` → 409); rıza yok — yanıtlar kimliksiz gider |
 | `POST /api/admin/insights/[kind]` (`evaluations`, `weekly-reports`) | yalnız `ADMIN`, kiracı elle daraltılır; `mentorship` yeteneği | en az `NAMED_ROWS_FLOOR` (3) dolu satır, yoksa hiçbir şey gönderilmez; isimler ve iletişim bilgileri maskelenir (#2046) |
+| `POST /api/admin/analytics/narrative` | yalnız `ADMIN` | rıza yok — yalnızca panonun toplamları gider; `GET` sağlayıcıyı hiç çağırmaz (#2046) |
 
 `GET /api/cv/feedback` ve `GET /api/interview-prep` yalnızca "bu özellik açık
 mı" bilgisini döndürür; kişisel veri taşımaz. `GET /api/admin/insights/[kind]`

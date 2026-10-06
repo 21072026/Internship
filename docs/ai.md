@@ -54,7 +54,8 @@ operator-level cost control that happens to be editable per tenant.
 | `interaction_summary` | `POST /api/interactions/summary` | mentor / admin on their own relation | the 30 newest log entries: date, type, subject, notes; the mentee's display name | attachments, documents, e-mail addresses, phone numbers, CV | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | yes |
 | `interview_prep` | `POST /api/interview-prep` | mentee, for themselves | the target position, the skills on the profile, an optional free-text focus (≤300 chars) | name, contact data, CV, employer names, anything about the mentor | none — no identifier is sent | yes — never a paywall |
 | `mentor_match` | `POST /api/admin/mentor-suggest` | admin | the mentee's skills / target position / interests, and up to five mentors as **anonymous labels A–E** with skills, interests and load | every name, e-mail and id on both sides; labels are mapped back to mentor ids locally, after the response | none — no identifier is sent | n/a (admin tool) |
-| `survey_summary` | `POST /api/admin/surveys/[id]/summary` | admin | one free-text question's answers, unattributed, contact details masked; only above the survey's response floor | respondent ids, names, timestamps | none — no identifier is sent | n/a (admin tool) |
+| `survey_summary` | `POST /api/admin/surveys/[id]/summary` | admin | one free-text question's answers on the open-text engine: unattributed, contact details masked, under labels `r1…`; only above the survey's response floor **and** only when the question itself has that many answers | respondent ids, names, timestamps | none — no identifier is sent | n/a (admin tool) |
+| `analytics_narrative` | `POST /api/admin/analytics/narrative` | admin | the dashboard's totals as `label: value` lines (stage counts with stage names, monthly trends, engagement, RSVP rate, sign-up windows), recomputed on the server | mentor workload rows (they carry names), every per-person row and id | none — totals only | n/a (admin tool) |
 | `evaluation_insights` | `POST /api/admin/insights/evaluations` | admin | up to 400 evaluation comments in range, under labels `r1…`, with contact details **and every known name** (author, mentee, mentor) masked; capped at 24 000 chars | database ids, who wrote which row, interview scorecards (no relation) | none — names are masked and the rows are the programme's own records | n/a (admin tool) |
 | `weekly_report_digest` | `POST /api/admin/insights/weekly-reports` | admin | the `blockers` of up to 400 submitted weekly reports in range, same masking and cap | the report summary, hours, mentor comments, ids | none — as above | n/a (admin tool) |
 
@@ -188,8 +189,9 @@ One engine reads many free-text rows at once:
 pure rules (what is sent, what is kept, the floor), and
 [`src/lib/ai/summarizeOpenText.ts`](../src/lib/ai/summarizeOpenText.ts) holds the
 one prompt and `runOpenTextSummary`. The consumers today are the evaluation
-themes and the weekly-report digest on `/admin/insights`. The survey summary
-(#1910) and the analytics narrative move onto it in #2046 part 2.
+themes and the weekly-report digest on `/admin/insights`, and — since #2046
+part 2 — the survey summary (#1910), whose engine floor is the survey's own
+k-floor applied to the question's written answers.
 
 **What leaves.** Each row's text, with contact details masked (the survey rules)
 and every known person's name masked. That means the full name and each part of
@@ -228,6 +230,31 @@ are absent, and `reason` says why.
 **Click-through.** Every theme lists the ids of its rows, and the screen opens
 them with the person and a link to the record. A summary you cannot check is
 worse than none.
+
+## The analytics narrative (#2046)
+
+`/admin/analytics` can show a short "what changed" paragraph
+([`src/lib/ai/analyticsNarrative.ts`](../src/lib/ai/analyticsNarrative.ts)).
+
+- **Grounded by construction.** The figures are recomputed on the server from
+  [`src/lib/adminAnalyticsData.ts`](../src/lib/adminAnalyticsData.ts), the same
+  function `GET /api/admin/analytics` returns, never numbers a client sent. They
+  go to the model as `label: value` lines (`analyticsFacts`). No names leave:
+  mentor workload rows are left out.
+- **Verified, not trusted.** `acceptNarrative`
+  ([`src/lib/ai/narrativeRules.ts`](../src/lib/ai/narrativeRules.ts)) extracts
+  every number in the reply and rejects the whole paragraph if any one of them is
+  not in the facts. That covers a computed percentage, a rounded figure and a
+  year the range does not contain. Thousands separators and decimal commas are
+  read both ways, and neither becomes a loophole. A rejected paragraph is
+  metered `parse_error` and never stored. The screen says it was discarded.
+- **The golden case** is `scripts/test/narrative-rules.test.mjs`: a fixed
+  dashboard, one paragraph that must pass, and the ways a paragraph goes wrong,
+  each of which must fail. The eval harness of #2036 does not exist yet; when it
+  lands, this case moves there.
+- **Cost.** `GET` reads the stored paragraph for exactly the current figures
+  (`hashInput({ facts, locale })`). `POST` writes one. With AI off the card is
+  not drawn.
 
 ## The degradation contract
 
