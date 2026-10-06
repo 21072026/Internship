@@ -12,6 +12,8 @@ import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { CompanyExternalIdForm } from '@/components/admin/CompanyExternalIdForm';
 import { ContactPermissionEditor } from '@/components/admin/ContactPermissionEditor';
 import { CompanyContactsEditor } from '@/components/admin/CompanyContactsEditor';
+import { CompanyChannelsEditor } from '@/components/admin/CompanyChannelsEditor';
+import { channelLabel } from '@/lib/salesChannels';
 import { PRIMARY_CONTACT_ID, hasPrimary, primaryAsContact } from '@/lib/companyContactsRule';
 import { ownerObjected } from '@/lib/contactPermissionRule';
 import { CONTACT_CHANNELS, marketingEmailAllowed } from '@/lib/contactPermissionRule';
@@ -205,6 +207,28 @@ export function CompanyDetailView({
             ].map((c) => redactContactForReader(c, role))}
             labels={d.contacts}
           />
+        )}
+      </Card>
+
+      {/* Sales channels (#2408): where this merchant sells and ships. */}
+      <Card className="mb-6" data-testid="company-detail-channels">
+        <CardHeader>
+          <CardTitle>{d.channels.title}</CardTitle>
+        </CardHeader>
+        {showAdminEditors ? (
+          <CompanyChannelsEditor companyId={company.id} channels={data.company.channels} labels={d.channels} />
+        ) : data.company.channels.length === 0 ? (
+          <p className="text-sm text-gray-500">{d.channels.none}</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {data.company.channels.map((c) => (
+              <li key={c.channel}>
+                <Badge variant={c.status === 'USING' ? 'success' : c.status === 'INTERESTED' ? 'info' : 'default'}>
+                  {channelLabel(c.channel)} · {d.channels.statuses[c.status as keyof typeof d.channels.statuses] ?? c.status}
+                </Badge>
+              </li>
+            ))}
+          </ul>
         )}
       </Card>
 

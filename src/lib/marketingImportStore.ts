@@ -69,6 +69,8 @@ import {
   type MarketingTargetSnapshot,
 } from './marketingImport';
 
+import { IMPORT_CHANNEL_STATUS } from './salesChannels';
+
 type TxClient = Prisma.TransactionClient;
 
 export interface MarketingImportOwner {
@@ -144,7 +146,8 @@ const ACCOUNT_SELECT = {
   contactEmail: true,
   contactPhone: true,
   externalId: true,
-} as const;
+  channels: { select: { channel: true } },
+} satisfies Prisma.CompanySelect;
 
 async function loadSnapshot(
   orgId: string | null,
@@ -153,7 +156,9 @@ async function loadSnapshot(
   // One query for every account of the org. The alternative — a WHERE built
   // from the file's raw names — cannot express `normalizeNameKey()`, so it
   // would silently miss exactly the İ/ı/ü/ß rows #2405 is about.
-  const accounts = await prisma.company.findMany({ where: { orgId }, select: ACCOUNT_SELECT });
+  const accounts = (await prisma.company.findMany({ where: { orgId }, select: ACCOUNT_SELECT })).map(
+    ({ channels, ...account }) => ({ ...account, channels: channels.map((c) => c.channel) }),
+  );
 
   // Every person lookup below carries `orgId` (#2590): the same address can be a
   // different person-record in the other world, and that one is neither a lead
@@ -440,6 +445,22 @@ async function placeOnFunnel(
   if (data) await tx.statusChange.create({ data });
 }
 
+/**
+ * The row's new sales channels (#2408), as USING. Additive by construction:
+ * the plan only lists keys the account lacks, and `skipDuplicates` keeps a
+ * concurrent edit on the account page from turning into a failed chunk. The
+ * CLI has no session, so `orgId` is passed (TENANT_MODELS stamps only from a
+ * bound context).
+ */
+async function addImportedChannels(tx: TxClient, row: MarketingPlannedRow, companyId: string, orgId: string | null) {
+  const keys = row.value.account.channelsToAdd ?? [];
+  if (keys.length === 0) return;
+  await tx.companyChannel.createMany({
+    data: keys.map((channel) => ({ orgId, companyId, channel, status: IMPORT_CHANNEL_STATUS })),
+    skipDuplicates: true,
+  });
+}
+
 function databaseWriter(context: WriterContext): MarketingAccountWriter {
   return {
     async createAccount(row) {
@@ -460,6 +481,7 @@ function databaseWriter(context: WriterContext): MarketingAccountWriter {
           companyId: company.id,
           address: company.contactEmail,
         });
+        await addImportedChannels(tx, row, company.id, context.orgId);
         await placeOnFunnel(tx, row, company.id, context, sourceId);
         return company.id;
       });
@@ -469,9 +491,10 @@ function databaseWriter(context: WriterContext): MarketingAccountWriter {
       if (!targetId) throw new Error('an UPDATE row reached the writer without a target id');
       const sourceId = await leadSourceIdFor(row, context);
       return prisma.$transaction(async (tx) => {
-        if (row.value.account.changed.length > 0) {
+        if (Object.keys(row.value.account.changes).length > 0) {
           await tx.company.update({ where: { id: targetId }, data: row.value.account.changes });
         }
+        await addImportedChannels(tx, row, targetId, context.orgId);
         await placeOnFunnel(tx, row, targetId, context, sourceId);
         return targetId;
       });

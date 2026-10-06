@@ -156,6 +156,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'PostCampaign',
   'PostCampaignRecipient',
   'ContactSuppression',
+  // An account's sales channels (#2408): which marketplaces a tenant's
+  // merchants sell on is that tenant's market intelligence. The import passes
+  // `orgId` itself (sessionless CLI).
+  'CompanyChannel',
   // The notification delivery ledger (#1710). One row per (recipient, event,
   // channel) — who was told what, and why they were not. It is written by the
   // router from whatever context the caller happens to be in (a request, a

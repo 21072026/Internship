@@ -181,6 +181,7 @@ model Organization {
   postCampaigns        PostCampaign[]
   postRecipients       PostCampaignRecipient[]
   contactSuppressions  ContactSuppression[]
+  companyChannels      CompanyChannel[]
   webhooks             Webhook[]
   announcements        Announcement[]
   newsletters          Newsletter[]
@@ -1418,6 +1419,8 @@ model Company {
   // The postal campaigns this account was a recipient of (#2697).
   postRecipients     PostCampaignRecipient[]
   contacts           CompanyContact[]
+  // The marketplaces, shop systems and carriers it works on (#2408).
+  channels           CompanyChannel[]
 
   // Org-scoped, not global — see the `vatId` comment above.
   @@unique([orgId, vatId])
@@ -1426,6 +1429,27 @@ model Company {
   // `findMany({ where: { externalId } })`, and without this it would filter the
   // whole table row by row.
   @@index([orgId, externalId])
+}
+
+// One sales channel of one account (#2408): a marketplace, a shop system or a
+// carrier the merchant works on. `channel` is a STRING key from
+// src/lib/salesChannels.ts, never an enum — a new marketplace is a code change,
+// not a schema change. `status`: USING / INTERESTED / DROPPED. The import
+// writes USING and only ADDS rows (a file never removes a channel or overrides
+// a status a person set); people edit them on the account page.
+model CompanyChannel {
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id])
+  id        String        @id @default(cuid())
+  companyId String
+  company   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  channel   String        @db.VarChar(40)
+  status    String        @default("USING") @db.VarChar(16)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([companyId, channel])
+  @@index([orgId, channel, status])
 }
 
 // One day of product usage for one account (#2446, story #2399).
