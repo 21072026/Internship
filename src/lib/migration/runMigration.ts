@@ -32,6 +32,7 @@ import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { sameTenant } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { acquireLease, releaseLease, replicaId } from '@/lib/jobs/lease';
+import { stageTrialWindow } from '@/lib/trialWindow';
 import type { Locale } from '@/i18n/config';
 import {
   interactionKey,
@@ -328,6 +329,8 @@ async function runLocked(input: MigrationInput, opts: MigrationOptions): Promise
                     pipelineStatus: startStage,
                     startDate: v.startDate ?? now,
                     ...(v.status === 'COMPLETED' ? { completedAt: now } : {}),
+                    // A start stage that is a trial (the MARKETING funnel) opens its window.
+                    ...(await stageTrialWindow({ orgId, toStage: startStage, enteredAt: v.startDate ?? now })),
                   },
                   select: { id: true },
                 });
@@ -442,8 +445,17 @@ async function runLocked(input: MigrationInput, opts: MigrationOptions): Promise
     // One source of truth: every touched pair stands where its LAST move took it.
     if (!dryRun) {
       for (const relationId of touched) {
-        const last = await prisma.statusChange.findFirst({ where: { relationId }, orderBy: { createdAt: 'desc' }, select: { toStatus: true } });
-        if (last) await prisma.mentorshipRelation.update({ where: { id: relationId }, data: { pipelineStatus: last.toStatus } });
+        const last = await prisma.statusChange.findFirst({ where: { relationId }, orderBy: { createdAt: 'desc' }, select: { toStatus: true, createdAt: true } });
+        if (!last) continue;
+        const rel = await prisma.mentorshipRelation.findUnique({ where: { id: relationId }, select: { trialStartedAt: true, trialEndsAt: true } });
+        await prisma.mentorshipRelation.update({
+          where: { id: relationId },
+          data: {
+            pipelineStatus: last.toStatus,
+            // Entering a trial stage opens its window from the moment of the move, as every stage writer does.
+            ...(await stageTrialWindow({ orgId, toStage: last.toStatus, enteredAt: last.createdAt, existing: rel })),
+          },
+        });
       }
     }
     result.sheets.stageHistory = toSheetReport(report, historyTable.missing);
