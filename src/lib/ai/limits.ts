@@ -55,6 +55,11 @@ export const AI_RATE_LIMITS = {
   // stored artefact without reaching this limit's provider call at all.
   open_text_insights: { limit: 10, windowMs: 10 * 60 * 1000 },
 
+  // Analytics "what changed" paragraph (POST /api/admin/analytics/narrative, #2046).
+  // 10 calls / 10 minutes: a small prompt, but one an admin can re-trigger per
+  // date range. An unchanged range is answered from the stored paragraph.
+  analytics_narrative: { limit: 10, windowMs: 10 * 60 * 1000 },
+
   // Coarse per-organization burst limit across all AI routes.
   // 120 calls / 10 minutes: Prevents a single tenant from starving shared capacity
   // or exhausting provider burst rates before fine-grained per-tenant quotas land (#1555).

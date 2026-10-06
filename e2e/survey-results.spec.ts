@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 import { createSurvey, submitSurveyResponse } from '../src/lib/surveys';
+import { prepareOpenText } from '../src/lib/ai/openTextRules';
+import { openTextInputHash } from '../src/lib/ai/summarizeOpenText';
 
 // Survey results (#1910). Its own org: three mentors with 6, 2 and 5 mentees.
 //   • under the floor (4 responses) nothing but counts leaves the server;
@@ -64,6 +66,7 @@ test.describe('survey results', () => {
   });
 
   test.afterAll(async () => {
+    await prisma.aiArtifact.deleteMany({ where: { orgId: { in: [orgId, otherOrgId] } } });
     await prisma.survey.deleteMany({ where: { orgId: { in: [orgId, otherOrgId] } } });
     await prisma.mentorshipRelation.deleteMany({ where: { orgId } });
     await prisma.cohort.deleteMany({ where: { orgId } });
@@ -163,6 +166,41 @@ test.describe('survey results', () => {
     await expect(page.getByTestId('ai-note-best')).toBeVisible();
     // The plain list is still all there.
     await expect(page.getByTestId('texts-best').locator('li')).toHaveCount(5);
+
+    // On the open-text engine (#2046): a stored summary for exactly these
+    // answers is answered without a provider call, and each theme opens the
+    // answers it was built from — by position in the list on the page.
+    const results = (await (await page.request.get(`/api/admin/surveys/${survey.id}/results`)).json()).results;
+    const best = results.questions.find((q: { key: string }) => q.key === 'best');
+    const { prepared } = prepareOpenText(best.texts.map((text: string, i: number) => ({ id: `${survey.id}/best/${i}`, text })));
+    const mock = best.texts.indexOf('Mock interviews');
+    const cv = best.texts.indexOf('Feedback on my CV');
+    await prisma.aiArtifact.create({
+      data: {
+        orgId,
+        taskId: 'survey_summary',
+        createdById: (await prisma.user.findFirstOrThrow({ where: { email: admin } })).id,
+        inputHash: openTextInputHash({ purpose: `written answers to one survey question: "${best.label}"`, locale: 'en' }, prepared),
+        content: JSON.stringify({
+          themes: [{ label: 'Interview practice', count: 2, exampleIds: [`${survey.id}/best/${mock}`, `${survey.id}/best/${cv}`], sentiment: 'positive' }],
+          overall: { positive: 2, neutral: 3, negative: 0, unclear: 0 },
+          notableQuotes: [{ id: `${survey.id}/best/${mock}`, text: 'Mock interviews' }],
+          caveats: [],
+          sent: 5,
+        }),
+      },
+    });
+    const usageBefore = await prisma.aiUsage.count();
+    const stored = await (await summarise()).json();
+    expect(stored).toMatchObject({ cached: true, summary: { themes: [{ label: 'Interview practice', count: 2, sentiment: 'positive', answers: [mock, cv] }], quotes: ['Mock interviews'] } });
+    expect(await prisma.aiUsage.count()).toBe(usageBefore);
+    await page.reload();
+    await page.getByTestId('ai-summarise-best').click();
+    const theme = page.getByTestId('ai-theme-best');
+    await expect(theme).toContainText('Interview practice');
+    await expect(theme).toContainText('mostly positive');
+    await theme.getByRole('button').click();
+    await expect(page.getByTestId('ai-theme-answers-best').locator('li')).toHaveText(['Mock interviews', 'Feedback on my CV']);
   });
 
   test('an anonymous response stores no relation, so there is no cohort or mentor breakdown', async ({ page }) => {

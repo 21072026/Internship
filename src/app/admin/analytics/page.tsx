@@ -1,6 +1,7 @@
 'use client';
 
 import { ProgramScorecard } from '@/components/admin/ProgramScorecard';
+import { AnalyticsNarrative } from '@/components/analytics/AnalyticsNarrative';
 import { MeetingAttendanceCard } from '@/components/admin/MeetingAttendanceCard';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -298,6 +299,9 @@ export default function AdminAnalyticsPage() {
 
       {/* "Is this programme healthy?" (#1908) — the verdict first, the detail below. */}
       <ProgramScorecard />
+
+      {/* "What changed" (#2046): AI prose grounded only in the figures below. */}
+      <AnalyticsNarrative query={rangeQuery(range)} />
       {/* Who actually met, and on the promised rhythm (#2014). */}
       <MeetingAttendanceCard />
 
