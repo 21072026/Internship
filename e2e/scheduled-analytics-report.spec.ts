@@ -1,150 +1,97 @@
 import crypto from 'crypto';
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
-import { MARKETING_HOST, asHost, signInViaApi } from './helpers/auth';
-import { freshIp } from './helpers/rateLimit';
-import { setOrgFeatureFor } from './helpers/entitlements';
+import { LEGACY_SEED_KEY, runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
+import { prisma as appPrisma } from '@/lib/prisma';
+
+// The weekly analytics report (Faz 2, #541) became a report subscription in
+// #1905: `sendWeeklyAnalyticsReport()` is gone, and every admin who received
+// the Monday mail is seeded a `pipeline-summary` subscription of their own.
+// What this pins — what the old job promised and the migration must keep:
+//   • only an org with ADVANCED_ANALYTICS is mailed (#1740, per org since #2680);
+//   • each admin reads it in their own language (#2715);
+//   • the per-user analytics-report opt-out still holds;
+//   • nobody is mailed twice — not in the week of the swap, not on a re-run;
+//   • an org is seeded once: a deleted subscription stays deleted, and an org
+//     that gains the tier later is seeded then.
+// Run in THIS process against its own orgs (SMTP is unset; the EmailLog row a
+// skipped send still writes is what says who was mailed, under which subject).
 
 test.afterAll(async () => {
   await prisma.$disconnect();
+  await appPrisma.$disconnect();
 });
 
-async function defaultOrg() {
-  return prisma.organization.upsert({
-    where: { slug: 'default' },
-    update: {},
-    create: { slug: 'default', name: 'Default Organization' },
-    select: { id: true },
-  });
-}
-
-// Premium Faz 2 (#541): the weekly analytics report email job is a no-op while
-// the org lacks ADVANCED_ANALYTICS (#1740), and reports sends once it has it (SMTP is
-// unset in CI, so sendEmail no-ops — the job still counts recipients). Restores
-// the flag in finally.
-//
-// Since #2680 the report is per org: GET /api/cron answers with the CALLER'S
-// org entry only, so `locked`/`sent` below are this admin's tenant's.
-test('weekly analytics report is locked by default and sends to admins once enabled', async ({ page }) => {
-  const adminEmail = uniqueEmail('wa-admin');
-  const pw = 'WeeklyPass123';
-  await seedUser(adminEmail, pw, 'ADMIN', 'Weekly Admin');
-  // A known starting point: the default org (this admin's) without the tier.
-  const def = await defaultOrg();
-  await setOrgFeature(def.id, 'ADVANCED_ANALYTICS', false);
-
-  try {
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', adminEmail);
-    await page.fill('input[type="password"]', pw);
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
-
-    // Flag off → the job reports itself locked and sends nothing.
-    const off = await page.request.get('/api/cron');
-    expect(off.ok()).toBeTruthy();
-    const lockedReport = (await off.json()).analyticsReport;
-    expect(lockedReport.locked).toBe(true);
-    expect(lockedReport.sent).toBe(0);
-
-    // Enable the tier → the job runs and counts at least this admin.
-    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', true);
-    const on = await page.request.get('/api/cron');
-    expect(on.ok()).toBeTruthy();
-    const report = (await on.json()).analyticsReport;
-    expect(report.locked).toBe(false);
-    expect(report.sent).toBeGreaterThanOrEqual(1);
-    // Only the caller's own entry — never the other tenants' counts.
-    expect(report.orgs).toBeUndefined();
-  } finally {
-    await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
-    await cleanupByEmail(adminEmail);
-  }
-});
-
-// #2680: two tenants on one database (#2542). Each org is gated on ITS OWN entitlement,
-// counts only ITS OWN relations, and mails only ITS OWN admins. The EmailLog
-// ledger is written even without SMTP (as SKIPPED/FAILED), so "who got a
-// report" is read from there by recipient address.
 const PW = 'WeeklyTenant123!';
 
-async function setOrgSetting(orgId: string, value: string) {
-  await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', value === 'true');
+/** Monday `weeks` from this one, 09:00 UTC — after the seeded subscriptions' 08:00. */
+function mondayAt9(weeks: number): Date {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 9));
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) + weeks * 7);
+  return d;
 }
 
-async function runReport(jar: APIRequestContext) {
-  const res = await jar.get('/api/cron?job=analytics-report');
-  expect(res.ok()).toBeTruthy();
-  return (await res.json()).analyticsReport as { orgId: string; locked: boolean; sent: number; total: number; orgs?: unknown };
-}
+const reportsTo = (email: string) => prisma.emailLog.findMany({ where: { to: email, category: 'analytics-report' }, select: { subject: true, status: true } });
 
-async function reportsTo(email: string) {
-  return prisma.emailLog.count({ where: { to: email, category: 'analytics-report' } });
-}
-
-test('each tenant gets its own report: own gate, own numbers, own admins (#2680)', async ({ playwright, baseURL }) => {
+test('the weekly report is a seeded subscription per admin of an entitled org (#1905)', async () => {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-  const mkt = await prisma.organization.create({
-    data: { name: `Weekly MKT ${stamp}`, slug: `weekly-mkt-${stamp}`, vertical: 'MARKETING' },
-  });
-  const def = await defaultOrg();
-
-  const mktAdmin = uniqueEmail('wa-mkt-admin');
-  const intAdmin = uniqueEmail('wa-int-admin');
-  const mktMentor = uniqueEmail('wa-mkt-mentor');
-  const mktMentee = uniqueEmail('wa-mkt-mentee');
-  await seedUser(mktAdmin, PW, 'ADMIN', 'Weekly MKT Admin', { orgId: mkt.id });
-  await seedUser(intAdmin, PW, 'ADMIN', 'Weekly INT Admin', { orgId: def.id });
-  const mentor = await seedUser(mktMentor, PW, 'MENTOR', 'Weekly MKT Mentor', { orgId: mkt.id });
-  const mentee = await seedUser(mktMentee, PW, 'MENTEE', 'Weekly MKT Mentee', { orgId: mkt.id });
-  // Exactly one relation in the marketing tenant.
-  await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, orgId: mkt.id } });
-
-  const mktJar = await playwright.request.newContext({ baseURL, extraHTTPHeaders: asHost(MARKETING_HOST) });
-  const intJar = await playwright.request.newContext({ baseURL });
+  const on = await prisma.organization.create({ data: { name: `Weekly On ${stamp}`, slug: `weekly-on-${stamp}`, brandName: `Weekly On ${stamp}` } });
+  const off = await prisma.organization.create({ data: { name: `Weekly Off ${stamp}`, slug: `weekly-off-${stamp}` } });
+  const trAdmin = uniqueEmail('wa-tr-admin');
+  const quietAdmin = uniqueEmail('wa-quiet-admin');
+  const offAdmin = uniqueEmail('wa-off-admin');
+  const orgIds = [on.id, off.id];
   try {
-    expect((await signInViaApi(mktJar, mktAdmin, PW, { host: MARKETING_HOST, headers: freshIp('wa-mkt') })).error).toBeNull();
-    expect((await signInViaApi(intJar, intAdmin, PW, { headers: freshIp('wa-int') })).error).toBeNull();
+    const tr = await seedUser(trAdmin, PW, 'ADMIN', 'Weekly TR Admin', on.id);
+    await prisma.user.update({ where: { id: tr.id }, data: { preferredLanguage: 'tr' } });
+    const quiet = await seedUser(quietAdmin, PW, 'ADMIN', 'Weekly Quiet Admin', on.id);
+    await prisma.user.update({ where: { id: quiet.id }, data: { emailNotifications: false } });
+    await seedUser(offAdmin, PW, 'ADMIN', 'Weekly Off Admin', off.id);
+    await setOrgFeature(on.id, 'ADVANCED_ANALYTICS', true);
 
-    // 1. Marketing on, default off: only the marketing admin is mailed, and its
-    //    numbers are its own tenant's — one relation, not the whole database.
-    await setOrgSetting(mkt.id, 'true');
-    await setOrgSetting(def.id, 'false');
-    const mktReport = await runReport(mktJar);
-    expect(mktReport.orgId).toBe(mkt.id);
-    expect(mktReport.locked).toBe(false);
-    expect(mktReport.sent).toBe(1);
-    expect(mktReport.total).toBe(1);
-    expect(mktReport.orgs).toBeUndefined();
-    expect(await reportsTo(mktAdmin)).toBe(1);
-    expect(await reportsTo(intAdmin)).toBe(0);
-    // The default admin's own view: locked. (The job itself runs for every org
-    // whoever triggers it, so the marketing admin gets a second report.)
-    expect((await runReport(intJar)).locked).toBe(true);
-    expect(await reportsTo(intAdmin)).toBe(0);
-    expect(await reportsTo(mktAdmin)).toBe(2);
+    // 1. The week of the swap: both admins of the entitled org are seeded, in
+    //    their own language, and nothing goes out this week.
+    const first = await runReportSubscriptions({ orgIds, now: mondayAt9(0) });
+    expect(first.sent).toBe(0);
+    const seeded = await prisma.reportSubscription.findMany({ where: { orgId: { in: orgIds } }, select: { recipientUserId: true, reportKey: true, locale: true, cadence: true } });
+    expect(seeded).toHaveLength(2);
+    expect(seeded.every((s) => s.reportKey === 'pipeline-summary' && s.cadence === 'WEEKLY')).toBe(true);
+    expect(seeded.find((s) => s.recipientUserId === tr.id)?.locale).toBe('tr');
+    expect(await prisma.setting.count({ where: { orgId: on.id, key: LEGACY_SEED_KEY } })).toBe(1);
+    expect(await prisma.setting.count({ where: { orgId: off.id, key: LEGACY_SEED_KEY } })).toBe(0);
 
-    // 2. The other direction: default on, marketing off. The default org's
-    //    totals include its NULL-org rows and never the marketing relation.
-    await setOrgSetting(mkt.id, 'false');
-    await setOrgSetting(def.id, 'true');
-    const intReport = await runReport(intJar);
-    expect(intReport.orgId).toBe(def.id);
-    expect(intReport.locked).toBe(false);
-    expect(intReport.sent).toBeGreaterThanOrEqual(1);
-    const defaultTotal = await prisma.mentorshipRelation.count({ where: { OR: [{ orgId: def.id }, { orgId: null }] } });
-    expect(intReport.total).toBe(defaultTotal);
-    expect(await reportsTo(intAdmin)).toBe(1);
-    expect(await reportsTo(mktAdmin)).toBe(2); // unchanged: marketing is off now
-    expect((await runReport(mktJar)).locked).toBe(true);
-    expect(await reportsTo(mktAdmin)).toBe(2);
+    // A re-run in the same week seeds nothing more and sends nothing.
+    const again = await runReportSubscriptions({ orgIds, now: mondayAt9(0) });
+    expect(again.sent).toBe(0);
+    expect(await prisma.reportSubscription.count({ where: { orgId: { in: orgIds } } })).toBe(2);
+
+    // 2. Next Monday: the Turkish admin gets it in Turkish, the opted-out one
+    //    does not, the org without the tier gets nothing.
+    const next = await runReportSubscriptions({ orgIds, now: mondayAt9(1) });
+    expect(next).toMatchObject({ sent: 1, skipped: 1 });
+    const trMail = await reportsTo(trAdmin);
+    expect(trMail.map((m) => m.subject)).toEqual([`Pipeline özeti — Weekly On ${stamp}`]);
+    expect(await reportsTo(quietAdmin)).toHaveLength(0);
+    expect(await reportsTo(offAdmin)).toHaveLength(0);
+    const quietSend = await prisma.reportSubscriptionSend.findFirst({ where: { subscription: { recipientUserId: quiet.id }, status: 'SKIPPED', error: 'opted_out' } });
+    expect(quietSend).not.toBeNull();
+
+    // 3. A subscription deleted by its admin stays deleted.
+    await prisma.reportSubscription.deleteMany({ where: { recipientUserId: quiet.id } });
+    await runReportSubscriptions({ orgIds, now: mondayAt9(2) });
+    expect(await prisma.reportSubscription.count({ where: { recipientUserId: quiet.id } })).toBe(0);
+
+    // 4. The org that gains the tier later is seeded then.
+    await setOrgFeature(off.id, 'ADVANCED_ANALYTICS', true);
+    await runReportSubscriptions({ orgIds, now: mondayAt9(2) });
+    expect(await prisma.reportSubscription.count({ where: { orgId: off.id } })).toBe(1);
   } finally {
-    await mktJar.dispose();
-    await intJar.dispose();
-    await setOrgFeature(def.id, 'ADVANCED_ANALYTICS', false);
-    await prisma.emailLog.deleteMany({ where: { to: { in: [mktAdmin, intAdmin] } } });
-    for (const e of [mktMentee, mktMentor, mktAdmin, intAdmin]) await cleanupByEmail(e);
-    await prisma.setting.deleteMany({ where: { orgId: mkt.id } });
-    await prisma.organization.delete({ where: { id: mkt.id } }).catch(() => {});
+    await prisma.emailLog.deleteMany({ where: { to: { in: [trAdmin, quietAdmin, offAdmin] } } });
+    for (const e of [trAdmin, quietAdmin, offAdmin]) await cleanupByEmail(e);
+    await prisma.reportSubscription.deleteMany({ where: { orgId: { in: orgIds } } });
+    await prisma.orgEntitlement.deleteMany({ where: { orgId: { in: orgIds } } });
+    await prisma.setting.deleteMany({ where: { orgId: { in: orgIds } } });
+    await prisma.organization.deleteMany({ where: { id: { in: orgIds } } });
   }
 });

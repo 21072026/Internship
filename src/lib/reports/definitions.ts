@@ -64,6 +64,20 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
       { key: 'count', labelKey: 'col.count', type: 'number' },
     ],
   },
+  // The headline numbers plus the stage distribution, in one table (#1905):
+  // what the weekly analytics e-mail carried before it became a subscription.
+  // Row-level, like the funnel — it names no person and no small group.
+  {
+    key: 'pipeline-summary',
+    titleKey: 'pipelineSummary.title',
+    descriptionKey: 'pipelineSummary.description',
+    aggregate: false,
+    columns: [
+      { key: 'metric', labelKey: 'col.metric', type: 'string' },
+      { key: 'value', labelKey: 'col.value', type: 'number' },
+      { key: 'share', labelKey: 'col.share', type: 'percent' },
+    ],
+  },
   {
     key: 'cohort-comparison',
     titleKey: 'cohortComparison.title',

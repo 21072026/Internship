@@ -48,8 +48,26 @@ Hourly at :25 via node-cron, registered from `/api/cron/start` (not
 handler. An admin can fire their own org's due subscriptions with
 `GET /api/cron?job=report-subscriptions` (`&at=<ISO>` pins the clock).
 
+## The weekly analytics report
+
+`sendWeeklyAnalyticsReport()` (#541, Mondays 08:15, every active admin of an
+org with `ADVANCED_ANALYTICS`) is gone. Its readers keep their mail as one
+`pipeline-summary` subscription each — the same figures: totals, how many
+reached the final stage, the last seven days' activity and every stage's share
+— seeded by `seedLegacyWeeklyReports()` at the start of every job pass:
+
+- **Per org, once, while entitled.** The claim is a `Setting` row
+  (`reportSubscriptions.legacyWeeklySeeded`, unique per org). A seeded org is
+  never re-seeded, so a deleted subscription stays deleted; an org without the
+  tier is not marked and is seeded on the first pass after it gains it —
+  exactly when the old job would have started mailing it.
+- **Each admin in their own language** (`preferredLanguage`), weekly, Monday
+  08:00 UTC, as a table in the e-mail.
+- **No double send in the week of the swap.** A seeded subscription records its
+  first period as `SKIPPED · seeded`; the deploy may land on a Monday after the
+  old job already sent.
+- An admin who joins later subscribes on `/admin/reports/subscriptions`.
+
 ## Not yet
 
 - The admin screen (`/admin/reports/subscriptions`) — follow-up PR.
-- Retiring `sendWeeklyAnalyticsReport()` into a seeded weekly subscription per
-  org — follow-up PR; until then both exist and the old one is unchanged.

@@ -9,7 +9,6 @@ import {
   checkStageDeadlineReminders,
   checkRetentionReminders,
   checkCompanyNeedMatches,
-  sendWeeklyAnalyticsReport,
   sendWeeklyReportReminders,
   sendWeeklyMissingDocumentReminders,
   runEmailHealthCheck,
@@ -27,18 +26,6 @@ import { runTrialReminders } from '@/lib/jobs/trialReminders';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 
-// The weekly analytics report runs for every org (#2542), but any tenant's admin
-// may call this route: answer with the caller's own org's entry only, never the
-// other tenants' counts.
-async function ownAnalyticsReport(
-  session: Parameters<typeof settingsOrgOf>[0],
-  report: Awaited<ReturnType<typeof sendWeeklyAnalyticsReport>>,
-) {
-  const orgId = await settingsOrgOf(session);
-  const own = report.orgs.find((r) => r.orgId === orgId);
-  return own ?? { orgId, locked: true, sent: 0, total: 0 };
-}
-
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -48,9 +35,6 @@ export async function GET(request: Request) {
     }
 
     const job = new URL(request.url).searchParams.get('job');
-    if (job === 'analytics-report') {
-      return NextResponse.json({ message: 'Weekly analytics report ran', analyticsReport: await ownAnalyticsReport(session, await sendWeeklyAnalyticsReport()) });
-    }
     if (job === 'weekly-reports') {
       return NextResponse.json({ message: 'Weekly report reminders ran', weeklyReports: await sendWeeklyReportReminders() });
     }
@@ -162,7 +146,7 @@ export async function GET(request: Request) {
     const dormantSweep = await sweepDormantFirstContacts();
     const dormantCheckIns = await sendDormantCheckIns();
 
-    const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
+    const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
@@ -171,7 +155,6 @@ export async function GET(request: Request) {
       checkStageDeadlineReminders(),
       checkRetentionReminders(),
       checkCompanyNeedMatches(),
-      sendWeeklyAnalyticsReport(),
       sendWeeklyMissingDocumentReminders(),
       expireOffers(),
       sendWeeklyReportReminders(),
@@ -191,7 +174,9 @@ export async function GET(request: Request) {
       deadlines,
       retention,
       needMatches,
-      analyticsReport: await ownAnalyticsReport(session, analyticsReport),
+      // The weekly analytics report is a subscription now (#1905): the
+      // caller's own org's due subscriptions, never another tenant's.
+      reportSubscriptions: await runReportSubscriptions({ orgIds: [await settingsOrgOf(session)] }),
       missingDocuments,
       offers,
       weeklyReports,

@@ -25,13 +25,14 @@ import type { ReportSubscription } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { entitled } from '@/lib/entitlements';
+import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { getReportDefinition } from '@/lib/reports/definitions';
 import { loadReport, ReportUnavailable } from '@/lib/reports/registry';
 import { renderReport, reportSheet, toCsv } from '@/lib/reports/render';
-import { isCadence, isDue, periodKey } from '@/lib/reportSubscriptions';
+import { isCadence, isDue, periodKey, type Cadence } from '@/lib/reportSubscriptions';
 import { reportUnsubscribeUrl } from '@/lib/reportSubscriptionTokens';
 import { suppressionHash } from '@/lib/postCampaign';
 import { emailBrand, sendEmail } from '@/services/emailService';
@@ -190,18 +191,98 @@ export interface RunResult {
   duplicate: number;
 }
 
+// ── The weekly analytics e-mail, as subscriptions (#1905) ───────────────────
+//
+// `sendWeeklyAnalyticsReport()` mailed every active admin of every org that
+// had ADVANCED_ANALYTICS, Mondays at 08:15. It is gone; its readers keep their
+// mail as one `pipeline-summary` subscription each (the same figures: totals,
+// conversion, the week's activity, every stage), seeded here.
+//
+// PER ORG, ONCE, AND ONLY WHILE ENTITLED. The claim is a Setting row
+// (`LEGACY_SEED_KEY`, unique per org): an org whose first seed already ran is
+// never re-seeded, so an admin who deletes their subscription stays
+// unsubscribed. An org WITHOUT the tier is not marked — it received nothing
+// before — and is seeded on the first pass after it gains the tier, exactly
+// when the old job would have started mailing it.
+//
+// The seeded subscriptions skip the period they are created in (a SKIPPED
+// `seeded` row): the deploy that swaps the jobs may land on a Monday after the
+// old job already sent, and one missed week is better than a duplicate.
+// An admin who joins later subscribes on /admin/reports/subscriptions.
+export const LEGACY_SEED_KEY = 'reportSubscriptions.legacyWeeklySeeded';
+const LEGACY_REPORT = 'pipeline-summary';
+
+export async function seedLegacyWeeklyReports(opts: { now?: Date; orgIds?: string[] } = {}): Promise<{ orgs: number; subscriptions: number }> {
+  const now = opts.now ?? new Date();
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true, orgId: true, preferredLanguage: true },
+  });
+  const byOrg = new Map<string, typeof admins>();
+  for (const a of admins) {
+    const org = await settingsOrgOfRow(a.orgId);
+    if (opts.orgIds && !opts.orgIds.includes(org)) continue;
+    byOrg.set(org, [...(byOrg.get(org) ?? []), a]);
+  }
+  const result = { orgs: 0, subscriptions: 0 };
+  for (const [orgId, recipients] of byOrg) {
+    if (!(await entitled(orgId, 'ADVANCED_ANALYTICS'))) continue;
+    if ((await prisma.setting.count({ where: { orgId, key: LEGACY_SEED_KEY } })) > 0) continue;
+    try {
+      await prisma.setting.create({ data: { orgId, key: LEGACY_SEED_KEY, value: now.toISOString() } });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2002') continue; // another pass won the claim
+      throw error;
+    }
+    result.orgs++;
+    const period = periodKey('WEEKLY', now);
+    for (const admin of recipients) {
+      const sub = await prisma.reportSubscription.create({
+        data: {
+          orgId,
+          reportKey: LEGACY_REPORT,
+          cadence: 'WEEKLY',
+          dayOfWeek: 1,
+          hour: 8,
+          locale: isLocale(admin.preferredLanguage ?? undefined) ? admin.preferredLanguage! : defaultLocale,
+          format: 'EMAIL_SUMMARY',
+          recipientUserId: admin.id,
+        },
+      });
+      await prisma.reportSubscriptionSend.create({
+        data: { subscriptionId: sub.id, orgId, periodKey: period, status: 'SKIPPED', error: 'seeded', sentAt: now },
+      });
+      result.subscriptions++;
+    }
+  }
+  return result;
+}
+
 /** One pass: every active, due subscription (optionally of some orgs only). */
 export async function runReportSubscriptions(opts: { now?: Date; orgIds?: string[] } = {}): Promise<RunResult> {
   const now = opts.now ?? new Date();
+  await seedLegacyWeeklyReports({ now, orgIds: opts.orgIds });
   const subs = await prisma.reportSubscription.findMany({
     where: { isActive: true, ...(opts.orgIds ? { orgId: { in: opts.orgIds } } : {}) },
     orderBy: { createdAt: 'asc' },
   });
   const result: RunResult = { due: 0, sent: 0, skipped: 0, failed: 0, duplicate: 0 };
-  for (const sub of subs) {
-    if (!isCadence(sub.cadence) || !isDue(sub, now)) continue;
+  const due = subs.filter((sub) => isCadence(sub.cadence) && isDue(sub, now));
+  // A subscription stays due all day, so most hourly passes find its period
+  // already done. Read those once instead of letting every one of them hit the
+  // unique (the claim below still settles a genuine race).
+  const done = new Set(
+    due.length === 0
+      ? []
+      : (await prisma.reportSubscriptionSend.findMany({
+          where: { OR: due.map((sub) => ({ subscriptionId: sub.id, periodKey: periodKey(sub.cadence as Cadence, now) })) },
+          select: { subscriptionId: true },
+        })).map((r) => r.subscriptionId),
+  );
+  for (const sub of due) {
     result.due++;
-    const r = await sendReportSubscription(sub, { periodKey: periodKey(sub.cadence, now), now });
+    if (done.has(sub.id)) { result.duplicate++; continue; }
+    const r = await sendReportSubscription(sub, { periodKey: periodKey(sub.cadence as Cadence, now), now });
     if (r.outcome === 'SENT') result.sent++;
     else if (r.outcome === 'SKIPPED') result.skipped++;
     else if (r.outcome === 'FAILED') result.failed++;

@@ -3,7 +3,8 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAsFreshUser } from './helpers/auth';
 // Static import, not `await import()`: Playwright resolves the `@/…` alias only
 // for the spec's static import graph (see e2e/erasure-free-text.spec.ts).
-import { weeklyAnalyticsStats } from '../src/services/emailService';
+import { loadReport } from '../src/lib/reports/registry';
+import { getReportDefinition } from '../src/lib/reports/definitions';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -53,15 +54,17 @@ test('a renamed pipeline: its terminal stage is not overdue, and the weekly figu
     expect(byId(open.id)?.overdue).toBe(true);
     expect(byId(done.id)?.overdue).toBe(false);
 
-    // Weekly report figures: this org's relations only, "hired" = its own
-    // finished stage, and the table speaks its labels, not its keys.
-    const stats = await weeklyAnalyticsStats(org.id, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
-    expect(stats.total).toBe(2);
-    expect(stats.conversion).toBe(50);
-    expect(stats.stageRows).toContain('Placed at partner');
-    expect(stats.stageRows).toContain('Working together');
-    expect(stats.stageRows).not.toContain('STAGE_PLACED');
-    expect(stats.stageRows).not.toContain('HIRED_660');
+    // The weekly summary (a pipeline-summary report since #1905): this org's
+    // relations only, "reached" = its own finished stage, and the stage rows
+    // speak its labels, not its keys.
+    const { rows } = await loadReport(getReportDefinition('pipeline-summary')!, { orgId: org.id, locale: 'en' });
+    expect(rows[0]).toMatchObject({ value: 2 });
+    expect(rows[1]).toMatchObject({ value: 1, share: 50 });
+    const metrics = rows.map((r) => String(r.metric));
+    expect(metrics).toContain('Stage: Placed at partner');
+    expect(metrics).toContain('Stage: Working together');
+    expect(metrics.join(' ')).not.toContain('STAGE_PLACED');
+    expect(metrics.join(' ')).not.toContain('HIRED_660');
   } finally {
     await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [open.id, done.id] } } });
     for (const email of [menteeA, menteeB, mentorEmail, adminEmail]) await cleanupByEmail(email);

@@ -79,9 +79,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         invitationEmail: {
           roles: { MENTOR: 'a sales rep', MENTEE: 'a lead' },
         },
-        analyticsReportEmail: {
-          summary: '{total} records · {conversion}% reached the final stage · last 7 days: {newRelations} new records, {interactions} interactions.',
-        },
         events: {
           'interaction.logged': 'A new interaction note was added.',
           'company_interest.mentee': 'A company showed interest in your profile. Your contact person will get in touch with you.',
@@ -668,9 +665,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         invitationEmail: {
           roles: { MENTOR: 'satış temsilcisi', MENTEE: 'müşteri adayı' },
         },
-        analyticsReportEmail: {
-          summary: '{total} kayıt · %{conversion} son aşamaya ulaştı · son 7 gün: {newRelations} yeni kayıt, {interactions} etkileşim.',
-        },
         events: {
           'interaction.logged': 'Yeni bir etkileşim kaydı eklendi.',
           'company_interest.mentee': 'Bir firma profilinle ilgilendi. Muhatabın seninle iletişime geçecek.',
@@ -1118,9 +1112,6 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       notifications: {
         invitationEmail: {
           roles: { MENTOR: 'Vertriebsmitarbeiter', MENTEE: 'Lead' },
-        },
-        analyticsReportEmail: {
-          summary: '{total} Datensätze · {conversion} % haben die letzte Phase erreicht · letzte 7 Tage: {newRelations} neue Datensätze, {interactions} Interaktionen.',
         },
         events: {
           'interaction.logged': 'Ein neuer Interaktionseintrag wurde hinzugefügt.',

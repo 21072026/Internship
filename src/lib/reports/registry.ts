@@ -12,7 +12,9 @@
 
 import { prisma } from '@/lib/prisma';
 import type { Locale } from '@/i18n/config';
-import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { outcomeStageKeysFrom, resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
+import { interactionInTenant } from '@/lib/analyticsScope';
+import { getDictionary } from '@/i18n/dictionaries';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE, complianceRows } from '@/lib/weeklyReportComplianceQuery';
@@ -57,6 +59,35 @@ const LOADERS: Record<string, (ctx: ReportContext) => Promise<Row[]>> = {
     ]);
     const byKey = new Map(counts.map((c) => [c.pipelineStatus, c._count._all]));
     return stages.map((s) => ({ stage: s.label, count: byKey.get(s.key) ?? 0 }));
+  },
+
+  async 'pipeline-summary'(ctx) {
+    const { tenant, stageOrgId } = await scopeOf(ctx);
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+    const [stages, counts, newRelations, interactions] = await Promise.all([
+      resolvePipelineStages(stageOrgId, ctx.locale),
+      prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({}, tenant), _count: { _all: true } }),
+      prisma.mentorshipRelation.count({ where: withinTenant({ startDate: { gte: weekAgo } }, tenant) }),
+      prisma.interactionLog.count({ where: { date: { gte: weekAgo }, ...interactionInTenant(tenant) } }),
+    ]);
+    // "Reached the final stage" is the tenant's own finished set (#1882).
+    const { finished } = outcomeStageKeysFrom(stages);
+    const total = counts.reduce((n, c) => n + c._count._all, 0);
+    const reached = counts.filter((c) => finished.includes(c.pipelineStatus)).reduce((n, c) => n + c._count._all, 0);
+    const M = getDictionary(ctx.locale).reports.metric;
+    // Stage rows busiest first, named by the tenant's own labels in the
+    // reader's language — never a key.
+    const stageRows = counts
+      .slice()
+      .sort((a, b) => b._count._all - a._count._all)
+      .map((c) => ({ metric: M.stage.replace('{stage}', stageLabel(stages, c.pipelineStatus, ctx.locale)), value: c._count._all, share: pct(c._count._all, total) }));
+    return [
+      { metric: M.total, value: total, share: null },
+      { metric: M.reached, value: reached, share: pct(reached, total) },
+      { metric: M.new7, value: newRelations, share: null },
+      { metric: M.interactions7, value: interactions, share: null },
+      ...stageRows,
+    ];
   },
 
   async 'cohort-comparison'(ctx) {
