@@ -176,6 +176,7 @@ model Organization {
   usageRollups         UsageRollup[]
   companyUsage         CompanyUsage[]
   contactPermissions   ContactPermission[]
+  integrationEvents    IntegrationEvent[]
   companyContacts      CompanyContact[]
   postCampaigns        PostCampaign[]
   postRecipients       PostCampaignRecipient[]
@@ -1777,6 +1778,33 @@ model CompanyContact {
 
   @@unique([companyId, email])
   @@index([orgId])
+}
+
+// One event a machine source sent us (#2450/#2451): the idempotency claim and
+// the per-account high-water mark. The row is inserted FIRST (the unique index
+// is the claim, the CompanyInquiry `convertedCompanyId` pattern), so a repeated
+// `event_id` writes nothing a second time; `outcome` records what the event did.
+// Written only by src/lib/salevaliIngest.ts, which always passes `orgId`.
+model IntegrationEvent {
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  id         String       @id @default(cuid())
+  // The machine source, e.g. "salevali".
+  provider   String       @db.VarChar(40)
+  // The source's own event id (SaleVali: the outbox document's _id).
+  eventId    String       @db.VarChar(64)
+  eventType  String       @db.VarChar(40)
+  // Lower-cased, as Company.externalId stores it.
+  externalId String?      @db.VarChar(191)
+  occurredAt DateTime
+  // processing | applied | stale | refused_backward | recorded | unknown_account | conflict
+  outcome    String       @db.VarChar(40)
+  detail     String?      @db.VarChar(500)
+  companyId  String?
+  createdAt  DateTime     @default(now())
+
+  @@unique([orgId, provider, eventId])
+  @@index([orgId, provider, externalId, occurredAt])
 }
 
 model ContactPermission {

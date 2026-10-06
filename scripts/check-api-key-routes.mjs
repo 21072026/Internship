@@ -18,6 +18,9 @@
 //   2. every /api/v1 route that touches prisma goes through withApiKey()
 //   3. the scope each one asks for is a real scope from lib/apiScopes.ts
 //   4. every /api/v1 path is described in the public OpenAPI document
+//   5. a key-authenticated route OUTSIDE /api/v1 (#2450: /api/v1 is frozen,
+//      #2348 decision 3) is named in KEY_ROUTES_OUTSIDE_V1 with its reason, and
+//      checks 2 and 3 apply to it exactly as to /api/v1
 //
 // Run: node scripts/check-api-key-routes.mjs   (npm run check:api-key-routes)
 
@@ -104,6 +107,33 @@ for (const file of files) {
   }
 }
 
+// 5. Key-authenticated routes outside /api/v1. Each one is a deliberate
+// machine-to-machine door, so it is listed here with its reason — a new one
+// cannot appear by accident.
+const KEY_ROUTES_OUTSIDE_V1 = {
+  'src/app/api/integrations/salevali/events/route.ts':
+    'SaleVali account events (#2450): the machine-to-machine ingest a source system POSTs to with a ' +
+    'companies:write key; the tenant is the key\'s bound org. Contract: ' +
+    'docs/marketing-vertical/salevali-provider-contract.md.',
+};
+const outside = routeFiles('src/app/api').filter((f) => !f.replace(/\\/g, '/').startsWith(`${V1_DIR}/`));
+for (const file of outside) {
+  const text = readFileSync(file, 'utf8');
+  if (!/\bwithApiKey\s*\(/.test(text)) continue;
+  const key = file.replace(/\\/g, '/');
+  if (!KEY_ROUTES_OUTSIDE_V1[key]) {
+    problems.push(`${file}  opens an API-key door outside /api/v1 without an entry in KEY_ROUTES_OUTSIDE_V1.`);
+  }
+  for (const m of text.matchAll(/withApiKey\s*\(\s*[A-Za-z_$][\w$]*\s*,\s*'([^']*)'/g)) {
+    if (!scopes.has(m[1])) problems.push(`${file}  requires the scope '${m[1]}', which is not in API_SCOPES.`);
+  }
+}
+for (const listed of Object.keys(KEY_ROUTES_OUTSIDE_V1)) {
+  if (!outside.some((f) => f.replace(/\\/g, '/') === listed)) {
+    problems.push(`${listed}  is listed in KEY_ROUTES_OUTSIDE_V1 but does not exist — remove the entry.`);
+  }
+}
+
 if (problems.length > 0) {
   console.error('api-key routes FAILED — the public API must be entered through one door:\n');
   for (const problem of problems) console.error(`  • ${problem}`);
@@ -113,5 +143,6 @@ if (problems.length > 0) {
 
 console.log(
   `api-key routes OK — ${files.length} /api/v1 route file(s), every authenticated one behind ` +
-    `withApiKey(), scopes drawn from the ${scopes.size} known scope(s), all documented.`,
+    `withApiKey(), scopes drawn from the ${scopes.size} known scope(s), all documented; ` +
+    `${Object.keys(KEY_ROUTES_OUTSIDE_V1).length} listed key route(s) outside /api/v1.`,
 );

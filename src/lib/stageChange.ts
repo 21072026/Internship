@@ -15,6 +15,10 @@ import { resolvePipelineStages } from './pipelineStages';
 import { isDropoffReasonCodeFor } from './dropoffReasons';
 import { verticalFor } from './verticalContext';
 
+// The no-regression rule for MACHINE writers (#2451): pure, so it is unit-tested
+// on its own — see the module's header.
+export { isBackwardMove, type StageForDirection } from './stageDirection';
+
 export function isStageTransition(fromStatus: string, toStatus: string): boolean {
   return fromStatus !== toStatus;
 }

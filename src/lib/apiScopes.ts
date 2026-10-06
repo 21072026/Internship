@@ -5,16 +5,17 @@
 // server-only. The server-side helpers that touch the DB live in lib/apiKey.ts.
 //
 // Naming shape: `<resource>:<action>`, lowercase, singular action verbs
-// (`read`, later `write`). Exactly ONE scope exists today because exactly one
-// /api/v1 route exists (`GET /api/v1/candidates`) — the point of fixing the
-// shape now is that adding `companies:read` or `candidates:write` later is a
-// list entry, not a format migration. A key carrying an unknown scope string is
-// treated as holding nothing.
+// (`read`, `write`). `candidates:read` is `GET /api/v1/candidates`;
+// `companies:write` (#2450) is the first WRITE scope — the machine-to-machine
+// account ingest, `POST /api/integrations/salevali/events`, deliberately outside
+// the frozen /api/v1. Never a default: an admin grants it to the one key a
+// source system uses. A key carrying an unknown scope string is treated as
+// holding nothing.
 //
 // NOTE: nothing here enforces anything. Checking a scope at the door of an
 // /api/v1 route is #1546; this module defines and parses the vocabulary.
 
-export const API_SCOPES = ['candidates:read'] as const;
+export const API_SCOPES = ['candidates:read', 'companies:write'] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
 
