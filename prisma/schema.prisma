@@ -168,6 +168,7 @@ model Organization {
   relationHealthSnapshots RelationHealthSnapshot[]
   surveys                 Survey[]
   surveyCampaigns         SurveyCampaign[]
+  evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
   surveyResponses         SurveyResponse[]
   meetingFeedback         MeetingFeedback[]
@@ -2655,6 +2656,8 @@ model MentorshipRelation {
   meetings              Meeting[]
   messages              Message[]
   evaluations           Evaluation[]
+  // INTERIM/FINAL due dates and their reminders (#1891).
+  evaluationDues        EvaluationDue[]
   goals                 Goal[]
   meetingRequests       MeetingRequest[]
   questions             MentorQuestion[]
@@ -2702,6 +2705,31 @@ enum EvaluationType {
 enum GoalStatus {
   OPEN
   DONE
+}
+
+// When an INTERIM or FINAL evaluation is due, and whether the mentor has been
+// reminded (#1891). One row per relation and type — the unique is the claim,
+// so two sweeps (or two replicas) create one row. `dueAt` comes from the org's
+// schedule (src/lib/evaluationDue.ts): N days after the relation entered the
+// configured stage. `completedAt` is stamped by POST /api/evaluations when the
+// mentor (or an admin) writes that type — not by polling — and stops the
+// reminders at once. At most two reminders, ever (EVALUATION_MAX_REMINDERS).
+model EvaluationDue {
+  id             String             @id @default(cuid())
+  orgId          String?
+  org            Organization?      @relation(fields: [orgId], references: [id])
+  relationId     String
+  relation       MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  type           EvaluationType
+  dueAt          DateTime
+  remindersSent  Int                @default(0)
+  lastRemindedAt DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@unique([relationId, type])
+  @@index([orgId])
+  @@index([completedAt, dueAt])
 }
 
 model Evaluation {
