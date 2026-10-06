@@ -9,7 +9,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { Session } from 'next-auth';
 import type { Locale } from '@/i18n/config';
 import { runAiGated, type AiArtifactRef, type AiDenialReason } from '@/lib/aiGate';
-import { findCachedArtifact, hashInput } from '@/lib/ai/artifacts';
+import { findCachedArtifact, hashInput, TASK_TTL_MS } from '@/lib/ai/artifacts';
+import { prisma } from '@/lib/prisma';
 import { noteParseError } from '@/lib/ai/provider';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -63,14 +64,26 @@ export async function analyticsNarrative(
   locale: Locale,
   mode: { run: false } | { run: true; regenerate?: boolean },
 ): Promise<NarrativeBody> {
-  const facts = await factsFor(session, params, locale);
   const orgId = await settingsOrgOf(session);
+  const none: NarrativeBody = { narrative: null, cached: false, artifact: null, reason: null };
+  if (!mode.run) {
+    // The dashboard calls this on every view, next to GET /api/admin/analytics
+    // computing the very same figures. Recomputing them here only pays off
+    // when a paragraph could exist at all, so the cheap question goes first:
+    // an org that never wrote one (or not within the TTL) costs one indexed
+    // read, not a second copy of the dashboard's queries.
+    const any = await prisma.aiArtifact
+      .findFirst({ where: { orgId: orgId ?? (await defaultOrgId()), taskId: SCOPE, subjectUserId: null, createdAt: { gte: new Date(Date.now() - TASK_TTL_MS[SCOPE]) } }, select: { id: true } })
+      .catch(() => null);
+    if (!any) return none;
+  }
+  const facts = await factsFor(session, params, locale);
   const inputHash = hashInput({ facts, locale });
   if (!mode.run) {
     const hit = await findCachedArtifact({ orgId: orgId ?? (await defaultOrgId()), taskId: SCOPE, subjectUserId: null, inputHash }).catch(() => null);
     return hit
       ? { narrative: hit.content, cached: true, artifact: { id: hit.id, createdAt: hit.createdAt.toISOString(), visibility: hit.visibility }, reason: null }
-      : { narrative: null, cached: false, artifact: null, reason: null };
+      : none;
   }
   const gated = await runAiGated<string | null>({
     scope: SCOPE,
