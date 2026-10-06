@@ -6332,6 +6332,49 @@ const en = {
   // the tree, rendered both by the internal report (#1895) and the public
   // calculator (#1755), which is why the copy has to read correctly to a
   // coordinator and to a prospect.
+  // The executive dashboard (#1895), /admin/analytics/executive.
+  executive: {
+    title: 'Executive dashboard',
+    subtitle: 'Four scores from 0 to 100, each one plain arithmetic over your own records.',
+    openFromAnalytics: 'Executive dashboard',
+    back: 'Analytics',
+    print: 'Print',
+    from: 'From',
+    to: 'To',
+    cohort: 'Cohort',
+    allCohorts: 'All cohorts',
+    deterministic: 'No score here is predicted, learned or modelled: each is 100 × a count ÷ a count, and the counts are shown.',
+    howComputed: 'How is this computed?',
+    trend: 'Previous periods',
+    noData: 'No active relationships in this period.',
+    delta: {
+      up: '{name} is {d} points above the previous period.',
+      down: '{name} is {d} points below the previous period.',
+      same: '{name} is unchanged from the previous period.',
+      none: 'No previous period to compare with yet.',
+    },
+    scores: {
+      engagement: {
+        name: 'Engagement',
+        formula: 'Relationships with at least one contact in the period — a logged interaction, a direct message either way, or the participant’s own group post — out of all relationships active in it.',
+      },
+      progression: {
+        name: 'Progression',
+        formula: 'Relationships that moved forward at least one stage on the main path in the period, out of all relationships active in it.',
+      },
+      placement: {
+        name: 'Placement',
+        formula: 'Relationships that first reached “{stage}” in the period, out of all relationships active in it.',
+      },
+      capability: {
+        name: 'Capability',
+        formula: 'Growth in skill proficiency over time.',
+        notMeasurable: 'Not yet measurable',
+        notMeasurableBody: 'This score needs skill levels recorded over time and the skills-gap report. Until both exist it is left empty rather than filled with a stand-in number.',
+        link: 'What is missing',
+      },
+    },
+  },
   roi: {
     title: 'Programme ROI',
     subtitle: 'What the programme cost, what it returned, and every step in between.',
@@ -12575,6 +12618,49 @@ const tr: Dict = {
     },
     back: 'Ana sayfaya dön',
   },
+  // Yönetici panosu (#1895), /admin/analytics/executive.
+  executive: {
+    title: 'Yönetici panosu',
+    subtitle: '0–100 arası dört skor; her biri kendi kayıtlarınız üzerinde basit bir hesap.',
+    openFromAnalytics: 'Yönetici panosu',
+    back: 'Analitik',
+    print: 'Yazdır',
+    from: 'Başlangıç',
+    to: 'Bitiş',
+    cohort: 'Dönem',
+    allCohorts: 'Tüm dönemler',
+    deterministic: 'Buradaki hiçbir skor tahmin edilmiyor, öğrenilmiyor ya da modellenmiyor: her biri 100 × bir sayı ÷ bir sayı ve sayılar gösteriliyor.',
+    howComputed: 'Bu nasıl hesaplanıyor?',
+    trend: 'Önceki dönemler',
+    noData: 'Bu dönemde aktif ilişki yok.',
+    delta: {
+      up: '{name} önceki döneme göre {d} puan yukarıda.',
+      down: '{name} önceki döneme göre {d} puan aşağıda.',
+      same: '{name} önceki dönemle aynı.',
+      none: 'Henüz karşılaştırılacak önceki dönem yok.',
+    },
+    scores: {
+      engagement: {
+        name: 'Etkileşim',
+        formula: 'Dönem içinde en az bir teması olan ilişkiler — kayıtlı bir etkileşim, iki yönden biri doğrudan mesaj ya da katılımcının kendi grup mesajı — dönemde aktif olan tüm ilişkilere oranı.',
+      },
+      progression: {
+        name: 'İlerleme',
+        formula: 'Dönem içinde ana yolda en az bir aşama ilerleyen ilişkilerin, dönemde aktif olan tüm ilişkilere oranı.',
+      },
+      placement: {
+        name: 'Yerleştirme',
+        formula: 'Dönem içinde “{stage}” aşamasına ilk kez ulaşan ilişkilerin, dönemde aktif olan tüm ilişkilere oranı.',
+      },
+      capability: {
+        name: 'Yetkinlik',
+        formula: 'Zaman içinde beceri düzeyindeki gelişim.',
+        notMeasurable: 'Henüz ölçülemiyor',
+        notMeasurableBody: 'Bu skor, zaman içinde kaydedilen beceri düzeylerine ve beceri açığı raporuna ihtiyaç duyuyor. İkisi de gelene kadar yerine uydurma bir sayı konmuyor, boş bırakılıyor.',
+        link: 'Eksik olan ne',
+      },
+    },
+  },
   roi: {
     title: 'Program yatırım getirisi',
     subtitle: 'Programın maliyeti, getirisi ve aradaki her adım.',
@@ -18815,6 +18901,49 @@ const de: Dict = {
       health: 'Dienst-Verfügbarkeit',
     },
     back: 'Zurück zur Startseite',
+  },
+  // Das Executive-Dashboard (#1895), /admin/analytics/executive.
+  executive: {
+    title: 'Executive-Dashboard',
+    subtitle: 'Vier Scores von 0 bis 100, jeder eine einfache Rechnung über Ihre eigenen Daten.',
+    openFromAnalytics: 'Executive-Dashboard',
+    back: 'Analysen',
+    print: 'Drucken',
+    from: 'Von',
+    to: 'Bis',
+    cohort: 'Kohorte',
+    allCohorts: 'Alle Kohorten',
+    deterministic: 'Kein Score hier ist vorhergesagt, gelernt oder modelliert: Jeder ist 100 × eine Anzahl ÷ eine Anzahl, und die Anzahlen werden gezeigt.',
+    howComputed: 'Wie wird das berechnet?',
+    trend: 'Vorherige Zeiträume',
+    noData: 'Keine aktiven Beziehungen in diesem Zeitraum.',
+    delta: {
+      up: '{name} liegt {d} Punkte über dem vorherigen Zeitraum.',
+      down: '{name} liegt {d} Punkte unter dem vorherigen Zeitraum.',
+      same: '{name} ist gegenüber dem vorherigen Zeitraum unverändert.',
+      none: 'Noch kein vorheriger Zeitraum zum Vergleich.',
+    },
+    scores: {
+      engagement: {
+        name: 'Engagement',
+        formula: 'Beziehungen mit mindestens einem Kontakt im Zeitraum — eine erfasste Interaktion, eine Direktnachricht in beide Richtungen oder ein eigener Gruppenbeitrag der teilnehmenden Person — im Verhältnis zu allen in ihm aktiven Beziehungen.',
+      },
+      progression: {
+        name: 'Fortschritt',
+        formula: 'Beziehungen, die im Zeitraum mindestens eine Phase auf dem Hauptpfad vorangekommen sind, im Verhältnis zu allen in ihm aktiven Beziehungen.',
+      },
+      placement: {
+        name: 'Vermittlung',
+        formula: 'Beziehungen, die im Zeitraum erstmals „{stage}“ erreicht haben, im Verhältnis zu allen in ihm aktiven Beziehungen.',
+      },
+      capability: {
+        name: 'Kompetenz',
+        formula: 'Wachstum des Kompetenzniveaus über die Zeit.',
+        notMeasurable: 'Noch nicht messbar',
+        notMeasurableBody: 'Dieser Score braucht über die Zeit erfasste Kompetenzniveaus und den Skills-Gap-Bericht. Solange beides fehlt, bleibt er leer statt mit einer Ersatzzahl gefüllt.',
+        link: 'Was fehlt',
+      },
+    },
   },
   roi: {
     title: 'Programm-ROI',

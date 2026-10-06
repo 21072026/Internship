@@ -279,6 +279,9 @@ export default function AdminAnalyticsPage() {
               <Link href="/admin/analytics/roi" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="roi-link">
                 {t.roi.screen.openFromAnalytics}
               </Link>
+              <Link href="/admin/analytics/executive" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="executive-link">
+                {t.executive.openFromAnalytics}
+              </Link>
               <Link href="/admin/reports/subscriptions" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="schedule-reports-link">
                 {t.reportSubscriptions.ui.openFromAnalytics}
               </Link>
