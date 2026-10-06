@@ -630,6 +630,7 @@ export default function MentorshipPage() {
       <div className="mb-4">
         <SavedViews
           storageKey="mentorship-views"
+            surface="mentorship"
           current={{ search, statusFilter }}
           onApply={(f) => {
             setSearch(f.search || '');
