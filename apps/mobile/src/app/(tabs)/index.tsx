@@ -15,7 +15,8 @@ export default function HomeTab() {
   const tint = product?.color ?? '#1D4ED8';
   const firstName = (user?.name ?? '').split(' ')[0] || user?.email || '';
 
-  const open = (path: string, title: string) => router.push({ pathname: '/web', params: { path, title } });
+  const open = (path: string, title: string) =>
+    path === '/notifications' ? router.navigate('/notifications') : router.push({ pathname: '/web', params: { path, title } });
 
   const tiles: { icon: IconName; label: string; path: string | null }[] = [
     { icon: 'notifications', label: t.notifications, path: '/notifications' },

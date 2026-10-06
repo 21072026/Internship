@@ -19,6 +19,7 @@ import { expireOffers } from '@/lib/offerNotify';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { askForMeetingFeedback } from '@/lib/meetingFeedback';
 import { dispatchDueSurveyCampaigns } from '@/lib/surveyCampaigns';
+import { sendEvaluationReminders } from '@/lib/evaluationDue';
 import { sendDueSurveyReminders } from '@/lib/surveyReminders';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
@@ -125,6 +126,15 @@ export async function GET(request: Request) {
       const at = new URL(request.url).searchParams.get('at');
       const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
       return NextResponse.json({ message: 'Relation health sweep ran', relationHealth: await sweepRelationHealth({ orgIds: [orgId], now }) });
+    }
+    // Evaluation due dates and reminders (#1891): the caller's own org only.
+    // `?at=` pins the clock so the due date and the week-later second reminder
+    // can be exercised.
+    if (job === 'evaluations') {
+      const orgId = await settingsOrgOf(session);
+      const at = new URL(request.url).searchParams.get('at');
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      return NextResponse.json({ message: 'Evaluation reminders ran', evaluations: await sendEvaluationReminders(now, { orgIds: [orgId] }) });
     }
     // Survey campaigns (#1887): the caller's own org only, and only this
     // sweep. `?at=` pins the clock so a trigger's window can be exercised.

@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Lock } from 'lucide-react';
+import { ArrowLeft, Lock, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import type { Breakdown, DistributionBin, QuestionResult, SurveyResults } from '@/lib/surveyResults';
 import type { Nps } from '@/lib/nps';
+import type { SummaryTheme } from '@/lib/surveyTextRules';
 
 // One survey's results (#1910). Everything that keeps a small group unreadable
 // already happened on the server (src/lib/surveyResults.ts) — this screen only
@@ -58,7 +60,60 @@ function NpsBlock({ nps, s }: { nps: Nps; s: Dict }) {
   );
 }
 
-function QuestionCard({ q, s, floor }: { q: QuestionResult; s: Dict; floor: number }) {
+// "Summarise these answers" (#1910). The plain list above always stays: when
+// AI is off, out of quota or fails, the reply says why and nothing else changes.
+function AiSummary({ surveyId, questionKey, s }: { surveyId: string; questionKey: string; s: Dict }) {
+  const [busy, setBusy] = useState(false);
+  const [themes, setThemes] = useState<SummaryTheme[] | null>(null);
+  const [note, setNote] = useState('');
+  const run = async () => {
+    setBusy(true);
+    setNote('');
+    try {
+      const res = await fetch(`/api/admin/surveys/${surveyId}/summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionKey }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.summary) setThemes(body.summary.themes);
+      else setNote((s as Record<string, string>)[`aiUnavailable_${body.reason ?? body.code}`] ?? s.aiUnavailable);
+    } catch {
+      setNote(s.aiUnavailable);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-3" data-testid={`ai-summary-${questionKey}`}>
+      {!themes && (
+        <Button size="sm" variant="outline" onClick={run} loading={busy} data-testid={`ai-summarise-${questionKey}`}>
+          <Sparkles className="mr-1 h-4 w-4" /> {s.aiSummarise}
+        </Button>
+      )}
+      {note && <p className="mt-2 text-sm text-gray-600 dark:text-gray-300" role="status" data-testid={`ai-note-${questionKey}`}>{note}</p>}
+      {themes && (
+        <div className="rounded-lg border border-purple-200 p-3 dark:border-purple-900">
+          <p className="mb-2 flex items-center gap-1 text-xs font-medium text-purple-700 dark:text-purple-300"><Sparkles className="h-3.5 w-3.5" /> {s.aiSummaryTitle}</p>
+          {themes.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-300">{s.aiNoThemes}</p>}
+          <ul className="space-y-2 text-sm">
+            {themes.map((t, i) => (
+              <li key={i}>
+                <p className="font-medium text-gray-900 dark:text-gray-100">{t.theme}</p>
+                {t.quotes.map((quote, j) => (
+                  <blockquote key={j} className="ml-3 border-l-2 border-gray-200 pl-2 text-gray-700 dark:border-gray-700 dark:text-gray-200">“{quote}”</blockquote>
+                ))}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-gray-500">{s.aiSummaryNote}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuestionCard({ q, s, floor, surveyId }: { q: QuestionResult; s: Dict; floor: number; surveyId: string }) {
   const bins = q.type === 'BOOLEAN' && q.distribution
     ? q.distribution.map((b) => ({ ...b, label: b.value === 'true' ? s.yes : s.no }))
     : q.distribution;
@@ -91,6 +146,7 @@ function QuestionCard({ q, s, floor }: { q: QuestionResult; s: Dict; floor: numb
               <li key={i} className="whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-2 text-sm text-gray-800 dark:text-gray-100">{text}</li>
             ))}
           </ul>
+          <AiSummary surveyId={surveyId} questionKey={q.key} s={s} />
         </div>
       )}
     </Card>
@@ -182,7 +238,7 @@ export default function SurveyResultsPage() {
                 </Card>
               )}
               <div className="grid gap-4 lg:grid-cols-2">
-                {data.questions.map((q) => <QuestionCard key={q.key} q={q} s={s} floor={data.floor} />)}
+                {data.questions.map((q) => <QuestionCard key={q.key} q={q} s={s} floor={data.floor} surveyId={data.survey.id} />)}
               </div>
             </>
           )}

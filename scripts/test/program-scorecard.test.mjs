@@ -47,7 +47,9 @@ test('below the floor, or with nothing counted, a row says "not enough data" —
 test('indicators without a data source yet are not measurable, with the work that fixes that', () => {
   const by = Object.fromEntries(buildScorecard({}).map((r) => [r.key, r]));
   assert.deepEqual(by.evaluationCoverage, { key: 'evaluationCoverage', status: 'not_measurable', dependsOn: [1891] });
-  assert.deepEqual(by.nps, { key: 'nps', status: 'not_measurable', dependsOn: [1910] });
+  // The survey indicators became measurable with #1910: no data is "not enough data", not "not measurable".
+  assert.equal(by.nps.status, 'insufficient');
+  assert.equal(by.surveyResponseRate.status, 'insufficient');
   assert.equal(buildScorecard({}).length, SCORECARD_KEYS.length);
 });
 
@@ -67,4 +69,15 @@ test('every threshold is justified in the source and published in the doc', () =
     assert.ok(line > 0 && src.split('\n')[line - 1].trimStart().startsWith('//'), `${key} has a comment above it`);
     assert.match(doc, new RegExp(`\\| \`${key}\` \\|[^\\n]*\\| ${t.green} \\|[^\\n]*\\| ${t.amber} \\|`), `${key} row in the doc`);
   }
+});
+
+test('NPS is a signed score: above 0 is amber, 30 is green, a negative score is red', () => {
+  assert.equal(bandFor('nps', 30), 'GREEN');
+  assert.equal(bandFor('nps', 29), 'AMBER');
+  assert.equal(bandFor('nps', 0), 'AMBER');
+  assert.equal(bandFor('nps', -1), 'RED');
+  const [row] = buildScorecard({ nps: { value: -12, basis: 40 } }).filter((r) => r.key === 'nps');
+  assert.deepEqual({ status: row.status, band: row.band, unit: row.unit, nextAction: row.nextAction }, { status: 'ok', band: 'RED', unit: 'score', nextAction: '/admin/surveys' });
+  assert.equal(bandFor('surveyResponseRate', 50), 'GREEN');
+  assert.equal(bandFor('surveyResponseRate', 29), 'RED');
 });

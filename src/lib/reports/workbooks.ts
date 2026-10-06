@@ -12,7 +12,8 @@
 // reasons) are screen-specific KPI tables, moved here unchanged.
 
 import type { Dictionary } from '@/i18n/dictionaries';
-import type { ScorecardRow } from '@/lib/programScorecard';
+import type { ScorecardRow, ScorecardUnit } from '@/lib/programScorecard';
+import type { SurveyOverviewRow } from '@/lib/surveyOverview';
 import { netChangeMinor, type DealValueMonth } from '@/lib/dealValue';
 import { getReportDefinition } from './definitions';
 import { loadReport, ReportUnavailable, type ReportContext } from './registry';
@@ -90,6 +91,32 @@ interface AnalyticsSources {
   funnel: FunnelKpi | null;
   /** The programme health scorecard (#1908) — the first sheet when present. */
   scorecard?: ScorecardRow[] | null;
+  /** Every survey, floored like the results screen (#1910). */
+  surveys?: SurveyOverviewRow[] | null;
+}
+
+// The surveys (#1910): counts always, the rate and the NPS only at or above
+// each survey's floor — a blank there is "fewer than the floor", said in words.
+function surveysSheet(rows: SurveyOverviewRow[] | null | undefined, t: Dictionary): Sheet[] {
+  if (!rows || rows.length === 0) return [];
+  const s = t.surveyResults;
+  const label = (prefix: string, v: string) => (s as Record<string, string>)[`${prefix}_${v}`] ?? v;
+  return [
+    {
+      name: 'Surveys',
+      columns: [s.colSurvey, s.colStatus, s.colAnonymity, s.colInvited, s.colResponses, s.colRate, s.colNps, s.colNpsN],
+      rows: rows.map((r): Cell[] => [
+        r.title,
+        label('status', r.status),
+        label('anonymity', r.anonymity),
+        r.invited,
+        r.responses,
+        r.rate === null ? s.belowFloor : `${r.rate}%`,
+        r.nps === null ? (r.npsN > 0 ? s.belowFloor : '—') : r.nps,
+        r.npsN,
+      ]),
+    },
+  ];
 }
 
 // The programme health scorecard (#1908) as a sheet, so the verdict reaches
@@ -98,8 +125,8 @@ interface AnalyticsSources {
 function scorecardSheet(rows: ScorecardRow[] | null | undefined, t: Dictionary): Sheet[] {
   if (!rows || rows.length === 0) return [];
   const s = t.scorecard;
-  const fmt = (v: number, unit: 'percent' | 'days') => s.units[unit].replace('{v}', String(v));
-  const target = (r: { target: number; direction: 'higher' | 'lower'; unit: 'percent' | 'days' }) =>
+  const fmt = (v: number, unit: ScorecardUnit) => s.units[unit].replace('{v}', String(v));
+  const target = (r: { target: number; direction: 'higher' | 'lower'; unit: ScorecardUnit }) =>
     (r.direction === 'higher' ? s.targetAtLeast : s.targetAtMost).replace('{v}', fmt(r.target, r.unit));
   return [
     {
@@ -225,6 +252,7 @@ export async function analyticsWorkbook(src: AnalyticsSources, ctx: ReportContex
   const funnel = await registrySheet('Funnel', 'pipeline-funnel', ctx, t);
   return [
     ...scorecardSheet(src.scorecard, t),
+    ...surveysSheet(src.surveys, t),
     ...(funnel ? [funnel] : []),
     ...kpiSheets(src.funnel, t, stageLabel),
     ...dealValueSheet(src.dealValue, t),
@@ -248,6 +276,7 @@ export async function fullAnalyticsWorkbook(src: AnalyticsSources, ctx: ReportCo
   ]);
   return [
     ...scorecardSheet(src.scorecard, t),
+    ...surveysSheet(src.surveys, t),
     ...(funnel ? [funnel] : []),
     ...kpiSheets(src.funnel, t, stageLabel),
     ...dealValueSheet(src.dealValue, t),
