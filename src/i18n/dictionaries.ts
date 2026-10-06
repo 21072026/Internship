@@ -2487,6 +2487,17 @@ const en = {
     loadError: 'Failed to load meetings. Please try again.',
     scheduledCount: 'Invite sent to {n} mentee(s).',
     conflict: { collides: 'This time collides with “{title}” ({time}).', bookAnyway: 'Book anyway', skipped: 'Not booked for {name}: collides with “{title}” ({time}).', collidesBusy: 'This time is already taken ({time}).', skippedBusy: 'Not booked for {name}: that time is already taken ({time}).' },
+    suggest: {
+      title: 'Suggested times',
+      hint: 'Free for both of you, between 08:00 and 20:00 on each person’s clock.',
+      loading: 'Finding times…',
+      reasons: {
+        no_hours: 'No posted hours in the next three weeks.',
+        all_taken: 'Every posted hour in the next three weeks is already taken.',
+        outside_hours: 'The free hours fall outside 08:00–20:00 for one of you.',
+        limit_reached: 'The booking limit is reached for the coming weeks.',
+      },
+    },
     policy: {
       min_notice: 'Bookings need at least {limit} notice.',
       min_notice_named: '{name} needs at least {limit} notice.',
@@ -9283,6 +9294,17 @@ const tr: Dict = {
     loadError: 'Toplantılar yüklenemedi. Lütfen tekrar deneyin.',
     scheduledCount: '{n} mentee’ye davet gönderildi.',
     conflict: { collides: 'Bu saat “{title}” ({time}) ile çakışıyor.', bookAnyway: 'Yine de planla', skipped: '{name} için planlanmadı: “{title}” ({time}) ile çakışıyor.', collidesBusy: 'Bu saat zaten dolu ({time}).', skippedBusy: '{name} için planlanmadı: o saat zaten dolu ({time}).' },
+    suggest: {
+      title: 'Önerilen saatler',
+      hint: 'İkiniz için de boş, herkesin kendi saatiyle 08:00 ile 20:00 arasında.',
+      loading: 'Saatler aranıyor…',
+      reasons: {
+        no_hours: 'Önümüzdeki üç haftada girilmiş saat yok.',
+        all_taken: 'Önümüzdeki üç haftadaki bütün saatler dolu.',
+        outside_hours: 'Boş saatler birinizin saatine göre 08:00–20:00 dışında kalıyor.',
+        limit_reached: 'Önümüzdeki haftalar için randevu sınırı dolmuş.',
+      },
+    },
     policy: {
       min_notice: 'Randevu en az {limit} önceden alınmalı.',
       min_notice_named: '{name} en az {limit} önceden haber bekliyor.',
@@ -15975,6 +15997,17 @@ const de: Dict = {
     loadError: 'Meetings konnten nicht geladen werden. Bitte versuche es erneut.',
     scheduledCount: 'Einladung an {n} Mentee(s) gesendet.',
     conflict: { collides: 'Diese Zeit überschneidet sich mit „{title}“ ({time}).', bookAnyway: 'Trotzdem planen', skipped: 'Für {name} nicht geplant: überschneidet sich mit „{title}“ ({time}).', collidesBusy: 'Diese Zeit ist bereits belegt ({time}).', skippedBusy: 'Für {name} nicht geplant: diese Zeit ist bereits belegt ({time}).' },
+    suggest: {
+      title: 'Vorgeschlagene Zeiten',
+      hint: 'Für euch beide frei, zwischen 08:00 und 20:00 auf der jeweils eigenen Uhr.',
+      loading: 'Zeiten werden gesucht…',
+      reasons: {
+        no_hours: 'In den nächsten drei Wochen sind keine Zeiten eingetragen.',
+        all_taken: 'Alle eingetragenen Zeiten der nächsten drei Wochen sind schon belegt.',
+        outside_hours: 'Die freien Zeiten liegen für eine Person außerhalb von 08:00–20:00.',
+        limit_reached: 'Das Buchungslimit ist für die kommenden Wochen erreicht.',
+      },
+    },
     policy: {
       min_notice: 'Termine brauchen mindestens {limit} Vorlauf.',
       min_notice_named: '{name} braucht mindestens {limit} Vorlauf.',
