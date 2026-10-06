@@ -55,5 +55,16 @@ deterministic").
   have no row but do have an attendance record. An occurrence nobody recorded
   and the reminder job never materialized is invisible here.
 
-Still to come (#2014's second half): the per-participant attendance step in
-the end flow, and the cadence shown on the relation record.
+## Where people see it (#2014, part 2)
+
+- **The end flow.** Ending a pair's meeting from the dashboard banner asks
+  "who was there?" (`AttendanceStep`) before the rating card: both people
+  default to *was there*, one tap marks a no-show or an excused absence, and
+  *Skip* records nothing — which the figures read as everyone came. A
+  recurring occurrence gets the step too (it has no row to rate, so no card
+  follows); a project room gets neither.
+- **The relation record** (`/mentor/mentees/[id]`, `/admin/candidates/[id]`):
+  `RelationCadencePanel` shows when the pair last met and whether that is
+  inside the agreed rhythm, and lets the mentor or an admin set the rhythm.
+  Backed by `GET /api/mentorship/[id]/cadence` — the relation's mentor and an
+  admin only, the two who can change the promise.

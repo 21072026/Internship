@@ -36,6 +36,8 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
         setNotice(a.consentRequired);
       } else if (body.code === 'quota_exceeded') {
         setNotice(a.quotaExceeded);
+      } else if (body.code === 'provider_error') {
+        setNotice(a.providerError);
       } else if (body.code === 'not_configured') {
         setHidden(true);
       } else {

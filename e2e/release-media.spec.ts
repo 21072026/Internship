@@ -460,6 +460,8 @@ test.describe('release media', () => {
       await signInAndSettle(page, mentorEmail, 'MediaFeedback123!', '/mentor');
       page.once('dialog', (d) => d.accept());
       await page.getByTestId('upcoming-meeting-end').click();
+      // The attendance step (#2014) comes before the rating card.
+      await page.getByTestId('attendance-skip').click();
       await page.getByTestId('meeting-feedback-happened-yes').click();
       await page.getByTestId('meeting-feedback-rate-4').click();
       await capturePoster(page.getByTestId('meeting-feedback-card'), 'meeting-feedback');

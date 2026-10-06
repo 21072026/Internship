@@ -71,6 +71,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
       if (gated.reason === 'quota_exceeded') {
         return NextResponse.json({ error: 'Monthly AI quota exhausted', code: 'quota_exceeded' }, { status: 429 });
       }
+      // The provider failed even after its retries (#2024): the same neutral
+      // "not right now" — never a paywall, never a stack trace.
+      if (gated.reason === 'provider_error') {
+        return NextResponse.json({ error: 'Temporarily unavailable', code: 'provider_error' }, { status: 503 });
+      }
       return NextResponse.json({ error: 'AI extraction is not configured', code: 'not_configured' }, { status: 501 });
     }
     return NextResponse.json({ suggestions: gated.result });

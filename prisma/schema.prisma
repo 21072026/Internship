@@ -2119,6 +2119,12 @@ model AiUsage {
   orgId     String?
   createdAt DateTime @default(now())
 
+  // How the call ended (#2024): 'ok', 'parse_error' (the provider answered,
+  // the reply was not the JSON asked for — the task fell back) or
+  // 'provider_error' (it never answered). Only the first two consume quota:
+  // a failure must stay visible without costing the tenant anything.
+  outcome String @default("ok") @db.VarChar(20)
+
   @@index([createdAt])
   @@index([scope])
   @@index([orgId, createdAt])

@@ -38,6 +38,7 @@ import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
+import { RelationCadencePanel } from '@/components/RelationCadencePanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { DealValuePanel } from '@/components/DealValuePanel';
 
@@ -488,6 +489,9 @@ export default function AdminMenteeDetailPage() {
                 nextActionNote={rel.nextActionNote}
                 onSaved={load}
               />
+
+              {/* The pair's meeting rhythm (#2014). */}
+              <RelationCadencePanel relationId={rel.id} />
 
               {/* The trial end (#2553): shown for a record in a trial stage or
                   one that carries a trial date; renders nothing otherwise. */}

@@ -20,7 +20,7 @@ Rules:
 - Say nothing the answers do not contain. Do not add advice or conclusions of your own.`;
 
 export async function aiSummarizeSurveyTexts(question: string, answers: string[]): Promise<SummaryTheme[] | null> {
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS });
+  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 1200,

@@ -74,12 +74,15 @@ Revoking one takes effect on the next call — there is no cached grant.
 | Credential | `ANTHROPIC_API_KEY` — server-side only, never reaches the browser |
 | Model | `ANTHROPIC_CV_MODEL` (default `claude-opus-4-8`), plus `ANTHROPIC_SUMMARY_MODEL` for the interaction summary. The operator of an instance chooses. |
 | Request timeout | 60 s. The SDK's own default is 10 minutes, long enough to hold a request handler open until the user gives up (#895). |
+| Retries | At most 2, only on 429 / 5xx / timeout / connection loss, jittered exponential backoff, and no attempt starts after 45 s (`src/lib/ai/provider.ts`, #2024). The SDK's own retries are off (`maxRetries: 0`) so the two cannot multiply. One task is one metered call however many attempts it took. |
+| Circuit breaker | 5 failures inside a minute open it for a minute; calls then fail fast with `provider_error` and no network request, and the first call after the cool-down is the probe. Per container — a cost guard, not a distributed breaker. |
 | Input cap | 24 000 chars for text tasks; the structured tasks are bounded by their schema |
 | Output cap | 600–1024 `max_tokens` per task |
 
 `cv_extract` and `mentor_match` additionally pin a **JSON schema** on the
-response, so what comes back is a shape, not prose we then have to parse
-defensively.
+response — and still parse it through `safeParseModelJson` (#2024), which
+validates against a zod schema and falls back (marking the call `parse_error`)
+rather than throwing when a reply is not the shape asked for.
 
 ### What we do not have
 
@@ -110,7 +113,10 @@ Neither the prompt nor the generated text is stored:
 | Match rationale | rendered next to the suggestion, gone on reload |
 
 The only row written per call is `AiUsage` — `scope`, `userId`, `companyId`,
-`createdAt`. **No prompt, no completion, no excerpt.** It exists to meter the
+`createdAt` and `outcome` (`ok`, `parse_error` when the reply was not the JSON
+asked for and the task fell back, `provider_error` when the provider never
+answered — the last one is recorded for the console but **does not consume
+quota**). **No prompt, no completion, no excerpt.** It exists to meter the
 monthly quota and to answer "how much did this cost us", and it is the reason a
 usage figure can be shown without keeping anyone's CV around.
 
@@ -123,6 +129,7 @@ An AI denial is never an error page and never a paywall:
 | `no_consent` | a hint linking to the consent setting | "the mentee has not consented" |
 | `not_configured` | the feature **hides itself** (`GET` availability probes) | the button hides after the first attempt |
 | `quota_exceeded` | a neutral "temporarily unavailable" — never quota mechanics, never pricing | the actual reason, because they can fix it |
+| `provider_error` (#2024) | the same neutral "temporarily unavailable" (HTTP 503, `code: 'provider_error'`) | "the AI service is not answering right now" |
 
 `mentor_match` degrades differently and more strongly: the rule-based ranking
 (skill overlap, then lighter load) is computed **first, always**. AI only
