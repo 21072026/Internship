@@ -127,8 +127,11 @@ export function ReleaseNotesList({ initial, total, pageSize, locale, labels }: P
  * #1457) on hover. The releases before #1457 carry a day and no minute, so
  * those are anchored at noon UTC — at most twelve hours either way, which no
  * reading of "2 months ago" can tell apart — and their hover keeps the bare day.
+ * A pending release that git cannot date yet (an uncommitted fragment, a
+ * shallow clone) has an empty `date` and shows none rather than "27 years ago".
  */
 function ReleaseDate({ date, time, locale }: { date: string; time?: string; locale: Locale }) {
+  if (!date) return null;
   return (
     <RelativeTime
       date={`${date}T${time ?? '12:00'}:00Z`}

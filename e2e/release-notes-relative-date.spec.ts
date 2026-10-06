@@ -7,9 +7,11 @@ import { test, expect } from '@playwright/test';
  */
 test('a release reads as a distance, with its UTC stamp on hover', async ({ page }) => {
   await page.goto('/release-notes');
-  const newest = page.getByTestId('release-card').first().getByTestId('release-date');
+  // The first DATED release: a pending fragment that git cannot date yet (an
+  // uncommitted one locally, a shallow CI clone) renders no date at all.
+  const newest = page.getByTestId('release-date').first();
 
-  // The newest release was stamped to the minute, so its hover names the minute.
+  // A recent release was stamped to the minute (#1457), so its hover names the minute.
   await expect(newest).toHaveAttribute('title', /^\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/);
   await expect(newest).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/);
   // A distance, not a date: no "2026-" left in the visible text.
