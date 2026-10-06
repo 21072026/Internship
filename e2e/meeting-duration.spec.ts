@@ -61,9 +61,11 @@ test('a 45-minute meeting is 45 minutes in the .ics and the feed; a legacy row r
     expect(eventMinutes(ics, meeting.id)).toBe(45);
 
     // A row written before the column existed has no length: the one default.
+    // Four hours later, clear of the 90-minute stretch below — the pair cannot
+    // be double-booked (#1995), so lengthening into it would be refused.
     const legacy = await prisma.meeting.create({
       data: {
-        relationId: s.relation.id, title: 'Legacy row', scheduledAt, rsvpToken: `dur-legacy-${Date.now()}`,
+        relationId: s.relation.id, title: 'Legacy row', scheduledAt: new Date(scheduledAt.getTime() + 4 * 3600 * 1000), rsvpToken: `dur-legacy-${Date.now()}`,
         createdById: s.mentor.id,
       },
     });
