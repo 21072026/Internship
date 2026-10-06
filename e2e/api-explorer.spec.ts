@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -119,6 +120,9 @@ test('Swagger UI renders the operations and the token button pre-authorizes it',
   });
   try {
     await login(page, email, pw);
+    // Issuing a key that reads /api/v1 is the INTEGRATIONS_API feature (#1744):
+    // granted to the default org and left granted, so parallel specs never race.
+    await setOrgFeatureFor(page, 'INTEGRATIONS_API', true);
     await page.goto('/admin/api-explorer');
 
     // The warning is server-rendered, so it proves the page itself loaded
@@ -217,6 +221,9 @@ test('a guarded operation asks before it fires, and declining sends nothing', as
 
   try {
     await login(page, email, pw);
+    // Issuing a key that reads /api/v1 is the INTEGRATIONS_API feature (#1744):
+    // granted to the default org and left granted, so parallel specs never race.
+    await setOrgFeatureFor(page, 'INTEGRATIONS_API', true);
     await page.goto('/admin/api-explorer');
 
     // The page claims the gate exists. Everything below is that claim, checked.

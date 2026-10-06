@@ -13,8 +13,10 @@ import {
   isApiScope,
   maxApiKeyExpiry,
   parseScopes,
+  publicApiScopes,
   serializeScopes,
 } from '@/lib/apiScopes';
+import { integrationsLocked } from '@/lib/integrationsGate';
 
 // Admin management of programmatic API keys (#1545).
 //
@@ -91,6 +93,13 @@ export async function POST(request: Request) {
   const scopes = parsed.data.scopes.filter(isApiScope);
   if (scopes.length === 0) {
     return NextResponse.json({ error: 'At least one valid scope is required' }, { status: 400 });
+  }
+
+  // A key that can read the public API is the paid feature (#1744); a key for
+  // SaleVali's own ingest (companies:write) is not — see SCOPE_ENTITLEMENT.
+  if (publicApiScopes(scopes).length > 0) {
+    const locked = await integrationsLocked(session);
+    if (locked) return locked;
   }
 
   let expiresAt: Date | null = null;

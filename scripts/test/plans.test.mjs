@@ -222,7 +222,7 @@ test('an active plan grants exactly its own features', () => {
   const r = resolveEntitlements({ planKey: 'program_plus', status: 'ACTIVE' });
   assert.equal(r.planKey, 'program_plus');
   assert.equal(r.planActive, true);
-  assert.deepEqual([...r.features], ['ADVANCED_ANALYTICS', 'REPORT_EXPORT', 'WHITE_LABEL', 'SSO_SAML']);
+  assert.deepEqual([...r.features], ['ADVANCED_ANALYTICS', 'REPORT_EXPORT', 'WHITE_LABEL', 'SSO_SAML', 'INTEGRATIONS_API']);
   assert.deepEqual([...r.fromGrant], []);
   assert.deepEqual(r.limits, planLimits('program_plus'));
   assert.equal(isEntitled({ planKey: 'program_plus', status: 'ACTIVE' }, 'WHITE_LABEL'), true);

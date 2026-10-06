@@ -16,7 +16,8 @@
 //
 //   1. no module outside src/lib/apiKey.ts calls authenticateApiKey()
 //   2. every /api/v1 route that touches prisma goes through withApiKey()
-//   3. the scope each one asks for is a real scope from lib/apiScopes.ts
+//   3. the scope each one asks for is a real scope from lib/apiScopes.ts, and
+//      (for /api/v1) one SCOPE_ENTITLEMENT gates on INTEGRATIONS_API (#1744)
 //   4. every /api/v1 path is described in the public OpenAPI document
 //   5. a key-authenticated route OUTSIDE /api/v1 (#2450: /api/v1 is frozen,
 //      #2348 decision 3) is named in KEY_ROUTES_OUTSIDE_V1 with its reason, and
@@ -59,6 +60,20 @@ if (!scopeList) {
 }
 const scopes = new Set([...scopeList[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
 
+// Which scopes the plans sell as the public API (#1744). Read from the same
+// file, so the door, key issuing and this guard share one table.
+const entitlementTable = scopesSource.match(/export const SCOPE_ENTITLEMENT[^=]*=\s*\{([^}]*)\}/);
+if (!entitlementTable) {
+  console.error('check-api-key-routes FAILED — could not read SCOPE_ENTITLEMENT from src/lib/apiScopes.ts');
+  process.exit(1);
+}
+const scopeEntitlement = new Map(
+  [...entitlementTable[1].matchAll(/'([^']+)'\s*:\s*('INTEGRATIONS_API'|null)/g)].map((m) => [m[1], m[2] === 'null' ? null : 'INTEGRATIONS_API']),
+);
+for (const scope of scopes) {
+  if (!scopeEntitlement.has(scope)) problems.push(`src/lib/apiScopes.ts  SCOPE_ENTITLEMENT has no entry for '${scope}'.`);
+}
+
 // 1. authenticateApiKey() is the door's own internal step, not a route's tool.
 for (const file of sourceFiles('src')) {
   if (file.replace(/\\/g, '/') === DOOR) continue;
@@ -92,6 +107,13 @@ for (const file of files) {
       problems.push(
         `${file}  requires the scope '${m[1]}', which is not in API_SCOPES — no key can ever ` +
           'hold it, so the route answers 403 to everyone.',
+      );
+    } else if (scopeEntitlement.get(m[1]) !== 'INTEGRATIONS_API') {
+      // 3b. /api/v1 is the public API the plans sell (#1744): its scope must be
+      // one the door gates on INTEGRATIONS_API, or the route is free.
+      problems.push(
+        `${file}  asks for '${m[1]}', which SCOPE_ENTITLEMENT does not map to INTEGRATIONS_API — ` +
+          'an /api/v1 route must be gated by the plan.',
       );
     }
   }

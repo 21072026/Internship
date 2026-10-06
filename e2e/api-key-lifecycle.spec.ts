@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAsFreshUser } from './helpers/auth';
+import { setOrgFeatureFor } from './helpers/entitlements';
 
 // API key lifecycle (#1545): an API key is no longer "a name and a hash".
 // It records who minted it, when it stops being valid, what it may read, and
@@ -30,6 +31,9 @@ test('an API key needs at least one scope, and records owner + expiry', async ({
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Key Lifecycle Admin');
   try {
     await signInAsAdmin(page, adminEmail);
+    // Issuing a key that reads /api/v1 is the INTEGRATIONS_API feature (#1744):
+    // granted to the default org and left granted, so parallel specs never race.
+    await setOrgFeatureFor(page, 'INTEGRATIONS_API', true);
 
     // A key that can read nothing is a credential with no purpose.
     const noScopes = await page.request.post('/api/admin/api-keys', {
@@ -95,6 +99,9 @@ test('revoking a key is soft: the row survives with revokedAt set', async ({ pag
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Key Revoke Admin');
   try {
     await signInAsAdmin(page, adminEmail);
+    // Issuing a key that reads /api/v1 is the INTEGRATIONS_API feature (#1744):
+    // granted to the default org and left granted, so parallel specs never race.
+    await setOrgFeatureFor(page, 'INTEGRATIONS_API', true);
 
     const created = await page.request.post('/api/admin/api-keys', {
       data: { name: keyName, scopes: ['candidates:read'] },

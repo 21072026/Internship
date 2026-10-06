@@ -294,6 +294,34 @@ Two things that will surprise you in the UI:
 
 ---
 
+## Which plan includes the API (#1744)
+
+The public API is the `INTEGRATIONS_API` feature — in Program Plus, Enterprise
+and Employer Plus, or granted per org as an add-on (`OrgEntitlement`).
+
+- **Where it is checked.** In `withApiKey()` (`src/lib/apiKey.ts`), after the
+  key's org is bound, keyed to the scope the route asks for
+  (`SCOPE_ENTITLEMENT` in `src/lib/apiScopes.ts`). Every `/api/v1` route is
+  therefore gated without remembering to be, and `npm run
+  check:api-key-routes` fails a v1 route whose scope is not mapped to
+  `INTEGRATIONS_API`.
+- **What a locked org sees.** A live key answers `403 { code: 'feature_locked',
+  feature: 'INTEGRATIONS_API' }` — not a 401, so the integration partner learns
+  the plan changed, not that the key is wrong. Keys are never revoked by a
+  downgrade.
+- **What else is gated.** Creating a webhook, changing its URL or events,
+  switching it back on, and issuing a key with a public-API scope
+  (`src/lib/integrationsGate.ts`).
+- **What is not.** `GET /api/v1/openapi.json` (documentation); pausing or
+  deleting a webhook, revoking a key, rotating a secret (taking an integration
+  down must always work); the delivery of existing webhooks; and the SaleVali
+  ingest scope `companies:write`, which is the marketing product's own data
+  feed, not the public API.
+- **Existing integrations.** The deploy that added the gate granted the feature
+  once to every org holding a live public-API key or an active webhook
+  (`prisma/backfill-integrations-api-grandfather.mjs`), the same call as
+  REPORT_EXPORT's (#1740).
+
 ## What `npm run check:openapi` guarantees
 
 Wired into `ci.yml` next to the other `check:*` gates. It fails on:

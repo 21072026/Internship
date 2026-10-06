@@ -796,6 +796,11 @@ run_tool node prisma/backfill-premium-analytics-entitlement.mjs || true
 # gate do not inherit it.
 run_tool node prisma/backfill-report-export-grandfather.mjs || true
 
+# Grandfather every org already running an integration when the
+# INTEGRATIONS_API gate goes live (#1744): a live public-API key or an active
+# webhook. Runs ONCE (marker note), for the same reason as the one above.
+run_tool node prisma/backfill-integrations-api-grandfather.mjs || true
+
 # Re-split skill lists stored as one blob before anything split them (#2314).
 # Every form used to write `skills.split(',')` from a single-line input, and a
 # browser drops the line breaks out of a multi-line paste — so a pasted CV list
