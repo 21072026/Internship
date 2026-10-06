@@ -68,6 +68,10 @@ test('admin can add and delete stage-history entries', async ({ page }) => {
 
     const afterDelete = await prisma.statusChange.findMany({ where: { relationId: rel.id } });
     expect(afterDelete).toHaveLength(0);
+    // Deleting audit history is itself audited (#1562).
+    const audit = await prisma.activityLog.findFirst({ where: { action: 'pipeline.history_delete', targetId: afterAdd[0].id } });
+    expect(audit).not.toBeNull();
+    expect(audit!.detail).toContain(rel.id);
   } finally {
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);
