@@ -25,7 +25,6 @@
 import cron from 'node-cron';
 import type { EvaluationType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { logger } from '@/lib/logger';
 import { getSetting } from '@/lib/settings';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
@@ -209,19 +208,9 @@ export async function sendEvaluationReminders(now = new Date(), opts: { orgIds?:
   return result;
 }
 
-/**
- * Coverage for the programme scorecard (#1908's `evaluationCoverage`): of the
- * evaluations that fell due in the window (and are at least a week past due,
- * so both reminders have had their chance), how many were written.
- */
-export async function evaluationCoverage(tenant: TenantWhere, now = new Date(), windowDays = 90): Promise<{ due: number; written: number }> {
-  const where = withinTenant({ dueAt: { gte: new Date(now.getTime() - windowDays * DAY), lte: new Date(now.getTime() - 7 * DAY) } }, tenant);
-  const [due, written] = await Promise.all([
-    prisma.evaluationDue.count({ where }),
-    prisma.evaluationDue.count({ where: { AND: [where, { completedAt: { not: null } }] } }),
-  ]);
-  return { due, written };
-}
+// Coverage for the scorecard lives in src/lib/evaluationCoverage.ts (no mail
+// imports), re-exported here so this stays the module that explains it all.
+export { evaluationCoverage } from '@/lib/evaluationCoverage';
 
 // ── Scheduling ───────────────────────────────────────────────────────────────
 

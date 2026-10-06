@@ -51,7 +51,8 @@ test.describe('programme health scorecard', () => {
     // Four relationships are below the five a ratio needs to be judged.
     expect(row(before, 'stalledPairs')).toMatchObject({ status: 'insufficient', basis: 0 });
     expect(row(before, 'atRisk')).toMatchObject({ status: 'insufficient', basis: 4 });
-    expect(row(before, 'evaluationCoverage')).toEqual({ key: 'evaluationCoverage', status: 'not_measurable', dependsOn: [1891] });
+    // Measurable since #1891 — with nothing due yet it is "not enough data", never a 0.
+    expect(row(before, 'evaluationCoverage')).toMatchObject({ status: 'insufficient', basis: 0 });
     // No survey answers yet: not enough data — never a 0, and no longer "not measurable" (#1910).
     expect(row(before, 'nps')).toMatchObject({ status: 'insufficient', basis: 0 });
 
@@ -59,7 +60,7 @@ test.describe('programme health scorecard', () => {
     await expect(page.getByTestId('scorecard-band-matchRate')).toHaveAttribute('data-band', 'GREEN');
     await expect(page.getByTestId('scorecard-value-matchRate')).toHaveText('80%');
     await expect(page.getByTestId('scorecard-action-matchRate')).toHaveCount(0);
-    await expect(page.getByTestId('scorecard-value-evaluationCoverage')).toHaveText('Not yet measurable');
+    await expect(page.getByTestId('scorecard-value-evaluationCoverage')).toHaveText('Not enough data yet');
     await expect(page.getByTestId('scorecard-value-nps')).toHaveText('Not enough data yet');
     await expect(page.getByTestId('scorecard-value-atRisk')).toHaveText('Not enough data yet');
 
@@ -115,6 +116,8 @@ test.describe('programme health scorecard', () => {
     await page.goto('/admin/analytics');
     await expect(page.getByTestId('scorecard-value-nps')).toHaveText('17');
     await expect(page.getByTestId('scorecard-action-nps')).toHaveAttribute('href', '/admin/surveys');
+    // The action has a label, not just a link.
+    await expect(page.getByTestId('scorecard-action-nps')).toContainText('Open surveys');
 
     await page.goto('/admin/analytics/report');
     await expect(page.getByTestId(`report-survey-${survey.id}`)).toContainText('17 (n=6)');
@@ -123,6 +126,25 @@ test.describe('programme health scorecard', () => {
     const sheet = xlsx.sheets.find((s: { name: string }) => s.name === 'Surveys');
     // Invited 10, responses 6, rate 5/10 = 50 %, NPS 17 over 6 answers.
     expect(sheet.rows.find((r: (string | number)[]) => r[0] === `Programme pulse ${stamp}`)).toEqual([`Programme pulse ${stamp}`, 'Open', 'Anonymous', 10, 6, '50%', 17, 6]);
+  });
+
+  test('evaluation coverage: due a week ago or more, and written (#1891)', async ({ page }) => {
+    const relations = await prisma.mentorshipRelation.findMany({ where: { orgId }, select: { id: true } });
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+    // Five evaluations fell due ten days ago; four were written → 80 % → GREEN (inclusive).
+    const due = [
+      ...relations.slice(0, 4).map((r, i) => ({ relationId: r.id, type: 'INTERIM' as const, written: i < 4 })),
+      { relationId: relations[0].id, type: 'FINAL' as const, written: false },
+    ];
+    for (const d of due) {
+      await prisma.evaluationDue.create({ data: { orgId, relationId: d.relationId, type: d.type, dueAt: tenDaysAgo, completedAt: d.written ? new Date() : null } });
+    }
+    // One due yesterday is not counted yet — its reminders are still running.
+    await prisma.evaluationDue.create({ data: { orgId, relationId: relations[1].id, type: 'FINAL', dueAt: new Date(Date.now() - 24 * 60 * 60 * 1000) } });
+    await signInAndSettle(page, admin, PW, '/admin');
+    const rows = (await (await page.request.get('/api/admin/analytics/scorecard')).json()).rows;
+    expect(rows.find((r: { key: string }) => r.key === 'evaluationCoverage')).toMatchObject({ status: 'ok', value: 80, basis: 5, band: 'GREEN', nextAction: null });
+    await prisma.evaluationDue.deleteMany({ where: { orgId } });
   });
 
   test('ADMIN only, checked in the handler', async ({ page }) => {

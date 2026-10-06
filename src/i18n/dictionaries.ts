@@ -6569,6 +6569,10 @@ const en = {
       meetingCadence: 'Review meetings',
       stalledPairs: 'Open the health queue',
       atRisk: 'Open at-risk relationships',
+      // #1910 / #1891 — these rows linked somewhere with no label until now.
+      surveyResponseRate: 'Open surveys',
+      nps: 'Open surveys',
+      evaluationCoverage: 'Chase missing evaluations',
     },
   },
   // Answering a survey from the mailed link, no login (#1881). The thank-you
@@ -13126,6 +13130,9 @@ const tr: Dict = {
       meetingCadence: 'Görüşmeleri gözden geçir',
       stalledPairs: 'Sağlık kuyruğunu aç',
       atRisk: 'Risk altındaki ilişkileri aç',
+      surveyResponseRate: 'Anketleri aç',
+      nps: 'Anketleri aç',
+      evaluationCoverage: 'Eksik değerlendirmelerin peşine düş',
     },
   },
   // E-postadaki bağlantıdan, giriş yapmadan anket cevaplama (#1881). Teşekkür
@@ -19679,6 +19686,9 @@ const de: Dict = {
       meetingCadence: 'Termine prüfen',
       stalledPairs: 'Health-Warteschlange öffnen',
       atRisk: 'Gefährdete Beziehungen öffnen',
+      surveyResponseRate: 'Umfragen öffnen',
+      nps: 'Umfragen öffnen',
+      evaluationCoverage: 'Fehlende Bewertungen nachfassen',
     },
   },
   // Eine Umfrage über den Link aus der E-Mail beantworten, ohne Anmeldung

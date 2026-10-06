@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Scorecard: evaluation coverage is measured (#1891 follow-up):** `evaluationCoverage` reads `EvaluationDue` and is no longer \"not yet measurable\". It is the share of INTERIM/FINAL evaluations due 7–90 days ago that were written: green at 80 %, amber at 50 %, linking to `/admin/mentors`. The helper moves to a mail-free `src/lib/evaluationCoverage.ts` so the scorecard does not load emailService. Every scorecard indicator is now measurable. **Fix:** the `nps`, `surveyResponseRate` and `evaluationCoverage` rows linked to their screen with an empty label; they now say where they lead.",
+  "notes": {
+    "en": ["The programme health card now also shows evaluation coverage — how many of the evaluations that fell due were actually written."],
+    "tr": ["Program sağlığı kartı artık değerlendirme kapsamını da gösteriyor — zamanı gelen değerlendirmelerin ne kadarının gerçekten yazıldığını."],
+    "de": ["Die Programm-Health-Karte zeigt jetzt auch die Abdeckung der Bewertungen — wie viele der fälligen Bewertungen tatsächlich geschrieben wurden."]
+  }
+}
