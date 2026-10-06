@@ -17,6 +17,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -723,7 +725,7 @@ export default function AdminNewslettersPage() {
                       </div>
                       <p className="mt-1 text-xs text-gray-500">
                         {issue.audience === 'MENTEE' ? n.audienceMentee : issue.audience === 'MENTOR' ? n.audienceMentor : n.audienceBoth}
-                        {issue.sentAt && ` · ${n.metaSentAt.replace('{when}', formatDateTime(issue.sentAt, locale))}`}
+                        {issue.sentAt && <> · {fillTemplate(n.metaSentAt, { when: <RelativeTime date={issue.sentAt} /> })}</>}
                         {!issue.sentAt && issue.scheduledAt && ` · ${n.metaScheduled.replace('{when}', formatDateTime(issue.scheduledAt, locale))}`}
                         {issue.createdBySystem && ` · ${n.queuedBySystem}`}
                       </p>

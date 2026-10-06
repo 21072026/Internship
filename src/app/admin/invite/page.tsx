@@ -13,7 +13,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Send, Mail, Copy, Check, CheckCircle2, Circle } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDate, formatDateTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -421,7 +421,7 @@ export default function InvitePage() {
                       </p>
                       <p className="text-xs text-gray-400 truncate">
                         {invite.email && invite.label ? `${invite.label} · ` : ''}
-                        {formatDate(invite.createdAt, locale)} · {(t.invite.status as Record<string, string>)[status]}
+                        <RelativeTime date={invite.createdAt} /> · {(t.invite.status as Record<string, string>)[status]}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -440,7 +440,7 @@ export default function InvitePage() {
                           <Circle className="h-3.5 w-3.5 text-gray-300 flex-shrink-0" />
                         )}
                         <span className={s.at ? 'text-gray-700 font-medium' : 'text-gray-400'}>{s.label}</span>
-                        {s.at && <span className="text-gray-400">· {formatDateTime(s.at, locale)}</span>}
+                        {s.at && <span className="text-gray-400">· <RelativeTime date={s.at} /></span>}
                       </li>
                     ))}
                   </ol>

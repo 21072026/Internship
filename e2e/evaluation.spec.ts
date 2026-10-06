@@ -153,7 +153,9 @@ test('mentor received feedback is private, read-only, and uses only mentor crite
     await expect(firstFeedback).toContainText('Expertise: 3/5');
     await expect(firstFeedback).toContainText('Support: 2/5');
     await expect(firstFeedback).toContainText('Own feedback one');
-    await expect(firstFeedback).toContainText(new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(previousMonth));
+    // Shown as a distance ("21 days ago" or "1 mo. ago", depending on today's
+    // date); the instant itself is the <time>'s datetime.
+    await expect(firstFeedback.locator('time')).toHaveAttribute('datetime', previousMonth.toISOString());
 
     const secondFeedback = mentorPage.getByTestId('mentor-feedback-item').filter({ hasText: 'Feedback Mentee Two' });
     await expect(secondFeedback).toContainText('Final');

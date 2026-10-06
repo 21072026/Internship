@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { formatDuration, type MenteeActivity } from '@/lib/activityReport';
-import { relativeTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { Locale } from '@/i18n/config';
 
@@ -69,7 +69,12 @@ export function ActivityReportView({
                 </div>
                 <span className={`text-xs ${m.daysSinceLogin !== null && m.daysSinceLogin >= 7 ? 'text-amber-700 dark:text-amber-400 font-medium' : 'text-gray-500'}`}>
                   {loginText(m)}
-                  {m.lastLoginAt ? ` · ${relativeTime(m.lastLoginAt, locale)}` : ''}
+                  {m.lastLoginAt && (
+                    <>
+                      {' · '}
+                      <RelativeTime date={m.lastLoginAt} locale={locale} />
+                    </>
+                  )}
                 </span>
               </div>
 

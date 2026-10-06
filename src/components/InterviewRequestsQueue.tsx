@@ -8,7 +8,8 @@ import { CalendarClock } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDate, formatDateTimeWithZone } from '@/lib/relativeTime';
+import { formatDateTimeWithZone } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { viewerTimeZone } from '@/lib/timezone';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { InterviewDeclineDialog } from '@/components/InterviewDeclineDialog';
@@ -120,7 +121,15 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
                     <p className="break-words text-sm text-gray-600 dark:text-gray-300">
                       {item.company.name} · <PersonHoverCard personId={item.mentee.id} name={item.mentee.fullName} role="MENTEE" />
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(item.createdAt, locale)}</p>
+                    {/* When it was asked reads as a distance; the hover is on the
+                        same named clock as the slots below, not the browser's. */}
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <RelativeTime
+                        date={item.createdAt}
+                        title={formatDateTimeWithZone(item.createdAt, locale, viewerTimeZone(timezone))}
+                        data-testid="interview-request-requested-at"
+                      />
+                    </p>
                     {item.note && <p className="mt-2 break-words text-sm text-gray-700 dark:text-gray-300">{item.note}</p>}
                     {slots.length > 0 && (
                       <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">

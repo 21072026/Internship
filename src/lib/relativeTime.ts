@@ -1,20 +1,34 @@
 import { resolveTimeZone, zoneLabel } from './timezone';
 
-// Locale-aware relative time ("just now", "5 hours ago", "4 days ago"). Uses
-// Intl.RelativeTimeFormat so it localizes for free. Past dates read as "… ago".
+// Locale-aware relative time ("just now", "5 hours ago", "8 days ago"). Uses
+// Intl.RelativeTimeFormat so it localizes for free. Past dates read as "… ago",
+// future ones as "in …".
+//
+// No week rung: "8 days ago" says what "last week" only hints at, and days run
+// on to the month rung the way most activity feeds read.
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31536000],
   ['month', 2592000],
-  ['week', 604800],
   ['day', 86400],
   ['hour', 3600],
   ['minute', 60],
 ];
 
-export function relativeTime(date: Date | string, locale: string): string {
+export interface RelativeTimeOptions {
+  /** `'short'` is the compact form: "5 dk. önce", "5 min. ago", "vor 5 Min.". */
+  style?: Intl.RelativeTimeFormatStyle;
+  /** The instant to measure from; the current time when absent. */
+  now?: Date | number;
+}
+
+export function relativeTime(date: Date | string, locale: string, options: RelativeTimeOptions = {}): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  const sec = Math.round((Date.now() - d.getTime()) / 1000);
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  const now = options.now === undefined ? Date.now() : +options.now;
+  const sec = Math.round((now - d.getTime()) / 1000);
+  // An unparseable date would reach Intl as NaN, which throws a RangeError
+  // and takes the whole render down with it.
+  if (!Number.isFinite(sec)) return '';
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: options.style ?? 'long' });
   const abs = Math.abs(sec);
   for (const [unit, s] of UNITS) {
     if (abs >= s) return rtf.format(-Math.round(sec / s), unit);

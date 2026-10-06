@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Inbox, Check, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // The mentor's application inbox (#1188): public /apply submissions wait here
@@ -21,7 +21,6 @@ interface PendingApplication {
 
 export default function MentorApplicationsPage() {
   const t = useT();
-  const locale = useLocale();
   const [requests, setRequests] = useState<PendingApplication[] | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -98,7 +97,7 @@ export default function MentorApplicationsPage() {
                         ))}
                       </div>
                     )}
-                    <p className="mt-1 text-xs text-gray-400">{formatDate(r.createdAt, locale)}</p>
+                    <p className="mt-1 text-xs text-gray-400"><RelativeTime date={r.createdAt} /></p>
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" loading={deciding === r.id} onClick={() => decide(r.id, 'accept')} data-testid={`application-accept-${r.id}`}>

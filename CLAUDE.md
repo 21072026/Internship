@@ -506,6 +506,13 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   summary filename, so a second `k6 run` step there would overwrite the first one's summary.
   **Writing a new k6 test is expected** when a change puts real load on a new surface —
   follow the checklist at the end of the k6 section in `docs/testing.md`.
+- **Past instants read as a distance** (#2813): an instant that already happened (sent,
+  updated, last seen, logged) renders through `<RelativeTime>` (`src/components/ui/RelativeTime.tsx`)
+  — "5 dk. önce" on screen, the absolute reading as its hover `title`; a translated sentence
+  takes it through `fillTemplate()` rather than `.replace('{when}', …)`, which can only splice
+  text. Schedules, future dates, date-only calendar fields and anything printed, signed or
+  exported stay absolute. Don't hand-roll `relativeTime()` text in JSX: it loses the hover and
+  the element's hydration guard (keyed on hydration, so a server's or a cache's "now" never sticks).
 - **Images open in the app, never in a new tab** (#2147): every user-supplied image
   (message and support attachments, announcement images) is a `<button>` that opens
   `ImageLightbox` (`src/components/ui/ImageLightbox.tsx`) via `useImageLightbox()` — never an

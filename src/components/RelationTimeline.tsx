@@ -16,10 +16,11 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { AsyncSection } from '@/components/ui/AsyncSection';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { useT, useLocale } from '@/i18n/client';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
-import { formatDate, formatDateTime, relativeTime } from '@/lib/relativeTime';
+import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import type { TimelineEntry, TimelineKind } from '@/lib/relationTimeline';
 
 // The merged history of one pairing (#1702). Presentational only: the ordering,
@@ -288,13 +289,7 @@ function TimelineRow({
             <Badge variant="info" className="text-[10px]">{t.relationTimeline.automatic}</Badge>
           )}
 
-          <time
-            className="ml-auto flex-shrink-0 text-[11px] text-gray-400"
-            dateTime={entry.at}
-            title={formatDateTime(entry.at, locale)}
-          >
-            {relativeTime(entry.at, locale)}
-          </time>
+          <RelativeTime date={entry.at} className="ml-auto flex-shrink-0 text-[11px] text-gray-400" />
         </div>
 
         {/* The week a report covers is shipped as an ISO instant and formatted

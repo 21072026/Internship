@@ -31,7 +31,8 @@ import { CertificateGenerator } from '@/components/CertificateGenerator';
 import { canIssueCertificate } from '@/lib/certificateEligibility';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
-import { formatDate, formatDateTime } from '@/lib/relativeTime';
+import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
@@ -500,7 +501,7 @@ export default function MenteeDetailPage() {
                       <span className="font-medium text-gray-900">{label(sc.toStatus)}</span>
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {sc.changedBy?.fullName ?? t.common.systemActor} · {formatDateTime(sc.createdAt, locale)}
+                      {sc.changedBy?.fullName ?? t.common.systemActor} · <RelativeTime date={sc.createdAt} />
                     </p>
                   </li>
                 ))}

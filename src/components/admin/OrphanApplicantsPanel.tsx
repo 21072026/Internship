@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { Ghost, MailPlus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { UserEraseForm } from '@/components/UserEraseForm';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
 
 interface OrphanRow {
   id: string;
@@ -51,7 +51,6 @@ interface OrphanPayload {
 export function OrphanApplicantsPanel() {
   const t = useT();
   const o = t.orphanApplicants;
-  const locale = useLocale();
   const [data, setData] = useState<OrphanPayload | null>(null);
   // Tracked apart from `data === null` on purpose: on the one page whose job is
   // to show what is about to be destroyed, "the query failed" must never render
@@ -181,7 +180,7 @@ export function OrphanApplicantsPanel() {
                     <div className="text-xs text-gray-400">{row.email}</div>
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                    {formatDate(row.createdAt, locale)}
+                    <RelativeTime date={row.createdAt} />
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                     {/* "No decision recorded" is only true when there is no
@@ -190,7 +189,7 @@ export function OrphanApplicantsPanel() {
                         two contradictory statements in one cell. */}
                     {row.declinedBy ?? (row.declinedAt ? o.unknownDecider : o.noDecision)}
                     {row.declinedAt && (
-                      <div className="text-xs text-gray-400">{formatDate(row.declinedAt, locale)}</div>
+                      <div className="text-xs text-gray-400"><RelativeTime date={row.declinedAt} /></div>
                     )}
                   </td>
                   <td className="px-4 py-3">

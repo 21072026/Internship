@@ -5,8 +5,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDateTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { useT } from '@/i18n/client';
 
 interface Entry {
   id: string;
@@ -27,7 +27,6 @@ const LEVEL_VARIANT = { DEBUG: 'default', INFO: 'info', WARNING: 'warning', ERRO
 
 export default function AdminActivityPage() {
   const t = useT();
-  const locale = useLocale();
   const [items, setItems] = useState<Entry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -93,7 +92,7 @@ export default function AdminActivityPage() {
               <div key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm sm:flex-nowrap">
                 <Badge variant={LEVEL_VARIANT[e.level]} className="flex-shrink-0">{e.level}</Badge>
                 <span className="font-medium text-gray-900 flex-shrink-0">{e.action}</span>
-                <span data-testid="activity-date" className="ml-auto text-xs text-gray-400 flex-shrink-0 sm:ml-0 sm:order-last">{formatDateTime(e.createdAt, locale)}</span>
+                <RelativeTime date={e.createdAt} data-testid="activity-date" className="ml-auto text-xs text-gray-400 flex-shrink-0 sm:ml-0 sm:order-last" />
                 <span className="w-full min-w-0 truncate text-gray-500 sm:w-auto sm:flex-1">
                   {e.actorEmail || '—'}{e.detail ? ` · ${e.detail}` : ''}
                 </span>

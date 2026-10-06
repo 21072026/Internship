@@ -11,6 +11,7 @@ import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { User, Building2, BookOpen, ExternalLink, MessageCircle } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { ArchivedNotice } from '@/components/ArchivedNotice';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
@@ -105,10 +106,16 @@ export default async function PortalJourneyPage() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <StatusBadge status={relation.status} />
+              {/* "Completed" is the moment it ended, so it reads as a distance;
+                  "Since" is the mentorship's start date and stays a date. */}
               <span className="text-xs text-gray-400">
-                {isArchived && relation.completedAt
-                  ? `${t.portal.archived.completedOn} ${formatDate(relation.completedAt, locale)}`
-                  : `${t.portal.since} ${formatDate(relation.startDate, locale)}`}
+                {isArchived && relation.completedAt ? (
+                  <>
+                    {t.portal.archived.completedOn} <RelativeTime date={relation.completedAt} />
+                  </>
+                ) : (
+                  `${t.portal.since} ${formatDate(relation.startDate, locale)}`
+                )}
               </span>
             </div>
 

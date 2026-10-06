@@ -10,6 +10,7 @@ import { Plus, History, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react'
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { DEFAULT_HIRED_STAGE_KEY } from '@/lib/offers';
 import type { ResolvedStage } from '@/lib/pipeline';
 
@@ -261,7 +262,7 @@ export function OfferManagementPanel({
                           <span className="font-medium text-gray-700 dark:text-gray-300">
                             {(t.offers.timeline as Record<string, string>)[h.action] ?? h.action}
                           </span>
-                          <span>· {formatDate(h.createdAt, locale)}</span>
+                          <span>· <RelativeTime date={h.createdAt} /></span>
                         </li>
                       ))}
                     </ol>

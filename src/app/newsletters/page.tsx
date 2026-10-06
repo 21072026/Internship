@@ -5,8 +5,8 @@ import { GraduationCap, Languages, MailWarning, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDateTime } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { useT } from '@/i18n/client';
 
 /**
  * The reader's newsletter archive (#1469).
@@ -43,7 +43,6 @@ const PAGE_SIZE = 10;
 
 export default function NewslettersPage() {
   const t = useT();
-  const locale = useLocale();
   const n = t.newsletter;
   const [items, setItems] = useState<Issue[]>([]);
   const [total, setTotal] = useState(0);
@@ -129,7 +128,7 @@ export default function NewslettersPage() {
               )}
               <div className="p-5">
                 <p className="text-xs text-gray-400">
-                  {issue.sentAt ? formatDateTime(issue.sentAt, locale) : ''}
+                  {issue.sentAt && <RelativeTime date={issue.sentAt} />}
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">{issue.subject}</h2>
                 {issue.languageFallback && (

@@ -14,8 +14,9 @@ import {
   type ResolvedCriterion,
 } from '@/lib/evaluation';
 import { useCriteria, useCriterionLabel } from '@/lib/evaluationCriteriaClient';
-import { useT, useLocale } from '@/i18n/client';
-import { relativeTime } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { fillTemplate } from '@/components/ui/fillTemplate';
 
 interface Evaluation {
   id: string;
@@ -47,7 +48,6 @@ export function EvaluationPanel({
   audience?: 'MENTEE' | 'MENTOR';
 }) {
   const t = useT();
-  const locale = useLocale();
   const [items, setItems] = useState<Evaluation[]>([]);
   // The criteria of every rubric these evaluations were written against —
   // retired ones included, so an old record keeps its own labels (#822).
@@ -341,8 +341,8 @@ export function EvaluationPanel({
                     </div>
                     {ev.comment && <p className="text-sm text-gray-600 mt-1.5 whitespace-pre-wrap">{ev.comment}</p>}
                     <p className="text-xs text-gray-400 mt-1">
-                      {relativeTime(ev.createdAt, locale)}
-                      {ev.correctedAt && ` · ${t.evaluation.editedAt.replace('{when}', relativeTime(ev.correctedAt, locale))}`}
+                      <RelativeTime date={ev.createdAt} />
+                      {ev.correctedAt && <> · {fillTemplate(t.evaluation.editedAt, { when: <RelativeTime date={ev.correctedAt} /> })}</>}
                     </p>
                   </>
                 )}

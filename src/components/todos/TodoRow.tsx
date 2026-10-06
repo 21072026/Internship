@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AlertTriangle, Archive, ArchiveRestore, CalendarClock, Check, CheckCircle2, Circle, Pencil, Trash2, X } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { taskDueState, type TaskDueTone } from '@/lib/taskDue';
@@ -214,7 +215,7 @@ export function TodoRow({
           </span>
         )}
         {todo.done && todo.doneAt && (
-          <span className="shrink-0 whitespace-nowrap text-xs text-gray-400">{formatDate(todo.doneAt, locale)}</span>
+          <RelativeTime date={todo.doneAt} className="shrink-0 whitespace-nowrap text-xs text-gray-400" />
         )}
       </span>
 

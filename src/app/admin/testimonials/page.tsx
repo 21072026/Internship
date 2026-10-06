@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Quote, Send, Upload, Undo2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 
 // Testimonial moderation (#1098). Only consented-on-both-sides evaluations
 // ever reach this screen (the API enforces it — moderation never overrides
@@ -28,7 +28,6 @@ type Tab = 'candidates' | 'review' | 'published';
 
 export default function AdminTestimonialsPage() {
   const t = useT();
-  const locale = useLocale();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [tab, setTab] = useState<Tab>('candidates');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -123,7 +122,7 @@ export default function AdminTestimonialsPage() {
                     <span className="mx-1 text-gray-400">→</span>
                     {r.subjectName}
                   </span>
-                  <span className="text-xs text-gray-400">{formatDate(r.createdAt, locale)}</span>
+                  <RelativeTime date={r.createdAt} className="text-xs text-gray-400" />
                 </div>
                 {/* The original comment — read-only, never edited (audit rule). */}
                 <p className="mt-2 rounded-lg bg-gray-50 dark:bg-gray-800/60 p-3 text-sm text-gray-700 dark:text-gray-300">

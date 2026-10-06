@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDate, relativeTime } from '@/lib/relativeTime';
+import { formatDate } from '@/lib/relativeTime';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
@@ -219,8 +220,8 @@ export default function IntegrationsPage() {
               <div className="min-w-0">
                 <p className="text-sm text-gray-900 dark:text-gray-100">{labels[CONNECTOR_LABEL[c.connector]] ?? c.connector}</p>
                 <p className="text-xs text-gray-400">
-                  {t.integrations.lastOk}: {c.lastOkAt ? relativeTime(c.lastOkAt, locale) : t.integrations.never}
-                  {c.lastErrorAt ? ` · ${t.integrations.lastError}: ${relativeTime(c.lastErrorAt, locale)}` : ''}
+                  {t.integrations.lastOk}: {c.lastOkAt ? <RelativeTime date={c.lastOkAt} /> : t.integrations.never}
+                  {c.lastErrorAt && <> · {t.integrations.lastError}: <RelativeTime date={c.lastErrorAt} /></>}
                 </p>
                 {c.lastError && <p className="text-xs text-red-600 dark:text-red-400 break-words">{c.lastError}</p>}
                 {c.detail?.deliveryHealthPending ? <p className="text-xs text-gray-400">{t.integrations.deliveryPending}</p> : null}
@@ -383,7 +384,7 @@ export default function IntegrationsPage() {
                       </p>
                     )}
                     <p className="text-xs text-gray-400"><code>{k.scopes.join(', ')}</code></p>
-                    <p className="text-xs text-gray-400">{k.lastUsedAt ? `${t.integrations.lastUsed}: ${formatDate(k.lastUsedAt, locale)}` : t.integrations.neverUsed}</p>
+                    <p className="text-xs text-gray-400">{k.lastUsedAt ? <>{t.integrations.lastUsed}: <RelativeTime date={k.lastUsedAt} /></> : t.integrations.neverUsed}</p>
                   </div>
                   {!k.revokedAt && (
                     <button

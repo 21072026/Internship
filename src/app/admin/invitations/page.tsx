@@ -6,8 +6,8 @@ import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Download, Mail, RefreshCw, Trash2, Ban } from 'lucide-react';
-import { useLocale, useT } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import {
   INVITATION_STATUSES,
   emptyInvitationCounts,
@@ -65,7 +65,6 @@ const ROLES = ['ADMIN', 'MENTOR', 'MENTEE'] as const;
 
 export default function AdminInvitationsPage() {
   const t = useT();
-  const locale = useLocale();
   const v = t.invitations;
 
   const [q, setQ] = useState('');
@@ -467,13 +466,13 @@ export default function AdminInvitationsPage() {
                       {v.status[row.status]}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{formatDate(row.createdAt, locale)}</td>
-                  <td className="px-4 py-3 text-gray-500">{row.openedAt ? formatDate(row.openedAt, locale) : '—'}</td>
+                  <td className="px-4 py-3 text-gray-500"><RelativeTime date={row.createdAt} className="whitespace-nowrap" /></td>
+                  <td className="px-4 py-3 text-gray-500">{row.openedAt ? <RelativeTime date={row.openedAt} className="whitespace-nowrap" /> : '—'}</td>
                   <td className="px-4 py-3 text-gray-500">
-                    {row.registeredAt ? formatDate(row.registeredAt, locale) : '—'}
+                    {row.registeredAt ? <RelativeTime date={row.registeredAt} className="whitespace-nowrap" /> : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-500">
-                    {row.verifiedAt ? formatDate(row.verifiedAt, locale) : '—'}
+                    {row.verifiedAt ? <RelativeTime date={row.verifiedAt} className="whitespace-nowrap" /> : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{row.invitedByName ?? '—'}</td>
                 </tr>
