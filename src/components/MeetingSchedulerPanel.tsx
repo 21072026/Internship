@@ -16,6 +16,7 @@ import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 import { copyToClipboard } from '@/lib/clipboard';
 import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
+import { SuggestedTimes } from '@/components/meeting/SuggestedTimes';
 import { ConflictNotice, PolicyNotice, readConflict, readPolicy, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 
 interface Meeting {
@@ -139,6 +140,18 @@ export function MeetingSchedulerPanel({
           />
         </div>
       </CardHeader>
+
+      {/* Times free for both, on both clocks (#1999): a pick fills the date and
+          time below on this browser's clock — the one the inputs are read in. */}
+      <SuggestedTimes
+        relationId={relationId}
+        onPick={(startISO) => {
+          const d = new Date(startISO);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          setDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+          setTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+        }}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
         <div className="sm:col-span-2">

@@ -12,6 +12,7 @@ import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { ConflictNotice, PolicyNotice, readConflict, readPolicy, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 import { filterBookedOccurrences } from '@/lib/busyWindowsRule';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
+import { SuggestedTimes } from '@/components/meeting/SuggestedTimes';
 import { expandSlots, matchesSlot, type AvailabilityExceptionRange, type SlotOccurrence, type WeeklySlot } from '@/lib/availabilitySlots';
 
 interface MReq {
@@ -174,6 +175,18 @@ export function MeetingRequestsPanel({
 
       {conflict && <div className="mb-4"><ConflictNotice conflict={conflict} /></div>}
       {refusal && <div className="mb-4"><PolicyNotice refusal={refusal} name={mode === 'request' ? counterpart?.name : undefined} /></div>}
+
+      {/* Times free for both, on both clocks (#1999). Picking one fills the
+          request below exactly like picking an offered slot does. */}
+      {mode === 'request' && !readOnly && (
+        <SuggestedTimes
+          relationId={relationId}
+          onPick={(startISO) => {
+            setWhen('');
+            setPicked({ slotId: 'suggested', startISO, date: startISO.slice(0, 10), weekday: new Date(startISO).getUTCDay(), startTime: '', endTime: '' });
+          }}
+        />
+      )}
 
       {/* Picking one of the mentor's offered slots is a write action like the
           form below, so an archived mentorship closes both (#1408). */}
