@@ -88,3 +88,64 @@ test('the starter pack fills an empty tenant once, keeps the tenant’s edits, a
     await wipeOrg(other.id);
   }
 });
+
+test('the sample programme is labelled, mail-proof, added once, and removed as exactly its own rows', async ({ page }) => {
+  test.slow();
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const org = await prisma.organization.create({ data: { name: `Sample ${stamp}`, slug: `sample-${stamp}` } });
+  const adminEmail = uniqueEmail('sample-admin');
+  const realMentorEmail = uniqueEmail('sample-real-mentor');
+  const realMenteeEmail = uniqueEmail('sample-real-mentee');
+  try {
+    await seedUser(adminEmail, PW, 'ADMIN', 'Sample Admin', org.id);
+    const realMentor = await seedUser(realMentorEmail, PW, 'MENTOR', 'Real Mentor', org.id);
+    const realMentee = await seedUser(realMenteeEmail, PW, 'MENTEE', 'Real Mentee', org.id);
+    const realRel = await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: realMentor.id, menteeId: realMentee.id, status: 'ACTIVE' } });
+
+    await signInAndSettle(page, adminEmail, PW, '/admin');
+    // Through the settings card, with the sample box ticked.
+    await page.goto('/admin/settings');
+    await page.getByTestId('starter-pack-sample').check();
+    await page.getByTestId('starter-pack-apply').click();
+    await expect(page.getByTestId('starter-pack-sampleProgram')).not.toHaveAttribute('data-created', '0');
+
+    const sampleUsers = await prisma.user.findMany({ where: { orgId: org.id, sampleData: true }, select: { email: true, fullName: true, role: true } });
+    expect(sampleUsers).toHaveLength(6);
+    expect(sampleUsers.filter((u) => u.role === 'MENTOR')).toHaveLength(2);
+    expect(sampleUsers.every((u) => u.email.endsWith('@sample.invalid') && u.fullName.endsWith('(sample)'))).toBe(true);
+    const sampleRels = await prisma.mentorshipRelation.findMany({ where: { orgId: org.id, sampleData: true }, select: { id: true, pipelineStatus: true } });
+    expect(sampleRels).toHaveLength(4);
+    expect(new Set(sampleRels.map((r) => r.pipelineStatus)).size).toBeGreaterThan(1); // spread over the pipeline
+    expect(await prisma.weeklyReport.count({ where: { relationId: { in: sampleRels.map((r) => r.id) } } })).toBe(1);
+    expect(await prisma.company.count({ where: { orgId: org.id, sampleData: true } })).toBe(1);
+    expect(await prisma.requisition.count({ where: { orgId: org.id, sampleData: true } })).toBe(1);
+
+    // Asked again: nothing new.
+    const again = (await (await page.request.post(`/api/admin/organizations/${org.id}/starter-pack`, { data: { sampleProgram: true } })).json()).summary;
+    expect(again.sampleProgram).toEqual({ created: 0, skipped: 1 });
+    expect(await prisma.user.count({ where: { orgId: org.id, sampleData: true } })).toBe(6);
+
+    // Removed as a set — and the real pair is untouched.
+    await page.getByTestId('starter-pack-remove-sample').click();
+    await expect(page.getByTestId('starter-pack-removed')).toBeVisible();
+    expect(await prisma.user.count({ where: { orgId: org.id, sampleData: true } })).toBe(0);
+    expect(await prisma.mentorshipRelation.count({ where: { orgId: org.id, sampleData: true } })).toBe(0);
+    expect(await prisma.company.count({ where: { orgId: org.id, sampleData: true } })).toBe(0);
+    expect(await prisma.requisition.count({ where: { orgId: org.id, sampleData: true } })).toBe(0);
+    expect(await prisma.mentorshipRelation.findUnique({ where: { id: realRel.id }, select: { id: true } })).not.toBeNull();
+    expect(await prisma.user.count({ where: { id: { in: [realMentor.id, realMentee.id] } } })).toBe(2);
+    // Nothing was ever mailed to a sample address.
+    expect(await prisma.emailLog.count({ where: { to: { endsWith: '@sample.invalid' } } })).toBe(0);
+
+    // A mentor cannot remove anything.
+    await signInAsFreshUser(page, realMentorEmail, PW, '/mentor');
+    expect((await page.request.delete(`/api/admin/organizations/${org.id}/sample-data`)).status()).toBe(403);
+  } finally {
+    await prisma.user.deleteMany({ where: { orgId: org.id, sampleData: true } }).catch(() => {});
+    await cleanupByEmail(adminEmail);
+    await cleanupByEmail(realMentorEmail);
+    await cleanupByEmail(realMenteeEmail);
+    await prisma.company.deleteMany({ where: { orgId: org.id } }).catch(() => {});
+    await wipeOrg(org.id);
+  }
+});

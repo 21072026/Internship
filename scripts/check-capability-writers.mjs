@@ -66,6 +66,11 @@ const MODELS = {
 // promise that the path is sessionless and was reasoned about, with the reason
 // in the value — a reader should never have to go find out why.
 const EXEMPT = {
+  'src/lib/orgSampleProgram.ts':
+    'The starter pack\'s sample programme (#2066) creates one sample requisition and removes the rows it tagged. ' +
+    'It is sessionless by design (provisioning #2065/#1749 call it with an org they just created) and asks the ' +
+    "org's own vertical itself: a requisition is written only when verticalHasCapability(vertical, 'placements'). " +
+    'Its request paths are POST …/starter-pack and DELETE …/sample-data, both ADMIN-of-that-org only.',
   'src/lib/companyContacts.ts':
     'The address-book writes (#2442) live in a lib so the one-primary swap and the company-row lock have one ' +
     'home. Its only callers are the handlers under src/app/api/companies/[id]/contacts, each of which passes ' +
