@@ -228,6 +228,56 @@ test.describe('release media', () => {
     }
   });
 
+  // #1902: the org-wide at-risk queue — worst first, reasons, one next action,
+  // and a 30-day trend drawn from the nightly snapshots.
+  test('poster: the relationship health queue', async ({ page }) => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const stamp = Date.now();
+    const org = await prisma.organization.create({ data: { name: `Media Health ${stamp}`, slug: `media-health-${stamp}` } });
+    const adminEmail = uniqueEmail('media-health-admin');
+    const emails = [adminEmail];
+    try {
+      await seedUser(adminEmail, 'MediaHealth123!', 'ADMIN', 'Media Health Admin', org.id);
+      const mentorEmail = uniqueEmail('media-health-mentor');
+      emails.push(mentorEmail);
+      const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Dr. Lena Hoffmann', org.id);
+      const today = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
+      const pairs: [string, number, number | null][] = [
+        // name, start (days ago), last contact (days ago; null = never)
+        ['Aylin Demir', 200, null],
+        ['Jonas Weber', 120, 24],
+        ['Selin Arslan', 150, 3],
+      ];
+      for (const [i, [name, startAgo, contactAgo]] of pairs.entries()) {
+        const email = uniqueEmail('media-health-mentee');
+        emails.push(email);
+        const mentee = await seedUser(email, 'x', 'MENTEE', name, org.id);
+        const rel = await prisma.mentorshipRelation.create({
+          data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, pipelineStatus: 'INTERVIEW_PENDING_250', startDate: new Date(Date.now() - startAgo * DAY), stageDeadline: new Date(Date.now() - (5 + i) * DAY) },
+        });
+        if (contactAgo !== null) await prisma.interactionLog.create({ data: { relationId: rel.id, date: new Date(Date.now() - contactAgo * DAY), notes: 'Check-in', type: 'Call' } });
+        if (i === 0) await prisma.mentorQuestion.create({ data: { relationId: rel.id, askedById: mentee.id, question: 'Could we review my CV this week?' } });
+        // A month of measured days drifting down, so the trend has a shape.
+        await prisma.relationHealthSnapshot.createMany({
+          data: Array.from({ length: 30 }, (_, d) => {
+            const score = Math.max(15, 85 - i * 10 - Math.round(d * (2.2 - i * 0.6)));
+            return { orgId: org.id, relationId: rel.id, takenOn: new Date(today.getTime() - (29 - d) * DAY), score, band: score >= 70 ? 'HEALTHY' : score >= 40 ? 'WATCH' : 'AT_RISK', reasons: [], rulesVersion: 1 };
+          }),
+        });
+      }
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await signInAndSettle(page, adminEmail, 'MediaHealth123!', '/admin');
+      await page.goto('/admin/health');
+      const table = page.getByTestId('health-table');
+      await expect(table.locator('tbody tr')).toHaveCount(3);
+      await capturePoster(table, 'admin-health-monitor');
+    } finally {
+      await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });
+      for (const e of emails) await cleanupByEmail(e);
+      await prisma.organization.deleteMany({ where: { id: org.id } });
+    }
+  });
+
   /**
    * TEMPLATE — a clip, for a change where motion is the point.
    *

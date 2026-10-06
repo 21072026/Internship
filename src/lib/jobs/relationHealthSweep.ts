@@ -16,15 +16,11 @@ import cron from 'node-cron';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { getSetting } from '@/lib/settings';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { orgWhere } from '@/lib/tenantFilter';
-import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
-import { getLastContacts } from '@/lib/lastContact';
-import { menteesWithOpenTodo } from '@/lib/openWork';
-import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
+import { assessRelations, HEALTH_RELATION_SELECT, reminderDaysReader, type HealthRelationRow } from '@/lib/relationHealthLive';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
-import { scoreRelation, type HealthReason } from '@/lib/relationHealth';
+import type { HealthReason } from '@/lib/relationHealth';
 import { SNAPSHOT_RETENTION_DAYS, shouldAlert, utcDay } from '@/lib/relationHealthTrend';
 import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
@@ -32,23 +28,6 @@ import { emailBrand, sendEmail } from '@/services/emailService';
 
 const DAY = 24 * 60 * 60 * 1000;
 const BATCH = 500;
-
-const RELATION_SELECT = {
-  id: true,
-  orgId: true,
-  status: true,
-  pipelineStatus: true,
-  startDate: true,
-  stageDeadline: true,
-  mentor: { select: { fullName: true } },
-  mentee: { select: { id: true, fullName: true } },
-  questions: { where: { answer: null }, select: { id: true } },
-  meetingRequests: { where: { status: 'PENDING' as const }, select: { id: true } },
-  goals: { where: { status: 'OPEN' as const }, select: { id: true } },
-  weeklyReports: { where: { status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } }, select: { weekStart: true } },
-} satisfies Prisma.MentorshipRelationSelect;
-
-type Row = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION_SELECT }>;
 
 /** One pair that crossed into AT_RISK tonight — what the admin digest lists. */
 export interface Crossing {
@@ -83,20 +62,13 @@ export async function sweepRelationHealth(opts: { now?: Date; orgIds?: string[] 
 
   // reminderDays is an org setting (the same "stale" the digest uses), read
   // once per org per pass.
-  const reminderDaysByOrg = new Map<string, number>();
-  const reminderDaysFor = async (orgId: string | null) => {
-    const key = orgId ?? '';
-    if (!reminderDaysByOrg.has(key)) {
-      reminderDaysByOrg.set(key, parseInt(await getSetting('reminderDays', orgId ?? undefined), 10) || 14);
-    }
-    return reminderDaysByOrg.get(key)!;
-  };
+  const reminderDaysFor = reminderDaysReader();
 
   let cursor: string | undefined;
   for (;;) {
-    const rows: Row[] = await prisma.mentorshipRelation.findMany({
+    const rows: HealthRelationRow[] = await prisma.mentorshipRelation.findMany({
       where: scope,
-      select: RELATION_SELECT,
+      select: HEALTH_RELATION_SELECT,
       orderBy: { id: 'asc' },
       take: BATCH,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -105,37 +77,15 @@ export async function sweepRelationHealth(opts: { now?: Date; orgIds?: string[] 
     cursor = rows[rows.length - 1].id;
     const ids = rows.map((r) => r.id);
 
-    const [openWork, dormant, lastContacts, lastMoves, previous] = await Promise.all([
-      menteesWithOpenTodo(rows.map((r) => r.mentee.id)),
-      findDormantFirstContacts(rows.map((r) => ({ id: r.id, orgId: r.orgId, menteeId: r.mentee.id, pipelineStatus: r.pipelineStatus, stageDeadline: r.stageDeadline }))),
-      getLastContacts(rows.map((r) => ({ id: r.id, menteeId: r.mentee.id }))),
-      prisma.statusChange.groupBy({ by: ['relationId'], where: { relationId: { in: ids } }, _max: { createdAt: true } }),
+    const [assessed, previous] = await Promise.all([
+      assessRelations(rows, now, reminderDaysFor),
       prisma.relationHealthSnapshot.findMany({
         where: { relationId: { in: ids }, OR: [{ takenOn: { in: [yesterday, today] } }, { alertedAt: { not: null } }] },
         select: { relationId: true, takenOn: true, band: true, alertedAt: true },
       }),
     ]);
-    const lastMoveBy = new Map(lastMoves.map((m) => [m.relationId, m._max.createdAt]));
 
-    for (const r of rows) {
-      const lastContactAt = lastContacts.get(r.id)?.at ?? null;
-      const assessment = scoreRelation({
-        now: now.getTime(),
-        reminderDays: await reminderDaysFor(r.orgId),
-        status: r.status,
-        dormant: dormant.has(r.id),
-        startDate: r.startDate,
-        lastContactAt,
-        stageDeadline: r.stageDeadline,
-        unansweredQuestions: r.questions.length,
-        pendingMeetingRequests: r.meetingRequests.length,
-        hasOpenWork: r.goals.length > 0 || openWork.has(r.mentee.id),
-        weeklyReports:
-          r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450'
-            ? { submittedWeekStarts: r.weeklyReports.map((w) => w.weekStart.getTime()) }
-            : null,
-        lastStageMoveAt: lastMoveBy.get(r.id) ?? null,
-      });
+    for (const { row: r, assessment, lastContactAt } of assessed) {
       if (assessment.excluded) {
         result.excluded++;
         continue;

@@ -2,7 +2,7 @@ import {
   Activity, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
-  Handshake, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
+  Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
   Send,
@@ -50,6 +50,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/duplicates', icon: GitMerge, key: 'duplicates' },
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
+  // The org-wide at-risk queue (#1902): every pair, worst first, one next action.
+  { href: '/admin/health', icon: HeartPulse, key: 'health', capability: 'mentorship' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
   // The enquiry inbox is shared since #2569: on an internship tenant it holds the
   // /for-companies enquiries, on a MARKETING tenant the landing's demo requests
