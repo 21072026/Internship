@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,11 +16,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { signInWithPassword } from '../lib/authClient';
 import { strings } from '../lib/i18n';
 import { useSession } from '../lib/session';
+import { useAppTheme, type Palette } from '../lib/theme';
 
 // Native sign-in (#2775). It drives the server's own NextAuth flow — the same
 // rate limits, lockouts, 2FA, recovery codes and world check as the web form
 // (src/lib/auth.ts) — so there is nothing here to keep in sync but the wording.
 export default function SignInScreen() {
+  const { c } = useAppTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const { product, origin, signedIn, clearProduct } = useSession();
   const t = strings();
   const [email, setEmail] = useState('');
@@ -62,6 +65,7 @@ export default function SignInScreen() {
           <TextInput
             style={styles.input}
             placeholder={t.email}
+            placeholderTextColor={c.faint}
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
@@ -73,6 +77,7 @@ export default function SignInScreen() {
           <TextInput
             style={styles.input}
             placeholder={t.password}
+            placeholderTextColor={c.faint}
             secureTextEntry
             autoComplete="current-password"
             textContentType="password"
@@ -84,6 +89,7 @@ export default function SignInScreen() {
             <TextInput
               style={styles.input}
               placeholder={t.totp}
+              placeholderTextColor={c.faint}
               autoCapitalize="none"
               autoComplete="one-time-code"
               textContentType="oneTimeCode"
@@ -126,14 +132,15 @@ export default function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#fff' },
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
+  root: { flex: 1, backgroundColor: c.bg },
   body: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 14 },
   brand: { fontSize: 28, fontWeight: '800', marginBottom: 12 },
-  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 14, fontSize: 16, color: '#111827' },
+  input: { borderWidth: 1, borderColor: c.inputBorder, borderRadius: 10, padding: 14, fontSize: 16, color: c.text },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowText: { flex: 1, color: '#374151' },
-  error: { color: '#b91c1c' },
+  rowText: { flex: 1, color: c.text },
+  error: { color: c.danger },
   button: { borderRadius: 10, padding: 15, alignItems: 'center' },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   link: { color: '#1D4ED8', textAlign: 'center', padding: 6 },

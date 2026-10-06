@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { isEmbeddedAppUserAgent } from '@/lib/embeddedApp';
 import { getServerSession } from 'next-auth';
 import './globals.css';
 import { Providers } from './providers';
@@ -121,6 +122,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const vertical = await resolveRequestVertical();
   const dict = toClientDictionary(applyVerticalOverlay(getDictionary(locale), locale, vertical));
   const cookieStore = await cookies();
+  // Inside the native app's web view (src/lib/embeddedApp.ts).
+  const embeddedApp = isEmbeddedAppUserAgent((await headers()).get('user-agent'));
   let theme = cookieStore.get('theme')?.value;
   let fontSize = cookieStore.get('fontSize')?.value;
   let accent = cookieStore.get('accent')?.value;
@@ -157,6 +160,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       data-theme-pref={theme || undefined}
       data-font-size-pref={fontSize || undefined}
       data-density-pref={density || undefined}
+      data-embedded-app={embeddedApp ? '' : undefined}
       suppressHydrationWarning
     >
       <head>

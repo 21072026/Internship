@@ -5,7 +5,8 @@ import { useSession } from '../../lib/session';
 import { UnreadProvider, useUnread } from '../../lib/unread';
 
 function TabsInner() {
-  const { count } = useUnread();
+  const { messages, notifications } = useUnread();
+  const badge = (n: number) => (n > 0 ? (n > 99 ? '99+' : n) : undefined);
   const { product } = useSession();
   const t = strings();
   const tint = product?.color ?? '#1D4ED8';
@@ -20,6 +21,7 @@ function TabsInner() {
         name="messages"
         options={{
           title: t.tabs.messages,
+          tabBarBadge: badge(messages),
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" color={color} size={size} />,
         }}
       />
@@ -34,7 +36,7 @@ function TabsInner() {
         name="notifications"
         options={{
           title: t.notifications,
-          tabBarBadge: count > 0 ? (count > 99 ? '99+' : count) : undefined,
+          tabBarBadge: badge(notifications),
           tabBarIcon: ({ color, size }) => <Ionicons name="notifications" color={color} size={size} />,
         }}
       />

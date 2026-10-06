@@ -7,11 +7,32 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { requireCapability } from '@/lib/capabilityGate';
+import { loadInbox } from '@/lib/inbox';
+import { getServerDictionary } from '@/i18n/server';
 
 const schema = z.union([
   z.object({ userId: z.string().min(1), projectId: z.never().optional() }),
   z.object({ projectId: z.string().min(1), userId: z.never().optional() }),
 ]);
+
+// GET — the caller's inbox (#2775): every thread with its name, the latest
+// message and the unread count, plus the support line's unread count. The same
+// read as the /messages page (src/lib/inbox.ts), as JSON for the native app.
+// The co-member list for starting a new DM rides along so the app can offer it
+// without a second, differently-scoped query.
+export async function GET(request: Request) {
+  return withRequestScope(request, () => handleGet());
+}
+
+async function handleGet() {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { t } = await getServerDictionary();
+  return withTenantScope(session, async () => {
+    const inbox = await loadInbox(session.user.id, (name) => t.messages.projectGroup.replace('{name}', name));
+    return NextResponse.json(inbox);
+  });
+}
 
 // POST — create-or-get the 1:1 (DIRECT) conversation with another user (#769).
 // Idempotent: calling it repeatedly for the same pair returns the same

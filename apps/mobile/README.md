@@ -20,6 +20,15 @@ Expo (React Native) app for iOS and Android. It is one app that serves both prod
   - If the page lands on `/auth/signin`, the session is gone and the native sign-in takes over.
   - It is used for every surface that is not native yet, and for the admin, pipeline and analytics screens, which stay on the web on purpose.
 
+## The site inside the app
+
+- **The site knows it is in the app.** The web view adds `InternCRMApp/1` to its User-Agent. The root layout then renders `<html data-embedded-app>` (`src/lib/embeddedApp.ts`).
+- **The site's own chrome steps aside.** Anything marked `data-app-chrome` is hidden by `src/app/globals.css`: the mobile top bar and drawer (`ResponsiveShell`), the messages header (`MessagesShell`) and the install prompt.
+  - **When you add web chrome that duplicates something the app draws natively, mark it the same way.**
+- **The page reports its title and colours** (`src/lib/webMeta.ts`, `useWebHeader`). The native header shows the page's own title, without the ` · <product>` suffix, on the page's own background. A dark page never sits under a white bar, whatever theme the person picked on the site.
+- **The menu is native.** The More tab lists the person's web sidebar from `GET /api/app/navigation`, which is built from the same `navLinks.ts`, capability filter and labels as the web (`src/lib/appNavigation.ts`). Every nav key needs an Ionicons glyph in `src/lib/menu.ts`; a unit test reads `navLinks.ts` and fails on a missing one.
+- **Native screens follow the phone's light/dark setting.** The palettes in `src/lib/theme.ts` use the web's Tailwind grays.
+
 ## Develop
 
 ```bash
