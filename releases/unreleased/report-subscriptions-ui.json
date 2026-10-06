@@ -1,0 +1,17 @@
+{
+  "bump": "minor",
+  "changelog": "**Scheduled reports screen** (`/admin/reports/subscriptions`, #1905 part 2). Admins with advanced analytics create a scheduled report for a team member or an outside address (report, cadence, weekday or day of month, UTC hour, language, e-mail table / CSV / Excel), send themselves a test, pause / resume, delete, and read each subscription's delivery history with the reason a delivery was skipped. Locked panel without the tier; the API's write-time refusals (unknown report, export add-on missing, foreign recipient) are shown in the form. Linked from the admin nav (\"Scheduled reports\") and from `/admin/analytics`. Covered by `e2e/report-subscriptions.spec.ts`.",
+  "notes": {
+    "en": ["Scheduled reports: send any report weekly, monthly or quarterly to someone on your team or to an outside stakeholder — a dean, a sponsor, a funder — in their language, as a table in the e-mail or as an Excel/CSV file. Recipients without an account can unsubscribe with one click."],
+    "tr": ["Zamanlanmış raporlar: herhangi bir raporu haftalık, aylık ya da üç aylık olarak ekibinizden birine veya dışarıdan bir paydaşa — dekan, sponsor, fon veren — kendi dilinde, e-postada tablo ya da Excel/CSV dosyası olarak gönderin. Hesabı olmayan alıcılar tek tıkla abonelikten çıkabilir."],
+    "de": ["Geplante Berichte: Senden Sie jeden Bericht wöchentlich, monatlich oder vierteljährlich an jemanden aus Ihrem Team oder an externe Beteiligte – Dekanat, Sponsor, Förderer – in deren Sprache, als Tabelle in der E-Mail oder als Excel-/CSV-Datei. Empfänger ohne Konto können sich mit einem Klick abmelden."]
+  },
+  "media": {
+    "poster": "release-media/report-subscriptions-ui.png",
+    "alt": {
+      "en": "The scheduled reports screen: a weekly compliance report to a team member and a monthly cohort comparison to a dean, with its delivery history open",
+      "tr": "Zamanlanmış raporlar ekranı: bir ekip üyesine haftalık uyum raporu ve bir dekana aylık grup karşılaştırması, gönderim geçmişi açık",
+      "de": "Die Seite „Geplante Berichte“: ein wöchentlicher Compliance-Bericht an ein Teammitglied und ein monatlicher Kohortenvergleich an ein Dekanat, mit geöffnetem Versandverlauf"
+    }
+  }
+}

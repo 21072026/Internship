@@ -167,6 +167,39 @@ test.describe('release media', () => {
     }
   });
 
+  // #1905: the scheduled-reports screen with two subscriptions, one opened history.
+  test('poster: scheduled reports', async ({ page }) => {
+    const stamp = Date.now();
+    const org = await prisma.organization.create({ data: { name: `Media RS ${stamp}`, slug: `media-rs-${stamp}` } });
+    const adminEmail = uniqueEmail('media-rs-admin');
+    try {
+      const admin = await seedUser(adminEmail, 'MediaRs123!', 'ADMIN', 'Jana Köhler', org.id);
+      for (const feature of ['ADVANCED_ANALYTICS', 'REPORT_EXPORT']) await prisma.orgEntitlement.create({ data: { orgId: org.id, feature, note: 'media' } });
+      const dean = await prisma.reportSubscription.create({
+        data: { orgId: org.id, reportKey: 'cohort-comparison', cadence: 'MONTHLY', dayOfMonth: 1, hour: 7, locale: 'de', format: 'EMAIL_SUMMARY', recipientEmail: 'dekanat@hochschule.example', recipientName: 'Prof. Dr. Weber', createdById: admin.id, lastSentAt: new Date(Date.now() - 5 * 86_400_000) },
+      });
+      await prisma.reportSubscriptionSend.createMany({
+        data: [
+          { orgId: org.id, subscriptionId: dean.id, periodKey: '2026-10', status: 'SENT', sentAt: new Date(Date.now() - 5 * 86_400_000) },
+          { orgId: org.id, subscriptionId: dean.id, periodKey: '2026-09', status: 'SENT', sentAt: new Date(Date.now() - 35 * 86_400_000) },
+        ],
+      });
+      await prisma.reportSubscription.create({
+        data: { orgId: org.id, reportKey: 'weekly-report-compliance', cadence: 'WEEKLY', dayOfWeek: 1, hour: 6, locale: 'en', format: 'XLSX', recipientUserId: admin.id, createdById: admin.id },
+      });
+      await signInAndSettle(page, adminEmail, 'MediaRs123!', '/admin');
+      await page.goto('/admin/reports/subscriptions');
+      const list = page.getByTestId('report-subs-list');
+      await list.locator('li').filter({ hasText: 'Prof. Dr. Weber' }).getByText('Delivery history').click();
+      await capturePoster(list, 'report-subscriptions-ui');
+    } finally {
+      await prisma.reportSubscription.deleteMany({ where: { orgId: org.id } });
+      await prisma.orgEntitlement.deleteMany({ where: { orgId: org.id } });
+      await cleanupByEmail(adminEmail);
+      await prisma.organization.deleteMany({ where: { id: org.id } });
+    }
+  });
+
   // #1366: empty stages collapse to one strip per run, so three occupied stages
   // are on screen together.
   test('poster: the mentor board with its empty stages collapsed', async ({ page }) => {
