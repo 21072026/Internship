@@ -23,6 +23,7 @@ const {
   parseDealValueInput,
   dealValueInputText,
   isDealValueEnabled,
+  netChangeMinor,
   DEAL_VALUE_MAX_MINOR,
 } = await import('../../src/lib/dealValue.ts');
 const { retentionTriangle, cohortMonths } = await import('../../src/lib/funnelKpi.ts');
@@ -73,6 +74,24 @@ test('won, lost and the month-end book, each with its estimated value', () => {
   // Integer arithmetic end to end.
   for (const row of result.months) {
     for (const t of [row.won, row.lost, row.activeAtEnd]) assert.ok(Number.isSafeInteger(t.valueMinor));
+  }
+});
+
+test('net change is won minus lost, equals the month-end book\'s delta, and is blank for a quiet month (#2424)', () => {
+  const journeys = [
+    journey('a', [['DEAL_WON', '2026-01-10T00:00:00Z'], ['DEAL_LOST', '2026-03-05T00:00:00Z']], { valueMinor: 10000 }),
+    journey('b', [['DEAL_WON', '2026-02-28T23:59:59Z']], { valueMinor: 2500 }),
+    // Won and lost in the same month: no net change, and no book entry.
+    journey('c', [['DEAL_WON', '2026-02-02T00:00:00Z'], ['DEAL_LOST', '2026-02-20T00:00:00Z']], { valueMinor: 700 }),
+    // Won without an estimate: counted, adds nothing.
+    journey('d', [['DEAL_WON', '2026-03-15T00:00:00Z']], { valueMinor: null, currency: null }),
+  ];
+  const result = valueByMonth(ORDER, journeys, ['2025-12', ...MONTHS], OPTS);
+  const nets = result.months.map((m) => netChangeMinor(m));
+  assert.deepEqual(nets, [null, 10000, 2500, -10000, null]);
+  for (let i = 1; i < result.months.length; i++) {
+    const delta = result.months[i].activeAtEnd.valueMinor - result.months[i - 1].activeAtEnd.valueMinor;
+    assert.equal(nets[i] ?? 0, delta, result.months[i].month);
   }
 });
 
