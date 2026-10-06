@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Starter pack sample programme (#2066, part 2):** `applyOrgStarterPack(orgId, { sampleProgram: true })` (and `POST …/starter-pack` with `{ sampleProgram: true }`) adds a labelled synthetic set inside the tenant — 1 company, 1 requisition, 2 mentors, 4 mentees spread over the org's own on-path stages by position (no stage key spelled out), 4 interactions and one weekly report — in the same transaction, idempotently, internship vertical only. Names say \"(sample)\" and addresses are `@sample.invalid` (RFC 2606, undeliverable). **Schema, purely additive:** `sampleData Boolean @default(false)` on `User`, `Company`, `MentorshipRelation` and `Requisition` — a server-side default, no `@id`, key or relation touched (`check:schema-push` green). `DELETE /api/admin/organizations/[id]/sample-data` removes exactly the tagged rows (people through the account-erasure hard delete); the shared `orgAdminRefusal` gate covers both routes. Settings card: a sample checkbox and a remove button.",
+  "notes": {
+    "en": ["The starter pack can also add a labelled sample programme so a new organization's screens are not empty on day one — and remove it again in one click."],
+    "tr": ["Başlangıç paketi, yeni bir kurumun ekranları ilk gün boş kalmasın diye etiketli bir örnek program da ekleyebiliyor — ve tek tıkla yeniden kaldırabiliyor."],
+    "de": ["Das Startpaket kann zusätzlich ein gekennzeichnetes Beispielprogramm anlegen, damit die Seiten einer neuen Organisation am ersten Tag nicht leer sind — und es mit einem Klick wieder entfernen."]
+  }
+}

@@ -324,6 +324,9 @@ model User {
   orgId                   String?
   org                     Organization? @relation(fields: [orgId], references: [id])
   id                      String        @id @default(cuid())
+  // A row of the starter pack's sample programme (#2066): synthetic, labelled,
+  // removed as a set by DELETE /api/admin/organizations/[id]/sample-data.
+  sampleData              Boolean       @default(false)
   // NOT globally unique any more (worlds, epic #2348): one PERSON may hold one
   // account per WORLD — the internship product and the marketing product are
   // two different tenants, and the host a person signs in on decides which one
@@ -1348,6 +1351,9 @@ model Company {
   orgId           String?
   org             Organization? @relation(fields: [orgId], references: [id])
   id              String        @id @default(cuid())
+  // A row of the starter pack's sample programme (#2066): synthetic, labelled,
+  // removed as a set by DELETE /api/admin/organizations/[id]/sample-data.
+  sampleData      Boolean       @default(false)
   name            String
   // TEXT: the company form offers 2 000 characters, far past VARCHAR(191).
   description     String?       @db.Text
@@ -2645,6 +2651,9 @@ model MentorshipRelation {
   orgId                   String?
   org                     Organization?    @relation(fields: [orgId], references: [id])
   id                      String           @id @default(cuid())
+  // A row of the starter pack's sample programme (#2066): synthetic, labelled,
+  // removed as a set by DELETE /api/admin/organizations/[id]/sample-data.
+  sampleData              Boolean          @default(false)
   mentorId                String
   menteeId                String
   companyId               String?
@@ -4059,6 +4068,9 @@ model RelationValue {
 // rerun without coupling the two live write paths.
 model Requisition {
   id                  String    @id @default(cuid())
+  // A row of the starter pack's sample programme (#2066): synthetic, labelled,
+  // removed as a set by DELETE /api/admin/organizations/[id]/sample-data.
+  sampleData          Boolean   @default(false)
   orgId               String
   companyId           String
   title               String

@@ -99,7 +99,10 @@ export const STARTER_GOALS: LocalizedLabel[] = [
 ];
 
 export type StarterModel = 'stages' | 'slas' | 'documentRequirements' | 'evaluationTemplates' | 'goalTemplates';
-export type StarterSummary = Record<StarterModel, { created: number; skipped: number }>;
+export type StarterSummary = Record<StarterModel, { created: number; skipped: number }> & {
+  /** Present when the sample programme was asked for (#2066). */
+  sampleProgram?: { created: number; skipped: number };
+};
 
 /** The template a tenant's starter pack is drawn from. */
 export function starterTemplate(vertical: string | null | undefined): ProgramTemplate {
@@ -113,7 +116,7 @@ export function starterSlas(template: ProgramTemplate): { stageKey: string; days
   return onPath.flatMap((s, i) => (CANONICAL_SLA_DAYS[i] ? [{ stageKey: s.key, days: CANONICAL_SLA_DAYS[i]! }] : []));
 }
 
-async function apply(tx: Tx, orgId: string, locale: Locale): Promise<StarterSummary> {
+async function apply(tx: Tx, orgId: string, locale: Locale, sampleProgram: boolean): Promise<StarterSummary> {
   const org = await tx.organization.findUnique({ where: { id: orgId }, select: { id: true, vertical: true } });
   if (!org) throw new Error(`applyOrgStarterPack: no organization ${orgId}`);
   const template = starterTemplate(org.vertical);
@@ -175,6 +178,14 @@ async function apply(tx: Tx, orgId: string, locale: Locale): Promise<StarterSumm
   if (goals.length) await tx.projectTaskTemplate.createMany({ data: goals.map((g) => ({ orgId, projectId: null, title: g.tr, translations: g })) });
   summary.goalTemplates = { created: goals.length, skipped: STARTER_GOALS.length - goals.length };
 
+  // The sample programme, after the stages exist, in the same transaction.
+  // Loaded only when asked for: it pulls in the account-erasure path, which
+  // this module (and its unit test) has no other reason to load.
+  if (sampleProgram) {
+    const { createSampleProgram } = await import('@/lib/orgSampleProgram');
+    summary.sampleProgram = await createSampleProgram(tx, orgId);
+  }
+
   return summary;
 }
 
@@ -182,8 +193,9 @@ async function apply(tx: Tx, orgId: string, locale: Locale): Promise<StarterSumm
  * Apply the starter pack to an existing organization. One transaction — the
  * caller's when given (`tx`), else its own. Returns per-model counts.
  */
-export async function applyOrgStarterPack(orgId: string, opts: { tx?: Tx; locale?: Locale } = {}): Promise<StarterSummary> {
+export async function applyOrgStarterPack(orgId: string, opts: { tx?: Tx; locale?: Locale; sampleProgram?: boolean } = {}): Promise<StarterSummary> {
   const locale = opts.locale ?? 'en';
-  if (opts.tx) return apply(opts.tx, orgId, locale);
-  return prisma.$transaction((tx) => apply(tx, orgId, locale), { timeout: 20_000 });
+  const sample = opts.sampleProgram === true;
+  if (opts.tx) return apply(opts.tx, orgId, locale, sample);
+  return prisma.$transaction((tx) => apply(tx, orgId, locale, sample), { timeout: 30_000 });
 }
