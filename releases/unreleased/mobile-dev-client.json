@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Mobile: development build for the emulator (#2775):** `apps/mobile` now depends on `expo-dev-client`, so `npx expo run:android` / `run:ios` produce a development build that carries the app's own native modules (`react-native-keyboard-controller`, which Expo Go lacks) and reloads JS with Fast Refresh. `apps/mobile/README.md` § Emulator documents the one-time setup for macOS, Windows and Linux and the daily loop."
+}
