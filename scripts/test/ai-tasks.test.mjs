@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 register('./ts-extensionless-resolve.mjs', import.meta.url);
 
@@ -189,11 +189,12 @@ test('outside a tracked call, callModel still answers and records nothing', asyn
 test('src/lib/ai/provider.ts is the only file under src/ that imports @anthropic-ai/sdk', () => {
   const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../src');
   const hits = [];
+  // Dirent types from the one readdir, not a stat-then-read (CodeQL js/file-system-race).
   const walk = (dir) => {
-    for (const name of readdirSync(dir)) {
-      const full = path.join(dir, name);
-      if (statSync(full).isDirectory()) walk(full);
-      else if (/\.(ts|tsx|mjs|js)$/.test(name) && readFileSync(full, 'utf8').includes('@anthropic-ai/sdk')) hits.push(path.relative(root, full));
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ts|tsx|mjs|js)$/.test(entry.name) && readFileSync(full, 'utf8').includes('@anthropic-ai/sdk')) hits.push(path.relative(root, full));
     }
   };
   walk(root);
