@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logActivity } from '@/lib/activity';
-import { brandHeader, emailBrand, sendEmail } from '@/services/emailService';
+import { brandHeader, emailBrand, sendEmail, recordOptOuts } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
@@ -278,7 +278,17 @@ async function handlePost(request: Request) {
   });
 
   let emailed = 0;
+  // The people the broadcast honoured an opt-out for (#2054): one SKIPPED
+  // EmailLog row each, from the preference row this handler already loaded —
+  // one batched insert, no extra read — so "show me this person's opt-out was
+  // honoured on this announcement" has an answer.
+  let skipped = 0;
   if (email) {
+    const mailed = new Set(mailRecipients.map((u) => u.id));
+    skipped = await recordOptOuts(
+      users.filter((u) => u.email && !mailed.has(u.id)).map((u) => ({ to: u.email, category: 'announcement', subject: 'Announcement (not sent: opted out)' })),
+    );
+
     const escapeHtml = (value: string) =>
       value.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
     // The image is attached inline (cid:) rather than linked: /api/announcements/
@@ -363,7 +373,7 @@ async function handlePost(request: Request) {
 
   await logActivity({ action: 'announcement.broadcast', actorId: session.user.id, actorEmail: session.user.email ?? null });
   return NextResponse.json(
-    { recipients: users.length, emailed, imageUrl: imageData ? announcementImageUrl(announcement.id) : null },
+    { recipients: users.length, emailed, skipped, imageUrl: imageData ? announcementImageUrl(announcement.id) : null },
     { status: 201 }
   );
   });
