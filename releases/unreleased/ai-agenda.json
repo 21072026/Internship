@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **AI-personalised session agenda** (#1845): `POST /api/agendas/personalize` proposes 4–7 agenda lines adapted from the chosen guide, the pair's open goals (the goal visibility rule decides which leave), the previous session and the newest log entries, through `runAiGated` as the participant task `agenda_personalize` — free, never behind the AI pack. Every denial (no consent, no provider, no quota, provider error) answers with the guide as written plus the reason; the proposal is a draft in `AgendaPanel` until a seat adds it, and `POST /api/agendas/[id]/items` takes `texts[]` for that. The payload builder (`src/lib/aiAgendaRule.ts`) is unit-tested for what leaves the process.",
+  "notes": {
+    "en": [
+      "Session agendas can now be personalised with AI: one click proposes agenda lines adapted to the pair's open goals, the previous session and the latest notes. The proposal is a draft until you add it, and when AI is not available the guide is shown as written — never a paywall."
+    ],
+    "tr": [
+      "Oturum gündemleri artık yapay zekâ ile kişiselleştirilebiliyor: tek tıkla çiftin açık hedeflerine, önceki oturuma ve son notlara göre uyarlanmış gündem maddeleri önerilir. Öneri siz ekleyene kadar taslaktır; yapay zekâ kullanılamadığında rehber yazıldığı hâliyle gösterilir — asla ödeme duvarı yok."
+    ],
+    "de": [
+      "Sitzungsagenden lassen sich jetzt mit KI personalisieren: Ein Klick schlägt Agendapunkte vor, die auf die offenen Ziele des Paars, die vorherige Sitzung und die neuesten Notizen abgestimmt sind. Der Vorschlag bleibt ein Entwurf, bis du ihn hinzufügst; ist KI nicht verfügbar, wird der Leitfaden so gezeigt, wie er geschrieben ist — nie eine Bezahlschranke."
+    ]
+  }
+}
