@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { callModel, safeParseModelJson } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 
 const MATCH_REPLY = z.object({ ranking: z.array(z.object({ label: z.string(), reason: z.string() })) });
 
@@ -61,7 +62,7 @@ export async function aiRankMentors(
       capacity: c.capacity ?? null,
     })),
   };
-  const reply = await callModel({ task: 'mentor_match', system: SYSTEM, input: JSON.stringify(payload), jsonSchema: SCHEMA });
+  const reply = await callModel({ task: 'mentor_match', system: SYSTEM, input: `Candidates (JSON):\n${wrapUntrusted('candidates', JSON.stringify(payload))}`, jsonSchema: SCHEMA });
   // Not the JSON asked for → no AI ranking (the rule-based order stands), and
   // the call is recorded as parse_error (#2024).
   const parsed = safeParseModelJson(reply, MATCH_REPLY, { ranking: [] });

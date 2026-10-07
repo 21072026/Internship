@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
+import { AiText } from '@/components/ai/AiText';
 import { useT } from '@/i18n/client';
 import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 
@@ -88,7 +89,7 @@ export function CvFeedback() {
           {/* Marked, because a mentee acting on advice about their own CV
               deserves to know a model wrote it (#2034). */}
           <AiBadge note className="mb-2" />
-          <div className="whitespace-pre-line">{feedback}</div>
+          <AiText text={feedback} testId="cv-feedback-text" />
           {artifact && <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={state.consent ? () => run(true) : undefined} regenerating={loading} canShare />}
         </div>
       )}

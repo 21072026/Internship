@@ -38,6 +38,9 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import Anthropic from '@anthropic-ai/sdk';
 import type { z } from 'zod';
 import { AI_TASKS, type AiModelTier, type AiTaskId, type AiTaskSpec } from '@/lib/ai/tasks';
+import { UNTRUSTED_DATA_RULE, mapUntrustedBlocks, untrustedBlocks } from '@/lib/ai/untrusted';
+import { redactForPrompt } from '@/lib/ai/redact';
+import { injectionSignals } from '@/lib/ai/injection';
 
 export const AI_PROVIDER = 'anthropic';
 /** The model every tier resolves to unless an env var says otherwise (the pre-#2022 default). */
@@ -205,6 +208,8 @@ export interface AiCallUsage {
   latencyMs: number;
   /** How many provider requests completed. 0 means the usage is a resolved model and nothing else. */
   completed: number;
+  /** Injection tripwire hits over the untrusted blocks (#2026) — flagged, never blocking. */
+  flags: string[];
 }
 
 interface CallTracking {
@@ -246,7 +251,11 @@ export async function trackParseErrors<T>(fn: () => Promise<T>): Promise<{ resul
 export interface ModelCall {
   task: AiTaskId;
   system: string;
-  /** The one user message. Cut to the task's `maxInputChars` here. */
+  /**
+   * The one user message. Cut to the task's `maxInputChars` here. Everything a
+   * person wrote must sit inside a `wrapUntrusted()` block — an input without
+   * one is refused (#2026).
+   */
   input: string;
   /** A JSON schema pinned on the reply (structured tasks). */
   jsonSchema?: Record<string, unknown>;
@@ -262,6 +271,53 @@ const defaultCreate: ModelCreate = (params) =>
   // spec sets it at runtime); retries are callProvider's, so the SDK's are off.
   new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }).messages.create(params);
 
+/** Thrown when a feature module sends user text without fencing it — a programmer error, caught by the tests. */
+export class UnfencedInputError extends Error {
+  constructor(task: string) {
+    super(`callModel(${task}): the input carries no wrapUntrusted() block`);
+    this.name = 'UnfencedInputError';
+  }
+}
+
+/**
+ * Shorten the largest untrusted block until the input fits the task's cap, so
+ * the cut lands inside the data and never through a closing fence (a plain
+ * slice would leave the block open). The slice in callModel stays as the
+ * backstop.
+ */
+export function fitToBudget(input: string, max: number): string {
+  let out = input;
+  for (let i = 0; i < 4 && out.length > max; i++) {
+    const blocks = untrustedBlocks(out);
+    if (!blocks.length) break;
+    const largest = blocks.reduce((a, b) => (b.content.length > a.content.length ? b : a));
+    const keep = Math.max(0, largest.content.length - (out.length - max));
+    let done = false;
+    out = mapUntrustedBlocks(out, (content) => {
+      if (done || content !== largest.content) return content;
+      done = true;
+      return content.slice(0, keep);
+    });
+  }
+  return out;
+}
+
+/**
+ * What actually leaves for the provider (#2026): the system prompt with the
+ * untrusted-data rule appended, the input with contact details masked inside
+ * its untrusted blocks (unless the task declares `needsContactDetails`), and
+ * the tripwire's signals over those blocks. Exported for the unit test.
+ */
+export function preparePrompt(call: Pick<ModelCall, 'task' | 'system' | 'input'>): { system: string; input: string; flags: string[] } {
+  const spec: AiTaskSpec = AI_TASKS[call.task];
+  if (untrustedBlocks(call.input).length === 0) throw new UnfencedInputError(call.task);
+  const masked = spec.needsContactDetails ? call.input : mapUntrustedBlocks(call.input, (content) => redactForPrompt(content));
+  const input = fitToBudget(masked, spec.maxInputChars);
+  const flags = [...new Set(untrustedBlocks(call.input).flatMap((b) => injectionSignals(b.content)))];
+  if (flags.length) console.warn('[ai] injection tripwire', { task: call.task, flags });
+  return { system: `${call.system}\n\n${UNTRUSTED_DATA_RULE}`, input, flags };
+}
+
 /**
  * One request to the model under the task's registry entry. Returns the text
  * of the reply ('' when there is none — the caller's parser decides what that
@@ -270,9 +326,11 @@ const defaultCreate: ModelCreate = (params) =>
 export async function callModel(call: ModelCall, create: ModelCreate = defaultCreate): Promise<string> {
   const spec: AiTaskSpec = AI_TASKS[call.task];
   const model = resolveModel(call.task);
+  const { system, input, flags } = preparePrompt(call);
   const store = callTracking.getStore();
-  const usage: AiCallUsage = store?.usage ?? { provider: AI_PROVIDER, model, inputTokens: 0, outputTokens: 0, latencyMs: 0, completed: 0 };
+  const usage: AiCallUsage = store?.usage ?? { provider: AI_PROVIDER, model, inputTokens: 0, outputTokens: 0, latencyMs: 0, completed: 0, flags: [] };
   usage.model = model;
+  usage.flags = [...new Set([...usage.flags, ...flags])];
   if (store) store.usage = usage;
 
   const maxTokens = Math.min(call.maxTokens ?? spec.maxOutputTokens, spec.maxOutputTokens);
@@ -280,9 +338,9 @@ export async function callModel(call: ModelCall, create: ModelCreate = defaultCr
   const res = await create({
     model,
     max_tokens: maxTokens,
-    system: call.system,
+    system,
     ...(call.jsonSchema ? { output_config: { format: { type: 'json_schema', schema: call.jsonSchema } } } : {}),
-    messages: [{ role: 'user', content: call.input.slice(0, spec.maxInputChars) }],
+    messages: [{ role: 'user', content: input.slice(0, spec.maxInputChars) }],
   });
   usage.latencyMs += Date.now() - started;
   usage.model = res.model || model;

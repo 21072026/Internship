@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Sparkles, RefreshCw, X } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { AiText } from '@/components/ai/AiText';
 
 // Thread catch-up and suggested replies (#2048). Both ask the server
 // (POST /api/conversations/[id]/summary | suggest-reply), which decides who may
@@ -84,7 +85,7 @@ export function ThreadCatchUp({ conversationId }: { conversationId: string }) {
               </button>
             </div>
           </div>
-          <p className="whitespace-pre-wrap text-gray-800">{summary}</p>
+          <AiText as="p" text={summary} className="text-gray-800" />
           <p className="mt-2 text-xs text-violet-700">{A.disclaimer}</p>
         </div>
       )}

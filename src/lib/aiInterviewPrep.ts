@@ -6,6 +6,7 @@
 // `interview_prep`).
 
 import { callModel } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 
 const SYSTEM = `You are an interview preparation coach for a student/junior candidate. Given a target position and skills, produce, in the same language as the input: (1) "**Questions**" — 6-8 realistic interview questions for that position (mix of technical and behavioral, ordered easy→hard); (2) "**Tips**" — 3-5 short, concrete preparation tips specific to the position and skills. Keep the whole answer under 350 words. Do not invent facts about the candidate.`;
 
@@ -13,7 +14,8 @@ export async function aiInterviewPrep(targetPosition: string, skills: string[], 
   const reply = await callModel({
     task: 'interview_prep',
     system: SYSTEM,
-    input: `Target position: ${targetPosition}\nSkills: ${skills.join(', ') || '—'}${focus ? `\nSpecial focus: ${focus.slice(0, 300)}` : ''}`,
+    // Position, skills and the free-form focus are all typed by the user (#2026).
+    input: wrapUntrusted('candidate', `Target position: ${targetPosition}\nSkills: ${skills.join(', ') || '—'}${focus ? `\nSpecial focus: ${focus.slice(0, 300)}` : ''}`),
   });
   return reply.trim();
 }

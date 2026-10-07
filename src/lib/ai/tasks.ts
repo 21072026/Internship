@@ -51,6 +51,13 @@ export interface AiTaskSpec {
    * existing deployment keeps its model; new tasks leave it out.
    */
   legacyModelEnv?: 'ANTHROPIC_SUMMARY_MODEL';
+  /**
+   * The task genuinely needs contact details from the user text (#2026). Left
+   * out — the default — `callModel()` masks e-mail addresses, phone numbers,
+   * links, IBANs, ID numbers and street addresses in the untrusted blocks
+   * before they leave (src/lib/ai/redact.ts).
+   */
+  needsContactDetails?: true;
 }
 
 /** The default cap on text sent in one call — bounded regardless of CV or log size. */
@@ -59,7 +66,7 @@ export const DEFAULT_MAX_INPUT_CHARS = 24_000;
 export const AI_TASKS = {
   // CV text → structured profile suggestions (EPIC B3). The mentee applies them
   // field by field; the file itself never leaves.
-  cv_extract: { label: 'CV field extraction', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1024 },
+  cv_extract: { label: 'CV field extraction', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1024, needsContactDetails: true },
   // Constructive feedback on the mentee's own CV text (#535).
   cv_feedback: { label: 'CV feedback', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700 },
   // A mentor-facing digest of one relation's interaction log (#534); the
