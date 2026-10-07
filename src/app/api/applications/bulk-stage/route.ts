@@ -17,7 +17,9 @@ import {
 } from '@/lib/applications';
 import { actorFlagsFor, moveApplicationStage, visibleApplicationsWhere } from '@/lib/applicationStage';
 
-export const BULK_STAGE_MAX_IDS = 50;
+// Not exported: a Next.js route module may export only its handlers and the
+// route config — `next build` refuses any other export field.
+const BULK_STAGE_MAX_IDS = 50;
 
 const bodySchema = z.object({
   ids: z.array(z.string().trim().min(1).max(64)).min(1).max(BULK_STAGE_MAX_IDS),
@@ -28,7 +30,7 @@ const bodySchema = z.object({
 
 const ACTING_ROLES = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY'];
 
-export type BulkSkipReason = 'not_found' | 'invalid_transition' | 'forbidden' | 'stage_conflict' | 'disposition_required' | 'illegal_transition';
+type BulkSkipReason = 'not_found' | 'invalid_transition' | 'forbidden' | 'stage_conflict' | 'disposition_required' | 'illegal_transition';
 
 // POST — move up to 50 applications to one stage (#1836), the same rules as the
 // single route applied per row from each row's CURRENT stage. Partial success

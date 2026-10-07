@@ -13,3 +13,7 @@
   not roll back the four that moved, and `moved` must list only ids whose guarded write returned 1.
 - **`check:openapi` reads the comment above each handler for the summary** — a new route without
   one still passes, but reads as `PATCH /api/...` in the explorer. Write the one-line comment.
+- **A route module exports handlers and nothing else.** `export const BULK_STAGE_MAX_IDS` in a
+  `route.ts` passes `tsc --noEmit` and `next lint` and fails only `next build` ("is not a valid
+  Route export field"), which took every smoke shard and both image builds down with it. Keep
+  constants and types local or in `src/lib`, and run `npm run build` before pushing a new route.
