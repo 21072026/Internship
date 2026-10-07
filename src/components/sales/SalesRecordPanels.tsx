@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { ContractEndPanel } from '@/components/ContractEndPanel';
+import { WinBackPanel } from '@/components/WinBackPanel';
 import { DealValuePanel, type DealValueState } from '@/components/DealValuePanel';
 
 // The editors a sales rep has on their own record (#2580): the follow-up
@@ -53,6 +54,15 @@ export function SalesRecordPanels({
           trialEndsAt={trialEndsAt}
           canEdit={status === 'ACTIVE'}
           onSaved={refresh}
+        />
+      </div>
+      {/* A lost customer came back (#2842); renders on an open DEAL_LOST record only. */}
+      <div className="mb-6 empty:hidden">
+        <WinBackPanel
+          relationId={relationId}
+          pipelineStatus={pipelineStatus}
+          status={status}
+          hrefFor={(id) => `/sales/leads/${id}`}
         />
       </div>
       {/* A won customer's notice period (#2841); renders on DEAL_WON only. */}

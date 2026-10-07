@@ -14,7 +14,7 @@
 // key never needs a schema change (CLAUDE.md).
 
 /** Lifecycle end states a relation can carry. */
-export const RELATION_LIFECYCLE_STATES = ['ENDED_REMATCHED', 'ENDED_REASSIGNED'] as const;
+export const RELATION_LIFECYCLE_STATES = ['ENDED_REMATCHED', 'ENDED_REASSIGNED', 'ENDED_CHURNED'] as const;
 
 export type RelationLifecycleState = (typeof RELATION_LIFECYCLE_STATES)[number];
 
@@ -29,6 +29,19 @@ export const ENDED_REMATCHED: RelationLifecycleState = 'ENDED_REMATCHED';
  * and a report that cannot tell them apart cannot answer either question.
  */
 export const ENDED_REASSIGNED: RelationLifecycleState = 'ENDED_REASSIGNED';
+
+/**
+ * A customer who was lost (DEAL_LOST) came back (#2842, decision #2572 Q4):
+ * the lost journey closes with this state and a NEW journey starts, linked by
+ * `previousRelationId`. Not COMPLETED-as-success, and not a mentor change —
+ * the predecessor chain on the account page labels it as a win-back.
+ */
+export const ENDED_CHURNED: RelationLifecycleState = 'ENDED_CHURNED';
+
+/** True when this relation was closed because the customer churned and came back. */
+export function endedByChurn(relation: { lifecycleState?: string | null }): boolean {
+  return relation.lifecycleState === ENDED_CHURNED;
+}
 
 /**
  * Why a pairing ended, as picked by the person ending it. ONE list, shared by

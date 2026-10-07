@@ -816,6 +816,7 @@ const en = {
       trialWindow: '{start} – {end}',
       trialEnds: 'until {date}',
       continues: 'Continues an earlier pairing with {name}',
+      wonBack: 'Won back — this customer was lost before',
     },
     interactionsEmpty: 'No interactions logged yet.',
     interactionWith: 'with {name}',
@@ -4262,6 +4263,17 @@ const en = {
   },
   // The trial end on a funnel record (#2553): shown on the record and the board
   // card, set or extended by the owner or an admin.
+  // A lost customer came back (#2842).
+  winBack: {
+    title: 'Customer came back',
+    hint: 'Starts a new journey for this account and closes this lost one as churned — the history stays, and the return counts as a new win.',
+    toTrial: 'New trial',
+    toWon: 'Signed again',
+    confirm: 'Start a new journey for this customer? This lost record will be closed.',
+    done: 'New journey started',
+    error: 'Could not start the new journey',
+    alreadyActive: 'This customer already has an open record',
+  },
   // A won customer's notice period (#2841).
   contractEnd: {
     title: 'Notice given',
@@ -7948,6 +7960,7 @@ const tr: Dict = {
       trialWindow: '{start} – {end}',
       trialEnds: '{date} tarihine kadar',
       continues: '{name} ile önceki eşleştirmenin devamı',
+      wonBack: 'Geri kazanıldı — bu müşteri daha önce kaybedilmişti',
     },
     interactionsEmpty: 'Henüz kayıtlı etkileşim yok.',
     interactionWith: '{name} ile',
@@ -11278,6 +11291,17 @@ const tr: Dict = {
     overdue: 'Gecikti',
     alsoUpdate: 'Sonraki takibi de ayarla',
     chip: 'Takip {date}',
+  },
+  // A lost customer came back (#2842).
+  winBack: {
+    title: 'Müşteri geri döndü',
+    hint: 'Bu hesap için yeni bir yolculuk başlatır ve bu kaybı kayıp müşteri olarak kapatır — geçmiş kalır, dönüş yeni bir kazanım sayılır.',
+    toTrial: 'Yeni deneme',
+    toWon: 'Yeniden imzaladı',
+    confirm: 'Bu müşteri için yeni bir yolculuk başlatılsın mı? Bu kayıp kaydı kapatılacak.',
+    done: 'Yeni yolculuk başladı',
+    error: 'Yeni yolculuk başlatılamadı',
+    alreadyActive: 'Bu müşterinin zaten açık bir kaydı var',
   },
   // A won customer's notice period (#2841).
   contractEnd: {
@@ -14917,6 +14941,7 @@ const de: Dict = {
       trialWindow: '{start} – {end}',
       trialEnds: 'bis {date}',
       continues: 'Setzt eine frühere Zuordnung mit {name} fort',
+      wonBack: 'Zurückgewonnen — dieser Kunde war schon einmal verloren',
     },
     interactionsEmpty: 'Noch keine Interaktionen erfasst.',
     interactionWith: 'mit {name}',
@@ -18249,6 +18274,17 @@ const de: Dict = {
     overdue: 'Überfällig',
     alsoUpdate: 'Auch die nächste Wiedervorlage setzen',
     chip: 'Wiedervorlage {date}',
+  },
+  // A lost customer came back (#2842).
+  winBack: {
+    title: 'Kunde ist zurück',
+    hint: 'Startet eine neue Customer Journey für diesen Account und schließt diese verlorene als abgewandert — die Historie bleibt, die Rückkehr zählt als neuer Gewinn.',
+    toTrial: 'Neue Testphase',
+    toWon: 'Erneut unterschrieben',
+    confirm: 'Neue Customer Journey für diesen Kunden starten? Dieser verlorene Datensatz wird geschlossen.',
+    done: 'Neue Customer Journey gestartet',
+    error: 'Die neue Customer Journey konnte nicht gestartet werden',
+    alreadyActive: 'Dieser Kunde hat bereits einen offenen Datensatz',
   },
   // A won customer's notice period (#2841).
   contractEnd: {
