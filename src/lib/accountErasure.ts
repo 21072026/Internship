@@ -283,6 +283,10 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // ── Content written ABOUT the person → scrub, keep the row ──────────────
     prisma.interactionLog.updateMany({ where: asSubject, data: { notes: '', subject: null } }),
     prisma.relationNote.updateMany({ where: asSubject, data: { body: '' } }),
+    // The pair's shared minutes (#1847) are about the mentee as much as the
+    // mentor's private note is — body and every kept revision.
+    prisma.sessionNote.updateMany({ where: asSubject, data: { body: '' } }),
+    prisma.sessionNoteRevision.updateMany({ where: { note: asSubject }, data: { body: '' } }),
     prisma.personalNote.updateMany({
       where: { OR: [{ meeting: asSubject }, { meeting: directMeeting }] },
       data: { body: '' },

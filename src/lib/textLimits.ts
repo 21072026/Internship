@@ -185,6 +185,8 @@ export const TEXT_LIMITS = {
   goalSuccessCriteria: 2000,
   /** SessionAgendaItem.text — @db.Text (#1843); an ad-hoc agenda line */
   agendaItemText: 2000,
+  /** SessionNote.body — @db.Text (#1847); the pair's shared minutes */
+  sessionNoteBody: 10000,
   /** AgendaTemplate.summary — a locale entry of the JSON column (#1843) */
   agendaSummary: 500,
   /** AgendaTemplateItem.guidance — @db.Text (#1843) */

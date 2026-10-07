@@ -36,7 +36,10 @@ export type RealtimeEventType =
   // A session agenda of a mentorship this user is in changed (#1843): an item
   // was ticked, added, removed or carried over. Carries the relationId; the
   // panel refetches through the authorized endpoint. Moves no unread counter.
-  | 'agenda';
+  | 'agenda'
+  // The pair's shared minutes changed (#1847) — same shape and same rules as
+  // `agenda`: relationId only, the panel refetches, no counter moves.
+  | 'sessionNote';
 
 export interface RealtimeEvent {
   type: RealtimeEventType;
