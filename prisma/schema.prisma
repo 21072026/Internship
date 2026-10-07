@@ -2567,12 +2567,14 @@ model ProjectTask {
   // place that decides what "late" means.
   dueDate     DateTime?
 
-  project  Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee User?                @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  author   User?                @relation("ProjectTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  project     Project?               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?                  @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  author      User?                  @relation("ProjectTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   // A template is archived rather than deleted, so this normally stays intact;
   // SetNull is the safety net that leaves the snapshot title behind.
-  template ProjectTaskTemplate? @relation("TaskFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  template    ProjectTaskTemplate?   @relation("TaskFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  // The minutes line this to-do was promoted from (#1849), when it was.
+  minutesItem SessionNoteActionItem?
 
   @@index([projectId])
   @@index([assigneeId])
@@ -3255,14 +3257,36 @@ model SessionNote {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  relation  MentorshipRelation    @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  meeting   Meeting?              @relation(fields: [meetingId], references: [id], onDelete: SetNull)
-  agenda    SessionAgenda?        @relation(fields: [agendaId], references: [id], onDelete: SetNull)
-  createdBy User?                 @relation("SessionNoteAuthor", fields: [createdById], references: [id], onDelete: SetNull)
-  revisions SessionNoteRevision[]
+  relation    MentorshipRelation      @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  meeting     Meeting?                @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  agenda      SessionAgenda?          @relation(fields: [agendaId], references: [id], onDelete: SetNull)
+  createdBy   User?                   @relation("SessionNoteAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  revisions   SessionNoteRevision[]
+  actionItems SessionNoteActionItem[]
 
   @@index([relationId])
   @@index([meetingId])
+}
+
+// A `- [ ]` line of the minutes promoted to a to-do (#1849): the link that
+// keeps the two in step — ticking the to-do ticks the line, ticking the line
+// ticks the to-do. `text` is the line as promoted, which is how the line is
+// found again after the body is edited (lines move; wording rarely does). One
+// to-do per line, one line per to-do (taskId @unique). Cascade from the note:
+// without the minutes there is nothing to keep in step; the to-do itself
+// stays (SetNull on the task side would be wrong — the row IS the link).
+// Reached through SessionNote → MentorshipRelation, so no `orgId` either.
+model SessionNoteActionItem {
+  id        String   @id @default(cuid())
+  noteId    String
+  taskId    String   @unique
+  text      String
+  createdAt DateTime @default(now())
+
+  note SessionNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  task ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([noteId])
 }
 
 // Who changed the minutes after the meeting (#1847): an append-only trail, one

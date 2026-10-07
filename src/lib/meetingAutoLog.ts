@@ -53,7 +53,10 @@ const SIBLING_BATCH = 25;
 
 // The placeholder note. Deliberately says what the system knows (the meeting
 // was held) and nothing it doesn't (what was discussed) — an invented summary
-// in the mentee-visible history would be worse than an empty one.
+// in the mentee-visible history would be worse than an empty one. Since #1849
+// it is the FALLBACK: when the pair wrote the session's minutes (SessionNote
+// pinned to the meeting, #1847) the log carries those instead, and minutes
+// written after the log exists update that row in place (src/lib/minutesSync.ts).
 const NOTE: Record<Locale, string> = {
   en: 'The scheduled meeting took place. Add what was discussed.',
   tr: 'Planlanan toplantı gerçekleşti. Görüşülenleri buraya ekleyebilirsiniz.',
@@ -71,6 +74,8 @@ type LoggableMeeting = {
   scheduledAt: Date | null;
   relationId: string | null;
   relation: { orgId: string | null; mentor: { preferredLanguage: string | null } } | null;
+  /** The pair's minutes for this meeting, newest first (#1849); absent or empty → placeholder. */
+  sessionNotes?: { body: string }[];
 };
 
 const loggableSelect = {
@@ -79,7 +84,14 @@ const loggableSelect = {
   scheduledAt: true,
   relationId: true,
   relation: { select: { orgId: true, mentor: { select: { preferredLanguage: true } } } },
+  sessionNotes: { select: { body: true }, orderBy: { createdAt: 'desc' as const }, take: 1 },
 } as const;
+
+/** The minutes when the pair wrote them, else the localized placeholder. */
+function notesFor(meeting: LoggableMeeting): string {
+  const minutes = meeting.sessionNotes?.[0]?.body.trim();
+  return minutes || noteFor(meeting.relation?.mentor.preferredLanguage);
+}
 
 /**
  * Write the interaction log for one meeting that took place. Returns true when
@@ -97,7 +109,7 @@ export async function logMeetingInteraction(meeting: LoggableMeeting): Promise<b
         // the history wrong.
         date: meeting.scheduledAt,
         subject: meeting.title.slice(0, TEXT_LIMITS.interactionSubject) || null,
-        notes: noteFor(meeting.relation?.mentor.preferredLanguage),
+        notes: notesFor(meeting),
         type: 'Meeting',
         autoLogged: true,
         meetingId: meeting.id,
