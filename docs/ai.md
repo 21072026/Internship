@@ -79,14 +79,15 @@ paid add-on:
 - **`participant`** — the free core: `cv_extract`, `cv_feedback`,
   `interview_prep`, `practice_interview`, `interaction_summary`, `thread_summary`,
   `suggested_reply`, `outreach_draft`, `bulk_draft`, `profile_enrich`,
-  `next_step_suggest`. The
+  `next_step_suggest`, `agenda_personalize`. The
   mentee's own tools and the mentor's own view of their own mentee. The gate never runs the entitlement
   query on this path: no extra read, no paywall, and `not_entitled` cannot
   reach a participant route or screen. A route may **escalate one call** to
   operator (`runAiGated({ audience: 'operator' })`) when staff use a
   participant task as a tool — `POST /api/interactions/summary` does so for an
   ADMIN summarising a pair that is not theirs, `POST /api/mentorship/[id]/next-step`
-  for an ADMIN on a record that is not theirs, and `POST /api/ai/bulk-draft` for
+  for an ADMIN on a record that is not theirs, `POST /api/agendas/personalize` for
+  an ADMIN who is neither seat of the pair, and `POST /api/ai/bulk-draft` for
   an ADMIN's bulk draft; all answer `403 feature_locked` without the pack.
   The registry's audience is the floor and is never lowered per call.
 - **`operator`** — the admin tools: `mentor_match`, `survey_summary`,
@@ -137,6 +138,7 @@ them:
 | `evaluation_insights` | `POST /api/admin/insights/evaluations` | admin | up to 400 evaluation comments in range, under labels `r1…`, with contact details **and every known name** (author, mentee, mentor) masked; capped at 24 000 chars | database ids, who wrote which row, interview scorecards (no relation) | none — names are masked and the rows are the programme's own records | no — AI pack (#1738) |
 | `weekly_report_digest` | `POST /api/admin/insights/weekly-reports` | admin | the `blockers` of up to 400 submitted weekly reports in range, same masking and cap | the report summary, hours, mentor comments, ids | none — as above | no — AI pack (#1738) |
 | `next_step_suggest` | `POST /api/mentorship/[id]/next-step` | the mentor who owns the record / admin | the stage key and its label, the days in stage, the 10 newest log entries (date, type, subject, notes), the owner's current follow-up note; written in the **caller's** language | names, e-mail addresses, the company's contact data, files; with no log entry at all the route answers `empty` and nothing is sent | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | no — AI pack (#1738) for an admin on a record that is not theirs; the owning mentor stays free |
+| `agenda_personalize` | `POST /api/agendas/personalize` | either seat of the pair / admin | the guide's title and prompts (library text), the lines already on the agenda, the **open goals the caller may read** (title, success criteria, progress — the goal visibility rule decides, so another seat's PRIVATE goal never rides along), the previous session's lines with their done state, the 3 newest log entries (date, type, subject, notes), the stage label; written in the **caller's** language | names, e-mail addresses, CVs, documents, attachments, the company's contact data; with no guide, no readable goal, no previous session and no log entry the route answers `empty` and nothing is sent | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | yes — never a paywall for a seat; an ADMIN who is neither seat is operator use (#1738) |
 
 Two of these carry no consent type because there is no personal identifier in
 the payload to consent to. That is not an oversight and it is not a loophole:
@@ -198,6 +200,7 @@ The prompt is never stored. Since #2044 some generated text **is** kept, as an
 | Match rationale | **kept** as an `AiArtifact` about the mentee (1-day cache TTL), keyed on the exact candidate list |
 | Open-text themes (evaluation comments, weekly-report blockers) | **kept** as an org-level `AiArtifact` with no subject (1-day cache TTL); wiped for the whole org the moment any person in it is erased or anonymized, since it may quote them |
 | Next-step suggestions (#2875) | **kept** as an `AiArtifact` about the mentee, tied to the relation (1-day cache TTL, keyed on log + stage + note + day in stage); rendered as chips the owner clicks into the follow-up field — the note itself is saved only by the owner's Save |
+| Personalised session agenda (#1845) | **kept** as an `AiArtifact` about the mentee, tied to the relation (1-day cache TTL, keyed on the agenda's lines, the guide, the goals the caller may read, the previous session and the newest log entries); a **draft** in the agenda panel — lines are saved only when a seat adds them (`POST /api/agendas/[id]/items` with `texts[]`). Every denial answers 200 with the guide's prompts not yet on the agenda and the `reason` (`no_consent` / `not_configured` / `quota_exceeded` / `provider_error`): the templated agenda stays usable, no upgrade prompt |
 
 The only row written per call is `AiUsage` — `scope` and `taskId` (the same
 registry id; `scope` is the historic column), `orgId`, `userId`, `companyId`,

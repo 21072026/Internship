@@ -232,6 +232,15 @@ test('the free core never sees the AI pack: mentee and mentor AI answer as befor
       await neverLocked(await mentorPage.request.post('/api/interactions/summary', { data: { relationId: org.rel.id } }));
       // The owning mentor's next-step proposal is their own record: free.
       await neverLocked(await mentorPage.request.post(`/api/mentorship/${org.rel.id}/next-step`, { data: {} }));
+      // The pair's own session agenda, personalised (#1845): free, and every
+      // denial is the guide as written with the reason — never a lock.
+      const agenda = await prisma.sessionAgenda.create({ data: { relationId: org.rel.id } });
+      const personalize = await mentorPage.request.post('/api/agendas/personalize', { data: { agendaId: agenda.id } });
+      expect(personalize.status()).toBe(200);
+      const proposal = await personalize.json();
+      expect(proposal.code).toBeUndefined();
+      expect(proposal.source).toBe('template');
+      expect(['not_configured', 'quota_exceeded']).toContain(proposal.reason);
       // A mentor's bulk draft to their own mentees stays free (an admin's is operator use, asserted above).
       await neverLocked(await mentorPage.request.post('/api/ai/bulk-draft', { data: { purpose: 'Weekly report reminder', recipientCount: 3, locale: 'en' } }));
       expect((await (await mentorPage.request.get(`/api/interactions/summary?relationId=${org.rel.id}`)).json()).locked).toBeUndefined();
@@ -251,6 +260,10 @@ test('the free core never sees the AI pack: mentee and mentor AI answer as befor
       const nextStep = await adminPage.request.post(`/api/mentorship/${org.rel.id}/next-step`, { data: {} });
       expect(nextStep.status()).toBe(403);
       expect(await nextStep.json()).toMatchObject(LOCKED);
+      const agendaId = (await prisma.sessionAgenda.findFirstOrThrow({ where: { relationId: org.rel.id }, select: { id: true } })).id;
+      const personalize = await adminPage.request.post('/api/agendas/personalize', { data: { agendaId } });
+      expect(personalize.status()).toBe(403);
+      expect(await personalize.json()).toMatchObject(LOCKED);
       expect(await (await adminPage.request.get(`/api/interactions/summary?relationId=${org.rel.id}`)).json()).toMatchObject({ latest: null, locked: true });
     } finally {
       await adminCtx.close();
