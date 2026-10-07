@@ -45,7 +45,8 @@
  *   Notification (text, params)
  *
  * Emptied (free text written by or about a person):
- *   Message.body, MessageAttachment (rows), SupportMessage.body,
+ *   Message.body, MessageAttachment (rows), SafeguardingFlag (rows),
+ *   SupportMessage.body,
  *   SupportAttachment (rows), SupportTicket.subject, RelationNote.body,
  *   PersonalNote.body, Evaluation.comment + publicExcerpt, InteractionLog.notes
  *   + subject, MentorQuestion.question/answer, MeetingRequest.topic,
@@ -186,6 +187,9 @@ async function run() {
     ['document', () => prisma.document.deleteMany({})],
     ['announcementImage', () => prisma.announcementImage.deleteMany({})],
     ['messageAttachment', () => prisma.messageAttachment.deleteMany({})],
+    // Safeguarding flags (#2056) point at message text that is emptied below,
+    // and a review record means nothing without it.
+    ['safeguardingFlag', () => prisma.safeguardingFlag.deleteMany({})],
     ['supportAttachment', () => prisma.supportAttachment.deleteMany({})],
     ['invitationToken', () => prisma.invitationToken.deleteMany({})],
     ['passwordResetToken', () => prisma.passwordResetToken.deleteMany({})],
