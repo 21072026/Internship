@@ -48,6 +48,13 @@ export async function lookupBreachedPassword(
   opts: { fetchImpl?: FetchLike; timeoutMs?: number } = {},
 ): Promise<BreachLookup> {
   const timeoutMs = opts.timeoutMs ?? HIBP_TIMEOUT_MS;
+  // SHA-1 on purpose, and NOT as a password hash: it is the key the HIBP range
+  // API is indexed by (the protocol dictates it), it is never stored, never
+  // compared against a stored value and never sent whole — only its first five
+  // hex characters leave the process (splitSha1). Storage hashing stays bcrypt
+  // (cost 12) in the routes that call this. CodeQL reads "a password into a
+  // fast hash" and cannot see the k-anonymity contract, hence the suppression.
+  // codeql[js/insufficient-password-hash]
   const sha = createHash('sha1').update(password, 'utf8').digest('hex').toUpperCase();
   const { prefix, suffix } = splitSha1(sha);
   const url = `${hibpRangeBase()}/${prefix}`;
