@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Marketing import: `contract_ends_at`** (#2844, decision #2572 Q7). A won customer who already gave notice imports with the day the contract ends (`MentorshipRelation.contractEndsAt`, #2841); the column is refused on any row that is not `DEAL_WON`, and follows the import's one overwrite policy (gaps only unless authoritative). `customer_since` and `trial_ends_at` already shipped in #2554, so the cutover (#2555) now has every column the decision asks for.",
+  "notes": {
+    "en": ["The account import takes the day a customer’s contract ends, so customers who already gave notice arrive with their notice period."],
+    "tr": ["Hesap içe aktarımı müşterinin sözleşme bitiş gününü alır; fesih bildirmiş müşteriler ihbar süreleriyle birlikte gelir."],
+    "de": ["Der Account-Import übernimmt das Vertragsende, sodass Kunden, die bereits gekündigt haben, mit ihrer Kündigungsfrist ankommen."]
+  }
+}
