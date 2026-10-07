@@ -602,6 +602,8 @@ model User {
   placements                        Placement[]                   @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
   loginLinkTokens                   LoginLinkToken[]
+  // Text-only practice interviews (#2051).
+  practiceSessions                  PracticeSession[]             @relation("PracticeSessions")
 
   // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
   // distinct, so a row whose orgId is still NULL (the default org, until the
@@ -5722,4 +5724,30 @@ model SavedView {
 
   @@unique([orgId, surface, createdById, name])
   @@index([orgId, surface])
+}
+
+// A text-only practice interview (#2051): the mentee answers, an AI interviewer
+// asks the next question, and after `maxTurns` answers an after-action report is
+// written and stored as a PRIVATE AiArtifact (`reportArtifactId`) the mentee may
+// share with their mentor. No audio, no video, no recording — text only, by
+// design. `turns` is the transcript: [{ q, a?, note? }], the mentee's typed
+// answers included, so the row cascades with the person (erasure) and is
+// tenant-anchored (orgId + TENANT_MODELS).
+model PracticeSession {
+  id               String    @id @default(cuid())
+  orgId            String?
+  userId           String
+  user             User      @relation("PracticeSessions", fields: [userId], references: [id], onDelete: Cascade)
+  requisitionId    String?
+  role             String    @db.VarChar(191)
+  // ACTIVE | COMPLETED
+  status           String    @default("ACTIVE") @db.VarChar(16)
+  turns            Json      @default("[]")
+  maxTurns         Int       @default(6)
+  reportArtifactId String?
+  startedAt        DateTime  @default(now())
+  endedAt          DateTime?
+
+  @@index([userId, startedAt])
+  @@index([orgId])
 }
