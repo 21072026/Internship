@@ -13,19 +13,41 @@ not disagree.** If you change what a feature sends, change both.
 
 Every provider call in this codebase goes through
 [`src/lib/aiGate.ts`](../src/lib/aiGate.ts). Nothing else may construct an
-`Anthropic` client and call it — the `src/lib/ai*.ts` modules only *talk* to the
-provider, they never decide whether they are allowed to.
+`Anthropic` client and call it — the `src/lib/ai*.ts` modules hold a prompt and
+a parser, call `callModel()` for the request, and never decide whether they are
+allowed to.
 
 ```
-runAiGated({ scope, consent?, userId?, companyId?, call })
+runAiGated({ scope: AiTaskId, consent?, userId?, companyId?, call })
   │
   ├─ consent?      hasConsent(userId, type) — false → { ok:false, 'no_consent' }
   ├─ quota         Setting.aiMonthlyQuota, calls this calendar month
   │                0 or exhausted → { ok:false, 'quota_exceeded' }
   ├─ configured    ANTHROPIC_API_KEY set → else { ok:false, 'not_configured' }
-  ├─ call()        the provider request
-  └─ meter         AiUsage row AFTER success only
+  ├─ call()        the task's module → callModel() → the provider request
+  └─ meter         AiUsage row AFTER success only, with model / tokens / cost / latency
 ```
+
+### The registry and the provider module (#2022)
+
+Three files carry what used to be copied into every feature module:
+
+| File | What it owns |
+|---|---|
+| [`src/lib/ai/tasks.ts`](../src/lib/ai/tasks.ts) | **The registry.** One entry per task, keyed on the historic `scope` string (so metering history keeps its meaning): a label, `audience` (`participant` / `operator`), the `ConsentType` or `null`, a model `tier` (`fast` / `balanced` / `strong`), `maxInputChars`, `maxOutputTokens`. `runAiGated`'s `scope` is typed on it — a typo does not compile. Dependency-free and client-safe. |
+| [`src/lib/ai/provider.ts`](../src/lib/ai/provider.ts) | **The only importer of `@anthropic-ai/sdk`** (pinned by `scripts/test/ai-tasks.test.mjs`). `callModel({ task, system, input, jsonSchema? })` sends one user message under the task's entry — the resolved model, the input cap, the output cap, the 60 s timeout — and records what the provider answered with. `resolveModel(task)` and `isAiConfigured()` live here. The retries, the breaker and `safeParseModelJson` (#2024) are the same file. |
+| [`src/lib/ai/pricing.ts`](../src/lib/ai/pricing.ts) | **The rate table**, in the provider's published US-dollar list prices per million tokens, with the source and date in its header. A model not in it costs `null` — never a guess. |
+
+**Model routing** is an env change, never a deploy. `resolveModel(task)` takes
+the first that is set: `AI_MODEL_<TASK_ID>` (one task) → `AI_MODEL_TIER_<TIER>`
+(every task in a tier) → `ANTHROPIC_SUMMARY_MODEL` (the summary family, kept so
+an existing deployment keeps its model) → `ANTHROPIC_CV_MODEL` (every task) →
+the built-in default. Unset, every tier resolves to the same default, which is
+why adding the tiers changed nothing. `.env.example` lists every variable and
+which tasks sit in which tier.
+
+**Adding a task** is one registry entry plus a module that calls
+`callModel({ task: '<id>', … })`; see § Adding an AI task.
 
 The order is deliberate. Quota is checked **before** configuration so that
 `aiMonthlyQuota = 0` means "AI is off" whether or not an API key happens to be
@@ -76,12 +98,13 @@ Revoking one takes effect on the next call — there is no cached grant.
 |---|---|
 | Provider | Anthropic, through the official `@anthropic-ai/sdk` |
 | Credential | `ANTHROPIC_API_KEY` — server-side only, never reaches the browser |
-| Model | `ANTHROPIC_CV_MODEL` (default `claude-opus-4-8`), plus `ANTHROPIC_SUMMARY_MODEL` for the interaction summary. The operator of an instance chooses. |
-| Request timeout | 60 s. The SDK's own default is 10 minutes, long enough to hold a request handler open until the user gives up (#895). |
+| Model | Per task, from the environment (§ The registry and the provider module): `AI_MODEL_<TASK_ID>` → `AI_MODEL_TIER_<TIER>` → `ANTHROPIC_SUMMARY_MODEL` (summary family) → `ANTHROPIC_CV_MODEL` → the default `claude-opus-4-8`. The operator of an instance chooses; the model that answered is on every `AiUsage` row. |
+| Request timeout | 60 s, applied once in `callModel()`. The SDK's own default is 10 minutes, long enough to hold a request handler open until the user gives up (#895). |
 | Retries | At most 2, only on 429 / 5xx / timeout / connection loss, jittered exponential backoff, and no attempt starts after 45 s (`src/lib/ai/provider.ts`, #2024). The SDK's own retries are off (`maxRetries: 0`) so the two cannot multiply. One task is one metered call however many attempts it took. |
 | Circuit breaker | 5 failures inside a minute open it for a minute; calls then fail fast with `provider_error` and no network request, and the first call after the cool-down is the probe. Per container — a cost guard, not a distributed breaker. |
-| Input cap | 24 000 chars for text tasks; the structured tasks are bounded by their schema |
-| Output cap | 600–1024 `max_tokens` per task |
+| Input cap | `maxInputChars` per task in the registry, applied once in `callModel()`: 24 000 chars for the text tasks; 32 000 as a backstop for the JSON payload of `mentor_match` and for the open-text engines, whose rows are already bounded to 24 000 chars upstream (a cap that could cut a row in half would fail the verbatim quote check) |
+| Output cap | `maxOutputTokens` per task in the registry, 500–1500 `max_tokens`; a call may lower it, never raise it |
+| Cost | `src/lib/ai/pricing.ts`: list price per million tokens, in the provider's own currency (USD). `costMicros` on `AiUsage` is tokens × $/Mtok, i.e. micro-dollars, exact. An unpriced model records `null`. |
 
 `cv_extract` and `mentor_match` additionally pin a **JSON schema** on the
 response — and still parse it through `safeParseModelJson` (#2024), which
@@ -118,13 +141,20 @@ The prompt is never stored. Since #2044 some generated text **is** kept, as an
 | Match rationale | **kept** as an `AiArtifact` about the mentee (1-day cache TTL), keyed on the exact candidate list |
 | Open-text themes (evaluation comments, weekly-report blockers) | **kept** as an org-level `AiArtifact` with no subject (1-day cache TTL); wiped for the whole org the moment any person in it is erased or anonymized, since it may quote them |
 
-The only row written per call is `AiUsage` — `scope`, `userId`, `companyId`,
-`createdAt` and `outcome` (`ok`, `parse_error` when the reply was not the JSON
+The only row written per call is `AiUsage` — `scope` and `taskId` (the same
+registry id; `scope` is the historic column), `orgId`, `userId`, `companyId`,
+`createdAt`, `outcome` (`ok`, `parse_error` when the reply was not the JSON
 asked for and the task fell back, `provider_error` when the provider never
 answered — the last one is recorded for the console but **does not consume
-quota**). **No prompt, no completion, no excerpt.** It exists to meter the
-monthly quota and to answer "how much did this cost us", and it is the reason a
-usage figure can be shown without keeping anyone's CV around.
+quota**) and, since #2022, what the call was: `provider`, `model`,
+`inputTokens`, `outputTokens`, `costMicros` (list price, micro-dollars, `null`
+for an unpriced model) and `latencyMs` (time waiting on the provider across the
+attempts of the one logical call). A `provider_error` row still names the model
+that was asked; its token columns stay `null`. **No prompt, no completion, no
+excerpt.** It exists to meter the monthly quota and to answer "how much did this
+cost us", and it is the reason a usage figure can be shown without keeping
+anyone's CV around. Rows from before the columns existed carry `NULL`s; the
+deploy's `prisma/backfill-ai-usage-task.mjs` copies `scope` into `taskId`.
 
 ## Artefacts (#2044)
 
@@ -294,8 +324,10 @@ needs a separate discussion first.
 
 1. **No provider call outside `runAiGated`.** A module that imports
    `@anthropic-ai/sdk` and calls it directly bypasses consent, quota and
-   metering all at once — three failures for the price of one import. New AI
-   tasks add a `scope` and go through the gate.
+   metering all at once — three failures for the price of one import. Since
+   #2022 the import exists in exactly one file, `src/lib/ai/provider.ts`, and
+   a unit test fails on a second one. New AI tasks add a registry entry and go
+   through the gate.
 2. **Participant AI is never paywalled.** `cv_feedback` and `interview_prep`
    belong to the mentee, cost the mentee nothing, and surface quota exhaustion
    as "not right now" rather than "upgrade". The org's plan is the operator's
@@ -317,15 +349,19 @@ badge in the same change.
 
 ## Adding an AI task
 
-1. A `src/lib/ai<Task>.ts` module that only talks to the provider: a `SYSTEM`
-   prompt, an input cap, a timeout, and a return value. No consent logic.
-2. A route that calls `runAiGated` with a new `scope` string and, if any
-   personal data is in the payload, a `ConsentType` — added additively to
+1. An entry in the registry, `src/lib/ai/tasks.ts`: the id (snake_case — it
+   becomes `AI_MODEL_<ID>`), audience, consent type or `null`, tier, caps.
+2. A `src/lib/ai<Task>.ts` module that holds the `SYSTEM` prompt and the
+   parser and calls `callModel({ task: '<id>', system, input })`. No client,
+   no model, no timeout, no consent logic — those are the provider module's and
+   the gate's.
+3. A route that calls `runAiGated` with that `scope` and, if any personal data
+   is in the payload, a `ConsentType` — added additively to
    `prisma/schema.prisma`, surfaced in `ConsentSettings`.
-3. Handle all three denial reasons per the degradation contract above.
-4. `<AiBadge />` on whatever renders the result.
-5. A row in the task table here, the matching entry in the `ai` dictionary block
+4. Handle all four denial reasons per the degradation contract above.
+5. `<AiBadge />` on whatever renders the result.
+6. A row in the task table here, the matching entry in the `ai` dictionary block
    for `/ai`, and the route in
    [`role-access-matrix.md`](role-access-matrix.md).
 
-Step 5 is the one that gets skipped, and it is the one this document exists for.
+Step 6 is the one that gets skipped, and it is the one this document exists for.

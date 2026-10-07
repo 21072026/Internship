@@ -9,6 +9,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { ACCENT_COLORS } from '@/lib/accent';
+import { checkPastedMeetingLink } from '@/lib/meetingRoom';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -66,6 +67,10 @@ const updateProfileSchema = z.object({
   linkedinUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
   githubUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
   portfolioUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
+  // The saved personal video room (#2007). Shape here, meaning below: the
+  // https / no-credentials / not-our-host rule is checkPastedMeetingLink, the
+  // same door every pasted meeting link goes through.
+  personalMeetingUrl: z.string().max(TEXT_LIMITS.profileUrl).or(z.literal('')).nullable().optional(),
   interests: z.string().max(2000).optional(),
   targetPosition: z.string().max(160).optional(),
   mentorCapacity: z.number().int().min(0).max(100).nullable().optional(),
@@ -132,6 +137,7 @@ const PROFILE_SELECT = {
   linkedinUrl: true,
   githubUrl: true,
   portfolioUrl: true,
+  personalMeetingUrl: true,
   interests: true,
   targetPosition: true,
   mentorCapacity: true,
@@ -313,6 +319,23 @@ export async function PUT(request: Request) {
           return NextResponse.json(skillErrorBody(blocking), { status: 400 });
         }
         rest.skills = skillParse.skills;
+      }
+
+      // The personal room: refused with the rule's reason rather than stored,
+      // so the account page can say what is wrong with it. Empty clears it.
+      if (rest.personalMeetingUrl !== undefined) {
+        if (rest.personalMeetingUrl) {
+          const check = checkPastedMeetingLink(rest.personalMeetingUrl);
+          if (!check.ok) {
+            return NextResponse.json(
+              { error: 'That meeting link cannot be used', code: 'invalid_meeting_link', reason: check.reason },
+              { status: 400 },
+            );
+          }
+          rest.personalMeetingUrl = check.url;
+        } else {
+          rest.personalMeetingUrl = null;
+        }
       }
 
       // Read the switches back only when this write touches them; every other

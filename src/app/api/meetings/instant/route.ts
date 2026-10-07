@@ -11,6 +11,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { notify } from '@/lib/notify';
 import { resolveMeetingContext, resolveMeetingLink, type Invitee } from '@/lib/meetingContext';
+import { meetingLinkRefusal } from '@/lib/meetingRoom';
 import { requireCapability } from '@/lib/capabilityGate';
 
 // "Start a meeting now" (#1052).
@@ -70,7 +71,16 @@ export async function POST(request: Request) {
     // participant allowance still has room for this room, the public instance
     // otherwise (#2011). resolveMeetingContext already excluded the organizer
     // from the list, and the resolver adds them back when it projects.
-    const meetLink = await resolveMeetingLink({ inviteeCount: ctx.invitees.length, orgId: session.user.orgId });
+    // There is no paste box here, so under a tenant policy that wants an
+    // external room the organizer's saved personal room is what makes an
+    // instant meeting possible at all (#2007).
+    const resolved = await resolveMeetingLink({
+      inviteeCount: ctx.invitees.length,
+      orgId: session.user.orgId,
+      organizerId: session.user.id,
+    });
+    if (!resolved.ok) return meetingLinkRefusal(resolved);
+    const meetLink = resolved.link;
 
     // RELATION keeps the established shape — one row (and one RSVP token) per
     // relation, all sharing the room. PROJECT/CONVERSATION are a single row: the

@@ -1,7 +1,7 @@
 import { test, expect, request as playwrightRequest, type APIRequestContext } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, cleanupByEmail, uniqueEmail, seedUser } from './helpers/db';
-import { signInViaApi } from './helpers/auth';
+import { signInViaApi, asHost, MARKETING_HOST } from './helpers/auth';
 import { E2E_IDP_MOCK_PORT } from '../playwright.config';
 
 /**
@@ -13,6 +13,10 @@ import { E2E_IDP_MOCK_PORT } from '../playwright.config';
  * a multi-valued `groups` attribute, the ACS verifies it, and the provisioned
  * user carries the mapped role. The pure rule (priority, tie → less privilege,
  * ADMIN ignored) is unit-tested in scripts/test/sso-role-mapping.test.mjs.
+ *
+ * The second test is the vertical gate (#2839): a MARKETING tenant is offered,
+ * and may write, only the roles its product has — never SOURCE — and a row that
+ * holds such a role anyway is ignored by the ACS.
  */
 
 const MOCK = `http://127.0.0.1:${E2E_IDP_MOCK_PORT}`;
@@ -33,13 +37,14 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-async function seedOrg(prefix: string, sso: boolean) {
+async function seedOrg(prefix: string, sso: boolean, vertical: 'INTERNSHIP' | 'MARKETING' = 'INTERNSHIP') {
   const slug = `${prefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   return prisma.organization.create({
     data: {
       name: `SSO ${slug}`,
       slug,
       plan: 'ENTERPRISE',
+      vertical,
       ...(sso
         ? {
             ssoEnabled: true,
@@ -53,17 +58,27 @@ async function seedOrg(prefix: string, sso: boolean) {
   });
 }
 
-async function adminContext(orgId: string, email: string) {
+/** `host` — a MARKETING org's admin signs in, and stays, on the marketing host (#2590). */
+async function adminContext(orgId: string, email: string, host?: string) {
   await seedUser(email, PASSWORD, 'ADMIN', 'Role Map Admin', orgId);
-  const ctx = await playwrightRequest.newContext({ baseURL: test.info().project.use.baseURL });
+  const ctx = await playwrightRequest.newContext({
+    baseURL: test.info().project.use.baseURL,
+    ...(host ? { extraHTTPHeaders: asHost(host) } : {}),
+  });
   const signIn = await signInViaApi(ctx, email, PASSWORD);
   expect(signIn.ok, `admin sign-in failed: ${signIn.error}`).toBe(true);
   return ctx;
 }
 
 /** One SP-initiated round trip, browserless: login route → stub mint → ACS. */
-async function ssoSignIn(request: APIRequestContext, slug: string, email: string, groups: string[]) {
-  const login = await request.get(`/api/auth/sso/${slug}/login`, { maxRedirects: 0 });
+async function ssoSignIn(
+  request: APIRequestContext,
+  slug: string,
+  email: string,
+  groups: string[],
+  headers: Record<string, string> = {},
+) {
+  const login = await request.get(`/api/auth/sso/${slug}/login`, { headers, maxRedirects: 0 });
   expect(login.status()).toBeGreaterThanOrEqual(300);
   const samlRequest = new URL(login.headers()['location']).searchParams.get('SAMLRequest');
   expect(samlRequest).toBeTruthy();
@@ -72,7 +87,7 @@ async function ssoSignIn(request: APIRequestContext, slug: string, email: string
   });
   expect(minted.ok()).toBeTruthy();
   const { SAMLResponse } = await minted.json();
-  const acs = await request.post(`/api/auth/sso/${slug}/acs`, { form: { SAMLResponse }, maxRedirects: 0 });
+  const acs = await request.post(`/api/auth/sso/${slug}/acs`, { headers, form: { SAMLResponse }, maxRedirects: 0 });
   expect(acs.status()).toBe(303);
   expect(acs.headers()['location']).toContain('/auth/sso/complete?token=');
 }
@@ -155,5 +170,46 @@ test('SSO role mapping: a mapped group provisions its role, no match stays MENTE
       await cleanupByEmail(email);
     }
     await prisma.organization.deleteMany({ where: { id: { in: [org.id, other.id] } } }).catch(() => {});
+  }
+});
+
+test('SSO role mapping: a MARKETING tenant is offered only its product\'s roles — never SOURCE — and a stray SOURCE row grants nothing (#2839)', async ({
+  request,
+}) => {
+  const org = await seedOrg('sso-roles-mkt', true, 'MARKETING');
+  const adminEmail = uniqueEmail('sso-roles-mkt-admin').toLowerCase();
+  const partnerEmail = uniqueEmail('sso-roles-mkt-partner').toLowerCase();
+  const admin = await adminContext(org.id, adminEmail, MARKETING_HOST);
+  const api = `/api/admin/organizations/${org.id}/sso-role-mappings`;
+  const onMarketing = asHost(MARKETING_HOST);
+  try {
+    // GET lists back exactly what POST accepts: MARKETING has no `sourcing`.
+    const listed = await (await admin.get(api)).json();
+    expect(listed.roles).toEqual(['MENTEE', 'COMPANY', 'MENTOR']);
+
+    const asSource = await admin.post(api, { data: { claim: 'groups', matchValue: 'partners', role: 'SOURCE' } });
+    expect(asSource.status()).toBe(400);
+    expect((await asSource.json()).code).toBe('role_not_in_vertical');
+
+    const asRep = await admin.post(api, { data: { claim: 'groups', matchValue: 'reps', role: 'MENTOR' } });
+    expect(asRep.status(), 'a rep (MENTOR) is this product\'s role').toBe(201);
+
+    // A row holding the role anyway — written before the gate, or by hand — is
+    // ignored by the ACS the way an ADMIN row is, even at the highest priority.
+    await prisma.ssoClaimMapping.create({
+      data: { orgId: org.id, claim: 'groups', matchValue: 'partners', role: 'SOURCE', priority: 100 },
+    });
+    await ssoSignIn(request, org.slug, partnerEmail, ['partners'], onMarketing);
+    const partner = await prisma.user.findFirst({ where: { email: partnerEmail, orgId: org.id } });
+    expect(partner?.role, 'SOURCE is not a role this product has').toBe('MENTEE');
+  } finally {
+    await admin.dispose();
+    const users = await prisma.user.findMany({ where: { orgId: org.id }, select: { id: true, email: true } });
+    await prisma.ssoLoginGrant.deleteMany({ where: { userId: { in: users.map((u) => u.id) } } });
+    for (const email of new Set([adminEmail, partnerEmail, ...users.map((u) => u.email)])) {
+      await cleanupByEmail(email);
+    }
+    await prisma.ssoClaimMapping.deleteMany({ where: { orgId: org.id } });
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });

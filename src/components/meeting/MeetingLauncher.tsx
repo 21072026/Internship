@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
-import { freeMeetingFallbackLink, isEmbeddableMeetingLink, parseJaasMeetingLink } from '@/lib/meetingLink';
+import { freeMeetingFallbackLink, isEmbeddableMeetingLink, meetingProviderName, parseJaasMeetingLink } from '@/lib/meetingLink';
 import { meetingNotesAutoOpen, useFloatingNotes } from '@/components/meeting/FloatingNotes';
 import { JaasCall } from '@/components/meeting/JaasCall';
 import { FreeRoomWarning } from '@/components/meeting/FreeRoomWarning';
@@ -142,7 +142,9 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
         body: JSON.stringify({ title: trimmed, ...pending.target }),
       });
       if (!res.ok) {
-        setError(res.status === 429 ? t.meetings.instant.tooMany : t.meetings.instant.failed);
+        // 422: the tenant wants an external room and this organizer has none
+        // saved (#2007) — say what to do, not that something "failed".
+        setError(res.status === 429 ? t.meetings.instant.tooMany : res.status === 422 ? t.meetings.linkRequired : t.meetings.instant.failed);
         // Don't leave an empty notes window floating over a meeting that never
         // started — the user would have no idea what it belongs to.
         if (await notesOpening) notes.close();
@@ -260,13 +262,18 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
   // problem (tenant down, MAU quota blocked). Everyone who switches lands in
   // the same room because the name is shared between the two hosts.
   const freeFallback = freeMeetingFallbackLink(meeting.meetLink);
+  // "Open in Zoom" rather than a bare "open in a new tab" for a room we cannot
+  // frame (#2007): the provider's name is the one thing the empty box could
+  // not tell the participant.
+  const provider = embeddable ? null : meetingProviderName(meeting.meetLink);
+  const openLabel = provider ? t.meetings.instant.openIn.replace('{provider}', provider) : t.meetings.instant.openInNewTab;
   const linkFallback = (message: string) => (
     <div className="hidden lg:flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="text-sm text-gray-600 dark:text-gray-400">{message}</p>
-      <a href={meeting.meetLink} target="_blank" rel="noopener noreferrer">
+      <a href={meeting.meetLink} target="_blank" rel="noopener noreferrer" data-testid="meeting-open-external">
         <Button size="sm">
           <ExternalLink className="h-4 w-4" />
-          {t.meetings.instant.openInNewTab}
+          {openLabel}
         </Button>
       </a>
       {freeFallback && (
@@ -371,7 +378,7 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
         <a href={meeting.meetLink} target="_blank" rel="noopener noreferrer" className="block">
           <Button className="w-full" size="sm">
             <Video className="h-4 w-4" />
-            {t.meetings.instant.join}
+            {provider ? openLabel : t.meetings.instant.join}
           </Button>
         </a>
       </div>

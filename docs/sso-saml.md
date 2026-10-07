@@ -51,7 +51,14 @@ org's SSO config (its own ADMIN, or a super admin of its world).
      edit an org's SSO config into remote privilege escalation;
   4. claim values compare case-insensitively and trimmed; claim **names** match
      exactly (IdPs use URIs — `http://schemas.microsoft.com/ws/2008/06/identity/claims/role`
-     and `groups` are two different claims).
+     and `groups` are two different claims);
+  5. **only the roles the org's vertical has** (#2839) — `mappableRolesFor(capabilities)`
+     drops a role whose module the product lacks (SOURCE without `sourcing`,
+     COMPANY without `companies`); the GET offers exactly that list, the POST
+     refuses the rest (`role_not_in_vertical`), and the ACS ignores a row
+     outside it the way it ignores ADMIN. The role enum itself is shared by
+     every vertical — in MARKETING a MENTOR *is* the rep — so the admin card
+     shows roles in the vertical's words (`usersAdmin.*`, #2558), never the code.
 - **Only verified claims** — the ACS extracts claims from the profile node-saml
   returned *after* signature verification; single-valued and multi-valued
   attributes are normalised alike.
@@ -64,7 +71,8 @@ org's SSO config (its own ADMIN, or a super admin of its world).
 - **SAML only** — OIDC is refused at the write boundary (#1929); when it lands,
   its claims go through the same `extractClaims` → `resolveRole`.
 - **CI** — `e2e/sso-role-mapping.spec.ts` drives the stub IdP with a
-  multi-valued `groups` attribute through the real ACS.
+  multi-valued `groups` attribute through the real ACS, and pins the vertical
+  gate on a MARKETING tenant.
 
 ## The live round-trip (now wired)
 

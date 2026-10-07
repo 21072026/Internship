@@ -61,6 +61,9 @@ export const SALES_ATTENTION_REASONS = [
   'trial_expired',
   'trial_no_end_date',
   'next_action_due',
+  // Product usage (#2449): an account whose usage dropped, a trial nobody uses.
+  'usage_drop',
+  'trial_inactive',
 ] as const satisfies readonly AttentionReason[];
 
 /** The rep's own record page on the sales surface. */

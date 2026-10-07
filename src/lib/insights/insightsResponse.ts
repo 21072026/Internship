@@ -11,7 +11,7 @@
 
 import type { Session } from 'next-auth';
 import { z } from 'zod';
-import { isAiConfigured } from '@/lib/cvExtractAi';
+import { isAiConfigured } from '@/lib/ai/provider';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import type { Locale } from '@/i18n/config';
 import { belowFloor, countUsable, type OpenTextCaveat, type OpenTextSummary } from '@/lib/ai/openTextRules';

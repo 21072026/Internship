@@ -694,6 +694,16 @@ const en = {
   // The account detail page /admin/companies/[id] (#2560). Server-rendered,
   // ADMIN-only; the MARKETING overlay renames the mentorship words.
   companyDetail: {
+    usage: {
+      title: 'Product usage (last 90 days)',
+      aria: 'Daily product usage, last 90 days.',
+      summary: '{days} of {of} days with data · {total} transactions · last 30 days: {last} (30 days before: {prev})',
+      bar: '{day}: {value}',
+      barNoData: '{day}: no data',
+      legendValue: 'Transactions',
+      legendZero: 'Zero (no activity)',
+      legendNoData: 'No data received',
+    },
     // #2442 — the account's address book.
     channels: {
       title: 'Sales channels',
@@ -1792,6 +1802,11 @@ const en = {
       trialExpired: 'Trial expired — decide',
       // #2553: a running trial with no end date is reminded about by nothing.
       trialNoEndDate: 'Trial end date missing — enter it',
+      usageDrop: 'Usage dropped',
+      trialInactive: 'Trial not used yet',
+      usageNoHistory: '{n} account(s) left out of the usage check: not enough history yet.',
+      usageUnowned: '{n} account(s) with dropping usage have no active owner.',
+      usageNoFeed: 'Usage signals are off: no product usage has been received yet.',
       // #2563: the follow-up date the owner wrote on the record has passed.
       nextActionDue: 'Follow-up overdue',
       // #1891: an INTERIM/FINAL evaluation past its due date and not written.
@@ -2621,6 +2636,11 @@ const en = {
     topics: ['Weekly check-in', 'Progress review', 'Technical mentoring', 'Career guidance', 'Interview prep', 'Feedback session'],
     meetLink: 'Meeting link',
     meetLinkHint: 'Leave blank to auto-generate a video room link',
+    // Bring your own link (#2007).
+    linkEmbeds: 'This link opens inside the app.',
+    linkOpensIn: 'This link opens in {provider}, in a new browser tab.',
+    linkInvalid: 'That link cannot be used: it must start with https://, carry no password, and must not point back at this site.',
+    linkRequired: 'Your organization requires a link from its own conferencing tool. Paste one here, or save a personal meeting room on your account page.',
     duration: 'Duration',
     durationOption: '{n} min',
     sendInvite: 'Send invite',
@@ -2692,6 +2712,7 @@ const en = {
       close: 'Close meeting panel',
       join: 'Join the meeting',
       openInNewTab: 'Open in a new tab',
+      openIn: 'Open in {provider}',
       notEmbeddable: 'This link cannot be shown inside the app.',
       embedFailed: 'The call could not be started here — open it in a new tab.',
       freeRoomHint:
@@ -4015,6 +4036,15 @@ const en = {
     brandingSaved: 'Branding saved.',
     brandingLocked: 'White-label branding is included in the Enterprise plan. Upgrade this organization to edit it — stored branding stays applied, and you can still remove it.',
     brandingClear: 'Remove stored branding',
+    // Conferencing policy (#2007).
+    conferencing: 'Video conferencing',
+    conferencingHint: 'Which video room a meeting of this organization gets. A link pasted into the schedule form always wins; the policy decides what happens when nothing is pasted.',
+    conferencingSaved: 'Conferencing policy saved.',
+    conferencingPolicy: {
+      BUILTIN: { label: 'Built-in rooms', hint: 'Today’s behaviour: a built-in video room unless the organizer pastes a link. Saved personal rooms are not used.' },
+      PREFER_PERSONAL: { label: 'Prefer the organizer’s personal room', hint: 'Use the organizer’s saved personal meeting room when they have one; otherwise a built-in room.' },
+      REQUIRE_EXTERNAL: { label: 'Require your own conferencing tool', hint: 'Never a built-in room: the organizer must paste a link or have a personal room saved. For organizations whose IT policy forbids third-party rooms.' },
+    },
     sso: 'Enterprise SSO',
     ssoHint: 'Configure a tenant\'s SAML identity provider. Saved & validated here; SSO logins go live for the tenant as soon as the config is complete and enabled (see docs/sso-saml.md). OIDC is not supported yet.',
     ssoProvider: 'Provider',
@@ -6730,6 +6760,12 @@ const en = {
     notificationsSection: 'Notifications',
     notesAutoOpen: 'Open the notes window when I start a meeting',
     notesAutoOpenHint: 'Applies to this device only. The window opens with the meeting, so notes land against the right room.',
+    // The saved personal video room (#2007).
+    videoSection: 'Video meetings',
+    personalRoom: 'Your personal meeting room',
+    personalRoomHint: 'A link to the room you always meet in — a Zoom personal meeting room, a Google Meet room or a Teams link. When your organization prefers its own conferencing tool, the meetings you organize use this link instead of a built-in room. Leave it empty to keep using built-in rooms.',
+    personalRoomSaved: 'Personal room saved.',
+    personalRoomCleared: 'Personal room removed.',
     emailNotifications: 'Email me about messages and announcements',
     emailNotificationsHint: 'In-app notifications are always shown regardless of this setting.',
     browserNotifications: 'Browser notifications',
@@ -7806,6 +7842,16 @@ const tr: Dict = {
     dismiss: 'Kapat',
   },
   companyDetail: {
+    usage: {
+      title: 'Ürün kullanımı (son 90 gün)',
+      aria: 'Günlük ürün kullanımı, son 90 gün.',
+      summary: '{of} günün {days} gününde veri var · {total} işlem · son 30 gün: {last} (önceki 30 gün: {prev})',
+      bar: '{day}: {value}',
+      barNoData: '{day}: veri yok',
+      legendValue: 'İşlem',
+      legendZero: 'Sıfır (hareket yok)',
+      legendNoData: 'Veri gelmedi',
+    },
     // #2442 — hesabın adres defteri.
     channels: {
       title: 'Satış kanalları',
@@ -8863,6 +8909,11 @@ const tr: Dict = {
       noOpenGoal: 'Açık hedef veya yapılacak yok',
       trialExpired: 'Deneme süresi doldu — karar verin',
       trialNoEndDate: 'Deneme bitiş tarihi eksik — tarihi girin',
+      usageDrop: 'Kullanım düştü',
+      trialInactive: 'Deneme henüz kullanılmadı',
+      usageNoHistory: '{n} hesap kullanım kontrolünün dışında: henüz yeterli geçmiş yok.',
+      usageUnowned: 'Kullanımı düşen {n} hesabın aktif sahibi yok.',
+      usageNoFeed: 'Kullanım sinyalleri kapalı: henüz ürün kullanım verisi gelmedi.',
       nextActionDue: 'Takip tarihi geçti',
       // #1891: an INTERIM/FINAL evaluation past its due date and not written.
       evaluationDue: 'Değerlendirme zamanı — yaz',
@@ -9674,6 +9725,11 @@ const tr: Dict = {
     topics: ['Haftalık görüşme', 'İlerleme değerlendirmesi', 'Teknik mentorluk', 'Kariyer rehberliği', 'Mülakat hazırlığı', 'Geri bildirim görüşmesi'],
     meetLink: 'Toplantı bağlantısı',
     meetLinkHint: 'Boş bırakırsan otomatik video oda bağlantısı oluşturulur',
+    // Kendi bağlantını getir (#2007).
+    linkEmbeds: 'Bu bağlantı uygulamanın içinde açılır.',
+    linkOpensIn: 'Bu bağlantı yeni bir tarayıcı sekmesinde {provider} ile açılır.',
+    linkInvalid: 'Bu bağlantı kullanılamaz: https:// ile başlamalı, parola içermemeli ve bu siteye geri işaret etmemeli.',
+    linkRequired: 'Kuruluşun kendi konferans aracından bir bağlantı istiyor. Buraya bir bağlantı yapıştır ya da hesap sayfanda kişisel toplantı odanı kaydet.',
     duration: 'Süre',
     durationOption: '{n} dk',
     sendInvite: 'Davet gönder',
@@ -9745,6 +9801,7 @@ const tr: Dict = {
       close: 'Görüşme panelini kapat',
       join: 'Görüşmeye katıl',
       openInNewTab: 'Yeni sekmede aç',
+      openIn: '{provider} ile aç',
       notEmbeddable: 'Bu link uygulama içinde gösterilemiyor.',
       embedFailed: 'Görüşme burada başlatılamadı — yeni sekmede aç.',
       freeRoomHint:
@@ -11024,6 +11081,15 @@ const tr: Dict = {
     brandingSaved: 'Markalama kaydedildi.',
     brandingLocked: 'White-label markalama Enterprise planına dahildir. Düzenlemek için bu organizasyonun planını yükseltin — kayıtlı markalama uygulanmaya devam eder, dilerseniz kaldırabilirsiniz.',
     brandingClear: 'Kayıtlı markalamayı kaldır',
+    // Konferans politikası (#2007).
+    conferencing: 'Video konferans',
+    conferencingHint: 'Bu kuruluşun bir toplantısının hangi video odasını alacağı. Planlama formuna yapıştırılan bağlantı her zaman kazanır; politika, hiçbir şey yapıştırılmadığında ne olacağına karar verir.',
+    conferencingSaved: 'Konferans politikası kaydedildi.',
+    conferencingPolicy: {
+      BUILTIN: { label: 'Yerleşik odalar', hint: 'Bugünkü davranış: düzenleyen bir bağlantı yapıştırmadıkça yerleşik bir video odası. Kayıtlı kişisel odalar kullanılmaz.' },
+      PREFER_PERSONAL: { label: 'Düzenleyenin kişisel odasını tercih et', hint: 'Düzenleyenin kayıtlı kişisel toplantı odası varsa onu kullan; yoksa yerleşik bir oda.' },
+      REQUIRE_EXTERNAL: { label: 'Kendi konferans aracını zorunlu kıl', hint: 'Asla yerleşik oda yok: düzenleyen bir bağlantı yapıştırmalı ya da kayıtlı bir kişisel odası olmalı. BT politikası üçüncü taraf odalara izin vermeyen kuruluşlar için.' },
+    },
     sso: 'Kurumsal SSO',
     ssoHint: 'Kiracının SAML kimlik sağlayıcısını yapılandır. Burada kaydedilir ve doğrulanır; yapılandırma tamamlanıp etkinleştirildiği anda SSO girişleri devreye girer (bkz. docs/sso-saml.md). OIDC henüz desteklenmiyor.',
     ssoProvider: 'Sağlayıcı',
@@ -13695,6 +13761,12 @@ const tr: Dict = {
     notificationsSection: 'Bildirimler',
     notesAutoOpen: 'Görüşme başlattığımda not penceresi açılsın',
     notesAutoOpenHint: 'Yalnızca bu cihaz için geçerli. Pencere görüşmeyle birlikte açılır, böylece notlar doğru odaya bağlanır.',
+    // Kayıtlı kişisel video odası (#2007).
+    videoSection: 'Video görüşmeleri',
+    personalRoom: 'Kişisel toplantı odan',
+    personalRoomHint: 'Her zaman görüştüğün odanın bağlantısı — bir Zoom kişisel toplantı odası, bir Google Meet odası ya da bir Teams bağlantısı. Kuruluşun kendi konferans aracını tercih ettiğinde, düzenlediğin görüşmeler yerleşik oda yerine bu bağlantıyı kullanır. Yerleşik odaları kullanmaya devam etmek için boş bırak.',
+    personalRoomSaved: 'Kişisel oda kaydedildi.',
+    personalRoomCleared: 'Kişisel oda kaldırıldı.',
     emailNotifications: 'Mesajlar ve duyurular için bana e-posta gönder',
     emailNotificationsHint: 'Uygulama içi bildirimler bu ayardan bağımsız olarak her zaman gösterilir.',
     browserNotifications: 'Tarayıcı bildirimleri',
@@ -14754,6 +14826,16 @@ const de: Dict = {
     dismiss: 'Schließen',
   },
   companyDetail: {
+    usage: {
+      title: 'Produktnutzung (letzte 90 Tage)',
+      aria: 'Tägliche Produktnutzung, letzte 90 Tage.',
+      summary: '{days} von {of} Tagen mit Daten · {total} Transaktionen · letzte 30 Tage: {last} (30 Tage davor: {prev})',
+      bar: '{day}: {value}',
+      barNoData: '{day}: keine Daten',
+      legendValue: 'Transaktionen',
+      legendZero: 'Null (keine Aktivität)',
+      legendNoData: 'Keine Daten empfangen',
+    },
     // #2442 — das Adressbuch des Kontos.
     channels: {
       title: 'Vertriebskanäle',
@@ -15812,6 +15894,11 @@ const de: Dict = {
       noOpenGoal: 'Kein offenes Ziel oder Aufgabe',
       trialExpired: 'Testphase abgelaufen — entscheiden',
       trialNoEndDate: 'Enddatum der Testphase fehlt — bitte eintragen',
+      usageDrop: 'Nutzung gesunken',
+      trialInactive: 'Testphase noch ungenutzt',
+      usageNoHistory: '{n} Account(s) nicht in der Nutzungsprüfung: noch zu wenig Verlauf.',
+      usageUnowned: '{n} Account(s) mit sinkender Nutzung haben keinen aktiven Zuständigen.',
+      usageNoFeed: 'Nutzungssignale aus: noch keine Produktnutzung empfangen.',
       nextActionDue: 'Wiedervorlage überfällig',
       // #1891: an INTERIM/FINAL evaluation past its due date and not written.
       evaluationDue: 'Bewertung fällig — schreiben',
@@ -16623,6 +16710,11 @@ const de: Dict = {
     topics: ['Wöchentliches Check-in', 'Fortschrittsüberprüfung', 'Technisches Mentoring', 'Karriereberatung', 'Interviewvorbereitung', 'Feedback-Gespräch'],
     meetLink: 'Meeting-Link',
     meetLinkHint: 'Leer lassen, um automatisch einen Videoraum-Link zu erstellen',
+    // Eigenen Link mitbringen (#2007).
+    linkEmbeds: 'Dieser Link öffnet sich in der App.',
+    linkOpensIn: 'Dieser Link öffnet sich in {provider}, in einem neuen Browser-Tab.',
+    linkInvalid: 'Dieser Link kann nicht verwendet werden: Er muss mit https:// beginnen, darf kein Passwort enthalten und nicht auf diese Seite zurückzeigen.',
+    linkRequired: 'Deine Organisation verlangt einen Link aus ihrem eigenen Konferenz-Tool. Füge hier einen ein oder speichere deinen persönlichen Meeting-Raum auf deiner Kontoseite.',
     duration: 'Dauer',
     durationOption: '{n} Min.',
     sendInvite: 'Einladung senden',
@@ -16694,6 +16786,7 @@ const de: Dict = {
       close: 'Besprechungsfenster schließen',
       join: 'An der Besprechung teilnehmen',
       openInNewTab: 'In neuem Tab öffnen',
+      openIn: 'In {provider} öffnen',
       notEmbeddable: 'Dieser Link kann nicht in der App angezeigt werden.',
       embedFailed: 'Der Anruf konnte hier nicht gestartet werden — bitte in einem neuen Tab öffnen.',
       freeRoomHint:
@@ -17974,6 +18067,15 @@ const de: Dict = {
     brandingSaved: 'Branding gespeichert.',
     brandingLocked: 'White-Label-Branding ist im Enterprise-Plan enthalten. Stufen Sie diese Organisation hoch, um es zu bearbeiten — gespeichertes Branding bleibt aktiv und lässt sich weiterhin entfernen.',
     brandingClear: 'Gespeichertes Branding entfernen',
+    // Konferenzrichtlinie (#2007).
+    conferencing: 'Videokonferenz',
+    conferencingHint: 'Welchen Videoraum eine Besprechung dieser Organisation bekommt. Ein in das Planungsformular eingefügter Link gewinnt immer; die Richtlinie entscheidet, was passiert, wenn nichts eingefügt wird.',
+    conferencingSaved: 'Konferenzrichtlinie gespeichert.',
+    conferencingPolicy: {
+      BUILTIN: { label: 'Eingebaute Räume', hint: 'Heutiges Verhalten: ein eingebauter Videoraum, sofern die organisierende Person keinen Link einfügt. Gespeicherte persönliche Räume werden nicht verwendet.' },
+      PREFER_PERSONAL: { label: 'Persönlichen Raum der organisierenden Person bevorzugen', hint: 'Den gespeicherten persönlichen Meeting-Raum der organisierenden Person verwenden, wenn vorhanden; sonst einen eingebauten Raum.' },
+      REQUIRE_EXTERNAL: { label: 'Eigenes Konferenz-Tool verlangen', hint: 'Nie ein eingebauter Raum: Die organisierende Person muss einen Link einfügen oder einen persönlichen Raum gespeichert haben. Für Organisationen, deren IT-Richtlinie Räume von Drittanbietern verbietet.' },
+    },
     sso: 'Enterprise-SSO',
     ssoHint: 'SAML-Identity-Provider eines Mandanten konfigurieren. Hier gespeichert & validiert; SSO-Logins werden aktiv, sobald die Konfiguration vollständig und aktiviert ist (siehe docs/sso-saml.md). OIDC wird noch nicht unterstützt.',
     ssoProvider: 'Anbieter',
@@ -20646,6 +20748,12 @@ const de: Dict = {
     notificationsSection: 'Benachrichtigungen',
     notesAutoOpen: 'Notizfenster öffnen, wenn ich eine Besprechung starte',
     notesAutoOpenHint: 'Gilt nur für dieses Gerät. Das Fenster öffnet sich mit der Besprechung, damit Notizen dem richtigen Raum zugeordnet werden.',
+    // Der gespeicherte persönliche Videoraum (#2007).
+    videoSection: 'Videobesprechungen',
+    personalRoom: 'Dein persönlicher Meeting-Raum',
+    personalRoomHint: 'Ein Link zu dem Raum, in dem du dich immer triffst — ein persönlicher Zoom-Raum, ein Google-Meet-Raum oder ein Teams-Link. Wenn deine Organisation ihr eigenes Konferenz-Tool bevorzugt, verwenden die von dir organisierten Besprechungen diesen Link statt eines eingebauten Raums. Leer lassen, um weiter eingebaute Räume zu nutzen.',
+    personalRoomSaved: 'Persönlicher Raum gespeichert.',
+    personalRoomCleared: 'Persönlicher Raum entfernt.',
     emailNotifications: 'Benachrichtige mich per E-Mail über Nachrichten und Ankündigungen',
     emailNotificationsHint: 'In-App-Benachrichtigungen werden unabhängig von dieser Einstellung immer angezeigt.',
     browserNotifications: 'Browser-Benachrichtigungen',
