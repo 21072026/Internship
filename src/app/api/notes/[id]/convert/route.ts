@@ -76,6 +76,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           relationId: relationId!,
           title: line.trim().slice(0, 191),
           createdByRole: session.user.role === 'MENTEE' ? 'MENTEE' : 'MENTOR',
+          createdById: session.user.id,
         },
       });
       await markConverted(note.id, lines, index);

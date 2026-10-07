@@ -55,6 +55,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       nextActionNote: true,
       trialStartedAt: true,
       trialEndsAt: true,
+      contractEndsAt: true,
       // The record's estimated monthly value (#2422) — its own row, read by
       // name here and on the owner/ADMIN value route only.
       value: { select: { valueMinor: true, currency: true, source: true } },
@@ -123,6 +124,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         nextActionNote={relation.nextActionNote}
         trialStartedAt={iso(relation.trialStartedAt)}
         trialEndsAt={iso(relation.trialEndsAt)}
+        contractEndsAt={iso(relation.contractEndsAt)}
         dealValue={{
           valueMinor: relation.value?.valueMinor ?? null,
           currency: relation.value?.currency ?? null,

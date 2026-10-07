@@ -218,6 +218,10 @@ async function handleGet(request: Request) {
             ...group,
             participants,
             mentorId,
+            // The mentorship behind a 1:1 conversation, so the mentor's composer
+            // can ask for a grounded draft for it (#2048). The draft route does
+            // its own authorization; this only names the relation.
+            mentorshipId: counterpartMentorship?.id ?? null,
             // Lets the client render the thread read-only instead of failing on
             // send. The POST route enforces the same rule regardless (#770).
             canPost: await canPostToConversation(session.user, conversation!),

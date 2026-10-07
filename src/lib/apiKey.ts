@@ -4,7 +4,9 @@ import { prisma } from '@/lib/prisma';
 import { SCOPE_ENTITLEMENT, apiKeyStatus, parseScopes, type ApiScope } from '@/lib/apiScopes';
 import { entitled } from '@/lib/entitlements';
 import { assertApiKeyRequestContext, runAsApiKeyRequest, runWithApiKeyOrg } from '@/lib/orgContext';
-import { enforceRateLimit } from '@/lib/rateLimit';
+import { clientIp, enforceRateLimit, rateLimitState } from '@/lib/rateLimit';
+import { consumeApiKeyQuota } from '@/lib/apiKeyQuota';
+import { bindingLimit, rateLimitHeaders, type LimitState } from '@/lib/apiKeyQuotaRules';
 
 export function hashApiKey(raw: string): string {
   return createHash('sha256').update(raw).digest('hex');
@@ -22,6 +24,9 @@ export interface ApiKeyIdentity {
   id: string;
   orgId: string | null;
   scopes: string[];
+  /** The period allowance (#2010); both null = none. */
+  quotaPeriod: string | null;
+  quotaLimit: number | null;
 }
 
 // The identity a handler receives: authenticated, in scope, and bound to one
@@ -30,9 +35,14 @@ export interface ApiKeyContext extends ApiKeyIdentity {
   orgId: string;
 }
 
-// Shared by every /api/v1 route: the IP brake in front of the door and the
-// per-key allowance behind it use the same bucket and the same numbers.
-const V1_RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
+// Shared by every /api/v1 route: the IP brake for requests without a working
+// key and the per-key allowance behind it use the same bucket and numbers.
+export const V1_RATE_LIMIT = { limit: 120, windowMs: 60 * 1000 };
+
+// `lastUsedAt` is a "when did this integration last call?" fact, not a meter:
+// stamping it at most once a minute keeps the door from writing a row per
+// request (the quota's own counter is batched for the same reason, #2010).
+const LAST_USED_RESOLUTION_MS = 60 * 1000;
 
 // Authenticate a request via "Authorization: Bearer <key>". Returns the key's
 // identity when it is valid (and stamps lastUsedAt), else null.
@@ -52,14 +62,16 @@ export async function authenticateApiKey(request: Request): Promise<ApiKeyIdenti
   if (!m) return null;
   const key = await prisma.apiKey.findUnique({
     where: { hashedKey: hashApiKey(m[1].trim()) },
-    select: { id: true, orgId: true, scopes: true, expiresAt: true, revokedAt: true },
+    select: { id: true, orgId: true, scopes: true, expiresAt: true, revokedAt: true, lastUsedAt: true, quotaPeriod: true, quotaLimit: true },
   });
   if (!key) return null;
   // Revocation and expiry are one derived status (lib/apiScopes.ts) so the door
   // and the admin list can never disagree about what a key is.
   if (apiKeyStatus(key) !== 'active') return null;
-  await prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
-  return { id: key.id, orgId: key.orgId, scopes: parseScopes(key.scopes) };
+  if (!key.lastUsedAt || Date.now() - key.lastUsedAt.getTime() >= LAST_USED_RESOLUTION_MS) {
+    await prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
+  }
+  return { id: key.id, orgId: key.orgId, scopes: parseScopes(key.scopes), quotaPeriod: key.quotaPeriod, quotaLimit: key.quotaLimit };
 }
 
 // 403, never a filtered 200: a key asking for something it was not granted is a
@@ -77,39 +89,94 @@ export function requireApiScope(key: ApiKeyIdentity, scope: ApiScope): NextRespo
  * The single door of the public API (#1546).
  *
  * Every /api/v1 route goes through here, so expiry, revocation, scope, tenant
- * binding and the rate limits are decided in ONE place instead of being
- * re-implemented — or forgotten — per route. The handler only ever runs for a
- * live, in-scope key that belongs to exactly one organisation, and it runs
- * inside that organisation's tenant context.
+ * binding, the rate limits and the period quota are decided in ONE place
+ * instead of being re-implemented — or forgotten — per route. The handler only
+ * ever runs for a live, in-scope key that belongs to exactly one organisation,
+ * and it runs inside that organisation's tenant context.
  *
  * Fails closed, in this order:
+ *   - an address already over the per-minute limit with failed/absent keys → 429 `rate_limited`
  *   - no / unknown / expired / revoked key → 401
+ *   - the key's own per-minute window is spent → 429 `rate_limited`
  *   - key does not hold `scope`            → 403
  *   - key resolves to no organisation      → 403, never an unscoped read (the
  *     #831 "allowlist by omission" lesson: an unlisted case is rejected)
  *   - the org's plan lacks the feature the scope belongs to (#1744) → 403
  *     `feature_locked`
+ *   - the key's period allowance is spent (#2010) → 429 `quota_exceeded`, with
+ *     the reset instant
+ *
+ * Per-minute keying (#2010 on top of #1546): a request with a WORKING key
+ * spends only that key's window, so two integrations behind one NAT no longer
+ * share a budget. The IP window brakes everything else — requests without a
+ * key and requests whose key fails — and is checked before the key lookup, so
+ * a flood of garbage keys from one address stops costing database round trips
+ * once that address is over its limit.
+ *
+ * Every response carries `RateLimit-Limit` / `-Remaining` / `-Reset` for the
+ * limit closest to exhaustion, so a client can slow down before it is refused.
  */
 export async function withApiKey(
   request: Request,
   scope: ApiScope,
   handler: (key: ApiKeyContext) => Promise<NextResponse>,
 ): Promise<NextResponse> {
-  // The IP brake stays exactly where it was: in front of everything, so an
-  // anonymous flood is stopped before it costs a database round trip.
-  const ipLimited = enforceRateLimit(request, 'v1', V1_RATE_LIMIT);
-  if (ipLimited) return ipLimited;
+  const limits: { minute?: LimitState; quota?: LimitState | null } = {};
+  const response = await door(request, scope, handler, limits);
+  const binding = bindingLimit([limits.minute, limits.quota]);
+  if (binding) for (const [name, value] of Object.entries(rateLimitHeaders(binding))) response.headers.set(name, value);
+  return response;
+}
+
+/** A per-minute refusal, typed so a client can tell it from `quota_exceeded`. */
+function rateLimited(limited: NextResponse): NextResponse {
+  return NextResponse.json(
+    { error: 'Too many requests. Please try again later.', type: 'rate_limited' },
+    { status: 429, headers: { 'Retry-After': limited.headers.get('Retry-After') ?? '60' } },
+  );
+}
+
+async function door(
+  request: Request,
+  scope: ApiScope,
+  handler: (key: ApiKeyContext) => Promise<NextResponse>,
+  limits: { minute?: LimitState; quota?: LimitState | null },
+): Promise<NextResponse> {
+  const ip = clientIp(request);
+  const presentsKey = /^Bearer\s+\S/i.test(request.headers.get('authorization') || '');
+  const ipState = () => rateLimitState('v1', ip, V1_RATE_LIMIT);
+
+  // No key at all: the IP window, counted, exactly as before.
+  if (!presentsKey) {
+    const ipLimited = enforceRateLimit(request, 'v1', V1_RATE_LIMIT);
+    limits.minute = ipState();
+    if (ipLimited) return rateLimited(ipLimited);
+    return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
+  }
+  // A key is presented: an address already over its limit (from failed keys)
+  // is refused before the lookup costs anything.
+  if (ipState().remaining <= 0) {
+    const ipLimited = enforceRateLimit(request, 'v1', V1_RATE_LIMIT);
+    limits.minute = ipState();
+    if (ipLimited) return rateLimited(ipLimited);
+  }
 
   return runAsApiKeyRequest(async () => {
     const key = await authenticateApiKey(request);
-    if (!key) return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
+    if (!key) {
+      // A failed key spends the address's window — the brute-force brake.
+      const ipLimited = enforceRateLimit(request, 'v1', V1_RATE_LIMIT);
+      limits.minute = ipState();
+      if (ipLimited) return rateLimited(ipLimited);
+      return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
+    }
 
-    // A second dimension on the SAME limiter and the same bucket (#2028's
-    // additive `subject` option), not a second limiter and not a second store:
-    // one integration hammering the API now spends its own allowance instead of
-    // everyone else's behind the same address. The IP limit above is unchanged.
+    // The key's own window on the SAME limiter and the same bucket (#2028's
+    // additive `subject` option, #1546's keying): not a second limiter and
+    // not a second store.
     const keyLimited = enforceRateLimit(request, 'v1', { ...V1_RATE_LIMIT, subject: `key:${key.id}` });
-    if (keyLimited) return keyLimited;
+    limits.minute = rateLimitState('v1', `key:${key.id}`, V1_RATE_LIMIT);
+    if (keyLimited) return rateLimited(keyLimited);
 
     const outOfScope = requireApiScope(key, scope);
     if (outOfScope) return outOfScope;
@@ -136,6 +203,17 @@ export async function withApiKey(
         return NextResponse.json(
           { error: 'Your plan does not include API access', code: 'feature_locked', feature },
           { status: 403 },
+        );
+      }
+      // The period allowance (#2010), last: a request refused for its scope,
+      // its org or its plan never spends any of it. Counted in a batched
+      // tally (src/lib/apiKeyQuota.ts), never one write per request.
+      const quota = await consumeApiKeyQuota(key);
+      limits.quota = quota.state;
+      if (!quota.ok) {
+        return NextResponse.json(
+          { error: 'This API key has used its request allowance for the period', type: 'quota_exceeded', resetAt: quota.resetAt.toISOString() },
+          { status: 429, headers: { 'Retry-After': String(Math.max(1, Math.ceil((quota.resetAt.getTime() - Date.now()) / 1000))) } },
         );
       }
       return handler({ ...key, orgId });

@@ -559,13 +559,12 @@ const MARKETING_FUNNEL: ProgramTemplate = {
       labels: { en: 'Trial running', tr: 'Deneme sürüyor', de: 'Testphase läuft' } },
     { key: TRIAL_EXPIRED_STAGE_KEY, order: 4, isTerminal: false, isOffPath: false, color: '#eab308',
       labels: { en: 'Trial expired', tr: 'Deneme süresi doldu', de: 'Testphase abgelaufen' } },
-    { key: 'DEAL_PROPOSAL', order: 5, isTerminal: false, isOffPath: false, color: '#f59e0b',
-      labels: { en: 'Proposal sent', tr: 'Teklif gönderildi', de: 'Angebot gesendet' } },
-    { key: 'DEAL_NEGOTIATION', order: 6, isTerminal: false, isOffPath: false, color: '#f97316',
-      labels: { en: 'Negotiation', tr: 'Pazarlık', de: 'Verhandlung' } },
-    { key: 'DEAL_WON', order: 7, isTerminal: true, isOffPath: false, color: '#16a34a',
+    // No proposal/negotiation stages (#2572 Q1, #2840): SaleVali has no offer
+    // step — the win is the customer confirming the upgrade, straight out of
+    // the trial's decision window (TRIAL_EXPIRED).
+    { key: 'DEAL_WON', order: 5, isTerminal: true, isOffPath: false, color: '#16a34a',
       labels: { en: 'Won', tr: 'Kazanıldı', de: 'Gewonnen' } },
-    { key: 'DEAL_LOST', order: 8, isTerminal: true, isOffPath: true, color: '#6b7280',
+    { key: 'DEAL_LOST', order: 6, isTerminal: true, isOffPath: true, color: '#6b7280',
       labels: { en: 'Lost', tr: 'Kaybedildi', de: 'Verloren' } },
   ],
   // A marketing cadence in days: a fresh lead is contacted next-day, and a deal
@@ -582,13 +581,12 @@ const MARKETING_FUNNEL: ProgramTemplate = {
     // trial reminders. Two overlapping clocks on the same stage would nag the
     // owner twice about the same account, in different words, on different
     // days.
-    // TRIAL_EXPIRED is the opposite case: the trial is over, nothing is
-    // counting down any more, and the account is waiting for a human to decide
-    // whether it becomes a proposal or a loss. Three days is how long that
-    // decision may sit before it is genuinely overdue.
-    { stageKey: TRIAL_EXPIRED_STAGE_KEY, days: 3 },
-    { stageKey: 'DEAL_PROPOSAL', days: 5 },
-    { stageKey: 'DEAL_NEGOTIATION', days: 7 },
+    // TRIAL_EXPIRED is the opposite case: the free period is over and the
+    // account is in its 30-day decision window (#2572 Q2) — waiting for a human
+    // contact that turns it into a win or a loss. Seven days is how long that
+    // first contact may wait before it is genuinely overdue; three read as
+    // "decide in three days" next to a thirty-day window.
+    { stageKey: TRIAL_EXPIRED_STAGE_KEY, days: 7 },
   ],
 };
 
@@ -628,11 +626,23 @@ export function programTemplate(key: string | null | undefined): ProgramTemplate
 // Every curated stage outside the canonical set, by key. Template keys are
 // prefixed per template (GRAD_*, BUDDY_*, LEAD_*/DEAL_*, …), so a key names
 // exactly one curated stage.
-const CURATED_STAGE_LABELS: ReadonlyMap<string, LocalizedLabel> = new Map(
-  PROGRAM_TEMPLATES.filter((t) => t.key !== 'canonical_pipeline').flatMap((t) =>
+//
+// RETIRED stages are kept here too: a stage taken out of a preset is gone only
+// for orgs provisioned afterwards. An org that already has the row keeps it
+// (no backfill — the rows are the tenant's), and its label must go on reading
+// back in the viewer's language.
+const RETIRED_STAGE_LABELS: readonly (readonly [string, LocalizedLabel])[] = [
+  // MARKETING_FUNNEL until #2840 (#2572 Q1).
+  ['DEAL_PROPOSAL', { en: 'Proposal sent', tr: 'Teklif gönderildi', de: 'Angebot gesendet' }],
+  ['DEAL_NEGOTIATION', { en: 'Negotiation', tr: 'Pazarlık', de: 'Verhandlung' }],
+];
+
+const CURATED_STAGE_LABELS: ReadonlyMap<string, LocalizedLabel> = new Map([
+  ...RETIRED_STAGE_LABELS,
+  ...PROGRAM_TEMPLATES.filter((t) => t.key !== 'canonical_pipeline').flatMap((t) =>
     t.stages.map((s) => [s.key, s.labels] as const)
-  )
-);
+  ),
+]);
 
 /**
  * `localizeStageLabels`, extended to the curated template stages. A template

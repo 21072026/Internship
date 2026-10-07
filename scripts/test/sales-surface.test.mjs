@@ -56,7 +56,7 @@ test('the mentor shell sends a MARKETING MENTOR or ADMIN to /sales and everyone 
 });
 
 test('the sales queue keeps the sales reasons and none of the mentorship ones', () => {
-  assert.deepEqual([...SALES_ATTENTION_REASONS].sort(), ['next_action_due', 'overdue', 'trial_expired', 'trial_inactive', 'trial_no_end_date', 'usage_drop']);
+  assert.deepEqual([...SALES_ATTENTION_REASONS].sort(), ['cancellation_pending', 'next_action_due', 'overdue', 'trial_expired', 'trial_inactive', 'trial_no_end_date', 'usage_drop']);
   for (const mentorship of ['inactive', 'unanswered_question', 'pending_meeting', 'no_open_goal', 'missing_weekly_reports']) {
     assert.ok(!SALES_ATTENTION_REASONS.includes(mentorship), mentorship);
   }

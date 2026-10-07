@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Prompt-injection hardening, a PII pre-flight and safe rendering of model output (#2026):** every piece of user-authored text entering a prompt (CV, interaction log, conversation, survey row, interview focus, names) now travels inside a nonce-fenced `wrapUntrusted()` block (`src/lib/ai/untrusted.ts`) whose fence cannot be forged. `callModel()` is the enforcement point: it refuses an input with no block (`UnfencedInputError`), appends `UNTRUSTED_DATA_RULE` to every system prompt, cuts an over-long input inside the data instead of through a fence, masks e-mail addresses, phone numbers, links, IBANs, 11-digit ID numbers and street addresses inside the blocks unless the registry entry declares `needsContactDetails` (only `cv_extract`; `src/lib/ai/redact.ts`, tuned not to touch CV dates), and runs an EN/DE/TR injection tripwire (`src/lib/ai/injection.ts`) that flags but never blocks — hits land on the new nullable `AiUsage.flags` column. Thread prompts no longer put participant names into the system prompt. The open-text engine pre-masks its rows with the same pre-flight so its verbatim-quote check still compares like with like. All AI prose surfaces render through the new `AiText` component (plain text, no markup or live links, control and bidi-override characters stripped, length capped). `docs/security-audit-playbook.md` moves the AI endpoints from \"never examined\" to the tested matrix. Tests: `scripts/test/ai-untrusted.test.mjs`, `e2e/ai-output-safety.spec.ts`.",
+  "notes": {
+    "en": [
+      "AI features are harder to manipulate: text you upload or write is always treated as data, contact details are removed before anything is sent where they are not needed, and AI answers are always shown as plain text."
+    ],
+    "tr": [
+      "AI özelliklerini yönlendirmek artık daha zor: yüklediğin ya da yazdığın metin her zaman veri olarak ele alınıyor, gerekmeyen yerlerde iletişim bilgileri gönderilmeden önce siliniyor ve AI yanıtları her zaman düz metin olarak gösteriliyor."
+    ],
+    "de": [
+      "KI-Funktionen lassen sich schwerer manipulieren: Hochgeladener oder geschriebener Text wird immer als Daten behandelt, Kontaktdaten werden vor dem Senden entfernt, wo sie nicht gebraucht werden, und KI-Antworten werden immer als reiner Text angezeigt."
+    ]
+  }
+}

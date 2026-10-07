@@ -182,6 +182,13 @@ test('video volume is recorded at the room chokepoint, and gates nothing', async
   }
 });
 
+// resolveMeetingLink answers an outcome object ({ ok, link, source }), not a string.
+async function resolveMeetingLinkUrl(opts: Parameters<typeof resolveMeetingLink>[0]): Promise<string> {
+  const out = await resolveMeetingLink(opts);
+  if (!out.ok) throw new Error(`resolveMeetingLink refused: ${out.code}`);
+  return out.link;
+}
+
 // The production path reads the organizer org's world from the row itself —
 // the unit spec only proves the prefix for an explicit `vertical`.
 test('resolveMeetingLink names the room after the organizer org\'s world', async () => {
@@ -193,9 +200,9 @@ test('resolveMeetingLink names the room after the organizer org\'s world', async
     data: { name: `Room world I ${stamp}`, slug: `room-i-${stamp}`.slice(0, 60), plan: 'FREE', vertical: 'INTERNSHIP' },
   });
   try {
-    expect(await resolveMeetingLink({ inviteeCount: 1, orgId: marketing.id })).toMatch(/\/SaleVali-[0-9a-f]{16}$/);
-    expect(await resolveMeetingLink({ inviteeCount: 1, orgId: internship.id })).toMatch(/\/InternshipCRM-[0-9a-f]{16}$/);
-    expect(await resolveMeetingLink({ inviteeCount: 1, orgId: null })).toMatch(/\/InternshipCRM-[0-9a-f]{16}$/);
+    expect(await resolveMeetingLinkUrl({ inviteeCount: 1, orgId: marketing.id })).toMatch(/\/SaleVali-[0-9a-f]{16}$/);
+    expect(await resolveMeetingLinkUrl({ inviteeCount: 1, orgId: internship.id })).toMatch(/\/InternshipCRM-[0-9a-f]{16}$/);
+    expect(await resolveMeetingLinkUrl({ inviteeCount: 1, orgId: null })).toMatch(/\/InternshipCRM-[0-9a-f]{16}$/);
     // The video meter is written fire-and-forget; wait for it before cleanup
     // so a late write cannot land on a deleted org.
     for (const org of [marketing, internship]) {
