@@ -561,6 +561,8 @@ model User {
   assignedSupportTickets            SupportTicket[]               @relation("SupportAssignee")
   supportMessages                   SupportMessage[]              @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                @relation("RelationNoteAuthor")
+  sessionNotes                      SessionNote[]                 @relation("SessionNoteAuthor")
+  sessionNoteRevisions              SessionNoteRevision[]         @relation("SessionNoteRevisionAuthor")
   pageViews                         PageView[]
   referredBy                        User?                         @relation("UserReferrals", fields: [referredById], references: [id])
   referredUsers                     User[]                        @relation("UserReferrals")
@@ -2918,6 +2920,7 @@ model MentorshipRelation {
   evaluationDues        EvaluationDue[]
   goals                 Goal[]
   sessionAgendas        SessionAgenda[]
+  sessionNotes          SessionNote[]
   meetingRequests       MeetingRequest[]
   questions             MentorQuestion[]
   relationNotes         RelationNote[]
@@ -3228,6 +3231,57 @@ model RelationNote {
   @@index([relationId])
 }
 
+// The pair's SHARED minutes (#1847): one record of what was said and agreed,
+// readable and editable by both the mentor and the mentee (an admin reads).
+// Deliberately a THIRD model beside PersonalNote (author-private, "only the
+// author can see it") and RelationNote (mentor-private): rows in those two were
+// written under an explicit privacy promise, and a visibility flag on either
+// would break it retroactively. `meetingId` and `agendaId` are SetNull for the
+// PersonalNote reason — deleting the meeting or the agenda must not delete what
+// was written in it; the minutes are the durable part.
+//
+// No `orgId`, deliberately: this is a child of MentorshipRelation, which IS in
+// TENANT_MODELS (src/lib/orgContext.ts), so it is reached only through a scoped
+// parent — the same arrangement as MeetingGuest under Meeting. Worth stating,
+// because a model that is not anchored gets no automatic tenant protection and
+// every reader has to know that on purpose.
+model SessionNote {
+  id          String   @id @default(cuid())
+  relationId  String
+  meetingId   String?
+  agendaId    String?
+  body        String   @db.Text
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  relation  MentorshipRelation    @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  meeting   Meeting?              @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  agenda    SessionAgenda?        @relation(fields: [agendaId], references: [id], onDelete: SetNull)
+  createdBy User?                 @relation("SessionNoteAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  revisions SessionNoteRevision[]
+
+  @@index([relationId])
+  @@index([meetingId])
+}
+
+// Who changed the minutes after the meeting (#1847): an append-only trail, one
+// row per saved edit holding the body AS SAVED and who saved it. The routes
+// keep the last SESSION_NOTE_REVISIONS_KEPT rows per note; there is no diff UI.
+// Reached through SessionNote → MentorshipRelation, so no `orgId` either.
+model SessionNoteRevision {
+  id        String   @id @default(cuid())
+  noteId    String
+  authorId  String?
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  note   SessionNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  author User?       @relation("SessionNoteRevisionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([noteId, createdAt])
+}
+
 // A goal set within a mentorship — supports goal setting + tracking (checklist 7).
 model Goal {
   id              String     @id @default(cuid())
@@ -3349,6 +3403,7 @@ model SessionAgenda {
   meeting  Meeting?            @relation(fields: [meetingId], references: [id], onDelete: SetNull)
   template AgendaTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
   items    SessionAgendaItem[]
+  notes    SessionNote[]
 
   @@index([relationId])
   @@index([templateId])
@@ -3513,6 +3568,7 @@ model Meeting {
   feedback     MeetingFeedback[]
   attendance   MeetingAttendance[]
   agenda       SessionAgenda?
+  sessionNotes SessionNote[]
 
   @@index([relationId])
   @@index([projectId])
