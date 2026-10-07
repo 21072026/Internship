@@ -18,7 +18,7 @@
 #   3. back up the database (infra/backup-db.sh), refuse a data-destroying
 #      schema diff (infra/schema-guard.sh), then prisma db push
 #      --accept-data-loss (schema sync, same as CI)
-#   4. seed-templates + seed-goal-templates + backfill-project-members
+#   4. seed-templates + seed-goal-templates + seed-agenda-templates + backfill-project-members
 #      + backfill-sso-plan (all idempotent)
 #   5. swap the internship-crm container (host networking, port 3200, restart
 #      unless-stopped) — the same flags the retired deploy.yml used. With
@@ -692,6 +692,9 @@ run_tool node prisma/seed-templates.mjs || true
 # The shared project-goal template pool (#51) — every project sees these on top
 # of its own. Only ever adds missing titles.
 run_tool node prisma/seed-goal-templates.mjs || true
+# The guided-conversation library (#1841) — the six starter session agendas
+# of the default org. Only ever adds missing titles and missing items.
+run_tool node prisma/seed-agenda-templates.mjs || true
 # Contributor terms v1.0 (#1025) — versioned rows; never edits an existing one.
 run_tool node prisma/seed-contributor-terms.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true

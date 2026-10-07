@@ -202,6 +202,7 @@ model Organization {
   trialReminders          TrialReminder[]
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
+  agendaTemplates         AgendaTemplate[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -543,6 +544,7 @@ model User {
   projectJoinRequests               ProjectJoinRequest[]          @relation("JoinRequester")
   decidedJoinRequests               ProjectJoinRequest[]          @relation("JoinRequestDecider")
   taskTemplates                     ProjectTaskTemplate[]         @relation("TaskTemplateAuthor")
+  agendaTemplates                   AgendaTemplate[]              @relation("AgendaTemplateAuthor")
   mentorOnboardings                 MenteeOnboarding[]            @relation("OnboardingMentor")
   menteeOnboarding                  MenteeOnboarding[]            @relation("OnboardingMentee")
   missingDocumentReminderSubjects   DocumentRequirementReminder[] @relation("MissingDocumentReminderSubject")
@@ -2783,6 +2785,7 @@ model MentorshipRelation {
   // INTERIM/FINAL due dates and their reminders (#1891).
   evaluationDues        EvaluationDue[]
   goals                 Goal[]
+  sessionAgendas        SessionAgenda[]
   meetingRequests       MeetingRequest[]
   questions             MentorQuestion[]
   relationNotes         RelationNote[]
@@ -3113,6 +3116,122 @@ model Goal {
   @@index([relationId])
 }
 
+// ── Session agendas (#1841) ──────────────────────────────────────────────────
+// "What are we going to talk about." Two pairs of tables: a reusable,
+// trilingual guided-conversation LIBRARY (AgendaTemplate + its items), and the
+// per-session INSTANCE a pair works through (SessionAgenda + its items), which
+// hangs off a MentorshipRelation and optionally off the Meeting it was held in.
+// Same shape as ProjectTaskTemplate / ProjectTask on purpose: the canonical
+// string is the dedupe key and the fallback wording, `translations` carries the
+// per-locale text, and a templated item resolves its wording LIVE from the
+// template in the reader's language (src/lib/agendas.ts) — rewording a prompt
+// in the library reaches every session that was given it. UI is #1843.
+model AgendaTemplate {
+  id           String    @id @default(cuid())
+  // The tenant whose library this is. Nullable like ProjectTaskTemplate.orgId
+  // (#2298): the starter set may be seeded before the default org exists on a
+  // first deploy, and NULL reads as the default org.
+  orgId        String?
+  // The Program (#1622) this conversation belongs to. Nullable until that
+  // model lands; a plain id on purpose so this change does not wait for it.
+  programId    String?
+  // Who the conversation is for. PAIR today; a group session gets its own value.
+  audience     String    @default("PAIR")
+  // The fallback wording, and the key the library dedupes on (@@unique below).
+  title        String
+  // { en?, tr?, de? } — the title in each language it has been written in.
+  translations Json?
+  // { en?, tr?, de? } — one or two sentences on when to hold this conversation.
+  summary      Json?
+  // How many sessions were instantiated from it — the picker sorts by it.
+  useCount     Int       @default(0)
+  createdAt    DateTime  @default(now())
+  // Retired from the library, not deleted (#1113): instantiating one creates a
+  // live reference from SessionAgenda.templateId, and removing the row would
+  // blank the wording of every session that was held from it. Archived means
+  // "don't offer this again".
+  archivedAt   DateTime?
+  createdById  String?
+
+  org       Organization?        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User?                @relation("AgendaTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  items     AgendaTemplateItem[]
+  sessions  SessionAgenda[]
+
+  // One template per wording per tenant, so re-seeding is a no-op. MySQL does
+  // not enforce it across NULL orgIds; the seeder checks by title itself.
+  @@unique([orgId, title])
+  @@index([orgId])
+  @@index([programId])
+}
+
+// One prompt of a template, in order — the EvaluationCriterion shape.
+model AgendaTemplateItem {
+  id           String  @id @default(cuid())
+  templateId   String
+  order        Int     @default(0)
+  // The fallback wording of the prompt; `translations` carries the locales.
+  prompt       String
+  translations Json?
+  // Facilitation notes for the mentor: why ask this, what to listen for. Not
+  // shown to the mentee.
+  guidance     String? @db.Text
+
+  template     AgendaTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sessionItems SessionAgendaItem[]
+
+  @@index([templateId, order])
+}
+
+// The agenda of ONE session of a pair. `meetingId` is unique: a meeting has at
+// most one agenda, and an agenda may exist before the meeting is scheduled.
+// `templateId` is SetNull so retiring a template never blanks a held session.
+//
+// No `orgId`, deliberately: this is a child of MentorshipRelation, which IS in
+// TENANT_MODELS (src/lib/orgContext.ts), so it is reached only through a scoped
+// parent — the same arrangement as MeetingGuest under Meeting. Worth stating,
+// because a model that is not anchored gets no automatic tenant protection and
+// every reader has to know that on purpose.
+model SessionAgenda {
+  id          String   @id @default(cuid())
+  relationId  String
+  meetingId   String?  @unique
+  templateId  String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  relation MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  meeting  Meeting?            @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  template AgendaTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  items    SessionAgendaItem[]
+
+  @@index([relationId])
+  @@index([templateId])
+}
+
+// One line of a session agenda. Templated (`templateItemId` set — the text
+// resolves live from the template in the reader's language, `text` is the
+// snapshot fallback) or ad hoc (`templateItemId` null — `text` is the wording).
+model SessionAgendaItem {
+  id                String    @id @default(cuid())
+  agendaId          String
+  order             Int       @default(0)
+  text              String    @db.Text
+  templateItemId    String?
+  done              Boolean   @default(false)
+  doneAt            DateTime?
+  // The item of a PREVIOUS session this one continues ("carried over"). A
+  // plain id, not a self-relation: the previous agenda may be deleted with
+  // its relation, and the link is informational.
+  carriedFromItemId String?
+
+  agenda       SessionAgenda       @relation(fields: [agendaId], references: [id], onDelete: Cascade)
+  templateItem AgendaTemplateItem? @relation(fields: [templateItemId], references: [id], onDelete: SetNull)
+
+  @@index([agendaId, order])
+  @@index([templateItemId])
+}
+
 model InteractionLog {
   id         String          @id @default(cuid())
   relationId String
@@ -3248,6 +3367,7 @@ model Meeting {
   guests       MeetingGuest[]
   feedback     MeetingFeedback[]
   attendance   MeetingAttendance[]
+  agenda       SessionAgenda?
 
   @@index([relationId])
   @@index([projectId])
