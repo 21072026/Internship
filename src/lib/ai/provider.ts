@@ -182,6 +182,11 @@ export class CircuitBreaker {
 
 const providerBreaker = new CircuitBreaker();
 
+/** This container's breaker, for the operator console (#2030): per process, so it describes the replica that answered. */
+export function providerBreakerState(): 'closed' | 'open' | 'half-open' {
+  return providerBreaker.state();
+}
+
 /** One logical provider call: breaker first, then the retries. Throws when it finally fails. */
 export async function callProvider<T>(fn: () => Promise<T>, breaker: CircuitBreaker = providerBreaker): Promise<T> {
   if (!breaker.canCall()) throw new ProviderUnavailable();

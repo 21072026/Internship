@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { timingSafeEqual } from 'crypto';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { isAiConfigured } from '@/lib/ai/provider';
 import { getEmailHealth } from '@/lib/emailHealth';
 import { jobQueueHealth, retentionHealth } from '@/lib/jobs/health';
 import { leaseSnapshot, replicaName } from '@/lib/jobs/lease';
@@ -190,6 +191,9 @@ export async function GET(request: Request) {
       // one flapping container. It rides the existing detail gate — the name is
       // a container name, never a hostname an attacker could reach directly.
       replica: replicaName(),
+      // Whether an AI provider key is configured (#2030) — yes or no, never
+      // which key or provider. Rides the detail gate like `smtp`.
+      ai: isAiConfigured() ? 'ok' : 'not_configured',
       // Opt-in with ?leases=1 + proof of identity. Read from the JobLease rows
       // themselves, so there is no parallel record to drift.
       ...(wantsLeases && access.verified ? { leases: await readLeases() } : {}),
