@@ -142,7 +142,8 @@ Huni dışı iki uç: `LOST_950` (kaybedildi), `DISQUALIFIED_990` (uygun değil)
 (`src/lib/programTemplates.ts:546-570`):
 
 `LEAD_NEW` → `LEAD_CONTACTED` → `LEAD_QUALIFIED` → `TRIAL_ACTIVE` → `TRIAL_EXPIRED` →
-`DEAL_PROPOSAL` → `DEAL_NEGOTIATION` → `DEAL_WON` | `DEAL_LOST` (off-path, terminal)
+`DEAL_WON` | `DEAL_LOST` (off-path, terminal) — `DEAL_PROPOSAL`/`DEAL_NEGOTIATION` yeni
+org'ların preset'inden #2840 ile kaldırıldı (karar #2572): SaleVali'de teklif adımı yok.
 
 DEAL_WON sonrası müşteri durumu (aktif müşteri, fesih bildirimi, churn) preset'te yok;
 bu açık karar #2572'dedir.

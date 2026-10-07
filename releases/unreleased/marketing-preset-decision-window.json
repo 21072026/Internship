@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **MARKETING preset without a quote step** (#2840, decision #2572). `MARKETING_FUNNEL` for *new* organisations is `LEAD_NEW → LEAD_CONTACTED → LEAD_QUALIFIED → TRIAL_ACTIVE → TRIAL_EXPIRED → DEAL_WON | DEAL_LOST`: `DEAL_PROPOSAL` and `DEAL_NEGOTIATION` are gone (SaleVali has no proposal/negotiation step; the close follows the trial's decision window), and the `TRIAL_EXPIRED` service level is 7 days instead of 3. No backfill — `PipelineStage` rows are the tenant's (#747), so an existing organisation keeps its two stages until its admin deletes them. The demo-tenant mirror (`MARKETING_DEMO_STAGES`, the thirty accounts, the per-stage notes), `e2e/vertical-stage-preset.spec.ts`, the sample CSV fixture, `docs/marketing-import.md`, `docs/marketing-vertical/pipeline-record.md` and `salevali-domain.md` follow.",
+  "notes": {
+    "en": ["A new marketing organisation's funnel now runs Lead → Trial running → Trial expired → Won / Lost, without the proposal and negotiation columns, and an expired trial is flagged as waiting after seven days rather than three."],
+    "tr": ["Yeni bir pazarlama kuruluşunun hunisi artık Aday → Deneme sürüyor → Deneme süresi doldu → Kazanıldı / Kaybedildi olarak akıyor; teklif ve pazarlık sütunları kalktı, süresi dolan deneme üç yerine yedi gün sonra bekliyor olarak işaretleniyor."],
+    "de": ["Der Funnel einer neuen Marketing-Organisation läuft jetzt Lead → Testphase läuft → Testphase abgelaufen → Gewonnen / Verloren, ohne die Spalten Angebot und Verhandlung; eine abgelaufene Testphase gilt nach sieben statt drei Tagen als wartend."]
+  }
+}

@@ -118,10 +118,13 @@ marketing tenant those come from the `MARKETING_FUNNEL` preset
 (`src/lib/programTemplates.ts`):
 
 ```
-LEAD_NEW · LEAD_CONTACTED · LEAD_QUALIFIED · TRIAL_ACTIVE · TRIAL_EXPIRED · DEAL_PROPOSAL · DEAL_NEGOTIATION · DEAL_WON · DEAL_LOST
+LEAD_NEW · LEAD_CONTACTED · LEAD_QUALIFIED · TRIAL_ACTIVE · TRIAL_EXPIRED · DEAL_WON · DEAL_LOST
 ```
 
-(`src/lib/programTemplates.ts:551-570`; the two trial keys since #2518.) `DEAL_LOST` is the
+(`src/lib/programTemplates.ts`, `MARKETING_FUNNEL`; the two trial keys since #2518. `DEAL_PROPOSAL`
+and `DEAL_NEGOTIATION` were dropped from the preset for new organisations in #2840 — decision
+#2572 — so a file that still carries them is refused by a tenant provisioned after that, while
+an older tenant that kept the rows still accepts them.) `DEAL_LOST` is the
 one off-path stage. A row placed at `TRIAL_ACTIVE` is stamped with a trial window — see
 "What it writes" below. An organisation provisioned before #2518 may not have the trial
 rows yet (nothing backfills them); the error message lists the keys it really has, and

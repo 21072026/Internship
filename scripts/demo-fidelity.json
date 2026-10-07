@@ -139,9 +139,9 @@
       "model": "PipelineStage",
       "where": { "org": { "vertical": "MARKETING" } },
       "label": "PipelineStage(MARKETING)",
-      "minRows": 9,
-      "target": 9,
-      "screen": "the marketing funnel board — LEAD_NEW … DEAL_LOST from the shipped MARKETING_FUNNEL preset",
+      "minRows": 7,
+      "target": 7,
+      "screen": "the marketing funnel board — LEAD_NEW … DEAL_LOST from the shipped MARKETING_FUNNEL preset (7 since #2840: no proposal/negotiation stages)",
       "issue": "#2443"
     },
     {
@@ -166,9 +166,9 @@
       "model": "StatusChange",
       "where": { "relation": { "org": { "vertical": "MARKETING" } } },
       "label": "StatusChange(MARKETING)",
-      "minRows": 94,
-      "target": 94,
-      "screen": "stage aging + cohort conversion on a marketing tenant — back-dated history is what they are drawn from",
+      "minRows": 78,
+      "target": 78,
+      "screen": "stage aging + cohort conversion on a marketing tenant — back-dated history is what they are drawn from (78 moves since #2840: the walks are two stages shorter)",
       "issue": "#2443"
     },
     {

@@ -44,9 +44,10 @@ test('a new MARKETING org is provisioned with the marketing funnel, an INTERNSHI
     const mktStages = await prisma.pipelineStage.findMany({
       where: { orgId: mktId }, orderBy: { order: 'asc' }, select: { key: true, isTerminal: true, isOffPath: true },
     });
+    // No DEAL_PROPOSAL / DEAL_NEGOTIATION since #2840 (decision #2572): the
+    // product has no quote step, the close follows the trial's decision window.
     expect(mktStages.map((s) => s.key)).toEqual([
-      'LEAD_NEW', 'LEAD_CONTACTED', 'LEAD_QUALIFIED', 'TRIAL_ACTIVE', 'TRIAL_EXPIRED',
-      'DEAL_PROPOSAL', 'DEAL_NEGOTIATION', 'DEAL_WON', 'DEAL_LOST',
+      'LEAD_NEW', 'LEAD_CONTACTED', 'LEAD_QUALIFIED', 'TRIAL_ACTIVE', 'TRIAL_EXPIRED', 'DEAL_WON', 'DEAL_LOST',
     ]);
     // Won is a terminal on-path finish; Lost is the off-path exit.
     expect(mktStages.find((s) => s.key === 'DEAL_WON')).toMatchObject({ isTerminal: true, isOffPath: false });

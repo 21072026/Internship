@@ -160,8 +160,9 @@ export async function getAttentionItems(
 
     // A trial that has run out (#2418). The sweep in lib/jobs/trialReminders.ts
     // parks the record in TRIAL_EXPIRED and then stops: nothing else happens to
-    // it until a human turns it into a proposal or a loss, so it belongs in the
-    // queue its owner already reads rather than on a new board card. The key
+    // it until a human closes it as won or lost (#2572 — there is no proposal
+    // stage in between), so it belongs in the queue its owner already reads
+    // rather than on a new board card. The key
     // comes from the preset that ships it (lib/programTemplates.ts), never
     // written as a literal here; a tenant that renamed the LABEL keeps the key,
     // and a tenant without the stage simply has no relation sitting in it.
@@ -170,12 +171,11 @@ export async function getAttentionItems(
     // lib/stageClock.ts owns time-in-stage and the board already shows it. This
     // branch answers only "is this one waiting for a decision?".
     //
-    // Know what that board number currently says for an AUTOMATICALLY expired
-    // trial, though: the sweep writes an `AuditLog` row and no `StatusChange`
-    // (it has no `User` to put in the required FK), and `StatusChange` is the
-    // only thing the stage clock reads — so such a record shows the age of the
-    // whole trial rather than the age of the decision. #2527 fixes that at the
-    // source; nothing here should paper over it with a second calculation.
+    // That board number is right for an AUTOMATICALLY expired trial too: since
+    // #2527 the sweep writes the move as a `StatusChange` with `changedById:
+    // null` (the system actor) in the same transaction, and `StatusChange` is
+    // what the stage clock reads — so the record shows the age of the decision,
+    // not of the whole trial. Nothing here computes a second number.
     if (r.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY) reasons.push('trial_expired');
     // A running trial with no end date (#2553) is invisible to the reminder
     // ladder and the expiry sweep alike — nothing would ever happen to it. It

@@ -559,13 +559,16 @@ const MARKETING_FUNNEL: ProgramTemplate = {
       labels: { en: 'Trial running', tr: 'Deneme sürüyor', de: 'Testphase läuft' } },
     { key: TRIAL_EXPIRED_STAGE_KEY, order: 4, isTerminal: false, isOffPath: false, color: '#eab308',
       labels: { en: 'Trial expired', tr: 'Deneme süresi doldu', de: 'Testphase abgelaufen' } },
-    { key: 'DEAL_PROPOSAL', order: 5, isTerminal: false, isOffPath: false, color: '#f59e0b',
-      labels: { en: 'Proposal sent', tr: 'Teklif gönderildi', de: 'Angebot gesendet' } },
-    { key: 'DEAL_NEGOTIATION', order: 6, isTerminal: false, isOffPath: false, color: '#f97316',
-      labels: { en: 'Negotiation', tr: 'Pazarlık', de: 'Verhandlung' } },
-    { key: 'DEAL_WON', order: 7, isTerminal: true, isOffPath: false, color: '#16a34a',
+    // No proposal / negotiation stages between the trial and the close (#2572,
+    // decision 1, #2840): the product this funnel tracks has no quote step —
+    // the customer upgrades or does not, inside the decision window that
+    // TRIAL_EXPIRED is — so those two stages only ever made an account look
+    // "overdue" at a step it could never be at. Removed for NEW organizations
+    // only: PipelineStage rows belong to the tenant (#747), so an existing org
+    // keeps the two until its own admin deletes them.
+    { key: 'DEAL_WON', order: 5, isTerminal: true, isOffPath: false, color: '#16a34a',
       labels: { en: 'Won', tr: 'Kazanıldı', de: 'Gewonnen' } },
-    { key: 'DEAL_LOST', order: 8, isTerminal: true, isOffPath: true, color: '#6b7280',
+    { key: 'DEAL_LOST', order: 6, isTerminal: true, isOffPath: true, color: '#6b7280',
       labels: { en: 'Lost', tr: 'Kaybedildi', de: 'Verloren' } },
   ],
   // A marketing cadence in days: a fresh lead is contacted next-day, and a deal
@@ -582,13 +585,13 @@ const MARKETING_FUNNEL: ProgramTemplate = {
     // trial reminders. Two overlapping clocks on the same stage would nag the
     // owner twice about the same account, in different words, on different
     // days.
-    // TRIAL_EXPIRED is the opposite case: the trial is over, nothing is
-    // counting down any more, and the account is waiting for a human to decide
-    // whether it becomes a proposal or a loss. Three days is how long that
-    // decision may sit before it is genuinely overdue.
-    { stageKey: TRIAL_EXPIRED_STAGE_KEY, days: 3 },
-    { stageKey: 'DEAL_PROPOSAL', days: 5 },
-    { stageKey: 'DEAL_NEGOTIATION', days: 7 },
+    // TRIAL_EXPIRED is the opposite case: the free period is over and the
+    // account sits in its 30-day decision window (trialEndsAt + 30 days —
+    // derived in #2843) waiting for a human to make contact before it is won
+    // or lost. Seven days — the first week after expiry — is how long
+    // that contact may wait before it is genuinely overdue (#2572, decision 2):
+    // the old three read as "decide in three days" next to a thirty-day window.
+    { stageKey: TRIAL_EXPIRED_STAGE_KEY, days: 7 },
   ],
 };
 

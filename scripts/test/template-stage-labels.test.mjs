@@ -18,9 +18,12 @@ const { localizeResolvedStageLabels } = await import('../../src/lib/programTempl
 const row = (key, label, order = 0) => ({ key, label, order, isTerminal: false, isOffPath: false, color: null });
 
 test('an English-provisioned marketing stage reads back in Turkish and German', () => {
-  const stored = [row('LEAD_NEW', 'New lead', 0), row('DEAL_PROPOSAL', 'Proposal sent', 1), row('DEAL_LOST', 'Lost', 2)];
-  assert.deepEqual(localizeResolvedStageLabels(stored, 'tr').map((s) => s.label), ['Yeni aday', 'Teklif gönderildi', 'Kaybedildi']);
-  assert.deepEqual(localizeResolvedStageLabels(stored, 'de').map((s) => s.label), ['Neuer Lead', 'Angebot gesendet', 'Verloren']);
+  // TRIAL_EXPIRED rather than the old DEAL_PROPOSAL: the proposal stage left
+  // the preset in #2840, and a key the preset no longer curates reads back as
+  // typed — which the "kept verbatim" test below already covers.
+  const stored = [row('LEAD_NEW', 'New lead', 0), row('TRIAL_EXPIRED', 'Trial expired', 1), row('DEAL_LOST', 'Lost', 2)];
+  assert.deepEqual(localizeResolvedStageLabels(stored, 'tr').map((s) => s.label), ['Yeni aday', 'Deneme süresi doldu', 'Kaybedildi']);
+  assert.deepEqual(localizeResolvedStageLabels(stored, 'de').map((s) => s.label), ['Neuer Lead', 'Testphase abgelaufen', 'Verloren']);
 });
 
 test('a curated label stored in another locale, or blank, is localized too', () => {
@@ -43,7 +46,7 @@ test('canonical stages keep their existing localization', () => {
 test('a stage-change notification snapshot follows the reader, a typed label does not', async () => {
   const { renderNotification } = await import('../../src/lib/notificationText.ts');
   const t = { notifications: { events: { 'stage.changed': '{from} → {to}' }, generic: '?' }, interviewDeclineReasons: {} };
-  const n = (toLabel) => ({ type: 'stage.changed', params: { from: 'LEAD_NEW', to: 'DEAL_PROPOSAL', fromLabel: 'New lead', toLabel } });
-  assert.equal(renderNotification(n('Proposal sent'), t, 'tr'), 'Yeni aday → Teklif gönderildi');
+  const n = (toLabel) => ({ type: 'stage.changed', params: { from: 'LEAD_NEW', to: 'TRIAL_EXPIRED', fromLabel: 'New lead', toLabel } });
+  assert.equal(renderNotification(n('Trial expired'), t, 'tr'), 'Yeni aday → Deneme süresi doldu');
   assert.equal(renderNotification(n('Our offer'), t, 'tr'), 'Yeni aday → Our offer');
 });
