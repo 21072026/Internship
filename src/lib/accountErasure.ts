@@ -245,6 +245,10 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // Attachments first: once the message row is masked there is no way back to
     // its bytes, and `MessageAttachment` is reached only through the message.
     prisma.messageAttachment.deleteMany({ where: { message: { senderId: userId } } }),
+    // Safeguarding flags on their messages (#2056): the flag points at text that
+    // is emptied on the next line, and it names the person as its subject. An
+    // escalated case belongs in the institution's own case file, not here.
+    prisma.safeguardingFlag.deleteMany({ where: { message: { senderId: userId } } }),
     // `Message.senderId` has NO foreign key to `User` (see prisma/schema.prisma
     // — the model declares `relation`, `conversation`, `attachments`,
     // `hiddenFor` and `reactions`, but no `sender`), so a hard delete does not

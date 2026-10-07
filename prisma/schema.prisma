@@ -222,6 +222,7 @@ model Organization {
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
   agendaTemplates         AgendaTemplate[]
+  safeguardingFlags       SafeguardingFlag[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -605,6 +606,7 @@ model User {
   loginLinkTokens                   LoginLinkToken[]
   // Text-only practice interviews (#2051).
   practiceSessions                  PracticeSession[]             @relation("PracticeSessions")
+  safeguardingReviews               SafeguardingFlag[]            @relation("SafeguardingReviewer")
 
   // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
   // distinct, so a row whose orgId is still NULL (the default org, until the
@@ -893,13 +895,16 @@ model Message {
   // can never post the same reply twice. Null for messages written in-app.
   inboundMessageId     String?        @unique
 
-  relation     MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  conversation Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  attachments  MessageAttachment[]
+  relation          MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  conversation      Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  attachments       MessageAttachment[]
   // Per-user "delete for me" — hides the message only from these users' view.
-  hiddenFor    MessageHiddenFor[]
+  hiddenFor         MessageHiddenFor[]
   // Emoji reactions (👍❤️😂…) from thread participants.
-  reactions    MessageReaction[]
+  reactions         MessageReaction[]
+  // Safeguarding flags raised on this message (#2056). Detection never blocks
+  // the message; these rows are the admin review queue's record of it.
+  safeguardingFlags SafeguardingFlag[]
 
   @@index([conversationId])
   @@index([relationId])
@@ -5804,4 +5809,53 @@ model PracticeSession {
 
   @@index([userId, startedAt])
   @@index([orgId])
+}
+
+// ── Safeguarding (#2056) ─────────────────────────────────────────────────────
+// A message that shared a contact detail or hit an org's watch keyword. The
+// rule is src/lib/safeguarding.ts (pure, corpus-tested); the only writer is
+// src/lib/safeguardingScan.ts; the queue is /admin/safeguarding. Detection
+// NEVER blocks or holds the message — this row is a note for an admin, not a
+// gate on the participant's channel. docs/safeguarding.md has the whole story.
+
+enum SafeguardingFlagKind {
+  CONTACT_DETAIL
+  KEYWORD
+}
+
+enum SafeguardingOutcome {
+  // Looked at; nothing to do (a false positive, or harmless in context).
+  NO_ACTION
+  // Looked at and dealt with inside the programme (a word with the mentor…).
+  REVIEWED
+  // Handed on — to the safeguarding lead, the institution, the authorities.
+  ESCALATED
+}
+
+model SafeguardingFlag {
+  id           String               @id @default(cuid())
+  // Tenant data: the org of the message's SENDER, stamped at write time. In
+  // TENANT_MODELS (src/lib/orgContext.ts) and filtered by hand in every read.
+  orgId        String?
+  messageId    String
+  kind         SafeguardingFlagKind
+  // A MASKED contact detail ("01•• ••••••78") or the watch keyword as the admin
+  // configured it — never the full number or address: the message body is the
+  // record, and the retention sweep masks bodies, so a flag that kept the
+  // number would outlive it.
+  matchedTerm  String               @db.VarChar(191)
+  createdAt    DateTime             @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+  outcome      SafeguardingOutcome?
+
+  org        Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  message    Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reviewedBy User?         @relation("SafeguardingReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  // Re-scanning an edited message must not raise the same flag twice.
+  @@unique([messageId, kind, matchedTerm])
+  // The queue: one org's open flags, newest first.
+  @@index([orgId, reviewedAt, createdAt])
+  @@index([reviewedById])
 }

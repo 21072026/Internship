@@ -114,6 +114,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ApiKeyUsage',
   // A mentee's practice interview transcript (#2051).
   'PracticeSession',
+  // Safeguarding flags (#2056) — one org's review queue; stamped with the
+  // sender's org at write time.
+  'SafeguardingFlag',
   'MatchFeedback',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
