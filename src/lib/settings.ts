@@ -52,6 +52,20 @@ export const SETTING_DEFAULTS = {
   // 'admins' = required for ADMIN; 'admins_mentors' = required for ADMIN+MENTOR.
   // Users in scope are held at a 2FA-setup gate until they enable it.
   require2fa: 'off',
+  // Password policy (#1544, src/lib/passwordPolicyRule.ts): what a NEW password
+  // is judged by, per org, read by src/lib/password.ts for register, reset and
+  // account and handed to the forms by GET /api/auth/password-policy. These
+  // defaults ARE the rule the app always had; the minimum is clamped to >= 8
+  // on read, so no row can make the rule weaker than the code default.
+  passwordMinLength: '8',
+  passwordRequireUpper: 'true',
+  passwordRequireLower: 'true',
+  passwordRequireDigit: 'false',
+  passwordRequireSymbol: 'false',
+  // Screen new passwords against Have I Been Pwned (k-anonymity: five hex
+  // characters of the SHA-1 leave the box). Fails OPEN on an outage
+  // (src/lib/breachedPassword.ts); 'false' switches the lookup off.
+  breachedPasswordCheck: 'true',
   // Premium early-access window (#531): number of days a newly-hireable
   // (HIREABLE_600) candidate is visible in talent-pool search ONLY to companies
   // holding the EARLY_ACCESS entitlement, before opening to all subscribers.
