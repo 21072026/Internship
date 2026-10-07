@@ -508,6 +508,13 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   mirror (Node 20 on the server cannot import TS) — the unit test compares the two, change both in one
   commit. `npm run backfill:applications` (also on deploy) only ever adds rows; re-keying or deleting
   `CompanyInterest` is a drop-and-recreate under `db push` and is out of scope by design.
+  **`Application.stage` has ONE writer** (#1836): `moveApplicationStage()` in `src/lib/applicationStage.ts`,
+  a guarded `updateMany` with the expected stage in the WHERE plus exactly one `ApplicationEvent`, zero
+  rows → `409 stage_conflict`; `PATCH /api/applications/[id]/stage`, `POST /api/applications/bulk-stage`
+  (≤ 50 ids, honest `{ moved, skipped[] }`), the shortlist write-through in `/api/company/interests` and
+  the interview approval all go through it, and `visibleApplicationsWhere()` is the one "which rows may
+  this actor see" filter (not yours = 404, never a 403 that confirms the id). A hand-rolled
+  `prisma.application.update` of `stage` skips the event, the derived status and the race guard at once.
 - **Structured compensation on offers** ([`docs/offer-compensation.md`](docs/offer-compensation.md),
   #1851): money on `Offer` is integer **minor units** + ISO code (`baseAmountMinor`, `currency`,
   `basePeriod`…) — never a Float/Decimal, same rule as `ProgramCost`/`Placement`. The rules

@@ -10,6 +10,8 @@ import { companyInterestScopeKey } from '@/lib/companyInterests';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { notificationLink } from '@/lib/notificationLink';
 import { hasConsent } from '@/lib/consent';
+import { requireCapability } from '@/lib/capabilityGate';
+import { syncApplicationFromInterest } from '@/lib/applicationStage';
 
 const bodySchema = z.object({
   menteeId: z.string().min(1),
@@ -58,6 +60,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Placement write (#2364/#1836): a shortlist is the first step of a placement,
+  // and a requisition-scoped one writes the Application below.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   if (session.user.role !== 'COMPANY') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!session.user.companyId) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
   const companyId = session.user.companyId;
@@ -141,6 +147,28 @@ export async function POST(request: Request) {
     targetType: 'user',
     targetId: menteeId,
   });
+
+  // Write-through (#1836): a requisition-scoped interest IS an application —
+  // a shortlist creates it at SHORTLISTED, a pass rejects it, and the one
+  // mapping between the two vocabularies is applicationFromInterest(). The
+  // legacy, requisition-less interest stays what it was: a flag on a person.
+  if (requisitionId) {
+    const synced = await prisma.$transaction((tx) =>
+      syncApplicationFromInterest(tx, { interest: { requisitionId, menteeId, companyId, status, note: note ?? null }, orgId, actorId: session.user.id }),
+    );
+    if (synced?.moved) {
+      await logActivity({
+        action: 'application.stage.set',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        targetType: 'application',
+        targetId: synced.applicationId,
+        detail: `${synced.fromStage ?? 'new'} -> ${synced.toStage}; via=company.interest`,
+        request,
+        orgId,
+      });
+    }
+  }
 
   return NextResponse.json({ interest });
   });
