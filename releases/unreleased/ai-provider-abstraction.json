@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **One AI provider module, a task registry and real cost rows** (#2022). `src/lib/ai/tasks.ts` registers every AI task (the historic `scope` strings, audience, consent, model tier, input/output caps) and `runAiGated` only accepts a registered id. `src/lib/ai/provider.ts` is now the only importer of `@anthropic-ai/sdk`: `callModel()` applies the 60s timeout and the input cap centrally, `resolveModel()` routes per task (`AI_MODEL_<TASK_ID>` → `AI_MODEL_TIER_<TIER>` → `ANTHROPIC_SUMMARY_MODEL` → `ANTHROPIC_CV_MODEL` → default), and every `AiUsage` row records the model, both token counts, the list-price cost (`src/lib/ai/pricing.ts`, micro-dollars, `null` for an unpriced model) and the latency. Additive nullable columns; the deploy backfills `taskId` from `scope`. Every AI variable is documented in `.env.example`.",
+  "notes": {
+    "en": ["AI calls now record which model answered, the tokens used and what they cost, so an operator can answer \"what did AI cost us last month\" — and route each task to a different model from the environment, without a deploy."],
+    "tr": ["Yapay zekâ çağrıları artık hangi modelin yanıt verdiğini, kullanılan token'ları ve maliyeti kaydediyor; operatör \"geçen ay yapay zekâ bize ne kadara mal oldu\" sorusunu yanıtlayabiliyor ve her görevi deploy olmadan, ortam değişkeniyle farklı bir modele yönlendirebiliyor."],
+    "de": ["KI-Aufrufe halten jetzt fest, welches Modell geantwortet hat, wie viele Tokens verbraucht wurden und was das gekostet hat — der Betreiber kann „Was hat uns KI letzten Monat gekostet?“ beantworten und jede Aufgabe per Umgebungsvariable ohne Deploy auf ein anderes Modell leiten."]
+  }
+}

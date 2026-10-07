@@ -710,6 +710,7 @@ run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-activity-log-org.mjs || true
 run_tool node prisma/backfill-task-template-org.mjs || true
 run_tool node prisma/backfill-ai-usage-org.mjs || true
+run_tool node prisma/backfill-ai-usage-task.mjs || true
 run_tool node prisma/backfill-organization.mjs \
   || log "WARNING: org backfill FAILED (exit non-zero) — see the output above. It may be incomplete; do NOT enable MT_ENFORCE_ISOLATION until it runs green (#1557)."
 run_tool node scripts/backfill-requisitions.mjs || true

@@ -1,12 +1,13 @@
 import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
 import { hasConsent } from '@/lib/consent';
-import { isAiConfigured } from '@/lib/cvExtractAi';
 import { ambientOrgId } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
-import { callProvider, trackParseErrors } from '@/lib/ai/provider';
+import { callProvider, isAiConfigured, trackAiCall, usageOfFailure, type AiCallUsage } from '@/lib/ai/provider';
+import type { AiTaskId } from '@/lib/ai/tasks';
+import { estimateCostMicros } from '@/lib/ai/pricing';
 import type { ConsentType } from '@prisma/client';
 import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts';
 
@@ -88,8 +89,10 @@ export async function getAiQuota(
 }
 
 export async function runAiGated<T>(opts: {
-  // Feature identifier recorded per call, e.g. 'cv_extract'.
-  scope: string;
+  // The task's registry key (src/lib/ai/tasks.ts), recorded per call as
+  // `AiUsage.scope` AND `AiUsage.taskId`. A string outside the registry does
+  // not compile (#2022) — a typo used to open a new metering bucket silently.
+  scope: AiTaskId;
   // Whose consent gates the call (the person whose data is processed) — omit
   // only for features that process no personal data.
   consent?: { userId: string; type: ConsentType };
@@ -130,14 +133,32 @@ export async function runAiGated<T>(opts: {
 
   // One logical task is one metered call, however many attempts the retries
   // took (src/lib/ai/provider.ts). A failure is recorded, at no cost to the
-  // quota, and comes back as a typed denial — never a thrown 500.
-  const record = (outcome: 'ok' | 'parse_error' | 'provider_error') =>
+  // quota, and comes back as a typed denial — never a thrown 500. The row
+  // carries what the provider answered with (#2022): the model, both token
+  // counts, the list-price cost and the latency — null when the task never
+  // reached `callModel` (a stub in a test) or the model is not priced.
+  const record = (outcome: 'ok' | 'parse_error' | 'provider_error', usage: AiCallUsage | null) =>
     prisma.aiUsage
-      .create({ data: { scope: opts.scope, orgId, userId: opts.userId ?? null, companyId: opts.companyId ?? null, outcome } })
+      .create({
+        data: {
+          scope: opts.scope,
+          taskId: opts.scope,
+          orgId,
+          userId: opts.userId ?? null,
+          companyId: opts.companyId ?? null,
+          outcome,
+          provider: usage?.provider ?? null,
+          model: usage?.model ?? null,
+          inputTokens: usage && usage.completed > 0 ? usage.inputTokens : null,
+          outputTokens: usage && usage.completed > 0 ? usage.outputTokens : null,
+          costMicros: usage && usage.completed > 0 ? estimateCostMicros(usage.model, usage.inputTokens, usage.outputTokens) : null,
+          latencyMs: usage && usage.completed > 0 ? usage.latencyMs : null,
+        },
+      })
       .catch(() => {}); // metering must never break the call
   try {
-    const { result, parseError } = await trackParseErrors(() => callProvider(opts.call));
-    await record(parseError ? 'parse_error' : 'ok');
+    const { result, parseError, usage } = await trackAiCall(() => callProvider(opts.call));
+    await record(parseError ? 'parse_error' : 'ok', usage);
     // A fallback result (the reply was not what was asked for) is not worth
     // keeping: it would answer the next identical request with the fallback.
     if (!persist || parseError) return { ok: true, result };
@@ -160,7 +181,7 @@ export async function runAiGated<T>(opts: {
     return { ok: true, result, ...(stored ? { artifact: refOf(stored) } : {}) };
   } catch (error) {
     console.error('[ai] provider call failed', { scope: opts.scope, error: String(error) });
-    await record('provider_error');
+    await record('provider_error', usageOfFailure(error));
     return { ok: false, reason: 'provider_error' };
   }
 }

@@ -6,11 +6,14 @@
 // Gated upstream by explicit consent (B2) and only active when ANTHROPIC_API_KEY
 // is configured — otherwise isAiConfigured() is false and callers return a
 // clear "not configured" response. Nothing here runs without both.
+//
+// This module holds the prompt and the parser only. The client, the model, the
+// timeout and the input cap are the provider module's (src/lib/ai/provider.ts,
+// #2022), under the `cv_extract` registry entry (src/lib/ai/tasks.ts).
 
-import Anthropic from '@anthropic-ai/sdk';
 import { capSkills } from '@/lib/skills';
 import { z } from 'zod';
-import { safeParseModelJson } from '@/lib/ai/provider';
+import { callModel, isAiConfigured as providerConfigured, safeParseModelJson } from '@/lib/ai/provider';
 
 // The reply's shape, loosely: every field optional, so a partial answer still
 // yields what it has.
@@ -20,9 +23,6 @@ const CV_REPLY = z
     phone: z.string(), linkedinUrl: z.string(), githubUrl: z.string(), portfolioUrl: z.string(), skills: z.array(z.string()),
   })
   .partial();
-
-// A generation that has not answered in a minute is not going to.
-const AI_TIMEOUT_MS = 60_000;
 
 export interface AiCvSuggestions {
   fullName: string;
@@ -37,13 +37,11 @@ export interface AiCvSuggestions {
   skills: string[];
 }
 
-// Default to the current flagship; overridable for cost tuning by the operator.
-const MODEL = process.env.ANTHROPIC_CV_MODEL || 'claude-opus-4-8';
-const MAX_INPUT_CHARS = 24_000; // keep requests bounded regardless of CV size
-
-export function isAiConfigured(): boolean {
-  return !!process.env.ANTHROPIC_API_KEY;
-}
+/**
+ * @deprecated since #2022 — import it from '@/lib/ai/provider', where the
+ * credential lives. Re-exported here for one release so no caller breaks.
+ */
+export const isAiConfigured = providerConfigured;
 
 const SCHEMA = {
   type: 'object',
@@ -73,24 +71,10 @@ const SYSTEM = `You extract structured profile fields from a CV/résumé. Return
  * already verified consent and isAiConfigured(). Throws on API failure.
  */
 export async function aiExtractFromText(text: string): Promise<AiCvSuggestions> {
-  // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
-  // enough to hold a request handler open until the user gives up (#895).
-  // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
-  const trimmed = text.slice(0, MAX_INPUT_CHARS);
-
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
-    system: SYSTEM,
-    output_config: { format: { type: 'json_schema', schema: SCHEMA } },
-    messages: [{ role: 'user', content: `CV text:\n\n${trimmed}` }],
-  });
-
-  const block = res.content.find((b) => b.type === 'text');
+  const reply = await callModel({ task: 'cv_extract', system: SYSTEM, input: `CV text:\n\n${text}`, jsonSchema: SCHEMA });
   // A reply that is not the JSON asked for falls back to "no suggestions" and
   // is recorded as parse_error (#2024) — never a thrown 500.
-  const parsed: Partial<AiCvSuggestions> = safeParseModelJson(block && block.type === 'text' ? block.text : null, CV_REPLY, {});
+  const parsed: Partial<AiCvSuggestions> = safeParseModelJson(reply, CV_REPLY, {});
 
   return {
     fullName: parsed.fullName ?? '',
