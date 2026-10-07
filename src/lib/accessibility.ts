@@ -23,7 +23,7 @@ import { GITHUB_URL } from '@/components/landing/links';
  * "no critical or serious violations" sentence below and this date with it.
  * Adding a page to the scan or closing one of the limitations does too.
  */
-export const ACCESSIBILITY_STATEMENT_REVIEWED = '2026-09-03';
+export const ACCESSIBILITY_STATEMENT_REVIEWED = '2026-10-07';
 
 /** Working days we aim to answer an accessibility report within. */
 export const ACCESSIBILITY_RESPONSE_DAYS = 5;
@@ -94,7 +94,6 @@ export type AccessibilityEvidenceKey = (typeof ACCESSIBILITY_EVIDENCE)[number]['
 export const ACCESSIBILITY_LIMITATIONS: { key: string; issue: number | null }[] = [
   // The language and theme selects in account settings have no programmatic
   // name (src/components/AccountSettings.tsx) — axe `select-name`, critical.
-  { key: 'accountSelects', issue: 2041 },
   // The scan's mentee has no MentorshipRelation, so every relation-dependent
   // component on the portal renders empty and is measured as clean.
   { key: 'thinFixture', issue: 1412 },

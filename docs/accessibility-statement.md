@@ -1,7 +1,7 @@
 # Accessibility statement (canonical source)
 
 **Status:** partially conformant — WCAG 2.2 level AA
-**Last reviewed:** 2026-09-02
+**Last reviewed:** 2026-10-07
 **Published at:** `/accessibility` (EN/TR/DE) — `src/app/accessibility/page.tsx`
 
 This is the long form of the public conformance statement (#2035, story #2033). The
@@ -75,17 +75,17 @@ At the last review `docs/a11y-audit.md` read **critical: 0 · serious: 0 · mode
 · minor: 0** for the pages in scope.
 
 **What the method does not do:** automated rules cover only part of a standard. There
-is no external audit, no structured screen-reader test programme and no VPAT yet
-(§5).
+is no external audit and no structured screen-reader test programme (§5). The
+VPAT 2.5 (`docs/legal/vpat.md`, published at `/accessibility/vpat`) is generated from the
+same evidence and says, per criterion, which rows that gap leaves at *Partially Supports*.
 
 ## 5. Known limitations
 
 | Limitation | Tracked |
 | --- | --- |
-| The language and theme selects on `/account` have no accessible name (`select-name`, critical) — `src/components/AccountSettings.tsx` | [#2041](https://github.com/21072026/Internship/issues/2041) |
 | Six screens have never been scanned: `/messages`, `/notifications`, `/mentor/board`, `/admin/board`, `/admin/settings`, `/apply*` | [#2043](https://github.com/21072026/Internship/issues/2043) |
 | The scan's mentee has no `MentorshipRelation`, so the stage tracker, mentor card, goals and calendar never render and are measured as clean | [#1412](https://github.com/21072026/Internship/issues/1412) (story [#1400](https://github.com/21072026/Internship/issues/1400)) |
-| Self-assessment only — no external audit, no screen-reader test programme, no VPAT | [#2033](https://github.com/21072026/Internship/issues/2033) |
+| Self-assessment only — no external audit, no screen-reader test programme. The VPAT 2.5 exists since #2037 (`docs/legal/vpat.md`, `/accessibility/vpat`) and names the same gap row by row | [#2033](https://github.com/21072026/Internship/issues/2033), [#2864](https://github.com/21072026/Internship/issues/2864) |
 | No right-to-left support: `src/app/layout.tsx` sets `lang` but never `dir` | not yet scheduled |
 | Embedded third parties we do not control: the tawk.to live chat on the home page (marketing-cookie gated) and the Jitsi meeting room | not yet scheduled |
 

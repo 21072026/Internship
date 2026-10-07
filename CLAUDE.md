@@ -503,6 +503,15 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   `e2e/offers.spec.ts` goes red. The benchmark (`/api/admin/offers/benchmark`) never
   converts currencies and returns buckets under 5 offers as `suppressed: true` with `null`
   figures, never omitted.
+- **The VPAT is generated, never hand-edited** (`docs/legal/README.md` § VPAT, #2037): rows live
+  in `src/lib/vpat.ts`, the automated evidence in `e2e/a11y-baseline.json`; `npm run vpat:evidence`
+  writes `docs/legal/vpat.md`, `docs/legal/vpat-evidence.md` and `src/lib/vpatEvidence.generated.ts`,
+  and `scripts/test/vpat.test.mjs` fails on a stale copy, a `Supports` row without an evidence
+  path, a path that does not exist, or a `check:` claim whose quoted command no longer "returns
+  nothing" / "lists … only" (it executes them; a grep there must `--exclude=vpat.ts` or it finds its
+  own quotation). Whenever the a11y baseline changes, regenerate in the same PR and re-review the
+  affected rows. Markdown is not in the image, so the public copy is the
+  `/accessibility/vpat` page and the `/accessibility/vpat.md` route, both rendered from the data.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.
