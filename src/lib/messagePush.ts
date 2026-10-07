@@ -22,7 +22,7 @@ export async function sendNewMessagePush(
 ): Promise<void> {
   // No `pushConfigured()` gate any more (#2775): that is the WEB channel's
   // switch, and native push needs no configuration. A recipient with neither a
-  // subscription nor an app install costs two indexed reads.
+  // subscription nor an app install costs a few indexed reads by userId.
   try {
     const recipient = await prisma.user.findUnique({
       where: { id: recipientId },
