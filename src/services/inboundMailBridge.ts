@@ -57,6 +57,24 @@ function headerText(headerLines: readonly { key: string; line: string }[], key: 
   return headerLines.filter((h) => h.key.toLowerCase() === key).map((h) => h.line).join(' ');
 }
 
+// A customer reply forwarded AS AN ATTACHMENT (Outlook's "forward as
+// attachment", #2815): the attached message's own From/Date/Subject/Message-ID.
+// Only those four fields leave this function — never its body.
+async function forwardedAttachment(
+  attachments: readonly { contentType: string; content: Buffer }[] | undefined,
+): Promise<{ from: string; date: string | null; subject: string | null; messageId: string | null } | null> {
+  const att = attachments?.find((a) => a.contentType.toLowerCase() === 'message/rfc822');
+  if (!att) return null;
+  try {
+    const inner = await simpleParser(att.content);
+    const from = inner.from?.value?.[0]?.address;
+    if (!from) return null;
+    return { from, date: inner.date ? inner.date.toISOString() : null, subject: inner.subject || null, messageId: inner.messageId || null };
+  } catch {
+    return null;
+  }
+}
+
 export type PollSummary = { fetched: number; routed: number; skipped: number; failed: number };
 
 // Drain one batch. Safe to call concurrently-ish: a message is only flagged
@@ -109,6 +127,7 @@ export async function pollInboundMailbox(): Promise<PollSummary> {
             cc: headerText(mail.headerLines, 'cc'),
             subject: mail.subject || null,
             date: mail.date ? mail.date.toISOString() : null,
+            forwarded: await forwardedAttachment(mail.attachments),
           });
 
           if (result.ok) {

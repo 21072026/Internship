@@ -13,6 +13,7 @@ const {
   addressesIn,
   clipSubject,
   crmBccEnabledFor,
+  crmBccInboundNotes,
   crmBccNotes,
   crmBccPayload,
   customerAddresses,
@@ -22,7 +23,11 @@ const {
   mailDate,
   nextCrmBccVersion,
   parseCrmBccPayload,
+  isForwardSubject,
+  parseForwardedDate,
+  parseForwardedHeaders,
   pickRelation,
+  stripForwardPrefix,
 } = await import('../../src/lib/crmBccRule.ts');
 
 test('the crm+ token is found in any recipient header, not inside a longer local part', () => {
@@ -118,4 +123,69 @@ test('on by default for MARKETING only; an explicit choice wins either way', () 
   assert.equal(crmBccEnabledFor('true', 'INTERNSHIP'), true);
   assert.equal(crmBccEnabledFor('false', 'MARKETING'), false);
   assert.equal(crmBccEnabledFor('garbage', 'MARKETING'), true);
+});
+
+// ── Forwarded customer replies (#2815) — a corpus of real client formats ──
+
+const FORWARDS = {
+  gmail: {
+    subject: 'Fwd: Re: Angebot Q4',
+    text: 'FYI\n\n---------- Forwarded message ---------\nFrom: Hans Kunde <hans@shop.de>\nDate: Mon, Oct 5, 2026 at 9:00 AM\nSubject: Re: Angebot Q4\nTo: Rep <rep@vendor.de>\n\nPasst, bitte Vertrag schicken.',
+    want: { email: 'hans@shop.de', subject: 'Re: Angebot Q4', dateParses: true },
+  },
+  outlookDe: {
+    subject: 'WG: Angebot Q4',
+    text: 'Siehe unten\r\n\r\n________________________________\r\nVon: Hans Kunde <hans@shop.de>\r\nGesendet: Montag, 5. Oktober 2026 09:00\r\nAn: Rep <rep@vendor.de>\r\nBetreff: AW: Angebot Q4\r\n\r\nPasst.',
+    want: { email: 'hans@shop.de', subject: 'AW: Angebot Q4', dateParses: false },
+  },
+  outlookEnBold: {
+    subject: 'FW: Offer',
+    text: '\n*From:* Hans Kunde [mailto:hans@shop.de]\n*Sent:* Monday, October 5, 2026 9:00 AM\n*To:* rep@vendor.de\n*Subject:* RE: Offer\n\nok',
+    want: { email: 'hans@shop.de', subject: 'RE: Offer', dateParses: true },
+  },
+  appleMail: {
+    subject: 'Fwd: Offer',
+    text: 'Begin forwarded message:\n\n> From: Hans Kunde <hans@shop.de>\n> Subject: Re: Offer\n> Date: 5 October 2026 at 09:00:00 CEST\n> To: rep@vendor.de\n\n> ok',
+    want: { email: 'hans@shop.de', subject: 'Re: Offer', dateParses: false },
+  },
+  outlookTr: {
+    subject: 'İLT: Teklif',
+    text: '-----Orijinal İleti-----\nKimden: Hans Kunde <hans@shop.de>\nGönderildi: 5 Ekim 2026 Pazartesi 09:00\nKime: rep@vendor.de\nKonu: YNT: Teklif\n\ntamam',
+    want: { email: 'hans@shop.de', subject: 'YNT: Teklif', dateParses: false },
+  },
+};
+
+for (const [name, f] of Object.entries(FORWARDS)) {
+  test(`forwarded header block is read: ${name}`, () => {
+    const got = parseForwardedHeaders(f.text, f.subject);
+    assert.ok(got, 'a forward was found');
+    assert.equal(addressesIn(got.from)[0], f.want.email);
+    assert.equal(got.subject, f.want.subject);
+    assert.equal(parseForwardedDate(got.date) !== null, f.want.dateParses);
+  });
+}
+
+test('a plain mail, or a quoted From: in an ordinary reply, is not a forward', () => {
+  assert.equal(parseForwardedHeaders('Hallo,\nwie besprochen.\nGruß', 'Angebot'), null);
+  assert.equal(parseForwardedHeaders('From: hans@shop.de\nhi', 'Angebot'), null);
+  assert.equal(parseForwardedHeaders('', 'Fwd: x'), null);
+  assert.equal(parseForwardedHeaders('---------- Forwarded message ---------\nFrom: nobody\n', 'Fwd: x'), null);
+});
+
+test('forward subjects and their prefixes', () => {
+  for (const s of ['Fwd: x', 'FW: x', 'WG: x', 'İlt: x', 'ilt: x', 'TR: x']) assert.equal(isForwardSubject(s), true, s);
+  assert.equal(isForwardSubject('Re: x'), false);
+  assert.equal(isForwardSubject('Forwarding plan'), false);
+  assert.equal(stripForwardPrefix('Fwd: Re: WG: AW: Angebot'), 'Angebot');
+  assert.equal(stripForwardPrefix(null), '');
+});
+
+test('Gmail\'s "at" date form parses; nonsense does not', () => {
+  assert.equal(parseForwardedDate('Mon, Oct 5, 2026 at 9:00 AM').getFullYear(), 2026);
+  assert.equal(parseForwardedDate('gestern'), null);
+  assert.equal(parseForwardedDate(null), null);
+});
+
+test('inbound notes name the customer only', () => {
+  assert.equal(crmBccInboundNotes('hans@shop.de'), 'BCC ← hans@shop.de');
 });

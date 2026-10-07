@@ -76,7 +76,8 @@ eşleşmesi de tutmaz.
 ## Açık sorular — kapandı
 
 1. INTERNSHIP: aynı kod, varsayılan **kapalı**, org ayarıyla açılır (`crmBccEnabled`).
-2. Gelen yanıtlar (müşteri → satışçı, satışçının CRM adresine yönlendirmesiyle): ayrı task.
+2. Gelen yanıtlar (müşteri → satışçı): satışçı yanıtı CRM adresine **yönlendirir** — uygulandı
+   (#2815, aşağıda § Yönlendirilen yanıtlar).
 
 ## Uygulama (#2809)
 
@@ -88,7 +89,7 @@ eşleşmesi de tutmaz.
 | Tekrar koruması | `InteractionLog.sourceRef` (`bcc:<sha256(Message-ID)>`, Message-ID yoksa gönderen+tarih+konu+alıcılar) + `@@unique([relationId, sourceRef])` |
 | Ayarlar | `crmBccEnabled` (`''` = vertical varsayılanı), `crmBccVersion` (döndürme = +1) |
 | Admin ekranı | `/admin/settings` → "Gönderilen e-postaları BCC ile kaydet" (`/api/admin/crm-bcc`: göster, kopyala, yeni adres, aç/kapat, varsayılana dön) |
-| Gizlilik metni | `privacy.purposesBody` (MARKETING overlay + temel metin), `PRIVACY_POLICY_VERSION = 2026-10-06` |
+| Gizlilik metni | `privacy.purposesBody` (MARKETING overlay + temel metin), `PRIVACY_POLICY_VERSION = 2026-10-07` |
 | E2E | `e2e/crm-bcc.spec.ts` |
 
 Notlar:
@@ -100,3 +101,23 @@ Notlar:
 - `INBOUND_EMAIL_DOMAIN` tanımsız bir ortamda adres gösterilemez; kart bunu söyler.
 - Gönderen kontrolü: `findUsersInWorld` ile org'un dünyasında arama, sonra org eşleşmesi (NULL
   `orgId` = varsayılan org kuralı); yalnız aktif `ADMIN`/`MENTOR`.
+
+## Yönlendirilen yanıtlar (#2815)
+
+Müşterinin cevabı satışçının posta kutusuna gelir; satışçı onu aynı `crm+` adresine **yönlendirir**.
+
+- Aynı iki şart: imzalı adres + gönderen (yönlendiren) o org'un aktif personeli.
+- Asıl gönderen, tarih ve konu şuradan okunur:
+  - ek olarak iletilmiş mesajın (`message/rfc822`, Outlook "Ek olarak ilet") kendi başlıkları —
+    köprü (`forwardedAttachment` in `src/services/inboundMailBridge.ts`) yalnız bu dört alanı çıkarır;
+  - yoksa satır içi yönlendirmenin başlık bloğu (`parseForwardedHeaders` in
+    `src/lib/crmBccRule.ts`): Gmail, Outlook EN/DE/TR (kalın `*From:*` dahil), Apple Mail
+    (`> ` önekli). Korpus `scripts/test/crm-bcc.test.mjs`'te.
+- **Gövde yalnız bellekte okunur**, yalnız bu üç alanı bulmak için; hiçbir parçası yazılmaz.
+- Asıl gönderen bir müşteri adresiyse (personel/CRM adresi değilse) kayıt **gelen** olarak düşer:
+  `notes = "BCC ← <adres>"`, `date` = asıl mailin tarihi (okunamazsa yönlendirmenin tarihi),
+  `subject` = asıl konu (yoksa yönlendirme konusunun `Fwd:`/`WG:`/`İlt:` önekleri atılmış hâli).
+- Tekrar koruması: asıl mailin Message-ID'si (ekli iletide) ya da gönderen + tarih + konu —
+  aynı yanıtı iki kez yönlendirmek tek kayıt.
+- Yerelleştirilmiş uzun tarih ("Montag, 5. Oktober 2026 09:00") okunmaz; o zaman yönlendirmenin
+  kendi tarihi kullanılır — bilinçli: yanlış güne yazmaktan iyidir.

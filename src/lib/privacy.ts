@@ -24,7 +24,9 @@
 // 2026-10-06: the purposes section names BCC-to-CRM (#2809) — a staff e-mail
 // copied to the org's CRM address is logged with date, subject and recipient
 // address only, never its content or attachments.
-export const PRIVACY_POLICY_VERSION = '2026-10-06';
+// 2026-10-07: the same sentence covers a customer reply that staff FORWARD to
+// that address (#2815) — logged with its date, subject and sender address.
+export const PRIVACY_POLICY_VERSION = '2026-10-07';
 
 // Version of the product-news opt-in WORDING on the marketing demo form
 // (`companyInquiry.marketingOptIn` in the dictionaries, #2569). Separate from
