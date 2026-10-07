@@ -428,6 +428,16 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   form's DOI mail is capped at one per address per UTC day (`ContactConfirmationMailCap`, a
   primary-key insert). No advertising mail to account contacts exists yet — the first one must
   call `canSendMarketingEmail()` per recipient.
+- **One meeting link resolver, one link check** (`docs/video-calls-jaas.md` § Bring your own
+  link, #2007): every meeting-creation path gets its room from `resolveMeetingLink()`
+  (`src/lib/meetingRoom.ts`) — pasted link → the organiser's saved `personalMeetingUrl` (under
+  `Organization.conferencingPolicy` `PREFER_PERSONAL` / `REQUIRE_EXTERNAL`) → a room of ours,
+  refused under `REQUIRE_EXTERNAL`; the rule itself is dependency-free in
+  `src/lib/conferencingRule.ts`. Every link a person types (a `meetLink`, a series `fixedLink`,
+  the personal room) goes through `checkPastedMeetingLink()` — https, no credentials, never a
+  served host, ≤ 191 chars — never a bare `z.string().url()`. `BUILTIN` stays the default and
+  ignores saved rooms. Don't widen `EMBEDDABLE_MEETING_HOSTS` for a provider link; the UI
+  offers "Open in <provider>" (`meetingProviderName()`) instead.
 - **Single-owner background work** (`src/lib/jobs/lease.ts`, #1701): anything that
   must run **once per environment** rather than once per process takes a `JobLease`
   — one row per lease name, a TTL, and a takeover by conditional `UPDATE`. Today

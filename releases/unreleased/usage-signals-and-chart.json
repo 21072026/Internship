@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Product-usage signals and the account usage chart** (#2449, #2448). The rule is `src/lib/usageRule.ts` (pure, `scripts/test/usage-rule.test.mjs`), the queries `src/lib/usageSignals.ts`. The attention queue gains `usage_drop` (the last half of a `usageBaselineDays` window — default 60 — at least `usageDropThresholdPct`, default 40 %, below the half before it) and `trial_inactive` (a `TRIAL_ACTIVE` record with no usage at all `trialActivationDays`, default 7, after `trialStartedAt`); both are in `SALES_ATTENTION_REASONS`, only show and never move a stage. Its footnote counts the caller's accounts left out for too short a history, the org's dropping accounts with no active owner, and says when no usage feed has delivered anything yet. The account page (`/admin/companies/[id]`, `/sales/accounts/[id]`) charts the last 90 days of `CompanyUsage` in the house CSS-bar style (`UsageSparkline`), with a recorded zero and a missing day drawn and summarised differently. Both stay dark until the SaleVali usage feed (#2447) writes rows.",
+  "notes": {
+    "en": ["Once product usage flows in, accounts whose usage drops and trials nobody has started using show up in your attention queue, and each account page charts its last 90 days."],
+    "tr": ["Ürün kullanım verisi gelmeye başladığında, kullanımı düşen hesaplar ve kimsenin kullanmaya başlamadığı denemeler dikkat kuyruğunuzda görünür; her hesap sayfası son 90 günü grafikle gösterir."],
+    "de": ["Sobald Nutzungsdaten eintreffen, erscheinen Accounts mit sinkender Nutzung und ungenutzte Testphasen in Ihrer Aufmerksamkeitsliste, und jede Account-Seite zeigt die letzten 90 Tage als Diagramm."]
+  }
+}

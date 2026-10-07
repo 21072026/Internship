@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { isAiConfigured } from '@/lib/cvExtractAi';
+import { isAiConfigured } from '@/lib/ai/provider';
 import { aiInterviewPrep } from '@/lib/aiInterviewPrep';
 import { runAiGated } from '@/lib/aiGate';
 import { withTenantScope } from '@/lib/orgContext';

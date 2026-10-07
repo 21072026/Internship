@@ -151,6 +151,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         convertToMenteeConfirm: '{name} will be signed out of every device and becomes a lead at their next sign-in. Their existing records are kept.',
         stateNoLoginHint: 'A record created by a rep or an import. It has no password, so nobody can sign in as it.',
       },
+      // The SSO role-mapping card (#2839): its hints named the enum (MENTEE,
+      // ADMIN), which the leak ratchet strips as a code — so nobody dressed them.
+      organizations: {
+        ssoRoleMappingsHint: 'A user whose claim contains the value gets that role. The highest priority wins; a tie gives the lower role. No match: lead. Admin cannot be mapped yet.',
+        ssoRoleNone: 'No mappings yet — every SSO user starts as a lead.',
+        ssoRoleSyncHint: 'Off: an existing user keeps the role they have. On: their role follows the mapping at each sign-in (never for an admin, and a login that matches nothing changes nothing).',
+      },
       candidateDetail: {
         mentorship: 'Owner',
         notAssigned: 'No rep owns this lead yet',
@@ -749,6 +756,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         convertToMenteeConfirm: '{name} tüm cihazlardan çıkış yaptırılır ve bir sonraki girişinde müşteri adayı olur. Mevcut kayıtları korunur.',
         stateNoLoginHint: 'Bir temsilci veya içe aktarma tarafından oluşturulmuş kayıt. Parolası yok, kimse bu hesapla giriş yapamaz.',
       },
+      // The SSO role-mapping card (#2839), see the EN block.
+      organizations: {
+        ssoRoleMappingsHint: 'Claim\'i bu değeri içeren kullanıcı o rolü alır. En yüksek öncelik kazanır; eşitlikte düşük rol verilir. Eşleşme yoksa: müşteri adayı. Yönetici henüz eşlenemez.',
+        ssoRoleNone: 'Henüz eşleme yok — her SSO kullanıcısı müşteri adayı olarak başlar.',
+        ssoRoleSyncHint: 'Kapalı: mevcut kullanıcı rolünü korur. Açık: rolü her girişte eşlemeyi izler (yönetici için asla; hiçbir şeyle eşleşmeyen giriş bir şey değiştirmez).',
+      },
       candidateDetail: {
         mentorship: 'Sorumlu',
         notAssigned: 'Bu müşteri adayı henüz bir temsilciye atanmadı',
@@ -1212,6 +1225,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         convertToMentorConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung Vertriebsmitarbeiter. Bestehende Datensätze bleiben erhalten.',
         convertToMenteeConfirm: '{name} wird auf allen Geräten abgemeldet und ist bei der nächsten Anmeldung ein Lead. Bestehende Datensätze bleiben erhalten.',
         stateNoLoginHint: 'Ein von einem Vertriebsmitarbeiter oder Import angelegter Datensatz. Ohne Passwort kann sich niemand damit anmelden.',
+      },
+      // The SSO role-mapping card (#2839), see the EN block.
+      organizations: {
+        ssoRoleMappingsHint: 'Wer den Wert im Claim hat, erhält die Rolle. Die höchste Priorität gewinnt; bei Gleichstand die niedrigere Rolle. Ohne Treffer: Lead. Admin kann noch nicht zugeordnet werden.',
+        ssoRoleNone: 'Noch keine Zuordnung — jeder SSO-Nutzer startet als Lead.',
+        ssoRoleSyncHint: 'Aus: Bestehende Nutzer behalten ihre Rolle. An: Die Rolle folgt bei jeder Anmeldung der Zuordnung (nie für einen Admin; eine Anmeldung ohne Treffer ändert nichts).',
       },
       candidateDetail: {
         mentorship: 'Zuständig',

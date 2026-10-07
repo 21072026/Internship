@@ -240,6 +240,15 @@ export const SETTING_DEFAULTS = {
   // The address's version: it is signed into the token, so bumping it (the
   // admin's "new address" button) makes the old address dead at once.
   crmBccVersion: '1',
+  // Usage signals on the attention queue (#2449, src/lib/usageRule.ts):
+  // `usage_drop` when the last half of the baseline is this many percent below
+  // the half before it; an account whose usage history is shorter than the
+  // baseline is left out and counted. `trial_inactive` when a trial has had no
+  // usage at all this many days in. Read only while a usage feed has written
+  // rows for the org; parsed by usageSignalSettings(), which falls back per field.
+  usageDropThresholdPct: '40',
+  usageBaselineDays: '60',
+  trialActivationDays: '7',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

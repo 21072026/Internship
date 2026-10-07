@@ -79,7 +79,7 @@ export default async function SalesDashboard() {
         <p className="text-gray-500 mt-1">{s.dashboard.subtitle}</p>
       </div>
 
-      <MentorAttentionQueue items={attention.items} t={t} hrefBase="/sales/leads" />
+      <MentorAttentionQueue items={attention.items} usage={attention.usage} t={t} hrefBase="/sales/leads" />
 
       {targetView && <SalesTargetCards view={targetView} t={t} viewerId={session.user.id} />}
 

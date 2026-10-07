@@ -12,6 +12,7 @@ import { locales, type Locale } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPlans';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
+import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
 
 interface Organization {
   id: string;
@@ -745,6 +746,10 @@ export default function AdminOrganizationsPage() {
           {ssoOrgId && <SsoRoleMappings key={ssoOrgId} orgId={ssoOrgId} locked={ssoLocked} />}
         </Card>
       )}
+
+      {/* Which video room this tenant's meetings get (#2007). Its own card and
+          its own route: an org admin sets it for their own tenant, no plan gate. */}
+      {orgs.length > 0 && <ConferencingPolicyCard orgs={orgs.map((o) => ({ id: o.id, name: o.name }))} />}
 
       {!loading && orgs.length > 0 && (
         <div className="flex items-center mb-4">

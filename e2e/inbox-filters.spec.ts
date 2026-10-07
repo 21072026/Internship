@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { cleanupMenteeWithRelation, prisma, seedMenteeWithRelation, type SeededRelation } from './helpers/db';
-import { signInAsFreshUser, signInViaApi } from './helpers/auth';
+import { gotoSettled, settleStreamedSuspense, signInAsFreshUser, signInViaApi } from './helpers/auth';
 import { sendUnreadMessageDigests } from '@/services/emailService';
 
 // Per-viewer inbox state (#1609): pin, archive, mute — and what a mute
@@ -72,7 +72,7 @@ test('the state route writes only your own row, in a thread that opens for you',
 
 test('pin and archive from the inbox, and both survive a reload', { tag: '@smoke' }, async ({ page }) => {
   await signInAsFreshUser(page, pair.menteeEmail, PASSWORD, '/portal');
-  await page.goto('/messages');
+  await gotoSettled(page, '/messages');
   const row = page.getByTestId(`inbox-thread-${conversationId}`);
   await expect(row).toBeVisible();
 
@@ -80,24 +80,29 @@ test('pin and archive from the inbox, and both survive a reload', { tag: '@smoke
   await page.getByTestId('thread-state-pin').click();
   await expect(row.getByTestId('thread-pinned')).toBeVisible();
   await page.reload();
+  await settleStreamedSuspense(page);
   await expect(page.getByTestId(`inbox-thread-${conversationId}`).getByTestId('thread-pinned')).toBeVisible();
   await page.getByTestId('inbox-filter-pinned').click();
+  await settleStreamedSuspense(page);
   await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toBeVisible();
 
   await page.getByTestId('inbox-filter-all').click();
+  await settleStreamedSuspense(page);
   await page.getByTestId(`thread-state-menu-${conversationId}`).click();
   await page.getByTestId('thread-state-archive').click();
   await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toHaveCount(0);
   await page.getByTestId('inbox-filter-archived').click();
   await expect(page).toHaveURL(/filter=archived/);
+  await settleStreamedSuspense(page);
   await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toBeVisible();
   await page.reload();
+  await settleStreamedSuspense(page);
   await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toBeVisible();
 
   // Someone writing into an archived thread brings it back to the main list.
   const sent = await mentor.post('/api/messages', { data: { conversationId, body: 'Are you still there?' } });
   expect(sent.status()).toBe(201);
-  await page.goto('/messages');
+  await gotoSettled(page, '/messages');
   await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toBeVisible();
 });
 
