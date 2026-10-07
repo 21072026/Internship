@@ -341,6 +341,7 @@ export default function MenteeDetailPage() {
           relationId={relation.id}
           nextActionAt={relation.nextActionAt}
           nextActionNote={relation.nextActionNote}
+          pipelineStatus={relation.pipelineStatus}
           onSaved={fetchRelation}
         />
       </div>

@@ -4426,7 +4426,7 @@ const en = {
     title: 'Follow-up',
     date: 'Follow-up date',
     note: 'Next step',
-    notePlaceholder: 'e.g. Call about pricing',
+    notePlaceholder: 'e.g. Ask for the updated CV',
     save: 'Save follow-up',
     clear: 'Clear',
     saved: 'Follow-up saved',
@@ -4437,6 +4437,13 @@ const en = {
     overdue: 'Overdue',
     alsoUpdate: 'Also set the next follow-up',
     chip: 'Follow-up {date}',
+    // Who reads the note (#2875): the owner and the admins — the mentee never
+    // does (stripNextActionFor), and the owner is reminded by e-mail on the day.
+    visibility: 'Only the mentor who owns this record and the admins see this note; the mentee never does. On the day, the owner gets one reminder.',
+    suggestionsLabel: 'Common next steps at this stage',
+    aiButton: 'Suggest with AI',
+    aiHint: 'Three suggestions from the interaction log and the stage (uses one AI credit). Pick one, edit it, save.',
+    aiEmpty: 'No interactions logged yet — add one first, or pick a step above.',
   },
   // The trial end on a funnel record (#2553): shown on the record and the board
   // card, set or extended by the owner or an admin.
@@ -11681,7 +11688,7 @@ const tr: Dict = {
     title: 'Takip',
     date: 'Takip tarihi',
     note: 'Sonraki adım',
-    notePlaceholder: 'örn. Fiyat için ara',
+    notePlaceholder: 'örn. Güncel CV’yi iste',
     save: 'Takibi kaydet',
     clear: 'Temizle',
     saved: 'Takip kaydedildi',
@@ -11692,6 +11699,11 @@ const tr: Dict = {
     overdue: 'Gecikti',
     alsoUpdate: 'Sonraki takibi de ayarla',
     chip: 'Takip {date}',
+    visibility: 'Bu notu yalnızca kaydın sahibi olan mentor ve yöneticiler görür; mentee asla görmez. Takip günü kaydın sahibine bir hatırlatma gider.',
+    suggestionsLabel: 'Bu aşamada sık görülen adımlar',
+    aiButton: 'AI ile öner',
+    aiHint: 'Etkileşim kaydı ve aşamadan üç öneri (bir AI kredisi kullanır). Birini seç, düzenle, kaydet.',
+    aiEmpty: 'Henüz etkileşim kaydı yok — önce bir etkileşim ekle ya da yukarıdaki adımlardan birini seç.',
   },
   // A lost customer came back (#2842).
   winBack: {
@@ -18888,7 +18900,7 @@ const de: Dict = {
     title: 'Wiedervorlage',
     date: 'Wiedervorlage am',
     note: 'Nächster Schritt',
-    notePlaceholder: 'z. B. Wegen Preisen anrufen',
+    notePlaceholder: 'z. B. Aktuellen Lebenslauf anfordern',
     save: 'Wiedervorlage speichern',
     clear: 'Entfernen',
     saved: 'Wiedervorlage gespeichert',
@@ -18899,6 +18911,11 @@ const de: Dict = {
     overdue: 'Überfällig',
     alsoUpdate: 'Auch die nächste Wiedervorlage setzen',
     chip: 'Wiedervorlage {date}',
+    visibility: 'Diese Notiz sehen nur der zuständige Mentor und die Admins; der Mentee nie. Am Tag der Wiedervorlage bekommt der Zuständige eine Erinnerung.',
+    suggestionsLabel: 'Übliche nächste Schritte in dieser Phase',
+    aiButton: 'Mit KI vorschlagen',
+    aiHint: 'Drei Vorschläge aus dem Interaktionsprotokoll und der Phase (verbraucht ein KI-Guthaben). Einen wählen, anpassen, speichern.',
+    aiEmpty: 'Noch keine Interaktion protokolliert — zuerst eine anlegen oder oben einen Schritt wählen.',
   },
   // A lost customer came back (#2842).
   winBack: {

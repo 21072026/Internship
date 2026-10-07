@@ -50,6 +50,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The follow-up panel (#2563) in the rep's words (#2875): the sales
+      // example the base dictionary used to carry, and who reads the note.
+      followUp: {
+        notePlaceholder: 'e.g. Call about pricing',
+        visibility: 'Only the owner of this record and the admins see this note; the contact never does. On the day, the owner gets one reminder.',
+        aiHint: 'Three suggestions from the activity log and the stage (uses one AI credit). Pick one, edit it, save.',
+        aiEmpty: 'No activity logged yet — add one first.',
+      },
       // The ROI screen's donated-time inputs (#1895), in the rep wording.
       roi: {
         screen: {
@@ -666,6 +674,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      // Takip paneli (#2563) temsilci diliyle (#2875): temel sözlüğün eskiden
+      // taşıdığı satış örneği ve notu kimin okuduğu.
+      followUp: {
+        notePlaceholder: 'örn. Fiyat için ara',
+        visibility: 'Bu notu yalnızca kaydın sahibi ve yöneticiler görür; müşteri adayı asla görmez. Takip günü kaydın sahibine bir hatırlatma gider.',
+        aiHint: 'Aktivite kaydı ve aşamadan üç öneri (bir AI kredisi kullanır). Birini seç, düzenle, kaydet.',
+        aiEmpty: 'Henüz aktivite kaydı yok — önce bir aktivite ekle.',
+      },
       // ROI ekranının gönüllü zaman alanları (#1895), temsilci diliyle.
       roi: {
         screen: {
@@ -1139,6 +1155,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      // Die Wiedervorlage (#2563) im Vertriebs-Wortlaut (#2875): das
+      // Verkaufsbeispiel, das das Basiswörterbuch früher trug, und wer die
+      // Notiz liest.
+      followUp: {
+        notePlaceholder: 'z. B. Wegen Preisen anrufen',
+        visibility: 'Diese Notiz sehen nur der Zuständige dieses Datensatzes und die Admins; der Kontakt nie. Am Tag der Wiedervorlage bekommt der Zuständige eine Erinnerung.',
+        aiHint: 'Drei Vorschläge aus dem Aktivitätsprotokoll und der Phase (verbraucht ein KI-Guthaben). Einen wählen, anpassen, speichern.',
+        aiEmpty: 'Noch keine Aktivität protokolliert — zuerst eine anlegen.',
+      },
       // Die Eingaben für gespendete Zeit auf der ROI-Seite (#1895), im Vertriebs-Wortlaut.
       roi: {
         screen: {
