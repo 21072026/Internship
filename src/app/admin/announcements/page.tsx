@@ -12,6 +12,8 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT, useLocale } from '@/i18n/client';
+import { TranslationFillButton, MachineTranslatedChip } from '@/components/ai/TranslationFill';
+import { afterEdit } from '@/lib/machineTranslation';
 import {
   ANNOUNCEMENT_IMAGE_ACCEPT,
   ANNOUNCEMENT_IMAGE_MAX_BYTES,
@@ -36,6 +38,8 @@ interface AnnouncementRecord {
   // { en?, tr?, de? } — the languages this announcement was written in (#1163).
   // Empty for a single-language one sent before (or without) translations.
   translations: Bodies;
+  /** Locales a machine filled and nobody reviewed yet (#2055). */
+  machineTranslated?: Locale[];
   link: string | null;
   imageUrl: string | null;
   sentByName: string | null;
@@ -52,6 +56,7 @@ export default function AdminAnnouncementsPage() {
   // per language and a tab for the one being typed; each reader is served their
   // own, falling back to whichever was written.
   const [bodies, setBodies] = useState<Bodies>({});
+  const [machine, setMachine] = useState<Locale[]>([]);
   const [tab, setTab] = useState<Locale>(locale);
   const [link, setLink] = useState('');
   const [email, setEmail] = useState(false);
@@ -66,6 +71,7 @@ export default function AdminAnnouncementsPage() {
   // being typed into it. An edit corrects the record — it never re-broadcasts.
   const [editId, setEditId] = useState<string | null>(null);
   const [editBodies, setEditBodies] = useState<Bodies>({});
+  const [editMachine, setEditMachine] = useState<Locale[]>([]);
   const [editTab, setEditTab] = useState<Locale>(locale);
   const [editLink, setEditLink] = useState('');
   const [editDropImage, setEditDropImage] = useState(false);
@@ -153,6 +159,7 @@ export default function AdminAnnouncementsPage() {
       // path whether or not an image is attached.
       const body = new FormData();
       body.append('translations', JSON.stringify(bodies));
+      if (machine.length) body.append('machineTranslated', JSON.stringify(machine));
       if (link) body.append('link', link);
       body.append('email', String(email));
       if (image) body.append('image', image.file);
@@ -170,7 +177,7 @@ export default function AdminAnnouncementsPage() {
         }
         throw new Error(data.error ?? t.common.error);
       }
-      setBodies({}); setLink(''); setEmail(false); clearImage();
+      setBodies({}); setMachine([]); setLink(''); setEmail(false); clearImage();
       setResult(t.announcements.sent.replace('{n}', String(data.recipients)));
       await Promise.all([fetchHistory(), refreshQuota()]);
     } catch (err) {
@@ -189,6 +196,7 @@ export default function AdminAnnouncementsPage() {
     // drop the original wording.
     const existing = filledLocales(a.translations).length > 0 ? a.translations : { [locale]: a.text };
     setEditBodies(existing);
+    setEditMachine(a.machineTranslated ?? []);
     setEditTab(filledLocales(existing)[0] ?? locale);
     setEditLink(a.link ?? '');
     setEditDropImage(false);
@@ -209,6 +217,7 @@ export default function AdminAnnouncementsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           translations: editBodies,
+          machineTranslated: editMachine,
           ...(editLink ? { link: editLink } : {}),
           ...(editDropImage ? { imageAction: 'remove' } : {}),
         }),
@@ -300,18 +309,27 @@ export default function AdminAnnouncementsPage() {
             <div>
               <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                 <label className="block text-sm font-medium text-gray-700">{t.announcements.message}</label>
-                {languageTabs(bodies, tab, setTab, 'announcement')}
+                <span className="flex flex-wrap items-center gap-2">
+                  <TranslationFillButton value={bodies} machine={machine} purpose="announcement" onFilled={(next, m) => { setBodies(next); setMachine(m); }} testId="announcement-translate" />
+                  {languageTabs(bodies, tab, setTab, 'announcement')}
+                </span>
               </div>
               <Textarea
                 data-testid="announcement-text"
                 value={bodies[tab] ?? ''}
-                onChange={(e) => setBodies((prev) => ({ ...prev, [tab]: e.target.value }))}
+                onChange={(e) => {
+                  const next = { ...bodies, [tab]: e.target.value };
+                  // An edited machine locale is the admin's now (#2055).
+                  setMachine(afterEdit(bodies, next, machine));
+                  setBodies(next);
+                }}
                 onPaste={onPaste}
                 rows={4}
                 maxLength={TEXT_LIMITS.announcementText}
                 showCounter
                 placeholder={t.announcements.messagePlaceholder}
               />
+              {machine.includes(tab) && <MachineTranslatedChip label={tab.toUpperCase()} onConfirm={() => setMachine(machine.filter((x) => x !== tab))} testId={`announcement-${tab}-machine`} />}
               {/* Everyone gets a message either way; this says which language
                   the ones you skipped will read. */}
               <p className="mt-1.5 text-xs text-gray-400">
@@ -399,15 +417,23 @@ export default function AdminAnnouncementsPage() {
                 <div key={a.id} data-testid={`announcement-${a.id}`} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
                   {editId === a.id ? (
                     <div className="space-y-2">
-                      {languageTabs(editBodies, editTab, setEditTab, 'announcement-edit')}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        {languageTabs(editBodies, editTab, setEditTab, 'announcement-edit')}
+                        <TranslationFillButton value={editBodies} machine={editMachine} purpose="announcement" onFilled={(next, m) => { setEditBodies(next); setEditMachine(m); }} testId="announcement-edit-translate" />
+                      </div>
                       <Textarea
                         data-testid="announcement-edit-text"
                         value={editBodies[editTab] ?? ''}
-                        onChange={(e) => setEditBodies((prev) => ({ ...prev, [editTab]: e.target.value }))}
+                        onChange={(e) => {
+                          const next = { ...editBodies, [editTab]: e.target.value };
+                          setEditMachine(afterEdit(editBodies, next, editMachine));
+                          setEditBodies(next);
+                        }}
                         rows={4}
                         maxLength={TEXT_LIMITS.announcementText}
                         showCounter
                       />
+                      {editMachine.includes(editTab) && <MachineTranslatedChip label={editTab.toUpperCase()} onConfirm={() => setEditMachine(editMachine.filter((x) => x !== editTab))} testId={`announcement-edit-${editTab}-machine`} />}
                       <Input
                         data-testid="announcement-edit-link"
                         type="url"

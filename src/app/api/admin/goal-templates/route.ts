@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { locales } from '@/i18n/config';
+import { normalizeMachineList } from '@/lib/machineTranslation';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -32,8 +34,10 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 const localeText = z.string().trim().max(TEXT_LIMITS.todoTitle).optional();
 const translationsSchema = z.object({ en: localeText, tr: localeText, de: localeText });
 
-const createSchema = z.object({ translations: translationsSchema });
-const updateSchema = z.object({ id: z.string().min(1), translations: translationsSchema });
+// The locales a machine filled and nobody has reviewed yet (#2055).
+const machineSchema = z.array(z.enum(locales)).max(locales.length).optional();
+const createSchema = z.object({ translations: translationsSchema, machineTranslated: machineSchema });
+const updateSchema = z.object({ id: z.string().min(1), translations: translationsSchema, machineTranslated: machineSchema });
 const deleteSchema = z.object({ id: z.string().min(1) });
 
 async function requireAdmin() {
@@ -42,8 +46,9 @@ async function requireAdmin() {
   return session;
 }
 
-function serialize(t: { id: string; title: string; translations: unknown; useCount: number }) {
-  return { id: t.id, title: t.title, translations: readTranslations(t.translations), useCount: t.useCount };
+function serialize(t: { id: string; title: string; translations: unknown; machineTranslated?: unknown; useCount: number }) {
+  const translations = readTranslations(t.translations);
+  return { id: t.id, title: t.title, translations, machineTranslated: normalizeMachineList(t.machineTranslated, translations), useCount: t.useCount };
 }
 
 // GET — the shared pool, most-used first.
@@ -58,7 +63,7 @@ export async function GET() {
     const templates = await prisma.projectTaskTemplate.findMany({
       where: withinTenant({ projectId: null, archivedAt: null }, await tenantWhere(session)),
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
-      select: { id: true, title: true, translations: true, useCount: true },
+      select: { id: true, title: true, translations: true, machineTranslated: true, useCount: true },
     });
     return NextResponse.json({ templates: templates.map(serialize) });
   });
@@ -92,8 +97,8 @@ export async function POST(request: Request) {
       // to-dos handed out from it stay attached to it.
       const revived = await prisma.projectTaskTemplate.update({
         where: { id: existing.id },
-        data: { archivedAt: null, translations },
-        select: { id: true, title: true, translations: true, useCount: true },
+        data: { archivedAt: null, translations, machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations) },
+        select: { id: true, title: true, translations: true, machineTranslated: true, useCount: true },
       });
       return NextResponse.json({ template: serialize(revived) }, { status: 201 });
     }
@@ -105,9 +110,10 @@ export async function POST(request: Request) {
         orgId: resolveOrgId(session) ?? (await defaultOrgId()),
         title,
         translations,
+        machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
         createdById: session.user.id,
       },
-      select: { id: true, title: true, translations: true, useCount: true },
+      select: { id: true, title: true, translations: true, machineTranslated: true, useCount: true },
     });
     return NextResponse.json({ template: serialize(template) }, { status: 201 });
   });
@@ -145,8 +151,8 @@ export async function PATCH(request: Request) {
 
     const template = await prisma.projectTaskTemplate.update({
       where: { id: target.id },
-      data: { title, translations },
-      select: { id: true, title: true, translations: true, useCount: true },
+      data: { title, translations, machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations) },
+      select: { id: true, title: true, translations: true, machineTranslated: true, useCount: true },
     });
     return NextResponse.json({ template: serialize(template) });
   });

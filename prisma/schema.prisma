@@ -980,20 +980,24 @@ model MessageTemplate {
   // already honours both so a "save this reply" affordance is additive.
   ownerId String?
 
-  title        String    @db.Text
-  translations Json?
+  title             String    @db.Text
+  translations      Json?
+  // Locales filled by machine translation and not yet reviewed (#2055): a
+  // JSON array like ["tr","de"]. A locale leaves it when an admin edits
+  // or confirms it; null/[] = everything here was written by a person.
+  machineTranslated Json?
   // How many times this text has been inserted — the picker sorts by it, so the
   // replies actually used float to the top and the pool stays usable as it grows.
-  useCount     Int       @default(0)
-  createdById  String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  useCount          Int       @default(0)
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   // Retired from the picker, not deleted (same reasoning as ProjectTaskTemplate,
   // #1113): `useCount` is the only record of which wording a program actually
   // leans on, and re-adding the same text revives this row rather than starting
   // a second one from zero. Nothing here is referenced by a sent Message — the
   // insert is a copy — so this is about the pool's own history.
-  archivedAt   DateTime?
+  archivedAt        DateTime?
 
   org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
   owner     User?         @relation("MessageTemplateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
@@ -1095,22 +1099,26 @@ model PushSubscription {
 // Notification rows it fans out to) — lets the admin UI show a history of
 // what was sent, by whom, and to how many people.
 model Announcement {
-  id             String   @id @default(cuid())
+  id                String   @id @default(cuid())
   // Broadcast body — TEXT, not the default VARCHAR(191), so admins can publish
   // long-form announcements (release notes, articles) without hitting a limit.
-  text           String   @db.Text
+  text              String   @db.Text
   // { en?, tr?, de? } — the announcement in each language it was written in
   // (#1163). `text` above stays the canonical wording and the fallback for a
   // reader whose language has no entry here, so every row written before this
   // column existed keeps working untouched. Nullable for the same reason.
   // Resolved per reader in src/lib/announcementText.ts.
-  translations   Json?
+  translations      Json?
+  // Locales filled by machine translation and not yet reviewed (#2055): a
+  // JSON array like ["tr","de"]. A locale leaves it when an admin edits
+  // or confirms it; null/[] = everything here was written by a person.
+  machineTranslated Json?
   // VarChar(500) to match the API's 500-char cap — see Notification.link.
-  link           String?  @db.VarChar(500)
-  sentById       String
-  recipientCount Int
-  emailedCount   Int      @default(0)
-  createdAt      DateTime @default(now())
+  link              String?  @db.VarChar(500)
+  sentById          String
+  recipientCount    Int
+  emailedCount      Int      @default(0)
+  createdAt         DateTime @default(now())
 
   // Optional attached image. Deliberately NOT mirrored into an `imageUrl`
   // column: the URL is a pure function of the announcement id
@@ -2550,33 +2558,37 @@ model ProjectTask {
 // Not tenant-anchored: reached through Project / User, like the other child
 // models (see TENANT_MODELS in src/lib/orgContext.ts).
 model ProjectTaskTemplate {
-  id           String    @id @default(cuid())
-  projectId    String?
+  id                String    @id @default(cuid())
+  projectId         String?
   // The fallback wording, and the key the pool dedupes on. A localized title
   // lives in `translations`; `title` is what a member sees when their language
   // has no entry there.
-  title        String
+  title             String
   // { en?, tr?, de? } — the goal in each language it has been written in. The
   // task created from a template is a plain string, resolved once from the
   // assignee's own language (src/lib/goalTemplates.ts).
-  translations Json?
-  createdById  String?
+  translations      Json?
+  // Locales filled by machine translation and not yet reviewed (#2055): a
+  // JSON array like ["tr","de"]. A locale leaves it when an admin edits
+  // or confirms it; null/[] = everything here was written by a person.
+  machineTranslated Json?
+  createdById       String?
   // How many times this template has been handed to someone — the pool sorts
   // by it so the goals actually used float to the top.
-  useCount     Int       @default(0)
-  createdAt    DateTime  @default(now())
+  useCount          Int       @default(0)
+  createdAt         DateTime  @default(now())
   // Retired from the pool, not deleted (#1113). Handing a to-do out creates a
   // live reference to this row, so removing it would blank the wording for
   // everyone who was ever given it. Archived means "don't offer this again";
   // adding the same wording back revives the row.
-  archivedAt   DateTime?
+  archivedAt        DateTime?
   // The tenant whose pool this template is in (cross-world isolation). The
   // shared (`projectId: null`) half used to be ONE global pool offered to every
   // organization, so a MARKETING admin saw — and could reword — the internship
   // starter goals. Nullable for the expand step (#2298);
   // prisma/backfill-task-template-org.mjs stamps legacy rows from their project,
   // else their author, else the default org. NULL reads as the default org.
-  orgId        String?
+  orgId             String?
 
   project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?         @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)

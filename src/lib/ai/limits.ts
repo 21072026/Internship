@@ -77,6 +77,8 @@ export const AI_RATE_LIMITS = {
   // assigned mentees drafts one message each; the same relation state is
   // answered from the stored draft.
   outreach_draft: { limit: 15, windowMs: 10 * 60 * 1000 },
+  // Fill the empty locales of a tenant-authored text (POST /api/admin/ai/translate, #2055).
+  content_translate: { limit: 30, windowMs: 10 * 60 * 1000 },
 
   // Bulk e-mail draft (POST /api/ai/bulk-draft, #2048).
   // 6 calls / 10 minutes: one call drafts the mail for up to 200 recipients,

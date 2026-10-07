@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { normalizeMachineList } from '@/lib/machineTranslation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -42,6 +43,8 @@ const schema = z.object({
   // normalizeAnnouncementTranslations rather than rejected, so a form that
   // submits three boxes with two of them empty is valid.
   translations: z.record(z.string(), z.string()).optional(),
+  // Locales a machine filled and nobody has reviewed yet (#2055).
+  machineTranslated: z.array(z.string()).max(3).optional(),
   link: z.string().max(TEXT_LIMITS.announcementLink).optional(),
   email: z.boolean().optional(),
 });
@@ -93,6 +96,7 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
         // The multilingual form sends one field per language; JSON clients send
         // a `translations` object. Both land in the same shape here.
         ...(form.get('translations') ? { translations: safeJson(form.get('translations')) } : {}),
+        ...(form.get('machineTranslated') ? { machineTranslated: safeJson(form.get('machineTranslated')) } : {}),
         ...(form.get('link') ? { link: form.get('link') } : {}),
         ...(form.get('email') === null ? {} : { email: form.get('email') === 'true' }),
       },
@@ -150,6 +154,7 @@ async function handleGet(request: Request) {
       // Normalized rather than passed through raw: the edit form binds one box
       // per language and should never be handed an unexpected key (#1163).
       translations: normalizeAnnouncementTranslations(a.translations),
+      machineTranslated: normalizeMachineList(a.machineTranslated, normalizeAnnouncementTranslations(a.translations)),
       sentByName: senderName.get(a.sentById) ?? null,
       imageUrl: image ? announcementImageUrl(a.id) : null,
     })),
@@ -245,6 +250,7 @@ async function handlePost(request: Request) {
     data: {
       text,
       translations,
+      machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
       link: link || null,
       sentById: session.user.id,
       // The sending tenant (#2357), so a later reader/query is scoped to its own
