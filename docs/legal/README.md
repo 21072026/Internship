@@ -29,8 +29,20 @@ somut bir **karar** ve gerekçesiyle.
 | Mentee görünürlük rızası | #551 | Yalnızca kamuya-açık alanlar (ad, üniversite, beceri, hedef pozisyon); e-posta/telefon asla; anında geri çekilebilir | [talent-pool-consent-policy.md](talent-pool-consent-policy.md) |
 | Fırsat eşitliği verisi | #819 | Demografik veri **toplanmıyor**; ürün sahibi açık onayı gelmeden şema değişikliği yok. Kör inceleme modu ayrı ve gönderildi | [equal-opportunity-data.md](equal-opportunity-data.md) |
 | Ödeme altyapısı | #552 | Faz 1 manuel fatura; ölçeklenince Stripe Billing + webhook → entitlement | [payment-infrastructure.md](payment-infrastructure.md) |
+| Erişilebilirlik uygunluk raporu (VPAT 2.5) | #2037 | WCAG 2.2 A+AA, EN 301 549 ve Revize 508 satır satır; her `Supports` bir kanıt yolu taşır; `npm run vpat:evidence` üretir, `/accessibility/vpat` yayımlar | [vpat.md](vpat.md), [vpat-evidence.md](vpat-evidence.md) |
 
 ## Veri erişim kuralı (#523 kalemi — zaten uygulandı)
 Katkı veren mentee'ler gerçek/preview PII'ye erişmez; geliştirme sentetik seed ile
 yapılır. Bkz. [../DATA_ACCESS_POLICY.md](../DATA_ACCESS_POLICY.md) — bu kalem koda
 bağlanmış durumda (demo seeder yerel-olmayan `DATABASE_URL`'i reddediyor).
+
+## VPAT yenileme kuralı (#2037)
+`docs/legal/vpat.md` ve `docs/legal/vpat-evidence.md` **elle yazılmaz**: satırlar `src/lib/vpat.ts`'te,
+otomatik kanıt `e2e/a11y-baseline.json` + `docs/a11y-audit.md` + `e2e/a11y-scan.spec.ts`'te durur ve
+`npm run vpat:evidence` ikisini de (ve sayfanın okuduğu `src/lib/vpatEvidence.generated.ts`'i) yeniden
+üretir. İki durumda aynı PR içinde yeniden üretilir ve etkilenen satırlar yeniden gözden geçirilir:
+(1) `e2e/a11y-baseline.json` her değiştiğinde — tarama genişlediğinde ya da bir bulgu dondurulduğunda
+/ kapandığında; (2) `src/lib/vpat.ts`'te bir satır değiştiğinde. `scripts/test/vpat.test.mjs`
+(`npm run test:unit`) bayat üretilmiş dosyayı, kanıt yolu olmayan bir `Supports` satırını ve var olmayan
+bir kanıt yolunu kırmızıya çevirir. Rapor yalnızca İngilizcedir; Markdown imaja girmediği için
+(`.dockerignore`) yayın `/accessibility/vpat` sayfası ve `/accessibility/vpat.md` route'udur.

@@ -19,6 +19,7 @@
     "check:demo-blocklist": "node scripts/check-demo-blocklist.mjs",
     "check:demo-fidelity": "node scripts/check-demo-fidelity.mjs",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
+    "vpat:evidence": "node --experimental-strip-types scripts/vpat-evidence.mjs",
     "check:reports": "node --experimental-strip-types scripts/check-reports.ts",
     "check:skills": "node --experimental-strip-types scripts/check-skills.mjs",
     "check:release-fragments": "node scripts/check-release-fragments.mjs",
