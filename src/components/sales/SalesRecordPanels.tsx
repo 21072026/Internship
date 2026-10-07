@@ -42,6 +42,7 @@ export function SalesRecordPanels({
           relationId={relationId}
           nextActionAt={nextActionAt}
           nextActionNote={nextActionNote}
+          pipelineStatus={pipelineStatus}
           onSaved={refresh}
         />
       </div>

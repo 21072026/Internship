@@ -77,6 +77,11 @@ export const AI_RATE_LIMITS = {
   // assigned mentees drafts one message each; the same relation state is
   // answered from the stored draft.
   outreach_draft: { limit: 15, windowMs: 10 * 60 * 1000 },
+
+  // Next-step suggestions for the follow-up field (POST /api/mentorship/[id]/next-step, #2875).
+  // 10 calls / 10 minutes: a mentor planning the week asks once per mentee;
+  // the same log, stage and day is answered from the stored copy.
+  next_step_suggest: { limit: 10, windowMs: 10 * 60 * 1000 },
   // Fill the empty locales of a tenant-authored text (POST /api/admin/ai/translate, #2055).
   content_translate: { limit: 30, windowMs: 10 * 60 * 1000 },
   // Authoring assist and enrichment (#2055, part 2).
