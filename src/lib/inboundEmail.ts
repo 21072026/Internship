@@ -25,6 +25,12 @@ export type InboundEmail = {
   subject?: string | null;
   /** The mail's Date header (RFC 2822 or ISO). */
   date?: string | null;
+  /**
+   * A message forwarded AS AN ATTACHMENT (`message/rfc822`), read by the bridge
+   * (#2815). An inline forward needs nothing here: its header block is read
+   * from `text`.
+   */
+  forwarded?: { from: string; date: string | null; subject: string | null; messageId: string | null } | null;
 };
 
 export type InboundResult =

@@ -51,7 +51,7 @@ test('BCC-to-CRM logs a sent mail on the account, once, and only for the org’s
   await prisma.companyContact.create({ data: { orgId: org.id, companyId: company.id, name: 'Chef', email: boss } });
   const rel = await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: rep.id, menteeId: lead.id, companyId: company.id } });
   const logs = () => prisma.interactionLog.findMany({ where: { relationId: rel.id } });
-  const send = (data: Record<string, string>) => request.post('/api/inbound-email', { headers: authed, data });
+  const send = (data: Record<string, unknown>) => request.post('/api/inbound-email', { headers: authed, data });
 
   try {
     // 1. A rep's mail to the account, its manager in Cc.
@@ -89,6 +89,36 @@ test('BCC-to-CRM logs a sent mail on the account, once, and only for the org’s
     expect(await logs()).toHaveLength(1);
     expect(await prisma.contactPermission.count({ where: { orgId: org.id } })).toBe(0);
 
+    // 1b. A customer's reply that the rep FORWARDS to the CRM address (#2815):
+    //     logged as inbound, with the original's date and subject; the body is
+    //     never stored, and forwarding it again is still one log.
+    const forward = {
+      to: crmAddress(org.id, '1'),
+      from: repEmail,
+      subject: 'Fwd: Re: Angebot Q4',
+      date: 'Tue, 06 Oct 2026 12:00:00 +0200',
+      text: `FYI\n\n---------- Forwarded message ---------\nFrom: Kunde <${customer}>\nDate: Mon, Oct 5, 2026 at 3:00 PM\nSubject: Re: Angebot Q4\nTo: ${repEmail}\n\nCUSTOMER SECRET reply text`,
+      messageId: `<fwd-1-${stamp}@vendor.example>`,
+    };
+    expect(await (await send(forward)).json()).toMatchObject({ logged: 1 });
+    const inbound = (await logs()).find((l) => l.notes.startsWith('BCC ←'));
+    expect(inbound).toMatchObject({ subject: 'Re: Angebot Q4', notes: `BCC ← ${customer}` });
+    expect(inbound?.date.getUTCDate()).toBe(5);
+    expect(JSON.stringify(await logs())).not.toContain('SECRET');
+    expect(await (await send({ ...forward, messageId: `<fwd-2-${stamp}@vendor.example>` })).json()).toMatchObject({ logged: 0, duplicates: 1 });
+
+    // …and the same as an attachment (Outlook "forward as attachment").
+    const asAttachment = await send({
+      to: crmAddress(org.id, '1'),
+      from: repEmail,
+      subject: 'FW: Rückfrage',
+      text: 'see attached',
+      messageId: `<fwd-att-${stamp}@vendor.example>`,
+      forwarded: { from: `Chef <${boss}>`, date: '2026-10-04T08:00:00Z', subject: 'Rückfrage', messageId: `<orig-${stamp}@shop.example>` },
+    });
+    expect(await asAttachment.json()).toMatchObject({ logged: 1 });
+    expect(await logs()).toHaveLength(3);
+
     // 3. The admin sees the card, rotates the address, then switches it off.
     await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
     await signInAndSettle(page, adminEmail, PW, '/admin');
@@ -106,7 +136,7 @@ test('BCC-to-CRM logs a sent mail on the account, once, and only for the org’s
 
     expect((await page.request.post('/api/admin/crm-bcc', { data: { action: 'disable' } })).status()).toBe(200);
     expect((await send({ ...mail, to: `${customer}, ${crmAddress(org.id, '2')}`, messageId: `<off-${stamp}@x>` })).status()).toBe(403);
-    expect(await logs()).toHaveLength(2);
+    expect(await logs()).toHaveLength(4);
     expect((await page.request.post('/api/admin/crm-bcc', { data: { action: 'bogus' } })).status()).toBe(400);
 
     // 4. INTERNSHIP: off by default, on once the org opts in.

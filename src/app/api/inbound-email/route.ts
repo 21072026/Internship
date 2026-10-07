@@ -13,6 +13,15 @@ const schema = z.object({
   cc: z.string().max(20000).optional(),
   subject: z.string().max(2000).optional(),
   date: z.string().max(200).optional(),
+  // A message forwarded as an attachment (#2815); an inline forward is read from `text`.
+  forwarded: z
+    .object({
+      from: z.string().min(1).max(500),
+      date: z.string().max(200).nullable().default(null),
+      subject: z.string().max(2000).nullable().default(null),
+      messageId: z.string().max(998).nullable().default(null),
+    })
+    .optional(),
 });
 
 function secretOk(request: Request): boolean {

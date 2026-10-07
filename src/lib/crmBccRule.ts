@@ -146,3 +146,97 @@ export function crmBccEnabledFor(stored: string | null | undefined, vertical: st
   if (stored === 'false') return false;
   return vertical === 'MARKETING';
 }
+
+// ── Forwarded customer replies (#2815) ──────────────────────────────────────
+//
+// The BCC path sees only what staff SEND. A customer's answer arrives in the
+// rep's own mailbox; the rep forwards it to the same `crm+` address and it is
+// logged as an inbound contact on the account the ORIGINAL sender belongs to.
+//
+// The body is read here, in memory, for one purpose: to find the original
+// sender, date and subject in the forward's header block. Nothing of it is
+// returned beyond those three fields, and nothing of it is stored.
+
+export type ForwardedOriginal = { from: string; date: string | null; subject: string | null; messageId?: string | null };
+
+// A forward's own subject prefix, in the clients' EN/DE/TR/FR spellings.
+const FORWARD_SUBJECT_RE = /^\s*(?:fwd?|fw|wg|wtr|[iİ]lt|tr)\s*:\s*/i;
+
+// The divider line clients put above a forwarded message.
+const FORWARD_MARKER_RE =
+  /^[\s>*_-]*(?:-{2,}\s*)?(?:forwarded message|begin forwarded message|original message|weitergeleitete nachricht|ursprüngliche nachricht|anfang der weitergeleiteten nachricht|[iİ]letilen ileti|orijinal ileti|message transféré)\b.*$|^_{10,}\s*$/im;
+
+const FIELD = {
+  from: /^(?:from|von|kimden|de)$/i,
+  date: /^(?:date|sent|datum|gesendet|tarih|gönderildi|gönderilme tarihi|envoyé)$/i,
+  subject: /^(?:subject|betreff|konu|objet)$/i,
+};
+
+/** Is this subject a forward's (`Fwd:`, `WG:`, `İlt:` …)? */
+export function isForwardSubject(subject: string | null | undefined): boolean {
+  return FORWARD_SUBJECT_RE.test(subject ?? '');
+}
+
+/** The subject with every leading forward/reply prefix removed. */
+export function stripForwardPrefix(subject: string | null | undefined): string {
+  let s = subject ?? '';
+  for (let i = 0; i < 5; i++) {
+    const next = s.replace(FORWARD_SUBJECT_RE, '').replace(/^\s*(?:re|aw|ynt|sv)\s*:\s*/i, '');
+    if (next === s) break;
+    s = next;
+  }
+  return s.trim();
+}
+
+/**
+ * The original message's From / Date / Subject from a forward's inline header
+ * block, or null when the text carries none. Looks only at the first block
+ * after a forward divider (or, when the subject says it is a forward, the first
+ * `From:` line), and only at its first dozen lines.
+ */
+export function parseForwardedHeaders(text: string | null | undefined, subject?: string | null): ForwardedOriginal | null {
+  const body = (text ?? '').replace(/\r\n?/g, '\n');
+  if (!body) return null;
+  const marker = body.search(FORWARD_MARKER_RE);
+  let start: number;
+  if (marker >= 0) {
+    start = marker;
+  } else if (isForwardSubject(subject)) {
+    const m = body.search(/^[\s>*]*(?:from|von|kimden|de)\s*:\s*\S/im);
+    if (m < 0) return null;
+    start = m;
+  } else {
+    return null;
+  }
+  const lines = body.slice(start).split('\n').slice(0, 14);
+  const out: { from?: string; date?: string; subject?: string } = {};
+  for (const raw of lines) {
+    const line = raw.replace(/^[\s>]*/, '').replace(/\*/g, '');
+    const m = line.match(/^([^:]{2,24}):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1].trim();
+    const value = m[2].trim();
+    if (!out.from && FIELD.from.test(key)) out.from = value;
+    else if (!out.date && FIELD.date.test(key)) out.date = value;
+    else if (!out.subject && FIELD.subject.test(key)) out.subject = value;
+  }
+  if (!out.from || addressesIn(out.from).length === 0) return null;
+  return { from: out.from, date: out.date ?? null, subject: out.subject ?? null };
+}
+
+/**
+ * A forwarded header's Date in the forms clients print it: RFC 2822, ISO, and
+ * Gmail's "Mon, Oct 5, 2026 at 9:00 AM". A localised long form ("Montag, 5.
+ * Oktober 2026 09:00") is null — the caller falls back to the forward's own date.
+ */
+export function parseForwardedDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const cleaned = value.replace(/\s+at\s+/i, ' ').replace(/\s+um\s+/i, ' ').trim();
+  const d = new Date(cleaned);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** The log's `notes` for a forwarded customer reply: the inbound marker plus the sender. */
+export function crmBccInboundNotes(from: string): string {
+  return `BCC ← ${from}`;
+}

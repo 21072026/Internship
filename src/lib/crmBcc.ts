@@ -12,13 +12,17 @@ import {
   addressesIn,
   clipSubject,
   crmBccEnabledFor,
+  crmBccInboundNotes,
   crmBccNotes,
   customerAddresses,
   extractCrmBccToken,
   hasReplyToken,
   isCrmBccSender,
   mailDate,
+  parseForwardedDate,
+  parseForwardedHeaders,
   pickRelation,
+  stripForwardPrefix,
 } from '@/lib/crmBccRule';
 
 // BCC-to-CRM (#2809): the Prisma-aware half. The rule is src/lib/crmBccRule.ts,
@@ -29,7 +33,9 @@ import {
 //     From address must be an active ADMIN/MENTOR of THAT org, looked up in that
 //     org's world (src/lib/userWorld.ts; never a bare e-mail lookup);
 //   * metadata only — date, clipped subject, recipient addresses. The body and
-//     the attachments are never read into a row;
+//     the attachments are never read into a row. A forwarded customer reply
+//     (#2815) is the one case the body is READ: in memory, only to find the
+//     original sender, date and subject in the forward's header block;
 //   * no ContactPermission write. A logged mail is a contact, not a consent
 //     (docs/contact-permission.md).
 
@@ -109,18 +115,43 @@ export async function routeCrmBcc(input: InboundEmail): Promise<CrmBccResult> {
       return { ok: false, status: 403, reason: 'Sender is not staff of this organization' };
     }
 
-    const recipients = customerAddresses({ to: input.to, cc: input.cc, from: fromAddress, inboundDomain: inboundEmailDomain() });
-    if (recipients.length === 0) {
+    const now = new Date();
+    // A forwarded customer reply (#2815): the account is the ORIGINAL sender's,
+    // the date and subject are the original's. Otherwise: an outbound BCC.
+    const original = input.forwarded?.from ? input.forwarded : parseForwardedHeaders(input.text, input.subject);
+    const originalFrom = original ? addressesIn(original.from)[0] : undefined;
+    const inbound = !!originalFrom && customerAddresses({ to: originalFrom, from: fromAddress, inboundDomain: inboundEmailDomain() }).length > 0;
+
+    let addresses: string[];
+    let date: Date;
+    let subject: string | null;
+    let sourceRef: string;
+    let notesFor: (matched: string[]) => string;
+    if (inbound && original && originalFrom) {
+      const originalSubject = original.subject ?? stripForwardPrefix(input.subject);
+      addresses = [originalFrom];
+      date = mailDate(parseForwardedDate(original.date) ?? input.date ?? null, now);
+      subject = clipSubject(originalSubject);
+      sourceRef = crmBccSourceRef({ messageId: original.messageId, from: originalFrom, date: original.date ?? '', subject: originalSubject, recipients: [] });
+      notesFor = () => crmBccInboundNotes(originalFrom);
+    } else {
+      addresses = customerAddresses({ to: input.to, cc: input.cc, from: fromAddress, inboundDomain: inboundEmailDomain() });
+      date = mailDate(input.date ?? null, now);
+      subject = clipSubject(input.subject);
+      sourceRef = crmBccSourceRef({ messageId: input.messageId, from: fromAddress, date: input.date ?? '', subject: subject ?? '', recipients: addresses });
+      notesFor = crmBccNotes;
+    }
+    if (addresses.length === 0) {
       logger.info('CRM BCC mail had no customer recipient', { orgId });
       return { ok: true, logged: 0, duplicates: 0, matchedAccounts: 0 };
     }
 
     const tenant = await orgWhere(orgId);
     const [byCompany, byContact] = await Promise.all([
-      prisma.company.findMany({ where: { ...tenant, contactEmail: { in: recipients } }, select: { id: true, contactEmail: true } }),
-      prisma.companyContact.findMany({ where: { ...tenant, email: { in: recipients } }, select: { companyId: true, email: true } }),
+      prisma.company.findMany({ where: { ...tenant, contactEmail: { in: addresses } }, select: { id: true, contactEmail: true } }),
+      prisma.companyContact.findMany({ where: { ...tenant, email: { in: addresses } }, select: { companyId: true, email: true } }),
     ]);
-    // Which of the mail's recipients belong to which account.
+    // Which of the mail's addresses belong to which account.
     const perCompany = new Map<string, Set<string>>();
     const add = (companyId: string, email: string | null) => {
       if (!email) return;
@@ -131,8 +162,8 @@ export async function routeCrmBcc(input: InboundEmail): Promise<CrmBccResult> {
     for (const c of byCompany) add(c.id, c.contactEmail);
     for (const c of byContact) add(c.companyId, c.email);
     if (perCompany.size === 0) {
-      // Counted, never stored: no recipient address in the log line (PII).
-      logger.info('CRM BCC mail matched no account', { orgId, recipients: recipients.length });
+      // Counted, never stored: no address in the log line (PII).
+      logger.info('CRM BCC mail matched no account', { orgId, inbound, addresses: addresses.length });
       return { ok: true, logged: 0, duplicates: 0, matchedAccounts: 0 };
     }
 
@@ -141,9 +172,6 @@ export async function routeCrmBcc(input: InboundEmail): Promise<CrmBccResult> {
       select: { id: true, mentorId: true, companyId: true, startDate: true },
     });
 
-    const now = new Date();
-    const date = mailDate(input.date ?? null, now);
-    const subject = clipSubject(input.subject);
     let logged = 0;
     let duplicates = 0;
     for (const [companyId, emails] of perCompany) {
@@ -152,17 +180,9 @@ export async function routeCrmBcc(input: InboundEmail): Promise<CrmBccResult> {
         sender.id,
       );
       if (!relationId) continue;
-      const matched = [...emails];
-      const sourceRef = crmBccSourceRef({
-        messageId: input.messageId,
-        from: fromAddress,
-        date: input.date ?? '',
-        subject: subject ?? '',
-        recipients: recipients,
-      });
       try {
         await prisma.interactionLog.create({
-          data: { relationId, date, subject, notes: crmBccNotes(matched), type: 'Email', autoLogged: true, sourceRef },
+          data: { relationId, date, subject, notes: notesFor([...emails]), type: 'Email', autoLogged: true, sourceRef },
         });
         logged++;
       } catch (e) {
@@ -171,7 +191,7 @@ export async function routeCrmBcc(input: InboundEmail): Promise<CrmBccResult> {
         throw e;
       }
     }
-    if (logged > 0) logger.info('CRM BCC mail logged', { orgId, logged, duplicates });
+    if (logged > 0) logger.info('CRM BCC mail logged', { orgId, inbound, logged, duplicates });
     return { ok: true, logged, duplicates, matchedAccounts: perCompany.size };
   });
 }
