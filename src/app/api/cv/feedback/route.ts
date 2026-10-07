@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasConsent } from '@/lib/consent';
 import { extractCvText } from '@/lib/cvParse';
-import { isAiConfigured } from '@/lib/cvExtractAi';
+import { isAiConfigured } from '@/lib/ai/provider';
 import { aiCvFeedback } from '@/lib/aiCvFeedback';
 import { runAiGated } from '@/lib/aiGate';
 import { enforceRateLimit } from '@/lib/rateLimit';

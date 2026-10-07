@@ -6,8 +6,11 @@ import { useT } from '@/i18n/client';
 
 // The tenant's IdP role mapping (#1940), inside the Enterprise SSO card. Reads
 // and writes /api/admin/organizations/[id]/sso-role-mappings; the rule that
-// applies the rows is src/lib/ssoRoleMapping.ts. ADMIN is not offered: the API
-// only lists MAPPABLE_ROLES back.
+// applies the rows is src/lib/ssoRoleMapping.ts. ADMIN is not offered, and a
+// role the org's vertical lacks is not either: the API lists back exactly what
+// it accepts (#2839). Roles are shown in the vertical's words — the same
+// `usersAdmin` labels the users list and the invite screen use, so a MARKETING
+// tenant reads "rep" and "lead" (#2558); the enum stays the value sent.
 
 interface Mapping {
   id: string;
@@ -29,6 +32,7 @@ export function SsoRoleMappings({ orgId, locked }: { orgId: string; locked: bool
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const base = `/api/admin/organizations/${encodeURIComponent(orgId)}/sso-role-mappings`;
+  const roleLabel = (r: string) => (t.usersAdmin as Record<string, string>)[r.toLowerCase()] ?? r;
 
   const load = useCallback(async () => {
     const res = await fetch(base);
@@ -114,7 +118,7 @@ export function SsoRoleMappings({ orgId, locked }: { orgId: string; locked: bool
               <tr key={m.id} data-testid={`sso-role-mapping-${m.id}`} className="border-t border-gray-100 dark:border-gray-800">
                 <td className="py-1 break-all">{m.claim}</td>
                 <td className="py-1 break-all">{m.matchValue}</td>
-                <td className="py-1 font-mono text-xs">{m.role}</td>
+                <td className="py-1">{roleLabel(m.role)}</td>
                 <td className="py-1">{m.priority}</td>
                 <td className="py-1 text-right">
                   <Button type="button" size="sm" variant="outline" disabled={busy || locked} onClick={() => remove(m.id)}>
@@ -140,7 +144,7 @@ export function SsoRoleMappings({ orgId, locked }: { orgId: string; locked: bool
           {t.organizations.ssoRoleRole}
           <select data-testid="sso-role-role" className={inputClass} value={role} onChange={(e) => setRole(e.target.value)}>
             {roles.map((r) => (
-              <option key={r} value={r}>{r}</option>
+              <option key={r} value={r}>{roleLabel(r)}</option>
             ))}
           </select>
         </label>

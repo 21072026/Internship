@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **SSO role mapping speaks the vertical's words and offers only its roles** (#2839). The IdP role-mapping card labels roles through `usersAdmin.*` (a MARKETING tenant reads rep/lead, not MENTOR/MENTEE) and its three hints gain MARKETING overlay entries — they named the enum in uppercase, which the leak ratchet strips as a code. `mappableRolesFor(capabilities)` in `ssoRoleMapping.ts` drops a role whose module the vertical lacks (SOURCE without `sourcing`, COMPANY without `companies`): the API offers and accepts only that list (`role_not_in_vertical`), and the ACS ignores a stray row the way it ignores ADMIN.",
+  "notes": {
+    "en": ["The SSO role mapping now uses your product's own role names and offers only the roles your product has."],
+    "tr": ["SSO rol eşleme artık ürününüzün kendi rol adlarını kullanıyor ve yalnızca ürününüzde bulunan rolleri sunuyor."],
+    "de": ["Die SSO-Rollenzuordnung verwendet jetzt die Rollennamen Ihres Produkts und bietet nur die Rollen an, die es dort gibt."]
+  }
+}

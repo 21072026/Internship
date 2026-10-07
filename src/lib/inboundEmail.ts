@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
-import { conversationForRelation } from '@/lib/conversations';
+import { conversationForRelation, mutedParticipants } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
 import { sendNewMessagePush } from '@/lib/messagePush';
@@ -152,7 +152,9 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   // that goes for the background push as well (#1464), which is why it sits
   // inside the same gate. sendNewMessagePush re-checks the preference itself,
   // so this is about not doing the work, not about correctness.
-  if (notificationCategoryAllowed(recipientUser, 'messages')) {
+  // A thread the recipient muted (#1609) interrupts them through no door.
+  const muted = await mutedParticipants(conversation?.id, [recipientUser.id]);
+  if (notificationCategoryAllowed(recipientUser, 'messages') && !muted.has(recipientUser.id)) {
     await notify(recipientUser.id, 'message.newByEmail', {}, link);
     await sendNewMessagePush(recipientUser.id, { link, byEmail: true, preview: body });
   }

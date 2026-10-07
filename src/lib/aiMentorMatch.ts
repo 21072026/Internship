@@ -3,18 +3,13 @@
 // labels (A, B, C…) with skills/interests/load only, and the mentee as an
 // unnamed profile. Labels are mapped back to mentor ids locally. Callers MUST
 // go through runAiGated (quota); with no provider the rule-based ranking is
-// returned unchanged (graceful fallback).
+// returned unchanged (graceful fallback). The prompt and the parser are here;
+// the client, model and timeout are callModel's (#2022, task `mentor_match`).
 
-import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { safeParseModelJson } from '@/lib/ai/provider';
+import { callModel, safeParseModelJson } from '@/lib/ai/provider';
 
 const MATCH_REPLY = z.object({ ranking: z.array(z.object({ label: z.string(), reason: z.string() })) });
-
-// A generation that has not answered in a minute is not going to.
-const AI_TIMEOUT_MS = 60_000;
-
-const MODEL = process.env.ANTHROPIC_CV_MODEL || 'claude-opus-4-8';
 
 export interface MatchCandidate {
   label: string; // 'A', 'B', ...
@@ -56,10 +51,6 @@ export async function aiRankMentors(
   mentee: MatchMentee,
   candidates: MatchCandidate[]
 ): Promise<{ label: string; reason: string }[]> {
-  // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
-  // enough to hold a request handler open until the user gives up (#895).
-  // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
   const payload = {
     mentee: { skills: mentee.skills, targetPosition: mentee.targetPosition ?? '', interests: mentee.interests ?? '' },
     mentors: candidates.map((c) => ({
@@ -70,16 +61,9 @@ export async function aiRankMentors(
       capacity: c.capacity ?? null,
     })),
   };
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 600,
-    system: SYSTEM,
-    output_config: { format: { type: 'json_schema', schema: SCHEMA } },
-    messages: [{ role: 'user', content: JSON.stringify(payload) }],
-  });
-  const block = res.content.find((b) => b.type === 'text');
+  const reply = await callModel({ task: 'mentor_match', system: SYSTEM, input: JSON.stringify(payload), jsonSchema: SCHEMA });
   // Not the JSON asked for → no AI ranking (the rule-based order stands), and
   // the call is recorded as parse_error (#2024).
-  const parsed = safeParseModelJson(block && block.type === 'text' ? block.text : null, MATCH_REPLY, { ranking: [] });
+  const parsed = safeParseModelJson(reply, MATCH_REPLY, { ranking: [] });
   return parsed.ranking;
 }

@@ -710,6 +710,7 @@ run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-activity-log-org.mjs || true
 run_tool node prisma/backfill-task-template-org.mjs || true
 run_tool node prisma/backfill-ai-usage-org.mjs || true
+run_tool node prisma/backfill-ai-usage-task.mjs || true
 run_tool node prisma/backfill-organization.mjs \
   || log "WARNING: org backfill FAILED (exit non-zero) — see the output above. It may be incomplete; do NOT enable MT_ENFORCE_ISOLATION until it runs green (#1557)."
 run_tool node scripts/backfill-requisitions.mjs || true
@@ -726,6 +727,11 @@ run_tool node prisma/check-active-mentor-duplicates.mjs || true
 # a deploy, never writes.
 log "public host mappings (report only)"
 run_tool node prisma/set-public-host.mjs --list || true
+# MARKETING org readiness (#2579), report only: trial stages, host, team,
+# default lead owner — so the prod org can be verified from this log without a
+# database connection. Never fails a deploy, never writes, no PII.
+log "marketing org readiness (report only)"
+run_tool node prisma/check-marketing-orgs.mjs || true
 # API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.

@@ -15,6 +15,7 @@ import type { AiArtifact } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getRetentionMonths } from '@/lib/retention';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import type { AiTaskId } from '@/lib/ai/tasks';
 
 export const ARTIFACT_VISIBILITIES = ['PRIVATE', 'SHARED_WITH_MENTOR', 'SHARED_WITH_ADMIN'] as const;
 export type ArtifactVisibility = (typeof ARTIFACT_VISIBILITIES)[number];
@@ -48,7 +49,7 @@ export const TASK_TTL_MS: Record<string, number> = {
  * they are a cache, regenerated on the next request, and a quote of an erased
  * person must not outlive them.
  */
-export const OPEN_TEXT_TASKS = ['evaluation_insights', 'weekly_report_digest', 'survey_summary'] as const;
+export const OPEN_TEXT_TASKS = ['evaluation_insights', 'weekly_report_digest', 'survey_summary'] as const satisfies readonly AiTaskId[];
 
 /** sha256 over a stable JSON rendering — key order never changes the hash. */
 export function hashInput(value: unknown): string {
