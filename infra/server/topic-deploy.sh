@@ -7,8 +7,10 @@
 #
 # Design decisions for this project (see infra/README.md):
 #   - Routing: whichever reverse proxy the host actually runs, auto-detected.
-#     CADDY (the new Oracle host, #2166): one generated file per topic in
-#     $CADDY_SITES_DIR, then reload. Ten lines, no panel, no per-topic cert work.
+#     CADDY (the new Oracle host, #2166): TWO generated files per topic in
+#     $CADDY_SITES_DIR, then reload. Internship at pr<N>.<domain>, marketing at
+#     pr<N>-m.<domain> (#2612) — both one DNS label so the *.interncrm.com
+#     wildcard cert covers them. No per-topic Let's Encrypt issuance.
 #     PLESK (the old IONOS box): a real Plesk subdomain plus an injected
 #     custom-nginx include, because Plesk owns 80/443 there and a raw conf.d
 #     server block loses the address-group match (see the block itself).
@@ -121,11 +123,18 @@ fi
 # pr<N>.<domain>, so every sign-in callback on a topic env pointed at a host
 # that does not resolve.
 HOST="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"
+# Second public host on the SAME wildcard (#2612). Option A in the issue used
+# pr<N>-marketing.bcsit-gmbh.dev, which would mint a new certificate per PR
+# (50/week/domain). pr<N>-m.<BASE_DOMAIN> is still two worlds on two hosts,
+# and it rides the cert this script already prefers. Do NOT inherit
+# MARKETING_HOSTS from ENV_FILE — that file names the shared preview domain.
+MARKETING_HOST="${ENV_PREFIX}${TOPIC}-m.${BASE_DOMAIN}"
 URL="https://${HOST}"
+MARKETING_URL="https://${MARKETING_HOST}"
 CONTAINER="internship-crm-${TOPIC}"
 CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"  # legacy raw route (cleaned up below)
 
-echo "==> Deploying topic '${TOPIC}' → ${URL} (container ${CONTAINER}, port ${PORT})"
+echo "==> Deploying topic '${TOPIC}' → ${URL} + ${MARKETING_URL} (container ${CONTAINER}, port ${PORT})"
 
 # ── Image: pull from GHCR unless it was built locally ────────────────────────
 if [ "${SKIP_PULL:-0}" != "1" ]; then
@@ -321,6 +330,13 @@ _in_image "$IMAGE" node prisma/backfill-organization.mjs \
 # Legacy needs require company orgId; include rows created by the demo seed.
 _in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
 
+# Point the demo MARKETING org at THIS topic's marketing host so the landing
+# demo form opens and e-mail links stay on the topic env, not production
+# (#2569 / #2612). Idempotent; a topic DB seeded before this change is patched
+# on the next push. Missing org (an ancient empty DB) is a warning, not a halt.
+_in_image "$IMAGE" node prisma/set-public-host.mjs --org demo-marketing --host "$MARKETING_HOST" \
+  || echo "WARN: could not map demo-marketing publicHost → ${MARKETING_HOST}"
+
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
 # OPERATOR_* (#1396) is forwarded like the rest: same host, same operator, so a
@@ -336,6 +352,7 @@ docker run -d \
   -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
   -e NEXTAUTH_URL="$URL" \
   -e NEXT_PUBLIC_APP_URL="$URL" \
+  -e MARKETING_HOSTS="$MARKETING_HOST" \
   -e SMTP_HOST="${SMTP_HOST:-}" \
   -e SMTP_PORT="${SMTP_PORT:-}" \
   -e SMTP_USER="${SMTP_USER:-}" \
@@ -372,7 +389,9 @@ echo "==> Container health http://127.0.0.1:${PORT}/api/health -> ${code}"
 
 # ── Routing ──────────────────────────────────────────────────────────────────
 SUBLABEL="${ENV_PREFIX}${TOPIC}"              # e.g. pr725
-FQDN="$HOST"                                  # e.g. pr725.interncrm.com — one source, see :99
+FQDN="$HOST"                                  # e.g. pr725.interncrm.com — one source, see HOST above
+MARKETING_SUBLABEL="${ENV_PREFIX}${TOPIC}-m"  # e.g. pr725-m
+MARKETING_FQDN="$MARKETING_HOST"
 
 # Which reverse proxy sits in front of the containers? The new host runs Caddy and
 # has no panel; the old one runs Plesk, which owns 80/443 there. Auto-detect, so
@@ -385,6 +404,17 @@ if [ -z "$ROUTER" ]; then
 fi
 echo "==> Router: ${ROUTER}"
 
+write_caddy_site() {
+  local fqdn="$1"
+  {
+    echo "# Managed by infra/server/topic-deploy.sh — topic '${TOPIC}'. Do not edit by hand."
+    echo "${fqdn} {"
+    if [ -n "$tls_line" ]; then echo "$tls_line"; fi
+    echo "    reverse_proxy 127.0.0.1:${PORT}"
+    echo "}"
+  } | _priv tee "${CADDY_SITES_DIR}/${fqdn}.caddy" >/dev/null
+}
+
 route_caddy() {
 # This is the whole thing — the ~90 lines the Plesk branch needs for the same job.
 _priv mkdir -p "$CADDY_SITES_DIR"
@@ -393,7 +423,8 @@ _priv mkdir -p "$CADDY_SITES_DIR"
 # last 100 PRs in 9 days and every PR gets its own hostname, while Let's Encrypt
 # allows 50 certificates per registered domain per week. Per-hostname issuance
 # would exhaust the domain's quota within days and topic environments would then
-# fail TLS with nothing in this script looking wrong.
+# fail TLS with nothing in this script looking wrong. The marketing host is the
+# same one-label shape (pr<N>-m.<domain>), so it uses this cert too (#2612).
 tls_line=""
 if [ -f "${CERT_DIR}/${BASE_DOMAIN}.cer" ] && [ -f "${CERT_DIR}/${BASE_DOMAIN}.key" ]; then
   tls_line="    tls ${CERT_DIR}/${BASE_DOMAIN}.cer ${CERT_DIR}/${BASE_DOMAIN}.key"
@@ -405,26 +436,56 @@ fi
 # itself, so this stays ONE proxy hop and TRUSTED_PROXY_COUNT=1 remains correct
 # (src/lib/rateLimit.ts). Moving this hostname behind Cloudflare's proxy would
 # make it two — bump the count in that same change.
-{
-  echo "# Managed by infra/server/topic-deploy.sh — topic '${TOPIC}'. Do not edit by hand."
-  echo "${FQDN} {"
-  # `[ -n "$x" ] && echo` would be a non-zero statement under `set -e` when the
-  # cert is absent; an `if` says the same thing without depending on how bash
-  # treats a failing AND-list.
-  if [ -n "$tls_line" ]; then echo "$tls_line"; fi
-  echo "    reverse_proxy 127.0.0.1:${PORT}"
-  echo "}"
-} | _priv tee "${CADDY_SITES_DIR}/${FQDN}.caddy" >/dev/null
+write_caddy_site "$FQDN"
+write_caddy_site "$MARKETING_FQDN"
 
 # Validate before reloading: Caddy loads one config for the whole box, so a bad
 # topic file would take production, preview and every other topic down with it.
 if ! eval "$CADDY_RELOAD_CMD"; then
-  _priv rm -f "${CADDY_SITES_DIR}/${FQDN}.caddy"
+  _priv rm -f "${CADDY_SITES_DIR}/${FQDN}.caddy" "${CADDY_SITES_DIR}/${MARKETING_FQDN}.caddy"
   eval "$CADDY_RELOAD_CMD" || true
-  echo "ERROR: caddy rejected the generated site file; removed it and reloaded" >&2
+  echo "ERROR: caddy rejected the generated site file; removed both topic hosts and reloaded" >&2
   exit 1
 fi
 echo "==> Caddy route ${FQDN} -> 127.0.0.1:${PORT}"
+echo "==> Caddy route ${MARKETING_FQDN} -> 127.0.0.1:${PORT} (MARKETING)"
+}
+
+route_plesk_host() {
+  local sublabel="$1"
+  local fqdn="$2"
+  local vhost_dir="/var/www/vhosts/system/${fqdn}/conf"
+
+  if plesk bin subdomain --info "$fqdn" >/dev/null 2>&1; then
+    echo "==> Plesk subdomain ${fqdn} already exists"
+  else
+    echo "==> Creating Plesk subdomain ${fqdn}"
+    plesk bin subdomain --create "$sublabel" -domain "$BASE_DOMAIN" -ssl true
+  fi
+
+  if [ -n "${WILDCARD_CERT_NAME:-}" ]; then
+    echo "==> Assigning '${WILDCARD_CERT_NAME}' to ${fqdn}"
+    plesk bin subdomain --update "$sublabel" -domain "$BASE_DOMAIN" -ssl true \
+      -certificate-name "$WILDCARD_CERT_NAME" || echo "WARN: cert assignment failed — keeping default cert"
+  fi
+
+  mkdir -p "$vhost_dir"
+  cat > "${vhost_dir}/vhost_nginx.conf" <<NGINX
+# Managed by infra/server/topic-deploy.sh — topic '${TOPIC}'. Do not edit by hand.
+location ~ ^/.* {
+    proxy_pass http://0.0.0.0:${PORT};
+    proxy_http_version 1.1;
+    proxy_set_header Host              \$host;
+    proxy_set_header X-Real-IP         \$remote_addr;
+    proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header Upgrade           \$http_upgrade;
+    proxy_set_header Connection        "upgrade";
+}
+NGINX
+
+  echo "==> Reconfiguring Plesk vhost for ${fqdn}"
+  plesk sbin httpdmng --reconfigure-domain "$fqdn"
 }
 
 route_plesk() {
@@ -436,32 +497,20 @@ route_plesk() {
 # (login_up.php / 404). So we route the topic through a real Plesk subdomain and
 # inject the same reverse-proxy crm-preview uses:
 #     location ~ ^/.* { proxy_pass http://0.0.0.0:<container port>; }
-VHOST_CONF_DIR="/var/www/vhosts/system/${FQDN}/conf"
+# The Plesk box is retired (#2166); this branch remains so a leftover environment
+# can still be updated. Both worlds get a subdomain (#2612).
 
-# Remove any leftover raw-nginx route from the earlier (pre-Plesk) approach so it
-# can't linger with a duplicate server_name.
 if [ -f "$CONF" ]; then rm -f "$CONF"; fi
 
 command -v plesk >/dev/null || { echo "ERROR: plesk CLI not found on PATH" >&2; exit 1; }
 
-# Create the subdomain (physical hosting + SSL) if it doesn't exist yet.
-if plesk bin subdomain --info "$FQDN" >/dev/null 2>&1; then
-  echo "==> Plesk subdomain ${FQDN} already exists"
-else
-  echo "==> Creating Plesk subdomain ${FQDN}"
-  plesk bin subdomain --create "$SUBLABEL" -domain "$BASE_DOMAIN" -ssl true
-fi
-
-# ── Assign the existing *.${BASE_DOMAIN} wildcard cert to this subdomain ──────
-# The wildcard already covers crm-pr<N>.${BASE_DOMAIN}, so we import that one cert
-# into Plesk (idempotent) and assign it — no per-topic Let's Encrypt issuance.
-# Non-fatal: if anything here fails the subdomain still serves with its default
-# cert (Cloudflare terminates TLS at the edge anyway).
-WILDCARD_CERT_NAME="wildcard-${BASE_DOMAIN}"
+# The wildcard already covers pr<N> and pr<N>-m on BASE_DOMAIN. Import once,
+# assign per subdomain. Non-fatal: Cloudflare terminates TLS at the edge anyway.
+WILDCARD_CERT_NAME=""
 if [ -f "${CERT_DIR}/${BASE_DOMAIN}.cer" ] && [ -f "${CERT_DIR}/${BASE_DOMAIN}.key" ]; then
+  WILDCARD_CERT_NAME="wildcard-${BASE_DOMAIN}"
   if ! plesk bin certificate --info "$WILDCARD_CERT_NAME" -domain "$BASE_DOMAIN" >/dev/null 2>&1; then
     echo "==> Importing wildcard cert into Plesk as '${WILDCARD_CERT_NAME}'"
-    # acme.sh writes a fullchain to .cer — split leaf (first block) from the CA chain.
     LEAF=$(mktemp); CHAIN=$(mktemp)
     awk 'BEGIN{n=0} /-BEGIN CERTIFICATE-/{n++} { if(n<=1) print > leaf; else print > chain }' \
       leaf="$LEAF" chain="$CHAIN" "${CERT_DIR}/${BASE_DOMAIN}.cer"
@@ -476,38 +525,12 @@ if [ -f "${CERT_DIR}/${BASE_DOMAIN}.cer" ] && [ -f "${CERT_DIR}/${BASE_DOMAIN}.k
     fi
     rm -f "$LEAF" "$CHAIN"
   fi
-  echo "==> Assigning '${WILDCARD_CERT_NAME}' to ${FQDN}"
-  plesk bin subdomain --update "$SUBLABEL" -domain "$BASE_DOMAIN" -ssl true \
-    -certificate-name "$WILDCARD_CERT_NAME" || echo "WARN: cert assignment failed — keeping default cert"
 else
   echo "==> No wildcard cert files at ${CERT_DIR}/${BASE_DOMAIN}.cer(.key); using subdomain default cert"
 fi
 
-# Inject the reverse proxy to the container via Plesk's supported custom-nginx
-# include, then have Plesk regenerate the vhost config (idempotent — rewritten
-# each deploy).
-mkdir -p "$VHOST_CONF_DIR"
-cat > "${VHOST_CONF_DIR}/vhost_nginx.conf" <<NGINX
-# Managed by infra/server/topic-deploy.sh — topic '${TOPIC}'. Do not edit by hand.
-location ~ ^/.* {
-    proxy_pass http://0.0.0.0:${PORT};
-    proxy_http_version 1.1;
-    proxy_set_header Host              \$host;
-    proxy_set_header X-Real-IP         \$remote_addr;
-    proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_set_header Upgrade           \$http_upgrade;
-    proxy_set_header Connection        "upgrade";
-}
-NGINX
-
-echo "==> Reconfiguring Plesk vhost for ${FQDN}"
-plesk sbin httpdmng --reconfigure-domain "$FQDN"
-
-# Verify the route resolves to the app locally (Host header hits the new vhost).
-sleep 2
-rcode=$(curl -s -k -o /dev/null -w '%{http_code}' -H "Host: ${FQDN}" "https://127.0.0.1/api/health" 2>/dev/null || echo "ERR")
-echo "==> Route check (Host: ${FQDN}) -> ${rcode}"
+route_plesk_host "$SUBLABEL" "$FQDN"
+route_plesk_host "$MARKETING_SUBLABEL" "$MARKETING_FQDN"
 }
 
 if [ "$ROUTER" = caddy ]; then route_caddy; else route_plesk; fi
@@ -516,6 +539,20 @@ if [ "$ROUTER" = caddy ]; then route_caddy; else route_plesk; fi
 sleep 2
 rcode=$(curl -s -k -o /dev/null -w '%{http_code}' -H "Host: ${FQDN}" "https://127.0.0.1/api/health" 2>/dev/null || echo "ERR")
 echo "==> Route check (Host: ${FQDN}) -> ${rcode}"
+mcode=$(curl -s -k -o /dev/null -w '%{http_code}' -H "Host: ${MARKETING_FQDN}" "https://127.0.0.1/api/health" 2>/dev/null || echo "ERR")
+echo "==> Route check (Host: ${MARKETING_FQDN}) -> ${mcode}"
+
+page="$(curl -sS --max-time 15 -H "Host: ${MARKETING_HOST}" "http://127.0.0.1:${PORT}/" 2>/dev/null || true)"
+title="$(printf '%s' "$page" | tr '\n' ' ' | grep -o '<title[^>]*>[^<]*</title>' | head -n1 | sed 's/<[^>]*>//g' || true)"
+if [ -z "$title" ]; then
+  echo "==> WARN: marketing host ${MARKETING_HOST}: no <title> in the landing on :${PORT}"
+elif printf '%s' "$title" | grep -q 'Internship CRM'; then
+  echo "==> WARN: marketing host ${MARKETING_HOST} serves the INTERNSHIP landing (title: ${title})"
+elif ! printf '%s' "$title" | grep -q 'SaleVali'; then
+  echo "==> WARN: marketing host ${MARKETING_HOST}: title '${title}' does not name SaleVali"
+else
+  echo "==> Marketing host ${MARKETING_HOST} OK — title: ${title}"
+fi
 
 # Reclaim space from older images — but never the rollback targets. `-af`
 # removes every image no container is using, and prod/preview keep their
@@ -528,4 +565,4 @@ docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
   | grep -vx "$IMAGE" \
   | xargs -r docker rmi >/dev/null 2>&1 || true
 
-echo "==> Topic '${TOPIC}' is live at ${URL}"
+echo "==> Topic '${TOPIC}' is live at ${URL} and ${MARKETING_URL}"

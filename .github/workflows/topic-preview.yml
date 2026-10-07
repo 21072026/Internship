@@ -4,7 +4,11 @@ name: Topic Preview (hosted build → server swap, auto per-PR)
 #
 # Every open PR automatically gets its own isolated environment:
 #   PR #123 → container internship-crm-pr123 on a dedicated port →
-#             https://pr123.<domain>  (wildcard DNS + TLS)
+#             https://pr123.<domain>            (internship world)
+#             https://pr123-m.<domain>          (marketing world, #2612)
+# Both names are one DNS label, so they ride the same *.interncrm.com wildcard
+# cert. MARKETING_HOSTS is set to the -m host inside the container — never
+# inherited from preview.env, which names the shared preview marketing domain.
 # A bot comment on the PR carries the URL (updated on every push). When the PR
 # is merged or closed, the environment (container + image + Caddy route) is torn
 # down so it stops consuming server resources.
@@ -183,14 +187,17 @@ jobs:
           script: |
             const topic = `pr${context.issue.number}`;
             const url = `https://${{ env.ENV_PREFIX }}${topic}.${{ env.BASE_DOMAIN }}`;
+            const marketingUrl = `https://${{ env.ENV_PREFIX }}${topic}-m.${{ env.BASE_DOMAIN }}`;
             const marker = '<!-- topic-preview -->';
             const body = `${marker}\n### 🧪 Topic preview ready\n\n` +
-              `Branch **\`${{ github.head_ref }}\`** → **${url}**\n\n` +
+              `Branch **\`${{ github.head_ref }}\`** → **${url}**\n` +
+              `Marketing (SaleVali) world → **${marketingUrl}** (#2612)\n\n` +
               `> Isolated environment for this PR (container \`internship-crm-${topic}\`, ` +
               `database \`internship_${topic}\`). Rebuilt on every push; container and database are ` +
               `both removed when this PR is merged or closed.\n` +
               `> Its own database, seeded with synthetic demo data — sign in with ` +
-              `\`admin.demo@demo.example.com\` / \`DemoPass123!\`. Schema changes here affect nobody else.`;
+              `\`admin.demo@demo.example.com\` / \`DemoPass123!\` (marketing: \`admin.marketing@demo.example.com\`, ` +
+              `same password). Schema changes here affect nobody else.`;
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number,
             });

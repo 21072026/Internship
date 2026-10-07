@@ -402,6 +402,15 @@ on the server:
   `internship-crm-pr<N>` on its derived port (3400–3499, `3400 + N%100`) and
   **routes it through the reverse proxy** at `pr<N>.interncrm.com` (see below). A bot
   comment on the PR carries the URL (updated on every push).
+- **The marketing world gets a second host, `pr<N>-m.interncrm.com`** (#2612), served by
+  the same container. Still one DNS label, so the existing `*.interncrm.com` DNS record
+  and wildcard cert cover it — no per-PR Let's Encrypt issuance (the 50/week/domain
+  ceiling is why `pr<N>-marketing.bcsit-gmbh.dev` was rejected). The container gets
+  `MARKETING_HOSTS=pr<N>-m.interncrm.com` explicitly — never the value from
+  `preview.env`, which names the shared preview marketing domain — and the deploy
+  points the seeded `demo-marketing` org's `publicHost` at it, so e-mail links stay on
+  the topic env. The deploy log ends with a landing-title probe on that host.
+  Teardown removes both site files.
 - **Fork PRs get no topic environment** — GitHub keeps their `GITHUB_TOKEN`
   read-only (the image can't be pushed) and withholds repo secrets, and building
   unreviewed fork code on the production host isn't worth working around. `ci.yml`
