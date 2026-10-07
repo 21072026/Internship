@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
@@ -79,7 +80,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   await prisma.auditLog.create({
-    data: { actorId: session.user.id, action: 'ADMIN_RESET_PASSWORD', targetId: user.id },
+    data: { actorId: session.user.id, action: 'ADMIN_RESET_PASSWORD', targetId: user.id, orgId: resolveOrgId(session) },
   });
   await logActivity({
     action: 'admin.reset_password',

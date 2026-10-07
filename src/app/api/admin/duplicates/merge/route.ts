@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { mergeUsers, MergeError } from '@/lib/mergeUsers';
@@ -112,6 +113,7 @@ export async function POST(request: Request) {
         actorId: session.user.id,
         action: 'USER_MERGE',
         targetId: primaryId,
+        orgId: resolveOrgId(session),
         detail: JSON.stringify({ duplicateId, duplicateEmail: result.duplicateEmail, counts: result.counts }),
       },
     });

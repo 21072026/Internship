@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { initCronJobs } from '@/services/emailService';
+import { initAuditDrainCron } from '@/lib/auditDrain';
 import { initNewsletterCron } from '@/lib/newsletterDispatch';
 import { initDeadLetterAlertCron } from '@/lib/jobs/dlqAlert';
 import { initRetentionCron } from '@/lib/retentionEntries';
@@ -69,5 +70,9 @@ export async function POST(request: Request) {
   initSurveyCampaignsCron();
   // Evaluation due reminders (#1891), daily 08:15 — they mail through emailService too.
   initEvaluationRemindersCron();
+  // The audit stream (#2012), every five minutes. Not a mail job, but it sits
+  // here with the others so every schedule in the product is registered from
+  // one place until #1676 leases the scheduler.
+  initAuditDrainCron();
   return NextResponse.json({ ok: true, started: true });
 }

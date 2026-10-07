@@ -59,6 +59,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           actorId: session.user.id,
           action: 'INTERVIEW_REQUEST_DECIDED',
           targetId: current.id,
+          orgId: resolveOrgId(session),
           detail: `${nextStatus}; mentee=${current.menteeId}; requisition=${current.requisitionId}${declineReasonCode ? `; reason=${declineReasonCode}` : ''}`,
         },
       });

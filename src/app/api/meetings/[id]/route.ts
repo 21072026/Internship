@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
@@ -229,6 +230,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           actorId: session.user.id,
           action: 'meeting.cancel',
           targetId: row.id,
+          orgId: resolveOrgId(session),
           detail: JSON.stringify({
             title: row.title,
             scheduledAt: row.scheduledAt?.toISOString() ?? null,
@@ -424,6 +426,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         actorId: session.user.id,
         action: 'meeting.delete',
         targetId: row.id,
+        orgId: resolveOrgId(session),
         detail: JSON.stringify({
           title: row.title,
           scheduledAt: row.scheduledAt?.toISOString() ?? null,

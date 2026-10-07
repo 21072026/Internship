@@ -215,6 +215,7 @@ model Organization {
   contactSuppressions     ContactSuppression[]
   companyChannels         CompanyChannel[]
   webhooks                Webhook[]
+  auditDrains             AuditDrain[]
   announcements           Announcement[]
   newsletters             Newsletter[]
   trialReminders          TrialReminder[]
@@ -4146,6 +4147,14 @@ model EmailLog {
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
 model AuditLog {
   id        String   @id @default(cuid())
+  // The tenant the audited action happened in (#2012). Nullable + backfilled:
+  // prisma/backfill-audit-log-org.mjs attributes legacy rows by the actor's
+  // org, then the target user's; what is left (system rows) falls to the
+  // default org in backfill-organization.mjs. NULL reads as the default org
+  // (tenantFilter). Registered in TENANT_MODELS, so a request-scoped writer
+  // has it stamped by the middleware; the sessionless writers (the offer
+  // expiry sweep, the impersonation STOP) pass it themselves.
+  orgId     String?
   actorId   String // who performed the action (e.g. the admin)
   action    String // e.g. IMPERSONATE_START / IMPERSONATE_STOP
   targetId  String? // affected user, when applicable
@@ -4159,6 +4168,51 @@ model AuditLog {
   // "Who accessed my account" (#1587) reads this table by the *affected* user,
   // not the actor — without this index that self-service list is a full scan.
   @@index([targetId])
+  // A time-ordered drain (#2012) and the age-based sweep (#1585) both walk
+  // this table by time; the per-tenant drain walks it by (org, time).
+  @@index([createdAt])
+  @@index([orgId, createdAt])
+}
+
+// Where a tenant's audit trail is streamed to (#2012): one row per receiver
+// (a Splunk HEC, a Sentinel data collector, an Elastic ingest endpoint). The
+// drain job (src/lib/auditDrain.ts) reads AuditLog forward from the cursor,
+// POSTs signed newline-delimited batches and moves the cursor only on a 2xx —
+// at-least-once, receivers dedupe on the audit row id (docs/audit-stream.md).
+//
+// Strictly tenant property: a drain receives its own org's rows and nothing
+// else, which is why it carries a REQUIRED orgId and is in TENANT_MODELS.
+// Nothing here can edit or delete an audit row; the only thing a drain writes
+// is its own bookkeeping.
+model AuditDrain {
+  id            String       @id @default(cuid())
+  orgId         String
+  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // @db.Text: a SIEM collector URL carries a token in its path or query and
+  // runs past 191 characters. The route caps it (AUDIT_DRAIN_URL_MAX).
+  url           String       @db.Text
+  // The HMAC-SHA256 key the receiver verifies each batch with. Shown once at
+  // creation and on rotation, like Webhook.secret.
+  secret        String
+  // 'json_lines' (our record, one per line) or 'ecs' (Elastic Common Schema).
+  format        String       @default("json_lines")
+  active        Boolean      @default(true)
+  // Where the next batch starts: the (createdAt, id) of the last row shipped.
+  // Null = nothing shipped yet, start at the beginning of the trail.
+  cursorAt      DateTime?
+  cursorId      String?
+  lastOkAt      DateTime?
+  // Through sanitizeError, never a raw response body.
+  lastError     String?      @db.Text
+  // Consecutive failed deliveries; cleared by a success. Drives the backoff
+  // (nextAttemptAt) and, past AUDIT_DRAIN_PAUSE_AFTER_FAILURES, the pause.
+  failures      Int          @default(0)
+  nextAttemptAt DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([orgId])
+  @@index([active, nextAttemptAt])
 }
 
 // Single-use, time-limited token to confirm a user's email address.

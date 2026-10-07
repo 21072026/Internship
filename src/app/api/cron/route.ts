@@ -24,6 +24,7 @@ import { sendDueSurveyReminders } from '@/lib/surveyReminders';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
+import { runAuditDrains } from '@/lib/auditDrain';
 import { runRetentionPrune } from '@/lib/retentionEntries';
 import { runUsageRollup } from '@/lib/jobs/usageRollup';
 import { runTrialReminders } from '@/lib/jobs/trialReminders';
@@ -90,6 +91,10 @@ export async function GET(request: Request) {
     // batch below. The batch is "run everything now", which an admin may click
     // several times while fixing something; the alert's whole contract is one
     // mail a day, and it is silent when the queue is clean either way.
+    if (job === 'audit-drain') {
+      // One tick of the audit stream (#2012): every due drain, platform-wide.
+      return NextResponse.json({ message: 'Audit drain ran', auditDrain: await runAuditDrains() });
+    }
     if (job === 'dlq-alert') {
       return NextResponse.json({ message: 'Dead-letter alert ran', dlqAlert: await runDeadLetterAlert() });
     }
