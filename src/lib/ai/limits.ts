@@ -90,6 +90,10 @@ export const AI_RATE_LIMITS = {
   company_enrich: { limit: 20, windowMs: 10 * 60 * 1000 },
   // One practice interview is up to 7 calls (6 turns + the report), #2051.
   practice_interview: { limit: 20, windowMs: 10 * 60 * 1000 },
+  // Personalised session agenda (POST /api/agendas/personalize, #1845).
+  // 10 calls / 10 minutes: one proposal per session, a regenerate or two; the
+  // same goals, lines, log and stage are answered from the stored copy.
+  agenda_personalize: { limit: 10, windowMs: 10 * 60 * 1000 },
 
   // Bulk e-mail draft (POST /api/ai/bulk-draft, #2048).
   // 6 calls / 10 minutes: one call drafts the mail for up to 200 recipients,

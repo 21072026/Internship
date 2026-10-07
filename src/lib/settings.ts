@@ -165,6 +165,19 @@ export const SETTING_DEFAULTS = {
   // row is never deleted, and nothing younger than
   // NOTIFICATION_RETENTION_FLOOR_DAYS (30) is deleted whatever this says.
   notificationRetentionDays: '180',
+  // Message retention (#2056), per tenant. Message BODIES older than this many
+  // days are masked every night with the existing delete-for-everyone mechanism
+  // (`deletedForEveryoneAt`, body emptied, attachments dropped) — the row stays,
+  // so the other participant's thread stays coherent. `0` = keep forever, the
+  // default and the behaviour before #2056: how long a programme keeps private
+  // conversations is its own data-protection decision, not ours. Anything
+  // positive is raised to MESSAGE_RETENTION_FLOOR_DAYS (30), so a typo cannot
+  // mask yesterday's conversation. Edited on /admin/safeguarding.
+  messageRetentionDays: '0',
+  // The org's safeguarding watch list (#2056): one keyword or phrase per line,
+  // parsed by `parseWatchKeywords` (src/lib/safeguarding.ts). Empty by default —
+  // contact-detail detection works without it. Edited on /admin/safeguarding.
+  safeguardingKeywords: '',
   // Board work-in-progress limit (#1439): a pipeline column holding more than
   // this many candidates gets an amber count, so a bottleneck stands out.
   // Advisory only — it never blocks a move.

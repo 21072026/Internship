@@ -720,6 +720,9 @@ run_tool node prisma/backfill-ai-usage-task.mjs || true
 run_tool node prisma/backfill-organization.mjs \
   || log "WARNING: org backfill FAILED (exit non-zero) — see the output above. It may be incomplete; do NOT enable MT_ENFORCE_ISOLATION until it runs green (#1557)."
 run_tool node scripts/backfill-requisitions.mjs || true
+# One Application per CompanyInterest that names a requisition (#1828). Only
+# ever adds rows; a second run reports created=0.
+run_tool node scripts/backfill-applications.mjs || true
 # Detector, NOT a gate (#419): reports mentees holding more than one ACTIVE
 # mentorship. Exits 0 by design, and `|| true` on top — this must never be the
 # reason a deploy fails. The DB-level @@unique([activeMenteeKey]) backstop lands

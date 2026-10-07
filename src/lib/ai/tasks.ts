@@ -128,6 +128,11 @@ export const AI_TASKS = {
   // and it can be switched off alone. No identifier is needed in the payload;
   // the typed answers are fenced and contact-masked like every other text.
   practice_interview: { label: 'Practice interview', audience: 'participant', consent: null, tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1500 },
+  // A session agenda adapted to one pair (#1845): the guide's prompts, the
+  // pair's open goals, the last session's lines and the newest log entries
+  // in, 4-7 ordered prompts out — a DRAFT until a seat adds it. Participant
+  // and free; the mentee's log consent, because the log is what it reads.
+  agenda_personalize: { label: 'Personalised session agenda', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700 },
 } as const satisfies Record<string, AiTaskSpec>;
 
 export type AiTaskId = keyof typeof AI_TASKS;

@@ -46,6 +46,8 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 //   profile_enrich        participant  a mentor's own profile from own text    never
 //   next_step_suggest     participant  the owning mentor's own record; an      never — except
 //                                      ADMIN on another record is escalated     an admin
+//   agenda_personalize    participant  the pair's own session agenda (#1845);  never — except
+//                                      an ADMIN on another pair is escalated    an admin
 //   content_translate     operator     admin authoring, /admin/*               required
 //   content_draft         operator     admin authoring from a brief            required
 //   company_enrich        operator     admin company record from pasted text   required

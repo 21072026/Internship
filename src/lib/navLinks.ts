@@ -11,6 +11,7 @@ import {
   Sparkles,
   ArrowRightLeft,
   type LucideIcon,
+  ShieldAlert,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
 
@@ -98,6 +99,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/email', icon: Mail, key: 'email', capability: 'mentorship' },
   { href: '/admin/documents', icon: FileText, key: 'documents' },
   { href: '/admin/support', icon: LifeBuoy, key: 'support' },
+  // Safeguarding review queue (#2056). Untagged: every vertical has messaging.
+  { href: '/admin/safeguarding', icon: ShieldAlert, key: 'safeguarding' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
   // Term compliance of the weekly diaries (#1918) — an internship-only screen.

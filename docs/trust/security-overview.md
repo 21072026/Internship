@@ -66,6 +66,21 @@ facts rather than intentions.
   of that.
   → [`subprocessors.md`](subprocessors.md), row 4
 
+## Safeguarding and message retention
+
+- **Contact details and watch keywords in private messages are flagged for a
+  programme admin — and never blocked.** A phone number or e-mail address (also
+  spelled out or obfuscated, in English, Turkish and German) or a word from the
+  programme's own watch list raises a flag on an ADMIN-only, tenant-scoped review
+  queue; the message is delivered regardless. Messaging stays free and ungated
+  for mentors and mentees.
+  → [`docs/safeguarding.md`](../safeguarding.md), issue #2056
+- **A programme can limit how long message text is kept.** An org-level window
+  (off by default) masks message bodies older than it every night, reusing the
+  delete-for-everyone mechanism, so the conversation stays coherent and no row is
+  deleted.
+  → [`docs/safeguarding.md`](../safeguarding.md) § Message retention
+
 ## Operational security
 
 - **The health endpoint can be closed.** `GET /api/health` answers everyone with

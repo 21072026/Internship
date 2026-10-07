@@ -97,6 +97,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'EvaluationDue',
   'Requisition',
   'InterviewRequest',
+  // One person considered for one role (#1828). ApplicationEvent is reached only
+  // through its application and is deliberately not listed (schema comment).
+  'Application',
   'MessageTemplate',
   // Guided-conversation library (#1841). SessionAgenda and both item models
   // are reached only through a scoped parent and are deliberately not listed
@@ -114,6 +117,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ApiKeyUsage',
   // A mentee's practice interview transcript (#2051).
   'PracticeSession',
+  // Safeguarding flags (#2056) — one org's review queue; stamped with the
+  // sender's org at write time.
+  'SafeguardingFlag',
   'MatchFeedback',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational

@@ -51,6 +51,9 @@ export const TASK_TTL_MS: Record<string, number> = {
   outreach_draft: 1 * DAY,
   // Keyed on the log, the stage, the note and the day in stage (#2875).
   next_step_suggest: 1 * DAY,
+  // Keyed on the agenda's lines, the guide, the open goals, the previous
+  // session and the newest log entries (#1845): any change is a new question.
+  agenda_personalize: 1 * DAY,
 };
 
 /**

@@ -196,6 +196,7 @@ model Organization {
   offers                  Offer[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
+  applications            Application[]
   messageTemplates        MessageTemplate[]
   apiKeys                 ApiKey[]
   matchFeedback           MatchFeedback[]
@@ -222,6 +223,7 @@ model Organization {
   relationValues          RelationValue[]
   ssoClaimMappings        SsoClaimMapping[]
   agendaTemplates         AgendaTemplate[]
+  safeguardingFlags       SafeguardingFlag[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -560,6 +562,8 @@ model User {
   assignedSupportTickets            SupportTicket[]               @relation("SupportAssignee")
   supportMessages                   SupportMessage[]              @relation("SupportMessageSender")
   authoredRelationNotes             RelationNote[]                @relation("RelationNoteAuthor")
+  sessionNotes                      SessionNote[]                 @relation("SessionNoteAuthor")
+  sessionNoteRevisions              SessionNoteRevision[]         @relation("SessionNoteRevisionAuthor")
   pageViews                         PageView[]
   referredBy                        User?                         @relation("UserReferrals", fields: [referredById], references: [id])
   referredUsers                     User[]                        @relation("UserReferrals")
@@ -589,6 +593,8 @@ model User {
   meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
+  applications                      Application[]                 @relation("ApplicationMentee")
+  applicationEvents                 ApplicationEvent[]            @relation("ApplicationEventActor")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
@@ -605,6 +611,7 @@ model User {
   loginLinkTokens                   LoginLinkToken[]
   // Text-only practice interviews (#2051).
   practiceSessions                  PracticeSession[]             @relation("PracticeSessions")
+  safeguardingReviews               SafeguardingFlag[]            @relation("SafeguardingReviewer")
 
   // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
   // distinct, so a row whose orgId is still NULL (the default org, until the
@@ -893,13 +900,16 @@ model Message {
   // can never post the same reply twice. Null for messages written in-app.
   inboundMessageId     String?        @unique
 
-  relation     MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  conversation Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  attachments  MessageAttachment[]
+  relation          MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  conversation      Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  attachments       MessageAttachment[]
   // Per-user "delete for me" — hides the message only from these users' view.
-  hiddenFor    MessageHiddenFor[]
+  hiddenFor         MessageHiddenFor[]
   // Emoji reactions (👍❤️😂…) from thread participants.
-  reactions    MessageReaction[]
+  reactions         MessageReaction[]
+  // Safeguarding flags raised on this message (#2056). Detection never blocks
+  // the message; these rows are the admin review queue's record of it.
+  safeguardingFlags SafeguardingFlag[]
 
   @@index([conversationId])
   @@index([relationId])
@@ -1491,6 +1501,7 @@ model Company {
   offers             Offer[]
   requisitions       Requisition[]
   interviewRequests  InterviewRequest[]
+  applications       Application[]
   placements         Placement[]
   // The enquiries this company was created from (#1863). A list rather than a
   // single row because nothing stops a second enquiry from the same company
@@ -2914,6 +2925,7 @@ model MentorshipRelation {
   evaluationDues        EvaluationDue[]
   goals                 Goal[]
   sessionAgendas        SessionAgenda[]
+  sessionNotes          SessionNote[]
   meetingRequests       MeetingRequest[]
   questions             MentorQuestion[]
   relationNotes         RelationNote[]
@@ -3224,6 +3236,57 @@ model RelationNote {
   @@index([relationId])
 }
 
+// The pair's SHARED minutes (#1847): one record of what was said and agreed,
+// readable and editable by both the mentor and the mentee (an admin reads).
+// Deliberately a THIRD model beside PersonalNote (author-private, "only the
+// author can see it") and RelationNote (mentor-private): rows in those two were
+// written under an explicit privacy promise, and a visibility flag on either
+// would break it retroactively. `meetingId` and `agendaId` are SetNull for the
+// PersonalNote reason — deleting the meeting or the agenda must not delete what
+// was written in it; the minutes are the durable part.
+//
+// No `orgId`, deliberately: this is a child of MentorshipRelation, which IS in
+// TENANT_MODELS (src/lib/orgContext.ts), so it is reached only through a scoped
+// parent — the same arrangement as MeetingGuest under Meeting. Worth stating,
+// because a model that is not anchored gets no automatic tenant protection and
+// every reader has to know that on purpose.
+model SessionNote {
+  id          String   @id @default(cuid())
+  relationId  String
+  meetingId   String?
+  agendaId    String?
+  body        String   @db.Text
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  relation  MentorshipRelation    @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  meeting   Meeting?              @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  agenda    SessionAgenda?        @relation(fields: [agendaId], references: [id], onDelete: SetNull)
+  createdBy User?                 @relation("SessionNoteAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  revisions SessionNoteRevision[]
+
+  @@index([relationId])
+  @@index([meetingId])
+}
+
+// Who changed the minutes after the meeting (#1847): an append-only trail, one
+// row per saved edit holding the body AS SAVED and who saved it. The routes
+// keep the last SESSION_NOTE_REVISIONS_KEPT rows per note; there is no diff UI.
+// Reached through SessionNote → MentorshipRelation, so no `orgId` either.
+model SessionNoteRevision {
+  id        String   @id @default(cuid())
+  noteId    String
+  authorId  String?
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  note   SessionNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  author User?       @relation("SessionNoteRevisionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([noteId, createdAt])
+}
+
 // A goal set within a mentorship — supports goal setting + tracking (checklist 7).
 model Goal {
   id              String     @id @default(cuid())
@@ -3345,6 +3408,7 @@ model SessionAgenda {
   meeting  Meeting?            @relation(fields: [meetingId], references: [id], onDelete: SetNull)
   template AgendaTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
   items    SessionAgendaItem[]
+  notes    SessionNote[]
 
   @@index([relationId])
   @@index([templateId])
@@ -3509,6 +3573,7 @@ model Meeting {
   feedback     MeetingFeedback[]
   attendance   MeetingAttendance[]
   agenda       SessionAgenda?
+  sessionNotes SessionNote[]
 
   @@index([relationId])
   @@index([projectId])
@@ -4439,6 +4504,7 @@ model Requisition {
 
   interests         CompanyInterest[]
   interviewRequests InterviewRequest[]
+  applications      Application[]
 
   @@index([orgId, companyId])
   @@index([orgId, status])
@@ -4476,6 +4542,67 @@ model InterviewRequest {
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+}
+
+/// One person being considered for one role, and where they are in it (#1828).
+/// The row every hiring screen reads: the per-role funnel, the interview
+/// outcome, the offer that fills the requisition. `stage`, `status` and
+/// `source` are plain Strings validated against the whitelists in
+/// src/lib/applications.ts (the repo's convention for status-like values, see
+/// Offer.status) — `stage` is the fine-grained funnel step, `status` the coarse
+/// outcome derived from it (ACTIVE | HIRED | REJECTED | WITHDRAWN) so a report
+/// can count open applications without knowing the stage vocabulary.
+/// CompanyInterest stays in place as the company's flat flag; the only bridge
+/// between the two is applicationFromInterest(). One application per person
+/// per role is enforced by the database, not by a handler.
+model Application {
+  id               String    @id @default(cuid())
+  orgId            String
+  requisitionId    String
+  menteeId         String
+  companyId        String
+  status           String    @default("ACTIVE")
+  stage            String    @default("APPLIED")
+  source           String    @default("SELF")
+  screeningAnswers Json?
+  coverNote        String?   @db.Text
+  dispositionCode  String?
+  dispositionNote  String?   @db.Text
+  withdrawnAt      DateTime?
+  decidedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  org         Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  requisition Requisition        @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User               @relation("ApplicationMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  events      ApplicationEvent[]
+
+  @@unique([requisitionId, menteeId])
+  @@index([orgId, status])
+  @@index([companyId, stage])
+  @@index([menteeId])
+}
+
+/// The audit trail of an application: one row per stage change, the funnel
+/// report's source (#1828). Reached only through its application, so it
+/// carries no orgId and is deliberately not in TENANT_MODELS. `fromStage` is
+/// null on the row that created the application.
+model ApplicationEvent {
+  id            String   @id @default(cuid())
+  applicationId String
+  fromStage     String?
+  toStage       String
+  actorId       String?
+  note          String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor       User?       @relation("ApplicationEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+  @@index([actorId])
 }
 
 /// A user's own Google Calendar, connected by them and revocable by them (#709).
@@ -5804,4 +5931,53 @@ model PracticeSession {
 
   @@index([userId, startedAt])
   @@index([orgId])
+}
+
+// ── Safeguarding (#2056) ─────────────────────────────────────────────────────
+// A message that shared a contact detail or hit an org's watch keyword. The
+// rule is src/lib/safeguarding.ts (pure, corpus-tested); the only writer is
+// src/lib/safeguardingScan.ts; the queue is /admin/safeguarding. Detection
+// NEVER blocks or holds the message — this row is a note for an admin, not a
+// gate on the participant's channel. docs/safeguarding.md has the whole story.
+
+enum SafeguardingFlagKind {
+  CONTACT_DETAIL
+  KEYWORD
+}
+
+enum SafeguardingOutcome {
+  // Looked at; nothing to do (a false positive, or harmless in context).
+  NO_ACTION
+  // Looked at and dealt with inside the programme (a word with the mentor…).
+  REVIEWED
+  // Handed on — to the safeguarding lead, the institution, the authorities.
+  ESCALATED
+}
+
+model SafeguardingFlag {
+  id           String               @id @default(cuid())
+  // Tenant data: the org of the message's SENDER, stamped at write time. In
+  // TENANT_MODELS (src/lib/orgContext.ts) and filtered by hand in every read.
+  orgId        String?
+  messageId    String
+  kind         SafeguardingFlagKind
+  // A MASKED contact detail ("01•• ••••••78") or the watch keyword as the admin
+  // configured it — never the full number or address: the message body is the
+  // record, and the retention sweep masks bodies, so a flag that kept the
+  // number would outlive it.
+  matchedTerm  String               @db.VarChar(191)
+  createdAt    DateTime             @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+  outcome      SafeguardingOutcome?
+
+  org        Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  message    Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reviewedBy User?         @relation("SafeguardingReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  // Re-scanning an edited message must not raise the same flag twice.
+  @@unique([messageId, kind, matchedTerm])
+  // The queue: one org's open flags, newest first.
+  @@index([orgId, reviewedAt, createdAt])
+  @@index([reviewedById])
 }

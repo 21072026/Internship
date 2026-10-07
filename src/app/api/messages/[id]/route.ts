@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -40,6 +41,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     where: { id },
     data: { body: parsed.data.body, editedAt: new Date() },
   });
+  // An edit is a new body: re-scanned, and only NEW findings are flagged (#2056).
+  await scanMessageForSafeguarding({ messageId: id, body: parsed.data.body, senderId: session.user.id });
   return NextResponse.json({ ok: true });
 }
 
