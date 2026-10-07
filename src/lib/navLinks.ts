@@ -1,4 +1,5 @@
 import {
+  BookOpenCheck,
   Activity, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
@@ -69,6 +70,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // sidebar — and the projects write APIs are gated on the same capability.
   { href: '/admin/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },
   { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates', capability: 'mentorship' },
+  // The guided-conversation library a pair's session agenda is picked from (#1843).
+  { href: '/admin/agenda-templates', icon: BookOpenCheck, key: 'agendaTemplates', capability: 'mentorship' },
   // The canned-response pool the composer offers (#1871), next to the other
   // reusable-text screen rather than buried under settings.
   { href: '/admin/message-templates', icon: MessageSquareQuote, key: 'messageTemplates' },

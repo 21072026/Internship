@@ -113,6 +113,7 @@ const SETUP: Route[] = [
   ...shell(
     '/admin/projects',
     '/admin/goal-templates',
+    '/admin/agenda-templates',
     '/admin/message-templates',
     '/admin/cohorts',
     '/admin/tags',

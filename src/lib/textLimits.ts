@@ -181,6 +181,10 @@ export const TEXT_LIMITS = {
   goalTitle: 191,
   /** Goal.description — @db.Text */
   goalDescription: 2000,
+  /** AgendaTemplate.summary — a locale entry of the JSON column (#1843) */
+  agendaSummary: 500,
+  /** AgendaTemplateItem.guidance — @db.Text (#1843) */
+  agendaGuidance: 2000,
   /** MeetingRequest.topic — VARCHAR(191) */
   meetingTopic: 191,
   /** Document.title — VARCHAR(191) */
