@@ -442,6 +442,14 @@ mı" bilgisini döndürür; kişisel veri taşımaz. `GET /api/admin/insights/[k
 sağlayıcıyı hiç çağırmaz: rakamları ve — tam bu satırlar için saklanmış bir
 özet varsa — onu döndürür; aynı rol ve yetenek kapısı geçerlidir.
 
+AI konsolunun iki okuma ucu (#2030) sağlayıcıyı hiç çağırmaz ve metin taşımaz:
+`GET /api/admin/ai/usage` (`?month=YYYY-MM`, `?format=csv`) ve
+`GET /api/admin/ai/status` — **yalnız `ADMIN`**, kontrol rotanın içinde (anonim
+`401`, MENTOR/MENTEE `403`; `e2e/admin-ai-console.spec.ts`), ölçüm satırları
+`orgWhere()` ile adminin org'una daraltılır — kotanın saydığı satırların aynısı.
+CSV yalnızca sayaç sütunlarını içerir (kullanıcı kimliği, içerik yok); durum ucu
+anahtarın tanımlı olup olmadığını söyler, anahtarın kendisini asla.
+
 Her ucun ne gönderip neyi bilerek göndermediği, saklama ve bozulma davranışı:
 [`ai.md`](ai.md).
 
