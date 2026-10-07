@@ -15,7 +15,7 @@ import { MAX_INTERVAL_WEEKS, MAX_OCCURRENCES_LIMIT } from '@/lib/seriesRule';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import type { Session } from 'next-auth';
 import { isValidTimeZone } from '@/lib/timezone';
-import { resolveMeetingLink } from '@/lib/meetingRoom';
+import { checkPastedMeetingLink, meetingLinkRefusal, resolveMeetingLink } from '@/lib/meetingRoom';
 import { requireCapability } from '@/lib/capabilityGate';
 import { withdrawMeetings } from '@/lib/googleCalendarSync';
 import { syncSeriesBounded, syncSeriesInBackground } from '@/lib/googleCalendarSeriesSync';
@@ -438,11 +438,14 @@ export async function POST(request: Request) {
     // allowance as a small group (lib/jaasAllowance.ts). It used to mean "never
     // a JaaS room", which put every recurring series on a host that cuts an
     // embedded call off after five minutes (#2011).
-    const fixedLink = await resolveMeetingLink({
+    const resolved = await resolveMeetingLink({
       pastedLink: meetLink,
       inviteeCount: null,
       orgId: session.user.orgId,
+      organizerId: session.user.id,
     });
+    if (!resolved.ok) return meetingLinkRefusal(resolved);
+    const fixedLink = resolved.link;
     const series = await prisma.meetingSeries.create({
       data: {
         projectId: projectId ?? null,
@@ -541,7 +544,17 @@ export async function PUT(request: Request) {
     if (incoming.daysOfWeek !== undefined) data.daysOfWeek = incoming.daysOfWeek;
     if (incoming.timeOfDay !== undefined) data.timeOfDay = incoming.timeOfDay;
     if (incoming.timeZone !== undefined) data.timeZone = isValidTimeZone(incoming.timeZone) ? incoming.timeZone : null;
-    if (incoming.meetLink !== undefined) data.fixedLink = incoming.meetLink || null;
+    if (incoming.meetLink !== undefined) {
+      // The same door a pasted link goes through on create (#2007): a link we
+      // would not send people to is refused, not stored. Empty clears it.
+      if (incoming.meetLink) {
+        const check = checkPastedMeetingLink(incoming.meetLink);
+        if (!check.ok) return meetingLinkRefusal({ ok: false, code: 'invalid_link', reason: check.reason });
+        data.fixedLink = check.url;
+      } else {
+        data.fixedLink = null;
+      }
+    }
     if (incoming.durationMinutes !== undefined) data.durationMinutes = incoming.durationMinutes;
     if (incoming.active !== undefined) data.active = incoming.active;
     if (incoming.intervalWeeks !== undefined) data.intervalWeeks = incoming.intervalWeeks;

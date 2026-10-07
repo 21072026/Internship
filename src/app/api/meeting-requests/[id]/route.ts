@@ -8,7 +8,7 @@ import { randomBytes } from 'crypto';
 import { notify } from '@/lib/notify';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestDecisionEmail } from '@/services/emailService';
-import { resolveMeetingLink } from '@/lib/meetingRoom';
+import { meetingLinkRefusal, resolveMeetingLink } from '@/lib/meetingRoom';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -88,8 +88,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   // Accept → create the confirmed meeting with an auto video link. A request
   // lives in one relation's thread (either side may file it), so the confirmed
-  // meeting is structurally a 1:1 call: one mentor, one mentee.
-  const link = await resolveMeetingLink({ inviteeCount: 1, orgId: session.user.orgId });
+  // meeting is structurally a 1:1 call: one mentor, one mentee. The room is
+  // the MENTOR's — their saved personal room applies under a tenant policy
+  // that wants one (#2007), whether the mentor or an admin clicked accept.
+  const resolved = await resolveMeetingLink({ inviteeCount: 1, orgId: session.user.orgId, organizerId: rel.mentorId });
+  if (!resolved.ok) return meetingLinkRefusal(resolved);
+  const link = resolved.link;
   // The wall clock behind `proposedAt` was typed by the *requester* (see
   // POST /api/meeting-requests), so theirs is the zone this time was agreed on —
   // not the mentor's, even though the mentor is the one confirming it (#1210).
