@@ -108,8 +108,13 @@ test('the thread view loads one bounded page and scrolls back on demand', { tag:
   await list.hover();
   await page.mouse.wheel(0, -50_000);
   await expect(list.locator('[data-message-id]')).toHaveCount(100);
-  await page.getByTestId('thread-load-older').click();
-  await expect(list.locator('[data-message-id]')).toHaveCount(TOTAL);
+  // The last page: the button — unless the wheel's momentum already scrolled
+  // the list to its top again and loaded it first, which the production build
+  // does often enough that the button can vanish under the click.
+  await expect(async () => {
+    if ((await list.locator('[data-message-id]').count()) < TOTAL) await page.getByTestId('thread-load-older').click({ timeout: 2_000 });
+    await expect(list.locator('[data-message-id]')).toHaveCount(TOTAL, { timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
   await expect(page.getByTestId('thread-load-older')).toHaveCount(0);
   const rendered = await list.locator('[data-message-id]').evaluateAll((els) => els.map((e) => e.getAttribute('data-message-id')));
   expect(rendered).toEqual(messageIds);
