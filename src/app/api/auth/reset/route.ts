@@ -3,7 +3,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { passwordSchema } from '@/lib/password';
+import { checkPassword, passwordRefusal, passwordSchema } from '@/lib/password';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import {
   isPasswordLoginBlockedForUserId,
@@ -70,6 +70,12 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // The account's org decides the policy (#1544): the row this link was
+    // minted for, never the address's other world.
+    const owner = await prisma.user.findUnique({ where: { id: record.userId }, select: { orgId: true } });
+    const verdict = await checkPassword(password, owner?.orgId);
+    if (!verdict.ok) return passwordRefusal(verdict);
 
     const hashed = await bcrypt.hash(password, 12);
 

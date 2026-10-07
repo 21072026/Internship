@@ -43,6 +43,13 @@ export default function AdminSettingsPage() {
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [require2fa, setRequire2fa] = useState('off');
   const [selfRegistration, setSelfRegistration] = useState('auto');
+  // Password policy (#1544) — stored as strings; the API range-checks the minimum.
+  const [passwordMinLength, setPasswordMinLength] = useState('8');
+  const [passwordRequireUpper, setPasswordRequireUpper] = useState(true);
+  const [passwordRequireLower, setPasswordRequireLower] = useState(true);
+  const [passwordRequireDigit, setPasswordRequireDigit] = useState(false);
+  const [passwordRequireSymbol, setPasswordRequireSymbol] = useState(false);
+  const [breachedPasswordCheck, setBreachedPasswordCheck] = useState(true);
   // Negative-outcome auto-send (#830) — off by default, deliberately.
   const [outcomeAutoSend, setOutcomeAutoSend] = useState(false);
   // Blind interview review (#819) — org-wide, off by default.
@@ -219,6 +226,12 @@ export default function AdminSettingsPage() {
     setWeeklyDigest(settings.weeklyDigest !== 'false');
     setRequire2fa(settings.require2fa ?? 'off');
     setSelfRegistration(settings.selfRegistration ?? 'auto');
+    setPasswordMinLength(settings.passwordMinLength ?? '8');
+    setPasswordRequireUpper(settings.passwordRequireUpper !== 'false');
+    setPasswordRequireLower(settings.passwordRequireLower !== 'false');
+    setPasswordRequireDigit(settings.passwordRequireDigit === 'true');
+    setPasswordRequireSymbol(settings.passwordRequireSymbol === 'true');
+    setBreachedPasswordCheck(settings.breachedPasswordCheck !== 'false');
     setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
     setAiMonthlyQuota(settings.aiMonthlyQuota ?? '200');
     setLoadedQuota(settings.aiMonthlyQuota ?? '200');
@@ -305,7 +318,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}) }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}) }),
       });
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
@@ -451,6 +464,30 @@ export default function AdminSettingsPage() {
               </select>
               <p className="text-xs text-gray-500 mt-1">{t.settings.require2faHint}</p>
             </div>
+            {/* The password policy (#1544): what a new password is judged by, per
+                org. The forms list the same rules (src/lib/passwordPolicyRule.ts);
+                the API refuses a minimum under 8. */}
+            <fieldset className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2" data-testid="password-policy">
+              <legend className="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">{t.settings.passwordPolicy}</legend>
+              <p className="text-xs text-gray-500">{t.settings.passwordPolicyHint}</p>
+              <Input id="password-min-length" label={t.settings.passwordMinLength} type="number" min={8} max={128} value={passwordMinLength} onChange={(e) => setPasswordMinLength(e.target.value)} data-testid="password-min-length" />
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input type="checkbox" checked={passwordRequireUpper} onChange={(e) => setPasswordRequireUpper(e.target.checked)} data-testid="password-require-upper" /> {t.settings.passwordRequireUpper}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input type="checkbox" checked={passwordRequireLower} onChange={(e) => setPasswordRequireLower(e.target.checked)} data-testid="password-require-lower" /> {t.settings.passwordRequireLower}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input type="checkbox" checked={passwordRequireDigit} onChange={(e) => setPasswordRequireDigit(e.target.checked)} data-testid="password-require-digit" /> {t.settings.passwordRequireDigit}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input type="checkbox" checked={passwordRequireSymbol} onChange={(e) => setPasswordRequireSymbol(e.target.checked)} data-testid="password-require-symbol" /> {t.settings.passwordRequireSymbol}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input type="checkbox" checked={breachedPasswordCheck} onChange={(e) => setBreachedPasswordCheck(e.target.checked)} data-testid="breached-password-check" /> {t.settings.breachedPasswordCheck}
+              </label>
+              <p className="text-xs text-gray-500">{t.settings.breachedPasswordCheckHint}</p>
+            </fieldset>
             <Input label={t.settings.earlyAccessWindow} type="number" min={0} max={365} value={earlyAccessWindowDays} onChange={(e) => setEarlyAccessWindowDays(e.target.value)} hint={t.settings.earlyAccessWindowHint} />
             {/* max 999999 mirrors the API's `\d{1,6}` regex, which stays the
                 authority — the number attribute only keeps the form honest. */}

@@ -58,6 +58,9 @@ const MODELS = {
   interviewRequest: 'placements',
   interviewPanel: 'placements',
   interviewPanelMember: 'placements',
+  // The hiring funnel's own row and its audit trail (#1828/#1836).
+  application: 'placements',
+  applicationEvent: 'placements',
   // The account address book (#2442).
   companyContact: 'companies',
 };
@@ -66,6 +69,12 @@ const MODELS = {
 // promise that the path is sessionless and was reasoned about, with the reason
 // in the value — a reader should never have to go find out why.
 const EXEMPT = {
+  'src/lib/applicationStage.ts':
+    'moveApplicationStage() is the ONE writer of Application.stage (#1836) and the two write-through hooks ' +
+    'beside it (a company shortlist, an approved interview request) run through it. Every caller is a ' +
+    "mutating handler that calls requireCapability(..., 'placements') before anything else — PATCH " +
+    '/api/applications/[id]/stage, POST /api/applications/bulk-stage, POST /api/company/interests and PATCH ' +
+    '/api/interview-requests/[id] — and hands it the transaction client. It opens no request path of its own.',
   'src/lib/orgSampleProgram.ts':
     'The starter pack\'s sample programme (#2066) creates one sample requisition and removes the rows it tagged. ' +
     'It is sessionless by design (provisioning #2065/#1749 call it with an org they just created) and asks the ' +

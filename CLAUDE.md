@@ -347,6 +347,18 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   (`spendLoginLink`), the request route answers the same 200 for every address and mails
   **after** the response (`after()`), and both limits apply: 5/15min per IP *and* per address.
   Never add a second TOTP implementation and never log the raw token.
+- **The password policy is data, and one function judges it** ([`docs/password-policy.md`](docs/password-policy.md),
+  #1544): `passwordMinLength` (clamped 8…128 on read, refused outside that range on write),
+  `passwordRequireUpper/Lower/Digit/Symbol` and `breachedPasswordCheck` are settings read through
+  the per-org chain; the rule check is pure and Unicode-aware in `src/lib/passwordPolicyRule.ts`
+  and runs identically in the browser (`usePasswordPolicy()` + `<PasswordRules>` under every
+  new-password field, fed by `GET /api/auth/password-policy`) and on the server. **Every path
+  that accepts a new password calls `checkPassword(password, orgId)`** (`src/lib/password.ts`)
+  after it knows the account's org — register, reset, account today — and answers a refusal as
+  `400 { code: 'password_policy' | 'password_breached' }`; `passwordSchema` is only the shape.
+  The HIBP lookup (`src/lib/breachedPassword.ts`) sends five hex characters of the SHA-1, matches
+  the suffix locally, goes through the SSRF guard and **fails open** — never log the password or
+  the hash. `HIBP_ALLOW_INSECURE_STUB=1` is the e2e stub's switch and is never set on a deployment.
 - **2FA recovery codes** ([`docs/two-factor-recovery.md`](docs/two-factor-recovery.md), #1542):
   enabling 2FA mints **ten single-use codes**, returned by that one response and never
   again — only an HMAC of each is stored (`src/lib/recoveryCodes.ts`; the format rules,
@@ -508,6 +520,13 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   mirror (Node 20 on the server cannot import TS) — the unit test compares the two, change both in one
   commit. `npm run backfill:applications` (also on deploy) only ever adds rows; re-keying or deleting
   `CompanyInterest` is a drop-and-recreate under `db push` and is out of scope by design.
+  **`Application.stage` has ONE writer** (#1836): `moveApplicationStage()` in `src/lib/applicationStage.ts`,
+  a guarded `updateMany` with the expected stage in the WHERE plus exactly one `ApplicationEvent`, zero
+  rows → `409 stage_conflict`; `PATCH /api/applications/[id]/stage`, `POST /api/applications/bulk-stage`
+  (≤ 50 ids, honest `{ moved, skipped[] }`), the shortlist write-through in `/api/company/interests` and
+  the interview approval all go through it, and `visibleApplicationsWhere()` is the one "which rows may
+  this actor see" filter (not yours = 404, never a 403 that confirms the id). A hand-rolled
+  `prisma.application.update` of `stage` skips the event, the derived status and the race guard at once.
 - **Structured compensation on offers** ([`docs/offer-compensation.md`](docs/offer-compensation.md),
   #1851): money on `Offer` is integer **minor units** + ISO code (`baseAmountMinor`, `currency`,
   `basePeriod`…) — never a Float/Decimal, same rule as `ProgramCost`/`Placement`. The rules

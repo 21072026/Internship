@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
 import { isLocale, locales } from '@/i18n/config';
-import { passwordSchema } from '@/lib/password';
+import { checkPassword, passwordRefusal, passwordSchema } from '@/lib/password';
 import { notify } from '@/lib/notify';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
@@ -216,6 +216,15 @@ export async function POST(request: Request) {
     if (await emailTakenInOrgWorld(email, orgId)) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
     }
+
+    // The org's password policy, then the breach screening (#1544) — the one
+
+    // entry point every new-password path calls (src/lib/password.ts).
+
+    const verdict = await checkPassword(password, orgId);
+
+    if (!verdict.ok) return passwordRefusal(verdict);
+
 
     const hashedPassword = await bcrypt.hash(password, 12);
 

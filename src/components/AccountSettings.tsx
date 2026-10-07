@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { PasswordRules } from '@/components/auth/PasswordRules';
+import { passwordPolicyError, passwordRefusalText, usePasswordPolicy } from '@/lib/passwordPolicyClient';
 import { useSession } from 'next-auth/react';
 import { signOutEverywhere } from '@/lib/signOutClient';
 import { useRouter } from 'next/navigation';
@@ -70,6 +72,9 @@ export function AccountSettings() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  // The org's password policy (#1544): listed under the field and checked with
+  // the same rule the API applies.
+  const pw = usePasswordPolicy();
   const [deletePassword, setDeletePassword] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -720,7 +725,7 @@ export function AccountSettings() {
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || (data.details && 'Validation failed') || 'Failed');
+    if (!res.ok) throw new Error(passwordRefusalText(data, pw.policy, t.passwordPolicy) ?? data.error ?? (data.details && 'Validation failed') ?? 'Failed');
     return data;
   };
 
@@ -749,6 +754,8 @@ export function AccountSettings() {
   const submitPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) return flash(t.account.passwordMismatch, true);
+    const policyError = passwordPolicyError(newPassword, pw.policy, t.passwordPolicy);
+    if (policyError) return flash(policyError, true);
     setSavingPw(true);
     try {
       await call({ currentPassword, newPassword });
@@ -936,7 +943,8 @@ export function AccountSettings() {
           <CardHeader><CardTitle>{t.account.passwordSection}</CardTitle></CardHeader>
           <form method="post" onSubmit={submitPassword} className="space-y-4">
             <Input label={t.account.currentPassword} type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
-            <Input label={t.account.newPassword} type="password" hint={t.account.passwordHint} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+            <Input label={t.account.newPassword} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+            <PasswordRules policy={pw.policy} rules={pw.rules} value={newPassword} breachCheck={pw.breachCheck} />
             <Input label={t.account.confirmPassword} type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
             <Button type="submit" loading={savingPw}>{t.account.updatePassword}</Button>
           </form>
