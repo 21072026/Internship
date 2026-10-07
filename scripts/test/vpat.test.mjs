@@ -4,9 +4,12 @@
 // Two things a reviewer cannot keep in their head are enforced here: no row says
 // `Supports` without an evidence path that exists, and the committed Markdown
 // is exactly what the data renders (so src/lib/vpat.ts, docs/legal/vpat.md and
-// the page can never disagree). The honesty of a remark is still a human's job.
+// the page can never disagree). A `check:` entry that states a verifiable result
+// ("returns nothing", "lists … only") is executed, so an evidence line cannot
+// outlive the fact it describes. The honesty of a remark is still a human's job.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   CONFORMANCE_LEVELS,
@@ -20,7 +23,7 @@ import {
   enChapter9Rows,
   evidencePath,
 } from '../../src/lib/vpat.ts';
-import { renderEvidenceAppendix, renderVpat } from '../../src/lib/vpatRender.ts';
+import { cell, renderEvidenceAppendix, renderVpat } from '../../src/lib/vpatRender.ts';
 import { VPAT_EVIDENCE } from '../../src/lib/vpatEvidence.generated.ts';
 
 const REPO_URL = 'https://github.com/21072026/Internship';
@@ -75,6 +78,51 @@ test('every evidence path exists in the tree; issues and checks are well-formed'
       assert.ok(existsSync(path), `${r.id}: evidence path does not exist: ${e}`);
     }
   }
+});
+
+// Runs a quoted `check:` command from the repository root. grep exits 1 on no match,
+// which is exactly the outcome a "returns nothing" claim expects, so that is not a failure.
+const checkOutput = new Map();
+function runCheck(cmd) {
+  if (checkOutput.has(cmd)) return checkOutput.get(cmd);
+  let out;
+  try {
+    out = execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: '/bin/sh' });
+  } catch (err) {
+    if (err.status !== 1 || (err.stderr ?? '').trim()) throw new Error(`"${cmd}" failed: ${err.stderr || err.message}`);
+    out = err.stdout ?? '';
+  }
+  checkOutput.set(cmd, out.trim());
+  return out.trim();
+}
+
+test('every executable `check:` claim still holds', () => {
+  let executed = 0;
+  for (const r of allRows) {
+    for (const e of r.evidence) {
+      const nothing = /^check: `(.+)` returns nothing$/.exec(e);
+      if (nothing) {
+        executed += 1;
+        assert.equal(runCheck(nothing[1]), '', `${r.id}: "${nothing[1]}" returned output`);
+        continue;
+      }
+      const lists = /^check: `(.+)` lists (.+) only$/.exec(e);
+      if (lists) {
+        executed += 1;
+        const expected = lists[2].split(/,\s*|\s+and\s+/).sort();
+        const actual = runCheck(lists[1]).split('\n').filter(Boolean).sort();
+        assert.deepEqual(actual, expected, `${r.id}: "${lists[1]}" lists something else`);
+      }
+    }
+  }
+  assert.ok(executed >= 5, `expected to execute the check claims, ran ${executed}`);
+});
+
+test('a table cell survives pipes, backslashes and line breaks', () => {
+  assert.equal(cell('a|b'), 'a\\|b');
+  assert.equal(cell('a\\b'), 'a\\\\b');
+  assert.equal(cell('a\\|b'), 'a\\\\\\|b');
+  assert.equal(cell('  x\n   y  '), 'x y');
 });
 
 test('a row that leans on the tracking issue is not claimed as Supports', () => {

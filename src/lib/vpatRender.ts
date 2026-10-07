@@ -57,9 +57,16 @@ export interface VpatDocument {
   appendixHref: string;
 }
 
-/** A Markdown table cell: no pipes, no line breaks. */
+/**
+ * A Markdown table cell: no pipes, no line breaks. Backslashes are doubled first so
+ * a backslash in the text can never turn the pipe escape back into a cell break.
+ */
 export function cell(text: string): string {
-  return text.replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim();
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\s*\n\s*/g, ' ')
+    .trim();
 }
 
 /** Repository path → blob link, issue → issue link, `check:` → verbatim. */

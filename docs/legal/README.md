@@ -44,5 +44,8 @@ otomatik kanıt `e2e/a11y-baseline.json` + `docs/a11y-audit.md` + `e2e/a11y-scan
 (1) `e2e/a11y-baseline.json` her değiştiğinde — tarama genişlediğinde ya da bir bulgu dondurulduğunda
 / kapandığında; (2) `src/lib/vpat.ts`'te bir satır değiştiğinde. `scripts/test/vpat.test.mjs`
 (`npm run test:unit`) bayat üretilmiş dosyayı, kanıt yolu olmayan bir `Supports` satırını ve var olmayan
-bir kanıt yolunu kırmızıya çevirir. Rapor yalnızca İngilizcedir; Markdown imaja girmediği için
+bir kanıt yolunu kırmızıya çevirir; sonucu doğrulanabilir bir `check:` kanıtını ("returns nothing",
+"lists … only") **çalıştırır**, dolayısıyla komut artık o sonucu vermiyorsa satır da kırmızıya düşer
+(ilk çalıştırma üç bayat iddia buldu). Bir `check:` komutu `src/lib/vpat.ts`'i dışlamalıdır (`--exclude=vpat.ts`),
+yoksa kendi alıntısını bulur. Rapor yalnızca İngilizcedir; Markdown imaja girmediği için
 (`.dockerignore`) yayın `/accessibility/vpat` sayfası ve `/accessibility/vpat.md` route'udur.
