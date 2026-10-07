@@ -50,6 +50,10 @@ const STAMPERS = {
 
 // File → why it writes `pipelineStatus`-adjacent data without stamping.
 const EXEMPT = {
+  'src/app/api/mentorship/[id]/contract-end/route.ts':
+    'A won customer\'s notice period (#2841): writes only contractEndsAt and its bell claim, never the stage — `pipelineStatus` is the conditional where of the updateMany.',
+  'src/lib/contractEnd.ts':
+    'The end-day bell (#2841): writes only the contractEndRemindedAt claim; `pipelineStatus` is a where filter on DEAL_WON records.',
   'src/services/emailService.ts':
     'Reminder sweeps write only their own *SentAt claim stamps; `pipelineStatus` appears as a where filter and in a mail payload, never in a relation data block.',
   'src/lib/jobs/trialReminders.ts':

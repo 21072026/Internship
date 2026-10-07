@@ -109,6 +109,9 @@ export const NOTIFICATION_EVENTS = [
   // date", and somebody who muted one meant to mute both — which is why no new
   // category and no new preference key were added for trials.
   { key: 'trial.endingSoon', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['company', 'days'] },
+  // A won customer's contract ends today (#2841): one bell to the owner, in-app only — the
+  // attention queue already carries the notice period every day before it.
+  { key: 'contract.endsToday', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['company'] },
   { key: 'weekly_report_reminder.due', category: 'weeklyReports', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'dashboard', params: [] },
   { key: 'missing_document.self', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'dashboard', params: ['requirement'] },
   { key: 'missing_document.mentor', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['mentee', 'requirement'] },
