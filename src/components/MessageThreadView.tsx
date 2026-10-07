@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2, FolderOpen, MessageSquareQuote, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -24,6 +24,7 @@ import { LanguageBadge } from '@/components/LanguageBadge';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 import { scrollBehavior } from '@/lib/motion';
+import { encodePageCursor, mergeNewestPage, prependOlderPage } from '@/lib/messagePage';
 import {
   resolveMessageTemplateText,
   templatePreview,
@@ -84,6 +85,22 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const [messages, setMessages] = useState<Msg[]>([]);
+  // The thread arrives a page at a time (#1609): the newest page on open and on
+  // every live refresh, older pages as the person scrolls up. The ref mirrors
+  // the state so a refresh and an older page resolving out of order both merge
+  // onto what is really on screen, not onto a stale closure.
+  const messagesRef = useRef<Msg[]>([]);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadingOlderRef = useRef(false);
+  const hasOlderRef = useRef(false);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // Distance from the bottom to put back after older messages were prepended,
+  // so the line being read does not jump away under the reader.
+  const keepFromBottomRef = useRef<number | null>(null);
+  // A search hit opens the thread at that message (`?m=`) and marks it briefly.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const jumpDoneRef = useRef(false);
   // Everyone in this thread, used to label incoming bubbles and the header.
   const [parties, setParties] = useState<Party[]>([]);
   // Set for a project group chat: which project it belongs to, so the header can
@@ -319,12 +336,27 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     // otherwise let the textarea insert a newline (default behaviour)
   };
 
+  const threadQuery = target.kind === 'relation' ? `relationId=${target.id}` : `conversationId=${target.id}`;
+  const showMessages = useCallback((next: Msg[]) => {
+    messagesRef.current = next;
+    setMessages(next);
+  }, []);
+  const showHasOlder = useCallback((value: boolean) => {
+    hasOlderRef.current = value;
+    setHasOlder(value);
+  }, []);
+
   const load = useCallback(async () => {
-    const query = target.kind === 'relation' ? `relationId=${target.id}` : `conversationId=${target.id}`;
-    const res = await fetch(`/api/messages?${query}`);
+    const res = await fetch(`/api/messages?${threadQuery}`);
     if (res.status === 403) { setForbidden(true); setLoading(false); return; }
     const d = await res.json();
-    setMessages(d.messages ?? []);
+    // The newest page, folded onto any older pages already scrolled back to.
+    // Only when the fresh page is now the oldest thing on screen does its
+    // `hasMore` speak for what lies further back.
+    const fresh: Msg[] = d.messages ?? [];
+    const next = mergeNewestPage(messagesRef.current, fresh, Boolean(d.hasMore));
+    showMessages(next);
+    if (!next.length || !fresh.length || next[0].id === fresh[0].id) showHasOlder(Boolean(d.hasMore));
     // A mentorship thread answers with mentor/mentee; a conversation with a
     // participants array. Normalize both to one list.
     setParties(d.participants ?? [d.mentor, d.mentee].filter(Boolean));
@@ -333,9 +365,56 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     setCanPost(d.canPost !== false);
     setCounterpartState(d.counterpartState ?? null);
     setLoading(false);
-  }, [target.kind, target.id]);
+  }, [threadQuery, showMessages, showHasOlder]);
 
   useEffect(() => { load(); }, [load]);
+
+  // One older page, prepended. Returns whether there is still more behind it.
+  const loadOlder = useCallback(async (): Promise<boolean> => {
+    const oldest = messagesRef.current[0];
+    if (!oldest || !hasOlderRef.current || loadingOlderRef.current) return false;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const res = await fetch(`/api/messages?${threadQuery}&before=${encodeURIComponent(encodePageCursor(oldest))}`);
+      if (!res.ok) return false;
+      const d = await res.json();
+      const el = scrollerRef.current;
+      if (el) keepFromBottomRef.current = el.scrollHeight - el.scrollTop;
+      showMessages(prependOlderPage(messagesRef.current, d.messages ?? []));
+      showHasOlder(Boolean(d.hasMore));
+      return Boolean(d.hasMore);
+    } catch {
+      return false;
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [threadQuery, showMessages, showHasOlder]);
+
+  // Put the reader back where they were once the older page has rendered.
+  const firstMessageId = messages.length ? messages[0].id : null;
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    const keep = keepFromBottomRef.current;
+    if (!el || keep === null) return;
+    keepFromBottomRef.current = null;
+    el.scrollTop = el.scrollHeight - keep;
+  }, [firstMessageId]);
+
+  // Scrolling UP to the top of the scroller asks for the page before it. Only
+  // up: the open itself scrolls down to the newest message — smoothly, so it
+  // passes through the top on its way — and that must not fetch a page nobody
+  // asked for. The button above the first message does the same for a
+  // keyboard, a screen reader, or a thread too short to scroll.
+  const lastScrollTopRef = useRef(0);
+  const onScrollerScroll = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const goingUp = el.scrollTop < lastScrollTopRef.current;
+    lastScrollTopRef.current = el.scrollTop;
+    if (goingUp && el.scrollTop < 80 && hasOlderRef.current && !loadingOlderRef.current) void loadOlder();
+  };
 
   // Live thread (#1464). The stream carries ids, not bodies, so a signal for
   // *this* thread simply replays the authorized fetch above — which also marks
@@ -373,6 +452,29 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'end' });
   }, [lastMessageId]);
+
+  // Opened from a search hit (`?m=<id>`): page back until the message is on
+  // screen — bounded, a hit from years ago is not worth an unbounded walk —
+  // then bring it into view and mark it for a moment.
+  useEffect(() => {
+    if (loading || jumpDoneRef.current) return;
+    jumpDoneRef.current = true;
+    let wanted: string | null = null;
+    try { wanted = new URLSearchParams(window.location.search).get('m'); } catch { /* no URL, no jump */ }
+    if (!wanted) return;
+    const id = wanted;
+    void (async () => {
+      for (let pages = 0; pages < 40 && !messagesRef.current.some((m) => m.id === id); pages++) {
+        if (!(await loadOlder()) && !messagesRef.current.some((m) => m.id === id)) break;
+      }
+      if (!messagesRef.current.some((m) => m.id === id)) return;
+      setHighlightId(id);
+      requestAnimationFrame(() => {
+        document.getElementById(`msg-${id}`)?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
+      });
+      setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 4000);
+    })();
+  }, [loading, loadOlder]);
 
   const addFiles = (list: FileList | File[]) => {
     const picked = Array.from(list).filter(Boolean);
@@ -637,12 +739,27 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         {messages.length === 0 ? (
           <p className="text-center py-10 text-gray-400 text-sm">{t.messages.empty}</p>
         ) : (
-          <div data-testid="thread-messages" className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain lg:max-h-[55vh] lg:flex-none">
+          <div
+            ref={scrollerRef}
+            onScroll={onScrollerScroll}
+            data-testid="thread-messages"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain lg:max-h-[55vh] lg:flex-none"
+          >
+            {hasOlder && (
+              <div className="flex justify-center">
+                <Button size="sm" variant="outline" onClick={() => void loadOlder()} loading={loadingOlder} data-testid="thread-load-older">
+                  {t.messages.loadOlder}
+                </Button>
+              </div>
+            )}
             {messages.map((m) => {
               const mine = m.senderId === myId;
               return (
-                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${mine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
+                <div key={m.id} id={`msg-${m.id}`} data-message-id={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    data-highlighted={highlightId === m.id ? 'true' : undefined}
+                    className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${mine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'} ${highlightId === m.id ? 'ring-2 ring-amber-400 ring-offset-2 dark:ring-offset-gray-900' : ''}`}
+                  >
                     {!mine && <p className="text-xs font-medium mb-0.5 opacity-70">{nameFor(m.senderId)}</p>}
                     {m.deleted ? (
                       <p className={`italic ${mine ? 'text-blue-100' : 'text-gray-400'}`}>{t.messages.deletedPlaceholder}</p>
