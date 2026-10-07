@@ -47,6 +47,8 @@ export const TASK_TTL_MS: Record<string, number> = {
   suggested_reply: 1 * DAY,
   // Keyed on the relation's facts (#2048): a new message, goal or stage is a new question.
   outreach_draft: 1 * DAY,
+  // Keyed on the log, the stage, the note and the day in stage (#2875).
+  next_step_suggest: 1 * DAY,
 };
 
 /**

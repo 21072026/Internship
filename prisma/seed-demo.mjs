@@ -773,9 +773,9 @@ async function main() {
         menteeId: relation.menteeId,
         companyId: related?.companyId ?? null,
         placedAt: new Date(Date.now() - 21 * DAY_MS),
-        // A junior first-year salary, entered by hand: #1851 has not landed, so
-        // there is no structured compensation on the Offer to derive it from
-        // and the seed says MANUAL rather than pretending otherwise.
+        // A junior first-year salary, entered by hand. Offers carry structured
+        // compensation since #1851, but nothing in the tree derives a Placement
+        // from an offer yet, so the seed says MANUAL rather than pretending.
         valueMinor: 4_200_000,
         valueCurrency: 'EUR',
         valueSource: 'MANUAL',

@@ -114,6 +114,10 @@ export const AI_TASKS = {
   content_draft: { label: 'Content draft from a brief', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1500 },
   profile_enrich: { label: 'Mentor profile suggestions', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 800 },
   company_enrich: { label: 'Company profile suggestions', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 600 },
+  // Three next-step lines for the follow-up field of one record (#2875):
+  // operator-side, read from the mentee's interaction log — so the same
+  // consent as the summary of that log — and a proposal only, never saved.
+  next_step_suggest: { label: 'Next-step suggestions', audience: 'operator', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 400 },
 } as const satisfies Record<string, AiTaskSpec>;
 
 export type AiTaskId = keyof typeof AI_TASKS;

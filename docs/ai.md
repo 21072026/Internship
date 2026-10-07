@@ -80,6 +80,7 @@ operator-level cost control that happens to be editable per tenant.
 | `analytics_narrative` | `POST /api/admin/analytics/narrative` | admin | the dashboard's totals as `label: value` lines (stage counts with stage names, monthly trends, engagement, RSVP rate, sign-up windows), recomputed on the server | mentor workload rows (they carry names), every per-person row and id | none — totals only | n/a (admin tool) |
 | `evaluation_insights` | `POST /api/admin/insights/evaluations` | admin | up to 400 evaluation comments in range, under labels `r1…`, with contact details **and every known name** (author, mentee, mentor) masked; capped at 24 000 chars | database ids, who wrote which row, interview scorecards (no relation) | none — names are masked and the rows are the programme's own records | n/a (admin tool) |
 | `weekly_report_digest` | `POST /api/admin/insights/weekly-reports` | admin | the `blockers` of up to 400 submitted weekly reports in range, same masking and cap | the report summary, hours, mentor comments, ids | none — as above | n/a (admin tool) |
+| `next_step_suggest` | `POST /api/mentorship/[id]/next-step` | the mentor who owns the record / admin | the stage key and its label, the days in stage, the 10 newest log entries (date, type, subject, notes), the owner's current follow-up note; written in the **caller's** language | names, e-mail addresses, the company's contact data, files; with no log entry at all the route answers `empty` and nothing is sent | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | yes |
 
 Two of these carry no consent type because there is no personal identifier in
 the payload to consent to. That is not an oversight and it is not a loophole:
@@ -140,6 +141,7 @@ The prompt is never stored. Since #2044 some generated text **is** kept, as an
 | Interview prep | **kept** as an `AiArtifact` (7-day cache TTL), shown again on reload |
 | Match rationale | **kept** as an `AiArtifact` about the mentee (1-day cache TTL), keyed on the exact candidate list |
 | Open-text themes (evaluation comments, weekly-report blockers) | **kept** as an org-level `AiArtifact` with no subject (1-day cache TTL); wiped for the whole org the moment any person in it is erased or anonymized, since it may quote them |
+| Next-step suggestions (#2875) | **kept** as an `AiArtifact` about the mentee, tied to the relation (1-day cache TTL, keyed on log + stage + note + day in stage); rendered as chips the owner clicks into the follow-up field — the note itself is saved only by the owner's Save |
 
 The only row written per call is `AiUsage` — `scope` and `taskId` (the same
 registry id; `scope` is the historic column), `orgId`, `userId`, `companyId`,

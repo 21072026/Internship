@@ -2132,6 +2132,25 @@ model Offer {
   position             String
   startDate            DateTime?
   compensationNote     String?            @db.Text
+  // Structured compensation (#1851). The free-text note above STAYS as the
+  // elaboration; these are the figures a benchmark can read. Same money rule
+  // as ProgramCost/Placement (see "MONEY IS ALWAYS AN INTEGER IN MINOR UNITS"
+  // below): integer minor units + ISO 4217 code, never a Float or a Decimal.
+  // Every one of these rides the compensationNote visibility rule
+  // (canSeeCompensation, src/lib/offers.ts) — ADMIN and the offer's own
+  // MENTEE, nobody else, and never SELECTed for anyone else.
+  // `basePeriod` HOURLY|MONTHLY|YEARLY and `contractType`
+  // INTERNSHIP|WORKING_STUDENT|FIXED_TERM|PERMANENT are Strings validated
+  // against the whitelists in src/lib/compensation.ts, not enums — the
+  // `db push` reasoning at Organization.planKey applies.
+  currency             String?            @db.VarChar(3)
+  baseAmountMinor      Int?
+  basePeriod           String?            @db.VarChar(10)
+  signingBonusMinor    Int?
+  otherBonusMinor      Int?
+  equityNote           String?            @db.VarChar(500)
+  hoursPerWeek         Int?
+  contractType         String?            @db.VarChar(20)
   expiresAt            DateTime?
   sentAt               DateTime?
   decidedAt            DateTime?
@@ -2147,6 +2166,7 @@ model Offer {
 
   @@index([orgId, status])
   @@index([relationId])
+  @@index([orgId, currency])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
