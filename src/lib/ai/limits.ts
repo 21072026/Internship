@@ -79,6 +79,10 @@ export const AI_RATE_LIMITS = {
   outreach_draft: { limit: 15, windowMs: 10 * 60 * 1000 },
   // Fill the empty locales of a tenant-authored text (POST /api/admin/ai/translate, #2055).
   content_translate: { limit: 30, windowMs: 10 * 60 * 1000 },
+  // Authoring assist and enrichment (#2055, part 2).
+  content_draft: { limit: 20, windowMs: 10 * 60 * 1000 },
+  profile_enrich: { limit: 5, windowMs: 10 * 60 * 1000 },
+  company_enrich: { limit: 20, windowMs: 10 * 60 * 1000 },
 
   // Bulk e-mail draft (POST /api/ai/bulk-draft, #2048).
   // 6 calls / 10 minutes: one call drafts the mail for up to 200 recipients,
