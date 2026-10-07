@@ -68,7 +68,8 @@ export const AI_TASKS = {
   // field by field; the file itself never leaves.
   cv_extract: { label: 'CV field extraction', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1024, needsContactDetails: true },
   // Constructive feedback on the mentee's own CV text (#535).
-  cv_feedback: { label: 'CV feedback', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700 },
+  // Scored since #2050: six sections + a checklist as JSON, hence the larger reply.
+  cv_feedback: { label: 'CV feedback', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1600 },
   // A mentor-facing digest of one relation's interaction log (#534); the
   // mentee whose log it is consents.
   interaction_summary: { label: 'Interaction summary', audience: 'operator', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700, legacyModelEnv: 'ANTHROPIC_SUMMARY_MODEL' },
