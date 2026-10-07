@@ -42,6 +42,8 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 //   bulk_draft            participant  a mentor's bulk draft to their mentees; never — except
 //                                      an ADMIN's bulk draft is escalated       an admin
 //   profile_enrich        participant  a mentor's own profile from own text    never
+//   next_step_suggest     participant  the owning mentor's own record; an      never — except
+//                                      ADMIN on another record is escalated     an admin
 //   content_translate     operator     admin authoring, /admin/*               required
 //   content_draft         operator     admin authoring from a brief            required
 //   company_enrich        operator     admin company record from pasted text   required

@@ -230,6 +230,8 @@ test('the free core never sees the AI pack: mentee and mentor AI answer as befor
     try {
       await signInAndSettle(mentorPage, org.emails.mentor, PW, '/mentor');
       await neverLocked(await mentorPage.request.post('/api/interactions/summary', { data: { relationId: org.rel.id } }));
+      // The owning mentor's next-step proposal is their own record: free.
+      await neverLocked(await mentorPage.request.post(`/api/mentorship/${org.rel.id}/next-step`, { data: {} }));
       // A mentor's bulk draft to their own mentees stays free (an admin's is operator use, asserted above).
       await neverLocked(await mentorPage.request.post('/api/ai/bulk-draft', { data: { purpose: 'Weekly report reminder', recipientCount: 3, locale: 'en' } }));
       expect((await (await mentorPage.request.get(`/api/interactions/summary?relationId=${org.rel.id}`)).json()).locked).toBeUndefined();
@@ -246,6 +248,9 @@ test('the free core never sees the AI pack: mentee and mentor AI answer as befor
       const run = await adminPage.request.post('/api/interactions/summary', { data: { relationId: org.rel.id } });
       expect(run.status()).toBe(403);
       expect(await run.json()).toMatchObject(LOCKED);
+      const nextStep = await adminPage.request.post(`/api/mentorship/${org.rel.id}/next-step`, { data: {} });
+      expect(nextStep.status()).toBe(403);
+      expect(await nextStep.json()).toMatchObject(LOCKED);
       expect(await (await adminPage.request.get(`/api/interactions/summary?relationId=${org.rel.id}`)).json()).toMatchObject({ latest: null, locked: true });
     } finally {
       await adminCtx.close();

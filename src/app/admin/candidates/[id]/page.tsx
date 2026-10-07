@@ -490,6 +490,7 @@ export default function AdminMenteeDetailPage() {
                 relationId={rel.id}
                 nextActionAt={rel.nextActionAt}
                 nextActionNote={rel.nextActionNote}
+                pipelineStatus={rel.pipelineStatus}
                 onSaved={load}
               />
 
