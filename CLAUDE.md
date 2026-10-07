@@ -337,6 +337,16 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   revokes sessions (sets `sessionsValidFrom`) **must** also call `revokeAllTrustedDevices()`,
   or the browser signs itself straight back in; and any new sign-out control must go through
   `signOutEverywhere()` rather than NextAuth's `signOut()`.
+- **Magic-link sign-in** ([`docs/magic-link.md`](docs/magic-link.md), #1959): "Email me a
+  sign-in link" is a **password-equivalent door** — same silent refusals as the password
+  (inactive, unverified, pending, SSO-enforced), same host check, and the **same second
+  factor**: the credentials provider's TOTP/recovery step lives in `requireSecondFactor()`
+  (`src/lib/auth.ts`) and the `magic` provider calls it *before* the link is spent — the
+  first visit answers `2FA_REQUIRED` without spending it. Only `sha256(token)` is stored
+  (`LoginLinkToken`, user-keyed, no `orgId`); the admission is one conditional `updateMany`
+  (`spendLoginLink`), the request route answers the same 200 for every address and mails
+  **after** the response (`after()`), and both limits apply: 5/15min per IP *and* per address.
+  Never add a second TOTP implementation and never log the raw token.
 - **2FA recovery codes** ([`docs/two-factor-recovery.md`](docs/two-factor-recovery.md), #1542):
   enabling 2FA mints **ten single-use codes**, returned by that one response and never
   again — only an HMAC of each is stored (`src/lib/recoveryCodes.ts`; the format rules,

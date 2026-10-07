@@ -7,6 +7,7 @@ import { directKeyFor } from '@/lib/conversations';
 import { orgIdsEntitledTo } from '@/lib/subscription';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
+import { purgeExpiredLoginLinks } from '@/lib/magicLink';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
@@ -1024,6 +1025,65 @@ export async function sendPasswordResetEmail({
         </p>
         <p style="color: #6b7280; font-size: 12px;">
           ${esc(P.copyLink)} ${resetUrl}
+        </p>
+      </div>
+    `,
+  });
+}
+
+// Magic-link sign-in (#1959). LOCALE and WORLD follow the password-reset mail
+// above for the same reasons: the mail goes to an existing account, so its own
+// stored language decides, and the link must open in the product the ACCOUNT
+// lives in — a sign-in link into the other product would sign nobody in.
+// `token` is the raw value, which exists only in this mail; the row behind it
+// holds a hash (src/lib/magicLinkToken.ts).
+export async function sendMagicLinkEmail({
+  to,
+  token,
+  fullName,
+  orgId,
+  locale,
+}: {
+  to: string;
+  token: string;
+  fullName?: string | null;
+  orgId?: string | null;
+  locale?: string | null;
+}) {
+  const signInUrl = `${await appUrlFor(orgId)}/auth/magic/complete?token=${token}`;
+  const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const M = getDictionary(resolved).notifications.magicLinkEmail;
+
+  return await sendEmail({
+    to,
+    fromName: brand.name,
+    // Essential (account_security group): a sign-in link the person just asked
+    // for is never a preference someone can have opted out of.
+    category: 'security',
+    locale: resolved,
+    subject: M.subject.replace('{brand}', brand.name),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.heading.replace('{brand}', brand.name)))}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(M.body.replace('{brand}', brand.name))}</p>
+        <a href="${signInUrl}" style="
+          display: inline-block;
+          background-color: ${brand.accent};
+          color: white;
+          padding: 12px 24px;
+          text-decoration: none;
+          border-radius: 6px;
+          margin: 16px 0;
+        ">
+          ${esc(M.cta)}
+        </a>
+        <p style="color: #6b7280; font-size: 14px;">
+          ${esc(M.expiry)}
+        </p>
+        <p style="color: #6b7280; font-size: 12px;">
+          ${esc(M.copyLink)} ${signInUrl}
         </p>
       </div>
     `,
@@ -4968,6 +5028,10 @@ export function initCronJobs() {
       if (r.devices || r.grants) {
         console.log(`[Cron] Trusted device purge: ${r.devices} devices, ${r.grants} grants`);
       }
+      // Same nightly slot for the magic-link rows (#1959): spent and expired
+      // sign-in links can admit nothing and are not kept.
+      const links = await purgeExpiredLoginLinks();
+      if (links) console.log(`[Cron] Login link purge: ${links} links`);
     } catch (e) {
       console.error('[Cron] Trusted device purge error:', e);
     }

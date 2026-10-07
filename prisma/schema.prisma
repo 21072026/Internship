@@ -601,6 +601,7 @@ model User {
   createdProgramCosts               ProgramCost[]                 @relation("ProgramCostCreatedBy")
   placements                        Placement[]                   @relation("PlacementMentee")
   twoFactorRecoveryCodes            TwoFactorRecoveryCode[]
+  loginLinkTokens                   LoginLinkToken[]
 
   // One account per e-mail per tenant. MySQL treats NULLs in a unique index as
   // distinct, so a row whose orgId is still NULL (the default org, until the
@@ -3854,6 +3855,31 @@ model SsoLoginGrant {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
+}
+
+// Magic-link sign-in (#1959): "e-mail me a sign-in link". One row per link
+// requested, holding ONLY the SHA-256 of the token the mail carries — the raw
+// value exists in that one e-mail and nowhere else, so a read of this table
+// (a backup, a log, a support session) hands nobody a sign-in. Single use:
+// `usedAt` is stamped by the same conditional UPDATE that admits the sign-in
+// (src/lib/magicLink.ts), so two clicks on one link cannot both win. Expired
+// and spent rows are dropped by the nightly trusted-device purge.
+//
+// User-keyed, not tenant-keyed, like SsoLoginGrant and PasswordResetToken: the
+// row is a credential for ONE account, and that account's row already carries
+// the tenant. An orgId here would be a second copy of the same fact.
+model LoginLinkToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+  requestIp String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Single-use bridge token minted by /api/auth/remember/refresh once a trusted

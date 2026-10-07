@@ -384,6 +384,13 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
               {t.auth.ssoLink}
             </Link>
           </p>
+          {/* Passwordless door (#1959): the link is mailed, single-use and
+              fifteen minutes long, and an enrolled authenticator still applies. */}
+          <p className="text-center text-sm mt-2">
+            <Link href="/auth/magic" className="text-blue-600 hover:underline" data-testid="magic-link-signin">
+              {t.auth.magicLink}
+            </Link>
+          </p>
 
           <p className="text-center text-sm text-gray-500 mt-6">
             {t.auth.haveInvite}{' '}
