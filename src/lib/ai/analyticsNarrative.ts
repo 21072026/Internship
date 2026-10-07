@@ -15,6 +15,7 @@ import { entitled } from '@/lib/entitlements';
 import { findCachedArtifact, hashInput, TASK_TTL_MS } from '@/lib/ai/artifacts';
 import { prisma } from '@/lib/prisma';
 import { callModel, noteParseError } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { loadAdminAnalytics } from '@/lib/adminAnalyticsData';
@@ -32,7 +33,7 @@ Rules:
 - Do not name or describe any person.`;
 
 async function callProvider(facts: Fact[], locale: Locale): Promise<string | null> {
-  const reply = await callModel({ task: SCOPE, system: SYSTEM, input: `Write in ${LANGUAGE[locale]}.\n\nFigures:\n${factsText(facts)}` });
+  const reply = await callModel({ task: SCOPE, system: SYSTEM, input: `Write in ${LANGUAGE[locale]}.\n\nFigures:\n${wrapUntrusted('figures', factsText(facts))}` });
   const kept = acceptNarrative(reply, facts);
   // Ungrounded or empty: metered as parse_error and never stored.
   if (!kept) noteParseError();

@@ -17,6 +17,8 @@ import {
   serializeScopes,
 } from '@/lib/apiScopes';
 import { integrationsLocked } from '@/lib/integrationsGate';
+import { currentUsage } from '@/lib/apiKeyQuota';
+import { parseQuotaInput } from '@/lib/apiKeyQuotaRules';
 
 // Admin management of programmatic API keys (#1545).
 //
@@ -55,10 +57,15 @@ export async function GET() {
       revokedAt: true,
       lastUsedAt: true,
       createdAt: true,
+      orgId: true,
+      quotaPeriod: true,
+      quotaLimit: true,
       createdBy: { select: { id: true, fullName: true, email: true } },
     },
   });
   const now = new Date();
+  // Requests this period (#2010): the key's quota period, or the month for a key without one.
+  const usage = await currentUsage(keys, now);
   return NextResponse.json({
     availableScopes: API_SCOPES,
     keys: keys.map((k) => ({
@@ -71,6 +78,9 @@ export async function GET() {
       createdAt: k.createdAt,
       createdBy: k.createdBy ? { name: k.createdBy.fullName, email: k.createdBy.email } : null,
       status: apiKeyStatus(k, now),
+      quotaPeriod: k.quotaPeriod,
+      quotaLimit: k.quotaLimit,
+      usage: usage.get(k.id) ?? null,
     })),
   });
 }
@@ -82,6 +92,9 @@ const schema = z.object({
   scopes: z.array(z.string()).min(1).max(API_SCOPES.length),
   // Optional. Null / omitted means "never expires" (the UI warns about it).
   expiresAt: z.string().datetime().nullish(),
+  // Optional period allowance (#2010): both or neither. Omitted = no quota.
+  quotaPeriod: z.string().nullish(),
+  quotaLimit: z.number().int().nullish(),
 });
 
 export async function POST(request: Request) {
@@ -114,6 +127,9 @@ export async function POST(request: Request) {
     }
   }
 
+  const quota = parseQuotaInput(parsed.data.quotaPeriod, parsed.data.quotaLimit);
+  if (!quota) return NextResponse.json({ error: 'Quota needs a period (day or month) and a whole-number limit' }, { status: 400 });
+
   const { raw, hash } = generateApiKey();
   const key = await prisma.apiKey.create({
     data: {
@@ -123,6 +139,8 @@ export async function POST(request: Request) {
       expiresAt,
       createdById: session.user.id,
       orgId: resolveOrgId(session),
+      quotaPeriod: quota.quotaPeriod,
+      quotaLimit: quota.quotaLimit,
     },
   });
   await logActivity({
@@ -172,4 +190,35 @@ export async function DELETE(request: Request) {
     });
   }
   return NextResponse.json({ ok: true });
+}
+
+const quotaSchema = z.object({ quotaPeriod: z.string().nullish(), quotaLimit: z.number().int().nullish() }).strict();
+
+// PATCH ?id= — set or clear a key's period allowance (#2010). Only the quota:
+// scopes and expiry are fixed at minting, by design (#1545). Tenant-scoped
+// like the revoke, so another tenant's id matches nothing.
+export async function PATCH(request: Request) {
+  const session = await requireAdmin();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const id = new URL(request.url).searchParams.get('id') || '';
+  const parsed = quotaSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  const quota = parseQuotaInput(parsed.data.quotaPeriod, parsed.data.quotaLimit);
+  if (!quota) return NextResponse.json({ error: 'Quota needs a period (day or month) and a whole-number limit' }, { status: 400 });
+  const { count } = await prisma.apiKey.updateMany({
+    where: withinTenant({ id, revokedAt: null }, await tenantWhere(session)),
+    data: quota,
+  });
+  if (!count) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  await logActivity({
+    action: 'apikey.quota_changed',
+    level: 'info',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'apikey',
+    targetId: id,
+    detail: quota.quotaLimit === null ? 'no quota' : `${quota.quotaLimit}/${quota.quotaPeriod}`,
+    request,
+  });
+  return NextResponse.json({ ok: true, ...quota });
 }

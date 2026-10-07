@@ -337,6 +337,16 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   revokes sessions (sets `sessionsValidFrom`) **must** also call `revokeAllTrustedDevices()`,
   or the browser signs itself straight back in; and any new sign-out control must go through
   `signOutEverywhere()` rather than NextAuth's `signOut()`.
+- **Magic-link sign-in** ([`docs/magic-link.md`](docs/magic-link.md), #1959): "Email me a
+  sign-in link" is a **password-equivalent door** — same silent refusals as the password
+  (inactive, unverified, pending, SSO-enforced), same host check, and the **same second
+  factor**: the credentials provider's TOTP/recovery step lives in `requireSecondFactor()`
+  (`src/lib/auth.ts`) and the `magic` provider calls it *before* the link is spent — the
+  first visit answers `2FA_REQUIRED` without spending it. Only `sha256(token)` is stored
+  (`LoginLinkToken`, user-keyed, no `orgId`); the admission is one conditional `updateMany`
+  (`spendLoginLink`), the request route answers the same 200 for every address and mails
+  **after** the response (`after()`), and both limits apply: 5/15min per IP *and* per address.
+  Never add a second TOTP implementation and never log the raw token.
 - **2FA recovery codes** ([`docs/two-factor-recovery.md`](docs/two-factor-recovery.md), #1542):
   enabling 2FA mints **ten single-use codes**, returned by that one response and never
   again — only an HMAC of each is stored (`src/lib/recoveryCodes.ts`; the format rules,
@@ -391,6 +401,15 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   `prisma/check-active-mentor-duplicates.mjs` line) reading clean on prod AND shared preview —
   a `db push --accept-data-loss` that fails on the constraint is a failed deploy. Read the doc
   before touching any of it; the sequencing is the load-bearing part.
+- **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
+  is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
+  before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to
+  `createdByRole` on older rows). Every reader of goals goes through that module — `GET /api/goals`
+  filters with `visibleGoals()`, `PATCH`/`DELETE` answer **404** for a goal the caller may not see
+  (the same `'missing'` branch as another tenant's goal, #2542 — a 403 would confirm the id), and
+  the relation timeline pages with `readableGoalsWhere()`, the SQL twin the unit test keeps in
+  step. Only the author may change the scope (403 `not_author`). Hiding a card in `GoalsPanel`
+  is never the check; a new reader of `prisma.goal` must call the rule.
 - **Mentör değişimi tek bir işlemdir** ([`docs/mentor-transfer.md`](docs/mentor-transfer.md),
   #2289): bir mentee'nin mentörünü değiştirmenin yolu `POST /api/mentorship/[id]/transfer`
   (admin) — "tamamlandı işaretle, sonra yeniden ata" **değil**; o yol olmayan bir başarıyı
@@ -418,6 +437,16 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   form's DOI mail is capped at one per address per UTC day (`ContactConfirmationMailCap`, a
   primary-key insert). No advertising mail to account contacts exists yet — the first one must
   call `canSendMarketingEmail()` per recipient.
+- **One meeting link resolver, one link check** (`docs/video-calls-jaas.md` § Bring your own
+  link, #2007): every meeting-creation path gets its room from `resolveMeetingLink()`
+  (`src/lib/meetingRoom.ts`) — pasted link → the organiser's saved `personalMeetingUrl` (under
+  `Organization.conferencingPolicy` `PREFER_PERSONAL` / `REQUIRE_EXTERNAL`) → a room of ours,
+  refused under `REQUIRE_EXTERNAL`; the rule itself is dependency-free in
+  `src/lib/conferencingRule.ts`. Every link a person types (a `meetLink`, a series `fixedLink`,
+  the personal room) goes through `checkPastedMeetingLink()` — https, no credentials, never a
+  served host, ≤ 191 chars — never a bare `z.string().url()`. `BUILTIN` stays the default and
+  ignores saved rooms. Don't widen `EMBEDDABLE_MEETING_HOSTS` for a provider link; the UI
+  offers "Open in <provider>" (`meetingProviderName()`) instead.
 - **Single-owner background work** (`src/lib/jobs/lease.ts`, #1701): anything that
   must run **once per environment** rather than once per process takes a `JobLease`
   — one row per lease name, a TTL, and a takeover by conditional `UPDATE`. Today

@@ -307,7 +307,7 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
       where: { OR: [asSubject, directMeeting] },
       data: { title: '', cancelReason: null },
     }),
-    prisma.goal.updateMany({ where: asSubject, data: { description: null } }),
+    prisma.goal.updateMany({ where: asSubject, data: { description: null, successCriteria: null } }),
     prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),

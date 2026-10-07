@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
+import { AiText } from '@/components/ai/AiText';
 import { useT } from '@/i18n/client';
 import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 
@@ -107,7 +108,7 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
           {/* A summary of someone else's mentee is exactly the text a reader
               would otherwise take for the mentor's own words (#2034). */}
           <AiBadge note className="mb-2" />
-          <div className="whitespace-pre-line">{summary}</div>
+          <AiText text={summary} testId="interaction-summary-text" />
           {artifact && <ArtifactMeta key={artifact.id} artifact={artifact} cached={cached} onRegenerate={() => run(true)} regenerating={loading} />}
         </div>
       )}

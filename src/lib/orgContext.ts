@@ -98,6 +98,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Requisition',
   'InterviewRequest',
   'MessageTemplate',
+  // Guided-conversation library (#1841). SessionAgenda and both item models
+  // are reached only through a scoped parent and are deliberately not listed
+  // (schema comment).
+  'AgendaTemplate',
   // Brute-force lockouts (#1541). Rows are written by the sign-in path, which
   // runs outside any tenant scope (there is no session yet) and stamps orgId
   // itself; listing this here is what keeps one tenant's admin from seeing or
@@ -106,6 +110,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Programmatic credentials are tenant property too (#1466): a key minted in
   // one org must never be listed by — or authenticate into — another.
   'ApiKey',
+  // Per-key request counts (#2010) — the key's tenant owns its usage.
+  'ApiKeyUsage',
   'MatchFeedback',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational

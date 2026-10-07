@@ -32,6 +32,7 @@ import type { PushDeviceView } from '@/lib/pushDevices';
 import { IMPERSONATION_SESSION_MAX_MS, type ImpersonationSession } from '@/lib/impersonationHistory';
 import { interpolate } from '@/lib/notificationText';
 import { SkillsField } from '@/components/ui/SkillsField';
+import { LinkRefusalNotice, MeetLinkHint, readLinkRefusal, type MeetingLinkRefusal } from '@/components/meeting/MeetLinkField';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -43,6 +44,13 @@ export function AccountSettings() {
   // Read after mount, not during render: localStorage doesn't exist on the
   // server and reading it while rendering would break hydration.
   const [notesAutoOpen, setNotesAutoOpen] = useState(true);
+  // The saved personal video room (#2007) — what the meetings this person
+  // organizes use when their organization prefers its own conferencing tool.
+  const [personalRoom, setPersonalRoom] = useState('');
+  const [savedPersonalRoom, setSavedPersonalRoom] = useState('');
+  const [personalRoomMsg, setPersonalRoomMsg] = useState<string | null>(null);
+  const [personalRoomRefusal, setPersonalRoomRefusal] = useState<MeetingLinkRefusal | null>(null);
+  const [savingPersonalRoom, setSavingPersonalRoom] = useState(false);
   useEffect(() => setNotesAutoOpen(meetingNotesAutoOpen()), []);
   // While an admin impersonates someone, `/api/account` refuses every
   // credential change and the account deletion outright (PUT/DELETE both 400).
@@ -232,6 +240,8 @@ export function AccountSettings() {
         setAccent(resolveAccent(user.accentColor, vertical));
         setRole(user.role ?? '');
         setTimezone(user.timezone ?? '');
+        setPersonalRoom(user.personalMeetingUrl ?? '');
+        setSavedPersonalRoom(user.personalMeetingUrl ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills : []);
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
         setAcceptingMentees(user.acceptingMentees ?? null);
@@ -1135,6 +1145,63 @@ export function AccountSettings() {
           {t.account.notesAutoOpen}
         </label>
         <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.account.notesAutoOpenHint}</p>
+      </Card>
+
+      <Card className="mt-6 max-w-4xl" id="personal-room" data-testid="personal-room-card">
+        <CardHeader><CardTitle>{t.account.videoSection}</CardTitle></CardHeader>
+        <p className="text-sm text-gray-600 mb-4 max-w-lg">{t.account.personalRoomHint}</p>
+        <form
+          className="max-w-lg space-y-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setSavingPersonalRoom(true);
+            setPersonalRoomMsg(null);
+            setPersonalRoomRefusal(null);
+            try {
+              const next = personalRoom.trim();
+              const res = await fetch('/api/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ personalMeetingUrl: next }),
+              });
+              const body = await res.json().catch(() => null);
+              if (!res.ok) {
+                setPersonalRoomRefusal(readLinkRefusal(body) ?? 'invalid_link');
+                return;
+              }
+              const stored = body?.user?.personalMeetingUrl ?? '';
+              setPersonalRoom(stored);
+              setSavedPersonalRoom(stored);
+              setPersonalRoomMsg(stored ? t.account.personalRoomSaved : t.account.personalRoomCleared);
+            } catch {
+              setPersonalRoomRefusal('invalid_link');
+            } finally {
+              setSavingPersonalRoom(false);
+            }
+          }}
+        >
+          <Input
+            label={t.account.personalRoom}
+            type="url"
+            placeholder="https://zoom.us/my/yourname"
+            value={personalRoom}
+            maxLength={191}
+            data-testid="personal-room-input"
+            onChange={(e) => {
+              setPersonalRoom(e.target.value);
+              setPersonalRoomMsg(null);
+              setPersonalRoomRefusal(null);
+            }}
+          />
+          <MeetLinkHint link={personalRoom} />
+          {personalRoomRefusal && <LinkRefusalNotice refusal={personalRoomRefusal} />}
+          <div className="flex items-center gap-3">
+            <Button type="submit" loading={savingPersonalRoom} disabled={!profileLoaded || personalRoom.trim() === savedPersonalRoom} data-testid="personal-room-save">
+              {t.common.save}
+            </Button>
+            {personalRoomMsg && <span className="text-sm text-green-700 dark:text-green-400" data-testid="personal-room-saved">{personalRoomMsg}</span>}
+          </div>
+        </form>
       </Card>
 
       <ConnectedCalendarsCard />

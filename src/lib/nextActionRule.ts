@@ -163,13 +163,18 @@ export function canSeeNextAction(viewer: { id: string; role: string }, relation:
   return viewer.role === 'ADMIN' || viewer.id === relation.mentorId;
 }
 
-/** A copy of `row` without the next-action columns unless the viewer may read them. */
+/**
+ * A copy of `row` without the owner's working columns unless the viewer may
+ * read them: the next action, and — the same class of data, the owner's view
+ * of the account — a won customer's notice period (`contractEndsAt`, #2841).
+ */
 export function stripNextActionFor<T extends { mentorId: string }>(
   viewer: { id: string; role: string },
   row: T
-): T | Omit<T, 'nextActionAt' | 'nextActionNote' | 'nextActionRemindedAt'> {
+): T | Omit<T, 'nextActionAt' | 'nextActionNote' | 'nextActionRemindedAt' | 'contractEndsAt' | 'contractEndRemindedAt'> {
   if (canSeeNextAction(viewer, row)) return row;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { nextActionAt, nextActionNote, nextActionRemindedAt, ...rest } = row as T & Partial<NextActionState>;
+  const { nextActionAt, nextActionNote, nextActionRemindedAt, contractEndsAt, contractEndRemindedAt, ...rest } =
+    row as T & Partial<NextActionState> & { contractEndsAt?: unknown; contractEndRemindedAt?: unknown };
   return rest;
 }

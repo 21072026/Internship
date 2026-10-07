@@ -132,6 +132,19 @@ test('operator AI is locked without the AI pack and open with it; nothing is met
     expect(off.surveyPost.status()).toBe(403);
     expect(await off.surveyPost.json()).toMatchObject(LOCKED);
 
+    // The authoring assists (#2055) and an admin's bulk draft (#2048) are
+    // operator tasks too.
+    for (const [url, data] of [
+      ['/api/admin/ai/translate', { purpose: 'goal_template', from: 'en', text: 'Ship one small PR', to: ['tr', 'de'] }],
+      ['/api/admin/ai/draft', { purpose: 'announcement', brief: 'CV workshop Thursday' }],
+      ['/api/admin/ai/company-enrich', { text: 'Acme GmbH, Berlin. We build payment APIs. Contact: jobs@acme.example' }],
+      ['/api/ai/bulk-draft', { purpose: 'Weekly report reminder', recipientCount: 3, locale: 'en' }],
+    ] as const) {
+      const res = await page.request.post(url, { data });
+      expect(res.status(), url).toBe(403);
+      expect(await res.json()).toMatchObject(LOCKED);
+    }
+
     // The ranking is not AI: the list stays, the rationale does not, and the
     // response names the pack instead of pretending nothing is missing.
     expect(off.suggest.status()).toBe(200);
@@ -217,6 +230,8 @@ test('the free core never sees the AI pack: mentee and mentor AI answer as befor
     try {
       await signInAndSettle(mentorPage, org.emails.mentor, PW, '/mentor');
       await neverLocked(await mentorPage.request.post('/api/interactions/summary', { data: { relationId: org.rel.id } }));
+      // A mentor's bulk draft to their own mentees stays free (an admin's is operator use, asserted above).
+      await neverLocked(await mentorPage.request.post('/api/ai/bulk-draft', { data: { purpose: 'Weekly report reminder', recipientCount: 3, locale: 'en' } }));
       expect((await (await mentorPage.request.get(`/api/interactions/summary?relationId=${org.rel.id}`)).json()).locked).toBeUndefined();
     } finally {
       await mentorCtx.close();

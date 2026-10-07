@@ -355,34 +355,46 @@ the *recipient's*, not the actor's.** Half of these send sites have both in
 scope, and swapping them still delivers the mail, just with somebody else's
 unsubscribe token in it.
 
-### The audit row is not the guarantee — read this before promising evidence
+### Every honoured opt-out leaves a row (#2054)
 
 When `sendEmail()` suppresses a mail it writes a `SKIPPED` `EmailLog` row whose
-error reads `Unsubscribed: <group>`. **That row only exists on send sites that
-have no call-site guard.** Where a guard sits in front, the loop `continue`s or
-the recipient list is `.filter()`ed and `sendEmail` is never entered — so there
-is no row *at all*: not `SENT`, not `SKIPPED`, no reason, nothing on **Admin →
-Settings → Email health**. And the guarded paths are precisely the bulk groups
-people actually unsubscribe from (`digests`, `task_reminders`,
-`meeting_reminders`, `opportunities`, `reports_analytics`, `announcements`), so
-`Unsubscribed: <group>` is the rare case rather than the rule. Do not send
-anyone to Email health expecting to find it.
+error reads `Unsubscribed: <group>`. Until #2054 that row only existed on send
+sites with no call-site guard: the five bulk paths — `sendWeeklyMentorDigests`,
+`sendDailyActivityDigests`, `checkCompanyNeedMatches`, the report-subscription
+job (which replaced `sendWeeklyAnalyticsReport`, #1905) and
+`POST /api/admin/announcements` — filtered the opted-out recipient out *before*
+`sendEmail()`, so the people who mattered most left no trace at all.
 
-What *is* on record for those users: the current `notificationPrefs` value, and
-the `ActivityLog` opt-out row from whichever surface they used (below).
+**The decision is taken.** Each of those five paths keeps its own guard (it reads
+the preference row the job already holds, and for the digests the legacy
+in-app category as well as the group), and where the guard says "no" it now
+writes the same row the central check would: `recordOptOuts()` in
+`src/services/emailService.ts`, `SKIPPED` + `Unsubscribed: <group>`, one insert
+per person and one `createMany` for a whole announcement. What it cost:
 
-**The known option, and what it costs.** Moving each guard to *after* the
-`sendEmail()` call — letting the central check suppress and record, and deriving
-the counter from the returned `'SENT' | 'SKIPPED'` — would produce the audit row
-on every path. The price is one extra `User` query per suppressed recipient: the
-guards read a batch the job has already loaded, while `sendEmail()` re-reads the
-preferences one recipient at a time. Four jobs put the guard ahead of a counter
-that e2e specs assert — `sendWeeklyMentorDigests`, `sendDailyActivityDigests`,
-`checkCompanyNeedMatches`, and the report-subscription job (which replaced
-`sendWeeklyAnalyticsReport`, #1905) — and
-`POST /api/admin/announcements` filters its recipient list the same way. N
-queries per run in exchange for full auditability is a maintainer decision, and
-it has deliberately **not** been taken here.
+- **No extra `User` read.** The option costed here before — dropping the guards
+  and letting `sendEmail()` re-read preferences one recipient at a time — would
+  also have rendered a digest for every suppressed person (several queries
+  each). Recording from the row already in hand costs one insert and reads
+  nothing.
+- **The counters keep their meaning.** `sent` / `emailed` / `alerts` still count
+  mail that went out; each job now also returns `skipped` (and the announcement
+  response carries `skipped`), so the e2e specs that assert the old counters are
+  unchanged.
+
+So **Admin → Settings → Email health → Honoured opt-outs** answers "show me this
+person's opt-out was honoured on this send": a per-group and per-category
+breakdown for a window, and a lookup by address (`GET /api/admin/email-log`
+`?suppressed=1&days=N&to=…`, super-admin only like the rest of the log).
+
+**Erasure removes the proof with the person.** `forgetEmailLog`
+(`src/lib/accountErasure.ts`) deletes `EmailLog` rows by address, these
+included. That is correct — the right to erasure outranks our audit trail — and
+it means the proof exists for exactly as long as the person's other data does.
+
+What else is on record for an opted-out user: the current `notificationPrefs`
+value, and the `ActivityLog` opt-out row from whichever surface they used
+(below).
 
 ### The links and the headers
 

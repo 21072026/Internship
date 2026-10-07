@@ -10,6 +10,9 @@ register('./ts-extensionless-resolve.mjs', import.meta.url);
 
 const { AI_TASKS, AI_TASK_IDS, isAiTaskId, DEFAULT_MAX_INPUT_CHARS } = await import('../../src/lib/ai/tasks.ts');
 const { MODEL_RATES, rateFor, estimateCostMicros } = await import('../../src/lib/ai/pricing.ts');
+const { wrapUntrusted, UNTRUSTED_DATA_RULE } = await import('../../src/lib/ai/untrusted.ts');
+// Every input carries its user text fenced since #2026; a fixed nonce keeps the assertions exact.
+const fenced = (text) => wrapUntrusted('data', text, '0123456789abcdef');
 const { resolveModel, modelEnvVar, tierEnvVar, callModel, trackAiCall, usageOfFailure, DEFAULT_MODEL, AI_PROVIDER, isAiConfigured } =
   await import('../../src/lib/ai/provider.ts');
 
@@ -114,15 +117,15 @@ test('callModel sends the task registry entry and records what the provider answ
     return reply('hello');
   };
   const { result, parseError, usage } = await trackAiCall(() =>
-    callModel({ task: 'cv_feedback', system: 'SYS', input: 'CV text', jsonSchema: { type: 'object' } }, create),
+    callModel({ task: 'cv_feedback', system: 'SYS', input: fenced('CV text'), jsonSchema: { type: 'object' } }, create),
   );
   assert.equal(result, 'hello');
   assert.equal(parseError, false);
   assert.equal(seen.length, 1);
   assert.equal(seen[0].model, resolveModel('cv_feedback'));
   assert.equal(seen[0].max_tokens, AI_TASKS.cv_feedback.maxOutputTokens);
-  assert.equal(seen[0].system, 'SYS');
-  assert.deepEqual(seen[0].messages, [{ role: 'user', content: 'CV text' }]);
+  assert.equal(seen[0].system, `SYS\n\n${UNTRUSTED_DATA_RULE}`);
+  assert.deepEqual(seen[0].messages, [{ role: 'user', content: fenced('CV text') }]);
   assert.deepEqual(seen[0].output_config, { format: { type: 'json_schema', schema: { type: 'object' } } });
   assert.equal(usage.provider, AI_PROVIDER);
   assert.equal(usage.model, 'claude-opus-4-8');
@@ -139,11 +142,12 @@ test('callModel applies the task input cap centrally and never raises the output
     return reply('x');
   };
   const long = 'a'.repeat(AI_TASKS.cv_extract.maxInputChars + 500);
-  await callModel({ task: 'cv_extract', system: 'S', input: long, maxTokens: 999_999 }, create);
+  await callModel({ task: 'cv_extract', system: 'S', input: fenced(long), maxTokens: 999_999 }, create);
   assert.equal(params.messages[0].content.length, AI_TASKS.cv_extract.maxInputChars);
+  assert.ok(params.messages[0].content.endsWith('<<<END_UNTRUSTED_DATA id=0123456789abcdef>>>'), 'the cut lands inside the data, never through the closing fence');
   assert.equal(params.max_tokens, AI_TASKS.cv_extract.maxOutputTokens);
   assert.equal('output_config' in params, false, 'no schema → no output_config');
-  await callModel({ task: 'cv_extract', system: 'S', input: 'short', maxTokens: 10 }, create);
+  await callModel({ task: 'cv_extract', system: 'S', input: fenced('short'), maxTokens: 10 }, create);
   assert.equal(params.max_tokens, 10);
 });
 
@@ -151,8 +155,8 @@ test('a reply with no text block is an empty string, and tokens add up across th
   let n = 0;
   const create = async () => (n++ === 0 ? reply('first', { input_tokens: 10, output_tokens: 1 }) : { model: 'm', content: [], usage: { input_tokens: 5, output_tokens: 0 } });
   const { result, usage } = await trackAiCall(async () => {
-    const a = await callModel({ task: 'interview_prep', system: 'S', input: 'i' }, create);
-    const b = await callModel({ task: 'interview_prep', system: 'S', input: 'i' }, create);
+    const a = await callModel({ task: 'interview_prep', system: 'S', input: fenced('i') }, create);
+    const b = await callModel({ task: 'interview_prep', system: 'S', input: fenced('i') }, create);
     return [a, b];
   });
   assert.deepEqual(result, ['first', '']);
@@ -167,7 +171,7 @@ test('a failed call still says which model was asked, with no token counts', asy
     throw Object.assign(new Error('boom'), { status: 503 });
   };
   await assert.rejects(
-    trackAiCall(() => callModel({ task: 'mentor_match', system: 'S', input: '{}' }, create)),
+    trackAiCall(() => callModel({ task: 'mentor_match', system: 'S', input: fenced('{}') }, create)),
     (error) => {
       const usage = usageOfFailure(error);
       assert.equal(usage.model, resolveModel('mentor_match'));
@@ -181,7 +185,7 @@ test('a failed call still says which model was asked, with no token counts', asy
 
 test('outside a tracked call, callModel still answers and records nothing', async () => {
   const create = async () => reply('ok');
-  assert.equal(await callModel({ task: 'cv_feedback', system: 'S', input: 'i' }, create), 'ok');
+  assert.equal(await callModel({ task: 'cv_feedback', system: 'S', input: fenced('i') }, create), 'ok');
 });
 
 // ── The one-importer rule ────────────────────────────────────────────────────

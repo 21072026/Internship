@@ -97,3 +97,35 @@ export function freeMeetingFallbackLink(link: string | null | undefined): string
   const jaas = parseJaasMeetingLink(link);
   return jaas ? `https://meet.jit.si/${jaas.room}` : null;
 }
+
+// The product a link belongs to, for an "Open in <provider>" button (#2007).
+// Nothing but a label: Meet/Zoom/Teams all refuse to be framed, so when the
+// panel cannot show the room it should at least say where the room is. Known
+// hosts get their brand name; anything else gets its hostname, which for a
+// company's own instance (`video.acme.de`) is the name people know it by.
+const MEETING_PROVIDERS: ReadonlyArray<readonly [host: string, name: string]> = [
+  ['meet.google.com', 'Google Meet'],
+  ['zoom.us', 'Zoom'],
+  ['zoom.com', 'Zoom'],
+  ['teams.microsoft.com', 'Microsoft Teams'],
+  ['teams.live.com', 'Microsoft Teams'],
+  ['webex.com', 'Webex'],
+  ['whereby.com', 'Whereby'],
+  ['meet.jit.si', 'Jitsi'],
+  ['8x8.vc', 'Jitsi'],
+];
+
+export function meetingProviderName(link: string | null | undefined): string | null {
+  if (!link) return null;
+  let host: string;
+  try {
+    host = new URL(link).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  if (!host) return null;
+  for (const [known, name] of MEETING_PROVIDERS) {
+    if (host === known || host.endsWith(`.${known}`)) return name;
+  }
+  return host;
+}

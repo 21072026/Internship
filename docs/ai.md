@@ -77,17 +77,19 @@ without one. It is the one place that decides whether the gate asks for the
 paid add-on:
 
 - **`participant`** — the free core: `cv_extract`, `cv_feedback`,
-  `interview_prep`, `interaction_summary`. The mentee's own tools and the
-  mentor's own view of their own mentee. The gate never runs the entitlement
+  `interview_prep`, `interaction_summary`, `thread_summary`, `suggested_reply`,
+  `outreach_draft`, `bulk_draft`, `profile_enrich`. The mentee's own tools and
+  the mentor's own view of their own mentee. The gate never runs the entitlement
   query on this path: no extra read, no paywall, and `not_entitled` cannot
   reach a participant route or screen. A route may **escalate one call** to
   operator (`runAiGated({ audience: 'operator' })`) when staff use a
   participant task as a tool — `POST /api/interactions/summary` does so for an
-  ADMIN summarising a pair that is not theirs, and answers `403 feature_locked`
-  without the pack; the registry's audience is the floor and is never lowered
-  per call.
+  ADMIN summarising a pair that is not theirs, and `POST /api/ai/bulk-draft`
+  for an ADMIN's bulk draft; both answer `403 feature_locked` without the pack.
+  The registry's audience is the floor and is never lowered per call.
 - **`operator`** — the admin tools: `mentor_match`, `survey_summary`,
-  `evaluation_insights`, `weekly_report_digest`, `analytics_narrative`. The
+  `evaluation_insights`, `weekly_report_digest`, `analytics_narrative`,
+  `content_translate`, `content_draft`, `company_enrich`. The
   gate asks `entitled(orgId, 'AI_PACKAGE')` (#1733; the constant is
   `AI_PACK_FEATURE` in `aiGate.ts`) right after consent and **before the
   artefact cache** — a locked org is not answered from a stored copy of the
@@ -392,6 +394,23 @@ needs a separate discussion first.
    at all — so a route cannot paywall a participant tool without first
    re-registering it as an operator one, in a diff a reviewer sees.
 
+## User text is data, never instructions (#2026)
+
+Everything a person wrote — a CV, a log, a conversation, a survey row, a free-form field, a
+name — enters a prompt inside a `wrapUntrusted(label, text)` block
+(`src/lib/ai/untrusted.ts`): a nonce-fenced block whose fence cannot be
+forged. `callModel()` enforces the rest so no module can forget it: it
+**refuses** an input with no block, appends `UNTRUSTED_DATA_RULE` to every
+system prompt, masks contact details inside the blocks unless the task's
+registry entry says `needsContactDetails: true` (only `cv_extract`;
+`src/lib/ai/redact.ts`), cuts an over-long input inside the data rather than
+through a fence, and runs the injection tripwire (`src/lib/ai/injection.ts`)
+whose hits land on `AiUsage.flags` — a flag, never a block. Model output is
+rendered only through `AiText` (`src/components/ai/AiText.tsx`): a plain
+text node, no markup, no live links, control and bidi characters stripped.
+`scripts/test/ai-untrusted.test.mjs` fails on an unfenced caller or a
+surface that renders generated prose another way.
+
 ## Labelling
 
 Every rendered model output carries the shared ✨ marker
@@ -424,7 +443,10 @@ badge in the same change.
    `operator` route answers `not_entitled` with the `403 feature_locked` shape
    and reports `locked` on its `GET`; a `participant` route can never receive
    it and carries no locked copy.
-5. `<AiBadge />` on whatever renders the result.
+5. `<AiBadge />` on whatever renders the result, and the result itself through
+   `<AiText />`. User text in the prompt goes through `wrapUntrusted()` —
+   `callModel` refuses it otherwise. Set `needsContactDetails: true` only if
+   the task truly reads an e-mail, phone number or link off the text.
 6. A row in the task table here, the matching entry in the `ai` dictionary block
    for `/ai`, and the route in
    [`role-access-matrix.md`](role-access-matrix.md).

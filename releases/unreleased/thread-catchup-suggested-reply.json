@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Thread catch-up and suggested replies (#2048, part 1):** two new endpoints, `POST /api/conversations/[id]/summary` (\"what happened here\", bullets in the reader's language) and `POST /api/conversations/[id]/suggest-reply` (`tone: brief | warm | formal`, written in the recipient's language on a 1:1 thread and the author's in a group room). Both are for participants only, through `getConversationIfAllowed` plus participant membership, so an admin who may read a thread does not get it summarised. Both read the latest 60 messages as the asker sees them, never ones deleted for everyone or for the asker (`src/lib/threadAiContext.ts`). They require `AI_INTERACTION_SUMMARY` consent from everyone quoted, are free (never plan-gated), and run through `runAiGated` with an `AiArtifact` keyed on the thread's last message and last edit, so reopening an unchanged thread costs no provider call and no quota. The artefacts are subject-less and listed in `OPEN_TEXT_TASKS`, so erasing any participant wipes them. A suggested reply is only ever returned as text: the composer fills its box and marks it ✨ until edited, and no code path sends it. Transcript, language and tone rules live in `src/lib/threadAiRules.ts` (unit-tested). New rate limits `thread_summary` and `suggested_reply`.",
+  "notes": {
+    "en": [
+      "Catch up on a long conversation in a few lines, and get a suggested reply in three tones that you can edit before you send it. Nothing is ever sent for you."
+    ],
+    "tr": [
+      "Uzun bir sohbeti birkaç satırda özetle; göndermeden önce düzenleyebileceğin üç farklı tonda yanıt önerisi al. Senin yerine hiçbir şey gönderilmez."
+    ],
+    "de": [
+      "Lass dir eine lange Unterhaltung in wenigen Zeilen zusammenfassen und erhalte einen Antwortvorschlag in drei Tonarten, den du vor dem Senden bearbeiten kannst. Es wird nie etwas für dich gesendet."
+    ]
+  }
+}

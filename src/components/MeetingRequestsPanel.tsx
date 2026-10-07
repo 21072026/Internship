@@ -10,6 +10,7 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { ConflictNotice, PolicyNotice, readConflict, readPolicy, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
+import { LinkRefusalNotice, readLinkRefusal, type MeetingLinkRefusal } from '@/components/meeting/MeetLinkField';
 import { filterBookedOccurrences } from '@/lib/busyWindowsRule';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
 import { SuggestedTimes } from '@/components/meeting/SuggestedTimes';
@@ -54,6 +55,9 @@ export function MeetingRequestsPanel({
   const [conflict, setConflict] = useState<MeetingConflict | null>(null);
   // The mentor's booking rules (#2003): which one a request ran into.
   const [refusal, setRefusal] = useState<MeetingPolicyRefusal | null>(null);
+  // Accepting needs an external room under the tenant's policy, and the
+  // mentor has none saved (#2007).
+  const [linkRefusal, setLinkRefusal] = useState<MeetingLinkRefusal | null>(null);
   const [booking, setBooking] = useState<{ slotMinutes: number | null; minNoticeMinutes: number | null } | null>(null);
   const [busyHours, setBusyHours] = useState<{ start: string; end: string }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -131,9 +135,10 @@ export function MeetingRequestsPanel({
       });
       // Taken since it was asked for, or against the rules: the request stays
       // pending, the reason shows.
-      const body = res.status === 409 ? await res.json().catch(() => null) : null;
+      const body = res.status === 409 || res.status === 422 ? await res.json().catch(() => null) : null;
       setConflict(readConflict(body));
       setRefusal(readPolicy(body));
+      setLinkRefusal(readLinkRefusal(body));
       await load();
     } finally {
       setBusy(false);
@@ -175,6 +180,7 @@ export function MeetingRequestsPanel({
 
       {conflict && <div className="mb-4"><ConflictNotice conflict={conflict} /></div>}
       {refusal && <div className="mb-4"><PolicyNotice refusal={refusal} name={mode === 'request' ? counterpart?.name : undefined} /></div>}
+      {linkRefusal && <div className="mb-4"><LinkRefusalNotice refusal={linkRefusal} /></div>}
 
       {/* Times free for both, on both clocks (#1999). Picking one fills the
           request below exactly like picking an offered slot does. */}

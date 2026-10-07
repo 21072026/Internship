@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Per-API-key quota and RateLimit headers (#2010):** a request with a working API key now spends only that key's per-minute window (120/min, on the shared limiter store — #1546's `key:<id>` keying, consumed), so two integrations behind one address no longer share a budget; requests without a key, and requests whose key fails, spend their address's window, which is checked before the key lookup so a flood of bad keys stops costing database round trips. Keys may carry an optional period allowance (`ApiKey.quotaPeriod` 'day' | 'month' + `quotaLimit`, additive nullable columns — existing keys are unchanged): past it the door answers `429 { type: 'quota_exceeded', resetAt }` with `Retry-After`, distinct from the per-minute `429 { type: 'rate_limited' }`. Usage is tallied per process and flushed every few seconds as one atomic `increment` upsert into the new `ApiKeyUsage` model (orgId, `TENANT_MODELS`) — never a database write per request; replicas add up and the count survives a restart. Every `/api/v1` response carries `RateLimit-Limit` / `-Remaining` / `-Reset` for the limit closest to exhaustion. `lastUsedAt` is now stamped at most once a minute. The admin key list shows requests this period against the allowance, the allowance can be set at minting or changed in place (`PATCH /api/admin/api-keys?id=`), and the public OpenAPI document and `/admin/api-docs` describe the limits, the headers and both 429 types. Session-authenticated requests are never metered.",
+  "notes": {
+    "en": [
+      "API keys can now have a daily or monthly request allowance, each key gets its own per-minute budget, and every API response tells the integration how many requests it has left."
+    ],
+    "tr": [
+      "API anahtarlarına artık günlük veya aylık istek hakkı tanımlanabiliyor, her anahtarın kendi dakikalık bütçesi var ve her API yanıtı entegrasyona kaç isteği kaldığını söylüyor."
+    ],
+    "de": [
+      "API-Schlüssel können jetzt ein Tages- oder Monatskontingent haben, jeder Schlüssel bekommt sein eigenes Minutenbudget, und jede API-Antwort sagt der Integration, wie viele Anfragen ihr noch bleiben."
+    ]
+  }
+}

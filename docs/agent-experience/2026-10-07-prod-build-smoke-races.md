@@ -1,0 +1,15 @@
+## 2026-10-07 — message pagination/search, inbox filters, provisioning wizard, thread AI (#1609, #2065, #2048; #2832, #2836, #2837, #2862)
+
+- **An e2e spec that passes against `next dev` can still be red in the CI smoke gate, which runs a production build.** The specs I added for #1609 passed locally and broke smoke 1/2 on every open PR. Before calling a new `@smoke` spec done, run it a few times against `npm run build && npx next start -p 3000` (`BASE_URL=http://127.0.0.1:3000`), not only against the dev server.
+- **Three production-only races to design every UI spec against:**
+  - A streamed server render keeps the incoming page as a hidden copy for a moment, so an unscoped test id matches twice. Use `page.locator('[data-testid="x"]:visible')`.
+  - A click right after a full load can land before hydration and do nothing. Retry opening client menus with `expect(...).toPass()`.
+  - A navigation is not finished when `click()` returns. Wait for the new page's own marker (e.g. `aria-current="page"`) before touching the next control.
+- **`router.refresh()` on live signals can swallow a same-route `<Link>` navigation.** `/messages` refreshes itself on every realtime tick (`MessagesLiveRefresh`), and a chip click to `?filter=…` sometimes did nothing in production. Navigations on a page that refreshes itself are plain `<a>` (full load), with the reason in a comment.
+- **CI logs are not reachable from this container.** `gh api …/jobs/<id>/logs` redirects to a blob host the built-in `gh` refuses, and the annotations only say "exit code 1". To find the failing test, run the same shard locally against a production build: `npx playwright test --grep @smoke --shard=1/2`.
+- **`pkill -f "playwright test"` kills the bash command that runs it, because its own command line matches.** Kill by PID, or by the port's owner: `kill $(ss -ltnp | grep ':3000' | grep -o 'pid=[0-9]*' | cut -d= -f2)`.
+- **A worker restart stops MariaDB too.** If you see `P1001` or `curl 000`, run `service mariadb start` before blaming the code. When `localhost:3000` gives 000 but the port is listening, use `127.0.0.1`.
+- **Reading `searchParams` in the legacy `/messages/[relationId]` redirect page made a client navigation flaky.** It was cheaper to resolve the target server-side where the link is built: the search route adopts a mentorship-only hit with `conversationForRelation` and links `/messages/c/<id>?m=`.
+- **Prisma's `contains` passes `%` and `_` to MySQL `LIKE` unescaped.** `%%` matched every message. Escape `\`, `%` and `_` first (`likeLiteral` in `src/lib/messagePage.ts`).
+- **Since #2022 a new AI feature is registry-first.** Add the task to `src/lib/ai/tasks.ts` (`maxInputChars` may not go below 24k, `scripts/test/ai-tasks.test.mjs` enforces it), call `callModel()` from the feature module, and never import `@anthropic-ai/sdk` outside `src/lib/ai/provider.ts`.
+- **An AI artefact that quotes several people gets `subjectUserId: null` plus an `OPEN_TEXT_TASKS` entry, so erasing any one of them wipes it.** Put the asker in the input hash so one participant never reads another's cached copy.

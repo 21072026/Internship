@@ -9,6 +9,7 @@ import { callProvider, isAiConfigured, trackAiCall, usageOfFailure, type AiCallU
 import { AI_TASKS, type AiTaskId, type AiTaskSpec } from '@/lib/ai/tasks';
 import { estimateCostMicros } from '@/lib/ai/pricing';
 import { entitled } from '@/lib/entitlements';
+import { flagsColumn } from '@/lib/ai/injection';
 import type { ConsentType } from '@prisma/client';
 import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts';
 
@@ -35,6 +36,15 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 //   evaluation_insights   operator     admin, /admin/insights                  required
 //   weekly_report_digest  operator     admin, /admin/insights                  required
 //   analytics_narrative   operator     admin, /admin/analytics                 required
+//   thread_summary        participant  a participant's own conversation        never
+//   suggested_reply       participant  a participant's own conversation        never
+//   outreach_draft        participant  the mentor's draft to their own mentee  never
+//   bulk_draft            participant  a mentor's bulk draft to their mentees; never — except
+//                                      an ADMIN's bulk draft is escalated       an admin
+//   profile_enrich        participant  a mentor's own profile from own text    never
+//   content_translate     operator     admin authoring, /admin/*               required
+//   content_draft         operator     admin authoring from a brief            required
+//   company_enrich        operator     admin company record from pasted text   required
 //
 // `participant` is the free core: the gate never runs the entitlement query
 // on that path (no extra read, no paywall — the denial copy stays the neutral
@@ -202,6 +212,7 @@ export async function runAiGated<T>(opts: {
           outputTokens: usage && usage.completed > 0 ? usage.outputTokens : null,
           costMicros: usage && usage.completed > 0 ? estimateCostMicros(usage.model, usage.inputTokens, usage.outputTokens) : null,
           latencyMs: usage && usage.completed > 0 ? usage.latencyMs : null,
+          flags: flagsColumn(usage?.flags ?? []),
         },
       })
       .catch(() => {}); // metering must never break the call

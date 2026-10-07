@@ -100,6 +100,7 @@ test('a handover copies the trial window verbatim — the successor carries the 
     cohortId: null,
     trialStartedAt: new Date('2026-03-01T10:00:00Z'),
     trialEndsAt: new Date('2026-03-31T10:00:00Z'),
+    contractEndsAt: null,
     // Not part of the journey — must not be copied.
     mentorId: 'old-mentor',
     id: 'rel-1',
@@ -110,6 +111,15 @@ test('a handover copies the trial window verbatim — the successor carries the 
   assert.equal(carried.pipelineStatus, 'TRIAL_ACTIVE');
   assert.equal('mentorId' in carried, false);
   assert.equal('id' in carried, false);
+});
+
+test('a handover during a notice period keeps the contract end (#2841)', () => {
+  const ends = new Date('2026-12-31T00:00:00Z');
+  const carried = carriedOverFields({
+    pipelineStatus: 'DEAL_WON', stageDeadline: null, companyId: 'c1', projectId: null, cohortId: null,
+    trialStartedAt: null, trialEndsAt: null, contractEndsAt: ends,
+  });
+  assert.equal(carried.contractEndsAt, ends);
 });
 
 test('every carried-over field is selected from the closing relation in mentorTransfer.ts', () => {

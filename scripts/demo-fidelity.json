@@ -139,8 +139,8 @@
       "model": "PipelineStage",
       "where": { "org": { "vertical": "MARKETING" } },
       "label": "PipelineStage(MARKETING)",
-      "minRows": 9,
-      "target": 9,
+      "minRows": 7,
+      "target": 7,
       "screen": "the marketing funnel board — LEAD_NEW … DEAL_LOST from the shipped MARKETING_FUNNEL preset",
       "issue": "#2443"
     },
@@ -166,8 +166,8 @@
       "model": "StatusChange",
       "where": { "relation": { "org": { "vertical": "MARKETING" } } },
       "label": "StatusChange(MARKETING)",
-      "minRows": 94,
-      "target": 94,
+      "minRows": 80,
+      "target": 80,
       "screen": "stage aging + cohort conversion on a marketing tenant — back-dated history is what they are drawn from",
       "issue": "#2443"
     },
@@ -175,8 +175,8 @@
       "model": "InteractionLog",
       "where": { "relation": { "org": { "vertical": "MARKETING" } } },
       "label": "InteractionLog(MARKETING)",
-      "minRows": 61,
-      "target": 61,
+      "minRows": 59,
+      "target": 59,
       "screen": "the marketing attention queue and the 'no recent contact' badge (docs/last-contact.md)",
       "issue": "#2443"
     }

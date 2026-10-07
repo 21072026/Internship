@@ -18,10 +18,18 @@ export function GET(request: Request) {
       title: `${productNameFor(world)} Public API`,
       version: '1.0.0',
       description:
-        'Read-only candidate access (Bearer API key) plus outgoing webhooks. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to.',
+        'Read-only candidate access (Bearer API key) plus outgoing webhooks. Every key carries an explicit scope list and may carry an expiry; revoked keys are retained for audit rather than deleted. Scope, expiry, revocation and the key’s organisation are enforced on every request: an expired or revoked key answers 401, a key missing the operation’s scope answers 403, and every response contains only the data of the organisation the key belongs to. Limits: each key has its own window of 120 requests a minute (requests without a working key share their address\u2019s window), and a key may additionally carry a daily or monthly request allowance. Every response carries RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset (seconds) for whichever limit is closest to exhaustion; a 429 also carries Retry-After and a `type` of `rate_limited` (the per-minute window) or `quota_exceeded` (the period allowance, with `resetAt`).',
     },
     servers: [{ url: '/api/v1' }],
     components: {
+      // On every response (#2010): the limit closest to exhaustion — the key's
+      // per-minute window or its period allowance.
+      headers: {
+        RateLimitLimit: { description: 'Requests allowed in the current window or period.', schema: { type: 'integer' } },
+        RateLimitRemaining: { description: 'Requests left in it.', schema: { type: 'integer' } },
+        RateLimitReset: { description: 'Seconds until it resets.', schema: { type: 'integer' } },
+        RetryAfter: { description: 'Seconds to wait before retrying (on a 429).', schema: { type: 'integer' } },
+      },
       securitySchemes: {
         apiKey: {
           type: 'http',
@@ -42,6 +50,11 @@ export function GET(request: Request) {
           responses: {
             '200': {
               description: 'Array of candidates, scoped to the key’s organisation',
+              headers: {
+                'RateLimit-Limit': { $ref: '#/components/headers/RateLimitLimit' },
+                'RateLimit-Remaining': { $ref: '#/components/headers/RateLimitRemaining' },
+                'RateLimit-Reset': { $ref: '#/components/headers/RateLimitReset' },
+              },
               content: { 'application/json': { schema: { type: 'object', properties: { candidates: { type: 'array', items: { type: 'object' } } } } } },
             },
             '401': { description: 'Missing, unknown, expired or revoked API key' },
@@ -49,7 +62,19 @@ export function GET(request: Request) {
               description:
                 'The key does not hold the `candidates:read` scope, or is not bound to an organisation',
             },
-            '429': { description: 'Rate limit exceeded (counted per client address and per key)' },
+            '429': {
+              description:
+                'Refused by a limit. `type: rate_limited` — the per-minute window (per key; per address for requests without a working key); `type: quota_exceeded` — the key\u2019s daily or monthly allowance is spent until `resetAt` (UTC). Both carry Retry-After.',
+              headers: { 'Retry-After': { $ref: '#/components/headers/RetryAfter' } },
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { error: { type: 'string' }, type: { type: 'string', enum: ['rate_limited', 'quota_exceeded'] }, resetAt: { type: 'string', format: 'date-time' } },
+                  },
+                },
+              },
+            },
           },
         },
       },
