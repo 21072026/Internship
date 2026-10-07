@@ -6,16 +6,63 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
 import { callProvider, isAiConfigured, trackAiCall, usageOfFailure, type AiCallUsage } from '@/lib/ai/provider';
-import type { AiTaskId } from '@/lib/ai/tasks';
+import { AI_TASKS, type AiTaskId, type AiTaskSpec } from '@/lib/ai/tasks';
 import { estimateCostMicros } from '@/lib/ai/pricing';
+import { entitled } from '@/lib/entitlements';
 import { flagsColumn } from '@/lib/ai/injection';
 import type { ConsentType } from '@prisma/client';
 import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts';
 
 // Central AI gate (Faz 2, #537) — the single wrapper every AI feature goes
-// through: consent check → provider configured → monthly quota → call →
-// metering. Other AI tasks (#533-#536) build on this; none of them may call
-// the provider directly.
+// through: consent check → entitlement (operator tasks) → monthly quota →
+// provider configured → call → metering. Other AI tasks (#533-#536) build on
+// this; none of them may call the provider directly.
+//
+// WHO THE TASK IS FOR decides whether the AI pack is asked for (#1738). The
+// decision is made once, in the registry (`audience` in src/lib/ai/tasks.ts —
+// a task cannot be registered without it), and read here from the task id:
+//
+//   task                  audience     route / screen                         AI_PACKAGE
+//   cv_extract            participant  the mentee's own CV (B3), also when a   never
+//                                      staff role with CV access triggers it
+//   cv_feedback           participant  the mentee's own CV, /portal            never
+//   interview_prep        participant  the mentee, for themselves, /portal     never
+//   practice_interview    participant  the mentee's own text-only mock          never
+//                                      interview, /portal (#2051)
+//   interaction_summary   participant  the mentor's own view of their own      never —
+//                                      mentee (/mentor/mentees/[id]); an       except an
+//                                      ADMIN reading another pair's log is     admin: the
+//                                      operator use and the route says so      route escalates
+//   mentor_match          operator     admin triage, /admin/candidates         required
+//   survey_summary        operator     admin, /admin/surveys/[id]              required
+//   evaluation_insights   operator     admin, /admin/insights                  required
+//   weekly_report_digest  operator     admin, /admin/insights                  required
+//   analytics_narrative   operator     admin, /admin/analytics                 required
+//   thread_summary        participant  a participant's own conversation        never
+//   suggested_reply       participant  a participant's own conversation        never
+//   outreach_draft        participant  the mentor's draft to their own mentee  never
+//   bulk_draft            participant  a mentor's bulk draft to their mentees; never — except
+//                                      an ADMIN's bulk draft is escalated       an admin
+//   profile_enrich        participant  a mentor's own profile from own text    never
+//   next_step_suggest     participant  the owning mentor's own record; an      never — except
+//                                      ADMIN on another record is escalated     an admin
+//   content_translate     operator     admin authoring, /admin/*               required
+//   content_draft         operator     admin authoring from a brief            required
+//   company_enrich        operator     admin company record from pasted text   required
+//
+// `participant` is the free core: the gate never runs the entitlement query
+// on that path (no extra read, no paywall — the denial copy stays the neutral
+// "not right now", docs/ai.md § The degradation contract). A route may
+// ESCALATE one call of a participant task to operator (`audience: 'operator'`)
+// when the caller is staff using it as a tool — an admin summarising a pair
+// that is not theirs; the registry's audience is the floor and is never
+// lowered per call. `operator` asks
+// `entitled(orgId, 'AI_PACKAGE')` (#1733) and answers 'not_entitled' when the
+// org has neither a plan with the pack nor a grant; the operator routes turn
+// that into the shared `403 { code: 'feature_locked', feature: 'AI_PACKAGE' }`.
+// The check sits BEFORE the artefact cache on purpose: a locked org reads no
+// stored copy of the add-on either. The orgs that existed when the gate went
+// live were grandfathered by prisma/backfill-ai-package-grandfather.mjs.
 //
 // Quota: Setting.aiMonthlyQuota calls per calendar month (UTC, the metering
 // month of src/lib/meteringRules.ts) PER ORG ('0' disables AI). The quota is a
@@ -36,8 +83,12 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 // mentees are never shown a paywall (core flows never depend on AI).
 
 // 'provider_error' (#2024): the provider failed even after its retries, or the
-// breaker is open. Like the other three it is a typed denial, never a throw.
-export type AiDenialReason = 'no_consent' | 'not_configured' | 'quota_exceeded' | 'provider_error';
+// breaker is open. 'not_entitled' (#1738): an operator task in an org without
+// the AI pack. Like the others each is a typed denial, never a throw.
+export type AiDenialReason = 'no_consent' | 'not_entitled' | 'not_configured' | 'quota_exceeded' | 'provider_error';
+
+/** The paid add-on an operator task needs (#1738). One name, so a route and a test cannot drift from the gate. */
+export const AI_PACK_FEATURE = 'AI_PACKAGE' as const;
 
 /** The stored artefact behind a result (#2044), when the call persisted one. */
 export interface AiArtifactRef {
@@ -100,6 +151,10 @@ export async function runAiGated<T>(opts: {
   // The tenant whose quota the call consumes — `settingsOrgOf(session)`. Required
   // so a new AI feature cannot silently meter against the default org.
   orgId: string | null;
+  // Escalate THIS call to operator use of a participant task (#1738): an admin
+  // reading a pair's summary, a staff-triggered extraction. Only 'operator'
+  // can be passed — the registry's audience is the floor, never lowered here.
+  audience?: 'operator';
   // Recorded for metering/attribution (companyId prepares per-company quotas).
   userId?: string | null;
   companyId?: string | null;
@@ -108,6 +163,13 @@ export async function runAiGated<T>(opts: {
 }): Promise<AiGateResult<T>> {
   if (opts.consent && !(await hasConsent(opts.consent.userId, opts.consent.type))) {
     return { ok: false, reason: 'no_consent' };
+  }
+  // The add-on, for operator tasks only (#1738, the table in the header). A
+  // participant task never reaches this read. Before the cache: a locked org
+  // is not answered from a stored copy either.
+  const task: AiTaskSpec = AI_TASKS[opts.scope];
+  if ((opts.audience ?? task.audience) === 'operator' && !(await entitled(await quotaOrgId(opts.orgId), AI_PACK_FEATURE))) {
+    return { ok: false, reason: 'not_entitled' };
   }
   // Consent first, cache second: a withdrawn consent is not answered from a
   // stored copy either. A hit costs nothing — no provider call, no quota.

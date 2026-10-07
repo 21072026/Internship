@@ -324,6 +324,8 @@ const en = {
     suggested: 'Suggested',
     sharedSkills: 'shared skills',
     ruleBased: 'rule-based',
+    // The org lacks the AI pack (#1738): one neutral line, no price, no CTA.
+    locked: 'Rule-based order — the AI ranking is part of the AI pack, which is not included for this organisation; the platform operator can add it.',
     noSuggestion: 'No available mentor to suggest.',
     // Confirmation dialog (#942) shown before assigning a mentor whose
     // availability.status is at_capacity/not_accepting — advisory, not a block.
@@ -1411,6 +1413,9 @@ const en = {
     aiUnavailable_quota_exceeded: 'This month\'s AI allowance is used up — the answers above are complete.',
     aiUnavailable_not_configured: 'AI is not set up for this programme — the answers above are complete.',
     aiUnavailable_below_floor: 'Not enough responses to summarise yet.',
+    aiUnavailable_not_entitled: 'The AI summary is part of the AI pack, which is not included for this organisation — the answers above are complete. The platform operator can add it.',
+    // The 403 `feature_locked` (#1738): the button goes, this line stays.
+    aiLocked: 'The AI summary is part of the AI pack, which is not included for this organisation — the answers above are complete. The platform operator can add it.',
   },
   adminHealth: {
     title: 'Relationship health',
@@ -1561,12 +1566,14 @@ const en = {
     title: 'What changed',
     write: 'Write the summary',
     hint: 'A short paragraph, written from the figures on this page only.',
+    locked: 'The AI tools for programme staff are part of the AI pack, which is not included for this organisation — every figure on this page is complete without them. The platform operator can add it.',
     note: 'Written by AI from the figures on this page. A paragraph that cites any number not among them is thrown away, never shown.',
     reasons: {
       not_configured: 'AI is not set up here — every figure on this page is complete without it.',
       quota_exceeded: "This month's AI quota is used up.",
       provider_error: 'The AI service is not answering right now. Try again later.',
       unreadable: 'The paragraph cited a figure that is not on this page, so it was discarded. Try again.',
+      not_entitled: 'The AI tools for programme staff are part of the AI pack, which is not included for this organisation — every figure on this page is complete without them. The platform operator can add it.',
     },
   },
   adminInsights: {
@@ -1577,6 +1584,7 @@ const en = {
     to: 'To',
     rows: '{n} rows with text in this range',
     summarise: 'Summarise',
+    locked: 'The AI tools for programme staff are part of the AI pack, which is not included for this organisation — every figure on this page is complete without them. The platform operator can add it.',
     themesTitle: 'Themes',
     themeCount: '{count} rows · {people} people',
     recurring: 'recurring',
@@ -1599,6 +1607,7 @@ const en = {
       provider_error: 'The AI service is not answering right now. Try again later.',
       unreadable: 'The answer could not be read. Try again.',
       no_rows: 'There is no text in this range.',
+      not_entitled: 'The AI tools for programme staff are part of the AI pack, which is not included for this organisation — every figure on this page is complete without them. The platform operator can add it.',
     },
     digest: {
       weekTitle: 'Week by week',
@@ -5434,6 +5443,8 @@ const en = {
     quotaExceeded: 'The monthly AI quota is exhausted. An admin can raise it in Settings.',
     // #2024: the provider failed even after its retries — not the user's doing.
     providerError: 'The AI service is not answering right now. Please try again in a few minutes.',
+    // #1738: an admin on a pair that is not theirs, in an org without the AI pack.
+    locked: 'The AI summary of another pair\'s log is part of the AI pack, which is not included for this organisation. The platform operator can add it.',
   },
   aiArtifact: {
     generatedAt: 'Generated {date}',
@@ -7902,6 +7913,7 @@ const tr: Dict = {
     suggested: 'Önerilen',
     sharedSkills: 'ortak yetenekler',
     ruleBased: 'kural tabanlı',
+    locked: 'Kural tabanlı sıra — AI sıralaması bu organizasyona dahil olmayan AI paketinin parçası; platform işletmecisi ekleyebilir.',
     noSuggestion: 'Önerilecek uygun mentör yok.',
     confirmAtCapacity: 'Bu mentor kapasitesini doldurmuş görünüyor. Yine de atamak istiyor musunuz?',
     confirmNotAccepting: 'Bu mentor yeni mentee kabul etmediğini belirtmiş. Yine de atamak istiyor musunuz?',
@@ -8947,6 +8959,8 @@ const tr: Dict = {
     aiUnavailable_quota_exceeded: 'Bu ayın AI hakkı doldu — yukarıdaki yanıtlar eksiksiz.',
     aiUnavailable_not_configured: 'Bu program için AI kurulmamış — yukarıdaki yanıtlar eksiksiz.',
     aiUnavailable_below_floor: 'Özetlemek için henüz yeterli yanıt yok.',
+    aiUnavailable_not_entitled: 'AI özeti, bu organizasyona dahil olmayan AI paketinin parçası — yukarıdaki yanıtlar eksiksiz. Platform işletmecisi ekleyebilir.',
+    aiLocked: 'AI özeti, bu organizasyona dahil olmayan AI paketinin parçası — yukarıdaki yanıtlar eksiksiz. Platform işletmecisi ekleyebilir.',
   },
   adminHealth: {
     title: 'İlişki sağlığı',
@@ -9094,12 +9108,14 @@ const tr: Dict = {
     title: 'Ne değişti',
     write: 'Özeti yaz',
     hint: 'Yalnızca bu sayfadaki rakamlardan yazılan kısa bir paragraf.',
+    locked: 'Program ekibine yönelik yapay zekâ araçları, bu organizasyona dahil olmayan AI paketinin parçası — bu sayfadaki tüm rakamlar onsuz da eksiksiz. Platform işletmecisi ekleyebilir.',
     note: 'Bu sayfadaki rakamlardan yapay zekâ tarafından yazıldı. Bunların arasında olmayan herhangi bir sayıyı anan bir paragraf atılır, asla gösterilmez.',
     reasons: {
       not_configured: 'Yapay zekâ burada kurulu değil — bu sayfadaki tüm rakamlar onsuz da eksiksiz.',
       quota_exceeded: 'Bu ayın yapay zekâ kotası doldu.',
       provider_error: 'Yapay zekâ hizmeti şu anda yanıt vermiyor. Daha sonra tekrar dene.',
       unreadable: 'Paragraf bu sayfada olmayan bir rakam andığı için atıldı. Tekrar dene.',
+      not_entitled: 'Program ekibine yönelik yapay zekâ araçları, bu organizasyona dahil olmayan AI paketinin parçası — bu sayfadaki tüm rakamlar onsuz da eksiksiz. Platform işletmecisi ekleyebilir.',
     },
   },
   adminInsights: {
@@ -9110,6 +9126,7 @@ const tr: Dict = {
     to: 'Bitiş',
     rows: 'Bu aralıkta metin içeren {n} satır',
     summarise: 'Özetle',
+    locked: 'Program ekibine yönelik yapay zekâ araçları, bu organizasyona dahil olmayan AI paketinin parçası — bu sayfadaki tüm rakamlar onsuz da eksiksiz. Platform işletmecisi ekleyebilir.',
     themesTitle: 'Temalar',
     themeCount: '{count} satır · {people} kişi',
     recurring: 'tekrarlayan',
@@ -9132,6 +9149,7 @@ const tr: Dict = {
       provider_error: 'Yapay zekâ hizmeti şu anda yanıt vermiyor. Daha sonra tekrar dene.',
       unreadable: 'Yanıt okunamadı. Tekrar dene.',
       no_rows: 'Bu aralıkta metin yok.',
+      not_entitled: 'Program ekibine yönelik yapay zekâ araçları, bu organizasyona dahil olmayan AI paketinin parçası — bu sayfadaki tüm rakamlar onsuz da eksiksiz. Platform işletmecisi ekleyebilir.',
     },
     digest: {
       weekTitle: 'Hafta hafta',
@@ -12852,6 +12870,7 @@ const tr: Dict = {
     consentRequired: 'Mentee AI özetlerine izin vermemiş. Hesap → Gizlilik ve onay bölümünden açabilir.',
     quotaExceeded: 'Aylık AI kotası doldu. Admin, Ayarlar’dan artırabilir.',
     providerError: 'AI hizmeti şu an yanıt vermiyor. Lütfen birkaç dakika sonra tekrar dene.',
+    locked: 'Başka bir eşleşmenin kaydına ait yapay zekâ özeti, bu organizasyona dahil olmayan AI paketinin parçası. Platform işletmecisi ekleyebilir.',
   },
   aiArtifact: {
     generatedAt: '{date} tarihinde oluşturuldu',
@@ -15287,6 +15306,7 @@ const de: Dict = {
     suggested: 'Vorgeschlagen',
     sharedSkills: 'gemeinsame Fähigkeiten',
     ruleBased: 'regelbasiert',
+    locked: 'Regelbasierte Reihenfolge — die KI-Rangfolge gehört zum KI-Paket, das für diese Organisation nicht enthalten ist; der Plattformbetreiber kann es hinzufügen.',
     noSuggestion: 'Kein verfügbarer Mentor zum Vorschlagen.',
     confirmAtCapacity: 'Dieser Mentor scheint seine Kapazität erreicht zu haben. Trotzdem zuweisen?',
     confirmNotAccepting: 'Dieser Mentor hat angegeben, aktuell keine neuen Mentees anzunehmen. Trotzdem zuweisen?',
@@ -16333,6 +16353,8 @@ const de: Dict = {
     aiUnavailable_quota_exceeded: 'Das KI-Kontingent dieses Monats ist aufgebraucht — die Antworten oben sind vollständig.',
     aiUnavailable_not_configured: 'KI ist für dieses Programm nicht eingerichtet — die Antworten oben sind vollständig.',
     aiUnavailable_below_floor: 'Noch nicht genug Antworten für eine Zusammenfassung.',
+    aiUnavailable_not_entitled: 'Die KI-Zusammenfassung gehört zum KI-Paket, das für diese Organisation nicht enthalten ist — die Antworten oben sind vollständig. Der Plattformbetreiber kann es hinzufügen.',
+    aiLocked: 'Die KI-Zusammenfassung gehört zum KI-Paket, das für diese Organisation nicht enthalten ist — die Antworten oben sind vollständig. Der Plattformbetreiber kann es hinzufügen.',
   },
   adminHealth: {
     title: 'Beziehungs-Health',
@@ -16480,12 +16502,14 @@ const de: Dict = {
     title: 'Was sich verändert hat',
     write: 'Zusammenfassung schreiben',
     hint: 'Ein kurzer Absatz, nur aus den Zahlen auf dieser Seite geschrieben.',
+    locked: 'Die KI-Werkzeuge für das Programmteam gehören zum KI-Paket, das für diese Organisation nicht enthalten ist — alle Zahlen auf dieser Seite sind auch ohne sie vollständig. Der Plattformbetreiber kann es hinzufügen.',
     note: 'Von KI aus den Zahlen auf dieser Seite geschrieben. Ein Absatz, der eine Zahl nennt, die nicht darunter ist, wird verworfen und nie angezeigt.',
     reasons: {
       not_configured: 'KI ist hier nicht eingerichtet — alle Zahlen auf dieser Seite sind auch ohne sie vollständig.',
       quota_exceeded: 'Das KI-Kontingent dieses Monats ist aufgebraucht.',
       provider_error: 'Der KI-Dienst antwortet gerade nicht. Versuche es später erneut.',
       unreadable: 'Der Absatz nannte eine Zahl, die nicht auf dieser Seite steht, und wurde deshalb verworfen. Versuche es erneut.',
+      not_entitled: 'Die KI-Werkzeuge für das Programmteam gehören zum KI-Paket, das für diese Organisation nicht enthalten ist — alle Zahlen auf dieser Seite sind auch ohne sie vollständig. Der Plattformbetreiber kann es hinzufügen.',
     },
   },
   adminInsights: {
@@ -16496,6 +16520,7 @@ const de: Dict = {
     to: 'Bis',
     rows: '{n} Zeilen mit Text in diesem Zeitraum',
     summarise: 'Zusammenfassen',
+    locked: 'Die KI-Werkzeuge für das Programmteam gehören zum KI-Paket, das für diese Organisation nicht enthalten ist — alle Zahlen auf dieser Seite sind auch ohne sie vollständig. Der Plattformbetreiber kann es hinzufügen.',
     themesTitle: 'Themen',
     themeCount: '{count} Zeilen · {people} Personen',
     recurring: 'wiederkehrend',
@@ -16518,6 +16543,7 @@ const de: Dict = {
       provider_error: 'Der KI-Dienst antwortet gerade nicht. Versuche es später erneut.',
       unreadable: 'Die Antwort konnte nicht gelesen werden. Versuche es erneut.',
       no_rows: 'In diesem Zeitraum gibt es keinen Text.',
+      not_entitled: 'Die KI-Werkzeuge für das Programmteam gehören zum KI-Paket, das für diese Organisation nicht enthalten ist — alle Zahlen auf dieser Seite sind auch ohne sie vollständig. Der Plattformbetreiber kann es hinzufügen.',
     },
     digest: {
       weekTitle: 'Woche für Woche',
@@ -20239,6 +20265,7 @@ const de: Dict = {
     consentRequired: 'Der Mentee hat KI-Zusammenfassungen nicht erlaubt. Aktivierbar unter Konto → Datenschutz & Einwilligung.',
     quotaExceeded: 'Das monatliche KI-Kontingent ist aufgebraucht. Ein Admin kann es in den Einstellungen erhöhen.',
     providerError: 'Der KI-Dienst antwortet gerade nicht. Bitte versuche es in ein paar Minuten noch einmal.',
+    locked: 'Die KI-Zusammenfassung des Protokolls eines anderen Paars gehört zum KI-Paket, das für diese Organisation nicht enthalten ist. Der Plattformbetreiber kann es hinzufügen.',
   },
   aiArtifact: {
     generatedAt: 'Erstellt am {date}',

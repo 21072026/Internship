@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInAndSettle, gotoSettled, signInViaApi } from './helpers/auth';
 
 // Machine-translation assist (#2055, part 1). CI has no provider key, so the
@@ -15,6 +15,11 @@ const adminEmail = uniqueEmail('mt-admin');
 const mentorEmail = uniqueEmail('mt-mentor');
 
 test.beforeAll(async () => {
+  // The admin assists are operator tasks behind the AI pack (#1738); this
+  // spec's admin lives in the shared default org, which keeps the pack for the
+  // whole run (never removed: other specs run on it in parallel). The locked
+  // org is e2e/ai-entitlement.spec.ts's business.
+  await setOrgFeature(null, 'AI_PACKAGE', true);
   await seedUser(adminEmail, PW, 'ADMIN', 'MT Admin');
   await seedUser(mentorEmail, PW, 'MENTOR', 'MT Mentor');
 });

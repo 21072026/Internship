@@ -24,13 +24,21 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
   const [hidden, setHidden] = useState(false);
   const [artifact, setArtifact] = useState<ArtifactInfo | null>(null);
   const [cached, setCached] = useState(false);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     let live = true;
     fetch(`/api/interactions/summary?relationId=${encodeURIComponent(relationId)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
-        if (!live || !body?.latest) return;
+        if (!live || !body) return;
+        // An admin on a pair that is not theirs, in an org without the AI
+        // pack (#1738): one line, no button. The pair's own mentor never sees it.
+        if (body.locked) {
+          setLocked(true);
+          return;
+        }
+        if (!body.latest) return;
         setSummary(body.latest.content);
         setArtifact(body.latest);
       })
@@ -57,6 +65,8 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
           setArtifact(body.artifact ?? null);
           setCached(!!body.cached);
         }
+      } else if (body.code === 'feature_locked') {
+        setLocked(true);
       } else if (body.code === 'consent_required') {
         setNotice(a.consentRequired);
       } else if (body.code === 'quota_exceeded') {
@@ -76,6 +86,13 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
   };
 
   if (hidden) return null;
+  if (locked) {
+    return (
+      <div className="mb-4" data-testid="interaction-summary">
+        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="interaction-summary-locked">{a.locked}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-4" data-testid="interaction-summary">

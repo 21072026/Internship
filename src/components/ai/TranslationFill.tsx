@@ -45,7 +45,8 @@ export function TranslationFillButton({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(m.unavailable);
+        const d = await res.json().catch(() => ({}));
+        setError(res.status === 403 && d.code === 'feature_locked' ? t.organizations.featureLocked : m.unavailable);
         return;
       }
       const merged = mergeMachine(value, body.translations ?? {}, machine);
@@ -105,7 +106,8 @@ export function DraftFromBrief({
   onDrafted: (next: LocaleMap, machine: Locale[]) => void;
   testId: string;
 }) {
-  const a = useT().authoringAssist;
+  const t = useT();
+  const a = t.authoringAssist;
   const [brief, setBrief] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -119,7 +121,8 @@ export function DraftFromBrief({
       const res = await fetch('/api/admin/ai/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose, brief: brief.trim() }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(a.unavailable);
+        const d = await res.json().catch(() => ({}));
+        setError(res.status === 403 && d.code === 'feature_locked' ? t.organizations.featureLocked : a.unavailable);
         return;
       }
       // Through mergeMachine like a translation: empty locales only, all marked.

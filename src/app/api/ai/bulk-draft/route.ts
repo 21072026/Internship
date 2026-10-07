@@ -52,6 +52,9 @@ async function handlePost(request: Request) {
     const gated = await runAiGated<Draft>({
       orgId: await settingsOrgOf(session),
       scope: 'bulk_draft',
+      // A mentor drafting to their own mentees is the free core; an ADMIN's
+      // bulk draft is an admin tool and needs the AI pack (#1738).
+      ...(session.user.role === 'ADMIN' ? { audience: 'operator' as const } : {}),
       userId: session.user.id,
       call: () => aiDraftBulk({ purpose: parsed.data.purpose, locale: parsed.data.locale, authorName: me?.fullName ?? '', recipientCount: parsed.data.recipientCount }),
     });

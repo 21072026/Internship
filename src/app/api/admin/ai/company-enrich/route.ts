@@ -6,7 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
-import { runAiGated } from '@/lib/aiGate';
+import { AI_PACK_FEATURE, runAiGated } from '@/lib/aiGate';
 import { enrichCompany, type CompanyProposal } from '@/lib/ai/authoringAssist';
 
 // POST — a proposed description and sector for a company record, from text the
@@ -33,6 +33,8 @@ export async function POST(request: Request) {
       call: () => enrichCompany(parsed.data.text),
     });
     if (!gated.ok) {
+      // An operator task without the AI pack (#1738): the shared locked shape.
+      if (gated.reason === 'not_entitled') return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
       const status = gated.reason === 'not_configured' ? 501 : gated.reason === 'quota_exceeded' ? 429 : 503;
       return NextResponse.json({ error: 'Suggestions are not available right now', code: gated.reason }, { status });
     }

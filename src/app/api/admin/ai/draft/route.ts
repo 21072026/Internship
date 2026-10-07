@@ -6,7 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
-import { runAiGated } from '@/lib/aiGate';
+import { AI_PACK_FEATURE, runAiGated } from '@/lib/aiGate';
 import { draftContent } from '@/lib/ai/authoringAssist';
 import { TRANSLATION_PURPOSES, type LocaleMap } from '@/lib/machineTranslation';
 
@@ -35,6 +35,8 @@ export async function POST(request: Request) {
       call: () => draftContent(parsed.data),
     });
     if (!gated.ok) {
+      // An operator task without the AI pack (#1738): the shared locked shape.
+      if (gated.reason === 'not_entitled') return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
       const status = gated.reason === 'not_configured' ? 501 : gated.reason === 'quota_exceeded' ? 429 : 503;
       return NextResponse.json({ error: 'Drafting is not available right now', code: gated.reason }, { status });
     }

@@ -7,11 +7,12 @@ import { getThreadIfAllowed } from '@/lib/messaging';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
-import { runAiGated } from '@/lib/aiGate';
+import { AI_PACK_FEATURE, runAiGated } from '@/lib/aiGate';
 import { aiSummarizeInteractions } from '@/lib/aiSummary';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { entitled } from '@/lib/entitlements';
 import { hashInput, latestArtifact, toArtifactDto } from '@/lib/ai/artifacts';
 
 const schema = z.object({
@@ -36,7 +37,13 @@ export async function GET(request: Request) {
     if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    const latest = await latestArtifact({ orgId: await settingsOrgOf(session), taskId: 'interaction_summary', subjectUserId: rel.menteeId, relationId: rel.id });
+    // An admin on a pair that is not theirs reads the summary as an operator
+    // tool (#1738): without the pack there is no stored copy to open either.
+    const orgId = await settingsOrgOf(session);
+    if (isOperatorUse(session.user, rel.mentorId) && !(await entitled(orgId, AI_PACK_FEATURE))) {
+      return NextResponse.json({ latest: null, locked: true });
+    }
+    const latest = await latestArtifact({ orgId, taskId: 'interaction_summary', subjectUserId: rel.menteeId, relationId: rel.id });
     return NextResponse.json({ latest: latest ? toArtifactDto(latest, session.user.id) : null });
   });
 }
@@ -45,6 +52,17 @@ export async function GET(request: Request) {
 // Mentor/admin only (it is a mentor-facing digest of their own log). Runs
 // through the central AI gate: the MENTEE's AI_INTERACTION_SUMMARY consent →
 // monthly quota → provider. Only log text is sent, never files/contact data.
+//
+// Audience (#1738): the task is `participant` — the pair's own mentor reading
+// their own log is the free core and never meets the AI pack. An ADMIN
+// summarising a pair that is not theirs is using it as an admin tool, so that
+// call is escalated to operator and, without the pack, answers the shared
+// 403 feature_locked like every other operator route.
+
+/** Staff reading a pair that is not theirs — the one caller the pack applies to. */
+function isOperatorUse(user: { id: string; role: string }, mentorId: string): boolean {
+  return user.role === 'ADMIN' && user.id !== mentorId;
+}
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -89,6 +107,7 @@ export async function POST(request: Request) {
   const gated = await runAiGated({
     orgId: await settingsOrgOf(session),
     scope: 'interaction_summary',
+    ...(isOperatorUse(session.user, rel.mentorId) ? { audience: 'operator' as const } : {}),
     // The mentee's data is being processed — their consent gates the call.
     consent: { userId: rel.menteeId, type: 'AI_INTERACTION_SUMMARY' },
     userId: session.user.id,
@@ -112,6 +131,9 @@ export async function POST(request: Request) {
   if (!gated.ok) {
     if (gated.reason === 'no_consent') {
       return NextResponse.json({ error: 'Mentee consent required', code: 'consent_required' }, { status: 403 });
+    }
+    if (gated.reason === 'not_entitled') {
+      return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
     }
     if (gated.reason === 'quota_exceeded') {
       return NextResponse.json({ error: 'Monthly AI quota exhausted', code: 'quota_exceeded' }, { status: 429 });

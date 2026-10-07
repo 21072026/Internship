@@ -123,7 +123,8 @@ export function TargetedEmailComposer() {
 
   const aiFailure = (code: string | undefined) => {
     const A = t.messages.ai;
-    return code === 'consent_required' ? A.consentRequired
+    return code === 'feature_locked' ? t.organizations.featureLocked
+      : code === 'consent_required' ? A.consentRequired
       : code === 'quota_exceeded' ? A.quotaExceeded
         : code === 'provider_error' ? A.providerError
           : code === 'not_configured' ? A.notConfigured

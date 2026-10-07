@@ -94,6 +94,9 @@ async function handlePost(request: Request, params: Promise<{ id: string }>) {
     const gated = await runAiGated<string[]>({
       orgId: await settingsOrgOf(session),
       scope: 'next_step_suggest',
+      // The owning mentor's own record is the free core; an ADMIN on a record
+      // that is not theirs is operator use and needs the AI pack (#1738).
+      ...(session.user.role === 'ADMIN' && rel.mentorId !== session.user.id ? { audience: 'operator' as const } : {}),
       consent: { userId: rel.menteeId, type: 'AI_INTERACTION_SUMMARY' },
       userId: session.user.id,
       call: () => aiNextStepSuggestions(input),

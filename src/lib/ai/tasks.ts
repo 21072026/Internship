@@ -11,9 +11,11 @@
 //   module (src/lib/ai/provider.ts) and the meter (`AiUsage`):
 //     • `id` — the key. It IS the historic `AiUsage.scope` / `AiArtifact.taskId`
 //       string, so metering history keeps its meaning. Never rename one.
-//     • `audience` — who the output is for. `participant` AI is never paywalled
-//       (CLAUDE.md, docs/ai.md § The two boundaries); #1738 makes the gate read
-//       this field for the AI_PACKAGE entitlement on the operator side.
+//     • `audience` — who the output is for. `participant` is the free core and
+//       is never paywalled (CLAUDE.md, docs/ai.md § The two boundaries): the
+//       mentee's own tools and the mentor's own view of their own mentee.
+//       `operator` is an admin or company tool, and the gate asks for the
+//       AI_PACKAGE add-on before running it (#1738, the table in aiGate.ts).
 //     • `consent` — the ConsentType the subject must have granted, or null when
 //       no personal identifier is in the payload (docs/ai.md § The task table
 //       says why that is not a loophole).
@@ -70,9 +72,10 @@ export const AI_TASKS = {
   // Constructive feedback on the mentee's own CV text (#535).
   // Scored since #2050: six sections + a checklist as JSON, hence the larger reply.
   cv_feedback: { label: 'CV feedback', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1600 },
-  // A mentor-facing digest of one relation's interaction log (#534); the
-  // mentee whose log it is consents.
-  interaction_summary: { label: 'Interaction summary', audience: 'operator', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700, legacyModelEnv: 'ANTHROPIC_SUMMARY_MODEL' },
+  // A digest of one relation's interaction log (#534) for the mentor's own
+  // view of their own mentee; the mentee whose log it is consents. Participant
+  // (#1738): the pair's own screen, not an admin tool — never behind the pack.
+  interaction_summary: { label: 'Interaction summary', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700, legacyModelEnv: 'ANTHROPIC_SUMMARY_MODEL' },
   // Interview questions and tips from the target position and skills (#536):
   // no identifier is sent, so no consent type.
   interview_prep: { label: 'Interview preparation', audience: 'participant', consent: null, tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 900 },
@@ -114,10 +117,12 @@ export const AI_TASKS = {
   content_draft: { label: 'Content draft from a brief', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1500 },
   profile_enrich: { label: 'Mentor profile suggestions', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 800 },
   company_enrich: { label: 'Company profile suggestions', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 600 },
-  // Three next-step lines for the follow-up field of one record (#2875):
-  // operator-side, read from the mentee's interaction log — so the same
-  // consent as the summary of that log — and a proposal only, never saved.
-  next_step_suggest: { label: 'Next-step suggestions', audience: 'operator', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 400 },
+  // Three next-step lines for the follow-up field of one record (#2875), read
+  // from the mentee's interaction log — so the same consent as the summary of
+  // that log — and a proposal only, never saved. Participant (#1738) like the
+  // summary: the owning mentor's own record is the free core; the route
+  // escalates an ADMIN on a record that is not theirs to operator use.
+  next_step_suggest: { label: 'Next-step suggestions', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 400 },
   // The text-only practice interview and its after-action report (#2051):
   // participant-side and free, its own id so its cost is visible on /admin/ai
   // and it can be switched off alone. No identifier is needed in the payload;

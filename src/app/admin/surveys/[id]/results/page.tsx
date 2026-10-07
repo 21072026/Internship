@@ -64,7 +64,9 @@ function NpsBlock({ nps, s }: { nps: Nps; s: Dict }) {
 // "Summarise these answers" (#1910, on the open-text engine since #2046). The
 // plain list above always stays: when AI is off, out of quota or fails, the
 // reply says why and nothing else changes. Each theme opens the answers it was
-// built from — by position in that same list — so it can be checked.
+// built from — by position in that same list — so it can be checked. An org
+// without the AI pack (#1738) learns it on the click (the results GET carries
+// no flag): the 403 `feature_locked` replaces the button with one line.
 type Sentiment = 'positive' | 'neutral' | 'negative' | 'unclear';
 interface SurveySummary {
   themes: { label: string; count: number; sentiment: Sentiment; answers: number[] }[];
@@ -88,6 +90,7 @@ function AiSummary({ surveyId, questionKey, texts, s }: { surveyId: string; ques
   const [cached, setCached] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const [note, setNote] = useState('');
+  const [locked, setLocked] = useState(false);
   const run = async (regenerate = false) => {
     setBusy(true);
     setNote('');
@@ -103,7 +106,8 @@ function AiSummary({ surveyId, questionKey, texts, s }: { surveyId: string; ques
         setArtifact(body.artifact ?? null);
         setCached(!!body.cached);
         setOpen(null);
-      } else setNote((s as Record<string, string>)[`aiUnavailable_${body.reason ?? body.code}`] ?? s.aiUnavailable);
+      } else if (res.status === 403 && body.code === 'feature_locked') setLocked(true);
+      else setNote((s as Record<string, string>)[`aiUnavailable_${body.reason ?? body.code}`] ?? s.aiUnavailable);
     } catch {
       setNote(s.aiUnavailable);
     } finally {
@@ -112,11 +116,12 @@ function AiSummary({ surveyId, questionKey, texts, s }: { surveyId: string; ques
   };
   return (
     <div className="mt-3" data-testid={`ai-summary-${questionKey}`}>
-      {!summary && (
+      {!summary && !locked && (
         <Button size="sm" variant="outline" onClick={() => run()} loading={busy} data-testid={`ai-summarise-${questionKey}`}>
           <Sparkles className="mr-1 h-4 w-4" /> {s.aiSummarise}
         </Button>
       )}
+      {locked && <p className="text-sm text-gray-600 dark:text-gray-300" role="status" data-testid="survey-summary-locked">{s.aiLocked}</p>}
       {note && <p className="mt-2 text-sm text-gray-600 dark:text-gray-300" role="status" data-testid={`ai-note-${questionKey}`}>{note}</p>}
       {summary && (
         <div className="rounded-lg border border-purple-200 p-3 dark:border-purple-900">
