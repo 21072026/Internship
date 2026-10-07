@@ -100,6 +100,9 @@ const FUNNEL: Route[] = [
     '/admin/acquisition',
     // The at-risk queue (#1902) — the same miss as the line above.
     '/admin/health',
+    // Added to the sidebar without an entry here, same miss as the two lines above.
+    '/admin/insights',
+    '/admin/migrate',
     '/admin/invitations'
   ),
   // An AdminNav destination that is NOT an admin page: interview panels live
