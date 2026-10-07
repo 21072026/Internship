@@ -6,15 +6,43 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
 import { callProvider, isAiConfigured, trackAiCall, usageOfFailure, type AiCallUsage } from '@/lib/ai/provider';
-import type { AiTaskId } from '@/lib/ai/tasks';
+import { AI_TASKS, type AiTaskId, type AiTaskSpec } from '@/lib/ai/tasks';
 import { estimateCostMicros } from '@/lib/ai/pricing';
+import { entitled } from '@/lib/entitlements';
 import type { ConsentType } from '@prisma/client';
 import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts';
 
 // Central AI gate (Faz 2, #537) — the single wrapper every AI feature goes
-// through: consent check → provider configured → monthly quota → call →
-// metering. Other AI tasks (#533-#536) build on this; none of them may call
-// the provider directly.
+// through: consent check → entitlement (operator tasks) → monthly quota →
+// provider configured → call → metering. Other AI tasks (#533-#536) build on
+// this; none of them may call the provider directly.
+//
+// WHO THE TASK IS FOR decides whether the AI pack is asked for (#1738). The
+// decision is made once, in the registry (`audience` in src/lib/ai/tasks.ts —
+// a task cannot be registered without it), and read here from the task id:
+//
+//   task                  audience     route / screen                         AI_PACKAGE
+//   cv_extract            participant  the mentee's own CV (B3), also when a   never
+//                                      staff role with CV access triggers it
+//   cv_feedback           participant  the mentee's own CV, /portal            never
+//   interview_prep        participant  the mentee, for themselves, /portal     never
+//   interaction_summary   participant  the mentor's own view of their own      never
+//                                      mentee (/mentor/mentees/[id])
+//   mentor_match          operator     admin triage, /admin/candidates         required
+//   survey_summary        operator     admin, /admin/surveys/[id]              required
+//   evaluation_insights   operator     admin, /admin/insights                  required
+//   weekly_report_digest  operator     admin, /admin/insights                  required
+//   analytics_narrative   operator     admin, /admin/analytics                 required
+//
+// `participant` is the free core: the gate never runs the entitlement query
+// on that path (no extra read, no paywall — the denial copy stays the neutral
+// "not right now", docs/ai.md § The degradation contract). `operator` asks
+// `entitled(orgId, 'AI_PACKAGE')` (#1733) and answers 'not_entitled' when the
+// org has neither a plan with the pack nor a grant; the operator routes turn
+// that into the shared `403 { code: 'feature_locked', feature: 'AI_PACKAGE' }`.
+// The check sits BEFORE the artefact cache on purpose: a locked org reads no
+// stored copy of the add-on either. The orgs that existed when the gate went
+// live were grandfathered by prisma/backfill-ai-package-grandfather.mjs.
 //
 // Quota: Setting.aiMonthlyQuota calls per calendar month (UTC, the metering
 // month of src/lib/meteringRules.ts) PER ORG ('0' disables AI). The quota is a
@@ -35,8 +63,12 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 // mentees are never shown a paywall (core flows never depend on AI).
 
 // 'provider_error' (#2024): the provider failed even after its retries, or the
-// breaker is open. Like the other three it is a typed denial, never a throw.
-export type AiDenialReason = 'no_consent' | 'not_configured' | 'quota_exceeded' | 'provider_error';
+// breaker is open. 'not_entitled' (#1738): an operator task in an org without
+// the AI pack. Like the others each is a typed denial, never a throw.
+export type AiDenialReason = 'no_consent' | 'not_entitled' | 'not_configured' | 'quota_exceeded' | 'provider_error';
+
+/** The paid add-on an operator task needs (#1738). One name, so a route and a test cannot drift from the gate. */
+export const AI_PACK_FEATURE = 'AI_PACKAGE' as const;
 
 /** The stored artefact behind a result (#2044), when the call persisted one. */
 export interface AiArtifactRef {
@@ -107,6 +139,13 @@ export async function runAiGated<T>(opts: {
 }): Promise<AiGateResult<T>> {
   if (opts.consent && !(await hasConsent(opts.consent.userId, opts.consent.type))) {
     return { ok: false, reason: 'no_consent' };
+  }
+  // The add-on, for operator tasks only (#1738, the table in the header). A
+  // participant task never reaches this read. Before the cache: a locked org
+  // is not answered from a stored copy either.
+  const task: AiTaskSpec = AI_TASKS[opts.scope];
+  if (task.audience === 'operator' && !(await entitled(await quotaOrgId(opts.orgId), AI_PACK_FEATURE))) {
+    return { ok: false, reason: 'not_entitled' };
   }
   // Consent first, cache second: a withdrawn consent is not answered from a
   // stored copy either. A hit costs nothing — no provider call, no quota.
