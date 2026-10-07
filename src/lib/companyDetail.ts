@@ -22,6 +22,7 @@
 // the same `company.view` ActivityLog entry as GET /api/companies/[id] (#2433).
 
 import { usageSeries } from '@/lib/usageRule';
+import { endedByChurn } from '@/lib/relationLifecycle';
 import type { Session } from 'next-auth';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -132,17 +133,17 @@ export async function loadCompanyDetail({
     // read with the same tenant filter as every other row on the page — a link
     // that leaves the tenant simply ends the chain. One query per hop, capped:
     // a reassignment chain is a handful long, and the cap also stops a cycle.
-    const chainRows = new Map<string, { mentorName: string; previousRelationId: string | null }>();
+    const chainRows = new Map<string, { mentorName: string; previousRelationId: string | null; churned: boolean }>();
     let frontier = [
       ...new Set(company.mentorships.map((r) => r.previousRelationId).filter((v): v is string => !!v)),
     ];
     for (let hop = 0; hop < CHAIN_DEPTH_LIMIT && frontier.length > 0; hop++) {
       const rows = await prisma.mentorshipRelation.findMany({
         where: withinTenant({ id: { in: frontier } }, tenant),
-        select: { id: true, previousRelationId: true, mentor: { select: { fullName: true } } },
+        select: { id: true, previousRelationId: true, lifecycleState: true, mentor: { select: { fullName: true } } },
       });
       for (const row of rows) {
-        chainRows.set(row.id, { mentorName: row.mentor.fullName, previousRelationId: row.previousRelationId });
+        chainRows.set(row.id, { mentorName: row.mentor.fullName, previousRelationId: row.previousRelationId, churned: endedByChurn(row) });
       }
       frontier = [
         ...new Set(
@@ -151,17 +152,23 @@ export async function loadCompanyDetail({
       ];
     }
     const relations = company.mentorships.map((r) => {
+      // The chain says WHY each link exists (#2842): an owner change lists the
+      // earlier owners; a churned journey makes this one a win-back. Two
+      // labels, because "continues a pairing with X" is false for a customer
+      // who left and came back.
       const earlierMentors: string[] = [];
+      let wonBack = false;
       const seen = new Set<string>();
       let cursor = r.previousRelationId;
-      while (cursor && !seen.has(cursor) && earlierMentors.length < CHAIN_DEPTH_LIMIT) {
+      while (cursor && !seen.has(cursor) && seen.size < CHAIN_DEPTH_LIMIT) {
         seen.add(cursor);
         const row = chainRows.get(cursor);
         if (!row) break;
-        earlierMentors.push(row.mentorName);
+        if (row.churned) wonBack = true;
+        else earlierMentors.push(row.mentorName);
         cursor = row.previousRelationId;
       }
-      return { ...r, earlierMentors };
+      return { ...r, earlierMentors, wonBack };
     });
 
     const interactions = await prisma.interactionLog.findMany({

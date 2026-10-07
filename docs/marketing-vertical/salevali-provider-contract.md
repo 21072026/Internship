@@ -9,10 +9,11 @@ gerektiği. CRM tarafında bu sözleşmeyi bekleyen üç iş var ve üçü de bu
 anahtarı ve alan adlarını kullanmak zorunda: import kolonu (#2554), gecelik
 kullanım işi (#2447), makineden makineye lead ingest'i (#2450).
 
-> **Durum: taslak, maintainer onayı bekliyor.** "Karar" diye işaretli maddeler
-> önerilen varsayılandır ve CRM işleri bunun üzerinden ilerler; **"Açık karar"**
-> diye işaretli maddeler onay olmadan uygulanmaz. Hepsi aşağıda
-> [§ Açık kararlar](#açık-kararlar) altında bir kez daha toplu duruyor.
+> **Durum: KARAR — maintainer onayı 2026-10-07.** Önerilerin hepsi onaylandı:
+> K-1, K-2 (pull), K-3 (hayır), K-5 (`trialEndsAt` = serbest dönem sonu; `upgrade_confirmed`
+> → seçenek (a) `DEAL_WON`), K-6 (önerilen eşleme, serbest metin gönderilmez), K-7 (kişisiz
+> `deleted` olayı, otomatik silme yok), K-8. **K-4 (`standard` lisans tipi)** bir öneri
+> taşımadığı için açık kaldı — SaleVali ekibine SV-3 issue'sunda soruldu.
 >
 > **Satır numaraları.** SaleVali atıfları `salevali-server` @ `62d0d86` ve
 > `salevali-client` @ `a41534f` commit'lerine (2026-09-29'daki yerel checkout'lar;
@@ -348,8 +349,11 @@ Sözleşme **hesabın hacmini ve yaşam döngüsünü** taşır, kişiyi değil.
 
 ## SaleVali karşı işleri (SaleVali repolarında açılacak)
 
-Her biri SaleVali repolarında ayrı bir issue olur ve buraya linklenir (#2565'in
-kabul kriteri). Buradan açılmadı — SaleVali backlog'u o ekibin.
+Her biri SaleVali repolarında ayrı bir issue olarak açıldı (2026-10-07, #2565'in kabul
+kriteri): SV-1 `salevali-server#1582` · SV-2 `salevali-server#1583` · SV-3
+`salevali-server#1584` (K-4 ve K-8 teyidi orada soruldu) · SV-4 `salevali-server#1585` ·
+SV-5 `salevali-client#1581` · SV-6 `salevali-client#1582` · SV-7 `salevali-server#1586` ·
+SV-8 `salevali-server#1587`. Önceliklendirme SaleVali ekibinin.
 
 | # | Repo | İş | Dayanak |
 |---|---|---|---|
@@ -378,17 +382,17 @@ atıf yapmalı ve K-1'in biçimini (küçük harf 24-hex) kullanmalı.
 
 ## Açık kararlar
 
-<a id="k-1"></a>**K-1 · `externalId` = `User._id`** — *öneri, onay bekliyor.*
+<a id="k-1"></a>**K-1 · `externalId` = `User._id`** — *karar (2026-10-07).*
 Yukarıda gerekçesiyle. Onaylanırsa #2554'ün "öneri" ifadesi karar olur.
 
-<a id="k-2"></a>**K-2 · Olay taşıması: pull mu push mu?** — *açık.* Öneri **pull**
+<a id="k-2"></a>**K-2 · Olay taşıması: pull mu push mu?** — *karar (2026-10-07): **pull**.*
 (SaleVali'de outbound altyapı yok, DemoLeadSync emsali, sır tek tarafta, kaçan
 tur kendiliğinden kapanır). Push'un tek gerçek artısı gecikme: pull 15 dakikada
 bir koşarsa (DemoLeadSync `*/15`) bir deneme lead'i en geç ~15 dakikada CRM'de.
 Pull seçilirse #2450'nin "uç" kısmı bir pull işine dönüşür; yazıcı aynı kalır.
 
 <a id="k-3"></a>**K-3 · Doğrulanmamış kayıtlar (`TempUser`) ve DemoLead CRM'e gelir mi?** —
-*açık.* Öneri **hayır**: `TempUser` doğrulanmamış e-postadır (bot, yazım hatası),
+*karar (2026-10-07): **hayır**.* `TempUser` doğrulanmamış e-postadır (bot, yazım hatası),
 id'si yaşamaz; DemoLead yalnızca bir e-posta + oturum süresidir ve kişiye yazma
 dayanağı yoktur. İkisi de SaleVali'nin kendi admin ekranlarında kalır. "Kayıt
 başladı ama doğrulanmadı" bir satış sinyali olarak istenirse ayrı, kişisiz bir
@@ -398,8 +402,8 @@ sayaç olarak gelir.
 (`license.model.ts:13`), faturalanmıyor (`admin-user.service.ts:366`). Kullanılan
 bir tip mi, eski mi? Cevaba göre kapsam tablosuna girer ya da çıkar.
 
-<a id="k-5"></a>**K-5 · `trialEndsAt` ve `upgrade_confirmed`'ın aşaması** — *açık,
-#2572'ye bağlı.* Öneri: `trialEndsAt` = **serbest dönemin sonu** (`trial_ends_at`),
+<a id="k-5"></a>**K-5 · `trialEndsAt` ve `upgrade_confirmed`'ın aşaması** — *karar
+(2026-10-07): serbest dönem sonu; `upgrade_confirmed` → (a) `DEAL_WON`.* Öneri: `trialEndsAt` = **serbest dönemin sonu** (`trial_ends_at`),
 çünkü "premium'a geç?" sorusu o an çıkar ve satışçının araması gereken an odur;
 `decision_ends_at` pencereyi kapatan tarih olarak ayrıca taşınır ve
 `TRIAL_EXPIRED` SLA'sı (bugün 3 gün, `programTemplates.ts:589`) pencereyle
@@ -407,7 +411,7 @@ uyumlu hâle getirilir. `upgrade_confirmed` için iki seçenek: (a) `DEAL_WON`'a
 taşır (taahhüt anı), `converted` yalnızca faturalama başlangıcını damgalar;
 (b) aşamaya dokunmaz, `DEAL_WON` `converted` ile gelir.
 
-<a id="k-6"></a>**K-6 · Pasifleşme ve fesih nedenleri** — *açık.* Pasifleşmenin
+<a id="k-6"></a>**K-6 · Pasifleşme ve fesih nedenleri** — *karar (2026-10-07): aşağıdaki eşleme.* Pasifleşmenin
 `DEAL_LOST` neden kodu (öneri `NO_RESPONSE`: kullanıcı karar penceresinde hiçbir
 şey seçmedi). Fesih anketi → #2573 kodları için önerilen eşleme:
 `price` → `PRICE`, `service` → `TECHNICAL_ISSUE`, `difficulty` → `NOT_A_FIT`,
@@ -416,12 +420,12 @@ yorum, onay ister. Anketin serbest metni (`description`) **gönderilmez** öneri
 gönderilecekse yalnızca admin'in okuduğu `ActivityLog`'a gider, ilişkiye değil
 (`docs/mentor-transfer.md`'deki gerekçenin aynısı).
 
-<a id="k-7"></a>**K-7 · Silinen hesap** — *açık.* SaleVali'de silinen ya da purge
+<a id="k-7"></a>**K-7 · Silinen hesap** — *karar (2026-10-07): öneri.* SaleVali'de silinen ya da purge
 edilen bir hesabın CRM'deki `Company` + lead `User`'ına ne olur: silme yüzeyi
 (#2559) tetiklenir mi, yoksa kayıt `externalId` boşaltılıp ticari geçmiş olarak
 kalır mı? Öneri: `deleted` olayı kişisiz gelir, CRM kaydı otomatik silmez ama
 operatöre silme yüzeyinde gösterir.
 
-<a id="k-8"></a>**K-8 · `transactions` tanımı** — *öneri, onay bekliyor.*
+<a id="k-8"></a>**K-8 · `transactions` tanımı** — *karar (2026-10-07); SaleVali ürün ekibinin teyidi SV-3'te.*
 Faturalanan işlem (sipariş + manuel fatura + credit), `LogEntry` değil. Onay
 SaleVali ürün ekibinden de gelmeli: churn sinyali ile fatura aynı sayıyı konuşur.

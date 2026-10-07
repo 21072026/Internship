@@ -6,6 +6,7 @@
 // Behavior-preserving: an org with no PipelineStage rows falls back to the
 // canonical stages, so single-tenant production is unchanged.
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import {
   CANONICAL_OUTCOME_KEYS,
@@ -136,20 +137,27 @@ export interface StageWrite {
   color?: string | null;
 }
 
-export async function replaceStages(orgId: string, stages: StageWrite[]): Promise<void> {
+// `client` runs both writes inside a caller's interactive transaction (tenant
+// provisioning, #2065, creates the organization and its stages as one unit);
+// without it the pair is its own batch transaction, as it always was.
+export async function replaceStages(orgId: string, stages: StageWrite[], client?: Prisma.TransactionClient): Promise<void> {
+  const data = stages.map((s) => ({
+    orgId,
+    key: s.key,
+    label: isDefaultLabel(s.key, s.label) ? '' : s.label.trim(),
+    order: s.order,
+    isTerminal: s.isTerminal ?? false,
+    isOffPath: s.isOffPath ?? false,
+    color: s.color && s.color.trim() ? s.color.trim() : null,
+  }));
+  if (client) {
+    await client.pipelineStage.deleteMany({ where: { orgId } });
+    await client.pipelineStage.createMany({ data });
+    return;
+  }
   await prisma.$transaction([
     prisma.pipelineStage.deleteMany({ where: { orgId } }),
-    prisma.pipelineStage.createMany({
-      data: stages.map((s) => ({
-        orgId,
-        key: s.key,
-        label: isDefaultLabel(s.key, s.label) ? '' : s.label.trim(),
-        order: s.order,
-        isTerminal: s.isTerminal ?? false,
-        isOffPath: s.isOffPath ?? false,
-        color: s.color && s.color.trim() ? s.color.trim() : null,
-      })),
-    }),
+    prisma.pipelineStage.createMany({ data }),
   ]);
 }
 
@@ -167,10 +175,11 @@ export async function provisionStagePreset(
   orgId: string,
   vertical: string,
   locale: Locale = 'en',
+  client?: Prisma.TransactionClient,
 ): Promise<boolean> {
   const template = defaultTemplateForVertical(vertical);
   if (!template) return false;
-  await replaceStages(orgId, templateStagePayload(template, locale).stages);
+  await replaceStages(orgId, templateStagePayload(template, locale).stages, client);
   return true;
 }
 

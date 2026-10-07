@@ -25,6 +25,7 @@ const FILES =
         'src/lib/auth.ts',
         'src/app/api/auth/forgot/route.ts',
         'src/app/api/auth/verify-email/resend/route.ts',
+        'src/app/api/auth/magic-link/route.ts',
       ];
 // Reads/writes on User in these modules must all be column-scoped. Grant lookups
 // (impersonationGrant, ssoLoginGrant) carry no Json columns and are exempt.

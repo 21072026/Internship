@@ -8,6 +8,7 @@ import {
   Webhook,
   Send,
   Lightbulb,
+  Sparkles,
   ArrowRightLeft,
   type LucideIcon,
 } from 'lucide-react';
@@ -108,6 +109,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // from another platform — internship records, hence `mentorship`.
   { href: '/admin/migrate', icon: ArrowRightLeft, key: 'migrate', capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
+  // AI spend, failures, quota and provider status (#2030). Untagged: every
+  // vertical has AI tasks and a quota.
+  { href: '/admin/ai', icon: Sparkles, key: 'aiConsole' },
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
   { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },

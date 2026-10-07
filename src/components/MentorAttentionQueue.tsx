@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/Badge';
 import type { AttentionItem, AttentionReason } from '@/lib/mentorAttention';
 import type { UsageNote } from '@/lib/usageSignals';
 import type { Dictionary } from '@/i18n/dictionaries';
+import type { Locale } from '@/i18n/config';
+import { formatDate } from '@/lib/relativeTime';
 
 const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'purple'> = {
   inactive: 'warning',
@@ -27,6 +29,8 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   // trial nobody started using — still a conversation to have.
   usage_drop: 'danger',
   trial_inactive: 'warning',
+  // Red: a paying customer is on their way out (#2841).
+  cancellation_pending: 'danger',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
@@ -38,6 +42,7 @@ export function MentorAttentionQueue({
   dormantCount = 0,
   usage = null,
   t,
+  locale = 'en',
   hrefBase = '/mentor/mentees',
 }: {
   items: AttentionItem[];
@@ -45,6 +50,8 @@ export function MentorAttentionQueue({
   /** The usage signals' footnote (#2449), from getAttentionItems(). */
   usage?: UsageNote | null;
   t: Dictionary;
+  /** For the notice-period date (#2841). */
+  locale?: Locale;
   hrefBase?: string;
 }) {
   // Accounts left out of the usage signals are said out loud even when the
@@ -65,6 +72,7 @@ export function MentorAttentionQueue({
     evaluation_due: labels.evaluationDue,
     usage_drop: labels.usageDrop,
     trial_inactive: labels.trialInactive,
+    cancellation_pending: labels.cancellationPending,
   };
 
   return (
@@ -93,7 +101,9 @@ export function MentorAttentionQueue({
             <div className="flex flex-wrap gap-1">
               {item.reasons.map((r) => (
                 <Badge key={r} variant={REASON_VARIANT[r]} className="text-xs">
-                  {reasonLabel[r]}
+                  {r === 'cancellation_pending' && item.contractEndsAt
+                    ? reasonLabel[r].replace('{date}', formatDate(item.contractEndsAt, locale, { timeZone: 'UTC' }))
+                    : reasonLabel[r]}
                 </Badge>
               ))}
             </div>

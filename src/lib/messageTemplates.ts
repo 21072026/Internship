@@ -80,6 +80,8 @@ export interface MessageTemplateDto {
   translations: MessageTemplateTranslations;
   useCount: number;
   personal: boolean;
+  /** Only on the admin screen (#2055): locales a machine filled and nobody reviewed yet. */
+  machineTranslated?: Locale[];
 }
 
 /** DB row → DTO. One place, so every route serializes a template identically. */

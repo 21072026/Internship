@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Machine-translation assist for tenant-authored text (#2055, part 1):** announcements, goal templates and message templates get a \"Fill empty languages\" button: the admin writes one language, `POST /api/admin/ai/translate` (ADMIN-only, `runAiGated` task `content_translate`, operator-side, purpose-specific tone, the text fenced as untrusted data) translates it into the locales left empty, and the editor shows the result as a draft — nothing is saved, published or sent by the button. `mergeMachine` (`src/lib/machineTranslation.ts`, unit-tested) fills empty locales only, so a human-written translation is never overwritten, including on a re-run. Machine-filled locales are marked \"Machine-translated — review\" and stored as the new nullable `machineTranslated` JSON column on `Announcement`, `ProjectTaskTemplate` and `MessageTemplate` until the admin edits or confirms them. The per-locale map shape and its resolvers (`normalizeAnnouncementTranslations`, `resolveTemplateTitle`, the message-template resolver) are unchanged. Part 2 (authoring assist from a brief, paste-in profile enrichment) follows.",
+  "notes": {
+    "en": [
+      "Write an announcement or template in one language and fill the other two with one click. Machine translations are marked until you review them, and a translation you wrote yourself is never overwritten."
+    ],
+    "tr": [
+      "Bir duyuruyu ya da şablonu tek dilde yaz, diğer iki dili tek tıkla doldur. Makine çevirileri sen gözden geçirene kadar işaretli kalır; kendi yazdığın bir çeviri asla üzerine yazılmaz."
+    ],
+    "de": [
+      "Schreib eine Ankündigung oder Vorlage in einer Sprache und fülle die anderen beiden mit einem Klick. Maschinelle Übersetzungen bleiben markiert, bis du sie prüfst, und eine selbst geschriebene Übersetzung wird nie überschrieben."
+    ]
+  }
+}

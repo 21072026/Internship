@@ -110,6 +110,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Programmatic credentials are tenant property too (#1466): a key minted in
   // one org must never be listed by — or authenticate into — another.
   'ApiKey',
+  // Per-key request counts (#2010) — the key's tenant owns its usage.
+  'ApiKeyUsage',
   'MatchFeedback',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational

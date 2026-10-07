@@ -72,7 +72,9 @@ test('the weekly report is a seeded subscription per admin of an entitled org (#
     expect(next).toMatchObject({ sent: 1, skipped: 1 });
     const trMail = await reportsTo(trAdmin);
     expect(trMail.map((m) => m.subject)).toEqual([`Pipeline özeti — Weekly On ${stamp}`]);
-    expect(await reportsTo(quietAdmin)).toHaveLength(0);
+    // Not sent — and on record as an honoured opt-out (#2054): one SKIPPED row, nothing SENT.
+    expect(await reportsTo(quietAdmin)).toEqual([{ subject: expect.stringContaining('not sent: opted out'), status: 'SKIPPED' }]);
+    expect((await prisma.emailLog.findFirst({ where: { to: quietAdmin, category: 'analytics-report' }, select: { error: true } }))?.error).toBe('Unsubscribed: reports_analytics');
     expect(await reportsTo(offAdmin)).toHaveLength(0);
     const quietSend = await prisma.reportSubscriptionSend.findFirst({ where: { subscription: { recipientUserId: quiet.id }, status: 'SKIPPED', error: 'opted_out' } });
     expect(quietSend).not.toBeNull();

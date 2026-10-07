@@ -13,6 +13,8 @@ import {
   normalizeMessageTranslations,
   serializeMessageTemplate,
 } from '@/lib/messageTemplates';
+import { locales } from '@/i18n/config';
+import { normalizeMachineList } from '@/lib/machineTranslation';
 
 // Management for the org-wide canned-response pool (#1871).
 //
@@ -32,17 +34,27 @@ import {
 const localeText = z.string().trim().max(MAX_TEMPLATE_BODY).optional();
 const translationsSchema = z.object({ en: localeText, tr: localeText, de: localeText });
 
-const createSchema = z.object({ translations: translationsSchema });
-const updateSchema = z.object({ id: z.string().min(1), translations: translationsSchema });
+// The locales a machine filled and nobody has reviewed yet (#2055).
+const machineSchema = z.array(z.enum(locales)).max(locales.length).optional();
+const createSchema = z.object({ translations: translationsSchema, machineTranslated: machineSchema });
+const updateSchema = z.object({ id: z.string().min(1), translations: translationsSchema, machineTranslated: machineSchema });
 const deleteSchema = z.object({ id: z.string().min(1) });
 
 const rowSelect = {
   id: true,
   title: true,
   translations: true,
+  machineTranslated: true,
   useCount: true,
   ownerId: true,
 } as const;
+
+// The admin screen also needs which locales are still machine-translated (#2055);
+// the composer's picker (serializeMessageTemplate's other callers) does not.
+function serialize(row: Parameters<typeof serializeMessageTemplate>[0] & { machineTranslated: unknown }) {
+  const dto = serializeMessageTemplate(row);
+  return { ...dto, machineTranslated: normalizeMachineList(row.machineTranslated, normalizeMessageTranslations(row.translations)) };
+}
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -61,7 +73,7 @@ export async function GET() {
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: rowSelect,
     });
-    return NextResponse.json({ templates: templates.map(serializeMessageTemplate) });
+    return NextResponse.json({ templates: templates.map(serialize) });
   });
 }
 
@@ -90,10 +102,10 @@ export async function POST(request: Request) {
       // — the only record of how much the program leans on that reply — survives.
       const revived = await prisma.messageTemplate.update({
         where: { id: existing.id },
-        data: { archivedAt: null, translations },
+        data: { archivedAt: null, translations, machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations) },
         select: rowSelect,
       });
-      return NextResponse.json({ template: serializeMessageTemplate(revived) }, { status: 201 });
+      return NextResponse.json({ template: serialize(revived) }, { status: 201 });
     }
     if (existing) return NextResponse.json({ error: 'That reply is already in the pool' }, { status: 409 });
 
@@ -103,11 +115,12 @@ export async function POST(request: Request) {
         orgId: resolveOrgId(session) ?? (await defaultOrgId()),
         title,
         translations,
+        machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
         createdById: session.user.id,
       },
       select: rowSelect,
     });
-    return NextResponse.json({ template: serializeMessageTemplate(template) }, { status: 201 });
+    return NextResponse.json({ template: serialize(template) }, { status: 201 });
   });
 }
 
@@ -140,10 +153,10 @@ export async function PATCH(request: Request) {
 
     const template = await prisma.messageTemplate.update({
       where: { id: target.id },
-      data: { title, translations },
+      data: { title, translations, machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations) },
       select: rowSelect,
     });
-    return NextResponse.json({ template: serializeMessageTemplate(template) });
+    return NextResponse.json({ template: serialize(template) });
   });
 }
 

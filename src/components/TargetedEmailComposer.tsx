@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { LanguageBadge, languageBreakdown } from '@/components/LanguageBadge';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
-import { UserRound } from 'lucide-react';
+import { Sparkles, UserRound } from 'lucide-react';
 import { locales, type Locale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
+import { BULK_DRAFT_MAX_RECIPIENTS } from '@/lib/outreachRules';
 
 interface EmailDraft {
   subject: string;
@@ -60,6 +61,15 @@ export function TargetedEmailComposer() {
   const params = useSearchParams();
   const prefillRelation = params.get('relation');
   const prefillTemplate = params.get('template');
+  // AI drafts (#2048, part 2). One bulk draft is ONE provider call for every
+  // ticked recipient, personalised by {name}; the cost is stated before the
+  // button, and above the cap the button is off (the server refuses too). An
+  // AI draft fills the editor and is marked until edited — sending stays this
+  // screen's Send button, pressed by a person.
+  const [aiPurpose, setAiPurpose] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiFilled, setAiFilled] = useState<{ locale: Locale; draft: EmailDraft } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/mentorship');
@@ -110,6 +120,66 @@ export function TargetedEmailComposer() {
 
   const patchDraft = (patch: Partial<EmailDraft>) =>
     setDrafts((prev) => ({ ...prev, [tab]: { ...prev[tab], ...patch } }));
+
+  const aiFailure = (code: string | undefined) => {
+    const A = t.messages.ai;
+    return code === 'consent_required' ? A.consentRequired
+      : code === 'quota_exceeded' ? A.quotaExceeded
+        : code === 'provider_error' ? A.providerError
+          : code === 'not_configured' ? A.notConfigured
+            : code === 'batch_too_large' ? t.mentorEmail.ai.tooMany.replace('{max}', String(BULK_DRAFT_MAX_RECIPIENTS))
+              : A.failed;
+  };
+  const fillFromAi = (locale: Locale, draft: EmailDraft) => {
+    setDrafts((prev) => ({ ...prev, [locale]: draft }));
+    setTab(locale);
+    setAiFilled({ locale, draft });
+  };
+
+  const draftBulk = async () => {
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const res = await fetch('/api/ai/bulk-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purpose: aiPurpose.trim(), recipientCount: chosen.length, locale: tab }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setAiError(aiFailure(data.code)); return; }
+      fillFromAi(tab, { subject: data.draft?.subject ?? '', body: data.draft?.body ?? '' });
+    } catch {
+      setAiError(aiFailure(undefined));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  // The outcome note for the one relation this screen was opened for (#830):
+  // grounded in that relation, written in the mentee's language.
+  const outcomeRelation = prefillRelation && prefillTemplate?.startsWith('outcome') && chosen.length === 1 && chosen[0] === prefillRelation ? prefillRelation : null;
+  const draftOutcome = async () => {
+    if (!outcomeRelation) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const res = await fetch(`/api/mentorship/${encodeURIComponent(outcomeRelation)}/ai-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ moment: 'outcome_note' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setAiError(aiFailure(data.code)); return; }
+      const locale = (locales as readonly string[]).includes(data.locale) ? (data.locale as Locale) : tab;
+      fillFromAi(locale, { subject: data.draft?.subject || drafts[locale].subject, body: data.draft?.body ?? '' });
+    } catch {
+      setAiError(aiFailure(undefined));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  const aiUnedited = aiFilled !== null && aiFilled.locale === tab && drafts[tab].subject === aiFilled.draft.subject && drafts[tab].body === aiFilled.draft.body;
+  const tooMany = chosen.length > BULK_DRAFT_MAX_RECIPIENTS;
 
   const send = async () => {
     setSending(true);
@@ -208,6 +278,47 @@ export function TargetedEmailComposer() {
             <CardTitle>{t.mentorEmail.compose}</CardTitle>
           </CardHeader>
           <div className="space-y-4">
+            <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-900" data-testid="bulk-draft-panel">
+              <p className="mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-violet-800">
+                <Sparkles className="h-4 w-4" aria-hidden /> {t.mentorEmail.ai.title}
+              </p>
+              {outcomeRelation ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => void draftOutcome()} loading={aiBusy} data-testid="outcome-ai-draft">
+                  {t.mentorEmail.ai.outcomeDraft}
+                </Button>
+              ) : (
+                <>
+                  <Input
+                    label={t.mentorEmail.ai.purpose}
+                    value={aiPurpose}
+                    onChange={(e) => setAiPurpose(e.target.value)}
+                    placeholder={t.mentorEmail.ai.purposePlaceholder}
+                    maxLength={500}
+                    data-testid="bulk-draft-purpose"
+                  />
+                  <p className="mt-1.5 text-xs text-violet-800" data-testid="bulk-draft-cost">
+                    {chosen.length === 0
+                      ? t.mentorEmail.ai.noRecipients
+                      : tooMany
+                        ? t.mentorEmail.ai.tooMany.replace('{max}', String(BULK_DRAFT_MAX_RECIPIENTS))
+                        : t.mentorEmail.ai.cost.replace('{n}', String(chosen.length))}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                    onClick={() => void draftBulk()}
+                    loading={aiBusy}
+                    disabled={chosen.length === 0 || tooMany || aiPurpose.trim().length < 3}
+                    data-testid="bulk-draft-button"
+                  >
+                    {t.mentorEmail.ai.draft}
+                  </Button>
+                </>
+              )}
+              {aiError && <p className="mt-2 text-xs text-red-600" role="alert" data-testid="bulk-draft-error">{aiError}</p>}
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t.mentorEmail.template}</label>
               <select
@@ -275,6 +386,9 @@ export function TargetedEmailComposer() {
                 showCounter
               />
             </div>
+            {aiUnedited && (
+              <p className="text-xs text-violet-700" data-testid="email-ai-draft-badge">✨ {t.mentorEmail.ai.draftBadge}</p>
+            )}
             {/* Which of the ticked recipients this actually covers, and who
                 falls back — the sender should not have to cross-reference the
                 recipient list against the tabs by hand. */}

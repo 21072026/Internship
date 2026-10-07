@@ -6,6 +6,7 @@
 // `interaction_summary`).
 
 import { callModel } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 
 export interface SummaryInteraction {
   date: Date;
@@ -23,7 +24,7 @@ export async function aiSummarizeInteractions(menteeName: string, interactions: 
   const reply = await callModel({
     task: 'interaction_summary',
     system: SYSTEM,
-    input: `Mentee: ${menteeName}\n\nInteraction log (newest first):\n\n${log}`,
+    input: `Mentee:\n${wrapUntrusted('mentee', menteeName)}\n\nInteraction log (newest first):\n\n${wrapUntrusted('log', log)}`,
   });
   return reply.trim();
 }

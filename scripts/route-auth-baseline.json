@@ -22,6 +22,10 @@
     "methods": ["POST"],
     "why": "Password reset request: whoever needs it cannot sign in by definition. Answers the same 200 for every address so it cannot enumerate accounts, and is rate-limited to 5/15min."
   },
+  "src/app/api/auth/magic-link/route.ts": {
+    "methods": ["POST"],
+    "why": "Sign-in link request (#1959): whoever needs it cannot sign in by definition. Answers the same 200 for every address so it cannot enumerate accounts, mails only an eligible account, and is rate-limited 5/15min per IP and per address."
+  },
   "src/app/api/auth/remember/refresh/route.ts": {
     "methods": ["POST"],
     "why": "Silent re-authentication from a trusted device (#1495). The session JWT has expired — that is why the browser is here — so the remember-me cookie is the credential; readRememberToken()/rotateTrustedDevice() verify and rotate it, and the reply is a single-use grant, not a session."

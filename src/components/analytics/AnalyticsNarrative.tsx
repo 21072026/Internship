@@ -5,6 +5,7 @@ import { Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
+import { AiText } from '@/components/ai/AiText';
 import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 import { useT } from '@/i18n/client';
 
@@ -66,7 +67,7 @@ export function AnalyticsNarrative({ query }: { query: string }) {
       </div>
       {body.narrative ? (
         <>
-          <p className="mt-2 whitespace-pre-line text-sm text-gray-800 dark:text-gray-200" data-testid="analytics-narrative-text">{body.narrative}</p>
+          <AiText as="p" text={body.narrative} className="mt-2 text-sm text-gray-800 dark:text-gray-200" testId="analytics-narrative-text" />
           <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">{n.note}</p>
           {body.artifact && <ArtifactMeta key={body.artifact.id} artifact={body.artifact} cached={body.cached} onRegenerate={body.configured ? () => run(true) : undefined} regenerating={busy} />}
         </>
