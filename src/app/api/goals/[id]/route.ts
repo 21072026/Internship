@@ -10,16 +10,26 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
+import {
+  canReachGoals,
+  canReadGoal,
+  canSetGoalVisibility,
+  GOAL_PROGRESS_MAX,
+  GOAL_PROGRESS_MIN,
+  GOAL_VISIBILITIES,
+} from '@/lib/goalVisibilityRule';
 
 // 'missing' covers another tenant's goal too (#2542): Goal has no orgId, the
 // nested relation include is never scoped, so the tenant is checked here, and
 // the answer is the 404 a missing id gets — a 403 would confirm the id exists.
+// A PRIVATE goal of someone else (#1858) gets the same 'missing' for the same
+// reason: the other side must not learn that a goal they cannot read exists.
 async function goalIfAllowed(userId: string, role: string, goalId: string, callerOrgId: string | null) {
   const goal = await prisma.goal.findUnique({ where: { id: goalId }, include: { relation: true } });
   if (!goal || !(await inCallerTenant(goal.relation.orgId, callerOrgId))) return 'missing' as const;
-  const rel = goal.relation;
-  const allowed = role === 'ADMIN' || rel.mentorId === userId || rel.menteeId === userId;
-  return allowed ? goal : null;
+  const viewer = { id: userId, role };
+  if (!canReachGoals(goal.relation, viewer)) return null;
+  return canReadGoal(goal, goal.relation, viewer) ? goal : ('missing' as const);
 }
 
 const patchSchema = z.object({
@@ -27,6 +37,11 @@ const patchSchema = z.object({
   title: z.string().min(1).max(TEXT_LIMITS.goalTitle).optional(),
   description: z.string().max(TEXT_LIMITS.goalDescription).nullable().optional(),
   dueDate: z.string().nullable().optional(),
+  // #1858
+  successCriteria: z.string().max(TEXT_LIMITS.goalSuccessCriteria).nullable().optional(),
+  targetDate: z.string().nullable().optional(),
+  progress: z.number().int().min(GOAL_PROGRESS_MIN).max(GOAL_PROGRESS_MAX).nullable().optional(),
+  visibility: z.enum(GOAL_VISIBILITIES).optional(),
 });
 
 // PATCH — update a goal (toggle status, edit). Participants/admin.
@@ -50,7 +65,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const parsed = patchSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
-  const { status, title, description, dueDate } = parsed.data;
+  const { status, title, description, dueDate, successCriteria, targetDate, progress, visibility } = parsed.data;
+
+  // The sharing scope is the author's to set (#1858): the other participant
+  // may tick and edit a shared goal, but not widen or narrow who reads it.
+  const viewer = { id: session.user.id, role: session.user.role };
+  const changesVisibility = visibility !== undefined && visibility !== goal.visibility;
+  if (changesVisibility && !canSetGoalVisibility(goal, goal.relation, viewer)) {
+    return NextResponse.json({ error: 'Forbidden', code: 'not_author' }, { status: 403 });
+  }
 
   const updated = await prisma.goal.update({
     where: { id },
@@ -59,14 +82,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(title !== undefined ? { title } : {}),
       ...(description !== undefined ? { description } : {}),
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+      ...(successCriteria !== undefined ? { successCriteria: successCriteria?.trim() || null } : {}),
+      ...(targetDate !== undefined ? { targetDate: targetDate ? new Date(targetDate) : null } : {}),
+      ...(progress !== undefined ? { progress } : {}),
+      // Narrowing to PRIVATE pins the author on a row that predates the
+      // column, so the SQL-side readers (timeline) can name them too.
+      ...(changesVisibility ? { visibility, ...(goal.createdById ? {} : { createdById: session.user.id }) } : {}),
     },
   });
 
   // Completion notifies the OTHER side (#925): mentee ticks it → mentor learns,
   // mentor ticks it → mentee learns. Only on a genuine OPEN→DONE transition —
   // re-saving an already-done goal (title edit etc.) stays silent. `goal` is
-  // the pre-update row, so this compares against the old status.
-  if (status === 'DONE' && goal.status !== 'DONE') {
+  // the pre-update row, so this compares against the old status. A PRIVATE
+  // goal has no other side to tell.
+  if (status === 'DONE' && goal.status !== 'DONE' && updated.visibility !== 'PRIVATE') {
     const rel = goal.relation;
     const recipientId = session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;
     if (recipientId !== session.user.id) {

@@ -181,6 +181,8 @@ export const TEXT_LIMITS = {
   goalTitle: 191,
   /** Goal.description — @db.Text */
   goalDescription: 2000,
+  /** Goal.successCriteria — @db.Text (#1858) */
+  goalSuccessCriteria: 2000,
   /** MeetingRequest.topic — VARCHAR(191) */
   meetingTopic: 191,
   /** Document.title — VARCHAR(191) */

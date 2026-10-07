@@ -151,6 +151,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     relationId: ID,
     title: { limit: 'goalTitle', files: GOAL_WRITERS },
     description: { limit: 'goalDescription', files: GOAL_WRITERS },
+    createdById: ID,
+    successCriteria: { limit: 'goalSuccessCriteria', files: GOAL_WRITERS },
+    visibility: ENUMERATED,
   },
   MeetingRequest: {
     id: ID,

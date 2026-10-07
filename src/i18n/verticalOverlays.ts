@@ -72,6 +72,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Survey results (#1910): the breakdown labels name the roles, so they
       // take the same rep/lead words as everywhere else.
+      // Goal sharing scope (#1858): the option names the two seats.
+      goals: { visibilityPair: 'Sales rep and lead', visibilityProgram: 'Sales rep, lead and team' },
       surveyResults: {
         byMentor: 'By sales rep',
         noRelationBreakdowns: 'Anonymous responses carry no cohort or owner, so those breakdowns do not exist for this survey.',
@@ -677,6 +679,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       // Kişi = müşteri adayı (Lead); pipeline ilişkisi = fırsat (Deal). "Fırsat"
       // bilerek deal için ayrıldı, kişi listesi "Müşteri Adayları" oldu.
+      goals: { visibilityPair: 'Satış temsilcisi ve müşteri adayı', visibilityProgram: 'Satış temsilcisi, müşteri adayı ve ekip' },
       surveyResults: {
         byMentor: 'Satış temsilcisine göre',
         noRelationBreakdowns: 'Anonim yanıtlar dönem ya da sorumlu bilgisi taşımaz; bu yüzden bu ankette o kırılımlar yok.',
@@ -1141,6 +1144,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         profileMentorTitle: '{name}',
         profileMenteeTitle: '{name}',
       },
+      goals: { visibilityPair: 'Vertriebsmitarbeiter und Lead', visibilityProgram: 'Vertriebsmitarbeiter, Lead und Team' },
       surveyResults: {
         byMentor: 'Nach Vertriebsmitarbeiter',
         noRelationBreakdowns: 'Anonyme Antworten tragen weder Kohorte noch Zuständige, deshalb gibt es diese Aufschlüsselungen für diese Umfrage nicht.',
