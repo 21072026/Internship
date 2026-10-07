@@ -48,8 +48,12 @@ CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfi
 CONTAINER="internship-crm-${TOPIC}"
 SUBLABEL="${ENV_PREFIX}${TOPIC}"
 FQDN="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"
+MARKETING_SUBLABEL="${ENV_PREFIX}${TOPIC}-m"
+MARKETING_FQDN="${ENV_PREFIX}${TOPIC}-m.${BASE_DOMAIN}"
 LEGACY_SUBLABEL="${LEGACY_ENV_PREFIX}${TOPIC}"
 LEGACY_FQDN="${LEGACY_ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"
+LEGACY_MARKETING_SUBLABEL="${LEGACY_ENV_PREFIX}${TOPIC}-m"
+LEGACY_MARKETING_FQDN="${LEGACY_ENV_PREFIX}${TOPIC}-m.${BASE_DOMAIN}"
 CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"
 
 echo "==> Tearing down topic '${TOPIC}'"
@@ -61,9 +65,9 @@ docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
 [ -n "$IMG" ] && docker rmi "$IMG" 2>/dev/null || true
 
-# Caddy route (new host): one file, remove and reload. Idempotent.
+# Caddy routes (new host): internship + marketing (#2612). Idempotent.
 _removed_any=0
-for _fq in "$FQDN" "$LEGACY_FQDN"; do
+for _fq in "$FQDN" "$MARKETING_FQDN" "$LEGACY_FQDN" "$LEGACY_MARKETING_FQDN"; do
   [ -n "$_fq" ] || continue
   _site="${CADDY_SITES_DIR}/${_fq}.caddy"
   if [ -f "$_site" ]; then
@@ -75,13 +79,17 @@ done
 if [ "$_removed_any" = "1" ]; then
   eval "$CADDY_RELOAD_CMD" || true
 elif command -v caddy >/dev/null 2>&1; then
-  echo "==> No Caddy route for ${FQDN} or ${LEGACY_FQDN} (already gone)"
+  echo "==> No Caddy route for ${FQDN} / ${MARKETING_FQDN} (already gone)"
 fi
 
 # Remove the Plesk subdomain (this drops its nginx vhost + route). Idempotent.
 if command -v plesk >/dev/null 2>&1; then
   _found=0
-  for _pair in "${SUBLABEL}|${FQDN}" "${LEGACY_SUBLABEL}|${LEGACY_FQDN}"; do
+  for _pair in \
+      "${SUBLABEL}|${FQDN}" \
+      "${MARKETING_SUBLABEL}|${MARKETING_FQDN}" \
+      "${LEGACY_SUBLABEL}|${LEGACY_FQDN}" \
+      "${LEGACY_MARKETING_SUBLABEL}|${LEGACY_MARKETING_FQDN}"; do
     _lbl="${_pair%%|*}"; _fq="${_pair##*|}"
     [ -n "$_lbl" ] || continue
     if plesk bin subdomain --info "$_fq" >/dev/null 2>&1; then
