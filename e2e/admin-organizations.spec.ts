@@ -198,10 +198,16 @@ test('non-admin cannot list or create organizations', async ({ page }) => {
     const list = await page.request.get('/api/admin/organizations');
     expect(list.status()).toBe(401);
 
+    // Signed in, not an administrator: 403 (#2065), and the provisioning
+    // fields the wizard posts change nothing about that.
     const create = await page.request.post('/api/admin/organizations', {
       data: { name: 'Should Fail', slug: `should-fail-${Date.now()}` },
     });
-    expect(create.status()).toBe(401);
+    expect(create.status()).toBe(403);
+    const provision = await page.request.post('/api/admin/organizations', {
+      data: { name: 'Should Fail', vertical: 'INTERNSHIP', plan: 'ENTERPRISE', starterPack: true, firstAdminEmail: 'x@example.com' },
+    });
+    expect(provision.status()).toBe(403);
   } finally {
     await cleanupByEmail(mentorEmail);
   }
