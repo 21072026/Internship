@@ -11,16 +11,18 @@
 
 import { callModel } from '@/lib/ai/provider';
 import { languageName, type ReplyTone } from '@/lib/threadAiRules';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 
 /** "What happened here", for the participant who asked, in their language. */
 export async function aiCatchUp(input: { transcript: string; readerName: string; locale: string }): Promise<string> {
   const reply = await callModel({
     task: 'thread_summary',
     system:
-      `You help one participant catch up on a conversation they are part of. Write for ${input.readerName}, in ${languageName(input.locale)}. ` +
+      `You help one participant catch up on a conversation they are part of. Write for the reader named in the "reader" block, in ${languageName(input.locale)}. ` +
       'Return 3-6 short bullet lines: what was discussed, what was agreed or decided, questions or tasks still waiting (say who they wait on), and the next step if there is one. ' +
       'Use only what the messages say; never invent dates, commitments or facts. Do not quote whole messages.',
-    input: `Conversation (oldest first):\n\n${input.transcript}`,
+    // Names are user-authored too, so they travel as data, never in the system prompt (#2026).
+    input: `Reader:\n${wrapUntrusted('reader', input.readerName)}\n\nConversation (oldest first):\n\n${wrapUntrusted('conversation', input.transcript)}`,
   });
   return reply.trim();
 }
@@ -36,12 +38,12 @@ export async function aiSuggestReply(input: { transcript: string; authorName: st
   const reply = await callModel({
     task: 'suggested_reply',
     system:
-      `You draft the next message ${input.authorName} could send to ${input.recipientName} in this conversation. ` +
+      'You draft the next message the author (the "author" block) could send to the recipient (the "recipient" block) in this conversation. ' +
       `Write it in ${languageName(input.locale)}. Tone — ${TONE[input.tone]}. ` +
-      `Answer the latest message that is waiting on ${input.authorName}; if nothing is waiting, move the conversation one useful step forward. ` +
+      'Answer the latest message that is waiting on the author; if nothing is waiting, move the conversation one useful step forward. ' +
       'Return ONLY the message text: no preface, no quotation marks, no subject line, no signature placeholder. ' +
       'Never invent dates, times, links, promises or facts that the conversation does not contain.',
-    input: `Conversation (oldest first):\n\n${input.transcript}`,
+    input: `Author:\n${wrapUntrusted('author', input.authorName)}\nRecipient:\n${wrapUntrusted('recipient', input.recipientName)}\n\nConversation (oldest first):\n\n${wrapUntrusted('conversation', input.transcript)}`,
   });
   return reply.trim();
 }

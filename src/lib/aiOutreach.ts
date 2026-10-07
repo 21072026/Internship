@@ -8,6 +8,7 @@
 // that way (no mail or message write in here; no AI import in the crons).
 
 import { callModel } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 import { languageName } from '@/lib/threadAiRules';
 import { NAME_FIELD, factsBlock, parseDraft, type Draft, type OutreachFacts, type OutreachMoment } from '@/lib/outreachRules';
 
@@ -34,11 +35,12 @@ export async function aiDraftOutreach(input: { moment: OutreachMoment; facts: Ou
     task: 'outreach_draft',
     jsonSchema: DRAFT_SCHEMA,
     system:
-      `You draft a message from the mentor ${input.mentorName} to their mentee. Write it in ${languageName(input.locale)}. ` +
+      `You draft a message from the mentor (named in the "mentor" block) to their mentee. Write it in ${languageName(input.locale)}. ` +
       `${MOMENT[input.moment]} Ground it ONLY in the facts given; mention a goal or the last meeting only if it is listed. ` +
       'Never invent dates, links, companies, promises or facts. No signature placeholder. ' +
       'Return JSON: a short email subject and the message body.',
-    input: `Facts:\n${factsBlock(input.facts)}`,
+    // The name and the goal titles in the facts are user-authored: data, not prompt (#2026).
+    input: `Mentor:\n${wrapUntrusted('mentor', input.mentorName)}\n\nFacts:\n${wrapUntrusted('facts', factsBlock(input.facts))}`,
   });
   return parseDraft(reply);
 }
@@ -48,11 +50,11 @@ export async function aiDraftBulk(input: { purpose: string; locale: string; auth
     task: 'bulk_draft',
     jsonSchema: DRAFT_SCHEMA,
     system:
-      `You draft ONE email that ${input.authorName} will send to ${input.recipientCount} mentees, each receiving a personal copy. Write it in ${languageName(input.locale)}. ` +
+      `You draft ONE email that the sender (named in the "sender" block) will send to ${input.recipientCount} mentees, each receiving a personal copy. Write it in ${languageName(input.locale)}. ` +
       `Address the reader with the merge field ${NAME_FIELD} exactly as written (it is replaced by each person's first name) — never a made-up name. ` +
       'Keep it to what the purpose says; never invent dates, links or promises. No signature placeholder. ' +
       'Return JSON: a short subject and the body.',
-    input: `Purpose of the email (from the sender):\n${input.purpose}`,
+    input: `Sender:\n${wrapUntrusted('sender', input.authorName)}\n\nPurpose of the email (from the sender):\n${wrapUntrusted('purpose', input.purpose)}`,
   });
   return parseDraft(reply);
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { AiBadge } from '@/components/AiBadge';
+import { AiText } from '@/components/ai/AiText';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT } from '@/i18n/client';
 
@@ -46,7 +47,7 @@ export function SharedAiArtifacts({ subjectUserId }: { subjectUserId: string }) 
               <RelativeTime date={x.createdAt} className="ml-2 text-xs font-normal text-gray-500" />
             </summary>
             <AiBadge note className="mt-2 mb-1" />
-            <div className="whitespace-pre-line text-sm text-gray-800 dark:text-gray-200">{x.content}</div>
+            <AiText text={x.content} className="text-sm text-gray-800 dark:text-gray-200" />
           </details>
         ))}
       </div>

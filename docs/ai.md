@@ -334,6 +334,23 @@ needs a separate discussion first.
    problem; a student preparing for an interview is not the person to bill for
    it.
 
+## User text is data, never instructions (#2026)
+
+Everything a person wrote — a CV, a log, a conversation, a survey row, a free-form field, a
+name — enters a prompt inside a `wrapUntrusted(label, text)` block
+(`src/lib/ai/untrusted.ts`): a nonce-fenced block whose fence cannot be
+forged. `callModel()` enforces the rest so no module can forget it: it
+**refuses** an input with no block, appends `UNTRUSTED_DATA_RULE` to every
+system prompt, masks contact details inside the blocks unless the task's
+registry entry says `needsContactDetails: true` (only `cv_extract`;
+`src/lib/ai/redact.ts`), cuts an over-long input inside the data rather than
+through a fence, and runs the injection tripwire (`src/lib/ai/injection.ts`)
+whose hits land on `AiUsage.flags` — a flag, never a block. Model output is
+rendered only through `AiText` (`src/components/ai/AiText.tsx`): a plain
+text node, no markup, no live links, control and bidi characters stripped.
+`scripts/test/ai-untrusted.test.mjs` fails on an unfenced caller or a
+surface that renders generated prose another way.
+
 ## Labelling
 
 Every rendered model output carries the shared ✨ marker
@@ -359,7 +376,10 @@ badge in the same change.
    is in the payload, a `ConsentType` — added additively to
    `prisma/schema.prisma`, surfaced in `ConsentSettings`.
 4. Handle all four denial reasons per the degradation contract above.
-5. `<AiBadge />` on whatever renders the result.
+5. `<AiBadge />` on whatever renders the result, and the result itself through
+   `<AiText />`. User text in the prompt goes through `wrapUntrusted()` —
+   `callModel` refuses it otherwise. Set `needsContactDetails: true` only if
+   the task truly reads an e-mail, phone number or link off the text.
 6. A row in the task table here, the matching entry in the `ai` dictionary block
    for `/ai`, and the route in
    [`role-access-matrix.md`](role-access-matrix.md).

@@ -2195,6 +2195,11 @@ model AiUsage {
   outputTokens Int?
   costMicros   Int?
   latencyMs    Int?
+  // The prompt-injection tripwire's hits over the call's untrusted input
+  // (#2026, src/lib/ai/injection.ts), comma-joined — e.g.
+  // "instruction_override,prompt_exfiltration". A flag, never a block: the call
+  // ran normally. Null when nothing tripped. Never the text itself.
+  flags        String? @db.VarChar(191)
 
   @@index([createdAt])
   @@index([scope])
