@@ -169,6 +169,46 @@ panel   ├─ GET /api/meetings/<id>/call-token                     ← authori
   `EMBEDDABLE_MEETING_HOSTS` without updating both leaves an empty box or a call with no
   camera.
 
+## Bring your own link (#2007)
+
+An organisation that already licenses Zoom, Meet or Teams — or whose IT forbids
+third-party rooms — does not have to use a room of ours at all. Three levels, one
+rule (`src/lib/conferencingRule.ts`, pure and unit-tested in
+`scripts/test/conferencing-rule.test.mjs`), applied inside `resolveMeetingLink()`
+so every creation path inherits it:
+
+| Precedence | Source | When |
+|---|---|---|
+| 1 | the link **pasted** into the form (`meetLink`) | always wins — nothing is generated or metered |
+| 2 | the organiser's **saved personal room** (`User.personalMeetingUrl`, set on `/account`) | when the tenant's `Organization.conferencingPolicy` is `PREFER_PERSONAL` or `REQUIRE_EXTERNAL` |
+| 3 | a room of ours (JaaS tenant, else the public instance — the routing above) | unless the policy is `REQUIRE_EXTERNAL`, which **refuses** (`422 external_link_required`) |
+
+- `BUILTIN` is the default and ignores a saved personal room on purpose: today's
+  behaviour must not change under anyone's feet. `REQUIRE_EXTERNAL` still uses the
+  saved room — that *is* a link the organiser supplied, and the instant-meeting and
+  accept-a-request paths have no paste box, so without it they would be dead ends.
+- Every link a person supplies goes through **one door**, `checkPastedMeetingLink()`
+  (`src/lib/meetingRoom.ts`): `https:` only, no credentials in the URL, never a host
+  this deployment serves (`servedHosts()` — a meeting link in an e-mail we send that
+  points back at us is a phishing shape), and at most 191 characters (the width of
+  `Meeting.meetLink` / `MeetingSeries.fixedLink` / `User.personalMeetingUrl`).
+  A refused link is a `400 invalid_link` with the rule's `reason`, never a P2000.
+  Deliberately *not* the SSRF guard: nobody fetches this URL server-side.
+- The policy lives on `Organization`, not on `Setting`: `Setting` is keyed by a
+  `String @id`, and giving it an `orgId` re-keys the table (a drop-and-recreate under
+  `db push`). It is set through `GET/PATCH /api/admin/organizations/[id]/conferencing`
+  — the org's own ADMIN or a super admin of its world (`orgAdminGate`) — from the
+  "Video conferencing" card on `/admin/organizations`.
+- The join surfaces do not change what they embed: `EMBEDDABLE_MEETING_HOSTS` and the
+  `frame-src` / `Permissions-Policy` allowlists in `next.config.js` are untouched. A
+  Meet/Zoom/Teams link renders the "Open in *provider*" button
+  (`meetingProviderName()` in `src/lib/meetingLink.ts`) instead of an empty iframe,
+  and the schedule forms say under the link box whether it will embed or open a tab.
+- Nothing here can take a working call away from a participant: a policy restricts
+  which rooms an organisation's own organisers hand out, and the one refusal it can
+  produce names what is missing and who can fix it. A provider-generated link from
+  the organiser's connected account (#2009) slots in between levels 2 and 3.
+
 ## Verifying after deployment
 
 1. Start a call from a mentee card. While the month's allowance has room, the stored link

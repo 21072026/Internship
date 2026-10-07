@@ -204,6 +204,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     linkedinUrl: { limit: 'profileUrl', files: PROFILE_WRITERS },
     githubUrl: { limit: 'profileUrl', files: PROFILE_WRITERS },
     portfolioUrl: { limit: 'profileUrl', files: PROFILE_WRITERS },
+    // The saved personal video room (#2007): the profile route is its only
+    // writer, and the same cap keeps it inside Meeting.meetLink's column.
+    personalMeetingUrl: { limit: 'profileUrl', files: ['src/app/api/profile/route.ts'] },
     bio: { limit: 'bio', files: PROFILE_WRITERS },
     interests: { exempt: '@db.Text, capped by the profile schema' },
     reEngageNote: { exempt: '@db.Text, written by an admin through its own route' },

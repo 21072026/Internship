@@ -13,6 +13,7 @@ import type { Prisma } from '@prisma/client';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingContext';
+import { meetingLinkRefusal } from '@/lib/meetingRoom';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
@@ -179,14 +180,18 @@ export async function POST(request: Request) {
     });
 
     // Bulk scheduling creates ONE shared meeting: everyone selected joins the
-    // same room, so the video link is generated once (Jitsi, no account needed)
-    // when the organizer didn't paste one. The per-person RSVP token stays
-    // unique — each participant confirms attendance individually.
-    const link = await resolveMeetingLink({
+    // same room, so the video link is resolved once — pasted, the organizer's
+    // saved room, or a room of ours, as the tenant's policy says (#2007). The
+    // per-person RSVP token stays unique — each participant confirms
+    // attendance individually.
+    const resolved = await resolveMeetingLink({
       pastedLink: meetLink,
       inviteeCount: relations.length,
       orgId: session.user.orgId,
+      organizerId: session.user.id,
     });
+    if (!resolved.ok) return meetingLinkRefusal(resolved);
+    const link = resolved.link;
 
     // Guests are resolved once for the whole batch: they are invited to the
     // shared room, not to each relation. Anyone with an account is dropped here

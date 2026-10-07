@@ -9,8 +9,9 @@ import { menteesWithOpenTodo } from '@/lib/openWork';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 import { isTrialMissingEndDate } from '@/lib/trialReminderRule';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
+import { usageSignalsFor, type UsageNote } from '@/lib/usageSignals';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due' | 'usage_drop' | 'trial_inactive';
 
 // The relationship-health flags this queue shows (#1898) — every one the
 // table raises except `stage_stalled`, which belongs to the admin monitor.
@@ -32,6 +33,13 @@ export interface AttentionQueue {
    * queue never looks like a broken one.
    */
   dormantCount: number;
+  /**
+   * The usage signals' footnote (#2449): whether a usage feed exists for the
+   * org at all, how many of the caller's accounts were left out for too short
+   * a history, and how many dropping accounts nobody actively owns. Null when
+   * the caller passed no `orgId` or the reasons filter excludes both signals.
+   */
+  usage: UsageNote | null;
 }
 
 // A ranked "needs attention" list for a mentor's active mentees (EPIC: mentor
@@ -73,6 +81,8 @@ export async function getAttentionItems(
       stageDeadline: true,
       nextActionAt: true,
       trialEndsAt: true,
+      trialStartedAt: true,
+      companyId: true,
       mentee: { select: { id: true, fullName: true } },
       questions: { where: { answer: null }, select: { id: true } },
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
@@ -103,6 +113,13 @@ export async function getAttentionItems(
   const lastContacts = await getLastContacts(
     relations.map((r) => ({ id: r.id, menteeId: r.mentee.id })),
   );
+
+  // Product-usage signals (#2449): only show, never move a stage. Computed only
+  // when the caller names the org and asked for at least one of the two.
+  const wantsUsage = !options.reasons || options.reasons.some((r) => r === 'usage_drop' || r === 'trial_inactive');
+  const usage = options.orgId && wantsUsage && relations.length > 0
+    ? await usageSignalsFor(options.orgId, relations, new Date(now))
+    : null;
 
   const items: AttentionItem[] = [];
   let dormantCount = 0;
@@ -173,6 +190,7 @@ export async function getAttentionItems(
     // EvaluationDue row the reminders read, so the in-app nudge and the mail
     // agree, and it leaves the queue the moment the evaluation is written.
     if (r.evaluationDues.length > 0) reasons.push('evaluation_due');
+    for (const reason of usage?.reasons.get(r.id) ?? []) reasons.push(reason);
     const kept = options.reasons ? reasons.filter((reason) => options.reasons!.includes(reason)) : reasons;
     if (kept.length > 0) {
       items.push({
@@ -191,5 +209,5 @@ export async function getAttentionItems(
     return (b.daysSinceLastInteraction ?? Infinity) - (a.daysSinceLastInteraction ?? Infinity);
   });
 
-  return { items, dormantCount };
+  return { items, dormantCount, usage: usage?.note ?? null };
 }
