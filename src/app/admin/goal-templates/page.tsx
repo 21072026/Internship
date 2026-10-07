@@ -9,6 +9,8 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
+import { TranslationFillButton, MachineTranslatedChip } from '@/components/ai/TranslationFill';
+import { afterEdit } from '@/lib/machineTranslation';
 import { locales, type Locale } from '@/i18n/config';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
 
@@ -24,6 +26,8 @@ interface Template {
   id: string;
   title: string;
   translations: Translations;
+  /** Locales a machine filled and nobody reviewed yet (#2055). */
+  machineTranslated?: Locale[];
   useCount: number;
 }
 
@@ -39,6 +43,8 @@ export default function AdminGoalTemplatesPage() {
   const [draft, setDraft] = useState<Translations>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Translations>(emptyDraft);
+  const [draftMachine, setDraftMachine] = useState<Locale[]>([]);
+  const [editMachine, setEditMachine] = useState<Locale[]>([]);
   const [search, setSearch] = useState('');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
 
@@ -72,11 +78,14 @@ export default function AdminGoalTemplatesPage() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!locales.some((l) => draft[l]?.trim())) return;
-    if (await call('POST', { translations: draft }, 'create')) setDraft(emptyDraft);
+    if (await call('POST', { translations: draft, machineTranslated: draftMachine }, 'create')) {
+      setDraft(emptyDraft);
+      setDraftMachine([]);
+    }
   };
 
   const save = async (id: string) => {
-    if (await call('PATCH', { id, translations: edit }, id)) setEditingId(null);
+    if (await call('PATCH', { id, translations: edit, machineTranslated: editMachine }, id)) setEditingId(null);
   };
 
   const remove = (tpl: Template) => setPendingDelete({ id: tpl.id, title: resolveTemplateTitle(tpl, locale) });
@@ -92,19 +101,43 @@ export default function AdminGoalTemplatesPage() {
     // A template written before it had translations only has `title`; seed the
     // editor with it under the default locale so it is not lost on save.
     setEdit(Object.keys(tpl.translations).length > 0 ? tpl.translations : { en: tpl.title });
+    setEditMachine(tpl.machineTranslated ?? []);
   };
 
-  const localeInputs = (value: Translations, onChange: (next: Translations) => void, idPrefix: string) => (
+  const localeInputs = (value: Translations, onChange: (next: Translations) => void, idPrefix: string, machine: Locale[], setMachine: (m: Locale[]) => void) => (
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <TranslationFillButton
+          value={value}
+          machine={machine}
+          purpose="goal_template"
+          onFilled={(next, m) => { onChange(next); setMachine(m); }}
+          testId={`${idPrefix}-translate`}
+        />
+      </div>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {locales.map((l) => (
         <Input
           key={l}
           label={t.goalTemplateAdmin.langLabel.replace('{lang}', l.toUpperCase())}
           value={value[l] ?? ''}
-          onChange={(e) => onChange({ ...value, [l]: e.target.value })}
+          onChange={(e) => {
+            const next = { ...value, [l]: e.target.value };
+            // An edited machine locale is the admin's now (#2055).
+            setMachine(afterEdit(value, next, machine));
+            onChange(next);
+          }}
           data-testid={`${idPrefix}-${l}`}
         />
       ))}
+    </div>
+    {machine.length > 0 && (
+      <div className="flex flex-wrap gap-2">
+        {machine.map((l) => (
+          <MachineTranslatedChip key={l} label={l.toUpperCase()} onConfirm={() => setMachine(machine.filter((x) => x !== l))} testId={`${idPrefix}-${l}-machine`} />
+        ))}
+      </div>
+    )}
     </div>
   );
 
@@ -127,7 +160,7 @@ export default function AdminGoalTemplatesPage() {
           <CardDescription>{t.goalTemplateAdmin.newTemplateHint}</CardDescription>
         </CardHeader>
         <form onSubmit={create} className="space-y-3">
-          {localeInputs(draft, setDraft, 'new-template')}
+          {localeInputs(draft, setDraft, 'new-template', draftMachine, setDraftMachine)}
           <div className="flex justify-end">
             <Button type="submit" loading={busy === 'create'} data-testid="create-template">
               <Plus className="mr-1 h-4 w-4" /> {t.goalTemplateAdmin.add}
@@ -161,7 +194,7 @@ export default function AdminGoalTemplatesPage() {
               <li key={tpl.id} className="py-3" data-testid={`goal-template-${tpl.id}`}>
                 {editingId === tpl.id ? (
                   <div className="space-y-3">
-                    {localeInputs(edit, setEdit, `edit-template-${tpl.id}`)}
+                    {localeInputs(edit, setEdit, `edit-template-${tpl.id}`, editMachine, setEditMachine)}
                     <div className="flex justify-end gap-2">
                       <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
                         <X className="mr-1 h-3.5 w-3.5" /> {t.common.cancel}

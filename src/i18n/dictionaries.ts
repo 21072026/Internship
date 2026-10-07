@@ -1691,6 +1691,15 @@ const en = {
     audienceOperator: 'staff',
     csv: 'Download CSV',
   },
+  machineTranslation: {
+    fill: 'Fill empty languages',
+    filling: 'Translating…',
+    noSource: 'Write one language first.',
+    nothingToFill: 'Every language is filled in.',
+    unavailable: 'Translation is not available right now. You can still write the other languages yourself.',
+    chip: 'Machine-translated — review',
+    confirm: 'Looks right',
+  },
   orgWizard: {
     title: 'New organization',
     subtitle: 'Five steps to a configured organization with its first administrator invited.',
@@ -9011,6 +9020,15 @@ const tr: Dict = {
     audienceOperator: 'ekip',
     csv: 'CSV indir',
   },
+  machineTranslation: {
+    fill: 'Boş dilleri doldur',
+    filling: 'Çevriliyor…',
+    noSource: 'Önce bir dilde yaz.',
+    nothingToFill: 'Bütün diller dolu.',
+    unavailable: 'Çeviri şu an kullanılamıyor. Diğer dilleri yine de kendin yazabilirsin.',
+    chip: 'Makine çevirisi — gözden geçir',
+    confirm: 'Doğru görünüyor',
+  },
   orgWizard: {
     title: 'Yeni organizasyon',
     subtitle: 'Beş adımda yapılandırılmış ve ilk yöneticisi davet edilmiş bir organizasyon.',
@@ -16186,6 +16204,15 @@ const de: Dict = {
     audienceParticipant: 'Teilnehmende',
     audienceOperator: 'Team',
     csv: 'CSV herunterladen',
+  },
+  machineTranslation: {
+    fill: 'Leere Sprachen ausfüllen',
+    filling: 'Wird übersetzt…',
+    noSource: 'Schreib zuerst eine Sprache.',
+    nothingToFill: 'Alle Sprachen sind ausgefüllt.',
+    unavailable: 'Die Übersetzung ist gerade nicht verfügbar. Du kannst die anderen Sprachen trotzdem selbst schreiben.',
+    chip: 'Maschinell übersetzt — bitte prüfen',
+    confirm: 'Passt so',
   },
   orgWizard: {
     title: 'Neue Organisation',

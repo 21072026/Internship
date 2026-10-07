@@ -102,6 +102,10 @@ export const AI_TASKS = {
   // One draft for a bulk e-mail, personalised by {name}: the sender's own
   // purpose text is all it reads, so no one's consent is involved.
   bulk_draft: { label: 'Bulk e-mail draft', audience: 'participant', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700 },
+  // Machine translation of tenant-authored text into the empty locales
+  // (#2055). Operator-side: an admin authoring announcements and templates.
+  // No personal data is the point of the text, so no consent type.
+  content_translate: { label: 'Content translation', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 2000 },
 } as const satisfies Record<string, AiTaskSpec>;
 
 export type AiTaskId = keyof typeof AI_TASKS;
