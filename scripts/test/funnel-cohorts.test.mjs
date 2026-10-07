@@ -26,6 +26,7 @@ const {
   cohortMonths,
   stageConversions,
   relationChains,
+  cutChurnLinks,
   mergeChainJourney,
   trialConversion,
   trialStartOf,
@@ -472,4 +473,23 @@ test('trial → paid names no key: a tenant with renamed stages converts from it
   const j = [trialJourney('PROSPECT', '2026-01-01', [['PILOT', '2026-01-05'], ['CUSTOMER', '2026-01-25']])];
   const { months } = trialConversion(order, j, 'PILOT', 'CUSTOMER', ['2026-01'], { now: new Date('2026-06-01'), trialDays: 30 });
   assert.deepEqual(months[0], { month: '2026-01', started: 1, paid: 1, rate: 100, mature: true });
+});
+
+// ── A win-back is a new journey, a handover is not (#2845) ───────────────────
+
+test('a handover chains into one journey; a win-back after churn starts its own', () => {
+  const links = [
+    { id: 'a', previousRelationId: null, lifecycleState: 'ENDED_REASSIGNED' },
+    { id: 'b', previousRelationId: 'a', lifecycleState: 'ENDED_CHURNED' }, // the handover's successor, later lost
+    { id: 'c', previousRelationId: 'b', lifecycleState: null }, // won back
+  ];
+  const chains = relationChains(cutChurnLinks(links)).map((ch) => ch.map((l) => l.id));
+  assert.deepEqual(chains, [['a', 'b'], ['c']]);
+  // Without the cut, the win-back would fold into the lost journey.
+  assert.deepEqual(relationChains(links).map((ch) => ch.map((l) => l.id)), [['a', 'b', 'c']]);
+});
+
+test('cutChurnLinks leaves every other link untouched', () => {
+  const links = [{ id: 'x', previousRelationId: null }, { id: 'y', previousRelationId: 'x', lifecycleState: null }];
+  assert.deepEqual(cutChurnLinks(links), links);
 });
