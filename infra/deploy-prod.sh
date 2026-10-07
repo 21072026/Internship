@@ -802,6 +802,9 @@ run_tool node prisma/backfill-premium-analytics-entitlement.mjs || true
 # gate do not inherit it.
 run_tool node prisma/backfill-report-export-grandfather.mjs || true
 
+# Same for the admin AI tools (AI_PACKAGE, #1738): every org that exists keeps them, ONCE (marker note).
+run_tool node prisma/backfill-ai-package-grandfather.mjs || true
+
 # Grandfather every org already running an integration when the
 # INTEGRATIONS_API gate goes live (#1744): a live public-API key or an active
 # webhook. Runs ONCE (marker note), for the same reason as the one above.

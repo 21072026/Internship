@@ -21,6 +21,9 @@ allowed to.
 runAiGated({ scope: AiTaskId, consent?, userId?, companyId?, call })
   │
   ├─ consent?      hasConsent(userId, type) — false → { ok:false, 'no_consent' }
+  ├─ entitlement   operator tasks only (#1738): entitled(orgId, 'AI_PACKAGE')
+  │                false → { ok:false, 'not_entitled' }; a participant task skips this
+  ├─ cache         persist? a stored artefact for the same input → { ok:true, cached:true }
   ├─ quota         Setting.aiMonthlyQuota, calls this calendar month
   │                0 or exhausted → { ok:false, 'quota_exceeded' }
   ├─ configured    ANTHROPIC_API_KEY set → else { ok:false, 'not_configured' }
@@ -67,6 +70,50 @@ hint. Scoping the meter per tenant means adding `orgId` to `AiUsage`,
 registering it, and filtering the count — until then, treat the quota as an
 operator-level cost control that happens to be editable per tenant.
 
+### Who the task is for: audience and the AI pack (#1738)
+
+Every registry entry carries an `audience`, and a task cannot be registered
+without one. It is the one place that decides whether the gate asks for the
+paid add-on:
+
+- **`participant`** — the free core: `cv_extract`, `cv_feedback`,
+  `interview_prep`, `interaction_summary`. The mentee's own tools and the
+  mentor's own view of their own mentee. The gate never runs the entitlement
+  query on this path: no extra read, no paywall, and `not_entitled` cannot
+  reach a participant route or screen.
+- **`operator`** — the admin tools: `mentor_match`, `survey_summary`,
+  `evaluation_insights`, `weekly_report_digest`, `analytics_narrative`. The
+  gate asks `entitled(orgId, 'AI_PACKAGE')` (#1733; the constant is
+  `AI_PACK_FEATURE` in `aiGate.ts`) right after consent and **before the
+  artefact cache** — a locked org is not answered from a stored copy of the
+  add-on either — and answers `{ ok: false, reason: 'not_entitled' }` when the
+  org has neither a plan with the pack nor a grant.
+
+An operator route turns that denial into the shared locked shape,
+`403 { error: 'feature_locked', code: 'feature_locked', feature: 'AI_PACKAGE' }`
+(the one `GET /api/admin/export/[dataset]` already answers with), and its `GET`
+reports `locked: true` so the screen draws a locked state — one line of copy,
+no Run button — instead of a card that fails on the click. The exception is
+`POST /api/admin/mentor-suggest`: the rule-based ranking is not AI and stays
+available to every admin, so on `not_entitled` it answers
+`200 { batchId, suggestions, aiUsed: false, locked: 'AI_PACKAGE' }` — the same
+list, no rationale, and a short locked hint where the "(rule-based)" suffix
+would be.
+
+Two things keep the gate from taking the tools away from the people who had
+them:
+
+- **Grandfathering.** [`prisma/backfill-ai-package-grandfather.mjs`](../prisma/backfill-ai-package-grandfather.mjs),
+  run by `infra/deploy-prod.sh`, grants `AI_PACKAGE` to every org that exists
+  on the deploy that adds the gate — once. Its grants carry a marker note, and
+  any later run that finds one does nothing, so an org created after the gate
+  is really gated. The same call the maintainer made for `REPORT_EXPORT`
+  (#1740); the run-once rule is unit-tested in
+  `scripts/test/ai-package-grandfather.test.mjs`.
+- **The demo.** `prisma/seed-demo.mjs` grants the pack to both demo tenants,
+  because the demo must show the whole product (#2061): without it every topic
+  environment's admin AI tools would render locked.
+
 ## The task table
 
 | Task (`scope`) | Route | Audience | What is sent | What is deliberately **not** sent | Consent | Free? |
@@ -75,11 +122,11 @@ operator-level cost control that happens to be editable per tenant.
 | `cv_feedback` | `POST /api/cv/feedback` | mentee, own CV only | the same extracted CV text, same cap | the file; other people's CVs (the route ignores any id and reads the caller's own) | `AI_CV_PARSING`, from the caller | yes — never a paywall |
 | `interaction_summary` | `POST /api/interactions/summary` | mentor / admin on their own relation | the 30 newest log entries: date, type, subject, notes; the mentee's display name | attachments, documents, e-mail addresses, phone numbers, CV | `AI_INTERACTION_SUMMARY`, from the **mentee** whose log it is | yes |
 | `interview_prep` | `POST /api/interview-prep` | mentee, for themselves | the target position, the skills on the profile, an optional free-text focus (≤300 chars) | name, contact data, CV, employer names, anything about the mentor | none — no identifier is sent | yes — never a paywall |
-| `mentor_match` | `POST /api/admin/mentor-suggest` | admin | the mentee's skills / target position / interests, and up to five mentors as **anonymous labels A–E** with skills, interests and load | every name, e-mail and id on both sides; labels are mapped back to mentor ids locally, after the response | none — no identifier is sent | n/a (admin tool) |
-| `survey_summary` | `POST /api/admin/surveys/[id]/summary` | admin | one free-text question's answers on the open-text engine: unattributed, contact details masked, under labels `r1…`; only above the survey's response floor **and** only when the question itself has that many answers | respondent ids, names, timestamps | none — no identifier is sent | n/a (admin tool) |
-| `analytics_narrative` | `POST /api/admin/analytics/narrative` | admin | the dashboard's totals as `label: value` lines (stage counts with stage names, monthly trends, engagement, RSVP rate, sign-up windows), recomputed on the server | mentor workload rows (they carry names), every per-person row and id | none — totals only | n/a (admin tool) |
-| `evaluation_insights` | `POST /api/admin/insights/evaluations` | admin | up to 400 evaluation comments in range, under labels `r1…`, with contact details **and every known name** (author, mentee, mentor) masked; capped at 24 000 chars | database ids, who wrote which row, interview scorecards (no relation) | none — names are masked and the rows are the programme's own records | n/a (admin tool) |
-| `weekly_report_digest` | `POST /api/admin/insights/weekly-reports` | admin | the `blockers` of up to 400 submitted weekly reports in range, same masking and cap | the report summary, hours, mentor comments, ids | none — as above | n/a (admin tool) |
+| `mentor_match` | `POST /api/admin/mentor-suggest` | admin | the mentee's skills / target position / interests, and up to five mentors as **anonymous labels A–E** with skills, interests and load | every name, e-mail and id on both sides; labels are mapped back to mentor ids locally, after the response | none — no identifier is sent | no — AI pack (#1738); the rule-based list stays free |
+| `survey_summary` | `POST /api/admin/surveys/[id]/summary` | admin | one free-text question's answers on the open-text engine: unattributed, contact details masked, under labels `r1…`; only above the survey's response floor **and** only when the question itself has that many answers | respondent ids, names, timestamps | none — no identifier is sent | no — AI pack (#1738) |
+| `analytics_narrative` | `POST /api/admin/analytics/narrative` | admin | the dashboard's totals as `label: value` lines (stage counts with stage names, monthly trends, engagement, RSVP rate, sign-up windows), recomputed on the server | mentor workload rows (they carry names), every per-person row and id | none — totals only | no — AI pack (#1738) |
+| `evaluation_insights` | `POST /api/admin/insights/evaluations` | admin | up to 400 evaluation comments in range, under labels `r1…`, with contact details **and every known name** (author, mentee, mentor) masked; capped at 24 000 chars | database ids, who wrote which row, interview scorecards (no relation) | none — names are masked and the rows are the programme's own records | no — AI pack (#1738) |
+| `weekly_report_digest` | `POST /api/admin/insights/weekly-reports` | admin | the `blockers` of up to 400 submitted weekly reports in range, same masking and cap | the report summary, hours, mentor comments, ids | none — as above | no — AI pack (#1738) |
 
 Two of these carry no consent type because there is no personal identifier in
 the payload to consent to. That is not an oversight and it is not a loophole:
@@ -288,7 +335,8 @@ worse than none.
 
 ## The degradation contract
 
-An AI denial is never an error page and never a paywall:
+An AI denial is never an error page, and on a participant surface never a
+paywall:
 
 | Reason | Mentee-facing surfaces | Staff-facing surfaces |
 |---|---|---|
@@ -296,12 +344,13 @@ An AI denial is never an error page and never a paywall:
 | `not_configured` | the feature **hides itself** (`GET` availability probes) | the button hides after the first attempt |
 | `quota_exceeded` | a neutral "temporarily unavailable" — never quota mechanics, never pricing | the actual reason, because they can fix it |
 | `provider_error` (#2024) | the same neutral "temporarily unavailable" (HTTP 503, `code: 'provider_error'`) | "the AI service is not answering right now" |
+| `not_entitled` (#1738) | **never reaches one** — only an `operator` task asks for the pack, so a participant route cannot receive it | a locked state that names the add-on (`403 feature_locked`, `feature: 'AI_PACKAGE'`; the screen's `GET` says `locked: true`) and nothing beyond that — no mechanics, no pricing |
 
 `mentor_match` degrades differently and more strongly: the rule-based ranking
 (skill overlap, then lighter load) is computed **first, always**. AI only
 re-orders that list and adds one sentence of reasoning. With no provider, no
-quota or a provider failure, the admin gets the same list with `aiUsed: false`
-and no rationale text. The feature is a garnish on a deterministic ranking, not
+quota, a provider failure or no AI pack (`locked: 'AI_PACKAGE'`), the admin
+gets the same list with `aiUsed: false` and no rationale text. The feature is a garnish on a deterministic ranking, not
 the ranking.
 
 ## Human in the loop
@@ -332,7 +381,11 @@ needs a separate discussion first.
    belong to the mentee, cost the mentee nothing, and surface quota exhaustion
    as "not right now" rather than "upgrade". The org's plan is the operator's
    problem; a student preparing for an interview is not the person to bill for
-   it.
+   it. Since #1738 the boundary is enforced by the registry's `audience`
+   field rather than by convention: the gate asks for the AI pack only on an
+   `operator` task, and a `participant` task never runs the entitlement query
+   at all — so a route cannot paywall a participant tool without first
+   re-registering it as an operator one, in a diff a reviewer sees.
 
 ## Labelling
 
@@ -351,6 +404,10 @@ badge in the same change.
 
 1. An entry in the registry, `src/lib/ai/tasks.ts`: the id (snake_case — it
    becomes `AI_MODEL_<ID>`), audience, consent type or `null`, tier, caps.
+   The `audience` is what decides whether the gate asks for the AI pack
+   (§ Who the task is for): an admin or company tool is `operator`; anything a
+   mentee or mentor uses for themselves is `participant` and is never
+   paywalled. Choosing it is a product decision, not a default.
 2. A `src/lib/ai<Task>.ts` module that holds the `SYSTEM` prompt and the
    parser and calls `callModel({ task: '<id>', system, input })`. No client,
    no model, no timeout, no consent logic — those are the provider module's and
@@ -358,7 +415,10 @@ badge in the same change.
 3. A route that calls `runAiGated` with that `scope` and, if any personal data
    is in the payload, a `ConsentType` — added additively to
    `prisma/schema.prisma`, surfaced in `ConsentSettings`.
-4. Handle all four denial reasons per the degradation contract above.
+4. Handle every denial reason per the degradation contract above — an
+   `operator` route answers `not_entitled` with the `403 feature_locked` shape
+   and reports `locked` on its `GET`; a `participant` route can never receive
+   it and carries no locked copy.
 5. `<AiBadge />` on whatever renders the result.
 6. A row in the task table here, the matching entry in the `ai` dictionary block
    for `/ai`, and the route in

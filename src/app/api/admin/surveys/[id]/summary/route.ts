@@ -9,13 +9,17 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { getLocale } from '@/i18n/server';
 import { loadSurveyResults } from '@/lib/surveyResults';
 import { runOpenTextSummary } from '@/lib/ai/summarizeOpenText';
+import { AI_PACK_FEATURE } from '@/lib/aiGate';
 
 // "Summarise these answers" (#1910) — an admin-triggered AI summary of one
 // free-text question, on the open-text engine since #2046 part 2: themes with
 // the answers behind each, a sentiment flag (no score), quotes that appear
 // verbatim in an answer, and the caveats of how it was made.
 //   • ADMIN only, tenant-scoped. An org-side feature: participant-facing AI is
-//     untouched, and nobody is shown a paywall.
+//     untouched, and nobody is shown a paywall. An operator task (#1738), so
+//     an org without the AI pack gets the shared 403 `feature_locked` (the
+//     gate's 'not_entitled') — the one denial that is not a 200 with a
+//     reason, because it is not a passing condition the admin can fix here.
 //   • Only above the survey's response floor — the same `suppressed` verdict
 //     the results screen uses (409 `below_floor`) — AND only when the question
 //     itself has at least that many written answers: the engine is handed the
@@ -66,6 +70,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       regenerate: parsed.data.regenerate,
     });
     if (!outcome.ok) {
+      if (outcome.reason === 'not_entitled') {
+        return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
+      }
       const reason = outcome.reason === 'no_rows' ? 'no_answers' : outcome.reason;
       return NextResponse.json({ summary: null, reason, caveats: 'caveats' in outcome ? outcome.caveats : [] });
     }

@@ -212,6 +212,29 @@ async function upsertUser({ email, fullName, role, extra = {} }) {
   return user;
 }
 
+// The AI pack for a demo tenant (#1738). The admin AI tools — the match
+// rationale, the survey summary, the open-text insights, the analytics
+// narrative — sit behind the AI_PACKAGE add-on since #1738, and the demo must
+// show the whole product (#2061): without this grant every topic environment's
+// admin AI tools would render locked. A grant rather than a plan, because the
+// pack is grant-only (GRANT_ONLY_FEATURES in src/lib/plans.ts). Idempotent over
+// @@unique([orgId, feature]), and its note is deliberately NOT the marker of
+// prisma/backfill-ai-package-grandfather.mjs: that backfill counts only its own
+// marker, so a seeded local database still gets the grandfather decision on
+// its own terms, and its createMany skips this row instead of duplicating it.
+async function grantAiPack(orgId, tenant) {
+  await prisma.orgEntitlement.upsert({
+    where: { orgId_feature: { orgId, feature: 'AI_PACKAGE' } },
+    create: {
+      orgId,
+      feature: 'AI_PACKAGE',
+      note: `Demo tenant (${tenant}): the AI pack is granted so the demo shows the whole product (#1738, #2061).`,
+    },
+    update: {},
+  });
+  console.log(`granted AI_PACKAGE to the ${tenant} demo tenant`);
+}
+
 async function main() {
   assertSafeTarget();
 
@@ -389,6 +412,7 @@ async function main() {
   // REQUIRED column and is read from the relations/users backfilled above.
   await assignDefaultOrg(prisma, defaultOrg.id);
   console.log('backfilled default org onto demo rows');
+  await grantAiPack(defaultOrg.id, 'internship');
 
   // ---------------------------------------------------------------------------
   // Development / oversight half (#2062): weekly reports, to-dos, mentor
@@ -811,13 +835,17 @@ async function main() {
   //     converging on the second pass, which is not what a fresh topic
   //     environment gets.
   // ---------------------------------------------------------------------------
-  await seedMarketingDemo({
+  const marketing = await seedMarketingDemo({
     prisma,
     // Hashed once and shared: bcrypt at cost 10 is ~80 ms, and this tenant alone
     // opens thirty-four accounts.
     passwordHash: await bcrypt.hash(PASSWORD, 10),
     domain: DEMO_DOMAIN,
   });
+  // The marketing tenant reaches two of the operator AI tasks — the analytics
+  // narrative on /admin/analytics and the survey summary — neither of which
+  // sits behind the `mentorship` capability, so it needs the pack as well.
+  await grantAiPack(marketing.orgId, 'marketing');
 
   // Contributor terms (#1025, #1026). The demo set portrays projects that have
   // been running for a while, and someone who has been on a project for months

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 import { hashInput } from '../src/lib/ai/artifacts';
 import { defaultOrgId } from '../src/lib/defaultOrg';
@@ -159,6 +159,9 @@ test('the same candidates re-use the kept match rationale; a stale or changed on
   // parallel workers.
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const org = await prisma.organization.create({ data: { name: `Match Org ${stamp}`, slug: `match-${stamp}` } });
+  // mentor_match is an operator task behind the AI pack (#1738): the stored
+  // rationale is only read back for an org that holds it.
+  await setOrgFeature(org.id, 'AI_PACKAGE', true);
   const adminEmail = uniqueEmail('match-admin');
   const mentorEmail = uniqueEmail('match-mentor');
   const menteeEmail = uniqueEmail('match-mentee');
@@ -211,6 +214,7 @@ test('the same candidates re-use the kept match rationale; a stale or changed on
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(adminEmail);
     await prisma.aiArtifact.deleteMany({ where: { orgId: org.id } });
+    await prisma.orgEntitlement.deleteMany({ where: { orgId: org.id } });
     await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });
