@@ -325,6 +325,7 @@ fi
 _in_image "$IMAGE" node prisma/backfill-activity-log-org.mjs || true
 _in_image "$IMAGE" node prisma/backfill-task-template-org.mjs || true
 _in_image "$IMAGE" node prisma/backfill-ai-usage-org.mjs || true
+_in_image "$IMAGE" node prisma/backfill-ai-usage-task.mjs || true
 _in_image "$IMAGE" node prisma/backfill-organization.mjs \
   || echo "WARN: org backfill FAILED (exit non-zero) — see the output above"
 # Legacy needs require company orgId; include rows created by the demo seed.

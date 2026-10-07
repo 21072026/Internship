@@ -2144,9 +2144,27 @@ model AiUsage {
   // a failure must stay visible without costing the tenant anything.
   outcome String @default("ok") @db.VarChar(20)
 
+  // What the call was and what it cost (#2022). All nullable so the columns
+  // apply to the populated table; rows from before them carry NULL (the deploy
+  // runs prisma/backfill-ai-usage-task.mjs to copy `scope` into `taskId`).
+  // `taskId` is the registry key (src/lib/ai/tasks.ts) — the same string as
+  // `scope`, which stays as the historic column every reader already groups on.
+  // `costMicros` is the provider's list price in MICRO-DOLLARS
+  // (src/lib/ai/pricing.ts); null when the model is not in the rate table,
+  // never an estimate. `latencyMs` is the time spent waiting on the provider
+  // across the attempts of this one logical call.
+  taskId       String? @db.VarChar(64)
+  provider     String? @db.VarChar(32)
+  model        String? @db.VarChar(64)
+  inputTokens  Int?
+  outputTokens Int?
+  costMicros   Int?
+  latencyMs    Int?
+
   @@index([createdAt])
   @@index([scope])
   @@index([orgId, createdAt])
+  @@index([taskId, createdAt])
 }
 
 // What an AI call PRODUCED (#2044) — AiUsage above is the meter (that a call

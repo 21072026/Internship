@@ -15,7 +15,8 @@ import { currentPeriod, periodRange } from '../src/lib/meteringRules';
 // never contacted — `call` is a stub — but `isAiConfigured()` must read true for
 // the gate to reach the call and meter it, so the key is set in THIS process.
 
-const SCOPE = 'e2e_quota_per_org';
+// A registry task id (#2022: `scope` is typed); the rows are deleted by org in finally.
+const SCOPE = 'interview_prep';
 
 test.afterAll(async () => {
   await prisma.$disconnect();

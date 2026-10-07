@@ -5,23 +5,20 @@
 // Cached as a subject-less AiArtifact keyed on the facts and the language, so
 // a page view re-reads the stored paragraph instead of regenerating it.
 
-import Anthropic from '@anthropic-ai/sdk';
 import type { Session } from 'next-auth';
 import type { Locale } from '@/i18n/config';
 import { runAiGated, type AiArtifactRef, type AiDenialReason } from '@/lib/aiGate';
 import { findCachedArtifact, hashInput, TASK_TTL_MS } from '@/lib/ai/artifacts';
 import { prisma } from '@/lib/prisma';
-import { noteParseError } from '@/lib/ai/provider';
+import { callModel, noteParseError } from '@/lib/ai/provider';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { loadAdminAnalytics } from '@/lib/adminAnalyticsData';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { acceptNarrative, analyticsFacts, factsText, type Fact } from '@/lib/ai/narrativeRules';
 
-const AI_TIMEOUT_MS = 60_000;
-const MODEL = process.env.ANTHROPIC_SUMMARY_MODEL || process.env.ANTHROPIC_CV_MODEL || 'claude-opus-4-8';
 const LANGUAGE: Record<Locale, string> = { en: 'English', tr: 'Turkish', de: 'German' };
-const SCOPE = 'analytics_narrative';
+const SCOPE = 'analytics_narrative' as const;
 
 const SYSTEM = `You write a short "what changed" paragraph for the team that runs a mentoring and internship programme, from the dashboard figures you are given.
 Rules:
@@ -31,15 +28,8 @@ Rules:
 - Do not name or describe any person.`;
 
 async function callProvider(facts: Fact[], locale: Locale): Promise<string | null> {
-  const client = new Anthropic({ timeout: AI_TIMEOUT_MS, maxRetries: 0 }); // retries are runAiGated's (src/lib/ai/provider.ts, #2024)
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 500,
-    system: SYSTEM,
-    messages: [{ role: 'user', content: `Write in ${LANGUAGE[locale]}.\n\nFigures:\n${factsText(facts)}` }],
-  });
-  const block = res.content.find((b) => b.type === 'text');
-  const kept = acceptNarrative(block && block.type === 'text' ? block.text : '', facts);
+  const reply = await callModel({ task: SCOPE, system: SYSTEM, input: `Write in ${LANGUAGE[locale]}.\n\nFigures:\n${factsText(facts)}` });
+  const kept = acceptNarrative(reply, facts);
   // Ungrounded or empty: metered as parse_error and never stored.
   if (!kept) noteParseError();
   return kept;
