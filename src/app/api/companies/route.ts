@@ -128,6 +128,11 @@ export async function GET(request: Request) {
     // permits advertising mail by the one rule (src/lib/contactPermission.ts).
     // Any other value is no filter, never an error.
     const permissionFilter = searchParams.get('permission') === 'email' ? marketingEmailPermissionFilter() : undefined;
+    // "My accounts" (#2397): the companies behind at least one of the CALLER's
+    // own relations — the /sales/accounts rule, for an admin who also owns
+    // leads. Any other value is no filter.
+    const ownerFilter: Prisma.CompanyWhereInput | undefined =
+      searchParams.get('owner') === 'me' ? { mentorships: { some: { mentorId: session.user.id } } } : undefined;
 
     // The same two columns the client-side `filter()` used to match on, so the
     // move to the server is not also a change of what "search" means.
@@ -153,6 +158,7 @@ export async function GET(request: Request) {
         (await tenantWhere(session)) as Prisma.CompanyWhereInput,
         searchFilter,
         permissionFilter,
+        ownerFilter,
       );
       const include = {
         needs: true,
