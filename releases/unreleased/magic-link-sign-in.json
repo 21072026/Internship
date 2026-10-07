@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Magic-link sign-in (#1959):** \"Email me a sign-in link\" on `/auth/signin`. `POST /api/auth/magic-link` answers the same 200 for every address (rate-limited 5/15min per IP *and* per address), mails an eligible account a single-use link that expires in 15 minutes, and refuses silently for inactive, unverified, pending-approval and SSO-enforced accounts. Only the SHA-256 of the token is stored (`LoginLinkToken`, user-keyed like `SsoLoginGrant`); the new `magic` NextAuth provider spends it with one conditional `updateMany`, so two clicks cannot both sign in. An enrolled authenticator is **not** bypassed: the credentials provider's TOTP/recovery step moved into a shared `requireSecondFactor()` that the magic provider calls before the link is spent — the first visit answers `2FA_REQUIRED` without spending it, `/auth/magic/complete` asks for the code, and a wrong code costs the TOTP bucket, never the link. Spent and expired rows go with the nightly trusted-device purge. Not behind any plan or entitlement.",
+  "notes": {
+    "en": ["Sign in without a password: choose \"Email me a sign-in link\" on the sign-in page and we send you a link that works once and expires in 15 minutes. If you use an authenticator app, it still asks for your code."],
+    "tr": ["Parolasız giriş: giriş sayfasında \"Bana giriş bağlantısı gönder\"i seçin, size bir kez çalışan ve 15 dakika içinde geçerliliğini yitiren bir bağlantı gönderelim. Doğrulama uygulaması kullanıyorsanız kodunuz yine sorulur."],
+    "de": ["Anmelden ohne Passwort: Wähle auf der Anmeldeseite „Anmeldelink per E-Mail senden“ und wir schicken dir einen Link, der einmal funktioniert und nach 15 Minuten abläuft. Wer eine Authenticator-App nutzt, wird weiterhin nach dem Code gefragt."]
+  }
+}
