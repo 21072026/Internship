@@ -45,6 +45,8 @@ export const TASK_TTL_MS: Record<string, number> = {
   // day only bounds how long one answer is re-read.
   thread_summary: 1 * DAY,
   suggested_reply: 1 * DAY,
+  // Keyed on the relation's facts (#2048): a new message, goal or stage is a new question.
+  outreach_draft: 1 * DAY,
 };
 
 /**

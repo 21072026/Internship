@@ -88,6 +88,12 @@ export const AI_TASKS = {
   // and the transcript is already cut to 16k by threadAiRules.buildTranscript.
   thread_summary: { label: 'Conversation catch-up', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 600 },
   suggested_reply: { label: 'Suggested reply', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 400 },
+  // Grounded outreach drafts (#2048, part 2): a draft for the mentor to edit,
+  // never sent by any code path. The relation's facts are the mentee's data.
+  outreach_draft: { label: 'Outreach draft', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 600 },
+  // One draft for a bulk e-mail, personalised by {name}: the sender's own
+  // purpose text is all it reads, so no one's consent is involved.
+  bulk_draft: { label: 'Bulk e-mail draft', audience: 'participant', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700 },
 } as const satisfies Record<string, AiTaskSpec>;
 
 export type AiTaskId = keyof typeof AI_TASKS;

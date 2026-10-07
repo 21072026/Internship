@@ -143,3 +143,43 @@ export function SuggestReply({ conversationId, onDraft }: { conversationId: stri
     </span>
   );
 }
+
+/**
+ * The mentor's grounded draft for this mentee (#2048, part 2): the first
+ * message, a check-in to a quiet mentee, or the outcome note — the server
+ * picks the moment from the relation's state and writes in the mentee's
+ * language. Like the suggested reply it only ever comes back as text.
+ */
+export function MentorDraft({ relationId, onDraft }: { relationId: string; onDraft: (text: string) => void }) {
+  const t = useT();
+  const A = t.messages.ai;
+  const failureText = useFailureText();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await ask(`/api/mentorship/${encodeURIComponent(relationId)}/ai-draft`, { moment: 'auto' });
+    setBusy(false);
+    if (!r.ok) { setError(failureText(r.failure)); return; }
+    const draft = r.data.draft as { body?: string } | undefined;
+    if (draft?.body) onDraft(draft.body);
+  };
+
+  return (
+    <span className="relative inline-flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => void run()}
+        disabled={busy}
+        className="inline-flex shrink-0 items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 disabled:opacity-60"
+        data-testid="mentor-ai-draft"
+      >
+        <Sparkles className="h-3.5 w-3.5 text-violet-600" aria-hidden />
+        {busy ? A.working : A.draftForMentee}
+      </button>
+      {error && <span className="text-[11px] text-red-600" role="alert" data-testid="mentor-ai-draft-error">{error}</span>}
+    </span>
+  );
+}
