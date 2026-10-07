@@ -23,8 +23,17 @@ Expo (React Native) app for iOS and Android. It is one app that serves both prod
   - a link tap is stopped before the site's router sees it;
   - a `router.push()` after a fetch (the "send message" buttons) and a redirect's `replaceState` (the legacy `/messages/<relationId>` URL) are let through, reported and undone with `history.back()`;
   - a full load is refused in `onShouldStartLoadWithRequest`;
-  - a notification tap asks the same rule before it opens a web page.
+  - a notification tap — in-app list or system push — asks the same rule before it opens a web page.
 - **The keyboard.** The app draws edge to edge, so Android no longer resizes the window for the keyboard, and React Native's own `KeyboardAvoidingView` does nothing there. Screens with a text field use `react-native-keyboard-controller` (`KeyboardProvider` in the root layout): the thread follows the keyboard's height with a spacer, and sign-in uses that library's `KeyboardAvoidingView`.
+
+## Push notifications
+
+New messages arrive as native notifications, also while the app is closed, and a tap opens the native thread in the product they belong to. Design, the Firebase/EAS steps and what iOS still needs: [`docs/mobile-push.md`](../../docs/mobile-push.md).
+
+- `src/lib/push.ts` holds the rules (tested); `src/lib/pushDevice.ts` the expo-notifications glue; `src/components/PushBridge.tsx` wires both into the root layout.
+- The app registers its Expo token on each product it is signed in to (`POST /api/push/native`) and removes it **before** signing out of that product. Switching product keeps both.
+- FCM needs `google-services.json`: locally at `apps/mobile/google-services.json` (git-ignored), on EAS through the file env var `GOOGLE_SERVICES_JSON`. Without it the app builds and runs, without push. Use a Google Play system image on the emulator — FCM needs Play services.
+- A dev build logs its token (`[push] Expo token …`) for a quick test from <https://expo.dev/notifications>.
 
 ## The site inside the app
 

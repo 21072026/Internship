@@ -26,6 +26,7 @@
 | | Karar | Durum |
 |---|---|---|
 | **Native uygulama (Expo, iOS + Android)** | Tek uygulama, iki ürün; MVP mentee + mentor | **İskelet** — `apps/mobile/`, #2775 |
+| Native push (Expo → FCM/APNs) | Mesajlar; dokunuş native sohbeti doğru üründe açar | Android: kod hazır, Firebase kurulumu bekliyor; iOS: Apple hesabı + APNs anahtarı — [`mobile-push.md`](mobile-push.md) |
 | PWA (kurulabilir, Web Push, kısayollar, share target) | Web'de kalır | Canlıda (`src/app/manifest.ts`, `public/sw.js`) |
 | Android — TWA | Native çıkana kadar yedek | `mobile/android/` + `android-build.yml` |
 | Gerçek çevrimdışı | Ertelendi, önce ölçüm | — |

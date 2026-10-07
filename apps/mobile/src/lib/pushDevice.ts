@@ -107,6 +107,8 @@ export async function registerPush(origin: string, host: string): Promise<void> 
     if (!(await permission())) return;
     const token = await expoToken();
     if (!token) return;
+    // For a first check with Expo's push tool (docs/mobile-push.md § Testing).
+    if (__DEV__) console.log('[push] Expo token', token);
     const key = registrationKey(host);
     const stored = await AsyncStorage.getItem(key).catch(() => null);
     const fresh = freshSignIns.delete(host);
