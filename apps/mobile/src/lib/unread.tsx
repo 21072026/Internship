@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import * as Notifications from 'expo-notifications';
 import { AppState } from 'react-native';
 import { apiGet } from './api';
 import { useSession } from './session';
@@ -8,7 +9,8 @@ import { useSession } from './session';
 // src/lib/unreadCounts.ts the web header and its live stream use. Read when the
 // app comes to the foreground and once a minute while it is open; screens call
 // refresh() after they mark something read. Native push (a later slice) will
-// make the minute poll unnecessary.
+// make the minute poll unnecessary. A push that arrives while the app is open
+// refreshes them at once (#2775).
 
 const POLL_MS = 60_000;
 
@@ -37,9 +39,11 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') refresh();
     });
+    const pushed = Notifications.addNotificationReceivedListener(() => refresh());
     return () => {
       clearInterval(timer);
       sub.remove();
+      pushed.remove();
     };
   }, [refresh]);
 

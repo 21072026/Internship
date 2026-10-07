@@ -1357,7 +1357,9 @@ export function AccountSettings() {
           <div className="mt-4 pt-4 border-t border-gray-100" data-testid="push-devices">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.account.pushDevices}</h3>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-lg">{t.account.pushDevicesHint}</p>
-            {!pushDevicesEnabled && (
+            {/* About BROWSERS only: `enabled` is the VAPID switch, and the app's
+                installs are delivered without it (#2775). */}
+            {!pushDevicesEnabled && pushDeviceRows.some((d) => d.kind !== 'app') && (
               <p className="text-xs text-amber-700 dark:text-amber-300 mt-2 max-w-lg" data-testid="push-devices-unavailable">
                 {t.account.pushDevicesUnavailable}
               </p>

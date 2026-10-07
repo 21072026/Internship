@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PushBridge } from '../components/PushBridge';
 import { SessionProvider, useSession } from '../lib/session';
 import { navigationTheme, useAppTheme } from '../lib/theme';
 
@@ -15,6 +16,7 @@ function RootStack() {
     // setting and carry the product's colour as the accent.
     <ThemeProvider value={navigationTheme(dark, product?.color ?? '#1D4ED8')}>
       <StatusBar style="auto" />
+      <PushBridge />
       {status === 'loading' ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
           <ActivityIndicator />

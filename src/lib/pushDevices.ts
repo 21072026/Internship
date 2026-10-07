@@ -22,6 +22,11 @@ import { deviceLabel } from '@/lib/deviceLabel';
 
 export interface PushDeviceView {
   id: string;
+  /**
+   * 'browser' for a Web Push subscription, 'app' for an install of the native
+   * app (#2775, `NativePushToken`). Both are revoked through the same route.
+   */
+  kind: 'browser' | 'app';
   /** "Chrome on Android", or null when the user-agent said nothing usable. */
   label: string | null;
   createdAt: string;
@@ -49,21 +54,46 @@ export async function listPushDevices(
     // part of PushDeviceView and never reaches the response.
     select: { id: true, userAgent: true, createdAt: true, lastSeenAt: true, endpoint: true },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    // The stored user-agent is untrusted free text, so it is mapped to a fixed
-    // label here and never returned raw.
-    label: deviceLabel(row.userAgent),
-    createdAt: row.createdAt.toISOString(),
-    lastSeenAt: row.lastSeenAt.toISOString(),
-    current: Boolean(currentEndpoint) && row.endpoint === currentEndpoint,
-  }));
+  // The native app's installs (#2775). Same allowlist discipline: `token` is
+  // the credential for pushing to that phone and is never selected at all.
+  const apps = await prisma.nativePushToken.findMany({
+    where: { userId },
+    select: { id: true, platform: true, createdAt: true, lastSeenAt: true },
+  });
+  const views: PushDeviceView[] = [
+    ...rows.map((row) => ({
+      id: row.id,
+      kind: 'browser' as const,
+      // The stored user-agent is untrusted free text, so it is mapped to a fixed
+      // label here and never returned raw.
+      label: deviceLabel(row.userAgent),
+      createdAt: row.createdAt.toISOString(),
+      lastSeenAt: row.lastSeenAt.toISOString(),
+      current: Boolean(currentEndpoint) && row.endpoint === currentEndpoint,
+    })),
+    ...apps.map((row) => ({
+      id: row.id,
+      kind: 'app' as const,
+      label: appLabel(row.platform),
+      createdAt: row.createdAt.toISOString(),
+      lastSeenAt: row.lastSeenAt.toISOString(),
+      // A web page is never the app; the app has its own sign-out.
+      current: false,
+    })),
+  ];
+  return views.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// A fixed label from a stored platform value (validated on write, but read as
+// untrusted all the same), in the "X on Y" shape of deviceLabel().
+function appLabel(platform: string): string {
+  return platform === 'ios' ? 'App on iOS' : platform === 'android' ? 'App on Android' : 'App';
 }
 
 /**
- * Revoke one subscription by id, scoped to its owner.
+ * Revoke one subscription (browser or app install) by id, scoped to its owner.
  *
- * Returns false when nothing was deleted — an id belonging to someone else and
+ * Returns null when nothing was deleted — an id belonging to someone else and
  * an id that no longer exists are deliberately indistinguishable to the caller,
  * which is what makes ids safe to guess at. The route turns that into a 404.
  *
@@ -71,7 +101,12 @@ export async function listPushDevices(
  * subscription table on every send and keeps no cache of it, so a deleted row
  * stops receiving with the next notification and there is nothing to invalidate.
  */
-export async function revokePushDevice(id: string, userId: string): Promise<boolean> {
-  const { count } = await prisma.pushSubscription.deleteMany({ where: { id, userId } });
-  return count > 0;
+export async function revokePushDevice(id: string, userId: string): Promise<'browser' | 'app' | null> {
+  const web = await prisma.pushSubscription.deleteMany({ where: { id, userId } });
+  if (web.count > 0) return 'browser';
+  // A revoked app install stays revoked: the app re-registers only after a
+  // sign-in or when its token changes, never just because it was launched
+  // (apps/mobile/src/lib/push.ts, `registrationReason`).
+  const app = await prisma.nativePushToken.deleteMany({ where: { id, userId } });
+  return app.count > 0 ? 'app' : null;
 }

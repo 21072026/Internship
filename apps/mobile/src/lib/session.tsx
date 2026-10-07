@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { getSession, resumeSession, signOut as signOutRemote } from './authClient';
 import type { SessionUser } from './authProtocol';
 import { originFor, productById, type AppEnv, type Product } from './products';
+import { markFreshSignIn, unregisterPush } from './pushDevice';
 
 // App-wide state (#2775): the chosen product and the signed-in user. The
 // session itself lives in the OS cookie jar; this only remembers WHICH product
@@ -11,7 +12,7 @@ import { originFor, productById, type AppEnv, type Product } from './products';
 
 const PRODUCT_KEY = 'interncrm.product';
 
-const APP_ENV: AppEnv = Constants.expoConfig?.extra?.appEnv === 'preview' ? 'preview' : 'production';
+export const APP_ENV: AppEnv = Constants.expoConfig?.extra?.appEnv === 'preview' ? 'preview' : 'production';
 
 type Status = 'loading' | 'no-product' | 'signed-out' | 'signed-in';
 
@@ -74,16 +75,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStatus('no-product');
   }, []);
 
-  const signedIn = useCallback((u: SessionUser) => {
-    setUser(u);
-    setStatus('signed-in');
-  }, []);
+  // An explicit sign-in always (re)registers this phone for push on the
+  // product, even one the person revoked on /account earlier (pushDevice.ts).
+  const signedIn = useCallback(
+    (u: SessionUser) => {
+      if (product) markFreshSignIn(product.hosts[APP_ENV]);
+      setUser(u);
+      setStatus('signed-in');
+    },
+    [product],
+  );
 
+  // The push token goes first, while the session can still authorise it — the
+  // remembered device next, then the session (signOutEverywhere()'s order).
+  // Only this product's row: the other product keeps notifying.
   const signOut = useCallback(async () => {
+    if (origin && product) await unregisterPush(origin, product.hosts[APP_ENV]);
     if (origin) await signOutRemote(origin);
     setUser(null);
     setStatus('signed-out');
-  }, [origin]);
+  }, [origin, product]);
 
   const value = useMemo(
     () => ({ status, product, origin, user, chooseProduct, clearProduct, signedIn, signOut }),

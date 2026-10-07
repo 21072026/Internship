@@ -1,6 +1,7 @@
 import webpush, { type PushSubscription as WebPushSubscription } from 'web-push';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { sendNativePushToUser } from '@/lib/expoPush';
 import { notificationCategoryAllowed, type NotificationCategory } from '@/lib/notificationPrefs';
 import { worldOfOrg } from '@/lib/userWorld';
 import type { VerticalKey } from '@/lib/verticals';
@@ -97,9 +98,14 @@ export function vapidPublicKey(): string | null {
 }
 
 /**
- * Deliver one payload to every browser this user has subscribed, honouring the
- * notification category preference. Never throws and never rejects — the caller
- * is always in the middle of something more important (writing the message).
+ * Deliver one payload to every browser this user has subscribed AND every
+ * install of the native app (#2775), honouring the notification category
+ * preference once for both. Never throws and never rejects — the caller is
+ * always in the middle of something more important (writing the message).
+ *
+ * The two channels are independent: web push needs VAPID keys, native push
+ * needs nothing (src/lib/expoPush.ts), so a deployment without VAPID still
+ * reaches phones.
  *
  * Returns how many endpoints accepted the push, which is what the tests assert
  * on; callers are free to ignore it.
@@ -109,7 +115,6 @@ export async function sendPushToUser(
   category: NotificationCategory,
   payload: PushPayload,
 ): Promise<number> {
-  if (!pushConfigured()) return 0;
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -119,13 +124,26 @@ export async function sendPushToUser(
     // push included (#886).
     if (user && !notificationCategoryAllowed(user, category)) return 0;
 
+    const [web, native] = await Promise.all([
+      pushConfigured() ? sendWebPush(userId, user?.orgId, payload) : 0,
+      sendNativePushToUser(userId, { title: payload.title, body: payload.body, url: payload.url, tag: payload.tag }),
+    ]);
+    return web + native;
+  } catch (e) {
+    logger.error('Push delivery failed', { userId, error: String(e) });
+    return 0;
+  }
+}
+
+async function sendWebPush(userId: string, orgId: string | null | undefined, payload: PushPayload): Promise<number> {
+  try {
     const subscriptions = await prisma.pushSubscription.findMany({
       where: { userId },
       select: { id: true, endpoint: true, p256dh: true, auth: true },
     });
     if (subscriptions.length === 0) return 0;
 
-    const icon = PUSH_ICON[await worldOfOrg(user?.orgId)];
+    const icon = PUSH_ICON[await worldOfOrg(orgId)];
     const body = JSON.stringify({ icon, badge: icon, ...payload });
     const results = await Promise.all(
       subscriptions.map(async (subscription) => {
@@ -148,7 +166,7 @@ export async function sendPushToUser(
     );
     return results.filter(Boolean).length;
   } catch (e) {
-    logger.error('Push delivery failed', { userId, error: String(e) });
+    logger.error('Web push delivery failed', { userId, error: String(e) });
     return 0;
   }
 }

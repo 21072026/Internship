@@ -61,6 +61,7 @@ const ICONS: Record<string, string> = {
   inviteMentee: 'person-add',
   meetings: 'videocam',
   messageTemplates: 'chatbox',
+  migrate: 'cloud-upload',
   myMentees: 'people',
   organizations: 'business',
   reEngagement: 'refresh',

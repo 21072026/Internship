@@ -244,6 +244,14 @@ const FLOORS = new Map([
     },
   ],
   [
+    'src/lib/expoPushRules.ts',
+    {
+      floor: 95,
+      measured: 100.0,
+      why: 'which native push tokens are deleted at once, counted, or left alone — a wrong split silences a live phone or retries a dead one forever (#2775)',
+    },
+  ],
+  [
     'src/lib/recoveryCodeFormat.ts',
     {
       floor: 95,

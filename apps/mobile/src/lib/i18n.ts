@@ -58,6 +58,11 @@ const en = {
   loading: 'Loading…',
   retry: 'Try again',
   offline: 'This page could not be loaded.',
+  pushChannel: 'Messages',
+  pushAskTitle: 'Get notified about new messages?',
+  pushAskBody: 'We only notify you when someone writes to you — even when the app is closed. You can change this any time in Account settings or in your phone’s settings.',
+  pushAskLater: 'Not now',
+  pushAskContinue: 'Continue',
 };
 
 export type Strings = typeof en;
@@ -115,6 +120,11 @@ const tr: Strings = {
   loading: 'Yükleniyor…',
   retry: 'Tekrar dene',
   offline: 'Bu sayfa yüklenemedi.',
+  pushChannel: 'Mesajlar',
+  pushAskTitle: 'Yeni mesajlarda bildirim alsın mı?',
+  pushAskBody: 'Yalnızca biri sana yazdığında bildirim gönderiyoruz — uygulama kapalıyken bile. Bunu istediğin zaman Hesap ayarlarından ya da telefonunun ayarlarından değiştirebilirsin.',
+  pushAskLater: 'Şimdi değil',
+  pushAskContinue: 'Devam',
 };
 
 const de: Strings = {
@@ -170,6 +180,11 @@ const de: Strings = {
   loading: 'Wird geladen…',
   retry: 'Erneut versuchen',
   offline: 'Diese Seite konnte nicht geladen werden.',
+  pushChannel: 'Nachrichten',
+  pushAskTitle: 'Bei neuen Nachrichten benachrichtigen?',
+  pushAskBody: 'Wir benachrichtigen Sie nur, wenn Ihnen jemand schreibt — auch wenn die App geschlossen ist. Sie können das jederzeit in den Kontoeinstellungen oder in den Einstellungen Ihres Telefons ändern.',
+  pushAskLater: 'Nicht jetzt',
+  pushAskContinue: 'Weiter',
 };
 
 const DICTS: Record<string, Strings> = { en, tr, de };
