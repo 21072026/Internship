@@ -10,6 +10,8 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
+import { DraftFromBrief, TranslationFillButton, MachineTranslatedChip } from '@/components/ai/TranslationFill';
+import { afterEdit } from '@/lib/machineTranslation';
 import { locales, type Locale } from '@/i18n/config';
 import {
   MAX_TEMPLATE_BODY,
@@ -39,6 +41,8 @@ export default function AdminMessageTemplatesPage() {
   const [draft, setDraft] = useState<Translations>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Translations>(emptyDraft);
+  const [draftMachine, setDraftMachine] = useState<Locale[]>([]);
+  const [editMachine, setEditMachine] = useState<Locale[]>([]);
   const [search, setSearch] = useState('');
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
@@ -72,11 +76,14 @@ export default function AdminMessageTemplatesPage() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!locales.some((l) => draft[l]?.trim())) return;
-    if (await call('POST', { translations: draft }, 'create')) setDraft(emptyDraft);
+    if (await call('POST', { translations: draft, machineTranslated: draftMachine }, 'create')) {
+      setDraft(emptyDraft);
+      setDraftMachine([]);
+    }
   };
 
   const save = async (id: string) => {
-    if (await call('PATCH', { id, translations: edit }, id)) setEditingId(null);
+    if (await call('PATCH', { id, translations: edit, machineTranslated: editMachine }, id)) setEditingId(null);
   };
 
   const confirmRemove = async () => {
@@ -90,9 +97,21 @@ export default function AdminMessageTemplatesPage() {
     // A row stored before it had translations only has `title`; seed the editor
     // with it under the default locale so saving does not drop the wording.
     setEdit(Object.keys(tpl.translations).length > 0 ? tpl.translations : { en: tpl.title });
+    setEditMachine(tpl.machineTranslated ?? []);
   };
 
-  const localeFields = (value: Translations, onChange: (next: Translations) => void, idPrefix: string) => (
+  const localeFields = (value: Translations, onChange: (next: Translations) => void, idPrefix: string, machine: Locale[], setMachine: (m: Locale[]) => void) => (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <DraftFromBrief value={value} purpose="message_template" onDrafted={(next, m) => { onChange(next); setMachine(m); }} testId={`${idPrefix}-draft`} />
+        <TranslationFillButton
+          value={value}
+          machine={machine}
+          purpose="message_template"
+          onFilled={(next, m) => { onChange(next); setMachine(m); }}
+          testId={`${idPrefix}-translate`}
+        />
+      </div>
     <div className="space-y-3">
       {locales.map((l) => (
         <label key={l} className="block">
@@ -104,11 +123,20 @@ export default function AdminMessageTemplatesPage() {
             maxLength={MAX_TEMPLATE_BODY}
             showCounter
             value={value[l] ?? ''}
-            onChange={(e) => onChange({ ...value, [l]: e.target.value })}
+            onChange={(e) => {
+            const next = { ...value, [l]: e.target.value };
+            // An edited machine locale is the admin's now (#2055).
+            setMachine(afterEdit(value, next, machine));
+            onChange(next);
+          }}
             data-testid={`${idPrefix}-${l}`}
           />
+          {machine.includes(l) && (
+            <MachineTranslatedChip onConfirm={() => setMachine(machine.filter((x) => x !== l))} testId={`${idPrefix}-${l}-machine`} />
+          )}
         </label>
       ))}
+    </div>
     </div>
   );
 
@@ -131,7 +159,7 @@ export default function AdminMessageTemplatesPage() {
           <CardDescription>{t.messageTemplateAdmin.newTemplateHint}</CardDescription>
         </CardHeader>
         <form onSubmit={create} className="space-y-3">
-          {localeFields(draft, setDraft, 'new-message-template')}
+          {localeFields(draft, setDraft, 'new-message-template', draftMachine, setDraftMachine)}
           <div className="flex justify-end">
             <Button type="submit" loading={busy === 'create'} data-testid="create-message-template">
               <Plus className="mr-1 h-4 w-4" /> {t.messageTemplateAdmin.add}
@@ -165,7 +193,7 @@ export default function AdminMessageTemplatesPage() {
               <li key={tpl.id} className="py-3" data-testid={`message-template-${tpl.id}`}>
                 {editingId === tpl.id ? (
                   <div className="space-y-3">
-                    {localeFields(edit, setEdit, `edit-message-template-${tpl.id}`)}
+                    {localeFields(edit, setEdit, `edit-message-template-${tpl.id}`, editMachine, setEditMachine)}
                     <div className="flex justify-end gap-2">
                       <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
                         <X className="mr-1 h-3.5 w-3.5" /> {t.common.cancel}

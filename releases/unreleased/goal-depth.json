@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Goals gain success criteria, a target date, progress and a sharing scope (#1858):** `Goal` has four additive columns — `successCriteria` (text), `targetDate` (distinct from `dueDate`, the deadline), `progress` (0–100, entered by hand until sub-tasks derive it) and `visibility` (`PAIR` default | `PROGRAM` | `PRIVATE`) — plus `createdById`, the author. The scope is authorization, not presentation: `src/lib/goalVisibilityRule.ts` is the one rule, and `GET /api/goals`, `PATCH`/`DELETE /api/goals/[id]` and the relation timeline all answer through it. A `PRIVATE` goal is absent from the other participant's and the admin's `GET`, and its id answers 404 on `PATCH`/`DELETE` — the same answer a goal of another tenant gets (#2542), so the id confirms nothing. Only the author may change the scope (403 `not_author` otherwise); a goal older than the column resolves its author from `createdByRole`. `PAIR` reads exactly as every goal did before, so nothing already written changes reach. `GoalsPanel` renders the criteria, the target date, a progress bar and a Private/Programme badge, with the new fields behind a \"More details\" disclosure on the add form and in the inline editor; `completedAt`, the archive and the archived-relation 409 are untouched. Account erasure also blanks `successCriteria`. Unit test `scripts/test/goal-visibility.test.mjs`; e2e `e2e/goal-depth.spec.ts` (the API boundary is `@smoke`).",
+  "notes": {
+    "en": [
+      "A goal can now say how you will know it is achieved, carry a target date next to its deadline, show a progress bar, and be shared with the pair, with the programme, or kept private to you — a private goal is invisible to everyone else, including administrators."
+    ],
+    "tr": [
+      "Bir hedef artık başarıldığını nereden anlayacağını söyleyebilir, bitiş tarihinin yanında bir hedef tarih taşıyabilir, ilerleme çubuğu gösterebilir ve mentor–mentee ikilisiyle, programla paylaşılabilir ya da yalnızca sana özel kalabilir — özel bir hedefi yöneticiler dahil kimse göremez."
+    ],
+    "de": [
+      "Ein Ziel kann jetzt festhalten, woran du erkennst, dass es erreicht ist, neben der Frist ein Zieldatum tragen, einen Fortschrittsbalken zeigen und mit dem Tandem, mit dem Programm geteilt oder nur für dich privat gehalten werden — ein privates Ziel sieht sonst niemand, auch keine Administratoren."
+    ]
+  }
+}

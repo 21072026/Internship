@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Provable opt-out (#2054):** every bulk path now leaves an `EmailLog` row for each intended recipient — the five that used to filter opted-out people out before `sendEmail()` (`sendWeeklyMentorDigests`, `sendDailyActivityDigests`, `checkCompanyNeedMatches`, the report-subscription job and `POST /api/admin/announcements`) write the same `SKIPPED` + `Unsubscribed: <group>` row the central check does, via the new `recordOptOuts()` (`src/services/emailService.ts`): from the preference row the job already holds, so no extra `User` read and no digest rendered for someone who will not get it; an announcement records all its opt-outs in one `createMany`. `sent` / `emailed` / `alerts` keep meaning \"actually sent\" — each job also returns `skipped`, and the announcement response carries it. Admin → Settings → Email health gains **Honoured opt-outs** (super-admin only, like the log): a per-group and per-category breakdown for 1/7/30/90 days and a lookup by address, backed by `GET /api/admin/email-log?suppressed=1&days=&to=`. Erasure still deletes these rows with the person (`forgetEmailLog`), as `docs/EMAIL_DELIVERABILITY.md` now records along with the decision itself.",
+  "notes": {
+    "en": [
+      "When someone unsubscribes, every bulk email they no longer receive is now on record — and admins can look up an address to show that the opt-out was respected."
+    ],
+    "tr": [
+      "Biri abonelikten çıktığında, artık almadığı her toplu e-posta kayda geçiyor — yöneticiler bir adresi arayıp tercihine uyulduğunu gösterebilir."
+    ],
+    "de": [
+      "Wenn sich jemand abmeldet, wird jede Sammel-E-Mail, die er nicht mehr bekommt, protokolliert — und Admins können eine Adresse nachschlagen und zeigen, dass die Abmeldung respektiert wurde."
+    ]
+  }
+}

@@ -342,6 +342,11 @@ export function CompanyDetailView({
                           {d.funnel.continues.replace('{name}', r.earlierMentors.join(', '))}
                         </p>
                       )}
+                      {r.wonBack && (
+                        <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300" data-testid={`company-detail-relation-won-back-${r.id}`}>
+                          {d.funnel.wonBack}
+                        </p>
+                      )}
                     </td>
                     <td className="py-2 pr-4" data-testid={`company-detail-relation-stage-${r.id}`}>
                       {stageLabel(stages, r.pipelineStatus, locale)}

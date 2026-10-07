@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Win a lost customer back** (#2842, decision #2572 Q4). `POST /api/mentorship/[id]/win-back` (owner or ADMIN) closes an open DEAL_LOST record as COMPLETED + the new lifecycle state `ENDED_CHURNED` and opens a new journey at TRIAL_ACTIVE (fresh trial window) or DEAL_WON, linked by `previousRelationId`, in one transaction that re-asks the one-active-mentor rule (#419). Rule `src/lib/winBackRule.ts` (unit-tested), store `src/lib/winBack.ts`, `WinBackPanel` on the sales lead page; the account page labels such a chain \"won back\" rather than \"continues an earlier deal\". e2e `e2e/win-back.spec.ts`.",
+  "notes": {
+    "en": ["A lost customer who comes back starts a new journey with one click — a new trial or signed straight away — and the return counts as a new win."],
+    "tr": ["Geri dönen kayıp bir müşteri tek tıkla yeni bir yolculuğa başlar — yeni deneme ya da doğrudan imza — ve dönüş yeni bir kazanım sayılır."],
+    "de": ["Ein verlorener Kunde, der zurückkommt, startet mit einem Klick eine neue Customer Journey — neue Testphase oder direkt unterschrieben — und die Rückkehr zählt als neuer Gewinn."]
+  }
+}

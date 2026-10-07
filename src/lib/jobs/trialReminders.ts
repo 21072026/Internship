@@ -15,6 +15,7 @@ import type { VerticalKey } from '@/lib/verticals';
 import { TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 import { findDueTrialReminders, type DueTrialReminderRow } from '@/lib/trialReminders';
 import { sendTrialReminderEmail } from '@/services/emailService';
+import { ringContractEnds } from '@/lib/contractEnd';
 
 // The `trial-reminders` job (#2415, #2410, #2417 — story #2392).
 //
@@ -126,6 +127,8 @@ export const TRIAL_EXPIRY_MAX_PER_RUN = 500;
 // backlog. The same entry in the backfill script's header says so.
 
 export interface TrialRemindersResult {
+  /** End-day bells rung for won customers whose notice period ends (#2841). */
+  contractEnds: number;
   /** Due (record, threshold) pairs found across every tenant in scope. */
   considered: number;
   /** Pairs claimed and dispatched on at least one channel. */
@@ -535,7 +538,19 @@ export async function runTrialReminders(
     }
   }
 
-  return { considered: due.length, sent, skipped, failed, expired, orgs: inScope.length };
+  // A won customer's contract ends today (#2841): one bell to the owner. Same
+  // MARKETING tenants, same daily tick; never a stage move.
+  let contractEnds = 0;
+  for (const orgId of inScope) {
+    try {
+      contractEnds += await runWithOrg(orgId, () => ringContractEnds(orgId, now));
+    } catch (error) {
+      failed += 1;
+      logger.error('Contract end bells failed for one organisation', { orgId, error: String(error) });
+    }
+  }
+
+  return { considered: due.length, sent, skipped, failed, expired, contractEnds, orgs: inScope.length };
 }
 
 const tasks = new Map<string, ReturnType<typeof cron.schedule>>();

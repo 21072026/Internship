@@ -8,6 +8,7 @@ import { currentPeriod, periodRange } from '@/lib/meteringRules';
 import { callProvider, isAiConfigured, trackAiCall, usageOfFailure, type AiCallUsage } from '@/lib/ai/provider';
 import type { AiTaskId } from '@/lib/ai/tasks';
 import { estimateCostMicros } from '@/lib/ai/pricing';
+import { flagsColumn } from '@/lib/ai/injection';
 import type { ConsentType } from '@prisma/client';
 import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts';
 
@@ -153,6 +154,7 @@ export async function runAiGated<T>(opts: {
           outputTokens: usage && usage.completed > 0 ? usage.outputTokens : null,
           costMicros: usage && usage.completed > 0 ? estimateCostMicros(usage.model, usage.inputTokens, usage.outputTokens) : null,
           latencyMs: usage && usage.completed > 0 ? usage.latencyMs : null,
+          flags: flagsColumn(usage?.flags ?? []),
         },
       })
       .catch(() => {}); // metering must never break the call

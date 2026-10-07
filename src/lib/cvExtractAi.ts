@@ -14,6 +14,7 @@
 import { capSkills } from '@/lib/skills';
 import { z } from 'zod';
 import { callModel, isAiConfigured as providerConfigured, safeParseModelJson } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 
 // The reply's shape, loosely: every field optional, so a partial answer still
 // yields what it has.
@@ -71,7 +72,7 @@ const SYSTEM = `You extract structured profile fields from a CV/résumé. Return
  * already verified consent and isAiConfigured(). Throws on API failure.
  */
 export async function aiExtractFromText(text: string): Promise<AiCvSuggestions> {
-  const reply = await callModel({ task: 'cv_extract', system: SYSTEM, input: `CV text:\n\n${text}`, jsonSchema: SCHEMA });
+  const reply = await callModel({ task: 'cv_extract', system: SYSTEM, input: `The CV to extract from:\n\n${wrapUntrusted('cv', text)}`, jsonSchema: SCHEMA });
   // A reply that is not the JSON asked for falls back to "no suggestions" and
   // is recorded as parse_error (#2024) — never a thrown 500.
   const parsed: Partial<AiCvSuggestions> = safeParseModelJson(reply, CV_REPLY, {});

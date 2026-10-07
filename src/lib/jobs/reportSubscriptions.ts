@@ -35,7 +35,7 @@ import { renderReport, reportSheet, toCsv } from '@/lib/reports/render';
 import { isCadence, isDue, periodKey, type Cadence } from '@/lib/reportSubscriptions';
 import { reportUnsubscribeUrl } from '@/lib/reportSubscriptionTokens';
 import { suppressionHash } from '@/lib/postCampaign';
-import { emailBrand, sendEmail } from '@/services/emailService';
+import { emailBrand, recordOptOut, sendEmail } from '@/services/emailService';
 
 export type SendOutcome = 'SENT' | 'SKIPPED' | 'FAILED' | 'DUPLICATE';
 
@@ -96,7 +96,11 @@ export async function sendReportSubscription(
       });
       if (!user || !user.isActive) return await finish('SKIPPED', 'recipient_inactive');
       // People who already opted out of the analytics report stay opted out.
-      if (!emailGroupAllowedForCategory(user, 'analytics-report')) return await finish('SKIPPED', 'opted_out');
+      if (!emailGroupAllowedForCategory(user, 'analytics-report')) {
+        // On the delivery log AND in EmailLog, like every honoured opt-out (#2054).
+        await recordOptOut(user.email, 'analytics-report', `Scheduled report ${sub.reportKey} (not sent: opted out)`);
+        return await finish('SKIPPED', 'opted_out');
+      }
       to = user.email;
       name = user.fullName;
     } else if (sub.recipientEmail) {
