@@ -10,6 +10,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { Button } from '@/components/ui/Button';
 import { Plus, Trash2 } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { EnrichPanel } from '@/components/ai/EnrichPanel';
 import type { ClientDictionary } from '@/i18n/dictionaries';
 
 // Optional free-text field. Prisma returns `null` for empty nullable columns,
@@ -93,6 +94,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
@@ -171,6 +173,19 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
         placeholder={t.companyForm.addressPlaceholder}
         {...register('address')}
         error={errors.address?.message}
+      />
+
+      {/* Paste-in enrichment (#2055): proposals only — no website is fetched. */}
+      <EnrichPanel
+        endpoint="/api/admin/ai/company-enrich"
+        testId="company-enrich"
+        fields={[
+          { key: 'description', label: t.enrich.fields.description },
+          { key: 'industry', label: t.enrich.fields.industry },
+        ]}
+        onAccept={(key, value) => {
+          if (key === 'description' || key === 'industry') setValue(key, String(value), { shouldDirty: true });
+        }}
       />
 
       <div>

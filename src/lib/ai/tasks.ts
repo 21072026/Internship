@@ -106,6 +106,14 @@ export const AI_TASKS = {
   // (#2055). Operator-side: an admin authoring announcements and templates.
   // No personal data is the point of the text, so no consent type.
   content_translate: { label: 'Content translation', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 2000 },
+  // Authoring assist and paste-in enrichment (#2055, part 2) — proposals only,
+  // nothing saved or sent. A draft from an admin's brief and a company record
+  // from pasted text are operator-side; a mentor improving their OWN profile
+  // from their own pasted summary is participant-side and free, under the
+  // same consent as CV processing (it is the same kind of personal text).
+  content_draft: { label: 'Content draft from a brief', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1500 },
+  profile_enrich: { label: 'Mentor profile suggestions', audience: 'participant', consent: 'AI_CV_PARSING', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 800 },
+  company_enrich: { label: 'Company profile suggestions', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 600 },
 } as const satisfies Record<string, AiTaskSpec>;
 
 export type AiTaskId = keyof typeof AI_TASKS;

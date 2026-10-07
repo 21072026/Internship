@@ -12,7 +12,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT, useLocale } from '@/i18n/client';
-import { TranslationFillButton, MachineTranslatedChip } from '@/components/ai/TranslationFill';
+import { DraftFromBrief, TranslationFillButton, MachineTranslatedChip } from '@/components/ai/TranslationFill';
 import { afterEdit } from '@/lib/machineTranslation';
 import {
   ANNOUNCEMENT_IMAGE_ACCEPT,
@@ -310,6 +310,7 @@ export default function AdminAnnouncementsPage() {
               <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                 <label className="block text-sm font-medium text-gray-700">{t.announcements.message}</label>
                 <span className="flex flex-wrap items-center gap-2">
+                  <DraftFromBrief value={bodies} purpose="announcement" onDrafted={(next, m) => { setBodies(next); setMachine(m); }} testId="announcement-draft" />
                   <TranslationFillButton value={bodies} machine={machine} purpose="announcement" onFilled={(next, m) => { setBodies(next); setMachine(m); }} testId="announcement-translate" />
                   {languageTabs(bodies, tab, setTab, 'announcement')}
                 </span>

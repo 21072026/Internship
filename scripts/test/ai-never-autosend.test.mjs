@@ -29,6 +29,13 @@ const DRAFTERS = [
   'src/app/api/ai/bulk-draft/route.ts',
   'src/app/api/conversations/[id]/suggest-reply/route.ts',
   'src/app/api/conversations/[id]/summary/route.ts',
+  // Translation and authoring assist, enrichment (#2055): drafts and proposals only.
+  'src/lib/ai/translate.ts',
+  'src/lib/ai/authoringAssist.ts',
+  'src/app/api/admin/ai/translate/route.ts',
+  'src/app/api/admin/ai/draft/route.ts',
+  'src/app/api/admin/ai/company-enrich/route.ts',
+  'src/app/api/profile/enrich/route.ts',
 ];
 const SENDS = /\b(sendEmail|sendNewMessagePush|notifyIfAllowed|notify)\s*\(|\bmessage\.create\b|\binteractionLog\.create\b|\bpublishRealtime\b/;
 

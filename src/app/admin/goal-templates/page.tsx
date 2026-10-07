@@ -9,7 +9,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
-import { TranslationFillButton, MachineTranslatedChip } from '@/components/ai/TranslationFill';
+import { DraftFromBrief, TranslationFillButton, MachineTranslatedChip } from '@/components/ai/TranslationFill';
 import { afterEdit } from '@/lib/machineTranslation';
 import { locales, type Locale } from '@/i18n/config';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
@@ -106,7 +106,8 @@ export default function AdminGoalTemplatesPage() {
 
   const localeInputs = (value: Translations, onChange: (next: Translations) => void, idPrefix: string, machine: Locale[], setMachine: (m: Locale[]) => void) => (
     <div className="space-y-2">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <DraftFromBrief value={value} purpose="goal_template" onDrafted={(next, m) => { onChange(next); setMachine(m); }} testId={`${idPrefix}-draft`} />
         <TranslationFillButton
           value={value}
           machine={machine}
