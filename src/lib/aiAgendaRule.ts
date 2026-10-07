@@ -71,12 +71,17 @@ export function agendaHasContext(input: Pick<AgendaPayloadInput, 'guide' | 'goal
   return input.guide !== null || agendaGoalsFor(input.goals, input.rel, input.viewer).length > 0 || input.previousLines.length > 0 || input.log.length > 0;
 }
 
+/** How a block of person-written text is fenced before it leaves (#2026). */
+export type AgendaFence = (label: string, text: string) => string;
+
 /**
  * The user message of the call. Every block of person-written text is fenced
- * as untrusted data (#2026); the library text and the stage label are ours.
+ * as untrusted data (#2026) through `fence` — the module that calls the model
+ * passes `wrapUntrusted` itself, so the one-fence-per-call rule reads it
+ * there; the unit test passes a fixed-nonce fence to make the assertions
+ * exact. The library text and the stage label are ours and go out bare.
  */
-export function buildAgendaPayload(input: AgendaPayloadInput, nonce?: string): string {
-  const fence = (label: string, text: string) => (nonce ? wrapUntrusted(label, text, nonce) : wrapUntrusted(label, text));
+export function buildAgendaPayload(input: AgendaPayloadInput, fence: AgendaFence = (label, text) => wrapUntrusted(label, text)): string {
   const goals = agendaGoalsFor(input.goals, input.rel, input.viewer);
   const parts: string[] = [`locale: ${input.locale}`, `stage: ${input.stageLabel}`];
   if (input.guide) {

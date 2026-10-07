@@ -19,6 +19,9 @@ const {
   normalizeAgendaProposal,
   templateFallback,
 } = await import('../../src/lib/aiAgendaRule.ts');
+const { wrapUntrusted } = await import('../../src/lib/ai/untrusted.ts');
+// A fixed nonce keeps the fence assertions exact; the module that calls the model passes the real one.
+const fenced = (label, text) => wrapUntrusted(label, text, '0123456789abcdef');
 
 const rel = { mentorId: 'mentor-1', menteeId: 'mentee-1', mentorEmail: 'mentor@example.com', menteeName: 'Ada Lovelace' };
 const mentor = { id: 'mentor-1', role: 'MENTOR' };
@@ -53,16 +56,16 @@ test('the goal visibility rule decides which goals leave: a seat never sends the
   assert.deepEqual(agendaGoalsFor(goals, rel, mentee).map((g) => g.title), ['Ship the portfolio site', 'Secret plan of the mentee']);
   // An admin reads the pair's goals, never anyone's private ones.
   assert.deepEqual(agendaGoalsFor(goals, rel, admin).map((g) => g.title), ['Ship the portfolio site']);
-  const forMentor = buildAgendaPayload(base, '0123456789abcdef');
+  const forMentor = buildAgendaPayload(base, fenced);
   assert.ok(forMentor.includes('Private note of the mentor'));
   assert.ok(!forMentor.includes('Secret plan of the mentee'));
-  const forMentee = buildAgendaPayload({ ...base, viewer: mentee }, '0123456789abcdef');
+  const forMentee = buildAgendaPayload({ ...base, viewer: mentee }, fenced);
   assert.ok(forMentee.includes('Secret plan of the mentee'));
   assert.ok(!forMentee.includes('Private note of the mentor'));
 });
 
 test('only text derived from the guide, the goals, the previous session, the log and the stage goes out — fenced', () => {
-  const out = buildAgendaPayload(base, '0123456789abcdef');
+  const out = buildAgendaPayload(base, fenced);
   for (const expected of [
     'locale: en',
     'stage: Internship in progress',
@@ -93,7 +96,7 @@ test('only text derived from the guide, the goals, the previous session, the log
 
 test('the log window is bounded and a free-form agenda says so', () => {
   const many = Array.from({ length: AGENDA_LOG_ENTRIES + 3 }, (_, i) => ({ date: new Date(2026, 0, 20 - i), type: 'Meeting', subject: `Entry ${i}`, notes: `notes ${i}` }));
-  const out = buildAgendaPayload({ ...base, guide: null, log: many }, 'n');
+  const out = buildAgendaPayload({ ...base, guide: null, log: many });
   assert.ok(out.includes('guide: none (free-form agenda)'));
   assert.ok(out.includes(`Entry ${AGENDA_LOG_ENTRIES - 1}`));
   assert.ok(!out.includes(`Entry ${AGENDA_LOG_ENTRIES}`), 'older entries are cut');

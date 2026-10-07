@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import { callModel, safeParseModelJson } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 import {
   AGENDA_PROPOSAL_LINE_MAX,
   AGENDA_PROPOSAL_MAX,
@@ -34,7 +35,8 @@ export async function aiProposeAgenda(input: AgendaPayloadInput): Promise<string
   const reply = await callModel({
     task: 'agenda_personalize',
     system: SYSTEM,
-    input: buildAgendaPayload(input),
+    // Every person-written block is fenced here, where the model is called (#2026).
+    input: buildAgendaPayload(input, (label, text) => wrapUntrusted(label, text)),
     jsonSchema: {
       type: 'object',
       additionalProperties: false,
