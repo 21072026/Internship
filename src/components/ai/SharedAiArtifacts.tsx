@@ -7,6 +7,8 @@ import { AiBadge } from '@/components/AiBadge';
 import { AiText } from '@/components/ai/AiText';
 import { CvReviewView } from '@/components/ai/CvReviewView';
 import { readStoredFeedback } from '@/lib/cvReviewRules';
+import { PracticeReportView } from '@/components/ai/PracticeReportView';
+import { readReport } from '@/lib/practiceInterviewRules';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT } from '@/i18n/client';
 
@@ -52,8 +54,11 @@ export function SharedAiArtifacts({ subjectUserId }: { subjectUserId: string }) 
             {(() => {
               // A scored CV review (#2050) is JSON: shown as the review, not as its source.
               const stored = x.taskId === 'cv_feedback' ? readStoredFeedback(x.content) : null;
-              return stored?.kind === 'review'
-                ? <CvReviewView review={stored.review} />
+              if (stored?.kind === 'review') return <CvReviewView review={stored.review} />;
+              // A shared practice-interview report (#2051) is JSON too.
+              const practice = x.taskId === 'practice_interview' ? readReport(x.content) : null;
+              return practice
+                ? <PracticeReportView report={practice} />
                 : <AiText text={x.content} className="text-sm text-gray-800 dark:text-gray-200" />;
             })()}
           </details>

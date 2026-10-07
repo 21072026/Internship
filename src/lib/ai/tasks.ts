@@ -118,6 +118,11 @@ export const AI_TASKS = {
   // operator-side, read from the mentee's interaction log — so the same
   // consent as the summary of that log — and a proposal only, never saved.
   next_step_suggest: { label: 'Next-step suggestions', audience: 'operator', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 400 },
+  // The text-only practice interview and its after-action report (#2051):
+  // participant-side and free, its own id so its cost is visible on /admin/ai
+  // and it can be switched off alone. No identifier is needed in the payload;
+  // the typed answers are fenced and contact-masked like every other text.
+  practice_interview: { label: 'Practice interview', audience: 'participant', consent: null, tier: 'balanced', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 1500 },
 } as const satisfies Record<string, AiTaskSpec>;
 
 export type AiTaskId = keyof typeof AI_TASKS;

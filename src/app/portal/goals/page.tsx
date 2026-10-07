@@ -8,6 +8,7 @@ import { AgendaPanel } from '@/components/AgendaPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
+import { PracticeInterview } from '@/components/PracticeInterview';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Target } from 'lucide-react';
@@ -77,6 +78,8 @@ export default async function PortalGoalsPage() {
 
       {/* Works without a relation, as on the dashboard — always shown. */}
       <InterviewPrep defaultPosition={user?.targetPosition} />
+      {/* Rehearse it, text only, with a private after-action report (#2051). */}
+      <PracticeInterview />
     </div>
   );
 }

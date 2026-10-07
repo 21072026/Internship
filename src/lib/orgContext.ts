@@ -112,6 +112,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ApiKey',
   // Per-key request counts (#2010) — the key's tenant owns its usage.
   'ApiKeyUsage',
+  // A mentee's practice interview transcript (#2051).
+  'PracticeSession',
   'MatchFeedback',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
