@@ -66,6 +66,8 @@ export const SALES_ATTENTION_REASONS = [
   'trial_inactive',
   // A won customer's notice period (#2841).
   'cancellation_pending',
+  // An expired trial's decision window closing (#2843).
+  'decision_window_closing',
 ] as const satisfies readonly AttentionReason[];
 
 /** The rep's own record page on the sales surface. */

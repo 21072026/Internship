@@ -31,6 +31,8 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   trial_inactive: 'warning',
   // Red: a paying customer is on their way out (#2841).
   cancellation_pending: 'danger',
+  // Amber: still a conversation to have, with a date on it (#2843).
+  decision_window_closing: 'warning',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
@@ -73,6 +75,7 @@ export function MentorAttentionQueue({
     usage_drop: labels.usageDrop,
     trial_inactive: labels.trialInactive,
     cancellation_pending: labels.cancellationPending,
+    decision_window_closing: labels.decisionWindowClosing,
   };
 
   return (
@@ -103,7 +106,9 @@ export function MentorAttentionQueue({
                 <Badge key={r} variant={REASON_VARIANT[r]} className="text-xs">
                   {r === 'cancellation_pending' && item.contractEndsAt
                     ? reasonLabel[r].replace('{date}', formatDate(item.contractEndsAt, locale, { timeZone: 'UTC' }))
-                    : reasonLabel[r]}
+                    : r === 'decision_window_closing' && item.decisionWindowEndsAt
+                      ? reasonLabel[r].replace('{date}', formatDate(item.decisionWindowEndsAt, locale, { timeZone: 'UTC' }))
+                      : reasonLabel[r]}
                 </Badge>
               ))}
             </div>

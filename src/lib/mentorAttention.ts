@@ -7,12 +7,12 @@ import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { scoreRelation } from '@/lib/relationHealth';
 import { menteesWithOpenTodo } from '@/lib/openWork';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
-import { isTrialMissingEndDate } from '@/lib/trialReminderRule';
+import { decisionWindowEndsAt, isDecisionWindowClosing, isTrialMissingEndDate } from '@/lib/trialReminderRule';
 import { isNextActionOverdue } from '@/lib/nextActionRule';
 import { usageSignalsFor, type UsageNote } from '@/lib/usageSignals';
 import { isCancellationPending } from '@/lib/contractEndRule';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due' | 'usage_drop' | 'trial_inactive' | 'cancellation_pending';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports' | 'trial_expired' | 'trial_no_end_date' | 'next_action_due' | 'evaluation_due' | 'usage_drop' | 'trial_inactive' | 'cancellation_pending' | 'decision_window_closing';
 
 // The relationship-health flags this queue shows (#1898) — every one the
 // table raises except `stage_stalled`, which belongs to the admin monitor.
@@ -26,6 +26,8 @@ export interface AttentionItem {
   daysSinceLastInteraction: number | null;
   /** The day a won customer's contract ends, when they gave notice (#2841). */
   contractEndsAt?: Date | null;
+  /** The day an expired trial's decision window closes (#2843). */
+  decisionWindowEndsAt?: Date | null;
 }
 
 export interface AttentionQueue {
@@ -199,6 +201,9 @@ export async function getAttentionItems(
     // period, so the owner has every day of it to win them back. Leaves when
     // the date is cleared (notice withdrawn) or the owner moves the record.
     if (isCancellationPending(r)) reasons.push('cancellation_pending');
+    // An expired trial a week from the end of its decision window (#2843).
+    const nowDate = new Date(now);
+    if (isDecisionWindowClosing(r, nowDate)) reasons.push('decision_window_closing');
     const kept = options.reasons ? reasons.filter((reason) => options.reasons!.includes(reason)) : reasons;
     if (kept.length > 0) {
       items.push({
@@ -208,6 +213,7 @@ export async function getAttentionItems(
         reasons: kept,
         daysSinceLastInteraction: daysSince,
         contractEndsAt: r.contractEndsAt,
+        decisionWindowEndsAt: decisionWindowEndsAt(r.trialEndsAt),
       });
     }
   }

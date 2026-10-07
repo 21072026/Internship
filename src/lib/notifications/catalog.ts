@@ -112,6 +112,8 @@ export const NOTIFICATION_EVENTS = [
   // A won customer's contract ends today (#2841): one bell to the owner, in-app only — the
   // attention queue already carries the notice period every day before it.
   { key: 'contract.endsToday', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['company'] },
+  // An expired trial's decision window closes in a week (#2843): one bell, in-app.
+  { key: 'trial.decisionWindowClosing', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['company', 'date'] },
   { key: 'weekly_report_reminder.due', category: 'weeklyReports', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'dashboard', params: [] },
   { key: 'missing_document.self', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'dashboard', params: ['requirement'] },
   { key: 'missing_document.mentor', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'relation', params: ['mentee', 'requirement'] },

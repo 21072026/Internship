@@ -388,3 +388,43 @@ export function planTrialEndChange({
     reopen: pipelineStatus === TRIAL_EXPIRED_STAGE_KEY,
   };
 }
+
+// ── The decision window (#2843, decision #2572 Q2) ───────────────────────────
+//
+// `trialEndsAt` is the end of the FREE period. After it the record sits in
+// TRIAL_EXPIRED for the decision window, which closes DECISION_WINDOW_DAYS
+// later (SaleVali passivates the account then). Derived, never stored: one
+// constant, the same for a plain and an affiliate trial.
+
+/** Days between the end of the free period and the end of the decision window. */
+export const DECISION_WINDOW_DAYS = 30;
+
+/** How many days before the window closes its owner is warned. */
+export const DECISION_WINDOW_WARN_DAYS = 7;
+
+/**
+ * The `TrialReminder.threshold` that claims the "window closing" bell — a
+ * NEGATIVE number so it can never collide with the trial ladder (7/3/0): the
+ * days relative to the trial end at which it is due (30 − 7 = 23 days after).
+ */
+export const DECISION_WINDOW_CLAIM = -(DECISION_WINDOW_DAYS - DECISION_WINDOW_WARN_DAYS);
+
+/** The day the decision window closes, or null when there is no trial end. */
+export function decisionWindowEndsAt(trialEndsAt: TrialEndValue): Date | null {
+  const end = asDate(trialEndsAt);
+  return end ? new Date(end.getTime() + DECISION_WINDOW_DAYS * 24 * 60 * 60 * 1000) : null;
+}
+
+/**
+ * Is this expired trial's decision window about to close (or already closed,
+ * with nobody having decided)? Shown as `decision_window_closing`; also what
+ * makes the one bell due.
+ */
+export function isDecisionWindowClosing(
+  record: { pipelineStatus: string | null | undefined; trialEndsAt: TrialEndValue },
+  now: Date,
+): boolean {
+  if (record.pipelineStatus !== TRIAL_EXPIRED_STAGE_KEY) return false;
+  const closes = decisionWindowEndsAt(record.trialEndsAt);
+  return !!closes && daysUntilUtcDay(closes, now) <= DECISION_WINDOW_WARN_DAYS;
+}
