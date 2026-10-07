@@ -13,7 +13,7 @@ import {
 test('MARKETING gets the lost-deal list', () => {
   assert.deepEqual([...dropoffReasonCodesFor('MARKETING')], [
     'PRICE', 'MISSING_MARKETPLACE', 'MISSING_FEATURE', 'COMPETITOR', 'NO_RESPONSE',
-    'NOT_A_FIT', 'BUSINESS_CLOSED', 'TECHNICAL_ISSUE', 'OTHER',
+    'NOT_A_FIT', 'BUSINESS_CLOSED', 'TECHNICAL_ISSUE', 'CUSTOMER_CANCELLED', 'OTHER',
   ]);
 });
 

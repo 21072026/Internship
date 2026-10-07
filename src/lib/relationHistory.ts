@@ -65,6 +65,9 @@ export const CARRIED_OVER_FIELDS = [
   'cohortId',
   'trialStartedAt',
   'trialEndsAt',
+  // A won customer's notice period (#2841): a transfer during the notice must
+  // not silently drop the day the contract ends.
+  'contractEndsAt',
 ] as const;
 
 export type CarriedOverField = (typeof CARRIED_OVER_FIELDS)[number];

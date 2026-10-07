@@ -2765,6 +2765,16 @@ model MentorshipRelation {
   // contractual date, and moving the record to another stage would erase it.
   trialStartedAt          DateTime?
   trialEndsAt             DateTime?
+  // A won customer's notice period (#2841, decision #2572 option C): the day
+  // their contract ends after they gave notice. Same class of date as
+  // `trialEndsAt` — agreed, contractual, survives every stage change — so the
+  // same reasoning against `stageDeadline` applies. Set only on a DEAL_WON
+  // record (src/lib/contractEndRule.ts); cleared when the customer withdraws
+  // the notice. The record stays DEAL_WON until a human moves it to DEAL_LOST.
+  contractEndsAt          DateTime?
+  // When the end-day bell went out, so a re-run never rings twice. Cleared
+  // with the date.
+  contractEndRemindedAt   DateTime?
   // The owner's own "next step" on this record (#2563): a date and a short
   // line — "call Thursday about pricing". All three nullable and additive, so
   // `db push` adds them over a populated table and an untouched row means what

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
+import { ContractEndPanel } from '@/components/ContractEndPanel';
 import { DealValuePanel, type DealValueState } from '@/components/DealValuePanel';
 
 // The editors a sales rep has on their own record (#2580): the follow-up
@@ -18,6 +19,7 @@ export function SalesRecordPanels({
   nextActionNote,
   trialStartedAt,
   trialEndsAt,
+  contractEndsAt,
   dealValue,
 }: {
   relationId: string;
@@ -27,6 +29,7 @@ export function SalesRecordPanels({
   nextActionNote: string | null;
   trialStartedAt: string | null;
   trialEndsAt: string | null;
+  contractEndsAt: string | null;
   dealValue: DealValueState;
 }) {
   const router = useRouter();
@@ -48,6 +51,16 @@ export function SalesRecordPanels({
           pipelineStatus={pipelineStatus}
           trialStartedAt={trialStartedAt}
           trialEndsAt={trialEndsAt}
+          canEdit={status === 'ACTIVE'}
+          onSaved={refresh}
+        />
+      </div>
+      {/* A won customer's notice period (#2841); renders on DEAL_WON only. */}
+      <div className="mb-6 empty:hidden">
+        <ContractEndPanel
+          relationId={relationId}
+          pipelineStatus={pipelineStatus}
+          contractEndsAt={contractEndsAt}
           canEdit={status === 'ACTIVE'}
           onSaved={refresh}
         />

@@ -128,6 +128,7 @@ export async function transferMentorship(opts: {
       stageDeadline: true,
       trialStartedAt: true,
       trialEndsAt: true,
+      contractEndsAt: true,
       mentor: {
         select: {
           id: true,
