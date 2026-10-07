@@ -21,6 +21,7 @@
 // Opening the page is a read of the customer record either way, so both write
 // the same `company.view` ActivityLog entry as GET /api/companies/[id] (#2433).
 
+import { usageSeries } from '@/lib/usageRule';
 import type { Session } from 'next-auth';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -29,6 +30,9 @@ import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { logViewActivity } from '@/lib/activity';
 import { CONTACT_SELECT } from '@/lib/companyContacts';
 import type { HeaderSource } from '@/lib/clientIp';
+
+/** Days of product usage the account page charts (#2448). */
+const USAGE_DAYS = 90;
 
 /** How many funnel records and interactions the page lists. An account holds a
  *  handful of each; the bound only keeps a pathological one from rendering
@@ -176,6 +180,17 @@ export async function loadCompanyDetail({
       },
     });
 
+    // Product usage, last 90 days (#2448): read from the (companyId, date)
+    // unique index. Rows only — a day without a row stays "no data" in
+    // usageSeries(), never a zero.
+    const usageFrom = new Date(Date.now() - USAGE_DAYS * 24 * 60 * 60 * 1000);
+    const usageRows = await prisma.companyUsage.findMany({
+      where: { companyId: company.id, date: { gte: usageFrom } },
+      select: { date: true, transactions: true },
+      orderBy: { date: 'asc' },
+    });
+    const usage = usageSeries(usageRows, new Date(), USAGE_DAYS);
+
     await logViewActivity({
       action: 'company.view',
       reader: session.user,
@@ -184,7 +199,7 @@ export async function loadCompanyDetail({
       request: { headers },
     });
 
-    return { company: { ...company, mentorships: relations }, interactions };
+    return { company: { ...company, mentorships: relations }, interactions, usage };
   });
 }
 

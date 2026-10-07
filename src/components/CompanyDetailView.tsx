@@ -19,6 +19,7 @@ import { channelLabel } from '@/lib/salesChannels';
 import { PRIMARY_CONTACT_ID, hasPrimary, primaryAsContact } from '@/lib/companyContactsRule';
 import { ownerObjected } from '@/lib/contactPermissionRule';
 import { CONTACT_CHANNELS, marketingEmailAllowed } from '@/lib/contactPermissionRule';
+import { UsageSparkline } from '@/components/UsageSparkline';
 
 // The account detail screen (#2560), rendered by the ADMIN page and — without
 // any of its editors — by the sales rep's own view (/sales/accounts/[id], #2580).
@@ -293,6 +294,18 @@ export function CompanyDetailView({
           />
         )}
       </Card>
+
+      {/* Product usage (#2448) — only once the feed has delivered something
+          for this account in the window; the attention queue's footnote is
+          what says a feed is missing altogether. */}
+      {data.usage.some((pt) => pt.value !== null) && (
+        <Card className="mb-6" data-testid="company-usage-card">
+          <CardHeader>
+            <CardTitle>{d.usage.title}</CardTitle>
+          </CardHeader>
+          <UsageSparkline series={data.usage} labels={d.usage} />
+        </Card>
+      )}
 
       <Card className="mb-6">
         <CardHeader>

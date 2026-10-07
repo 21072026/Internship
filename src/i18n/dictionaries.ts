@@ -694,6 +694,16 @@ const en = {
   // The account detail page /admin/companies/[id] (#2560). Server-rendered,
   // ADMIN-only; the MARKETING overlay renames the mentorship words.
   companyDetail: {
+    usage: {
+      title: 'Product usage (last 90 days)',
+      aria: 'Daily product usage, last 90 days.',
+      summary: '{days} of {of} days with data · {total} transactions · last 30 days: {last} (30 days before: {prev})',
+      bar: '{day}: {value}',
+      barNoData: '{day}: no data',
+      legendValue: 'Transactions',
+      legendZero: 'Zero (no activity)',
+      legendNoData: 'No data received',
+    },
     // #2442 — the account's address book.
     channels: {
       title: 'Sales channels',
@@ -1792,6 +1802,11 @@ const en = {
       trialExpired: 'Trial expired — decide',
       // #2553: a running trial with no end date is reminded about by nothing.
       trialNoEndDate: 'Trial end date missing — enter it',
+      usageDrop: 'Usage dropped',
+      trialInactive: 'Trial not used yet',
+      usageNoHistory: '{n} account(s) left out of the usage check: not enough history yet.',
+      usageUnowned: '{n} account(s) with dropping usage have no active owner.',
+      usageNoFeed: 'Usage signals are off: no product usage has been received yet.',
       // #2563: the follow-up date the owner wrote on the record has passed.
       nextActionDue: 'Follow-up overdue',
       // #1891: an INTERIM/FINAL evaluation past its due date and not written.
@@ -7771,6 +7786,16 @@ const tr: Dict = {
     dismiss: 'Kapat',
   },
   companyDetail: {
+    usage: {
+      title: 'Ürün kullanımı (son 90 gün)',
+      aria: 'Günlük ürün kullanımı, son 90 gün.',
+      summary: '{of} günün {days} gününde veri var · {total} işlem · son 30 gün: {last} (önceki 30 gün: {prev})',
+      bar: '{day}: {value}',
+      barNoData: '{day}: veri yok',
+      legendValue: 'İşlem',
+      legendZero: 'Sıfır (hareket yok)',
+      legendNoData: 'Veri gelmedi',
+    },
     // #2442 — hesabın adres defteri.
     channels: {
       title: 'Satış kanalları',
@@ -8828,6 +8853,11 @@ const tr: Dict = {
       noOpenGoal: 'Açık hedef veya yapılacak yok',
       trialExpired: 'Deneme süresi doldu — karar verin',
       trialNoEndDate: 'Deneme bitiş tarihi eksik — tarihi girin',
+      usageDrop: 'Kullanım düştü',
+      trialInactive: 'Deneme henüz kullanılmadı',
+      usageNoHistory: '{n} hesap kullanım kontrolünün dışında: henüz yeterli geçmiş yok.',
+      usageUnowned: 'Kullanımı düşen {n} hesabın aktif sahibi yok.',
+      usageNoFeed: 'Kullanım sinyalleri kapalı: henüz ürün kullanım verisi gelmedi.',
       nextActionDue: 'Takip tarihi geçti',
       // #1891: an INTERIM/FINAL evaluation past its due date and not written.
       evaluationDue: 'Değerlendirme zamanı — yaz',
@@ -14684,6 +14714,16 @@ const de: Dict = {
     dismiss: 'Schließen',
   },
   companyDetail: {
+    usage: {
+      title: 'Produktnutzung (letzte 90 Tage)',
+      aria: 'Tägliche Produktnutzung, letzte 90 Tage.',
+      summary: '{days} von {of} Tagen mit Daten · {total} Transaktionen · letzte 30 Tage: {last} (30 Tage davor: {prev})',
+      bar: '{day}: {value}',
+      barNoData: '{day}: keine Daten',
+      legendValue: 'Transaktionen',
+      legendZero: 'Null (keine Aktivität)',
+      legendNoData: 'Keine Daten empfangen',
+    },
     // #2442 — das Adressbuch des Kontos.
     channels: {
       title: 'Vertriebskanäle',
@@ -15742,6 +15782,11 @@ const de: Dict = {
       noOpenGoal: 'Kein offenes Ziel oder Aufgabe',
       trialExpired: 'Testphase abgelaufen — entscheiden',
       trialNoEndDate: 'Enddatum der Testphase fehlt — bitte eintragen',
+      usageDrop: 'Nutzung gesunken',
+      trialInactive: 'Testphase noch ungenutzt',
+      usageNoHistory: '{n} Account(s) nicht in der Nutzungsprüfung: noch zu wenig Verlauf.',
+      usageUnowned: '{n} Account(s) mit sinkender Nutzung haben keinen aktiven Zuständigen.',
+      usageNoFeed: 'Nutzungssignale aus: noch keine Produktnutzung empfangen.',
       nextActionDue: 'Wiedervorlage überfällig',
       // #1891: an INTERIM/FINAL evaluation past its due date and not written.
       evaluationDue: 'Bewertung fällig — schreiben',
