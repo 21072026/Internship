@@ -951,6 +951,7 @@ const en = {
       email: 'Provable e-mail permission',
       emailHint: 'Only an account whose badge shows is permitted for its current contact e-mail.',
     },
+    ownerFilter: { label: 'Owner', all: 'All owners', me: 'My accounts' },
     permissionBadge: 'E-mail permission',
     deleteDialog: {
       title: 'Delete company',
@@ -7995,6 +7996,7 @@ const tr: Dict = {
       email: 'Kanıtlanabilir e-posta izni',
       emailHint: 'Yalnızca rozeti görünen hesap, güncel iletişim e-postası için izinlidir.',
     },
+    ownerFilter: { label: 'Sahip', all: 'Tüm sahipler', me: 'Benim hesaplarım' },
     permissionBadge: 'E-posta izni',
     deleteDialog: {
       title: 'Şirketi sil',
@@ -14883,6 +14885,7 @@ const de: Dict = {
       email: 'Nachweisbare E-Mail-Erlaubnis',
       emailHint: 'Nur ein Account mit Abzeichen ist für seine aktuelle Kontakt-E-Mail erlaubt.',
     },
+    ownerFilter: { label: 'Zuständig', all: 'Alle Zuständigen', me: 'Meine Accounts' },
     permissionBadge: 'E-Mail-Erlaubnis',
     deleteDialog: {
       title: 'Unternehmen löschen',

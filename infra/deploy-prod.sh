@@ -726,6 +726,11 @@ run_tool node prisma/check-active-mentor-duplicates.mjs || true
 # a deploy, never writes.
 log "public host mappings (report only)"
 run_tool node prisma/set-public-host.mjs --list || true
+# MARKETING org readiness (#2579), report only: trial stages, host, team,
+# default lead owner — so the prod org can be verified from this log without a
+# database connection. Never fails a deploy, never writes, no PII.
+log "marketing org readiness (report only)"
+run_tool node prisma/check-marketing-orgs.mjs || true
 # API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.

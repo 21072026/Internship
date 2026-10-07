@@ -64,6 +64,8 @@ export default function CompaniesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [permission, setPermission] = useState<PermissionFilter>('all');
+  // "My accounts" (#2397) — MARKETING only, where an admin can own leads too.
+  const [owner, setOwner] = useState<'all' | 'me'>('all');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [impact, setImpact] = useState<{
     cascade: Record<string, number>;
@@ -163,6 +165,7 @@ export default function CompaniesPage() {
       });
       if (search.trim()) params.set('search', search.trim());
       if (permission === 'email') params.set('permission', 'email');
+      if (owner === 'me') params.set('owner', 'me');
       const res = await fetch(`/api/companies?${params}`);
       const data = await res.json();
       setCompanies(data.companies || []);
@@ -172,7 +175,7 @@ export default function CompaniesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, sort, permission, t]);
+  }, [page, search, sort, permission, owner, t]);
 
   const fetchAllCompanies = useCallback(async () => {
     try {
@@ -205,7 +208,7 @@ export default function CompaniesPage() {
   // previous result set is an empty screen with no explanation.
   useEffect(() => {
     setPage(1);
-  }, [search, sort, permission]);
+  }, [search, sort, permission, owner]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -537,6 +540,18 @@ export default function CompaniesPage() {
           <option value="all">{t.companiesPage.permissionFilter.all}</option>
           <option value="email">{t.companiesPage.permissionFilter.email}</option>
         </select>
+        {isMarketing && (
+          <select
+            data-testid="companies-owner-filter"
+            aria-label={t.companiesPage.ownerFilter.label}
+            value={owner}
+            onChange={(e) => setOwner(e.target.value === 'me' ? 'me' : 'all')}
+            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+          >
+            <option value="all">{t.companiesPage.ownerFilter.all}</option>
+            <option value="me">{t.companiesPage.ownerFilter.me}</option>
+          </select>
+        )}
         {/* The filter checks the stored row; that its address is still the
             contact e-mail only the badge (and the send gate) can check —
             Prisma cannot compare two columns in a paginated query. */}
@@ -553,11 +568,12 @@ export default function CompaniesPage() {
         <SavedViews
           storageKey="companies-views"
           surface="companies"
-          current={{ search, sort, permission }}
+          current={{ search, sort, permission, ...(owner === 'me' ? { owner } : {}) }}
           onApply={(f) => {
             setSearch(f.search || '');
             setSort((COMPANY_SORT_KEYS as readonly string[]).includes(f.sort) ? (f.sort as CompanySort) : DEFAULT_COMPANY_SORT);
             setPermission(f.permission === 'email' ? 'email' : 'all');
+            setOwner(f.owner === 'me' ? 'me' : 'all');
           }}
         />
       </div>
