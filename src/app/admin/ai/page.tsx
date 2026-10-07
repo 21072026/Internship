@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 import { formatUsd, recentPeriods, successRate, type TaskUsage, type UsageTotals } from '@/lib/ai/consoleRules';
 
 // /admin/ai (#2030) — what AI costs this organisation. Reads
@@ -27,11 +27,14 @@ interface StatusBody {
 }
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
-const num = (n: number) => n.toLocaleString();
-const ms = (n: number | null) => (n === null ? '—' : `${num(n)} ms`);
+const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
+/** Counts in the app's language, never the browser's (check:locale-dates). */
+const numIn = (locale: string) => (n: number) => n.toLocaleString(locale);
 
 function UsageTable({ usage, labels, testId }: { usage: MonthUsage; labels: Record<string, string>; testId: string }) {
   const a = useT().adminAi;
+  const num = numIn(useLocale());
+  const ms = (n: number | null) => (n === null ? '—' : `${num(n)} ms`);
   if (usage.tasks.length === 0) return <p className="text-sm text-gray-500 dark:text-gray-400" data-testid={`${testId}-empty`}>{a.empty}</p>;
   const row = (key: string, r: TaskUsage | (UsageTotals & { task?: string; p50LatencyMs?: null; p95LatencyMs?: null }), name: string, strong = false) => {
     const rate = successRate(r);
@@ -76,7 +79,10 @@ function UsageTable({ usage, labels, testId }: { usage: MonthUsage; labels: Reco
 export default function AdminAiPage() {
   const t = useT();
   const a = t.adminAi;
+  const num = numIn(useLocale());
   const [month, setMonth] = useState(thisMonth);
+  // Only a well-formed period ever reaches a URL — the select's value is DOM text.
+  const period = PERIOD.test(month) ? month : thisMonth();
   const [usage, setUsage] = useState<UsageBody | null>(null);
   const [status, setStatus] = useState<StatusBody | null>(null);
   const [failed, setFailed] = useState(false);
@@ -87,7 +93,7 @@ export default function AdminAiPage() {
   const load = useCallback(async () => {
     setFailed(false);
     try {
-      const [u, s] = await Promise.all([fetch(`/api/admin/ai/usage?month=${month}`), fetch('/api/admin/ai/status')]);
+      const [u, s] = await Promise.all([fetch(`/api/admin/ai/usage?month=${encodeURIComponent(period)}`), fetch('/api/admin/ai/status')]);
       if (!u.ok || !s.ok) throw new Error('load');
       const body = (await u.json()) as UsageBody;
       setUsage(body);
@@ -96,7 +102,7 @@ export default function AdminAiPage() {
     } catch {
       setFailed(true);
     }
-  }, [month]);
+  }, [period]);
 
   useEffect(() => {
     void load();
@@ -152,7 +158,7 @@ export default function AdminAiPage() {
             </select>
           </label>
           <a
-            href={`/api/admin/ai/usage?month=${month}&format=csv`}
+            href={`/api/admin/ai/usage?month=${encodeURIComponent(period)}&format=csv`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
             data-testid="ai-console-csv"
           >
