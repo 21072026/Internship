@@ -4,7 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { isSsoActive } from '@/lib/sso';
 import { samlForOrg, mapSamlProfile } from '@/lib/ssoSaml';
 import { provisionSsoUser } from '@/lib/ssoProvisioning';
-import { extractClaims, resolveRole, type SsoClaims } from '@/lib/ssoRoleMapping';
+import { extractClaims, mappableRolesFor, resolveRole, type SsoClaims } from '@/lib/ssoRoleMapping';
+import { verticalCapabilities } from '@/lib/verticals';
 import { worldOfOrg } from '@/lib/userWorld';
 import { originForWorld, worldForHostHeader } from '@/lib/hostWorld';
 import { servedOrigin } from '@/lib/servedHosts';
@@ -82,12 +83,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   try {
     // The tenant's IdP role mapping (#1940). Explicitly this org's rows — the
     // ACS is sessionless, so no tenant scope is bound to do it for us. No
-    // match is null, and provisioning falls back to MENTEE.
+    // match is null, and provisioning falls back to MENTEE. Only the roles the
+    // org's vertical has (#2839): a row holding one it lacks grants nothing.
     const mappings = await prisma.ssoClaimMapping.findMany({
       where: { orgId: org.id },
       select: { claim: true, matchValue: true, role: true, priority: true },
     });
-    const role = resolveRole(mappings, claims);
+    const role = resolveRole(mappings, claims, mappableRolesFor(verticalCapabilities(org.vertical)));
     const { user } = await provisionSsoUser({ orgId: org.id, email, fullName, role, syncRole: org.ssoSyncRole });
     // Mint a short-lived single-use grant the `sso` provider will consume.
     const token = crypto.randomBytes(32).toString('hex');
