@@ -277,7 +277,7 @@ export async function POST(request: Request) {
     });
 
     await prisma.auditLog.create({
-      data: { actorId: session.user.id, action: 'offer.create', targetId: offer.id, detail: `relation ${relationId}` },
+      data: { actorId: session.user.id, action: 'offer.create', targetId: offer.id, detail: `relation ${relationId}`, orgId: resolveOrgId(session) },
     });
     await logActivity({
       action: 'offer.create',

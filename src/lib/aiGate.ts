@@ -27,6 +27,8 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 //                                      staff role with CV access triggers it
 //   cv_feedback           participant  the mentee's own CV, /portal            never
 //   interview_prep        participant  the mentee, for themselves, /portal     never
+//   practice_interview    participant  the mentee's own text-only mock          never
+//                                      interview, /portal (#2051)
 //   interaction_summary   participant  the mentor's own view of their own      never —
 //                                      mentee (/mentor/mentees/[id]); an       except an
 //                                      ADMIN reading another pair's log is     admin: the

@@ -112,6 +112,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'ApiKey',
   // Per-key request counts (#2010) — the key's tenant owns its usage.
   'ApiKeyUsage',
+  // A mentee's practice interview transcript (#2051).
+  'PracticeSession',
   'MatchFeedback',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
@@ -254,6 +256,15 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Webhook',
   'Announcement',
   'Newsletter',
+  // The audit trail and where it is streamed to (#2012). AuditLog gained a
+  // nullable orgId so a tenant's SIEM drain can select its own rows and
+  // nothing else; the request-scoped writers get it stamped here, the two
+  // sessionless ones (the offer expiry sweep, the impersonation STOP) pass it
+  // themselves, and the drain job reads with an explicit `orgId` because it
+  // runs outside any request scope. AuditDrain has a REQUIRED orgId: a
+  // receiver belongs to exactly one tenant.
+  'AuditLog',
+  'AuditDrain',
   // The public /for-companies enquiry (#1104). The form has no session and no
   // host→org resolution exists yet, so the submit stamps the default org
   // itself (the same one registration uses) rather than leaving NULL — a

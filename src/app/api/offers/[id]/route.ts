@@ -5,6 +5,7 @@ import type { Session } from 'next-auth';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
@@ -213,6 +214,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           actorId: session.user.id,
           action: `offer.${actionStr}`,
           targetId: id,
+          orgId: resolveOrgId(session),
           detail:
             actionStr === 'decline' ? `reason ${declineReasonCode}` : requisitionCountDetail(outcome.count),
         },

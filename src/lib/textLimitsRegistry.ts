@@ -250,6 +250,16 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     utmContent: { exempt: 'cleaned and capped at 150 (UTM_VALUE_MAX) by readInquiryAttribution' },
     referrer: { exempt: '@db.Text, origin + path capped at 500 (REFERRER_MAX) by readInquiryAttribution' },
   },
+  // Where a tenant's audit trail is streamed to (#2012).
+  AuditDrain: {
+    id: ID,
+    orgId: ID,
+    cursorId: ID,
+    secret: SERVER_SET,
+    format: ENUMERATED,
+    url: { exempt: '@db.Text, capped at 2000 (AUDIT_DRAIN_URL_MAX) by src/app/api/admin/audit-drains/route.ts' },
+    lastError: { exempt: '@db.Text, written by the drain job through sanitizeError, never from a request' },
+  },
   Organization: {
     id: ID,
     stripeCustomerId: ID,

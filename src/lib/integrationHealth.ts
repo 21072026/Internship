@@ -29,7 +29,8 @@ export type ConnectorId =
   | 'google_calendar'
   | 'sso'
   | 'inbound_jaas'
-  | 'inbound_email';
+  | 'inbound_email'
+  | 'audit_drain';
 
 export interface ConnectorHealth {
   connector: ConnectorId;
@@ -230,12 +231,51 @@ function inboundRow(connector: 'inbound_jaas' | 'inbound_email', secret: string 
   };
 }
 
+// The audit stream (#2012). Unlike webhooks this one HAS a delivery ledger —
+// the drain row itself carries lastOkAt / lastError / failures, written by the
+// same code path that delivers — so the row is derived from it, deployment-wide
+// like the others. A drain that paused itself after the failure ceiling
+// (`active: false` with failures > 0) is the loudest state: nothing is being
+// shipped and nothing will be until a human resumes it. A deployment with no
+// drain at all is `not_configured`, not broken.
+async function auditDrainRow(): Promise<ConnectorHealth> {
+  const [total, active, failing, pausedAuto, lastOk, lastFail] = await Promise.all([
+    prisma.auditDrain.count(),
+    prisma.auditDrain.count({ where: { active: true } }),
+    prisma.auditDrain.count({ where: { active: true, failures: { gt: 0 } } }),
+    prisma.auditDrain.count({ where: { active: false, failures: { gt: 0 } } }),
+    prisma.auditDrain.findFirst({ where: { lastOkAt: { not: null } }, orderBy: { lastOkAt: 'desc' }, select: { lastOkAt: true } }),
+    prisma.auditDrain.findFirst({
+      where: { lastError: { not: null } },
+      orderBy: { updatedAt: 'desc' },
+      // Never the URL — the operator figure is "is it delivering", not where to.
+      select: { updatedAt: true, lastError: true },
+    }),
+  ]);
+  const state: ConnectorState = total === 0
+    ? 'not_configured'
+    : pausedAuto > 0 || (active > 0 && failing === active)
+      ? 'failing'
+      : failing > 0 || active === 0
+        ? 'degraded'
+        : 'ok';
+  return {
+    connector: 'audit_drain',
+    state,
+    lastOkAt: lastOk?.lastOkAt?.toISOString() ?? null,
+    lastErrorAt: lastFail?.updatedAt.toISOString() ?? null,
+    lastError: sanitizeError(lastFail?.lastError),
+    detail: { total, active, failing, pausedAuto },
+  };
+}
+
 export async function getIntegrationHealth(): Promise<ConnectorHealth[]> {
-  const [email, webhooks, google, sso] = await Promise.all([
+  const [email, webhooks, google, sso, auditDrain] = await Promise.all([
     emailRow(),
     webhooksRow(),
     googleCalendarRow(),
     ssoRow(),
+    auditDrainRow(),
   ]);
   return [
     email,
@@ -244,5 +284,6 @@ export async function getIntegrationHealth(): Promise<ConnectorHealth[]> {
     sso,
     inboundRow('inbound_jaas', process.env.JAAS_WEBHOOK_SECRET),
     inboundRow('inbound_email', process.env.INBOUND_SECRET),
+    auditDrain,
   ];
 }

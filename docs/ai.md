@@ -77,8 +77,9 @@ without one. It is the one place that decides whether the gate asks for the
 paid add-on:
 
 - **`participant`** — the free core: `cv_extract`, `cv_feedback`,
-  `interview_prep`, `interaction_summary`, `thread_summary`, `suggested_reply`,
-  `outreach_draft`, `bulk_draft`, `profile_enrich`, `next_step_suggest`. The
+  `interview_prep`, `practice_interview`, `interaction_summary`, `thread_summary`,
+  `suggested_reply`, `outreach_draft`, `bulk_draft`, `profile_enrich`,
+  `next_step_suggest`. The
   mentee's own tools and the mentor's own view of their own mentee. The gate never runs the entitlement
   query on this path: no extra read, no paywall, and `not_entitled` cannot
   reach a participant route or screen. A route may **escalate one call** to

@@ -30,6 +30,8 @@ const DAY = 24 * 60 * 60 * 1000;
 export const TASK_TTL_MS: Record<string, number> = {
   cv_feedback: 7 * DAY,
   interview_prep: 7 * DAY,
+  // The practice-interview report (#2051) is written once per session; kept, never re-asked.
+  practice_interview: 365 * DAY,
   // Open-text insights (#2046): keyed on exactly the rows sent, so any new or
   // edited row is a fresh question anyway; the day bounds how long a page
   // view keeps re-reading one answer.

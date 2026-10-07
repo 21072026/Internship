@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Audit stream to a SIEM** (#2012). `AuditLog` gained a nullable `orgId` (registered in `TENANT_MODELS`, every writer stamps it, legacy rows attributed on deploy by `prisma/backfill-audit-log-org.mjs` before the generic default-org pass) and a new `AuditDrain` model holds, per tenant, a receiver URL, a signing secret, the `(createdAt, id)` cursor and the backoff/pause state. A five-minute tick (`src/lib/auditDrain.ts`, `GET /api/cron?job=audit-drain` to force one) ships each due drain's next rows as signed `application/x-ndjson` batches (`X-Signature: sha256=…`, `json_lines` or ECS), moves the cursor only on 2xx, backs off 1m→6h and pauses itself after 20 consecutive failures; the rules are pure and unit-tested in `src/lib/auditDrainRule.ts`. New admin API `GET/POST/PATCH/DELETE /api/admin/audit-drains` (+ `/test` with a synthetic flagged batch, `/rotate-secret`), gated on `INTEGRATIONS_API` and scoped to the caller's org; a card on `/admin/integrations` and an `audit_drain` row on the connector-health board. The receiver contract is `docs/audit-stream.md`; `e2e/audit-stream.spec.ts` drives configure → deliver → outage → replay against a local sink, and the cross-tenant guard is `@smoke`.",
+  "notes": {
+    "en": [
+      "Stream your audit trail to your own SIEM: register a receiver under Integrations and every audit event — impersonation, password resets, account merges, cancellations — arrives as signed, newline-delimited JSON (or Elastic Common Schema). An outage is replayed from the last delivered row, never lost; a test button sends two synthetic rows so you can prove the signature first."
+    ],
+    "tr": [
+      "Denetim izinizi kendi SIEM'inize akıtın: Entegrasyonlar altında bir alıcı tanımlayın; her denetim olayı — taklit oturumlar, parola sıfırlamaları, hesap birleştirmeleri, iptaller — imzalı, satır-satır JSON (veya Elastic Common Schema) olarak ulaşsın. Kesintide akış son teslim edilen satırdan devam eder, hiçbir kayıt kaybolmaz; test düğmesi önce imzayı kanıtlamanız için iki sentetik satır gönderir."
+    ],
+    "de": [
+      "Streame dein Audit-Protokoll an dein eigenes SIEM: Registriere unter Integrationen einen Empfänger, und jedes Audit-Ereignis — Impersonation, Passwort-Resets, Kontozusammenführungen, Kündigungen — kommt als signiertes, zeilenweises JSON (oder Elastic Common Schema) an. Ein Ausfall wird ab der letzten zugestellten Zeile nachgeliefert, nichts geht verloren; ein Test-Button sendet zwei synthetische Zeilen, damit du zuerst die Signatur prüfen kannst."
+    ]
+  }
+}

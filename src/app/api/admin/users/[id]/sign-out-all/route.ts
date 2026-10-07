@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -70,7 +71,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await revokeAllTrustedDevices(user.id);
 
     await prisma.auditLog.create({
-      data: { actorId: session.user.id, action: 'ADMIN_SIGN_OUT_ALL', targetId: user.id },
+      data: { actorId: session.user.id, action: 'ADMIN_SIGN_OUT_ALL', targetId: user.id, orgId: resolveOrgId(session) },
     });
     await logActivity({
       action: 'admin.sign_out_all',
