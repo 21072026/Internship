@@ -83,6 +83,11 @@ export const AI_TASKS = {
   weekly_report_digest: { label: 'Weekly report blockers digest', audience: 'operator', consent: null, tier: 'balanced', maxInputChars: 32_000, maxOutputTokens: 1500, legacyModelEnv: 'ANTHROPIC_SUMMARY_MODEL' },
   // The "what changed" paragraph on /admin/analytics (#2046): totals only.
   analytics_narrative: { label: 'Analytics narrative', audience: 'operator', consent: null, tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 500, legacyModelEnv: 'ANTHROPIC_SUMMARY_MODEL' },
+  // Conversation catch-up and suggested replies (#2048). Participant-facing
+  // and free; the consent is checked for everyone quoted (threadAiContext.ts),
+  // and the transcript is already cut to 16k by threadAiRules.buildTranscript.
+  thread_summary: { label: 'Conversation catch-up', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 600 },
+  suggested_reply: { label: 'Suggested reply', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 400 },
 } as const satisfies Record<string, AiTaskSpec>;
 
 export type AiTaskId = keyof typeof AI_TASKS;

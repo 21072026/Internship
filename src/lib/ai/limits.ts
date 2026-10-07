@@ -60,6 +60,18 @@ export const AI_RATE_LIMITS = {
   // date range. An unchanged range is answered from the stored paragraph.
   analytics_narrative: { limit: 10, windowMs: 10 * 60 * 1000 },
 
+  // Thread catch-up (POST /api/conversations/[id]/summary, #2048).
+  // 10 calls / 10 minutes: a participant catching up on a few long threads in a
+  // row is the legitimate pattern; an unchanged thread (same last message) is
+  // answered from the stored summary without reaching the provider at all.
+  thread_summary: { limit: 10, windowMs: 10 * 60 * 1000 },
+
+  // Suggested reply (POST /api/conversations/[id]/suggest-reply, #2048).
+  // 15 calls / 10 minutes: trying the three tones on one message is three calls,
+  // so the allowance is a few messages' worth; the same tone on the same last
+  // message is answered from the stored draft.
+  suggested_reply: { limit: 15, windowMs: 10 * 60 * 1000 },
+
   // Coarse per-organization burst limit across all AI routes.
   // 120 calls / 10 minutes: Prevents a single tenant from starving shared capacity
   // or exhausting provider burst rates before fine-grained per-tenant quotas land (#1555).
