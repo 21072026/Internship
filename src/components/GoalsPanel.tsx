@@ -1,15 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Archive, Check, Circle, Pencil, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useId, useState } from 'react';
+import { Archive, Check, Circle, Lock, Pencil, Trash2, Users } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
+import { TEXT_LIMITS } from '@/lib/textLimits';
+import {
+  DEFAULT_GOAL_VISIBILITY,
+  GOAL_PROGRESS_MAX,
+  GOAL_PROGRESS_MIN,
+  GOAL_VISIBILITIES,
+  type GoalVisibility,
+} from '@/lib/goalVisibilityRule';
 
 const ARCHIVE_PAGE_SIZE = 10;
 
@@ -21,16 +30,54 @@ interface Goal {
   dueDate: string | null;
   createdAt: string;
   createdByRole: string | null;
+  // #1858
+  successCriteria: string | null;
+  targetDate: string | null;
+  progress: number | null;
+  visibility: string;
+}
+
+/** The optional depth of a goal (#1858), shared by the add form and the inline editor. */
+interface GoalDetails {
+  successCriteria: string;
+  targetDate: string;
+  progress: string;
+  visibility: GoalVisibility;
+}
+
+const EMPTY_DETAILS: GoalDetails = { successCriteria: '', targetDate: '', progress: '', visibility: DEFAULT_GOAL_VISIBILITY };
+
+function detailsOf(g: Goal): GoalDetails {
+  return {
+    successCriteria: g.successCriteria ?? '',
+    targetDate: g.targetDate ? g.targetDate.slice(0, 10) : '',
+    progress: g.progress === null ? '' : String(g.progress),
+    visibility: (GOAL_VISIBILITIES as readonly string[]).includes(g.visibility) ? (g.visibility as GoalVisibility) : DEFAULT_GOAL_VISIBILITY,
+  };
+}
+
+/** '' → null, otherwise a whole number inside the 0–100 range. */
+function parseProgress(raw: string): number | null {
+  if (raw.trim() === '') return null;
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return null;
+  return Math.min(GOAL_PROGRESS_MAX, Math.max(GOAL_PROGRESS_MIN, n));
 }
 
 // Goal setting + tracking for a mentorship relation. Read-only viewers (e.g. a
 // company observer) only see progress; participants can add/toggle/remove.
+// The sharing scope is rendered here but ENFORCED in /api/goals (#1858): a
+// goal the viewer may not see never reaches this component.
 export function GoalsPanel({ relationId, readOnly = false }: { relationId: string; readOnly?: boolean }) {
   const t = useT();
   const locale = useLocale();
+  const criteriaId = useId();
+  const editCriteriaId = useId();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [details, setDetails] = useState<GoalDetails>(EMPTY_DETAILS);
+  const [showDetails, setShowDetails] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [showArchive, setShowArchive] = useState(false);
@@ -38,6 +85,7 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDueDate, setEditDueDate] = useState('');
+  const [editDetails, setEditDetails] = useState<GoalDetails>(EMPTY_DETAILS);
   const [editSaving, setEditSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -48,17 +96,32 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
   }, [relationId]);
   useEffect(() => { load(); }, [load]);
 
+  const visibilityOptions = [
+    { value: 'PAIR', label: t.goals.visibilityPair },
+    { value: 'PROGRAM', label: t.goals.visibilityProgram },
+    { value: 'PRIVATE', label: t.goals.visibilityPrivate },
+  ];
+
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     setSaving(true);
     try {
+      const progress = parseProgress(details.progress);
       const res = await fetch('/api/goals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationId, title, dueDate: dueDate || undefined }),
+        body: JSON.stringify({
+          relationId,
+          title,
+          dueDate: dueDate || undefined,
+          successCriteria: details.successCriteria.trim() || undefined,
+          targetDate: details.targetDate || undefined,
+          progress: progress === null ? undefined : progress,
+          visibility: details.visibility,
+        }),
       });
-      if (res.ok) { setTitle(''); setDueDate(''); await load(); }
+      if (res.ok) { setTitle(''); setDueDate(''); setDetails(EMPTY_DETAILS); await load(); }
     } finally {
       setSaving(false);
     }
@@ -90,12 +153,14 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
     setEditingId(g.id);
     setEditTitle(g.title);
     setEditDueDate(g.dueDate ? g.dueDate.slice(0, 10) : '');
+    setEditDetails(detailsOf(g));
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditTitle('');
     setEditDueDate('');
+    setEditDetails(EMPTY_DETAILS);
   };
 
   const saveEdit = async (g: Goal) => {
@@ -105,7 +170,16 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
       const res = await fetch(`/api/goals/${g.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: editTitle.trim(), dueDate: editDueDate || null }),
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          dueDate: editDueDate || null,
+          successCriteria: editDetails.successCriteria.trim() || null,
+          targetDate: editDetails.targetDate || null,
+          progress: parseProgress(editDetails.progress),
+          // Only the author may change the scope (the route refuses anyone
+          // else); sending it unchanged is a no-op for everybody.
+          visibility: editDetails.visibility,
+        }),
       });
       if (res.ok) {
         cancelEdit();
@@ -123,13 +197,71 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
   const activeGoals = sortGoals(goals.filter((g) => g.status === 'OPEN'));
   const archivedGoals = sortGoals(goals.filter((g) => g.status === 'DONE'));
 
+  // The optional fields, as one block the add form and the editor both show.
+  const detailFields = (
+    value: GoalDetails,
+    onChange: (next: GoalDetails) => void,
+    idPrefix: string,
+    testPrefix: string,
+  ) => (
+    <div className="w-full space-y-2" data-testid={`${testPrefix}-details`}>
+      <div>
+        <label htmlFor={`${idPrefix}-criteria`} className="mb-1 block text-sm font-medium text-gray-700">
+          {t.goals.successCriteria}
+        </label>
+        <Textarea
+          id={`${idPrefix}-criteria`}
+          rows={2}
+          value={value.successCriteria}
+          placeholder={t.goals.successCriteriaHint}
+          maxLength={TEXT_LIMITS.goalSuccessCriteria}
+          showCounter
+          onChange={(e) => onChange({ ...value, successCriteria: e.target.value })}
+        />
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="w-40">
+          <Input
+            id={`${idPrefix}-target`}
+            label={t.goals.targetDate}
+            type="date"
+            value={value.targetDate}
+            onChange={(e) => onChange({ ...value, targetDate: e.target.value })}
+          />
+        </div>
+        <div className="w-28">
+          <Input
+            id={`${idPrefix}-progress`}
+            label={t.goals.progress}
+            type="number"
+            inputMode="numeric"
+            min={GOAL_PROGRESS_MIN}
+            max={GOAL_PROGRESS_MAX}
+            step={5}
+            value={value.progress}
+            onChange={(e) => onChange({ ...value, progress: e.target.value })}
+          />
+        </div>
+        <div className="min-w-[200px] flex-1">
+          <Select
+            id={`${idPrefix}-visibility`}
+            label={t.goals.visibility}
+            value={value.visibility}
+            options={visibilityOptions}
+            onChange={(e) => onChange({ ...value, visibility: e.target.value as GoalVisibility })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   const goalRow = (g: Goal, editable: boolean) => (
-    <div key={g.id} data-testid={`goal-${g.id}`} className="flex items-center gap-2 text-sm">
+    <div key={g.id} data-testid={`goal-${g.id}`} data-visibility={g.visibility} className="flex items-start gap-2 text-sm">
       <button
         onClick={() => !readOnly && toggle(g)}
         disabled={readOnly || editingId === g.id}
         aria-label={g.status === 'DONE' ? t.goals.markOpen : t.goals.markDone}
-        className={g.status === 'DONE' ? 'text-green-600' : 'text-gray-300 hover:text-gray-500'}
+        className={`mt-0.5 ${g.status === 'DONE' ? 'text-green-600' : 'text-gray-300 hover:text-gray-500'}`}
       >
         {g.status === 'DONE' ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
       </button>
@@ -154,6 +286,7 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
                 />
               </div>
             </div>
+            {detailFields(editDetails, setEditDetails, `${editCriteriaId}-${g.id}`, 'edit-goal')}
             <div className="flex gap-2">
               <Button type="button" size="sm" loading={editSaving} disabled={!editTitle.trim()} onClick={() => saveEdit(g)}>
                 {t.common.save}
@@ -165,24 +298,70 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
           </div>
         ) : (
           <>
-            <span className={g.status === 'DONE' ? 'line-through text-gray-400' : 'text-gray-800'}>{g.title}</span>
+            <span className="flex flex-wrap items-center gap-x-2">
+              <span className={g.status === 'DONE' ? 'line-through text-gray-400' : 'text-gray-800'}>{g.title}</span>
+              {g.visibility === 'PRIVATE' && (
+                <span
+                  data-testid="goal-visibility-badge"
+                  className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600"
+                >
+                  <Lock className="h-3 w-3" aria-hidden="true" />
+                  {t.goals.privateBadge}
+                </span>
+              )}
+              {g.visibility === 'PROGRAM' && (
+                <span
+                  data-testid="goal-visibility-badge"
+                  className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700"
+                >
+                  <Users className="h-3 w-3" aria-hidden="true" />
+                  {t.goals.programBadge}
+                </span>
+              )}
+            </span>
             <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
               {g.createdByRole === 'MENTOR' && <span>{t.goals.byMentor}</span>}
               {g.createdByRole === 'MENTEE' && <span>{t.goals.byMentee}</span>}
               <span>· <RelativeTime date={g.createdAt} /></span>
+              {g.targetDate && <span data-testid="goal-target-date">· {t.goals.targetDate}: {formatDate(g.targetDate, locale)}</span>}
               {g.dueDate && <span>· {t.goals.dueDate}: {formatDate(g.dueDate, locale)}</span>}
             </span>
+            {g.successCriteria && (
+              <p data-testid="goal-success-criteria" className="mt-1 whitespace-pre-line text-xs text-gray-600">
+                <span className="font-medium text-gray-500">{t.goals.successCriteria}: </span>
+                {g.successCriteria}
+              </p>
+            )}
+            {g.progress !== null && (
+              <div className="mt-1.5 flex items-center gap-2">
+                <div
+                  role="progressbar"
+                  aria-label={t.goals.progress}
+                  aria-valuemin={GOAL_PROGRESS_MIN}
+                  aria-valuemax={GOAL_PROGRESS_MAX}
+                  aria-valuenow={g.progress}
+                  aria-valuetext={t.goals.progressPercent.replace('{n}', String(g.progress))}
+                  data-testid="goal-progress"
+                  className="h-1.5 w-full max-w-[200px] overflow-hidden rounded-full bg-gray-100"
+                >
+                  <div className="h-full rounded-full bg-emerald-600" style={{ width: `${g.progress}%` }} />
+                </div>
+                <span className="text-[11px] text-gray-500" data-testid="goal-progress-value">
+                  {t.goals.progressPercent.replace('{n}', String(g.progress))}
+                </span>
+              </div>
+            )}
           </>
         )}
       </span>
       {!readOnly && editingId !== g.id && (
         <>
           {editable && (
-            <button type="button" onClick={() => startEdit(g)} aria-label={t.common.edit} className="text-gray-300 hover:text-blue-600">
+            <button type="button" onClick={() => startEdit(g)} aria-label={t.common.edit} className="mt-0.5 text-gray-300 hover:text-blue-600">
               <Pencil className="h-4 w-4" />
             </button>
           )}
-        <button onClick={() => remove(g)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600">
+        <button onClick={() => remove(g)} aria-label={t.common.delete} className="mt-0.5 text-gray-300 hover:text-red-600">
           <Trash2 className="h-4 w-4" />
         </button>
         </>
@@ -242,10 +421,26 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
       )}
 
       {!readOnly && (
-        <form onSubmit={add} className="flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[160px]"><Input label={t.goals.newGoal} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-          <div className="w-40"><Input label={t.goals.dueDate} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
-          <Button type="submit" size="sm" loading={saving} disabled={!title.trim()}>{t.goals.add}</Button>
+        <form onSubmit={add} className="space-y-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex-1 min-w-[160px]"><Input label={t.goals.newGoal} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+            <div className="w-40"><Input label={t.goals.dueDate} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
+            <Button type="submit" size="sm" loading={saving} disabled={!title.trim()}>{t.goals.add}</Button>
+          </div>
+          <button
+            type="button"
+            className="text-xs text-blue-600 hover:underline"
+            aria-expanded={showDetails}
+            aria-controls={`${criteriaId}-details`}
+            onClick={() => setShowDetails((shown) => !shown)}
+          >
+            {showDetails ? t.goals.fewerFields : t.goals.moreFields}
+          </button>
+          {showDetails && (
+            <div id={`${criteriaId}-details`}>
+              {detailFields(details, setDetails, criteriaId, 'new-goal')}
+            </div>
+          )}
         </form>
       )}
 

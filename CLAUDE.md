@@ -391,6 +391,15 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   `prisma/check-active-mentor-duplicates.mjs` line) reading clean on prod AND shared preview —
   a `db push --accept-data-loss` that fails on the constraint is a failed deploy. Read the doc
   before touching any of it; the sequencing is the load-bearing part.
+- **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
+  is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
+  before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to
+  `createdByRole` on older rows). Every reader of goals goes through that module — `GET /api/goals`
+  filters with `visibleGoals()`, `PATCH`/`DELETE` answer **404** for a goal the caller may not see
+  (the same `'missing'` branch as another tenant's goal, #2542 — a 403 would confirm the id), and
+  the relation timeline pages with `readableGoalsWhere()`, the SQL twin the unit test keeps in
+  step. Only the author may change the scope (403 `not_author`). Hiding a card in `GoalsPanel`
+  is never the check; a new reader of `prisma.goal` must call the rule.
 - **Mentör değişimi tek bir işlemdir** ([`docs/mentor-transfer.md`](docs/mentor-transfer.md),
   #2289): bir mentee'nin mentörünü değiştirmenin yolu `POST /api/mentorship/[id]/transfer`
   (admin) — "tamamlandı işaretle, sonra yeniden ata" **değil**; o yol olmayan bir başarıyı
