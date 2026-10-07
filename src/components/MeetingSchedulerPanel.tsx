@@ -16,6 +16,7 @@ import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 import { copyToClipboard } from '@/lib/clipboard';
 import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
+import { LinkRefusalNotice, MeetLinkHint, readLinkRefusal, type MeetingLinkRefusal } from '@/components/meeting/MeetLinkField';
 import { SuggestedTimes } from '@/components/meeting/SuggestedTimes';
 import { ConflictNotice, PolicyNotice, readConflict, readPolicy, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 
@@ -54,6 +55,8 @@ export function MeetingSchedulerPanel({
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState<MeetingConflict | null>(null);
   const [refusal, setRefusal] = useState<MeetingPolicyRefusal | null>(null);
+  // A link refused as typed, or required by the tenant's policy (#2007).
+  const [linkRefusal, setLinkRefusal] = useState<MeetingLinkRefusal | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // Time optional: a date gives the meeting a time (+ RSVP); no date → no-time
   // meeting (just a link). Sent zone-qualified — see MeetingsManager (#1061).
@@ -86,6 +89,7 @@ export function MeetingSchedulerPanel({
     setBusy(true);
     setConflict(null);
     setRefusal(null);
+    setLinkRefusal(null);
     try {
       const res = await fetch('/api/meetings', {
         method: 'POST',
@@ -106,6 +110,8 @@ export function MeetingSchedulerPanel({
         const body = await res.json().catch(() => null);
         setConflict(readConflict(body));
         setRefusal(readPolicy(body));
+      } else if (!res.ok) {
+        setLinkRefusal(readLinkRefusal(await res.json().catch(() => null)));
       }
       if (res.ok) {
         setTitle('');
@@ -184,7 +190,13 @@ export function MeetingSchedulerPanel({
         )}
         <div className="sm:col-span-2">
           <Input label={t.meetings.meetLink} placeholder="https://meet.google.com/abc-defg-hij" hint={t.meetings.meetLinkHint} value={meetLink} onChange={(e) => setMeetLink(e.target.value)} />
+          <MeetLinkHint link={meetLink} className="mt-1" />
         </div>
+        {linkRefusal && (
+          <div className="sm:col-span-2">
+            <LinkRefusalNotice refusal={linkRefusal} />
+          </div>
+        )}
         <div className="sm:col-span-2">
           <GuestInviteField
             guests={guests}

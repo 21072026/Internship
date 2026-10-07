@@ -21,6 +21,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { MeetingDurationSelect } from '@/components/meeting/MeetingDurationSelect';
 import { ConflictNotice, PolicyNotice, readConflict, readPolicy, useConflictText, usePolicyText, type MeetingConflict, type MeetingPolicyRefusal } from '@/components/meeting/ConflictNotice';
 import { DEFAULT_MEETING_MINUTES } from '@/lib/meetingDuration';
+import { LinkRefusalNotice, MeetLinkHint, readLinkRefusal, type MeetingLinkRefusal } from '@/components/meeting/MeetLinkField';
 
 interface Relation {
   id: string;
@@ -81,6 +82,8 @@ export function MeetingsManager() {
   const conflictText = useConflictText();
   const [refusal, setRefusal] = useState<MeetingPolicyRefusal | null>(null);
   const policyText = usePolicyText();
+  // A link refused as typed, or required by the tenant's policy (#2007).
+  const [linkRefusal, setLinkRefusal] = useState<MeetingLinkRefusal | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -156,6 +159,7 @@ export function MeetingsManager() {
         }),
       });
       const data = await res.json();
+      setLinkRefusal(readLinkRefusal(data));
       if (res.ok) {
         // Two counts, not one: "3 mentees" and "2 outsiders" are different
         // facts, and an organizer who typed an address needs to see it landed.
@@ -328,6 +332,8 @@ export function MeetingsManager() {
               value={meetLink}
               onChange={(e) => setMeetLink(e.target.value)}
             />
+            <MeetLinkHint link={meetLink} className="-mt-2" />
+            {linkRefusal && <LinkRefusalNotice refusal={linkRefusal} />}
             {/* Outsiders are additive to the selection above, never a
                 replacement for it: this endpoint schedules against relations. */}
             <GuestInviteField guests={guests} onChange={setGuests} max={MAX_GUESTS_PER_MEETING} disabled={busy} testIdPrefix="guest" />

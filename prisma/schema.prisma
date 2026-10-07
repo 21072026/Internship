@@ -36,6 +36,18 @@ enum OrgPlan {
   ENTERPRISE
 }
 
+// Where a tenant's meetings get their video room (#2007). The rule itself —
+// pasted link → organiser's saved room → built-in room — is
+// src/lib/conferencingRule.ts; this only names the three answers.
+//   BUILTIN           today's behaviour: a room of ours unless a link is pasted
+//   PREFER_PERSONAL   the organiser's saved personal room when they have one
+//   REQUIRE_EXTERNAL  never a room of ours — the organiser must supply a link
+enum ConferencingPolicy {
+  BUILTIN
+  PREFER_PERSONAL
+  REQUIRE_EXTERNAL
+}
+
 enum InteractionType {
   Meeting
   Feedback
@@ -146,6 +158,12 @@ model Organization {
   publicHost       String?  @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  // Conferencing policy (#2007): which video room this tenant's meetings get.
+  // On the Organization, NOT on Setting — Setting is keyed by a `String @id`,
+  // and giving it an orgId re-keys the table (a drop-and-recreate under
+  // `db push`). Literal default, so `db push` fills existing rows itself.
+  conferencingPolicy ConferencingPolicy @default(BUILTIN)
 
   users                   User[]
   sources                 Source[]
@@ -383,6 +401,12 @@ model User {
   linkedinUrl             String?
   githubUrl               String?
   portfolioUrl            String?
+  // The organiser's own video room (#2007): a Zoom PMI, a Meet room, a Teams
+  // "meet now" link. Used for the meetings this person organises when their
+  // tenant's conferencingPolicy allows it (src/lib/conferencingRule.ts).
+  // Validated on write like the profile URLs — https only, no credentials,
+  // never one of our own hosts — and sized to fit Meeting.meetLink.
+  personalMeetingUrl      String?
   // Mentee: interests / target position. Mentor: max concurrent mentees.
   interests               String?       @db.Text
   targetPosition          String?

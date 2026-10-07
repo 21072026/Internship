@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Bring your own conferencing link** (#2007). `Organization.conferencingPolicy` (`BUILTIN` default · `PREFER_PERSONAL` · `REQUIRE_EXTERNAL`) and `User.personalMeetingUrl`, both additive. The precedence — pasted link → the organiser's saved personal room (under the two non-default policies) → a room of ours, refused under `REQUIRE_EXTERNAL` — is one pure rule (`src/lib/conferencingRule.ts`, unit-tested) applied inside `resolveMeetingLink()`, so the schedule, instant, series and accept-a-request paths all inherit it; the series `PATCH` and the profile route validate through the same `checkPastedMeetingLink()`. Every supplied link must be https, carry no credentials, not point at a served host and fit the column. New `GET/PATCH /api/admin/organizations/[id]/conferencing` (org admin or world super admin); a personal-room card on `/account`; the schedule forms say whether a link embeds or opens in a new tab and show the refusal; the meeting panel's fallback button reads “Open in Zoom/Meet/Teams”. `EMBEDDABLE_MEETING_HOSTS` and `next.config.js` are unchanged.",
+  "notes": {
+    "en": [
+      "Meet in the tool your organization already uses: save your personal Zoom, Meet or Teams room on the account page, and an organization can ask that meetings always use its own conferencing tool. A pasted link still wins, and when a link cannot be shown inside the app the panel now says where it opens."
+    ],
+    "tr": [
+      "Kuruluşunun zaten kullandığı araçla görüş: kişisel Zoom, Meet veya Teams odanı hesap sayfasına kaydet; bir kuruluş görüşmelerin her zaman kendi konferans aracını kullanmasını isteyebilir. Yapıştırılan bağlantı yine kazanır ve bir bağlantı uygulama içinde gösterilemediğinde panel artık nerede açılacağını söylüyor."
+    ],
+    "de": [
+      "Triff dich in dem Tool, das deine Organisation ohnehin nutzt: Speichere deinen persönlichen Zoom-, Meet- oder Teams-Raum auf der Kontoseite, und eine Organisation kann verlangen, dass Besprechungen immer ihr eigenes Konferenz-Tool verwenden. Ein eingefügter Link gewinnt weiterhin, und wenn ein Link nicht in der App angezeigt werden kann, sagt das Panel jetzt, wo er sich öffnet."
+    ]
+  }
+}
