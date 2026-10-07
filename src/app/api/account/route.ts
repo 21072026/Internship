@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { passwordSchema } from '@/lib/password';
+import { checkPassword, passwordRefusal, passwordSchema } from '@/lib/password';
 import { logActivity } from '@/lib/activity';
 import { hardDeleteUser } from '@/lib/accountErasure';
 import { withTenantScope } from '@/lib/orgContext';
@@ -75,6 +75,9 @@ export async function PUT(request: Request) {
       if (await isPasswordLoginBlocked(user)) {
         return NextResponse.json({ error: SSO_REQUIRED_MESSAGE, code: SSO_REQUIRED_CODE }, { status: 400 });
       }
+      // The org's password policy, then the breach screening (#1544).
+      const verdict = await checkPassword(newPassword, user.orgId);
+      if (!verdict.ok) return passwordRefusal(verdict);
       data.password = await bcrypt.hash(newPassword, 12);
       // Changing the password revokes every existing session (#868). The whole
       // point of changing it after a session is stolen is to lock the thief
