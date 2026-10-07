@@ -5,6 +5,8 @@ import { Sparkles } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { AiBadge } from '@/components/AiBadge';
 import { AiText } from '@/components/ai/AiText';
+import { CvReviewView } from '@/components/ai/CvReviewView';
+import { readStoredFeedback } from '@/lib/cvReviewRules';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useT } from '@/i18n/client';
 
@@ -47,7 +49,13 @@ export function SharedAiArtifacts({ subjectUserId }: { subjectUserId: string }) 
               <RelativeTime date={x.createdAt} className="ml-2 text-xs font-normal text-gray-500" />
             </summary>
             <AiBadge note className="mt-2 mb-1" />
-            <AiText text={x.content} className="text-sm text-gray-800 dark:text-gray-200" />
+            {(() => {
+              // A scored CV review (#2050) is JSON: shown as the review, not as its source.
+              const stored = x.taskId === 'cv_feedback' ? readStoredFeedback(x.content) : null;
+              return stored?.kind === 'review'
+                ? <CvReviewView review={stored.review} />
+                : <AiText text={x.content} className="text-sm text-gray-800 dark:text-gray-200" />;
+            })()}
           </details>
         ))}
       </div>
