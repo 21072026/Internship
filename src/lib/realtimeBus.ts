@@ -32,7 +32,11 @@ export type RealtimeEventType =
   // not connected at the moment it was published has missed nothing that
   // matters — which is why the stream deliberately does *not* re-check the
   // unread counters for this one (#1871).
-  | 'typing';
+  | 'typing'
+  // A session agenda of a mentorship this user is in changed (#1843): an item
+  // was ticked, added, removed or carried over. Carries the relationId; the
+  // panel refetches through the authorized endpoint. Moves no unread counter.
+  | 'agenda';
 
 export interface RealtimeEvent {
   type: RealtimeEventType;

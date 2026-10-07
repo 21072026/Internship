@@ -181,6 +181,8 @@ export const TEXT_LIMITS = {
   goalTitle: 191,
   /** Goal.description — @db.Text */
   goalDescription: 2000,
+  /** SessionAgendaItem.text — @db.Text (#1843); an ad-hoc agenda line */
+  agendaItemText: 2000,
   /** MeetingRequest.topic — VARCHAR(191) */
   meetingTopic: 191,
   /** Document.title — VARCHAR(191) */
