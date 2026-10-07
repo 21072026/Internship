@@ -196,6 +196,7 @@ model Organization {
   offers                  Offer[]
   requisitions            Requisition[]
   interviewRequests       InterviewRequest[]
+  applications            Application[]
   messageTemplates        MessageTemplate[]
   apiKeys                 ApiKey[]
   matchFeedback           MatchFeedback[]
@@ -589,6 +590,8 @@ model User {
   meetingFeedback                   MeetingFeedback[]             @relation("MeetingFeedbackRater")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
+  applications                      Application[]                 @relation("ApplicationMentee")
+  applicationEvents                 ApplicationEvent[]            @relation("ApplicationEventActor")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
@@ -1491,6 +1494,7 @@ model Company {
   offers             Offer[]
   requisitions       Requisition[]
   interviewRequests  InterviewRequest[]
+  applications       Application[]
   placements         Placement[]
   // The enquiries this company was created from (#1863). A list rather than a
   // single row because nothing stops a second enquiry from the same company
@@ -4439,6 +4443,7 @@ model Requisition {
 
   interests         CompanyInterest[]
   interviewRequests InterviewRequest[]
+  applications      Application[]
 
   @@index([orgId, companyId])
   @@index([orgId, status])
@@ -4476,6 +4481,67 @@ model InterviewRequest {
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+}
+
+/// One person being considered for one role, and where they are in it (#1828).
+/// The row every hiring screen reads: the per-role funnel, the interview
+/// outcome, the offer that fills the requisition. `stage`, `status` and
+/// `source` are plain Strings validated against the whitelists in
+/// src/lib/applications.ts (the repo's convention for status-like values, see
+/// Offer.status) — `stage` is the fine-grained funnel step, `status` the coarse
+/// outcome derived from it (ACTIVE | HIRED | REJECTED | WITHDRAWN) so a report
+/// can count open applications without knowing the stage vocabulary.
+/// CompanyInterest stays in place as the company's flat flag; the only bridge
+/// between the two is applicationFromInterest(). One application per person
+/// per role is enforced by the database, not by a handler.
+model Application {
+  id               String    @id @default(cuid())
+  orgId            String
+  requisitionId    String
+  menteeId         String
+  companyId        String
+  status           String    @default("ACTIVE")
+  stage            String    @default("APPLIED")
+  source           String    @default("SELF")
+  screeningAnswers Json?
+  coverNote        String?   @db.Text
+  dispositionCode  String?
+  dispositionNote  String?   @db.Text
+  withdrawnAt      DateTime?
+  decidedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  org         Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  requisition Requisition        @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User               @relation("ApplicationMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  events      ApplicationEvent[]
+
+  @@unique([requisitionId, menteeId])
+  @@index([orgId, status])
+  @@index([companyId, stage])
+  @@index([menteeId])
+}
+
+/// The audit trail of an application: one row per stage change, the funnel
+/// report's source (#1828). Reached only through its application, so it
+/// carries no orgId and is deliberately not in TENANT_MODELS. `fromStage` is
+/// null on the row that created the application.
+model ApplicationEvent {
+  id            String   @id @default(cuid())
+  applicationId String
+  fromStage     String?
+  toStage       String
+  actorId       String?
+  note          String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor       User?       @relation("ApplicationEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+  @@index([actorId])
 }
 
 /// A user's own Google Calendar, connected by them and revocable by them (#709).

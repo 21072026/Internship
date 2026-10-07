@@ -495,6 +495,19 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   counters only at the source. A request path never scans the activity tables; it reads the
   rollup. **Video volume is reported, never gated** — no meeting path may return a 403 for a
   metering reason.
+- **An `Application` is the hiring row** (#1828): one person considered for one role, where they are
+  in it — `@@unique([requisitionId, menteeId])` in the DB, `orgId` + `TENANT_MODELS`, one
+  `ApplicationEvent` per stage change (reached through its application, deliberately unregistered).
+  The vocabulary and the rules are pure in `src/lib/applications.ts`: `stage` (`APPLIED → SCREENING →
+  SHORTLISTED → INTERVIEW → OFFER → HIRED`, plus `REJECTED`/`WITHDRAWN`) moves forward only through the
+  explicit `canTransition` table, `status` is **derived** by `statusForStage()` (never set by hand), a
+  move to `REJECTED` needs a `DISPOSITION_CODES` entry, and `canPerformApplicationAction()` is the ONE
+  authorization rule — every flag it takes (owning company, own application, active mentor) is derived
+  from the database, never from a request body. `CompanyInterest` stays as the company's flat flag;
+  `applicationFromInterest()` is the only bridge and `scripts/applications-backfill-lib.mjs` its plain-ESM
+  mirror (Node 20 on the server cannot import TS) — the unit test compares the two, change both in one
+  commit. `npm run backfill:applications` (also on deploy) only ever adds rows; re-keying or deleting
+  `CompanyInterest` is a drop-and-recreate under `db push` and is out of scope by design.
 - **Structured compensation on offers** ([`docs/offer-compensation.md`](docs/offer-compensation.md),
   #1851): money on `Offer` is integer **minor units** + ISO code (`baseAmountMinor`, `currency`,
   `basePeriod`…) — never a Float/Decimal, same rule as `ProgramCost`/`Placement`. The rules

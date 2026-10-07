@@ -97,6 +97,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'EvaluationDue',
   'Requisition',
   'InterviewRequest',
+  // One person considered for one role (#1828). ApplicationEvent is reached only
+  // through its application and is deliberately not listed (schema comment).
+  'Application',
   'MessageTemplate',
   // Guided-conversation library (#1841). SessionAgenda and both item models
   // are reached only through a scoped parent and are deliberately not listed
