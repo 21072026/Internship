@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Grounded outreach drafts and the never-auto-send rule (#2048, part 2):** `POST /api/mentorship/[id]/ai-draft` (`moment: first_message | dormant_nudge | outcome_note | auto`) drafts a message for one mentee in the mentee's `preferredLanguage`, for the mentor of the pair or an admin of its org only, gated on the mentee's `AI_INTERACTION_SUMMARY` consent. The draft is grounded in an eight-line facts block (`src/lib/outreachRules.ts` `factsBlock`, read by `src/lib/outreachFacts.ts`): first name, stage, outcome, dormant flag, up to three open goals the mentor may see (`visibleGoals` — a private goal is never quoted), last meeting, last message, whether the mentor has written before. No e-mail address, no notes. The `AiArtifact` key is that facts block plus moment, language and author, so an unchanged relation costs no provider call. `POST /api/ai/bulk-draft` drafts one `{name}`-personalised text for the targeted-email composer: ONE provider call, refused before any call above `BULK_DRAFT_MAX_RECIPIENTS` (200) with `batch_too_large`, cost stated on the panel. New registry tasks `outreach_draft` / `bulk_draft`, rate limits, 1-day TTL. The hard rule is static: `scripts/test/ai-never-autosend.test.mjs` fails if the dormant check-ins, the outcome auto-send, the cron route or the e-mail service ever import an AI module, or if any draft module/route sends, notifies or logs a message — `outcomeAutoSend` stays templated-only. UI: \"Draft for this mentee\" in the mentor's thread composer, AI panel and outcome-note draft in `/mentor/email`, both marked ✨ until edited.",
+  "notes": {
+    "en": [
+      "Mentors can get an AI draft for a first message, a check-in to a quiet mentee or an outcome note — written in the mentee's language, based only on what the relation shows, and never sent until you press Send."
+    ],
+    "tr": [
+      "Mentorlar ilk mesaj, sessiz kalan bir mentee'ye hatırlatma veya sonuç notu için AI taslağı alabilir — mentee'nin dilinde, yalnızca ilişkide görünen bilgilere dayanarak ve sen Gönder'e basmadan asla gönderilmeden."
+    ],
+    "de": [
+      "Mentor:innen erhalten einen KI-Entwurf für die erste Nachricht, eine Nachfrage bei einer stillen Mentee oder eine Ergebnisnotiz — in der Sprache der Mentee, nur auf Basis dessen, was die Beziehung zeigt, und nie gesendet, bevor du auf Senden drückst."
+    ]
+  }
+}

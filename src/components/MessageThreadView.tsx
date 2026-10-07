@@ -24,7 +24,7 @@ import { LanguageBadge } from '@/components/LanguageBadge';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 import { scrollBehavior } from '@/lib/motion';
-import { SuggestReply, ThreadCatchUp } from '@/components/ThreadAiTools';
+import { MentorDraft, SuggestReply, ThreadCatchUp } from '@/components/ThreadAiTools';
 import { encodePageCursor, mergeNewestPage, prependOlderPage } from '@/lib/messagePage';
 import {
   resolveMessageTemplateText,
@@ -112,6 +112,8 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // the mentee (#1130). Answered for conversations too since the mentorship
   // thread hands over to one (#1156).
   const [mentorId, setMentorId] = useState<string | null>(null);
+  // The mentorship behind this 1:1 thread, for the mentor's grounded draft (#2048).
+  const [mentorshipId, setMentorshipId] = useState<string | null>(null);
   const [showParties, setShowParties] = useState(false);
   const [body, setBody] = useState('');
   // The last AI-suggested reply put into the box (#2048). Marked ✨ while the
@@ -365,6 +367,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     // participants array. Normalize both to one list.
     setParties(d.participants ?? [d.mentor, d.mentee].filter(Boolean));
     setMentorId(d.mentorId ?? d.mentor?.id ?? null);
+    setMentorshipId(d.mentorshipId ?? d.relationId ?? null);
     setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null } : null);
     setCanPost(d.canPost !== false);
     setCounterpartState(d.counterpartState ?? null);
@@ -1082,6 +1085,14 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         {target.kind === 'conversation' && messages.length > 0 && (
           <SuggestReply
             conversationId={target.id}
+            onDraft={(text) => { changeBody(text); setAiDraft(text); bodyRef.current?.focus(); }}
+          />
+        )}
+        {/* The mentor's grounded draft — first message, check-in or outcome
+            note, whichever the relation is at (#2048). Same rule: text only. */}
+        {mentorshipId && myId && myId === mentorId && (
+          <MentorDraft
+            relationId={mentorshipId}
             onDraft={(text) => { changeBody(text); setAiDraft(text); bodyRef.current?.focus(); }}
           />
         )}

@@ -72,6 +72,17 @@ export const AI_RATE_LIMITS = {
   // message is answered from the stored draft.
   suggested_reply: { limit: 15, windowMs: 10 * 60 * 1000 },
 
+  // Grounded outreach draft (POST /api/mentorship/[id]/ai-draft, #2048).
+  // 15 calls / 10 minutes: a mentor working through their quiet or newly
+  // assigned mentees drafts one message each; the same relation state is
+  // answered from the stored draft.
+  outreach_draft: { limit: 15, windowMs: 10 * 60 * 1000 },
+
+  // Bulk e-mail draft (POST /api/ai/bulk-draft, #2048).
+  // 6 calls / 10 minutes: one call drafts the mail for up to 200 recipients,
+  // so a handful of rewordings is the legitimate pattern.
+  bulk_draft: { limit: 6, windowMs: 10 * 60 * 1000 },
+
   // Coarse per-organization burst limit across all AI routes.
   // 120 calls / 10 minutes: Prevents a single tenant from starving shared capacity
   // or exhausting provider burst rates before fine-grained per-tenant quotas land (#1555).
