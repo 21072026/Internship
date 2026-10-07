@@ -143,7 +143,7 @@ test('cv_feedback and interaction_summary payloads carry no e-mail, phone number
   const extract = preparePrompt({ task: 'cv_extract', system: 'S', input: wrapUntrusted('cv', HOSTILE_CV) }).input;
   assert.match(extract, EMAIL);
   assert.match(extract, /\+49 171 1234567/);
-  assert.match(extract, /linkedin\.com/);
+  assert.ok(extract.includes('https://linkedin.com/in/ada?trk=abc123'), 'cv_extract keeps the profile link it exists to read');
 });
 
 test('a hostile CV is flagged on the call, and the request still goes out normally', async () => {
