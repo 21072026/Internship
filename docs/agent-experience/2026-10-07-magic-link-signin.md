@@ -34,3 +34,21 @@
 - **The seeded admin is a prerequisite for `e2e/auth.spec.ts`**, not just for the app:
   `npx prisma db seed` after `db push`, or the two `admin@example.com` tests time out on
   "Invalid email or password".
+- **Two cookie-less NextAuth requests in flight at once mint two CSRF cookies, and the sign-in
+  POST then fails silently.** The CI trace showed the sign-in POST carrying csrf token A in its
+  body (from `/api/auth/csrf`, sent with cookie A) while the cookie jar held B. NextAuth answers
+  `/api/auth/signin?csrf=true` — a URL with **no `error` param**, so `signIn({ redirect: false })`
+  returns `{ ok: true, error: null }` and there is no session. Two lessons: (1) a page that calls
+  `signIn()` on mount should wait for `useSession().status !== 'loading'`, so the
+  SessionProvider's first round-trip has landed and every later call reuses its cookie;
+  (2) **in a spec, `page.request` shares the browser's cookie jar** — an `expect.poll` on
+  `/api/auth/session` fired right after `page.goto` is exactly such a concurrent cookie-less
+  request, and in the CI trace the browser's only csrf-setting response was the session GET, so
+  the second cookie came from the test itself. Wait for the landing (`page.waitForURL('/portal')`)
+  and read the session after. Only the production build (fast responses) interleaved them;
+  `next dev` never did. `/auth/sso/complete` and `/auth/resume` share the page-side half (#2858).
+- **Read a Playwright HTML-report artifact without a browser:** the report is a base64 zip in
+  `<template id="playwrightReportBase64">`; `report.json` + per-test JSON give errors and
+  attachment paths, `data/*.md` are the error-context snapshots and `data/*.zip` the traces —
+  `*.network` inside a trace lists every request with cookies and set-cookie headers, which is
+  what settled this one. Artifact names are zero-based (`playwright-report-0-smoke` = shard 1/2).

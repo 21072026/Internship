@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { floodIp, freshIp } from './helpers/rateLimit';
+import { gotoSettled } from './helpers/auth';
 import { totp } from '../src/lib/totp';
 import { LOGIN_LINK_TTL_MS, generateLoginLinkToken, hashLoginLinkToken } from '../src/lib/magicLinkToken';
 
@@ -47,7 +48,10 @@ async function requestLink(request: APIRequestContext, email: string, headers: R
 }
 
 async function dropSession(page: Page) {
-  await page.goto('about:blank');
+  // The completion page's own full-page navigation to the role home can still
+  // be in flight here and win the race against about:blank — the same shape
+  // e2e/sso-roundtrip.spec.ts absorbs with gotoSettled.
+  await gotoSettled(page, 'about:blank');
   await page.context().clearCookies({ name: /next-auth\.session-token/ });
 }
 
@@ -82,10 +86,16 @@ test(
       expect(afterSecond[0].usedAt).not.toBeNull();
       expect(afterSecond[1].usedAt).toBeNull();
 
-      // 4. Redeem a link: it signs the user in.
+      // 4. Redeem a link: it signs the user in and lands on the role home.
+      // The session is read only AFTER that navigation: `page.request` shares
+      // the browser's cookie jar, and a poll fired while the page is still
+      // bootstrapping is one more cookie-less NextAuth request — which mints
+      // its own CSRF cookie and can overwrite the one the page's sign-in POST
+      // was built on (the race #2850's CI run exposed).
       const link = await seedLink(user.id);
       await page.goto(`/auth/magic/complete?token=${link.raw}`);
-      await expect.poll(() => sessionEmail(page.request), { timeout: 30_000 }).toBe(email);
+      await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 30_000 });
+      expect(await sessionEmail(page.request)).toBe(email);
       const spent = await prisma.loginLinkToken.findUnique({ where: { id: link.id } });
       expect(spent!.usedAt).not.toBeNull();
 
@@ -151,7 +161,8 @@ test(
       // The live code completes the sign-in and spends the link.
       await form.getByLabel('Authenticator code').fill(totp(secret));
       await form.locator('button[type="submit"]').click();
-      await expect.poll(() => sessionEmail(page.request), { timeout: 30_000 }).toBe(email);
+      await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 30_000 });
+      expect(await sessionEmail(page.request)).toBe(email);
       expect((await prisma.loginLinkToken.findUnique({ where: { id: link.id } }))!.usedAt).not.toBeNull();
       // And the step is burned, exactly as a password sign-in burns it (#865).
       const fresh = await prisma.user.findUnique({ where: { id: user.id }, select: { lastTotpStep: true } });

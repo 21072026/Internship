@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { BrandTile } from '@/components/BrandMark';
@@ -22,6 +22,16 @@ type Stage = 'redeeming' | 'totp' | 'failed';
 function Complete() {
   const params = useSearchParams();
   const t = useT();
+  // The redemption waits for the SessionProvider's first /api/auth/session
+  // round-trip. In a browser with no NextAuth cookies yet — a mailed link
+  // opened in a fresh tab is exactly that — any two NextAuth requests in
+  // flight at once (that one and signIn()'s own /api/auth/providers call)
+  // EACH mint a CSRF cookie: the sign-in POST then carries one token in its
+  // body and the other in its cookie, NextAuth answers `signin?csrf=true` (a
+  // URL with no `error` param, so signIn() reports success) and no session
+  // exists. Once the first round-trip has landed, every later call reuses its
+  // cookie. Seen on the CI production build (#2850).
+  const { status: sessionStatus } = useSession();
   const [stage, setStage] = useState<Stage>('redeeming');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -71,11 +81,11 @@ function Complete() {
   };
 
   useEffect(() => {
-    if (started.current) return;
+    if (sessionStatus === 'loading' || started.current) return;
     started.current = true;
     void redeem('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+  }, [params, sessionStatus]);
 
   const submitCode = async (e: React.FormEvent) => {
     e.preventDefault();
