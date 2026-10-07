@@ -4,6 +4,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { AgendaPanel } from '@/components/AgendaPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
@@ -45,6 +46,9 @@ export default async function PortalGoalsPage() {
         <div className="space-y-6">
           {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
           <GoalsPanel relationId={relation.id} readOnly={isArchived} />
+          {/* The session agenda (#1843), the same list the mentor sees, ticked
+              live from either side; read-only once the mentorship is over. */}
+          <AgendaPanel relationId={relation.id} readOnly={isArchived} />
           {/* Deliberately still writable on an archive: the feedback a mentee
               gives about their mentor is most likely to be written once the
               mentorship is over, and /api/evaluations accepts it. Only the

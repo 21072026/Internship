@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
+import { OFFER_COMPENSATION_FIELDS } from '../src/lib/offers';
 
 // Offer management (#809): state machine, role scoping, the compensationNote
 // sensitivity rule, audit trail, and the idempotent expiry cron.
@@ -278,23 +279,37 @@ test('an unauthorized/other role never receives compensationNote in the response
         status: 'SENT',
         position: 'Platform Engineer',
         compensationNote: 'Base 45k + equity — do not leak this',
+        // The structured figures (#1851) ride the same rule as the note.
+        currency: 'EUR',
+        baseAmountMinor: 4_500_000,
+        basePeriod: 'YEARLY',
+        signingBonusMinor: 123_456,
+        otherBonusMinor: 65_432,
+        equityNote: '0.05 % VSOP — do not leak this either',
+        hoursPerWeek: 40,
+        contractType: 'PERMANENT',
         sentAt: new Date(),
         createdById: s.admin.id,
       },
     });
 
-    // COMPANY may see the offer (it's theirs) but must never get compensationNote.
+    // COMPANY may see the offer (it's theirs) but must never get compensationNote
+    // — nor any of the structured compensation columns (#1851): the list in
+    // src/lib/offers.ts is what the routes select from, so this asserts over
+    // that list, and a column added to the schema but not to it fails here.
     await signInAndSettle(page, companyEmail, s.pw, '/company');
     const res = await page.request.get(`/api/offers/${offer.id}`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.offer.position).toBe('Platform Engineer');
-    expect(body.offer).not.toHaveProperty('compensationNote');
+    for (const field of OFFER_COMPENSATION_FIELDS) expect(body.offer).not.toHaveProperty(field);
     expect(JSON.stringify(body)).not.toContain('do not leak this');
+    expect(JSON.stringify(body)).not.toContain('4500000');
+    expect(JSON.stringify(body)).not.toContain('123456');
 
     const listRes = await page.request.get('/api/offers');
     const listBody = await listRes.json();
-    for (const o of listBody.offers) expect(o).not.toHaveProperty('compensationNote');
+    for (const o of listBody.offers) for (const field of OFFER_COMPENSATION_FIELDS) expect(o).not.toHaveProperty(field);
 
     // The mentee it belongs to IS authorized to see it (they need it to decide).
     await signInAsFreshUser(page, s.menteeEmail, s.pw, '/portal');
@@ -302,6 +317,16 @@ test('an unauthorized/other role never receives compensationNote in the response
     expect(menteeRes.status()).toBe(200);
     const menteeBody = await menteeRes.json();
     expect(menteeBody.offer.compensationNote).toBe('Base 45k + equity — do not leak this');
+    expect(menteeBody.offer.baseAmountMinor).toBe(4_500_000);
+    expect(menteeBody.offer.currency).toBe('EUR');
+    expect(menteeBody.offer.contractType).toBe('PERMANENT');
+    // And the portal card renders the figures, not just the note.
+    await page.goto('/portal');
+    const summary = page.getByTestId('offer-card-compensation');
+    await expect(summary).toBeVisible({ timeout: 15_000 });
+    await expect(summary).toContainText('€45,000.00');
+    await expect(summary).toContainText('per year');
+    await expect(summary).toContainText('40 h/week');
   } finally {
     await prisma.user.deleteMany({ where: { id: companyUser.id } });
     await s.cleanup();

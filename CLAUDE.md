@@ -481,6 +481,14 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   counters only at the source. A request path never scans the activity tables; it reads the
   rollup. **Video volume is reported, never gated** — no meeting path may return a 403 for a
   metering reason.
+- **Structured compensation on offers** ([`docs/offer-compensation.md`](docs/offer-compensation.md),
+  #1851): money on `Offer` is integer **minor units** + ISO code (`baseAmountMinor`, `currency`,
+  `basePeriod`…) — never a Float/Decimal, same rule as `ProgramCost`/`Placement`. The rules
+  are pure in `src/lib/compensation.ts`; every compensation column is withheld from COMPANY
+  through ONE list, `OFFER_COMPENSATION_FIELDS` (`src/lib/offers.ts`) — add a column there or
+  `e2e/offers.spec.ts` goes red. The benchmark (`/api/admin/offers/benchmark`) never
+  converts currencies and returns buckets under 5 offers as `suppressed: true` with `null`
+  figures, never omitted.
 - **The VPAT is generated, never hand-edited** (`docs/legal/README.md` § VPAT, #2037): rows live
   in `src/lib/vpat.ts`, the automated evidence in `e2e/a11y-baseline.json`; `npm run vpat:evidence`
   writes `docs/legal/vpat.md`, `docs/legal/vpat-evidence.md` and `src/lib/vpatEvidence.generated.ts`,
