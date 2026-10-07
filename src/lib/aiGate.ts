@@ -26,8 +26,10 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 //                                      staff role with CV access triggers it
 //   cv_feedback           participant  the mentee's own CV, /portal            never
 //   interview_prep        participant  the mentee, for themselves, /portal     never
-//   interaction_summary   participant  the mentor's own view of their own      never
-//                                      mentee (/mentor/mentees/[id])
+//   interaction_summary   participant  the mentor's own view of their own      never —
+//                                      mentee (/mentor/mentees/[id]); an       except an
+//                                      ADMIN reading another pair's log is     admin: the
+//                                      operator use and the route says so      route escalates
 //   mentor_match          operator     admin triage, /admin/candidates         required
 //   survey_summary        operator     admin, /admin/surveys/[id]              required
 //   evaluation_insights   operator     admin, /admin/insights                  required
@@ -36,7 +38,11 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 //
 // `participant` is the free core: the gate never runs the entitlement query
 // on that path (no extra read, no paywall — the denial copy stays the neutral
-// "not right now", docs/ai.md § The degradation contract). `operator` asks
+// "not right now", docs/ai.md § The degradation contract). A route may
+// ESCALATE one call of a participant task to operator (`audience: 'operator'`)
+// when the caller is staff using it as a tool — an admin summarising a pair
+// that is not theirs; the registry's audience is the floor and is never
+// lowered per call. `operator` asks
 // `entitled(orgId, 'AI_PACKAGE')` (#1733) and answers 'not_entitled' when the
 // org has neither a plan with the pack nor a grant; the operator routes turn
 // that into the shared `403 { code: 'feature_locked', feature: 'AI_PACKAGE' }`.
@@ -131,6 +137,10 @@ export async function runAiGated<T>(opts: {
   // The tenant whose quota the call consumes — `settingsOrgOf(session)`. Required
   // so a new AI feature cannot silently meter against the default org.
   orgId: string | null;
+  // Escalate THIS call to operator use of a participant task (#1738): an admin
+  // reading a pair's summary, a staff-triggered extraction. Only 'operator'
+  // can be passed — the registry's audience is the floor, never lowered here.
+  audience?: 'operator';
   // Recorded for metering/attribution (companyId prepares per-company quotas).
   userId?: string | null;
   companyId?: string | null;
@@ -144,7 +154,7 @@ export async function runAiGated<T>(opts: {
   // participant task never reaches this read. Before the cache: a locked org
   // is not answered from a stored copy either.
   const task: AiTaskSpec = AI_TASKS[opts.scope];
-  if (task.audience === 'operator' && !(await entitled(await quotaOrgId(opts.orgId), AI_PACK_FEATURE))) {
+  if ((opts.audience ?? task.audience) === 'operator' && !(await entitled(await quotaOrgId(opts.orgId), AI_PACK_FEATURE))) {
     return { ok: false, reason: 'not_entitled' };
   }
   // Consent first, cache second: a withdrawn consent is not answered from a

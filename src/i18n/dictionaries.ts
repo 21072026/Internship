@@ -5025,6 +5025,8 @@ const en = {
     quotaExceeded: 'The monthly AI quota is exhausted. An admin can raise it in Settings.',
     // #2024: the provider failed even after its retries — not the user's doing.
     providerError: 'The AI service is not answering right now. Please try again in a few minutes.',
+    // #1738: an admin on a pair that is not theirs, in an org without the AI pack.
+    locked: 'The AI summary of another pair\'s log is part of the AI pack, which is not included for this organisation. The platform operator can add it.',
   },
   aiArtifact: {
     generatedAt: 'Generated {date}',
@@ -11978,6 +11980,7 @@ const tr: Dict = {
     consentRequired: 'Mentee AI özetlerine izin vermemiş. Hesap → Gizlilik ve onay bölümünden açabilir.',
     quotaExceeded: 'Aylık AI kotası doldu. Admin, Ayarlar’dan artırabilir.',
     providerError: 'AI hizmeti şu an yanıt vermiyor. Lütfen birkaç dakika sonra tekrar dene.',
+    locked: 'Başka bir eşleşmenin kaydına ait yapay zekâ özeti, bu organizasyona dahil olmayan AI paketinin parçası. Platform işletmecisi ekleyebilir.',
   },
   aiArtifact: {
     generatedAt: '{date} tarihinde oluşturuldu',
@@ -18900,6 +18903,7 @@ const de: Dict = {
     consentRequired: 'Der Mentee hat KI-Zusammenfassungen nicht erlaubt. Aktivierbar unter Konto → Datenschutz & Einwilligung.',
     quotaExceeded: 'Das monatliche KI-Kontingent ist aufgebraucht. Ein Admin kann es in den Einstellungen erhöhen.',
     providerError: 'Der KI-Dienst antwortet gerade nicht. Bitte versuche es in ein paar Minuten noch einmal.',
+    locked: 'Die KI-Zusammenfassung des Protokolls eines anderen Paars gehört zum KI-Paket, das für diese Organisation nicht enthalten ist. Der Plattformbetreiber kann es hinzufügen.',
   },
   aiArtifact: {
     generatedAt: 'Erstellt am {date}',

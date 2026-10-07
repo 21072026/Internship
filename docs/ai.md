@@ -80,7 +80,12 @@ paid add-on:
   `interview_prep`, `interaction_summary`. The mentee's own tools and the
   mentor's own view of their own mentee. The gate never runs the entitlement
   query on this path: no extra read, no paywall, and `not_entitled` cannot
-  reach a participant route or screen.
+  reach a participant route or screen. A route may **escalate one call** to
+  operator (`runAiGated({ audience: 'operator' })`) when staff use a
+  participant task as a tool — `POST /api/interactions/summary` does so for an
+  ADMIN summarising a pair that is not theirs, and answers `403 feature_locked`
+  without the pack; the registry's audience is the floor and is never lowered
+  per call.
 - **`operator`** — the admin tools: `mentor_match`, `survey_summary`,
   `evaluation_insights`, `weekly_report_digest`, `analytics_narrative`. The
   gate asks `entitled(orgId, 'AI_PACKAGE')` (#1733; the constant is

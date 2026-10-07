@@ -217,8 +217,23 @@ test('the free core never sees the AI pack: mentee and mentor AI answer as befor
     try {
       await signInAndSettle(mentorPage, org.emails.mentor, PW, '/mentor');
       await neverLocked(await mentorPage.request.post('/api/interactions/summary', { data: { relationId: org.rel.id } }));
+      expect((await (await mentorPage.request.get(`/api/interactions/summary?relationId=${org.rel.id}`)).json()).locked).toBeUndefined();
     } finally {
       await mentorCtx.close();
+    }
+    // The same summary read by an ADMIN of a pair that is not theirs is an
+    // admin tool: that one call is operator use, and without the pack it is
+    // locked — on the run and on the stored-copy read alike.
+    const adminCtx = await page.context().browser()!.newContext();
+    const adminPage = await adminCtx.newPage();
+    try {
+      await signInAndSettle(adminPage, org.emails.admin, PW, '/admin');
+      const run = await adminPage.request.post('/api/interactions/summary', { data: { relationId: org.rel.id } });
+      expect(run.status()).toBe(403);
+      expect(await run.json()).toMatchObject(LOCKED);
+      expect(await (await adminPage.request.get(`/api/interactions/summary?relationId=${org.rel.id}`)).json()).toMatchObject({ latest: null, locked: true });
+    } finally {
+      await adminCtx.close();
     }
     expect(await prisma.aiUsage.count()).toBe(usageBefore);
   } finally {
