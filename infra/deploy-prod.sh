@@ -711,6 +711,9 @@ run_tool node prisma/backfill-project-members.mjs || true
 # orgId with the default org, which would hand a MARKETING tenant's audit trail
 # and goal pool to the INTERNSHIP admin. Only fills NULLs — idempotent.
 run_tool node prisma/backfill-activity-log-org.mjs || true
+# Same shape for the audit trail (#2012): the actor's org, then the target
+# user's; system rows fall to the default org below.
+run_tool node prisma/backfill-audit-log-org.mjs || true
 run_tool node prisma/backfill-task-template-org.mjs || true
 run_tool node prisma/backfill-ai-usage-org.mjs || true
 run_tool node prisma/backfill-ai-usage-task.mjs || true

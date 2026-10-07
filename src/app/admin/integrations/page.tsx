@@ -11,6 +11,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
+import { AuditDrainsCard } from '@/components/admin/AuditDrainsCard';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
 interface Key {
@@ -72,6 +73,7 @@ const CONNECTOR_LABEL: Record<string, string> = {
   sso: 'connectorSso',
   inbound_jaas: 'connectorInboundJaas',
   inbound_email: 'connectorInboundEmail',
+  audit_drain: 'connectorAuditDrain',
 };
 
 export default function IntegrationsPage() {
@@ -542,6 +544,11 @@ export default function IntegrationsPage() {
             </>
           )}
         </Card>
+
+        {/* The audit stream (#2012): the tenant's AuditLog rows, signed and
+            POSTed to a SIEM. Own component — own fetch, own one-time secret
+            banner — so this page only mounts it. */}
+        <AuditDrainsCard onLocked={() => setApiLocked(true)} />
       </div>
     </div>
   );

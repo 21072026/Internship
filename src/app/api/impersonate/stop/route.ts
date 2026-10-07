@@ -25,8 +25,10 @@ export async function POST() {
   }
 
   const grant = await createImpersonationGrant(impersonatorId, impersonatorId, 'STOP');
+  // No tenant scope is bound on this route, so the row's org is passed by
+  // hand (#2012): the impersonated account's, which is the admin's own world.
   await prisma.auditLog.create({
-    data: { actorId: impersonatorId, action: 'IMPERSONATE_STOP', targetId: session.user.id },
+    data: { actorId: impersonatorId, action: 'IMPERSONATE_STOP', targetId: session.user.id, orgId: session.user.orgId ?? null },
   });
   await logActivity({ action: 'impersonate.stop', level: 'warning', actorId: impersonatorId, targetType: 'user', targetId: session.user.id });
 

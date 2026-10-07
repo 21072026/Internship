@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -145,6 +146,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           actorId: session.user.id,
           action: 'ADMIN_RESET_2FA',
           targetId: user.id,
+          orgId: resolveOrgId(session),
           detail,
         },
       });

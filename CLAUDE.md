@@ -447,6 +447,20 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   served host, ≤ 191 chars — never a bare `z.string().url()`. `BUILTIN` stays the default and
   ignores saved rooms. Don't widen `EMBEDDABLE_MEETING_HOSTS` for a provider link; the UI
   offers "Open in <provider>" (`meetingProviderName()`) instead.
+- **The audit stream is one reader, one cursor, one signature** ([`docs/audit-stream.md`](docs/audit-stream.md),
+  #2012): a tenant's `AuditLog` rows are POSTed to its registered `AuditDrain` URL as signed
+  `application/x-ndjson` batches (`X-Signature: sha256=…`, `json_lines` or ECS), read forward
+  from a `(createdAt, id)` cursor that moves **only on 2xx** — an outage replays, never loses,
+  so delivery is at-least-once and a receiver dedupes on the row `id`. The rules (encoding,
+  signing, cursor, 1m→6h backoff, self-pause after 20 failures, URL shape) are pure in
+  `src/lib/auditDrainRule.ts`; `src/lib/auditDrain.ts` is the only reader and the only writer
+  of the drain row. Three things are load-bearing: **every `prisma.auditLog.create` passes
+  `orgId`** (the middleware stamps it only under `MT_ENFORCE_ISOLATION`; a row without one
+  reaches no drain), `prisma/backfill-audit-log-org.mjs` runs **before** the generic
+  `backfill-organization.mjs` in the deploy, and the stream never folds `NULL`-org rows into
+  the default org. The test button ships **synthetic** rows only (`X-Audit-Test: 1`).
+  `AUDIT_DRAIN_ALLOW_INSECURE_RECEIVERS=1` is the e2e sink's switch and is never set on a
+  deployment.
 - **Single-owner background work** (`src/lib/jobs/lease.ts`, #1701): anything that
   must run **once per environment** rather than once per process takes a `JobLease`
   — one row per lease name, a TTL, and a takeover by conditional `UPDATE`. Today
