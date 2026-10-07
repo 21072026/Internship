@@ -813,6 +813,14 @@ model ConversationParticipant {
   // Last time this participant read the conversation — powers per-conversation
   // unread counts without a per-message read row.
   lastReadAt     DateTime?
+  // Per-viewer inbox state (#1609, src/lib/conversationState.ts). Nullable,
+  // no default, no index — additive columns only (see the warning below about
+  // indexes on this table). Archived hides the thread behind a filter (nothing
+  // is deleted), mutedUntil silences push / e-mail / bell / digest for this
+  // viewer until then, pinnedAt sorts the thread first.
+  archivedAt     DateTime?
+  mutedUntil     DateTime?
+  pinnedAt       DateTime?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)

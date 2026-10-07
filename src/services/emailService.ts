@@ -3,6 +3,7 @@ import cron from 'node-cron';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { directKeyFor } from '@/lib/conversations';
 import { orgIdsEntitledTo } from '@/lib/subscription';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
@@ -4644,6 +4645,24 @@ export async function sendUnreadMessageDigests() {
     { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }
   >();
   const allIds: string[] = [];
+
+  // Muted threads (#1609): a recipient who muted the pair's conversation gets
+  // no digest line for it. Read once for the batch. A mentorship thread's
+  // messages may not carry the conversation id yet (it is adopted lazily,
+  // #1156), so the pair's directKey identifies the thread as well. The skipped
+  // lines are still marked digested below — a mute is not a postponement, and
+  // unmuting must not deliver a backlog of old digests.
+  const recipientIds = [...new Set(msgs.flatMap((m) => (m.relation ? [m.senderId === m.relation.mentorId ? m.relation.menteeId : m.relation.mentorId] : [])))];
+  const mutedRows = recipientIds.length
+    ? await prisma.conversationParticipant.findMany({
+        where: { userId: { in: recipientIds }, mutedUntil: { gt: now } },
+        select: { userId: true, conversationId: true, conversation: { select: { directKey: true } } },
+      })
+    : [];
+  const mutedThreads = new Set(
+    mutedRows.flatMap((r) => [`c:${r.conversationId}|${r.userId}`, ...(r.conversation.directKey ? [`d:${r.conversation.directKey}|${r.userId}`] : [])]),
+  );
+
   for (const m of msgs) {
     const rel = m.relation;
     // Defensive: the query filters relationId out, so this cannot normally fire.
@@ -4652,6 +4671,12 @@ export async function sendUnreadMessageDigests() {
     const recipient = m.senderId === rel.mentorId ? rel.mentee : rel.mentor;
     const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
     if (!recipient?.email) continue;
+    if (
+      (m.conversationId && mutedThreads.has(`c:${m.conversationId}|${recipient.id}`)) ||
+      mutedThreads.has(`d:${directKeyFor(rel.mentorId, rel.menteeId)}|${recipient.id}`)
+    ) {
+      continue;
+    }
     const entry = byRecipient.get(recipient.id) ?? { recipient, items: [] };
     entry.items.push({
       relationId: rel.id,

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { conversationForRelation, createOrGetProjectConversation } from '@/lib/conversations';
+import { isArchived, isMuted, sortInbox } from '@/lib/conversationState';
 
 // The message inbox, read once for every surface that lists it: the /messages
 // page and GET /api/conversations (the native app, #2775). Two copies of this
@@ -15,6 +16,12 @@ export interface InboxThread {
   otherId: string | null;
   last: { body: string; createdAt: Date; senderId: string } | null;
   unread: number;
+  /** The viewer's own inbox state (#1609, src/lib/conversationState.ts). */
+  pinned: boolean;
+  muted: boolean;
+  mutedUntil: Date | null;
+  /** Effective: an archived thread someone wrote into since is back in the list. */
+  archived: boolean;
 }
 
 export interface Inbox {
@@ -64,7 +71,9 @@ export async function loadInbox(me: string, groupName: (projectName: string) => 
       id: true,
       type: true,
       project: { select: { name: true } },
-      participants: { select: { userId: true, user: { select: { fullName: true } } } },
+      participants: {
+        select: { userId: true, archivedAt: true, mutedUntil: true, pinnedAt: true, user: { select: { fullName: true } } },
+      },
       messages: {
         orderBy: { createdAt: 'desc' },
         take: 1,
@@ -85,19 +94,30 @@ export async function loadInbox(me: string, groupName: (projectName: string) => 
     : [];
 
   // One row per conversation — which, for a 1:1 chat, means one row per person.
-  const threads: InboxThread[] = conversations
-    .map((c) => {
+  // Pinned first, then by latest message (#1609); which of them a filter chip
+  // shows is the page's business (filterInbox), so the native app gets all of
+  // them with their flags.
+  const now = new Date();
+  const threads: InboxThread[] = sortInbox(
+    conversations.map((c) => {
       const other = c.type === 'GROUP' ? null : c.participants.find((p) => p.userId !== me) ?? null;
+      const mine = c.participants.find((p) => p.userId === me) ?? { archivedAt: null, mutedUntil: null, pinnedAt: null };
+      const last = c.messages[0] ?? null;
+      const muted = isMuted(mine.mutedUntil, now);
       return {
         conversationId: c.id,
         type: c.type as InboxThread['type'],
         name: c.type === 'GROUP' ? groupName(c.project?.name ?? '—') : other?.user.fullName ?? '—',
         otherId: other?.userId ?? null,
-        last: c.messages[0] ?? null,
+        last,
         unread: c._count.messages,
+        pinned: mine.pinnedAt != null,
+        muted,
+        mutedUntil: muted ? mine.mutedUntil : null,
+        archived: isArchived(mine, last, me, now),
       };
-    })
-    .sort((a, b) => (b.last?.createdAt?.getTime() ?? 0) - (a.last?.createdAt?.getTime() ?? 0));
+    }),
+  );
 
   // Offer only people we don't already have a DM with — those threads are in
   // the list above. DIRECT only: every co-member is also a participant of the
