@@ -2328,9 +2328,36 @@ model ApiKey {
   revokedAt   DateTime?
   lastUsedAt  DateTime?
   createdAt   DateTime      @default(now())
+  // Period allowance (#2010). Both null = no period quota (the per-minute
+  // limit still applies) — every key minted before this stays exactly as it
+  // was. `quotaPeriod` is 'day' | 'month' (UTC calendar periods).
+  quotaPeriod String?       @db.VarChar(10)
+  quotaLimit  Int?
+  usage       ApiKeyUsage[]
 
   @@index([orgId])
   @@index([createdById])
+}
+
+// Requests per API key per quota period (#2010) — the only counter model the
+// per-key quota adds. Written in BATCHES by src/lib/apiKeyQuota.ts (an
+// in-process tally flushed every few seconds as one `increment` upsert per
+// key), never once per request: a write per request would turn the meter into
+// an amplifier for the traffic it measures. The increment is atomic in the
+// database, so replicas add up rather than overwrite each other, and the
+// count survives a restart (minus at most one unflushed window).
+model ApiKeyUsage {
+  id          String   @id @default(cuid())
+  apiKeyId    String
+  apiKey      ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  orgId       String?
+  periodStart DateTime
+  requests    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([apiKeyId, periodStart])
+  @@index([orgId])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support

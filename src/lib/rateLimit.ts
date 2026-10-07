@@ -91,6 +91,22 @@ export function rateLimit(
   return countRequest(store, key, { limit, windowMs }, now);
 }
 
+/**
+ * Where a window stands without counting a request (#2010): what the
+ * `RateLimit-*` headers report. A key that has not been seen in the current
+ * window reads as a fresh one.
+ */
+export function rateLimitState(
+  bucket: string,
+  subject: string,
+  { limit, windowMs }: { limit: number; windowMs: number },
+): { limit: number; remaining: number; resetAt: number } {
+  const now = Date.now();
+  const entry = store.get(`${bucket}:${subject}`);
+  if (!entry || entry.resetAt <= now) return { limit, remaining: limit, resetAt: now + windowMs };
+  return { limit, remaining: Math.max(0, limit - entry.count), resetAt: entry.resetAt };
+}
+
 const BREACH_LOG_EVERY_MS = 60_000;
 const breachLoggedAt = new Map<string, number>();
 
