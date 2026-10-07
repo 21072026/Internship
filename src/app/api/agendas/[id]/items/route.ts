@@ -8,11 +8,18 @@ import { withTenantScope } from '@/lib/orgContext';
 import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { agendaIfAllowed, agendaInclude, announceAgendaChange, serializeAgenda, viewerOf } from '@/lib/agendaAccess';
+import { AGENDA_PROPOSAL_MAX } from '@/lib/aiAgendaRule';
 
-const schema = z.object({ text: z.string().trim().min(1).max(TEXT_LIMITS.agendaItemText) });
+const line = z.string().trim().min(1).max(TEXT_LIMITS.agendaItemText);
+// One line, or the lines of an accepted AI proposal (#1845) in one request —
+// one write, one realtime signal, instead of a request per line.
+const schema = z
+  .object({ text: line.optional(), texts: z.array(line).min(1).max(AGENDA_PROPOSAL_MAX).optional() })
+  .refine((d) => Boolean(d.text) !== Boolean(d.texts), { message: 'text or texts' });
 
-// POST — add an ad-hoc line to the agenda (#1843). Either seat may; it lands
-// at the end. Templated lines come from the guide, never from here.
+// POST — add an ad-hoc line to the agenda (#1843), or several at once (an
+// accepted proposal, #1845). Either seat may; they land at the end, in order.
+// Templated lines come from the guide, never from here.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -30,8 +37,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
     const last = agenda.items.reduce((max, item) => Math.max(max, item.order), -1);
-    await prisma.sessionAgendaItem.create({
-      data: { agendaId: agenda.id, order: last + 1, text: parsed.data.text },
+    const texts = parsed.data.texts ?? [parsed.data.text as string];
+    await prisma.sessionAgendaItem.createMany({
+      data: texts.map((text, index) => ({ agendaId: agenda.id, order: last + 1 + index, text })),
     });
     const updated = await prisma.sessionAgenda.findUniqueOrThrow({ where: { id: agenda.id }, include: agendaInclude });
     announceAgendaChange(agenda.relation, agenda.relationId, session.user.id);

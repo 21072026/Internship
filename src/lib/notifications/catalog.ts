@@ -153,6 +153,9 @@ export const NOTIFICATION_EVENTS = [
   { key: 'support.newMessageGeneric', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: [] },
   { key: 'support.replied', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: [] },
   { key: 'support.closed', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: [] },
+  // Safeguarding (#2056): to the org's admins only, in-app only, no params — the
+  // bell never says who wrote what; the queue behind its own route check does.
+  { key: 'safeguarding.flagged', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'public_contact.message', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name', 'email', 'preview'] },
   { key: 'signup.companyInquiry', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['companyName', 'contactName'] },
 

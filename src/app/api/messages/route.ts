@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -342,6 +343,11 @@ async function handlePost(request: Request) {
       },
       include: { attachments: { select: ATTACHMENT_SELECT } },
     });
+
+    // Safeguarding (#2056): flag a shared contact detail or a watch keyword for
+    // the admin queue. After the write and never able to fail or hold it — the
+    // message is delivered whatever this finds.
+    await scanMessageForSafeguarding({ messageId: message.id, body, senderId: session.user.id });
 
     // Notify everyone but the sender — the single other party on a mentorship
     // thread, or every other participant of a conversation. An admin posting

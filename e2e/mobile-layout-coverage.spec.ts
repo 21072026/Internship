@@ -149,6 +149,8 @@ const OPERATIONS: Route[] = shell(
   '/admin/reports/subscriptions',
   // AI usage, spend and quota (#2030) — a wide per-task table, scrolled in its own container.
   '/admin/ai',
+  // The safeguarding review queue (#2056).
+  '/admin/safeguarding',
   '/admin/integrations',
   '/admin/api-explorer',
   '/admin/retention',

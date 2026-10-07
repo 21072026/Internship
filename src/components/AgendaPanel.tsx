@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRightCircle, Check, Circle, ListChecks, Plus, Trash2 } from 'lucide-react';
+import { ArrowRightCircle, Check, Circle, ListChecks, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +20,11 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 // lock); `readOnly` and the server's `writable` flag only hide the controls.
 // Both seats see the same agenda without polling: every write publishes an
 // `agenda` realtime signal for the relation and the panel refetches on it.
+//
+// The AI proposal (#1845) is a DRAFT: POST /api/agendas/personalize returns
+// lines and saves nothing; the seat unticks what does not fit and adds the
+// rest through the items endpoint. Every denial comes back as the guide as
+// written plus a reason line — never an upgrade prompt, participant AI is free.
 
 interface TemplateOption {
   id: string;
@@ -62,6 +67,7 @@ export function AgendaPanel({ relationId, readOnly = false }: { relationId: stri
   const [newItem, setNewItem] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [draft, setDraft] = useState<{ lines: string[]; picked: boolean[]; source: 'ai' | 'template' | 'empty'; reason: string | null } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/agendas?relationId=${relationId}`, { cache: 'no-store' });
@@ -163,6 +169,43 @@ export function AgendaPanel({ relationId, readOnly = false }: { relationId: stri
       label: `${resolveTemplateText({ text: tpl.title, translations: tpl.translations }, locale)} · ${t.agenda.promptsCount.replace('{n}', String(tpl.items.length))}`,
     })),
   ];
+
+  // A proposal belongs to the session it was asked for.
+  const currentId = current?.id ?? null;
+  useEffect(() => { setDraft(null); }, [currentId]);
+
+  const suggest = async (regenerate = false) => {
+    if (!current) return;
+    setBusy('ai');
+    setError('');
+    try {
+      const res = await fetch('/api/agendas/personalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agendaId: current.id, ...(regenerate ? { regenerate: true } : {}) }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.code === 'inactive_relation' ? t.agenda.archivedHint : body.error ?? t.common.error);
+        return;
+      }
+      const lines: string[] = Array.isArray(body.proposals) ? body.proposals.filter((l: unknown) => typeof l === 'string') : [];
+      setDraft({ lines, picked: lines.map(() => true), source: body.source === 'template' || body.source === 'empty' ? body.source : 'ai', reason: typeof body.reason === 'string' ? body.reason : null });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const acceptDraft = async () => {
+    if (!current || !draft) return;
+    const texts = draft.lines.filter((_, i) => draft.picked[i]);
+    if (texts.length === 0) {
+      setDraft(null);
+      return;
+    }
+    const body = await call('ai-accept', `/api/agendas/${current.id}/items`, { method: 'POST', body: JSON.stringify({ texts }) });
+    if (body) setDraft(null);
+  };
 
   const sessionIndex = (agenda: Agenda) => agendas.length - agendas.indexOf(agenda);
   const sessionLabel = (agenda: Agenda) =>
@@ -309,6 +352,63 @@ export function AgendaPanel({ relationId, readOnly = false }: { relationId: stri
                   {t.agenda.add}
                 </Button>
               </form>
+
+              <div data-testid="agenda-ai">
+                {!draft ? (
+                  <Button type="button" size="sm" variant="outline" loading={busy === 'ai'} onClick={() => suggest()} data-testid="agenda-ai-suggest">
+                    <Sparkles className="h-4 w-4" />
+                    {busy === 'ai' ? t.agenda.aiSuggesting : t.agenda.aiSuggest}
+                  </Button>
+                ) : (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm dark:border-violet-900" data-testid="agenda-ai-draft">
+                    <p className="font-medium text-gray-800">{t.agenda.aiDraftTitle}</p>
+                    {draft.reason && (
+                      <p className="mt-1 text-xs text-gray-600" data-testid="agenda-ai-reason">
+                        {t.agenda.aiReasons[draft.reason as keyof typeof t.agenda.aiReasons] ?? t.agenda.aiReasons.provider_error}
+                      </p>
+                    )}
+                    {draft.lines.length === 0 ? (
+                      <p className="mt-1 text-xs text-gray-600" data-testid="agenda-ai-empty">
+                        {draft.source === 'empty' ? t.agenda.aiEmpty : t.agenda.aiNothingNew}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="mt-1 text-xs text-gray-500">{t.agenda.aiDraftHint}</p>
+                        <ul className="mt-2 space-y-1" data-testid="agenda-ai-lines">
+                          {draft.lines.map((line, i) => (
+                            <li key={`${i}-${line}`} className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                id={`agenda-ai-line-${i}`}
+                                checked={draft.picked[i]}
+                                onChange={() => setDraft({ ...draft, picked: draft.picked.map((p, j) => (j === i ? !p : p)) })}
+                                className="mt-1 h-4 w-4 rounded border-gray-300"
+                                data-testid={`agenda-ai-line-${i}`}
+                              />
+                              <label htmlFor={`agenda-ai-line-${i}`} className="text-gray-800">{line}</label>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {draft.lines.length > 0 && (
+                        <Button type="button" size="sm" loading={busy === 'ai-accept'} disabled={!draft.picked.some(Boolean)} onClick={acceptDraft} data-testid="agenda-ai-accept">
+                          {t.agenda.aiAccept.replace('{n}', String(draft.picked.filter(Boolean).length))}
+                        </Button>
+                      )}
+                      {draft.source === 'ai' && (
+                        <Button type="button" size="sm" variant="outline" loading={busy === 'ai'} onClick={() => suggest(true)} data-testid="agenda-ai-regenerate">
+                          {t.agenda.aiRegenerate}
+                        </Button>
+                      )}
+                      <Button type="button" size="sm" variant="outline" onClick={() => setDraft(null)} data-testid="agenda-ai-discard">
+                        {t.agenda.aiDiscard}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-2 border-t border-gray-200 pt-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t.agenda.nextSession}</p>
