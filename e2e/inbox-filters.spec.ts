@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { cleanupMenteeWithRelation, prisma, seedMenteeWithRelation, type SeededRelation } from './helpers/db';
-import { gotoSettled, settleStreamedSuspense, signInAsFreshUser, signInViaApi } from './helpers/auth';
+import { gotoSettled, signInAsFreshUser, signInViaApi } from './helpers/auth';
 import { sendUnreadMessageDigests } from '@/services/emailService';
 
 // Per-viewer inbox state (#1609): pin, archive, mute — and what a mute
@@ -72,38 +72,54 @@ test('the state route writes only your own row, in a thread that opens for you',
 
 test('pin and archive from the inbox, and both survive a reload', { tag: '@smoke' }, async ({ page }) => {
   await signInAsFreshUser(page, pair.menteeEmail, PASSWORD, '/portal');
+  // Visible elements only. The inbox is a streamed server render: in the
+  // production build the incoming page sits in the DOM as a hidden copy until
+  // React swaps it in, so an unfiltered test id briefly matches twice — once
+  // in the page leaving and once in the page arriving — and a locator that
+  // resolves to the hidden one waits on, or clicks, the wrong page.
+  const visible = (testId: string) => page.locator(`[data-testid="${testId}"]:visible`);
+  const row = () => visible(`inbox-thread-${conversationId}`);
+  // A chip is a navigation: wait until the page it leads to is the one on
+  // screen (its own chip marked current) before touching the next control.
+  const chip = async (key: 'all' | 'pinned' | 'archived') => {
+    await visible(`inbox-filter-${key}`).click();
+    await expect(visible(`inbox-filter-${key}`)).toHaveAttribute('aria-current', 'page');
+  };
+  const pinnedMark = () => row().locator('[data-testid="thread-pinned"]:visible');
+  // The row menu is a client component: a click that lands before the freshly
+  // loaded page has hydrated opens nothing, so open it until it is open.
+  const openMenu = async (item: string) => {
+    await expect(async () => {
+      if (!(await visible(item).count())) await visible(`thread-state-menu-${conversationId}`).click();
+      await expect(visible(item)).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+    await visible(item).click();
+  };
+
   await gotoSettled(page, '/messages');
-  const row = page.getByTestId(`inbox-thread-${conversationId}`);
-  await expect(row).toBeVisible();
+  await expect(row()).toBeVisible();
 
-  await page.getByTestId(`thread-state-menu-${conversationId}`).click();
-  await page.getByTestId('thread-state-pin').click();
-  await expect(row.getByTestId('thread-pinned')).toBeVisible();
+  await openMenu('thread-state-pin');
+  await expect(pinnedMark()).toBeVisible();
   await page.reload();
-  await settleStreamedSuspense(page);
-  await expect(page.getByTestId(`inbox-thread-${conversationId}`).getByTestId('thread-pinned')).toBeVisible();
-  await page.getByTestId('inbox-filter-pinned').click();
-  await settleStreamedSuspense(page);
-  await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toBeVisible();
+  await expect(pinnedMark()).toBeVisible();
+  await chip('pinned');
+  await expect(row()).toBeVisible();
 
-  await page.getByTestId('inbox-filter-all').click();
-  await settleStreamedSuspense(page);
-  await page.getByTestId(`thread-state-menu-${conversationId}`).click();
-  await page.getByTestId('thread-state-archive').click();
-  await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toHaveCount(0);
-  await page.getByTestId('inbox-filter-archived').click();
+  await chip('all');
+  await openMenu('thread-state-archive');
+  await expect(row()).toHaveCount(0);
+  await chip('archived');
   await expect(page).toHaveURL(/filter=archived/);
-  await settleStreamedSuspense(page);
-  await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toBeVisible();
+  await expect(row()).toBeVisible();
   await page.reload();
-  await settleStreamedSuspense(page);
-  await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toBeVisible();
+  await expect(row()).toBeVisible();
 
   // Someone writing into an archived thread brings it back to the main list.
   const sent = await mentor.post('/api/messages', { data: { conversationId, body: 'Are you still there?' } });
   expect(sent.status()).toBe(201);
   await gotoSettled(page, '/messages');
-  await expect(page.getByTestId(`inbox-thread-${conversationId}`)).toBeVisible();
+  await expect(row()).toBeVisible();
 });
 
 test('a muted thread rings no bell, sends no mail mirror and drops out of the digest', async () => {

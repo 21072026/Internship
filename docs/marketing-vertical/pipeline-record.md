@@ -38,8 +38,7 @@ between qualification and the proposal — shipped in #2518 (issue #2413); the p
 (`TRIAL_EXPIRED_STAGE_KEY`):
 
 ```
-LEAD_NEW → LEAD_CONTACTED → LEAD_QUALIFIED → TRIAL_ACTIVE → TRIAL_EXPIRED → DEAL_PROPOSAL
-         → DEAL_NEGOTIATION → DEAL_WON | DEAL_LOST
+LEAD_NEW → LEAD_CONTACTED → LEAD_QUALIFIED → TRIAL_ACTIVE → TRIAL_EXPIRED → DEAL_WON | DEAL_LOST
 ```
 
 `TRIAL_EXPIRED` is on-path, not off-path: an expired trial is a deal that still has to be
@@ -47,21 +46,20 @@ chased, and an off-path stage stops the SLA clock and demands a drop-off reason.
 source outside those two constants spells the keys; the one deliberate mirror is the plain-ESM
 demo seeder `prisma/seed-demo-marketing.mjs` (`:93-94`, reused at `:154-161`, `:236-241` and `:417-419`),
 which cannot import the TS constants. `TRIAL_ACTIVE` deliberately carries no SLA
-and `TRIAL_EXPIRED` a 3-day one (`src/lib/programTemplates.ts:573-591`).
+and `TRIAL_EXPIRED` a 7-day one (3 until #2840) (`src/lib/programTemplates.ts:573-591`).
 
 How long a trial runs is the SaleVali product's rule, not this repo's: 30 free days plus a
 30-day decision window (60 + 30 for an affiliate trial) — see
 [`salevali-domain.md` § Deneme](salevali-domain.md#deneme-trial--serbest-dönem--karar-penceresi).
 The `trialLengthDays` org setting (default 30) models only the free period; where the
-decision window sits in this funnel is the open decision #2572.
+decision window is `TRIAL_EXPIRED`, ending `trialEndsAt` + 30 days (#2572 Q2, #2843).
 
-## SaleVali yolculuğu (#2572 — draft, awaiting maintainer approval)
+## SaleVali yolculuğu (#2572 — decided 2026-10-07)
 
 What happens around the trial and **after** `DEAL_WON` (active / notice given / churned /
-won back), whether `DEAL_PROPOSAL`/`DEAL_NEGOTIATION` stay in the preset, and which stage
-existing paying customers are imported at (#2555) is written up as options with a
-recommendation in [`funnel-decision.md`](funnel-decision.md). It is **not** a decision yet;
-until it is approved, nothing may rely on it.
+won back), the preset without `DEAL_PROPOSAL`/`DEAL_NEGOTIATION`, and which stage existing
+paying customers are imported at (#2555) are decided in [`funnel-decision.md`](funnel-decision.md)
+(option C), with the implementation issues linked there.
 
 ## What this decision rules OUT
 

@@ -9,6 +9,7 @@ import { StarterPackCard } from '@/components/admin/StarterPackCard';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { fillTemplate } from '@/components/ui/fillTemplate';
 import { useT, useLocale } from '@/i18n/client';
+import { EmailOptOutProof } from '@/components/admin/EmailOptOutProof';
 import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
@@ -663,6 +664,8 @@ export default function AdminSettingsPage() {
                 <Button type="button" variant="ghost" size="sm" onClick={loadEmailLog}>{t.settings.emailLogRefresh}</Button>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t.settings.emailLogHint}</p>
+              {/* The opt-out proof (#2054): suppression breakdown + lookup by address. */}
+              <EmailOptOutProof />
 
               {emailLog && (
                 <p className="text-xs mb-2">

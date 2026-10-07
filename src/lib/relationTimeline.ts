@@ -31,6 +31,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isStageTransition } from '@/lib/stageChange';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
+import { readableGoalsWhere } from '@/lib/goalVisibilityRule';
 
 export const TIMELINE_KINDS = ['stage', 'interaction', 'meeting', 'goal', 'report', 'offer', 'note'] as const;
 export type TimelineKind = (typeof TIMELINE_KINDS)[number];
@@ -175,6 +176,8 @@ function row(kind: TimelineKind, event: string, sortId: string, at: Date, rest: 
 export interface TimelineRequest {
   relationId: string;
   role: TimelineViewerRole;
+  /** The viewer's user id — a PRIVATE goal (#1858) is listed for its author alone. */
+  viewerId: string;
   /** Narrow to these kinds; empty/absent means "every kind the role may see". */
   kinds?: readonly string[];
   limit?: number;
@@ -182,7 +185,7 @@ export interface TimelineRequest {
 }
 
 export async function buildRelationTimeline(req: TimelineRequest): Promise<TimelinePage> {
-  const { relationId, role } = req;
+  const { relationId, role, viewerId } = req;
   const allowed = visibleKinds(role);
   const requested = (req.kinds ?? []).filter(isTimelineKind);
   const kinds = new Set<TimelineKind>(requested.length ? requested.filter((k) => allowed.includes(k)) : allowed);
@@ -194,6 +197,10 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
   // list overflowing the page size is the only way more can exist.
   const take = limit + 1;
   const base = { relationId };
+  // Goals carry a sharing scope (#1858): the route already established that
+  // the viewer reaches this pairing, so only the PRIVATE rows of someone else
+  // are left to drop — in SQL, so the cursor stays exact.
+  const goalBase = { ...base, ...readableGoalsWhere({ id: viewerId }) };
   const want = (kind: TimelineKind) => kinds.has(kind);
 
   const [
@@ -245,14 +252,14 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
       : [],
     want('goal')
       ? prisma.goal.findMany({
-          where: where<Prisma.GoalWhereInput>(base, { completedAt: null }, afterCursor('createdAt', cursor)),
+          where: where<Prisma.GoalWhereInput>(goalBase, { completedAt: null }, afterCursor('createdAt', cursor)),
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take,
         })
       : [],
     want('goal')
       ? prisma.goal.findMany({
-          where: where<Prisma.GoalWhereInput>(base, { completedAt: { not: null } }, afterCursor('completedAt', cursor)),
+          where: where<Prisma.GoalWhereInput>(goalBase, { completedAt: { not: null } }, afterCursor('completedAt', cursor)),
           orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
           take,
         })

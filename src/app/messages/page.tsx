@@ -81,8 +81,16 @@ export default async function MessagesInboxPage({ searchParams }: { searchParams
           )}
         </Link>
         <nav aria-label={F.label} className="flex flex-wrap gap-2 border-b border-gray-100 px-2 py-3 dark:border-gray-800" data-testid="inbox-filters">
+          {/* Plain anchors, not <Link> (#1609): the inbox re-renders itself
+              with router.refresh() on every live signal (MessagesLiveRefresh),
+              and a refresh committing while a client-side navigation to the
+              same route is in flight swallowed that navigation — in the
+              production build a chip click could simply do nothing. A full
+              load of this server-rendered page costs the same and cannot be
+              raced. */}
           {INBOX_FILTERS.map((key) => (
-            <Link
+            // eslint-disable-next-line @next/next/no-html-link-for-pages -- see the comment above
+            <a
               key={key}
               href={key === 'all' ? '/messages' : `/messages?filter=${key}`}
               aria-current={filter === key ? 'page' : undefined}
@@ -94,7 +102,7 @@ export default async function MessagesInboxPage({ searchParams }: { searchParams
               }`}
             >
               {F[key]}
-            </Link>
+            </a>
           ))}
         </nav>
         {threads.length === 0 ? (

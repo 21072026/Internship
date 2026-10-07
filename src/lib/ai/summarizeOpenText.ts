@@ -19,6 +19,7 @@ import { runAiGated, type AiDenialReason, type AiArtifactRef } from '@/lib/aiGat
 import { findCachedArtifact, hashInput } from '@/lib/ai/artifacts';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { callModel, noteParseError } from '@/lib/ai/provider';
+import { wrapUntrusted } from '@/lib/ai/untrusted';
 import type { AiTaskId } from '@/lib/ai/tasks';
 import type { Locale } from '@/i18n/config';
 import {
@@ -45,7 +46,7 @@ Rules:
 
 async function callProviderForSummary(task: AiTaskId, purpose: string, locale: Locale, prepared: PreparedItem[], carried: OpenTextCaveat[]): Promise<OpenTextSummary | null> {
   const rows = prepared.map((p) => `[${p.label}] ${p.text}`).join('\n');
-  const reply = await callModel({ task, system: SYSTEM, input: `What these rows are: ${purpose}\nWrite theme titles in ${LANGUAGE[locale]}.\n\n${rows}` });
+  const reply = await callModel({ task, system: SYSTEM, input: `What these rows are: ${purpose}\nWrite theme titles in ${LANGUAGE[locale]}.\n\n${wrapUntrusted('rows', rows)}` });
   const summary = parseOpenTextSummary(reply, prepared, carried);
   // Not the JSON asked for: metered as parse_error, and never kept — a stored
   // "unreadable" would answer every identical request for a day.

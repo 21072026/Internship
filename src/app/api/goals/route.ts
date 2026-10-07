@@ -8,6 +8,14 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { notifyIfAllowed } from '@/lib/notify';
+import {
+  canReachGoals,
+  DEFAULT_GOAL_VISIBILITY,
+  GOAL_PROGRESS_MAX,
+  GOAL_PROGRESS_MIN,
+  GOAL_VISIBILITIES,
+  visibleGoals,
+} from '@/lib/goalVisibilityRule';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -18,11 +26,12 @@ async function relationIfAllowed(userId: string, role: string, relationId: strin
   // and ADMIN is allowed below: another tenant's relation answers like a
   // missing one (#2542).
   if (!rel || !(await inCallerTenant(rel.orgId, callerOrgId))) return null;
-  const allowed = role === 'ADMIN' || rel.mentorId === userId || rel.menteeId === userId;
-  return allowed ? rel : null;
+  return canReachGoals(rel, { id: userId, role }) ? rel : null;
 }
 
-// GET ?relationId= — goals for a relation (participants/admin).
+// GET ?relationId= — goals for a relation (participants/admin). A PRIVATE goal
+// (#1858) is in the answer for its author only — filtered here, not in the
+// panel, so no other reader of this route can show it by accident.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -32,7 +41,8 @@ export async function GET(request: Request) {
   const rel = await relationIfAllowed(session.user.id, session.user.role, relationId, resolveOrgId(session));
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const goals = await prisma.goal.findMany({ where: { relationId }, orderBy: { createdAt: 'asc' } });
+  const rows = await prisma.goal.findMany({ where: { relationId }, orderBy: { createdAt: 'asc' } });
+  const goals = visibleGoals(rows, rel, { id: session.user.id, role: session.user.role });
   return NextResponse.json({ goals });
   });
 }
@@ -42,6 +52,11 @@ const schema = z.object({
   title: z.string().min(1).max(TEXT_LIMITS.goalTitle),
   description: z.string().max(TEXT_LIMITS.goalDescription).optional(),
   dueDate: z.string().optional(),
+  // #1858 — all optional: the one-line "title + due date" form still works.
+  successCriteria: z.string().max(TEXT_LIMITS.goalSuccessCriteria).optional(),
+  targetDate: z.string().optional(),
+  progress: z.number().int().min(GOAL_PROGRESS_MIN).max(GOAL_PROGRESS_MAX).optional(),
+  visibility: z.enum(GOAL_VISIBILITIES).optional(),
 });
 
 // POST — create a goal (participants/admin).
@@ -70,16 +85,23 @@ export async function POST(request: Request) {
       title: parsed.data.title,
       description: parsed.data.description || null,
       dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null,
-      // Record which side set the goal so it's clear who owns it.
+      successCriteria: parsed.data.successCriteria?.trim() || null,
+      targetDate: parsed.data.targetDate ? new Date(parsed.data.targetDate) : null,
+      progress: parsed.data.progress ?? null,
+      visibility: parsed.data.visibility ?? DEFAULT_GOAL_VISIBILITY,
+      // Record which side set the goal so it's clear who owns it — and who it
+      // is, because the author is the one reader of a PRIVATE goal (#1858).
       createdByRole: session.user.role as Role,
+      createdById: session.user.id,
     },
   });
 
   // The other side of the relation learns about the new goal (#925) — no echo
   // to whoever created it. An admin is neither side, so the mentee (whose
   // development the goal tracks) is told. Link fits the recipient's role.
+  // A PRIVATE goal is nobody else's business, so nobody else is told.
   const recipientId = session.user.id === rel.mentorId ? rel.menteeId : session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;
-  if (recipientId !== session.user.id) {
+  if (recipientId !== session.user.id && goal.visibility !== 'PRIVATE') {
     const link = recipientId === rel.menteeId ? '/portal/goals' : `/mentor/mentees/${rel.id}`;
     await notifyIfAllowed(recipientId, 'goalsEvaluations', 'goal.assigned', { title: goal.title }, link);
   }

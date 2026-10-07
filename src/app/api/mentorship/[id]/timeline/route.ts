@@ -55,6 +55,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       const page = await buildRelationTimeline({
         relationId: id,
         role,
+        viewerId: session.user.id,
         kinds,
         limit,
         cursor: sp.get('cursor'),

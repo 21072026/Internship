@@ -579,7 +579,16 @@ export default function AdminOrganizationsPage() {
 
       {superAdmin && (
       <Card className="mb-6 max-w-2xl" data-testid="new-org-card">
-        <CardHeader><CardTitle>{t.organizations.newOrg}</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>{t.organizations.newOrg}</CardTitle>
+            {/* The full flow — plan, branding, starter pack, first admin (#2065).
+                The quick form below stays for a bare tenant. */}
+            <Link href="/admin/organizations/new" data-testid="new-org-wizard-link" className="text-sm font-medium text-blue-600 hover:underline">
+              {t.organizations.newOrgWizard}
+            </Link>
+          </div>
+        </CardHeader>
         <form onSubmit={create} className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[180px]">
             <Input label={t.organizations.name} value={name} onChange={(e) => setName(e.target.value)} required />

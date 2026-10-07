@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isBackwardMove } from '../../src/lib/stageDirection.ts';
 
-// The MARKETING_FUNNEL preset's shape (src/lib/programTemplates.ts).
+// The MARKETING_FUNNEL preset's shape as an org provisioned before #2840 keeps
+// it — the two retired deal stages included, which is the harder case.
 const STAGES = [
   { key: 'LEAD_NEW', order: 0, isOffPath: false },
   { key: 'LEAD_CONTACTED', order: 1, isOffPath: false },
