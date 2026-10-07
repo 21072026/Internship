@@ -146,6 +146,8 @@ const OPERATIONS: Route[] = shell(
   '/admin/weekly-reports',
   // Report subscriptions (#1905) — in the sidebar without an entry here.
   '/admin/reports/subscriptions',
+  // AI usage, spend and quota (#2030) — a wide per-task table, scrolled in its own container.
+  '/admin/ai',
   '/admin/integrations',
   '/admin/api-explorer',
   '/admin/retention',
