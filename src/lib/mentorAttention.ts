@@ -160,7 +160,7 @@ export async function getAttentionItems(
 
     // A trial that has run out (#2418). The sweep in lib/jobs/trialReminders.ts
     // parks the record in TRIAL_EXPIRED and then stops: nothing else happens to
-    // it until a human turns it into a proposal or a loss, so it belongs in the
+    // it until a human turns it into a win or a loss, so it belongs in the
     // queue its owner already reads rather than on a new board card. The key
     // comes from the preset that ships it (lib/programTemplates.ts), never
     // written as a literal here; a tenant that renamed the LABEL keeps the key,

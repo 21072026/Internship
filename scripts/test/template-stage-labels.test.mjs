@@ -23,6 +23,11 @@ test('an English-provisioned marketing stage reads back in Turkish and German', 
   assert.deepEqual(localizeResolvedStageLabels(stored, 'de').map((s) => s.label), ['Neuer Lead', 'Angebot gesendet', 'Verloren']);
 });
 
+test('a stage retired from the preset (#2840) still localizes for an org that kept it', () => {
+  const stored = [row('DEAL_NEGOTIATION', 'Negotiation', 0), row('TRIAL_EXPIRED', 'Trial expired', 1)];
+  assert.deepEqual(localizeResolvedStageLabels(stored, 'de').map((s) => s.label), ['Verhandlung', 'Testphase abgelaufen']);
+});
+
 test('a curated label stored in another locale, or blank, is localized too', () => {
   const stored = [row('LEAD_CONTACTED', 'Kontaktiert'), row('DEAL_WON', '  ')];
   assert.deepEqual(localizeResolvedStageLabels(stored, 'en').map((s) => s.label), ['Contacted', 'Won']);

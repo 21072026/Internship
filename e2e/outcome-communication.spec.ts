@@ -212,9 +212,9 @@ test('a MARKETING lead reaching an outcome gets no placement mail, and the rep n
     await page.waitForURL((u) => u.pathname.startsWith('/sales'), { timeout: 30_000 });
 
     // An ordinary move first: the lead is a prospect with no portal, so the
-    // internal funnel ("Qualified → Proposal sent") must not be written to them.
+    // internal funnel ("Qualified → Trial expired") must not be written to them.
     const move = await page.request.put(`/api/mentorship/${seeded.relation.id}`, {
-      data: { pipelineStatus: 'DEAL_PROPOSAL' },
+      data: { pipelineStatus: 'TRIAL_EXPIRED' },
     });
     expect(move.ok(), await move.text()).toBeTruthy();
 

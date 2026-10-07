@@ -118,7 +118,10 @@ marketing tenant those come from the `MARKETING_FUNNEL` preset
 (`src/lib/programTemplates.ts`):
 
 ```
-LEAD_NEW · LEAD_CONTACTED · LEAD_QUALIFIED · TRIAL_ACTIVE · TRIAL_EXPIRED · DEAL_PROPOSAL · DEAL_NEGOTIATION · DEAL_WON · DEAL_LOST
+LEAD_NEW · LEAD_CONTACTED · LEAD_QUALIFIED · TRIAL_ACTIVE · TRIAL_EXPIRED · DEAL_WON · DEAL_LOST
+
+(An org provisioned before #2840 may still have `DEAL_PROPOSAL` / `DEAL_NEGOTIATION`; a
+row naming them imports only where the org kept those stages.)
 ```
 
 (`src/lib/programTemplates.ts:551-570`; the two trial keys since #2518.) `DEAL_LOST` is the

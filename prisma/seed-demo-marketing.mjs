@@ -92,10 +92,8 @@ export const MARKETING_DEMO_STAGES = [
   { key: 'LEAD_QUALIFIED', label: 'Qualified', order: 2, isTerminal: false, isOffPath: false, color: '#8b5cf6' },
   { key: 'TRIAL_ACTIVE', label: 'Trial running', order: 3, isTerminal: false, isOffPath: false, color: '#06b6d4' },
   { key: 'TRIAL_EXPIRED', label: 'Trial expired', order: 4, isTerminal: false, isOffPath: false, color: '#eab308' },
-  { key: 'DEAL_PROPOSAL', label: 'Proposal sent', order: 5, isTerminal: false, isOffPath: false, color: '#f59e0b' },
-  { key: 'DEAL_NEGOTIATION', label: 'Negotiation', order: 6, isTerminal: false, isOffPath: false, color: '#f97316' },
-  { key: 'DEAL_WON', label: 'Won', order: 7, isTerminal: true, isOffPath: false, color: '#16a34a' },
-  { key: 'DEAL_LOST', label: 'Lost', order: 8, isTerminal: true, isOffPath: true, color: '#6b7280' },
+  { key: 'DEAL_WON', label: 'Won', order: 5, isTerminal: true, isOffPath: false, color: '#16a34a' },
+  { key: 'DEAL_LOST', label: 'Lost', order: 6, isTerminal: true, isOffPath: true, color: '#6b7280' },
 ];
 
 /** The tenant's admin — the identity you sign in as to browse the marketing product. */
@@ -160,14 +158,12 @@ export const MARKETING_DEMO_ACCOUNTS = [
   { key: 'harz-holzwerk', name: 'Harzer Holzwerk GmbH (Demo)', vatId: 'DE900000019', city: 'Goslar', industry: 'E-Commerce · Holz', size: '10-50', contactName: 'Stefan Wernicke', stage: 'TRIAL_EXPIRED', openedAt: 74, inStage: 4, owner: 0, trialDays: 30 },
   { key: 'donau-buerobedarf', name: 'Donau Bürobedarf GmbH (Demo)', vatId: 'DE900000020', city: 'Regensburg', industry: 'B2B · Bürobedarf', size: '50-100', contactName: 'Petra Vogl', stage: 'TRIAL_EXPIRED', openedAt: 81, inStage: 9, owner: 1, trialDays: 30 },
 
-  // ── Proposal sent ──────────────────────────────────────────────────────────
-  { key: 'elbland-weine', name: 'Elbland Weinhandel GmbH (Demo)', vatId: 'DE900000021', city: 'Dresden', industry: 'E-Commerce · Wein', size: '10-50', contactName: 'Konstantin Gräf', stage: 'DEAL_PROPOSAL', openedAt: 88, inStage: 5, owner: 2 },
-  { key: 'westfalen-leuchten', name: 'Westfalen Leuchtenhandel GmbH (Demo)', vatId: 'DE900000022', city: 'Dortmund', industry: 'E-Commerce · Beleuchtung', size: '50-100', contactName: 'Britta Schulte', stage: 'DEAL_PROPOSAL', openedAt: 94, inStage: 10, owner: 0 },
-  { key: 'allgaeu-milchhof', name: 'Allgäuer Milchhof Direkt GmbH (Demo)', vatId: 'DE900000023', city: 'Kempten', industry: 'E-Commerce · Lebensmittel', size: '50-100', contactName: 'Josef Wiedemann', stage: 'DEAL_PROPOSAL', openedAt: 99, inStage: 15, owner: 1 },
-
-  // ── Negotiation ────────────────────────────────────────────────────────────
-  { key: 'pfalz-pflanzen', name: 'Pfalz Pflanzenversand GmbH (Demo)', vatId: 'DE900000024', city: 'Landau', industry: 'E-Commerce · Garten', size: '50-100', contactName: 'Miriam Zeller', stage: 'DEAL_NEGOTIATION', openedAt: 106, inStage: 7, owner: 2 },
-  { key: 'weser-sanitaer', name: 'Weser Sanitärhandel GmbH (Demo)', vatId: 'DE900000025', city: 'Bremen', industry: 'B2B · Sanitär', size: '100-250', contactName: 'Holger Ahrens', stage: 'DEAL_NEGOTIATION', openedAt: 113, inStage: 13, owner: 0 },
+  // ── Decision window (trial expired, #2572) ───────────────────────────────
+  { key: 'elbland-weine', name: 'Elbland Weinhandel GmbH (Demo)', vatId: 'DE900000021', city: 'Dresden', industry: 'E-Commerce · Wein', size: '10-50', contactName: 'Konstantin Gräf', stage: 'TRIAL_EXPIRED', openedAt: 88, inStage: 5, owner: 2, trialDays: 30 },
+  { key: 'westfalen-leuchten', name: 'Westfalen Leuchtenhandel GmbH (Demo)', vatId: 'DE900000022', city: 'Dortmund', industry: 'E-Commerce · Beleuchtung', size: '50-100', contactName: 'Britta Schulte', stage: 'TRIAL_EXPIRED', openedAt: 94, inStage: 10, owner: 0, trialDays: 30 },
+  { key: 'allgaeu-milchhof', name: 'Allgäuer Milchhof Direkt GmbH (Demo)', vatId: 'DE900000023', city: 'Kempten', industry: 'E-Commerce · Lebensmittel', size: '50-100', contactName: 'Josef Wiedemann', stage: 'TRIAL_EXPIRED', openedAt: 99, inStage: 15, owner: 1, trialDays: 30 },
+  { key: 'pfalz-pflanzen', name: 'Pfalz Pflanzenversand GmbH (Demo)', vatId: 'DE900000024', city: 'Landau', industry: 'E-Commerce · Garten', size: '50-100', contactName: 'Miriam Zeller', stage: 'DEAL_WON', openedAt: 106, inStage: 7, owner: 2 },
+  { key: 'weser-sanitaer', name: 'Weser Sanitärhandel GmbH (Demo)', vatId: 'DE900000025', city: 'Bremen', industry: 'B2B · Sanitär', size: '100-250', contactName: 'Holger Ahrens', stage: 'DEAL_WON', openedAt: 113, inStage: 13, owner: 0 },
 
   // ── Won ────────────────────────────────────────────────────────────────────
   { key: 'bodensee-buecher', name: 'Bodensee Büchergilde GmbH (Demo)', vatId: 'DE900000026', city: 'Konstanz', industry: 'E-Commerce · Bücher', size: '10-50', contactName: 'Clara Bühler', stage: 'DEAL_WON', openedAt: 121, inStage: 9, owner: 1 },
@@ -175,8 +171,8 @@ export const MARKETING_DEMO_ACCOUNTS = [
   { key: 'altmark-imkerei', name: 'Altmark Imkerei Handels GmbH (Demo)', vatId: 'DE900000028', city: 'Stendal', industry: 'E-Commerce · Lebensmittel', size: '1-10', contactName: 'Heike Ollrich', stage: 'DEAL_WON', openedAt: 148, inStage: 38, owner: 0 },
 
   // ── Lost ───────────────────────────────────────────────────────────────────
-  { key: 'vogtland-modellbau', name: 'Vogtland Modellbau GmbH (Demo)', vatId: 'DE900000029', city: 'Plauen', industry: 'E-Commerce · Modellbau', size: '10-50', contactName: 'Uwe Seifert', stage: 'DEAL_LOST', openedAt: 128, inStage: 19, owner: 1, droppedFrom: 'DEAL_PROPOSAL', reasonCode: 'NO_RESPONSE' },
-  { key: 'eifel-kaese', name: 'Eifel Käsekontor GmbH (Demo)', vatId: 'DE900000030', city: 'Bitburg', industry: 'E-Commerce · Lebensmittel', size: '10-50', contactName: 'Nadine Thelen', stage: 'DEAL_LOST', openedAt: 141, inStage: 31, owner: 2, droppedFrom: 'DEAL_NEGOTIATION', reasonCode: 'ACCEPTED_ELSEWHERE' },
+  { key: 'vogtland-modellbau', name: 'Vogtland Modellbau GmbH (Demo)', vatId: 'DE900000029', city: 'Plauen', industry: 'E-Commerce · Modellbau', size: '10-50', contactName: 'Uwe Seifert', stage: 'DEAL_LOST', openedAt: 128, inStage: 19, owner: 1, droppedFrom: 'TRIAL_EXPIRED', reasonCode: 'NO_RESPONSE' },
+  { key: 'eifel-kaese', name: 'Eifel Käsekontor GmbH (Demo)', vatId: 'DE900000030', city: 'Bitburg', industry: 'E-Commerce · Lebensmittel', size: '10-50', contactName: 'Nadine Thelen', stage: 'DEAL_LOST', openedAt: 141, inStage: 31, owner: 2, droppedFrom: 'TRIAL_EXPIRED', reasonCode: 'ACCEPTED_ELSEWHERE' },
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -242,21 +238,12 @@ const INTERACTIONS_BY_STAGE = {
     { type: 'Meeting', subject: 'Trial kick-off', notes: 'Walked the team through the import and the first report. (demo)' },
     { type: 'Email', subject: 'Trial ended', notes: 'Trial window closed; waiting on their decision. (demo)' },
   ],
-  DEAL_PROPOSAL: [
-    { type: 'Email', subject: 'Proposal sent', notes: 'Proposal with the two-tier pricing went out. (demo)' },
-    { type: 'Meeting', subject: 'Proposal walkthrough', notes: 'Went through the proposal line by line. (demo)' },
-  ],
-  DEAL_NEGOTIATION: [
-    { type: 'Email', subject: 'Proposal sent', notes: 'Proposal with the two-tier pricing went out. (demo)' },
-    { type: 'Meeting', subject: 'Terms', notes: 'Talked through the term length and the onboarding fee. (demo)' },
-    { type: 'Feedback', subject: 'Internal note', notes: 'Wants a three-month break clause; worth conceding. (demo)' },
-  ],
   DEAL_WON: [
-    { type: 'Meeting', subject: 'Terms', notes: 'Talked through the term length and the onboarding fee. (demo)' },
+    { type: 'Meeting', subject: 'Decision call', notes: 'Walked through the plans; they confirmed the upgrade. (demo)' },
     { type: 'Email', subject: 'Signed', notes: 'Contract signed; onboarding scheduled. (demo)' },
   ],
   DEAL_LOST: [
-    { type: 'Email', subject: 'Proposal sent', notes: 'Proposal with the two-tier pricing went out. (demo)' },
+    { type: 'Email', subject: 'Trial ended', notes: 'Trial window closed; waiting on their decision. (demo)' },
     { type: 'Feedback', subject: 'Closed lost', notes: 'No decision made; account parked for a later approach. (demo)' },
   ],
 };
