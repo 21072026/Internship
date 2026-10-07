@@ -481,6 +481,14 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   counters only at the source. A request path never scans the activity tables; it reads the
   rollup. **Video volume is reported, never gated** — no meeting path may return a 403 for a
   metering reason.
+- **Structured compensation on offers** ([`docs/offer-compensation.md`](docs/offer-compensation.md),
+  #1851): money on `Offer` is integer **minor units** + ISO code (`baseAmountMinor`, `currency`,
+  `basePeriod`…) — never a Float/Decimal, same rule as `ProgramCost`/`Placement`. The rules
+  are pure in `src/lib/compensation.ts`; every compensation column is withheld from COMPANY
+  through ONE list, `OFFER_COMPENSATION_FIELDS` (`src/lib/offers.ts`) — add a column there or
+  `e2e/offers.spec.ts` goes red. The benchmark (`/api/admin/offers/benchmark`) never
+  converts currencies and returns buckets under 5 offers as `suppressed: true` with `null`
+  figures, never omitted.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

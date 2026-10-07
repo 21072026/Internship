@@ -12,8 +12,10 @@ import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
 import { DECLINE_REASON_CODES } from '@/lib/offers';
+import { hasStructuredCompensation, type CompensationFields } from '@/lib/compensation';
+import { CompensationSummary } from '@/components/CompensationSummary';
 
-interface Offer {
+interface Offer extends Partial<CompensationFields> {
   id: string;
   status: string;
   position: string;
@@ -156,10 +158,13 @@ export function OfferCard() {
             {deadlineText}
           </Badge>
         )}
-        {offer.compensationNote && (
+        {(offer.compensationNote || hasStructuredCompensation(offer)) && (
           <div className="pt-1">
             <p className="text-xs text-gray-400">{t.portal.offer.compensation}</p>
-            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{offer.compensationNote}</p>
+            <CompensationSummary offer={offer} testId="offer-card-compensation" />
+            {offer.compensationNote && (
+              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{offer.compensationNote}</p>
+            )}
           </div>
         )}
       </div>
