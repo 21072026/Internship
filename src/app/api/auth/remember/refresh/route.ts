@@ -9,6 +9,7 @@ import { isPasswordLoginBlockedForUserId, SSO_REQUIRED_CODE } from '@/lib/ssoEnf
 import { authWrongWorld } from '@/lib/authErrors';
 import { worldForHeaders } from '@/lib/hostWorld';
 import { worldOfOrg } from '@/lib/userWorld';
+import { fireSecurityNotice } from '@/lib/securityNotices';
 
 /** How long the bridge token the browser immediately trades in stays usable. */
 const GRANT_TTL_MS = 60 * 1000;
@@ -72,6 +73,10 @@ export async function POST(request: Request) {
 
   const result = await rotateTrustedDevice(token, request);
   if (!result.ok) {
+    // A replayed secret means a copy of the cookie left the owner's machine
+    // (#1717): tell them, quoting THIS request's browser and address — the
+    // replayer's, which is exactly what they need to recognise as not theirs.
+    if (result.reason === 'reuse') fireSecurityNotice('deviceTokenReuse', { userId: result.userId, request });
     // Expired, revoked, unknown or replayed — in every case this browser's
     // cookie is worthless now, so drop it instead of retrying on every visit.
     const res = NextResponse.json({ error: result.reason }, { status: 401 });

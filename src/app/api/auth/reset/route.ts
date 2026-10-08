@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { checkPassword, passwordRefusal, passwordSchema } from '@/lib/password';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { sendSecurityNotice } from '@/lib/securityNotices';
 import {
   isPasswordLoginBlockedForUserId,
   SSO_REQUIRED_CODE,
@@ -115,6 +116,9 @@ export async function POST(request: Request) {
     // "lock everyone out" action, and a long-lived device cookie that survived
     // it would hand the session straight back.
     await revokeAllTrustedDevices(record.userId);
+    // The owner's copy (#1717): a reset completed by somebody who got hold of
+    // the link is a password change the owner did not make.
+    await sendSecurityNotice('passwordChanged', { userId: record.userId, request });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

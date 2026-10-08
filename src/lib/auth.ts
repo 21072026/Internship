@@ -7,6 +7,7 @@ import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
 import { verifyTotpStep } from '@/lib/totp';
 import { consumeRecoveryCode, looksLikeRecoveryCode, recoveryCodeStatus } from '@/lib/recoveryCodes';
 import { notifyEvent } from '@/lib/notifications/router';
+import { observeSignInDevice } from '@/lib/securityNotices';
 import { headerSource, clientIp } from '@/lib/clientIp';
 import { guardProviders } from '@/lib/authGuard';
 import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/lib/accountLockout';
@@ -462,6 +463,10 @@ export const authOptions: NextAuthOptions = {
           actorEmail: user.email,
           request: origin,
         });
+        // A browser this account has not signed in from before earns a
+        // security notice (#1717). The row is written here; the mail is not
+        // waited for.
+        await observeSignInDevice(user.id, origin);
 
         return {
           id: user.id,
@@ -704,6 +709,10 @@ export const authOptions: NextAuthOptions = {
           actorEmail: user.email,
           request: origin,
         });
+        // Same new-device notice as the password door (#1717): a link is a
+        // credential too, and one read from a stolen mailbox arrives from a
+        // browser the account has never used.
+        await observeSignInDevice(user.id, origin);
 
         return {
           id: user.id,

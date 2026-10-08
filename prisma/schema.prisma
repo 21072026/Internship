@@ -598,6 +598,7 @@ model User {
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+  signInDevices                     SignInDevice[]
   ownedMessageTemplates             MessageTemplate[]             @relation("MessageTemplateOwner")
   authoredMessageTemplates          MessageTemplate[]             @relation("MessageTemplateAuthor")
   createdApiKeys                    ApiKey[]                      @relation("ApiKeyCreatedBy")
@@ -4073,6 +4074,36 @@ model TrustedDevice {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+// A browser a person has signed in from (#1717).
+//
+// The memory behind the "new sign-in from a device we haven't seen" security
+// notice. One row per (user, browser fingerprint); the fingerprint is the
+// SHA-256 of the user-agent string, so two tabs of the same browser are one
+// device and an upgraded browser is a new one — a deliberately coarse notion
+// that errs towards the occasional extra notice rather than silence. No
+// geolocation, no cookie: the row says "this browser has signed in here before"
+// and nothing else, which is why the first sign-in of an account is the
+// baseline (nothing to compare against) and sends no mail. The address is the
+// one the sign-in came from; the mail quotes it so the reader can recognise
+// their own network. User-keyed and without `orgId`, exactly like TrustedDevice:
+// the row is read only through the user it belongs to.
+model SignInDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // sha256(userAgent), hex. Never the raw agent as the key: it is 512 bytes wide.
+  fingerprint String
+  // "Chrome on macOS" — the label the notice quotes.
+  label       String?
+  userAgent   String?  @db.Text
+  lastIp      String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([userId, fingerprint])
+  @@index([lastSeenAt])
 }
 
 // Single-use 2FA recovery codes (#1542).
