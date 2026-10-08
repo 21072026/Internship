@@ -527,6 +527,18 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   the interview approval all go through it, and `visibleApplicationsWhere()` is the one "which rows may
   this actor see" filter (not yours = 404, never a 403 that confirms the id). A hand-rolled
   `prisma.application.update` of `stage` skips the event, the derived status and the race guard at once.
+- **An interview request's SCHEDULED and CANCELLED are written by two routes only** (#1844):
+  `POST /api/interview-requests/[id]/schedule` creates the `Meeting` and flips the status in ONE
+  transaction (a guarded `updateMany` on `APPROVED`; the loser of a race rolls its meeting back and
+  answers 409), and `/cancel` writes `CANCELLED` and calls `cancelMeetingRows()`
+  (`src/lib/meetingCancel.ts`) — the one way a meeting leaves the calendars (status flip, late-cancel
+  record, Google withdrawal), shared with `PATCH /api/meetings/[id]`; a Meeting row is never deleted
+  for it. Who may act is `interviewRequestActorWhere()` in `src/lib/interviewRequests.ts` (ADMIN the
+  org, MENTOR the mentees they actively mentor, COMPANY its own request and only for cancel) — the
+  decision route reads the same rule, do not copy the filter. A slot the company did not propose
+  needs `override: true`; the company's interviewers are `MeetingGuest` rows, never accounts; every
+  confirmed time a person reads is rendered in their zone and language through
+  `formatInTimeZone(when, tz, undefined, intlLocaleFor(lang))`, never a bare `toLocaleString()`.
 - **Structured compensation on offers** ([`docs/offer-compensation.md`](docs/offer-compensation.md),
   #1851): money on `Offer` is integer **minor units** + ISO code (`baseAmountMinor`, `currency`,
   `basePeriod`…) — never a Float/Decimal, same rule as `ProgramCost`/`Placement`. The rules
