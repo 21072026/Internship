@@ -135,6 +135,10 @@ export async function POST(request: Request) {
     if (gated.reason === 'not_entitled') {
       return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
     }
+    if (gated.reason === 'disabled') {
+      // Switched off by the organisation (#2032): said as such, never as a spent quota.
+      return NextResponse.json({ error: 'AI is turned off for this organisation', code: 'disabled' }, { status: 403 });
+    }
     if (gated.reason === 'quota_exceeded') {
       return NextResponse.json({ error: 'Monthly AI quota exhausted', code: 'quota_exceeded' }, { status: 429 });
     }

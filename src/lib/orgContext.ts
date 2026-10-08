@@ -91,6 +91,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'SavedView',
   // What an AI call produced (#2044).
   'AiArtifact',
+  // Per-task AI switches and quota overrides (#2032): one tenant's policy, never another's.
+  'AiFeatureSetting',
   // Who attended a meeting (#2014).
   'MeetingAttendance',
   // INTERIM/FINAL due dates and reminders (#1891).

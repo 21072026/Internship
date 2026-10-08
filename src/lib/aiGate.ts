@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
 import { hasConsent } from '@/lib/consent';
 import { ambientOrgId } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
@@ -9,6 +8,7 @@ import { callProvider, isAiConfigured, trackAiCall, usageOfFailure, type AiCallU
 import { AI_TASKS, type AiTaskId, type AiTaskSpec } from '@/lib/ai/tasks';
 import { estimateCostMicros } from '@/lib/ai/pricing';
 import { entitled } from '@/lib/entitlements';
+import { orgAiQuota, resolveAiPolicy, type AiPolicy } from '@/lib/ai/policy';
 import { flagsColumn } from '@/lib/ai/injection';
 import type { ConsentType } from '@prisma/client';
 import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts';
@@ -87,7 +87,9 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 // 'provider_error' (#2024): the provider failed even after its retries, or the
 // breaker is open. 'not_entitled' (#1738): an operator task in an org without
 // the AI pack. Like the others each is a typed denial, never a throw.
-export type AiDenialReason = 'no_consent' | 'not_entitled' | 'not_configured' | 'quota_exceeded' | 'provider_error';
+// 'disabled' (#2032): the org's kill switch or this task's own switch is off —
+// an admin's decision, answered as such, never dressed up as a spent quota.
+export type AiDenialReason = 'no_consent' | 'not_entitled' | 'disabled' | 'not_configured' | 'quota_exceeded' | 'provider_error';
 
 /** The paid add-on an operator task needs (#1738). One name, so a route and a test cannot drift from the gate. */
 export const AI_PACK_FEATURE = 'AI_PACKAGE' as const;
@@ -130,16 +132,32 @@ async function quotaOrgId(orgId: string | null | undefined): Promise<string> {
   return orgId ?? ambientOrgId() ?? (await defaultOrgId());
 }
 
+/**
+ * The allowance that applies, and how much of it is spent this month. With a
+ * task, the policy chain decides (#2032): a task with its own `monthlyQuota`
+ * is measured against ITS calls; every other task against the org's calls
+ * and the org quota (tenant row → global row → default). Without a task it is
+ * the org figure the console shows. `policy` lets the gate pass the chain it
+ * already resolved instead of reading it twice.
+ */
 export async function getAiQuota(
   orgId?: string | null,
-): Promise<{ orgId: string; quota: number; used: number; remaining: number }> {
+  taskId?: AiTaskId,
+  policy?: AiPolicy,
+): Promise<{ orgId: string; quota: number; used: number; remaining: number; source: 'org' | 'task' }> {
   const org = await quotaOrgId(orgId);
-  const quota = parseInt(await getSetting('aiMonthlyQuota', org), 10) || 0;
-  // A provider failure is recorded (#2024) but never consumes quota.
+  const chain = taskId ? (policy ?? (await resolveAiPolicy(org, taskId))) : null;
+  const quota = chain ? chain.quota : await orgAiQuota(org);
+  const source = chain?.quotaSource ?? 'org';
+  // A provider failure is recorded (#2024) but never consumes quota. A per-task
+  // allowance counts the task's own rows (`scope` is set on every row, old and new).
   const used = await prisma.aiUsage.count({
-    where: withinTenant({ createdAt: periodRange(currentPeriod()), outcome: { not: 'provider_error' } }, await orgWhere(org)),
+    where: withinTenant(
+      { createdAt: periodRange(currentPeriod()), outcome: { not: 'provider_error' }, ...(source === 'task' && taskId ? { scope: taskId } : {}) },
+      await orgWhere(org),
+    ),
   });
-  return { orgId: org, quota, used, remaining: Math.max(0, quota - used) };
+  return { orgId: org, quota, used, remaining: Math.max(0, quota - used), source };
 }
 
 export async function runAiGated<T>(opts: {
@@ -166,11 +184,17 @@ export async function runAiGated<T>(opts: {
   if (opts.consent && !(await hasConsent(opts.consent.userId, opts.consent.type))) {
     return { ok: false, reason: 'no_consent' };
   }
+  // The switches (#2032): the org's kill switch, then this task's own. Before
+  // the pack, the cache and the quota — off means off, not "spent", and not a
+  // stored copy either. One read of the chain; the quota check below reuses it.
+  const org = await quotaOrgId(opts.orgId);
+  const policy = await resolveAiPolicy(org, opts.scope);
+  if (!policy.taskEnabled) return { ok: false, reason: 'disabled' };
   // The add-on, for operator tasks only (#1738, the table in the header). A
   // participant task never reaches this read. Before the cache: a locked org
   // is not answered from a stored copy either.
   const task: AiTaskSpec = AI_TASKS[opts.scope];
-  if ((opts.audience ?? task.audience) === 'operator' && !(await entitled(await quotaOrgId(opts.orgId), AI_PACK_FEATURE))) {
+  if ((opts.audience ?? task.audience) === 'operator' && !(await entitled(org, AI_PACK_FEATURE))) {
     return { ok: false, reason: 'not_entitled' };
   }
   // Consent first, cache second: a withdrawn consent is not answered from a
@@ -178,7 +202,7 @@ export async function runAiGated<T>(opts: {
   const persist = opts.persist;
   const decode = persist?.deserialize ?? ((c: string) => c as unknown as T);
   if (persist && !persist.force) {
-    const hit = await findCachedArtifact({ orgId: await quotaOrgId(opts.orgId), taskId: opts.scope, subjectUserId: persist.subjectUserId, inputHash: persist.inputHash }).catch(() => null);
+    const hit = await findCachedArtifact({ orgId: org, taskId: opts.scope, subjectUserId: persist.subjectUserId, inputHash: persist.inputHash }).catch(() => null);
     // A stored copy that no longer decodes (a format change, a hand-edited
     // row) is a miss, not an error: the provider answers instead.
     if (hit) {
@@ -191,8 +215,9 @@ export async function runAiGated<T>(opts: {
   }
   // Quota before configuration (the issue's order: consent → flag → quota →
   // provider): quota 0 means "AI off" regardless of key, and quota behaviour
-  // stays testable in environments without a provider key.
-  const { orgId, quota, used } = await getAiQuota(opts.orgId);
+  // stays testable in environments without a provider key. The allowance and
+  // the counter are the chain's — a task with its own quota spends its own.
+  const { orgId, quota, used } = await getAiQuota(org, opts.scope, policy);
   if (quota <= 0 || used >= quota) return { ok: false, reason: 'quota_exceeded' };
   if (!isAiConfigured()) return { ok: false, reason: 'not_configured' };
 

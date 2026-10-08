@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     if (!gated.ok) {
       if (gated.reason === 'no_consent') return NextResponse.json({ error: 'Consent required', code: 'consent_required' }, { status: 403 });
       // Never a paywall for a participant — just "not right now".
-      const status = gated.reason === 'not_configured' ? 501 : gated.reason === 'quota_exceeded' ? 429 : 503;
+      const status = gated.reason === 'not_configured' ? 501 : gated.reason === 'quota_exceeded' ? 429 : gated.reason === 'disabled' ? 403 : 503;
       return NextResponse.json({ error: 'Suggestions are not available right now', code: gated.reason }, { status });
     }
     return NextResponse.json({ proposal: gated.result });

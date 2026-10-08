@@ -56,6 +56,7 @@ export function InterviewPrep({ defaultPosition }: { defaultPosition?: string | 
         setCached(!!body.cached);
       }
       else if (body.code === 'no_position') setNotice(c.noPosition);
+      else if (body.code === 'disabled') setNotice(c.aiOff);
       else setNotice(c.unavailable);
     } catch {
       setNotice(c.unavailable);

@@ -51,7 +51,7 @@ export function PracticeInterview() {
   // Hidden without a provider unless there is something to read.
   if (!state.configured && !state.active && !latestReport) return null;
 
-  const fail = (code?: string) => setNotice(code === 'no_position' ? p.noPosition : p.unavailable);
+  const fail = (code?: string) => setNotice(code === 'no_position' ? p.noPosition : code === 'disabled' ? p.aiOff : p.unavailable);
 
   const start = async () => {
     setBusy(true);

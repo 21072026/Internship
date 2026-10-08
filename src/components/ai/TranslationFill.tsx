@@ -45,8 +45,8 @@ export function TranslationFillButton({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(res.status === 403 && d.code === 'feature_locked' ? t.organizations.featureLocked : m.unavailable);
+        // The body was read once above — a second res.json() would throw and hide the code.
+        setError(body.code === 'feature_locked' ? t.organizations.featureLocked : body.code === 'disabled' ? m.aiOff : m.unavailable);
         return;
       }
       const merged = mergeMachine(value, body.translations ?? {}, machine);
@@ -121,8 +121,8 @@ export function DraftFromBrief({
       const res = await fetch('/api/admin/ai/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose, brief: brief.trim() }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(res.status === 403 && d.code === 'feature_locked' ? t.organizations.featureLocked : a.unavailable);
+        // The body was read once above — a second res.json() would throw and hide the code.
+        setError(body.code === 'feature_locked' ? t.organizations.featureLocked : body.code === 'disabled' ? a.aiOff : a.unavailable);
         return;
       }
       // Through mergeMachine like a translation: empty locales only, all marked.

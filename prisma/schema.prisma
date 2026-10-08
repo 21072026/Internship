@@ -188,6 +188,7 @@ model Organization {
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
   aiArtifacts             AiArtifact[]
+  aiFeatureSettings       AiFeatureSetting[]
   meetingAttendance       MeetingAttendance[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
@@ -2248,6 +2249,29 @@ model AiUsage {
   @@index([scope])
   @@index([orgId, createdAt])
   @@index([taskId, createdAt])
+}
+
+// Per-task AI switches and quota overrides of ONE organisation (#2032). The
+// org-wide kill switch is the `aiEnabled` Setting; this table holds what is
+// decided per task: off, or a monthly allowance of its own (null = the org's
+// `aiMonthlyQuota`). No row means "on, inherit" — the chain lives in
+// src/lib/ai/policy.ts and is the only reader. Tenant configuration, so it is
+// in TENANT_MODELS; `taskId` is a registry key (src/lib/ai/tasks.ts), not a
+// foreign key, so a retired task's row is harmless and a typo never compiles
+// into the gate.
+model AiFeatureSetting {
+  id           String   @id @default(cuid())
+  orgId        String
+  taskId       String   @db.VarChar(64)
+  enabled      Boolean  @default(true)
+  monthlyQuota Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, taskId])
+  @@index([orgId])
 }
 
 // What an AI call PRODUCED (#2044) — AiUsage above is the meter (that a call

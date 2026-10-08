@@ -1413,6 +1413,7 @@ const en = {
     aiNoThemes: 'The AI found no themes it could support with the answers.',
     aiUnavailable: 'The AI summary is not available right now — the answers above are complete.',
     aiUnavailable_quota_exceeded: 'This month\'s AI allowance is used up — the answers above are complete.',
+    aiUnavailable_disabled: 'AI is switched off for this organisation — the answers above are complete.',
     aiUnavailable_not_configured: 'AI is not set up for this programme — the answers above are complete.',
     aiUnavailable_below_floor: 'Not enough responses to summarise yet.',
     aiUnavailable_not_entitled: 'The AI summary is part of the AI pack, which is not included for this organisation — the answers above are complete. The platform operator can add it.',
@@ -1573,6 +1574,7 @@ const en = {
     reasons: {
       not_configured: 'AI is not set up here — every figure on this page is complete without it.',
       quota_exceeded: "This month's AI quota is used up.",
+      disabled: 'AI is switched off for this organisation — every figure on this page is complete without it.',
       provider_error: 'The AI service is not answering right now. Try again later.',
       unreadable: 'The paragraph cited a figure that is not on this page, so it was discarded. Try again.',
       not_entitled: 'The AI tools for programme staff are part of the AI pack, which is not included for this organisation — every figure on this page is complete without them. The platform operator can add it.',
@@ -1606,6 +1608,7 @@ const en = {
     reasons: {
       not_configured: 'AI is not set up here — every figure on this page is complete without it.',
       quota_exceeded: "This month's AI quota is used up.",
+      disabled: 'AI is switched off for this organisation — every figure on this page is complete without it.',
       provider_error: 'The AI service is not answering right now. Try again later.',
       unreadable: 'The answer could not be read. Try again.',
       no_rows: 'There is no text in this range.',
@@ -1693,6 +1696,21 @@ const en = {
     },
   },
   adminAi: {
+    switchesTitle: 'Switches',
+    switchesIntro: 'Turn AI off for the whole organisation, or one feature at a time; give a feature its own monthly allowance. Enforced on the server — a switched-off feature answers "turned off", never "quota used up".',
+    switchesHint: "A feature's own allowance counts that feature's calls only; leave it empty to share the organisation quota above. Changes apply from the next AI call.",
+    switchesSaved: 'Saved — it applies from the next AI call.',
+    masterOn: 'AI is on for this organisation',
+    masterOff: 'AI is off for this organisation',
+    masterOffNote: 'AI is switched off for this organisation — every AI feature answers "turned off".',
+    confirmOffTitle: 'Turn AI off for the whole organisation?',
+    confirmOffBody: 'Every AI feature — for participants and for staff — will answer "AI is turned off" until you switch it back on. Nothing is deleted; stored results stay where they are.',
+    confirmOff: 'Turn AI off',
+    colEnabled: 'Switch',
+    colTaskQuota: 'Own monthly allowance',
+    taskOn: 'on',
+    taskOff: 'off',
+    taskQuotaInherit: 'inherits',
     title: 'AI usage',
     intro: 'What AI costs this organisation: calls, failures and spend by task, the monthly budget, and whether the provider is wired up.',
     scopeNote: 'Figures for this organisation only — the same calls the monthly quota counts.',
@@ -1734,6 +1752,7 @@ const en = {
     csv: 'Download CSV',
   },
   machineTranslation: {
+    aiOff: 'AI is switched off for this organisation. You can still write the other languages yourself.',
     fill: 'Fill empty languages',
     filling: 'Translating…',
     noSource: 'Write one language first.',
@@ -1743,6 +1762,7 @@ const en = {
     confirm: 'Looks right',
   },
   authoringAssist: {
+    aiOff: 'AI is switched off for this organisation. You can still write it yourself.',
     briefPlaceholder: 'Brief, e.g. "CV workshop Thursday 6pm, room 2"',
     draft: 'Draft in 3 languages',
     drafting: 'Drafting…',
@@ -1813,6 +1833,7 @@ const en = {
     none: 'No honoured opt-out on record for this address in the log.',
   },
   practiceInterview: {
+    aiOff: 'AI is switched off for your organisation, so practice interviews are not available.',
     title: 'Practice interview',
     hint: 'Answer six questions for your target role and get a report on how it went — structure, evidence, relevance and clarity, plus what to work on next.',
     textOnly: 'Text only: you type your answers. Nothing is recorded. The report stays private until you choose to share it.',
@@ -3961,6 +3982,7 @@ const en = {
       no_consent: 'The other side has not allowed AI on this pairing yet; the guide is shown as written.',
       not_configured: 'AI is not set up on this workspace; the guide is shown as written.',
       quota_exceeded: 'The AI allowance for this month is used up; the guide is shown as written.',
+      disabled: 'AI is switched off for this organisation; the guide is shown as written.',
       provider_error: 'AI could not answer right now; the guide is shown as written.',
     },
   },
@@ -5012,6 +5034,7 @@ const en = {
       draftBadge: 'AI-suggested draft — review and edit before sending',
       consentRequired: 'Someone in this conversation has not allowed AI summaries.',
       quotaExceeded: 'AI is not available this month.',
+      aiOff: 'AI is switched off for your organisation.',
       providerError: 'AI is busy right now. Please try again in a moment.',
       notConfigured: 'AI is not available here.',
       failed: 'That did not work. Please try again.',
@@ -5511,6 +5534,7 @@ const en = {
     },
   },
   aiSummary: {
+    aiOff: 'AI is switched off for your organisation.',
     button: 'AI summary',
     hint: 'Summarize this interaction log with AI (uses one AI credit).',
     empty: 'No interactions to summarize yet.',
@@ -5529,6 +5553,7 @@ const en = {
     tasks: { cv_feedback: 'CV feedback', interview_prep: 'Interview prep', interaction_summary: 'Summary', mentor_match: 'Match rationale', practice_interview: 'Practice interview report' },
   },
   cvFeedback: {
+    aiOff: 'AI is switched off for your organisation, so CV feedback is not available.',
     title: 'AI CV feedback',
     hint: 'Get constructive suggestions to improve your CV — strengths, improvements and missing sections.',
     button: 'Get feedback',
@@ -5554,6 +5579,7 @@ const en = {
 
   },
   interviewPrep: {
+    aiOff: 'AI is switched off for your organisation, so interview prep is not available.',
     title: 'Interview preparation (AI)',
     hint: 'Get realistic example questions and preparation tips for your target position. Your skills from your profile are taken into account.',
     positionPlaceholder: 'Target position (from your profile if empty)',
@@ -9056,6 +9082,7 @@ const tr: Dict = {
     aiNoThemes: 'AI, yanıtlarla desteklenebilecek bir tema bulamadı.',
     aiUnavailable: 'AI özeti şu an kullanılamıyor — yukarıdaki yanıtlar eksiksiz.',
     aiUnavailable_quota_exceeded: 'Bu ayın AI hakkı doldu — yukarıdaki yanıtlar eksiksiz.',
+    aiUnavailable_disabled: 'Bu kurumda yapay zekâ kapalı — yukarıdaki yanıtlar eksiksiz.',
     aiUnavailable_not_configured: 'Bu program için AI kurulmamış — yukarıdaki yanıtlar eksiksiz.',
     aiUnavailable_below_floor: 'Özetlemek için henüz yeterli yanıt yok.',
     aiUnavailable_not_entitled: 'AI özeti, bu organizasyona dahil olmayan AI paketinin parçası — yukarıdaki yanıtlar eksiksiz. Platform işletmecisi ekleyebilir.',
@@ -9212,6 +9239,7 @@ const tr: Dict = {
     reasons: {
       not_configured: 'Yapay zekâ burada kurulu değil — bu sayfadaki tüm rakamlar onsuz da eksiksiz.',
       quota_exceeded: 'Bu ayın yapay zekâ kotası doldu.',
+      disabled: 'Bu kurumda yapay zekâ kapalı — bu sayfadaki tüm rakamlar onsuz da eksiksiz.',
       provider_error: 'Yapay zekâ hizmeti şu anda yanıt vermiyor. Daha sonra tekrar dene.',
       unreadable: 'Paragraf bu sayfada olmayan bir rakam andığı için atıldı. Tekrar dene.',
       not_entitled: 'Program ekibine yönelik yapay zekâ araçları, bu organizasyona dahil olmayan AI paketinin parçası — bu sayfadaki tüm rakamlar onsuz da eksiksiz. Platform işletmecisi ekleyebilir.',
@@ -9245,6 +9273,7 @@ const tr: Dict = {
     reasons: {
       not_configured: 'Yapay zekâ burada kurulu değil — bu sayfadaki tüm rakamlar onsuz da eksiksiz.',
       quota_exceeded: 'Bu ayın yapay zekâ kotası doldu.',
+      disabled: 'Bu kurumda yapay zekâ kapalı — bu sayfadaki tüm rakamlar onsuz da eksiksiz.',
       provider_error: 'Yapay zekâ hizmeti şu anda yanıt vermiyor. Daha sonra tekrar dene.',
       unreadable: 'Yanıt okunamadı. Tekrar dene.',
       no_rows: 'Bu aralıkta metin yok.',
@@ -9332,6 +9361,21 @@ const tr: Dict = {
     },
   },
   adminAi: {
+    switchesTitle: 'Anahtarlar',
+    switchesIntro: 'Yapay zekâyı tüm kurum için ya da özellik özellik kapat; bir özelliğe kendi aylık hakkını ver. Sunucuda uygulanır — kapatılan bir özellik "kota doldu" değil "kapalı" yanıtı verir.',
+    switchesHint: 'Bir özelliğin kendi hakkı yalnız o özelliğin çağrılarını sayar; yukarıdaki kurum kotasını paylaşması için boş bırak. Değişiklik bir sonraki yapay zekâ çağrısından itibaren geçerlidir.',
+    switchesSaved: 'Kaydedildi — bir sonraki yapay zekâ çağrısından itibaren geçerli.',
+    masterOn: 'Bu kurumda yapay zekâ açık',
+    masterOff: 'Bu kurumda yapay zekâ kapalı',
+    masterOffNote: 'Bu kurumda yapay zekâ kapatılmış — her yapay zekâ özelliği "kapalı" yanıtı verir.',
+    confirmOffTitle: 'Yapay zekâ tüm kurum için kapatılsın mı?',
+    confirmOffBody: 'Siz yeniden açana kadar her yapay zekâ özelliği — katılımcılar ve ekip için — "yapay zekâ kapalı" yanıtı verecek. Hiçbir şey silinmez; kaydedilmiş sonuçlar yerinde kalır.',
+    confirmOff: 'Yapay zekâyı kapat',
+    colEnabled: 'Anahtar',
+    colTaskQuota: 'Kendi aylık hakkı',
+    taskOn: 'açık',
+    taskOff: 'kapalı',
+    taskQuotaInherit: 'devralır',
     title: 'AI kullanımı',
     intro: 'AI bu organizasyona neye mal oluyor: göreve göre çağrılar, hatalar ve harcama, aylık bütçe ve sağlayıcının bağlı olup olmadığı.',
     scopeNote: 'Rakamlar yalnızca bu organizasyona ait — aylık kotanın saydığı çağrıların aynısı.',
@@ -9373,6 +9417,7 @@ const tr: Dict = {
     csv: 'CSV indir',
   },
   machineTranslation: {
+    aiOff: 'Bu kurumda yapay zekâ kapalı. Diğer dilleri yine de kendin yazabilirsin.',
     fill: 'Boş dilleri doldur',
     filling: 'Çevriliyor…',
     noSource: 'Önce bir dilde yaz.',
@@ -9382,6 +9427,7 @@ const tr: Dict = {
     confirm: 'Doğru görünüyor',
   },
   authoringAssist: {
+    aiOff: 'Bu kurumda yapay zekâ kapalı. Yine de kendin yazabilirsin.',
     briefPlaceholder: 'Kısa not, ör. "Perşembe 18:00 CV atölyesi, 2 no.lu oda"',
     draft: '3 dilde taslak oluştur',
     drafting: 'Taslak hazırlanıyor…',
@@ -9452,6 +9498,7 @@ const tr: Dict = {
     none: 'Bu adres için kayıtta uyulan bir abonelik iptali yok.',
   },
   practiceInterview: {
+    aiOff: 'Kurumunuzda yapay zekâ kapalı; bu yüzden deneme mülakatları kullanılamıyor.',
     title: 'Deneme mülakatı',
     hint: 'Hedef rolün için altı soruyu yanıtla ve nasıl geçtiğine dair bir rapor al — yapı, kanıt, uygunluk ve açıklık, artı sırada üzerinde çalışman gerekenler.',
     textOnly: 'Yalnızca metin: yanıtlarını yazarsın. Hiçbir şey kaydedilmez. Rapor, paylaşmayı seçene kadar sana özel kalır.',
@@ -11518,6 +11565,7 @@ const tr: Dict = {
       no_consent: 'Karşı taraf bu eşleşmede yapay zekâya henüz izin vermedi; rehber yazıldığı hâliyle gösteriliyor.',
       not_configured: 'Bu çalışma alanında yapay zekâ kurulu değil; rehber yazıldığı hâliyle gösteriliyor.',
       quota_exceeded: 'Bu ayki yapay zekâ hakkı doldu; rehber yazıldığı hâliyle gösteriliyor.',
+      disabled: 'Bu kurumda yapay zekâ kapalı; rehber yazıldığı hâliyle gösteriliyor.',
       provider_error: 'Yapay zekâ şu an yanıt veremedi; rehber yazıldığı hâliyle gösteriliyor.',
     },
   },
@@ -12544,6 +12592,7 @@ const tr: Dict = {
       draftBadge: 'Yapay zekâ önerisi — göndermeden önce gözden geçir ve düzenle',
       consentRequired: 'Bu sohbetteki biri yapay zekâ özetlerine izin vermemiş.',
       quotaExceeded: 'Yapay zekâ bu ay kullanılamıyor.',
+      aiOff: 'Kurumunuzda yapay zekâ kapalı.',
       providerError: 'Yapay zekâ şu an meşgul. Birazdan tekrar dene.',
       notConfigured: 'Yapay zekâ burada kullanılamıyor.',
       failed: 'Olmadı. Lütfen tekrar dene.',
@@ -13036,6 +13085,7 @@ const tr: Dict = {
     },
   },
   aiSummary: {
+    aiOff: 'Kurumunuzda yapay zekâ kapalı.',
     button: 'AI özeti',
     hint: 'Bu etkileşim kaydını AI ile özetle (bir AI kredisi kullanır).',
     empty: 'Özetlenecek etkileşim yok.',
@@ -13052,6 +13102,7 @@ const tr: Dict = {
     tasks: { cv_feedback: 'CV geri bildirimi', interview_prep: 'Mülakat hazırlığı', interaction_summary: 'Özet', mentor_match: 'Eşleştirme gerekçesi', practice_interview: 'Deneme mülakatı raporu' },
   },
   cvFeedback: {
+    aiOff: 'Kurumunuzda yapay zekâ kapalı; bu yüzden CV geri bildirimi kullanılamıyor.',
     title: 'AI CV geri bildirimi',
     hint: 'CV’ni geliştirmek için yapıcı öneriler al — güçlü yanlar, iyileştirmeler ve eksik bölümler.',
     button: 'Geri bildirim al',
@@ -13077,6 +13128,7 @@ const tr: Dict = {
 
   },
   interviewPrep: {
+    aiOff: 'Kurumunuzda yapay zekâ kapalı; bu yüzden mülakat hazırlığı kullanılamıyor.',
     title: 'Mülakat hazırlığı (AI)',
     hint: 'Hedef pozisyonun için gerçekçi örnek sorular ve hazırlık ipuçları al. Profilindeki yetenekler dikkate alınır.',
     positionPlaceholder: 'Hedef pozisyon (boşsa profilinden alınır)',
@@ -16544,6 +16596,7 @@ const de: Dict = {
     aiNoThemes: 'Die KI hat keine Themen gefunden, die sich mit den Antworten belegen lassen.',
     aiUnavailable: 'Die KI-Zusammenfassung ist gerade nicht verfügbar — die Antworten oben sind vollständig.',
     aiUnavailable_quota_exceeded: 'Das KI-Kontingent dieses Monats ist aufgebraucht — die Antworten oben sind vollständig.',
+    aiUnavailable_disabled: 'KI ist für diese Organisation abgeschaltet — die Antworten oben sind vollständig.',
     aiUnavailable_not_configured: 'KI ist für dieses Programm nicht eingerichtet — die Antworten oben sind vollständig.',
     aiUnavailable_below_floor: 'Noch nicht genug Antworten für eine Zusammenfassung.',
     aiUnavailable_not_entitled: 'Die KI-Zusammenfassung gehört zum KI-Paket, das für diese Organisation nicht enthalten ist — die Antworten oben sind vollständig. Der Plattformbetreiber kann es hinzufügen.',
@@ -16700,6 +16753,7 @@ const de: Dict = {
     reasons: {
       not_configured: 'KI ist hier nicht eingerichtet — alle Zahlen auf dieser Seite sind auch ohne sie vollständig.',
       quota_exceeded: 'Das KI-Kontingent dieses Monats ist aufgebraucht.',
+      disabled: 'KI ist für diese Organisation abgeschaltet — alle Zahlen auf dieser Seite sind auch ohne sie vollständig.',
       provider_error: 'Der KI-Dienst antwortet gerade nicht. Versuche es später erneut.',
       unreadable: 'Der Absatz nannte eine Zahl, die nicht auf dieser Seite steht, und wurde deshalb verworfen. Versuche es erneut.',
       not_entitled: 'Die KI-Werkzeuge für das Programmteam gehören zum KI-Paket, das für diese Organisation nicht enthalten ist — alle Zahlen auf dieser Seite sind auch ohne sie vollständig. Der Plattformbetreiber kann es hinzufügen.',
@@ -16733,6 +16787,7 @@ const de: Dict = {
     reasons: {
       not_configured: 'KI ist hier nicht eingerichtet — alle Zahlen auf dieser Seite sind auch ohne sie vollständig.',
       quota_exceeded: 'Das KI-Kontingent dieses Monats ist aufgebraucht.',
+      disabled: 'KI ist für diese Organisation abgeschaltet — alle Zahlen auf dieser Seite sind auch ohne sie vollständig.',
       provider_error: 'Der KI-Dienst antwortet gerade nicht. Versuche es später erneut.',
       unreadable: 'Die Antwort konnte nicht gelesen werden. Versuche es erneut.',
       no_rows: 'In diesem Zeitraum gibt es keinen Text.',
@@ -16820,6 +16875,21 @@ const de: Dict = {
     },
   },
   adminAi: {
+    switchesTitle: 'Schalter',
+    switchesIntro: 'KI für die ganze Organisation abschalten oder Funktion für Funktion; einer Funktion ein eigenes Monatskontingent geben. Serverseitig durchgesetzt — eine abgeschaltete Funktion antwortet „abgeschaltet“, nie „Kontingent aufgebraucht“.',
+    switchesHint: 'Das eigene Kontingent einer Funktion zählt nur deren Aufrufe; leer lassen, damit sie das Organisationskontingent oben teilt. Änderungen gelten ab dem nächsten KI-Aufruf.',
+    switchesSaved: 'Gespeichert — gilt ab dem nächsten KI-Aufruf.',
+    masterOn: 'KI ist für diese Organisation an',
+    masterOff: 'KI ist für diese Organisation aus',
+    masterOffNote: 'KI ist für diese Organisation abgeschaltet — jede KI-Funktion antwortet „abgeschaltet“.',
+    confirmOffTitle: 'KI für die ganze Organisation abschalten?',
+    confirmOffBody: 'Jede KI-Funktion — für Teilnehmende und für das Team — antwortet „KI ist abgeschaltet“, bis du sie wieder einschaltest. Nichts wird gelöscht; gespeicherte Ergebnisse bleiben, wo sie sind.',
+    confirmOff: 'KI abschalten',
+    colEnabled: 'Schalter',
+    colTaskQuota: 'Eigenes Monatskontingent',
+    taskOn: 'an',
+    taskOff: 'aus',
+    taskQuotaInherit: 'erbt',
     title: 'KI-Nutzung',
     intro: 'Was KI diese Organisation kostet: Aufrufe, Fehler und Ausgaben je Aufgabe, das Monatsbudget und ob der Anbieter angebunden ist.',
     scopeNote: 'Zahlen nur für diese Organisation — dieselben Aufrufe, die das Monatskontingent zählt.',
@@ -16861,6 +16931,7 @@ const de: Dict = {
     csv: 'CSV herunterladen',
   },
   machineTranslation: {
+    aiOff: 'KI ist für diese Organisation abgeschaltet. Die anderen Sprachen kannst du weiterhin selbst schreiben.',
     fill: 'Leere Sprachen ausfüllen',
     filling: 'Wird übersetzt…',
     noSource: 'Schreib zuerst eine Sprache.',
@@ -16870,6 +16941,7 @@ const de: Dict = {
     confirm: 'Passt so',
   },
   authoringAssist: {
+    aiOff: 'KI ist für diese Organisation abgeschaltet. Du kannst es weiterhin selbst schreiben.',
     briefPlaceholder: 'Kurzinfo, z. B. „Lebenslauf-Workshop Do. 18 Uhr, Raum 2“',
     draft: 'Entwurf in 3 Sprachen',
     drafting: 'Entwurf wird erstellt…',
@@ -16940,6 +17012,7 @@ const de: Dict = {
     none: 'Für diese Adresse ist keine respektierte Abmeldung im Protokoll.',
   },
   practiceInterview: {
+    aiOff: 'KI ist für deine Organisation abgeschaltet, daher gibt es keine Übungsinterviews.',
     title: 'Übungsinterview',
     hint: 'Beantworte sechs Fragen für deine Zielrolle und erhalte einen Bericht, wie es lief — Struktur, Belege, Relevanz und Klarheit, dazu, woran du als Nächstes arbeiten solltest.',
     textOnly: 'Nur Text: Du tippst deine Antworten. Nichts wird aufgezeichnet. Der Bericht bleibt privat, bis du ihn teilen möchtest.',
@@ -19007,6 +19080,7 @@ const de: Dict = {
       no_consent: 'Die andere Seite hat KI für diese Zusammenarbeit noch nicht erlaubt; der Leitfaden wird so gezeigt, wie er geschrieben ist.',
       not_configured: 'KI ist in diesem Arbeitsbereich nicht eingerichtet; der Leitfaden wird so gezeigt, wie er geschrieben ist.',
       quota_exceeded: 'Das KI-Kontingent für diesen Monat ist aufgebraucht; der Leitfaden wird so gezeigt, wie er geschrieben ist.',
+      disabled: 'KI ist für diese Organisation abgeschaltet; der Leitfaden wird so gezeigt, wie er geschrieben ist.',
       provider_error: 'KI konnte gerade nicht antworten; der Leitfaden wird so gezeigt, wie er geschrieben ist.',
     },
   },
@@ -20033,6 +20107,7 @@ const de: Dict = {
       draftBadge: 'KI-Vorschlag — vor dem Senden prüfen und bearbeiten',
       consentRequired: 'Jemand in dieser Unterhaltung hat KI-Zusammenfassungen nicht erlaubt.',
       quotaExceeded: 'KI ist diesen Monat nicht verfügbar.',
+      aiOff: 'KI ist für deine Organisation abgeschaltet.',
       providerError: 'Die KI ist gerade ausgelastet. Bitte gleich noch einmal versuchen.',
       notConfigured: 'KI ist hier nicht verfügbar.',
       failed: 'Das hat nicht geklappt. Bitte erneut versuchen.',
@@ -20525,6 +20600,7 @@ const de: Dict = {
     },
   },
   aiSummary: {
+    aiOff: 'KI ist für deine Organisation abgeschaltet.',
     button: 'KI-Zusammenfassung',
     hint: 'Dieses Interaktionsprotokoll mit KI zusammenfassen (verbraucht ein KI-Guthaben).',
     empty: 'Noch keine Interaktionen zum Zusammenfassen.',
@@ -20541,6 +20617,7 @@ const de: Dict = {
     tasks: { cv_feedback: 'CV-Feedback', interview_prep: 'Interviewvorbereitung', interaction_summary: 'Zusammenfassung', mentor_match: 'Begründung der Zuordnung', practice_interview: 'Bericht zum Übungsinterview' },
   },
   cvFeedback: {
+    aiOff: 'KI ist für deine Organisation abgeschaltet, daher gibt es kein Lebenslauf-Feedback.',
     title: 'KI-Feedback zum Lebenslauf',
     hint: 'Erhalte konstruktive Vorschläge zur Verbesserung deines Lebenslaufs — Stärken, Verbesserungen und fehlende Abschnitte.',
     button: 'Feedback erhalten',
@@ -20566,6 +20643,7 @@ const de: Dict = {
 
   },
   interviewPrep: {
+    aiOff: 'KI ist für deine Organisation abgeschaltet, daher gibt es keine Interviewvorbereitung.',
     title: 'Interviewvorbereitung (KI)',
     hint: 'Erhalte realistische Beispielfragen und Vorbereitungstipps für deine Zielposition. Deine Fähigkeiten aus dem Profil werden berücksichtigt.',
     positionPlaceholder: 'Zielposition (leer = aus deinem Profil)',
