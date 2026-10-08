@@ -65,7 +65,7 @@ test('meetings page does not flash empty states while mentorship data is loading
 
     const navigation = page.goto('/mentor/meetings');
     await requestStarted;
-    await expect(page.getByTestId('meetings-relations-loading')).toBeVisible();
+    await expect(page.getByTestId('meetings-relations').getByTestId('async-section-loading')).toBeVisible();
     await expect(page.getByText('No mentees assigned')).toHaveCount(0);
     await expect(page.getByText('No meetings yet')).toHaveCount(0);
     await expect(page.getByText('Meetings (0)')).toHaveCount(0);
@@ -100,14 +100,25 @@ test('meetings page shows an error instead of empty states when an API request f
 
   try {
     await signInAndSettle(page, mentorEmail, 'Pass1234!', '/mentor');
-    await page.route('**/api/mentorship', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"test"}' }));
+    let failRequest = true;
+    await page.route('**/api/mentorship', (route) => failRequest
+      ? route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"test"}' })
+      : route.continue());
     await page.goto('/mentor/meetings');
 
-    await expect(page.getByTestId('meetings-load-error')).toBeVisible();
-    await expect(page.getByText('Failed to load meetings. Please try again.')).toBeVisible();
+    await expect(page.getByTestId('meetings-relations').getByTestId('async-section-error')).toBeVisible();
+    await expect(page.getByTestId('meetings-list').getByTestId('async-section-error')).toBeVisible();
+    await expect(page.getByTestId('meetings-list').getByText('Failed to load meetings. Please try again.')).toBeVisible();
     await expect(page.getByText('No mentees assigned')).toHaveCount(0);
     await expect(page.getByText('No meetings yet')).toHaveCount(0);
     await expect(page.getByText('Meetings (0)')).toHaveCount(0);
+
+    // The shared section owns presentation; its retry still reloads both APIs.
+    failRequest = false;
+    await page.getByTestId('meetings-list').getByRole('button', { name: /try again/i }).click();
+    await expect(page.getByTestId('async-section-error')).toHaveCount(0);
+    await expect(page.getByText('No mentees assigned')).toBeVisible();
+    await expect(page.getByText('No meetings yet')).toBeVisible();
   } finally {
     await cleanupByEmail(mentorEmail);
   }

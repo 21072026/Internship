@@ -70,6 +70,8 @@ Rules of thumb when adding one:
 ## Async UI states
 
 Use `AsyncSection` for new asynchronous lists and panels: loading, error and empty are distinct states.
+`MeetingsManager` uses it for the attendee picker and upcoming meetings, with retries loading both lists.
+`CalendarView` deliberately retains its loading overlay: replacing its grid with a section skeleton would lose the calendar layout (#1450).
 Loading must never render the empty state, and errors should offer a retry when the caller can reload.
 The component owns presentation only; fetching, state and retry behavior stay in the caller.
 Choose the smallest matching `list`, `card` or `stats` skeleton variant.

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "Meeting attendee and upcoming-meeting lists now use the shared AsyncSection loading, error and empty states, including retry actions (#1450). The calendar retains its layout-preserving loading overlay."
+}

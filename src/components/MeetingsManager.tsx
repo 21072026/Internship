@@ -12,7 +12,7 @@ import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { useSearchParams } from 'next/navigation';
-import { SkeletonRows } from '@/components/ui/Skeleton';
+import { AsyncSection } from '@/components/ui/AsyncSection';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestInviteField';
 import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
@@ -231,15 +231,6 @@ export function MeetingsManager() {
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{result}</div>
       )}
 
-      {loadError && (
-        <Card className="mb-4" data-testid="meetings-load-error">
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <p className="text-sm text-red-500">{t.meetings.loadError}</p>
-            <Button variant="outline" size="sm" onClick={load}>{t.errorBoundary.retry}</Button>
-          </div>
-        </Card>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -258,13 +249,16 @@ export function MeetingsManager() {
             </div>
           </CardHeader>
           <div className="space-y-4">
-            <div className="max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-lg p-2">
-              {loading ? (
-                <div data-testid="meetings-relations-loading"><SkeletonRows rows={2} /></div>
-              ) : loadError ? null : relations.length === 0 ? (
-                <p className="text-sm text-gray-400">{t.mentor.noMenteesAssigned}</p>
-              ) : (
-                <>
+            <div className="max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-lg p-2" data-testid="meetings-relations">
+              <AsyncSection
+                loading={loading}
+                error={loadError ? t.meetings.loadError : null}
+                empty={relations.length === 0}
+                emptyText={<p className="text-sm text-gray-400">{t.mentor.noMenteesAssigned}</p>}
+                retryText={t.errorBoundary.retry}
+                onRetry={load}
+                skeleton="list"
+              >
                 <label className="flex items-center gap-2 text-sm py-1 mb-1 border-b border-gray-100 dark:border-gray-800 font-medium">
                   <input
                     type="checkbox"
@@ -291,8 +285,7 @@ export function MeetingsManager() {
                     <PersonHoverCard personId={r.mentee.id} name={r.mentee.fullName} role="MENTEE" className="truncate" />
                   </label>
                 ))}
-                </>
-              )}
+              </AsyncSection>
             </div>
             <div>
               <Input label={t.meetings.meetingTitle} value={title} onChange={(e) => setTitle(e.target.value)} list="meeting-topics" />
@@ -347,50 +340,56 @@ export function MeetingsManager() {
           <CardHeader>
             <CardTitle>{t.meetings.upcoming}{!loading && !loadError ? ` (${meetings.length})` : ''}</CardTitle>
           </CardHeader>
-          {loading ? (
-            <div data-testid="meetings-list-loading"><SkeletonRows rows={3} /></div>
-          ) : loadError ? null : meetings.length === 0 ? (
-            <p className="text-sm text-gray-400">{t.meetings.none}</p>
-          ) : (
-            <div className="divide-y divide-gray-50 dark:divide-gray-800">
-              {meetings.map((m) => (
-                <div key={m.id} className="flex items-center justify-between gap-3 py-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.title}</p>
-                    <p className="text-xs text-gray-500 truncate">
-                      <PersonHoverCard personId={m.relation.mentee.id} name={m.relation.mentee.fullName} role="MENTEE" />
-                      {m.scheduledAt ? ` · ${formatDateTime(m.scheduledAt, locale)}` : ` · ${t.meetings.noTime}`}
-                    </p>
-                    {m.meetLink && (
-                      <a
-                        href={m.meetLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate block max-w-[16rem]"
-                      >
-                        {m.meetLink}
-                      </a>
-                    )}
-                    <MeetingGuestList guests={m.guests ?? []} />
+          <div data-testid="meetings-list">
+            <AsyncSection
+              loading={loading}
+              error={loadError ? t.meetings.loadError : null}
+              empty={meetings.length === 0}
+              emptyText={<p className="text-sm text-gray-400">{t.meetings.none}</p>}
+              retryText={t.errorBoundary.retry}
+              onRetry={load}
+              skeleton="list"
+            >
+              <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                {meetings.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.title}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        <PersonHoverCard personId={m.relation.mentee.id} name={m.relation.mentee.fullName} role="MENTEE" />
+                        {m.scheduledAt ? ` · ${formatDateTime(m.scheduledAt, locale)}` : ` · ${t.meetings.noTime}`}
+                      </p>
+                      {m.meetLink && (
+                        <a
+                          href={m.meetLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate block max-w-[16rem]"
+                        >
+                          {m.meetLink}
+                        </a>
+                      )}
+                      <MeetingGuestList guests={m.guests ?? []} />
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {m.meetLink && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyLink(m)}
+                          aria-label={t.meetings.copyLink}
+                        >
+                          {copiedId === m.id ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copiedId === m.id ? t.meetings.linkCopied : t.meetings.copyLink}
+                        </Button>
+                      )}
+                      {m.scheduledAt && <Badge variant={RSVP_VARIANT[m.rsvp]}>{t.meetings[m.rsvp.toLowerCase() as 'pending' | 'accepted' | 'declined']}</Badge>}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {m.meetLink && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyLink(m)}
-                        aria-label={t.meetings.copyLink}
-                      >
-                        {copiedId === m.id ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-                        {copiedId === m.id ? t.meetings.linkCopied : t.meetings.copyLink}
-                      </Button>
-                    )}
-                    {m.scheduledAt && <Badge variant={RSVP_VARIANT[m.rsvp]}>{t.meetings[m.rsvp.toLowerCase() as 'pending' | 'accepted' | 'declined']}</Badge>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            </AsyncSection>
+          </div>
         </Card>
       </div>
     </div>
