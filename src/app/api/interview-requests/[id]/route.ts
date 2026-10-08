@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
-import { decideInterviewRequestSchema } from '@/lib/interviewRequests';
+import { decideInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/interviewRequests';
 import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
@@ -25,11 +25,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
 
   return withTenantScope(session, async () => {
+    // The actor rule lives in the lib (#1844) and is shared with /schedule and /cancel.
+    const scope = interviewRequestActorWhere({ role: session.user.role, userId: session.user.id, orgId });
+    if (!scope) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const current = await prisma.interviewRequest.findFirst({
-      where: {
-        id, orgId,
-        ...(session.user.role === 'MENTOR' ? { mentee: { menteeRelations: { some: { mentorId: session.user.id, status: 'ACTIVE', orgId } } } } : {}),
-      },
+      where: { id, ...scope },
       select: { id: true, status: true, menteeId: true, requisitionId: true, companyId: true, mentee: { select: { preferredLanguage: true } } },
     });
     if (!current) return NextResponse.json({ error: 'Not found', code: 'not_found' }, { status: 404 });

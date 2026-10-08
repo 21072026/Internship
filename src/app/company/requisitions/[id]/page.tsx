@@ -9,7 +9,9 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
 import { InterviewRequestForm } from '@/components/InterviewRequestForm';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTimeWithZone } from '@/lib/relativeTime';
+import { viewerTimeZone } from '@/lib/timezone';
 import { UNSPECIFIED_INTERVIEW_DECLINE_REASON } from '@/lib/interviewDeclineReasons';
 
 type Candidate = { id: string; fullName: string };
@@ -20,11 +22,13 @@ type Interview = {
   status: string;
   declineReasonCode: string | null;
   declineNote: string | null;
+  scheduledAt: string | null;
+  cancelReason: string | null;
 };
 
 export default function CompanyRequisitionDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const t = useT(); const text = t.interviewRequests;
+  const t = useT(); const text = t.interviewRequests; const locale = useLocale();
   const [requisition, setRequisition] = useState<{ title: string } | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [shortlist, setShortlist] = useState<Shortlist[]>([]);
@@ -70,7 +74,17 @@ export default function CompanyRequisitionDetailPage() {
               {request ? (
                 <>
                   <Badge>{text.statuses[request.status as keyof typeof text.statuses]}</Badge>
-                  {request.status === 'APPROVED' && <span className="text-sm text-gray-500">{text.scheduleWithProgram}</span>}
+                  {/* The outcome, not an instruction (#1844): the confirmed time on the viewer's named clock, or the cancellation. */}
+                  {request.status === 'SCHEDULED' && request.scheduledAt && (
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100" data-testid="interview-scheduled-at">
+                      {text.scheduledAt.replace('{when}', formatDateTimeWithZone(request.scheduledAt, locale, viewerTimeZone(null)))}
+                    </span>
+                  )}
+                  {request.status === 'CANCELLED' && (
+                    <span className="text-sm text-gray-600 dark:text-gray-300" data-testid="interview-cancelled">
+                      {request.cancelReason ? text.cancelledWithReason.replace('{reason}', request.cancelReason) : text.cancelledNoReason}
+                    </span>
+                  )}
                 </>
               ) : (
                 <Button size="sm" variant="outline" onClick={() => void removeFromShortlist(item)}>{text.removeFromShortlist}</Button>

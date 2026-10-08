@@ -15,7 +15,7 @@ import { providerBusy } from '@/lib/calendarFreeBusy';
 import type { BusyWindow } from '@/lib/busyWindowsRule';
 import { findPolicyViolation, policyBody, policyExempt, recordPolicyOverride } from '@/lib/bookingPolicy';
 import type { PolicyViolation } from '@/lib/bookingPolicyRule';
-import { recordLateCancel } from '@/lib/meetingAttendance';
+import { cancelMeetingRows } from '@/lib/meetingCancel';
 
 // The three verbs a meeting never had (#1980).
 //
@@ -206,25 +206,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const now = new Date();
 
     if (status === 'CANCELLED') {
-      await prisma.meeting.updateMany({
-        where: { id: { in: ids } },
-        data: {
-          status: 'CANCELLED',
-          cancelledAt: now,
-          cancelledById: session.user.id,
-          cancelReason: cancelReason?.trim() || null,
-        },
-      });
-      // Cancelled inside the late-cancel window by one of the pair: that is a
-      // LATE_CANCEL for them (#2014) — derived here, never typed by anyone.
-      await recordLateCancel(
-        await prisma.meeting.findMany({ where: { id: { in: ids } }, select: { id: true, scheduledAt: true, relation: { select: { id: true, orgId: true, mentorId: true, menteeId: true } } } }),
-        session.user.id,
-        now,
-      );
-      // Off the invitees' real calendars too — through the helper, never by
-      // deleting GoogleCalendarEventLink rows from here (#1986 owns that file).
-      await withdrawMeetings(ids);
+      // The status flip, the late-cancel record and the calendar withdrawal
+      // are one path (src/lib/meetingCancel.ts), shared with the interview
+      // request's cancel route (#1844).
+      await cancelMeetingRows({ ids, actorId: session.user.id, reason: cancelReason ?? null, now });
       await prisma.auditLog.create({
         data: {
           actorId: session.user.id,

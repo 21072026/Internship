@@ -596,6 +596,7 @@ model User {
   applications                      Application[]                 @relation("ApplicationMentee")
   applicationEvents                 ApplicationEvent[]            @relation("ApplicationEventActor")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
+  cancelledInterviewRequests        InterviewRequest[]            @relation("InterviewRequestCanceller")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
   ownedMessageTemplates             MessageTemplate[]             @relation("MessageTemplateOwner")
@@ -3562,18 +3563,19 @@ model Meeting {
   // nulls".
   batchKey            String?
 
-  relation     MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  project      Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  conversation Conversation?             @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  series       MeetingSeries?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
-  interaction  InteractionLog?
-  notes        PersonalNote[]
-  googleEvents GoogleCalendarEventLink[]
-  guests       MeetingGuest[]
-  feedback     MeetingFeedback[]
-  attendance   MeetingAttendance[]
-  agenda       SessionAgenda?
-  sessionNotes SessionNote[]
+  relation         MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  project          Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversation     Conversation?             @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  series           MeetingSeries?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  interaction      InteractionLog?
+  notes            PersonalNote[]
+  googleEvents     GoogleCalendarEventLink[]
+  guests           MeetingGuest[]
+  feedback         MeetingFeedback[]
+  attendance       MeetingAttendance[]
+  agenda           SessionAgenda?
+  sessionNotes     SessionNote[]
+  interviewRequest InterviewRequest?
 
   @@index([relationId])
   @@index([projectId])
@@ -4529,6 +4531,15 @@ model InterviewRequest {
   decidedAt         DateTime?
   proposedSlots     Json?
   activeKey         String?   @unique
+  // The interview as a real Meeting (#1844): set when an approver schedules
+  // it, so the request and the calendar entry point at each other. SCHEDULED
+  // and CANCELLED are written only by /schedule and /cancel; the meeting is
+  // taken off the calendars through the shared cancel path, never deleted.
+  meetingId         String?   @unique
+  scheduledAt       DateTime?
+  cancelledAt       DateTime?
+  cancelledById     String?
+  cancelReason      String?   @db.Text
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -4537,6 +4548,8 @@ model InterviewRequest {
   company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   decidedBy   User?        @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  meeting     Meeting?     @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  cancelledBy User?        @relation("InterviewRequestCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
 
   @@index([orgId, status])
   @@index([companyId, requisitionId])
