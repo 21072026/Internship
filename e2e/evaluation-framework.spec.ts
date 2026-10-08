@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, userInWorld } from './helpers/db';
-import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
+import { gotoSettled, signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // #822 — evaluation criteria as org data instead of hardcoded arrays.
 //
@@ -167,7 +167,7 @@ test('retiring a criterion keeps it readable on the evaluations that were scored
     expect(retired?.active).toBe(false);
 
     await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
-    await page.goto(`/mentor/mentees/${relation.id}`);
+    await gotoSettled(page, `/mentor/mentees/${relation.id}`);
     // Asked for today: Impact. Still readable from the past: Punctuality.
     await expect(page.getByText('Impact', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Punctuality: ?5\/5/).first()).toBeVisible();
