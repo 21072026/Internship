@@ -493,12 +493,13 @@ crashed" email.
 
 `/api/health` runs four `EmailLog` queries per request when `HEALTH_TOKEN` is unset on the
 server, and one of them is `findFirst({ where: { status: 'FAILED' }, orderBy: { createdAt:
-'desc' } })`. `EmailLog` has single-column indexes on `status` and `createdAt` but **no
-composite `[status, createdAt]** (`prisma/schema.prisma`), so on an append-only ledger MySQL
-must either filesort the FAILED set or walk `createdAt` backwards past every non-FAILED row.
-As the table grows, that query — not the app — is the likeliest cause of an `ep:health`
-breach. Setting `HEALTH_TOKEN` on the server removes the whole detail path from the anonymous
-probe and is the cheaper fix.
+'desc' } })`. That query used to be the documented landmine here: `EmailLog` had single-column
+indexes on `status` and `createdAt` only, so on an append-only ledger MySQL had to filesort the
+FAILED set or walk `createdAt` backwards past every non-FAILED row. **Defused in #1608:**
+`EmailLog` now carries `@@index([status, createdAt])`, which serves that lookup directly. The
+four queries still run, so if `ep:health` goes red, check the slow-query log first
+(`DB_SLOW_QUERY_MS`, [docs/observability.md](observability.md)); setting `HEALTH_TOKEN` on the
+server still removes the whole detail path from the anonymous probe.
 
 The job-queue counters added in #1674 deliberately did **not** join that bill: they are read
 only for a caller who asks for them with `?jobs=1` **and** has proved who they are — a

@@ -923,6 +923,10 @@ model Message {
   // db push to drop or rename an FK-backing index is what MySQL refuses (#784).
   @@index([conversationId, createdAt])
   @@index([relationId, createdAt])
+  // One sender's messages over a window (#1608): the activity report's sent/
+  // received counts (`senderId` + `createdAt: { gte }`), the message-retention
+  // sweep (`senderId: { in }` + `createdAt: { lt }`, #2056) and erasure.
+  @@index([senderId, createdAt])
 }
 
 // A single emoji reaction on a message by one user (WhatsApp/Slack style).
@@ -4268,6 +4272,9 @@ model ActivityLog {
   @@index([action])
   @@index([createdAt])
   @@index([orgId])
+  // /admin/activity (#1608): one tenant's rows, newest first, a page at a time
+  // — `where: { orgId }` + `orderBy: { createdAt: 'desc' }` + skip/take.
+  @@index([orgId, createdAt])
 }
 
 enum EmailStatus {
@@ -4310,6 +4317,12 @@ model EmailLog {
   @@index([status])
   @@index([category])
   @@index([createdAt])
+  // The FAILED/SENT-by-recency shape (#1608): /api/health's
+  // `findFirst({ where: { status: 'FAILED' }, orderBy: { createdAt: 'desc' } })`
+  // and the email-log screen's `groupBy` over `{ status, createdAt: { gte } }`.
+  // Without it MySQL filesorts the status set or walks createdAt past every
+  // row of the other statuses — the documented ep:health landmine.
+  @@index([status, createdAt])
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
