@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // Structured compensation on offers (#1851): the write rules, the admin panel
 // summary, and the benchmark read model with its <5 suppression. Visibility
@@ -259,7 +259,7 @@ test('the benchmark reports median/p25/p75 per position and currency, suppresses
 
     // Not for anyone but ADMIN.
     const { email: menteeEmail } = await s.mentee(30);
-    await signInAndSettle(page, menteeEmail, PW, '/portal');
+    await signInAsFreshUser(page, menteeEmail, PW, '/portal');
     const forbidden = await page.request.get('/api/admin/offers/benchmark');
     expect(forbidden.status()).toBe(403);
   } finally {
