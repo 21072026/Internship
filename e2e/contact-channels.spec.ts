@@ -22,7 +22,8 @@ test('contacting a mentee can be logged as a Call/WhatsApp interaction', async (
 
     // The mentee detail page exposes Call / WhatsApp quick actions.
     await page.goto(`/mentor/mentees/${rel.id}`);
-    await expect(page.getByRole('button', { name: /Call|Ara/i })).toBeVisible({ timeout: 10_000 });
+    // Scoped: the follow-up suggestion chips also say "call" (strict mode).
+    await expect(page.getByTestId('mentee-detail-sidebar').getByRole('button', { name: /^(Call|Ara)$/i })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('button', { name: 'WhatsApp' })).toBeVisible();
 
     // Logging a Call interaction (what the "reached them? yes" flow does) works
