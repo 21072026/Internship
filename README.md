@@ -54,22 +54,39 @@ stateDiagram-v2
 
 ## Local setup
 
+Prerequisites: Node.js/npm and a running Docker engine with Docker Compose
+(for the local MySQL 8 database below). If you already have a local MySQL 8
+instance, use its connection details and skip the Docker step.
+
 ```bash
 # 1. Install
 npm install
 
 # 2. Configure env
-cp .env.example .env        # then fill DATABASE_URL, NEXTAUTH_SECRET, etc.
+cp .env.example .env        # for a fresh checkout; keep any existing .env
+# Set DATABASE_URL="mysql://crm:crm@127.0.0.1:3306/internship_crm"
+# Set NEXTAUTH_URL="http://localhost:3000" and your own NEXTAUTH_SECRET.
+# Configure SMTP_* if you need email delivery.
 
-# 3. Sync DB schema (this project uses db push, not migrations)
+# 3. Start local MySQL; wait until the db service is healthy
+npm run db:dev:up
+docker compose -f docker-compose.dev.yml ps
+
+# 4. Sync DB schema (this project uses db push, not migrations)
 npx prisma db push
 
-# 4. Create the first admin
+# 5. Create the first admin
 npx prisma db seed          # uses SEED_ADMIN_* env (default admin@example.com / ChangeMe123!)
 
-# 5. Run
+# 6. Run
 npm run dev                 # http://localhost:3000
 ```
+
+Use a local development database for schema changes. If you keep your app's
+configuration in `.env.local`, pass `DATABASE_URL` explicitly to the Prisma CLI;
+it reads `.env`, not `.env.local`. See [local development](docs/local-dev.md)
+for that setup. `npm run db:dev:down` stops the local database and preserves its
+data volume.
 
 ### Required environment variables
 
