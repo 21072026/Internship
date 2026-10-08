@@ -67,6 +67,10 @@ export const SETTING_DEFAULTS = {
   // feature consumes from this pool via runAiGated; '0' disables AI calls
   // entirely. Metered in AiUsage; resets each calendar month.
   aiMonthlyQuota: '200',
+  // The org-wide AI kill switch (#2032): 'false' turns every task off with its
+  // own honest denial ('disabled'), distinct from a spent quota. Read only
+  // through src/lib/ai/policy.ts.
+  aiEnabled: 'true',
   // Negative-outcome communication (#830). 'false' (default) means reaching an
   // outcome stage notifies the mentor and prefills a draft — a human reads,
   // edits and sends it. 'true' lets the templated message go out to the mentee

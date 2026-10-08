@@ -21,10 +21,13 @@ allowed to.
 runAiGated({ scope: AiTaskId, consent?, userId?, companyId?, call })
   │
   ├─ consent?      hasConsent(userId, type) — false → { ok:false, 'no_consent' }
+  ├─ switches      resolveAiPolicy(orgId, task) (#2032): the org kill switch, then
+  │                this task's own — off → { ok:false, 'disabled' }, before everything below
   ├─ entitlement   operator tasks only (#1738): entitled(orgId, 'AI_PACKAGE')
   │                false → { ok:false, 'not_entitled' }; a participant task skips this
   ├─ cache         persist? a stored artefact for the same input → { ok:true, cached:true }
-  ├─ quota         Setting.aiMonthlyQuota, calls this calendar month
+  ├─ quota         the chain's allowance: the task's own monthlyQuota against its own
+  │                calls, else aiMonthlyQuota against the org's, this calendar month
   │                0 or exhausted → { ok:false, 'quota_exceeded' }
   ├─ configured    ANTHROPIC_API_KEY set → else { ok:false, 'not_configured' }
   ├─ call()        the task's module → callModel() → the provider request
@@ -123,6 +126,44 @@ them:
 - **The demo.** `prisma/seed-demo.mjs` grants the pack to both demo tenants,
   because the demo must show the whole product (#2061): without it every topic
   environment's admin AI tools would render locked.
+
+## Switches and the policy chain (#2032)
+
+Switching AI off used to mean setting the quota to zero — all-or-nothing, and
+reported to the person as "quota used up" when the operator meant "off". The
+organisation's AI settings are now one chain, read in exactly one place,
+`src/lib/ai/policy.ts` (`resolveAiPolicy(orgId, taskId)`; the pure arithmetic is
+`src/lib/ai/policyRule.ts`, unit-tested), in this order and nothing else:
+
+1. **the org kill switch** — the `aiEnabled` Setting (`'false'` is off): every
+   task is off, whatever the rows below say;
+2. **the per-task switch** — `AiFeatureSetting.enabled` for `(orgId, taskId)`;
+   no row means on;
+3. **the per-task quota** — `AiFeatureSetting.monthlyQuota`, when set: this
+   task's own monthly allowance, counted against **this task's** answered
+   calls (`AiUsage.scope`);
+4. **the org quota** — the tenant's `aiMonthlyQuota` row, counted against the
+   org's answered calls;
+5. **the global default** — the deployment's global row, then the code
+   default (`SETTING_DEFAULTS`); 4 and 5 are what one `getSetting()` resolves.
+
+`runAiGated` asks the chain **before** the AI pack, the artefact cache and the
+quota: a switched-off task is refused with the typed denial **`'disabled'`**,
+never answered from a stored copy, and never dressed up as `'quota_exceeded'`.
+Every route answers it as `403 { code: 'disabled' }` and every screen says
+"AI is switched off for your organisation" — honest copy, no paywall, no
+upgrade prompt, for participants and staff alike. `getAiQuota(orgId, taskId)`
+measures a task with its own allowance against its own calls and every other
+task against the org's.
+
+`AiFeatureSetting` is a new additive table in `TENANT_MODELS`; `taskId` is a
+registry key (`src/lib/ai/tasks.ts`), not a foreign key, so a retired task's row
+is harmless and a typo never compiles into the gate. The switches are edited on
+`/admin/ai` through `GET`/`PUT /api/admin/ai/policy` (ADMIN, the session's org,
+never a request value; the master switch asks for a confirmation before it goes
+off); no other code may read `aiEnabled` or `aiMonthlyQuota`. The existing
+`Setting` table was **not** re-keyed for this — its `key String @id` makes
+adding `orgId` a drop-and-recreate under `db push`.
 
 ## The task table
 
@@ -359,6 +400,7 @@ paywall:
 | `quota_exceeded` | a neutral "temporarily unavailable" — never quota mechanics, never pricing | the actual reason, because they can fix it |
 | `provider_error` (#2024) | the same neutral "temporarily unavailable" (HTTP 503, `code: 'provider_error'`) | "the AI service is not answering right now" |
 | `not_entitled` (#1738) | **never reaches one** — only an `operator` task asks for the pack, so a participant route cannot receive it | a locked state that names the add-on (`403 feature_locked`, `feature: 'AI_PACKAGE'`; the screen's `GET` says `locked: true`) and nothing beyond that — no mechanics, no pricing |
+| `disabled` (#2032) | the org's kill switch or this task's switch is off — `403 { code: 'disabled' }` and "AI is switched off for your organisation"; the non-AI path stays (the guide as written, the form, the log), never a stored copy, never a quota message, never a paywall | the same `403 { code: 'disabled' }` and the same sentence; the console (`/admin/ai`) is where it is switched back on |
 
 `mentor_match` degrades differently and more strongly: the rule-based ranking
 (skill overlap, then lighter load) is computed **first, always**. AI only

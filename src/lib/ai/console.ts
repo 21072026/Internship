@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { periodRange } from '@/lib/meteringRules';
 import { getAiQuota } from '@/lib/aiGate';
+import { loadAiPolicy } from '@/lib/ai/policy';
 import { isAiConfigured, providerBreakerState, resolveModel } from '@/lib/ai/provider';
 import { AI_TASKS, AI_TASK_IDS } from '@/lib/ai/tasks';
 import { foldUsage, percentileIndex, type TaskUsage, type UsageTotals } from '@/lib/ai/consoleRules';
@@ -73,18 +74,22 @@ export const FLAG_WINDOW_DAYS = 30;
 
 export async function loadAiStatus(orgId: string) {
   const since = new Date(Date.now() - FLAG_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const [quota, flaggedCalls] = await Promise.all([
+  const [quota, flaggedCalls, policy] = await Promise.all([
     getAiQuota(orgId),
     // The injection tripwire's hits (#2026): flagged, never blocked.
     prisma.aiUsage.count({ where: withinTenant({ createdAt: { gte: since }, flags: { not: null } }, await orgWhere(orgId)) }),
+    // The switches (#2032): the kill switch for the status card, per task for the rows.
+    loadAiPolicy(orgId),
   ]);
+  const switches = new Map(policy.tasks.map((t) => [t.id, t]));
   return {
     configured: isAiConfigured(),
+    enabled: policy.enabled,
     breaker: providerBreakerState(),
     quota: { quota: quota.quota, used: quota.used, remaining: quota.remaining },
     flaggedCalls,
     flagWindowDays: FLAG_WINDOW_DAYS,
-    tasks: AI_TASK_IDS.map((id) => ({ id, label: AI_TASKS[id].label, audience: AI_TASKS[id].audience, tier: AI_TASKS[id].tier, model: resolveModel(id) })),
+    tasks: AI_TASK_IDS.map((id) => ({ id, label: AI_TASKS[id].label, audience: AI_TASKS[id].audience, tier: AI_TASKS[id].tier, model: resolveModel(id), enabled: switches.get(id)?.enabled ?? true, monthlyQuota: switches.get(id)?.monthlyQuota ?? null })),
   };
 }
 

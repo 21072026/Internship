@@ -80,5 +80,7 @@ export async function POST(request: Request) {
 
 /** The one answer every denial gets — never a paywall, never a quota. */
 function unavailable(reason: string) {
+  // Switched off by the organisation (#2032) is the one denial named as such.
+  if (reason === 'disabled') return NextResponse.json({ error: 'AI is turned off for this organisation', code: 'disabled' }, { status: 403 });
   return NextResponse.json({ error: 'Practice interviews are not available right now', code: reason === 'not_configured' ? 'not_configured' : 'unavailable' }, { status: reason === 'not_configured' ? 501 : 503 });
 }

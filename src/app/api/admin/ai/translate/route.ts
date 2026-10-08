@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     if (!gated.ok) {
       // An operator task without the AI pack (#1738): the shared locked shape.
       if (gated.reason === 'not_entitled') return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
-      const status = gated.reason === 'not_configured' ? 501 : gated.reason === 'quota_exceeded' ? 429 : 503;
+      const status = gated.reason === 'not_configured' ? 501 : gated.reason === 'quota_exceeded' ? 429 : gated.reason === 'disabled' ? 403 : 503;
       return NextResponse.json({ error: 'Translation is not available right now', code: gated.reason }, { status });
     }
     return NextResponse.json({ translations: gated.result });

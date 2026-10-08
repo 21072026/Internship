@@ -149,6 +149,8 @@ export function FollowUpPanel({
         else setAiLines(body.suggestions.filter((s: unknown): s is string => typeof s === 'string'));
       } else if (body.code === 'consent_required') {
         setAiNotice(t.aiSummary.consentRequired);
+      } else if (body.code === 'disabled') {
+        setAiNotice(t.aiSummary.aiOff);
       } else if (body.code === 'quota_exceeded') {
         setAiNotice(t.aiSummary.quotaExceeded);
       } else if (body.code === 'provider_error') {

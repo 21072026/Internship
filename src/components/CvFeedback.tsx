@@ -66,6 +66,9 @@ export function CvFeedback() {
         }
       } else if (body.code === 'consent_required') {
         setNotice(c.consentRequired);
+      } else if (body.code === 'disabled') {
+        // Switched off by the organisation (#2032): said as such.
+        setNotice(c.aiOff);
       } else {
         // quota_exceeded / not_configured / anything else: neutral message —
         // the mentee never sees pricing or quota mechanics.

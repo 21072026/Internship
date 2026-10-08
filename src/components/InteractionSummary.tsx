@@ -69,6 +69,8 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
         setLocked(true);
       } else if (body.code === 'consent_required') {
         setNotice(a.consentRequired);
+      } else if (body.code === 'disabled') {
+        setNotice(a.aiOff);
       } else if (body.code === 'quota_exceeded') {
         setNotice(a.quotaExceeded);
       } else if (body.code === 'provider_error') {
