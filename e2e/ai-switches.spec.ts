@@ -54,7 +54,8 @@ test(
       expect((await signInViaApi(asAdminB, b.adminEmail, PASSWORD)).ok).toBeTruthy();
       const usageBefore = await prisma.aiUsage.count();
       const prep = () => asMenteeA.post('/api/interview-prep', { data: { position: 'Backend Developer' } });
-      const practice = () => asMenteeA.post('/api/interview-prep/session', { data: { position: 'Backend Developer' } });
+      // The practice interview takes its role from the profile (targetPosition in the seed); its body is `{}` or a requisition id.
+      const practice = () => asMenteeA.post('/api/interview-prep/session', { data: {} });
 
       // Nothing configured: everything on, every task inherits, and CI's missing key is the only refusal.
       const initial = (await (await asAdminA.get('/api/admin/ai/policy')).json()) as Policy;
@@ -72,7 +73,7 @@ test(
       const refusedBody = await refused.json();
       expect(refusedBody.code).toBe('disabled');
       expect(JSON.stringify(refusedBody)).not.toMatch(NEVER);
-      expect(((await (await asMenteeA.post('/api/interview-prep/session', { data: { position: 'Backend Developer' } })).json()) as { code: string }).code).toBe('disabled');
+      expect(((await (await practice()).json()) as { code: string }).code).toBe('disabled');
       expect(((await (await asAdminA.get('/api/admin/ai/status')).json()) as { enabled: boolean }).enabled).toBe(false);
 
       // One task off, the rest on: interview prep is disabled while the practice interview still reaches the provider check.
