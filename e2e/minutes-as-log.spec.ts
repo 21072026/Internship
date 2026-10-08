@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInViaApi, signInAndSettle } from './helpers/auth';
+import { signInViaApi, signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -54,6 +54,8 @@ async function seedPair(prefix: string) {
 type Note = { id: string; body: string; revisions: { author: { id: string } | null }[]; actionItems: { taskId: string; text: string; done: boolean; assignee: { id: string } | null }[] };
 
 test('minutes become the meeting log (before or after it exists, one row per meeting) and action items become to-dos that stay in step', async ({ page, playwright }) => {
+  // Two UI sign-ins plus the whole API loop; the first visit compiles half the API on a cold dev server.
+  test.setTimeout(180_000);
   const p = await seedPair('minutes-log');
   const ended = await p.meeting(minutesAgo(10), 'CV review call');
   const swept = await p.meeting(minutesAgo(180), 'Career planning talk');
@@ -138,8 +140,8 @@ test('minutes become the meeting log (before or after it exists, one row per mee
     const mentorTodos = (await (await asMentor.get('/api/todos')).json()) as { todos: { id: string; author: { id: string } | null }[] };
     expect(mentorTodos.todos.find((x) => x.id === secondTaskId)?.author?.id).toBe(p.mentee.id);
 
-    // 6. The mentee's history shows the real minutes, not the placeholder.
-    await signInAndSettle(page, p.menteeEmail, PASSWORD, '/portal');
+    // 6. The mentee's history shows the real minutes, not the placeholder (the page is still the admin's — switch users properly).
+    await signInAsFreshUser(page, p.menteeEmail, PASSWORD, '/portal');
     await page.goto('/portal/interactions');
     await expect(page.getByText('Decided: apply to two roles this month.', { exact: false })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('took place', { exact: false })).toHaveCount(0);
@@ -151,6 +153,7 @@ test('minutes become the meeting log (before or after it exists, one row per mee
 });
 
 test('the panel pins minutes to a meeting, lists the action items, promotes one and ticks it', async ({ page }) => {
+  test.setTimeout(120_000);
   const p = await seedPair('minutes-ui');
   const held = await p.meeting(minutesAgo(30), 'Weekly sync');
   try {
@@ -161,12 +164,12 @@ test('the panel pins minutes to a meeting, lists the action items, promotes one 
     await panel.getByTestId('session-note-new').click();
     await panel.getByTestId('session-note-meeting').selectOption(held.id);
     await panel.getByTestId('session-note-draft').fill('Good session.\n- [ ] Call the HR contact\n- [ ] Send the thank-you note');
+    // Wait on the request itself: on a cold dev server the POST queues behind
+    // the page's own on-demand compiles for well over ten seconds.
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/session-notes') && r.request().method() === 'POST', { timeout: 60_000 });
     await panel.getByTestId('session-note-save').click();
-
-    const stored = await expect
-      .poll(async () => prisma.sessionNote.findFirst({ where: { relationId: p.rel.id } }), { timeout: 10_000 })
-      .not.toBeNull()
-      .then(() => prisma.sessionNote.findFirstOrThrow({ where: { relationId: p.rel.id } }));
+    expect((await saved).status()).toBe(201);
+    const stored = await prisma.sessionNote.findFirstOrThrow({ where: { relationId: p.rel.id } });
     expect(stored.meetingId).toBe(held.id);
     const row = panel.getByTestId(`session-note-${stored.id}`);
     await expect(row.getByTestId('session-note-meeting-label')).toContainText('Weekly sync');
