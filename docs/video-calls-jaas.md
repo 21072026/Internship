@@ -209,6 +209,30 @@ so every creation path inherits it:
   produce names what is missing and who can fix it. A provider-generated link from
   the organiser's connected account (#2009) slots in between levels 2 and 3.
 
+### Slack Huddle link (#2879)
+
+Slack has **no public API** to start or join a huddle, but every channel and DM has a
+stable huddle link, `https://app.slack.com/huddle/<TEAM_ID>/<CHANNEL_ID>` (`T…` and
+`C…`/`D…`/`G…`). Opening it joins the huddle running in that channel, or starts one.
+That link is a bring-your-own link like any other — not a provider or room type of its
+own — and goes through the same door (`checkPastedMeetingLink()`, nothing relaxed).
+
+- **Copying it:** in Slack, open the channel (or DM) → the *headphones* / huddle control
+  in the channel header → **⋯** → *Copy huddle link*. Paste it as the personal room on
+  `/account`, or into a meeting's link box.
+- **What the app does with it:** `meetingProviderName()` labels it *Slack Huddle*, so
+  the panel's fallback button reads "Open in Slack Huddle" and the link-box hint says it
+  opens in a new tab. `EMBEDDABLE_MEETING_HOSTS` is untouched: Slack refuses to be
+  framed, so the panel never tries. The id grammar lives in `src/lib/slackHuddle.ts`
+  (`buildHuddleUrl` / `parseHuddleUrl`, dependency-free, `e2e/slack-huddle.unit.spec.ts`).
+- **Who can join:** only **members of that Slack workspace**. A mentee or an external
+  guest who is not in Slack cannot open the link, so for those calls keep a built-in
+  room (or a Zoom/Meet link) — a huddle is for the mentor-and-team side of the house.
+  Nothing from the huddle (recording, transcript, attendance) reaches the CRM.
+- **Not possible, and not attempted:** starting a huddle or placing a user into one
+  through the API. The follow-up (PR 2) posts the meeting to each invitee's Slack DM
+  with a *Join Huddle* button that opens this same link.
+
 ## Verifying after deployment
 
 1. Start a call from a mentee card. While the month's allowance has room, the stored link
