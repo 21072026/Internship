@@ -26,8 +26,24 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { REQUEST_ID_HEADER, registerRequestIdAmbient, resolveRequestId } from './requestId';
+import { logger } from './logger';
+import { QUERY_COUNT_HEADER, parseQueryCeiling, topModels } from './dbQueryObserver';
 
-const storage = new AsyncLocalStorage<{ requestId: string }>();
+type RequestStore = {
+  requestId: string;
+  // Database queries issued while this request was handled (#1608).
+  queries: number;
+  byModel: Map<string, number>;
+  // The ceiling warning fires once per request, not once per query past it.
+  warned: boolean;
+};
+
+const storage = new AsyncLocalStorage<RequestStore>();
+
+// Queries one request may issue before a warning names its top models (#1608).
+// A loop that issues one query per row is the shape this exists to catch: it
+// is invisible at ten rows and an outage at ten thousand.
+const QUERY_CEILING = parseQueryCeiling(process.env.DB_QUERY_WARN_CEILING);
 
 /**
  * The id of the request being handled, or `undefined` when no context is bound
@@ -49,7 +65,50 @@ export function currentRequestId(): string | undefined {
 export function withRequestContext<T>(requestId: string, fn: () => T): T {
   const existing = currentRequestId();
   if (existing) return fn();
-  return storage.run({ requestId }, fn);
+  return storage.run({ requestId, queries: 0, byModel: new Map(), warned: false }, fn);
+}
+
+/** Queries issued so far by the request in flight, or `undefined` outside one. */
+export function currentQueryCount(): number | undefined {
+  return storage.getStore()?.queries;
+}
+
+function countQuery(model: string): void {
+  const store = storage.getStore();
+  if (!store) return;
+  store.queries += 1;
+  store.byModel.set(model, (store.byModel.get(model) ?? 0) + 1);
+  if (!store.warned && store.queries > QUERY_CEILING) {
+    store.warned = true;
+    // Model names and counts only — never what was queried.
+    logger.warning('Request exceeded the database query ceiling', {
+      ceiling: QUERY_CEILING,
+      queries: store.queries,
+      top: topModels(store.byModel),
+    });
+  }
+}
+
+/**
+ * Outside production, stamp the response with the request's query count so a
+ * developer sees it in the network tab while working (#1608). Production never
+ * advertises it: it is a free map of how expensive each endpoint is.
+ */
+function withQueryCountHeader<T>(result: T, store: RequestStore | undefined): T {
+  if (process.env.NODE_ENV === 'production' || !store) return result;
+  const stamp = (value: unknown) => {
+    if (value instanceof Response) {
+      try {
+        value.headers.set(QUERY_COUNT_HEADER, String(store.queries));
+      } catch {
+        // Some responses (a redirect) have immutable headers; the count is a
+        // convenience, never worth a failed request.
+      }
+    }
+    return value;
+  };
+  if (result instanceof Promise) return result.then(stamp) as T;
+  return stamp(result) as T;
 }
 
 /**
@@ -68,11 +127,13 @@ export function withRequestContext<T>(requestId: string, fn: () => T): T {
  */
 export function withRequestScope<T>(request: Request | Headers, fn: () => T): T {
   const headers = request instanceof Headers ? request : request.headers;
-  return withRequestContext(resolveRequestId(headers.get(REQUEST_ID_HEADER)), fn);
+  return withRequestContext(resolveRequestId(headers.get(REQUEST_ID_HEADER)), () =>
+    withQueryCountHeader(fn(), storage.getStore()),
+  );
 }
 
 // Publish the engine to the client-safe seam so `src/lib/logger.ts` — imported
 // by modules that must not pull in `node:async_hooks` — can read the bound id.
 // Evaluating this module is what registers it, and any request that binds a
 // context has evaluated it, because `withRequestScope` above lives here.
-registerRequestIdAmbient({ currentRequestId });
+registerRequestIdAmbient({ currentRequestId, countQuery });

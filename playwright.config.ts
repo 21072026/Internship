@@ -283,6 +283,10 @@ export default defineConfig({
           // because CI serves a production build. Unset everywhere else, so the
           // routes are a 404 on preview and production.
           E2E_ERROR_ROUTES: '1',
+          // Per-model database query tally for the N+1 report (#1608,
+          // e2e/db-query-report.spec.ts). Same opt-in shape as E2E_ERROR_ROUTES:
+          // unset everywhere else, where /api/dev/db-tally is a 404.
+          DB_QUERY_TALLY: '1',
           JAAS_WEBHOOK_SECRET: E2E_JAAS_WEBHOOK_SECRET,
           // Web Push (#1464/#1716): makes `pushConfigured()` true so the account
           // page renders its push device list. Keys are generated above, per run.
