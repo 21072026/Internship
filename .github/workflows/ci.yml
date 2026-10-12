@@ -370,6 +370,9 @@ jobs:
       - name: unit tests + per-module coverage floor (#1599)
         run: npm run test:unit:coverage
       - run: npm run build
+        # Node 22 exhausts its default ~2 GiB heap during Next.js type checking.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
   # The demo seed is the only data most people ever see: the public demo, every
   # per-PR topic environment, and every new contributor's local box. When a
