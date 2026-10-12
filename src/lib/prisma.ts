@@ -28,9 +28,14 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 // re-evaluation reuses the client above and must not stack a second timer on
 // it, while a second module instance that builds its own client must still get
 // one — a global flag would leave that client unmeasured.
+//
+// SERVER ONLY. A few client components reach this module through a shared
+// import graph, and in a browser bundle `prisma` is Prisma's stub, which throws
+// on ANY property access — harmless while nothing touched it at module load,
+// a crashed page the moment this block read `prisma.$use` there.
 const OBSERVED = Symbol.for('internship.prisma.queryObserver');
 const observable = prisma as PrismaClient & { [OBSERVED]?: true };
-if (!observable[OBSERVED]) {
+if (typeof window === 'undefined' && !observable[OBSERVED]) {
   observable[OBSERVED] = true;
   prisma.$use(async (params, next) => {
     const started = performance.now();
