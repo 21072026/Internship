@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Survey numbers in the scorecard and the exports (#1910):** the programme health scorecard's `nps` and `surveyResponseRate` were \"not yet measurable\" and are now real.\n- `nps` is the pooled NPS of the last 90 days' answers. A survey counts only once its own answers reach its own floor. Green at 30, amber at 0, new unit `score`.\n- `surveyResponseRate` is the share of invitations sent 7–90 days ago that were answered. Green at 50 %, amber at 30 %.\n- Both link to `/admin/surveys`.\n- New one-row-per-survey overview (`src/lib/surveyOverview.ts`, `GET /api/admin/analytics/surveys`), shown as the print report's Surveys block and an XLSX \"Surveys\" sheet. The rate and the NPS are floored per survey.",
-  "notes": {
-    "en": ["The programme health card now shows your Net Promoter Score and survey response rate, and your surveys appear in the printable report and the Excel export."],
-    "tr": ["Program sağlığı kartı artık Net Tavsiye Skorunu ve anket yanıt oranını gösteriyor; anketlerin de yazdırılabilir raporda ve Excel dışa aktarımında yer alıyor."],
-    "de": ["Die Programm-Health-Karte zeigt jetzt deinen Net Promoter Score und die Rücklaufquote der Umfragen, und deine Umfragen erscheinen im druckbaren Bericht und im Excel-Export."]
-  }
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Scheduling assistant (#1999):** `GET /api/meetings/suggested-times?relationId=&duration=&count=` proposes times that work for both people of a relation. It starts from the mentor's posted hours (one-offs and away windows included), slices them to the meeting length, and removes everyone's busy windows (the mentor's widened by their buffer). It keeps only times inside 08:00–20:00 on each person's own clock and applies the mentor's notice and caps (#2003). Results are ranked soonest first, with on-the-hour starts preferred. When nothing qualifies, it names the binding constraint: `no_hours`, `all_taken`, `outside_hours` or `limit_reached`. The ranking logic is pure and unit-tested in `src/lib/suggestTimes.ts`, including two zones and a DST change. The response contains only instants and each person's zone, never anybody's calendar contents. A **Suggested times** strip on the scheduling panel and on the mentee's request panel shows each option on the viewer's clock, with `AttendeeTimes` under the selected one. Picking an option fills the form and books through the existing POST.",
-  "notes": {
-    "en": ["When you schedule or request a meeting, Suggested times now offers slots that suit both of you, within working hours on each person's clock. One tap fills in the form."],
-    "tr": ["Toplantı planlarken ya da talep ederken artık Önerilen saatler, ikinize de uyan ve herkesin kendi saatine göre mesai içinde kalan saatleri gösteriyor. Tek dokunuşla form doluyor."],
-    "de": ["Beim Planen oder Anfragen eines Meetings schlägt Vorgeschlagene Zeiten jetzt Termine vor, die für euch beide passen und auf der Uhr jeder Person in der Arbeitszeit liegen. Ein Tipp füllt das Formular aus."]
-  }
-}

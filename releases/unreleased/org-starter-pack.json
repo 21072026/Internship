@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Tenant starter pack (#2066, part 1):** `applyOrgStarterPack(orgId, { tx?, locale? })` in `src/lib/orgStarterPack.ts` seeds a tenant's stages, service levels, document requirements, an evaluation framework per scope and goal templates in one transaction — the caller's when given, so the provisioning wizard (#2065) and self-serve signup (#1749) can run it right after creating the org. Stages and template service levels/documents come from the programme template catalogue (#1641: the vertical's default, else the canonical set derived from the enum — no stage key is spelled out, `check:stage-keys` stays green); the canonical set's starter days are given per on-path stage position, pinned by a unit test. Idempotent and edit-safe: `createMany({ skipDuplicates })` on each model's unique key, stages only for an org with none, rubrics only for a scope without one, goals by title — a second run reports `created: 0` and no tenant edit is overwritten. `POST /api/admin/organizations/[id]/starter-pack` (that org's ADMIN or a super admin of its world) and a Starter pack card in settings. The sample programme (`sampleData` columns) is part 2.",
-  "notes": {
-    "en": ["New organizations can start from a ready-made setup: stages, service levels, required documents, an evaluation framework and goal templates in one click from Settings — and applying it again never changes what you edited."],
-    "tr": ["Yeni kurumlar hazır bir kurulumla başlayabiliyor: aşamalar, hizmet süreleri, gerekli belgeler, bir değerlendirme çerçevesi ve hedef şablonları Ayarlar’dan tek tıkla — tekrar uygulamak düzenlediğin hiçbir şeyi değiştirmez."],
-    "de": ["Neue Organisationen können mit einer fertigen Einrichtung starten: Phasen, Servicezeiten, erforderliche Dokumente, ein Bewertungsrahmen und Zielvorlagen mit einem Klick in den Einstellungen — erneutes Anwenden ändert nichts, was Sie bearbeitet haben."]
-  }
-}

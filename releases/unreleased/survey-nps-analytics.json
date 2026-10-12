@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Survey results & NPS (#1910):** `/admin/surveys` and `/admin/surveys/[id]/results` (API `GET /api/admin/surveys/[id]/results`) — NPS with promoter/passive/detractor bands, a week-by-week trend, per-question distributions and means, unattributed free text, and NPS by role, cohort and mentor. All privacy rules run in `src/lib/surveyResults.ts`: nothing but counts under the floor, hidden breakdown groups are not sent at all, and the trend weeks are floored like any breakdown. **Privacy fixes:** `applyResponseFloor` now hides shown buckets until the hidden ones reach the floor together (two hidden buckets of 1 and 2 were readable as a group of 3), and an ANONYMOUS response no longer stores its `relationId`.",
-  "notes": {
-    "en": ["Survey results are here: see your programme's Net Promoter Score, how it moves week by week and how each question was answered — with groups smaller than five never shown."],
-    "tr": ["Anket sonuçları geldi: programının Net Tavsiye Skorunu, haftadan haftaya nasıl değiştiğini ve her sorunun nasıl yanıtlandığını gör — beş kişiden küçük gruplar hiçbir zaman gösterilmez."],
-    "de": ["Umfrageergebnisse sind da: Sieh den Net Promoter Score deines Programms, wie er sich Woche für Woche entwickelt und wie jede Frage beantwortet wurde — Gruppen unter fünf Personen werden nie angezeigt."]
-  }
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**MARKETING preset follows the SaleVali journey** (#2840, decision #2572). New MARKETING orgs are provisioned without `DEAL_PROPOSAL`/`DEAL_NEGOTIATION` — the win comes straight out of the trial's decision window — and the `TRIAL_EXPIRED` service level is 7 days instead of 3. Existing orgs keep their rows (no backfill), and the two retired stages still read back localized (`RETIRED_STAGE_LABELS` in `src/lib/programTemplates.ts`). The demo marketing tenant, its mirror (`MARKETING_DEMO_STAGES`), the sample import file and the fidelity floors follow. The decision itself is recorded in `docs/marketing-vertical/funnel-decision.md` and `salevali-provider-contract.md`.",
-  "notes": {
-    "en": ["New sales workspaces follow the SaleVali journey: no proposal or negotiation stage — a deal is won straight out of the trial’s decision window."],
-    "tr": ["Yeni satış alanları SaleVali yolculuğunu izler: teklif ve pazarlık aşaması yok — iş doğrudan denemenin karar penceresinden kazanılır."],
-    "de": ["Neue Vertriebsbereiche folgen der SaleVali-Customer-Journey: keine Angebots- oder Verhandlungsphase — der Deal wird direkt aus dem Entscheidungsfenster der Testphase gewonnen."]
-  }
-}
