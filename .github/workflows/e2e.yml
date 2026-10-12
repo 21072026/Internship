@@ -171,6 +171,9 @@ jobs:
 
       - name: Build app
         run: npm run build
+        # Keep the Next.js build worker above its default ~2 GiB heap limit.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Save Next.js build cache
         if: ${{ github.event_name == 'push' && matrix.shard == '1/2' }}
