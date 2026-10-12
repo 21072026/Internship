@@ -11,6 +11,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import { reflectTaskInMinutes } from '@/lib/minutesSync';
 
 // One to-do: tick it off, put it away, reword it, hand it over.
 //
@@ -183,6 +184,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
   if (assigneeId && assigneeId !== session.user.id) {
     await notify(assigneeId, 'project.goalAssigned', { title: updated.title }, await goalLinkFor(assigneeId, task.projectId));
   }
+  // A to-do promoted from the minutes (#1849) ticks its line too.
+  if (parsed.data.done !== undefined) await reflectTaskInMinutes(taskId, parsed.data.done, session.user.id);
   return NextResponse.json({ task: updated });
   });
 }

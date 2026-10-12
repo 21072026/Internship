@@ -8,6 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { loadAccessibleMeeting } from '@/lib/meetingAccess';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { syncMinutesToMeetingLog } from '@/lib/minutesSync';
 import {
   ADMIN_READ_ONLY_ERROR,
   announceSessionNoteChange,
@@ -63,16 +64,38 @@ export async function GET(request: Request) {
     if (rel === 'missing') return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const notes = await prisma.sessionNote.findMany({
-      where: { relationId },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      include: sessionNoteInclude,
-    });
+    const [notes, seats, meetings] = await Promise.all([
+      prisma.sessionNote.findMany({
+        where: { relationId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: sessionNoteInclude,
+      }),
+      prisma.mentorshipRelation.findUnique({
+        where: { id: relationId },
+        select: { mentor: { select: { id: true, fullName: true } }, mentee: { select: { id: true, fullName: true } } },
+      }),
+      // The sessions the minutes can be pinned to (#1849): the pairing's past
+      // meetings, newest first, bounded — the picker, not a history.
+      prisma.meeting.findMany({
+        where: { relationId, status: 'SCHEDULED', scheduledAt: { not: null, lte: new Date() } },
+        orderBy: { scheduledAt: 'desc' },
+        take: 12,
+        select: { id: true, title: true, scheduledAt: true, sessionNotes: { select: { id: true }, take: 1 } },
+      }),
+    ]);
     return NextResponse.json({
       notes: notes.map(serializeSessionNote),
       // The panel closes its editor on an archive or for an admin the same way
       // the goals panel does; the server refuses regardless (POST/PATCH).
       writable: canAuthor(rel, viewerOf(session)) && !menteeWriteClosed(rel, session.user.id),
+      // Who an action item can be handed to (#1849): the two seats, nobody else.
+      participants: seats ? [seats.mentor, seats.mentee] : [],
+      meetings: meetings.map((m) => ({
+        id: m.id,
+        title: m.title,
+        scheduledAt: m.scheduledAt?.toISOString() ?? null,
+        hasMinutes: m.sessionNotes.length > 0,
+      })),
     });
   });
 }
@@ -112,6 +135,10 @@ export async function POST(request: Request) {
       select: { id: true },
     });
     await recordRevision(created.id, session.user.id, body);
+    // Minutes written after the meeting was already logged replace the
+    // placeholder in place (#1849); written before, the log reads them when it
+    // is created. Either way one meeting keeps one log.
+    await syncMinutesToMeetingLog({ meetingId: meetingId ?? null, body });
     const note = await prisma.sessionNote.findUniqueOrThrow({ where: { id: created.id }, include: sessionNoteInclude });
     announceSessionNoteChange(rel, rel.id, session.user.id);
     return NextResponse.json({ note: serializeSessionNote(note) }, { status: 201 });

@@ -7,6 +7,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { syncActionItemsFromMinutes, syncMinutesToMeetingLog } from '@/lib/minutesSync';
 import {
   ADMIN_READ_ONLY_ERROR,
   announceSessionNoteChange,
@@ -59,6 +60,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (parsed.data.body !== note.body) {
       await prisma.sessionNote.update({ where: { id: note.id }, data: { body: parsed.data.body } });
       await recordRevision(note.id, session.user.id, parsed.data.body);
+      // #1849: the meeting's log follows the minutes, and a ticked `- [x]`
+      // line ticks the to-do it was promoted to (and vice versa).
+      await syncMinutesToMeetingLog({ meetingId: note.meetingId, body: parsed.data.body });
+      await syncActionItemsFromMinutes(note.id, parsed.data.body);
       announceSessionNoteChange(note.relation, note.relationId, session.user.id);
     }
     const updated = await prisma.sessionNote.findUniqueOrThrow({ where: { id: note.id }, include: sessionNoteInclude });
