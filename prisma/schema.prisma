@@ -3079,25 +3079,39 @@ model Evaluation {
 //
 // That rule is enforced in the API, never merely hidden in the UI.
 model InterviewPanel {
-  id          String    @id @default(cuid())
-  orgId       String?
+  id                   String    @id @default(cuid())
+  orgId                String?
   // The candidate being interviewed.
-  subjectId   String
+  subjectId            String
   // The rubric to score against (#822). Null = the org's built-in mentee
   // criteria, resolved at read time like everywhere else.
-  templateId  String?
-  title       String?
-  scheduledAt DateTime?
-  createdById String?
+  templateId           String?
+  title                String?
+  scheduledAt          DateTime?
+  createdById          String?
   // Set when an admin closes the panel early — a no-show interviewer must not
   // hold the calibration view hostage for ever. Closing reveals the scorecards
   // that were submitted.
-  closedAt    DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  closedAt             DateTime?
+  // The calendar entry this panel scores (#1846): set when an interview
+  // request is scheduled with `createPanel`, so `scheduledAt` is the meeting's
+  // and the interviewers are on a calendar.
+  meetingId            String?   @unique
+  // The decision a closed panel produced (#1846): ADVANCE | REJECT | OFFER,
+  // written once by POST /api/interview-panels/[id]/outcome and never by a
+  // side effect. The application it moved is kept so the funnel can be read
+  // back from the panel.
+  outcome              String?
+  outcomeAt            DateTime?
+  outcomeById          String?
+  outcomeApplicationId String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  members    InterviewPanelMember[]
-  scorecards Evaluation[]
+  members          InterviewPanelMember[]
+  scorecards       Evaluation[]
+  meeting          Meeting?               @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  interviewRequest InterviewRequest?
 
   @@index([orgId, subjectId])
   @@index([subjectId, createdAt])
@@ -3576,6 +3590,7 @@ model Meeting {
   agenda           SessionAgenda?
   sessionNotes     SessionNote[]
   interviewRequest InterviewRequest?
+  interviewPanel   InterviewPanel?
 
   @@index([relationId])
   @@index([projectId])
@@ -4540,16 +4555,20 @@ model InterviewRequest {
   cancelledAt       DateTime?
   cancelledById     String?
   cancelReason      String?   @db.Text
+  // The scorecard panel convened for this interview (#1846), created in the
+  // same transaction as the meeting when the approver asks for one.
+  panelId           String?   @unique
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  requisition Requisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  mentee      User         @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  decidedBy   User?        @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
-  meeting     Meeting?     @relation(fields: [meetingId], references: [id], onDelete: SetNull)
-  cancelledBy User?        @relation("InterviewRequestCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
+  requisition Requisition     @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User            @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  org         Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  decidedBy   User?           @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  meeting     Meeting?        @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  cancelledBy User?           @relation("InterviewRequestCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
+  panel       InterviewPanel? @relation(fields: [panelId], references: [id], onDelete: SetNull)
 
   @@index([orgId, status])
   @@index([companyId, requisitionId])

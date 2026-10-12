@@ -15,6 +15,9 @@ import { inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { formatInTimeZone, isValidTimeZone } from '@/lib/timezone';
 import { sendMeetingInviteEmail } from '@/services/emailService';
+import { resolveTemplateId } from '@/lib/evaluationTemplates';
+import { getSetting } from '@/lib/settings';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import {
   intlLocaleFor,
   interviewRequestActorWhere,
@@ -52,7 +55,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     const parsed = scheduleInterviewRequestSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
-    const { slot, timeZone, durationMinutes, meetLink, guestEmails, override } = parsed.data;
+    const { slot, timeZone, durationMinutes, meetLink, guestEmails, override, createPanel, interviewerIds } = parsed.data;
     if (!isValidTimeZone(timeZone)) return NextResponse.json({ error: 'Unknown time zone', code: 'invalid_time_zone' }, { status: 400 });
     const when = new Date(slot);
     if (Number.isNaN(when.getTime())) return NextResponse.json({ error: 'Invalid slot', code: 'validation_failed' }, { status: 400 });
@@ -100,9 +103,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
 
       const title = `Interview · ${current.requisition.title} · ${current.company.name}`;
-      let meetingId: string;
+
+      // The scorecard panel (#1846), convened in the same transaction as the
+      // meeting so its scheduledAt is the meeting's. Everyone on it has to be a
+      // real, active account that can sign in and score (the rule of
+      // POST /api/interview-panels); a ghost member would block completion.
+      const interviewers = createPanel
+        ? await prisma.user.findMany({
+            where: { id: { in: [...new Set(interviewerIds ?? [])] }, orgId, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } },
+            select: { id: true },
+          })
+        : [];
+      if (createPanel && interviewers.length === 0) {
+        return NextResponse.json({ error: 'No valid interviewers', code: 'no_valid_interviewers' }, { status: 400 });
+      }
+      const templateId = createPanel ? await resolveTemplateId(orgId, 'MENTEE') : null;
+
+      let created: { meetingId: string; panelId: string | null };
       try {
-        meetingId = await prisma.$transaction(async (tx) => {
+        created = await prisma.$transaction(async (tx) => {
           const meeting = await tx.meeting.create({
             data: {
               relationId: relation.id,
@@ -116,11 +135,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             },
             select: { id: true },
           });
+          const panel = createPanel
+            ? await tx.interviewPanel.create({
+                data: {
+                  orgId,
+                  subjectId: current.menteeId,
+                  title,
+                  scheduledAt: when,
+                  createdById: session.user.id,
+                  templateId,
+                  meetingId: meeting.id,
+                  members: { create: interviewers.map((i) => ({ userId: i.id })) },
+                },
+                select: { id: true },
+              })
+            : null;
           // The guard: the status the checks above saw is in the WHERE, so the
-          // loser of a race rolls its meeting back and answers 409.
+          // loser of a race rolls its meeting (and panel) back and answers 409.
           const changed = await tx.interviewRequest.updateMany({
             where: { id: current.id, orgId, status: 'APPROVED' },
-            data: { status: 'SCHEDULED', meetingId: meeting.id, scheduledAt: when },
+            data: { status: 'SCHEDULED', meetingId: meeting.id, scheduledAt: when, ...(panel ? { panelId: panel.id } : {}) },
           });
           if (changed.count !== 1) throw new NotApproved();
           await tx.auditLog.create({
@@ -129,10 +163,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
               action: 'INTERVIEW_REQUEST_SCHEDULED',
               targetId: current.id,
               orgId,
-              detail: `meeting=${meeting.id}; at=${when.toISOString()}; zone=${timeZone}; mentee=${current.menteeId}; requisition=${current.requisitionId}${override ? '; override' : ''}`,
+              detail: `meeting=${meeting.id}; at=${when.toISOString()}; zone=${timeZone}; mentee=${current.menteeId}; requisition=${current.requisitionId}${override ? '; override' : ''}${panel ? `; panel=${panel.id}` : ''}`,
             },
           });
-          return meeting.id;
+          return { meetingId: meeting.id, panelId: panel?.id ?? null };
         });
       } catch (e) {
         if (e instanceof NotApproved) {
@@ -142,7 +176,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
 
       const meeting = await prisma.meeting.findUniqueOrThrow({
-        where: { id: meetingId },
+        where: { id: created.meetingId },
         select: { id: true, title: true, scheduledAt: true, durationMinutes: true, timeZone: true, meetLink: true, rsvpToken: true, relationId: true, createdById: true },
       });
 
@@ -164,7 +198,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       // Into the calendars of whoever connected their own (#709) — organiser,
       // mentor and mentee; fire-and-forget, a third party can never fail this.
-      pushMeetingInBackground(meeting, [...new Set([session.user.id, relation.mentorId, current.mentee.id])]);
+      // The panel's interviewers sit on the calendar too (#1846).
+      pushMeetingInBackground(meeting, [...new Set([session.user.id, relation.mentorId, current.mentee.id, ...interviewers.map((i) => i.id)])]);
+
+      if (created.panelId) {
+        // Under blind review the assignment must not name the candidate (#819).
+        const blindEnabled = (await getSetting('blindReview', await settingsOrgOf(session))) === 'true';
+        for (const interviewer of interviewers) {
+          await (blindEnabled
+            ? notifyIfAllowed(interviewer.id, 'goalsEvaluations', 'interview.assignedBlind', undefined, `/interviews/${created.panelId}`)
+            : notifyIfAllowed(interviewer.id, 'goalsEvaluations', 'interview.assigned', { name: current.mentee.fullName }, `/interviews/${created.panelId}`));
+        }
+        await logActivity({
+          action: 'interview_panel.created',
+          actorId: session.user.id,
+          actorEmail: session.user.email ?? null,
+          targetType: 'interviewPanel',
+          targetId: created.panelId,
+          detail: `${current.mentee.fullName} · ${interviewers.length} interviewers · meeting=${meeting.id}`,
+          request,
+          orgId,
+        });
+      }
 
       try {
         await sendMeetingInviteEmail({
@@ -219,6 +274,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         ok: true,
         status: 'SCHEDULED',
         meetingId: meeting.id,
+        panelId: created.panelId,
         scheduledAt: when.toISOString(),
         timeZone,
         guests: invitedGuests,

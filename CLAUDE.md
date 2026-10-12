@@ -539,6 +539,16 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   needs `override: true`; the company's interviewers are `MeetingGuest` rows, never accounts; every
   confirmed time a person reads is rendered in their zone and language through
   `formatInTimeZone(when, tz, undefined, intlLocaleFor(lang))`, never a bare `toLocaleString()`.
+- **A closed panel's outcome is recorded once, through the stage writer** (#1846): `POST
+  /api/interview-panels/[id]/outcome` refuses while `closedAt` is null (the scorecards decide first),
+  seals `InterviewPanel.outcome` with a guarded `updateMany` (`outcome: null`), moves the application
+  through `moveApplicationStage()` to the stage `outcomeTargetStage()` (`src/lib/interviewOutcome.ts`,
+  pure) names — ADVANCE = the next open stage, OFFER needs INTERVIEW, REJECT needs a disposition code —
+  and tells the company the **decision only**: never a score, never a divergence flag. The relation's
+  pipeline stage moves only on an explicit `advancePipeline: true`, never on a rejection, and only
+  through `stageMoveData()` + `recordStageMove()` (the shared stage write path). `schedule` with
+  `createPanel` convenes the panel in the meeting's transaction; `InterviewPanel.meetingId` and
+  `InterviewRequest.panelId` are the links.
 - **Structured compensation on offers** ([`docs/offer-compensation.md`](docs/offer-compensation.md),
   #1851): money on `Offer` is integer **minor units** + ISO code (`baseAmountMinor`, `currency`,
   `basePeriod`…) — never a Float/Decimal, same rule as `ProgramCost`/`Placement`. The rules
