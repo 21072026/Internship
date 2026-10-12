@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
-import { notify } from '@/lib/notify';
+import { sendSecurityNotice } from '@/lib/securityNotices';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 
 // POST — an admin forces a user out of the product, everywhere, right now.
@@ -84,7 +84,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     // Transparency, mirroring impersonation and admin reset: the account owner
     // hears about it rather than just finding themselves signed out.
-    await notify(user.id, 'security.adminSignedOutAll', {});
+    // In-app and e-mail (#1717). No request context on purpose: the browser
+    // and address of THIS request are the administrator's, not the owner's.
+    await sendSecurityNotice('adminSignedOutAll', { userId: user.id });
 
     return NextResponse.json({ ok: true });
   });

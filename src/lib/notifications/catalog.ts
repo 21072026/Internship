@@ -293,6 +293,21 @@ export const NOTIFICATION_EVENTS = [
   // person reading it did not do it, the printed codes are in someone else's
   // hands and every minute counts.
   { key: 'security.recoveryCodeUsed', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['remaining'] },
+  // Security notices (#1717) — src/lib/securityNotices.ts is their one sender.
+  // Each is a disclosure like the rows above: the reader may be the victim, so
+  // the mail goes through the essential group whatever the preferences say.
+  // `newDevice` is a sign-in from a browser the account has not used before
+  // (rule in signInDeviceRule.ts); `deviceTokenReuse` a replayed remember-me
+  // cookie (trustedDevice.ts). `sessionsRevoked` is the owner's own "sign out
+  // of all devices"; the admin-pressed one is `adminSignedOutAll` above.
+  { key: 'security.newDevice', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['device'] },
+  { key: 'security.deviceTokenReuse', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.passwordChanged', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.emailChanged', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['email'] },
+  { key: 'security.twoFactorEnabled', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.twoFactorDisabled', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.recoveryCodesRegenerated', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.sessionsRevoked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentor', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentee', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
 ] as const satisfies readonly NotificationEventDef[];
