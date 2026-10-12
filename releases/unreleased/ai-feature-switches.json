@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Per-feature AI switches, an org kill switch and a per-task quota chain** (#2032): a new additive `AiFeatureSetting` table (in `TENANT_MODELS`) holds, per organisation and registered task, an on/off and an optional monthly allowance of its own; the `aiEnabled` Setting is the org-wide kill switch. `src/lib/ai/policy.ts` is the ONE reader of AI settings — the chain is org kill switch → per-task switch → per-task quota → org quota → global default (`src/lib/ai/policyRule.ts`, unit-tested) — and `runAiGated` asks it before the pack, the cache and the quota, answering the new typed denial `'disabled'`, distinct from `'quota_exceeded'`. Every AI route and screen says \"turned off\" for it, never \"quota used up\" and never a paywall. `getAiQuota(orgId, taskId)` measures a task with its own allowance against its own calls. `/admin/ai` gains the switches: a master switch with a confirmation, and a row per task with an on/off and a quota override, through `GET`/`PUT /api/admin/ai/policy`.",
-  "notes": {
-    "en": ["Admins can now switch AI off for the whole organisation in one click, or turn single features off (for example CV parsing) while keeping others on, and give a feature its own monthly allowance. People see \"AI is turned off\" rather than a quota message when that is the reason."],
-    "tr": ["Yöneticiler artık yapay zekâyı tüm kurum için tek tıkla kapatabilir, tek tek özellikleri (örneğin CV ayrıştırma) kapatıp diğerlerini açık tutabilir ve bir özelliğe kendi aylık hakkını verebilir. Sebep buysa kullanıcılar kota mesajı değil \"yapay zekâ kapalı\" görür."],
-    "de": ["Admins können KI jetzt für die ganze Organisation mit einem Klick abschalten, einzelne Funktionen (etwa die Lebenslauf-Auswertung) deaktivieren und andere anlassen, und einer Funktion ein eigenes Monatskontingent geben. Ist das der Grund, sehen die Leute „KI ist abgeschaltet“ statt einer Kontingent-Meldung."]
-  }
-}

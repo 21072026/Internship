@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Recurring survey pulses (#2769):** `RECURRING` survey campaigns are enabled — every `everyDays` days each person in the audience gets one invitation per round (`pulse:<n>`). The contract step of #1887's expand → contract: `SurveyInvitation`'s unique widens from `[surveyId, email]` to `[surveyId, email, round]` (the `@@index([surveyId])` that #1887 shipped is what lets MariaDB drop the old one), and the `recurring_not_yet` refusal is gone.",
-  "notes": {
-    "en": ["Survey campaigns can now repeat: send a short pulse every week or month, and everyone gets one invitation per round."],
-    "tr": ["Anket kampanyaları artık tekrarlanabiliyor: her hafta ya da ay kısa bir nabız anketi gönder, herkes her turda tek bir davet alır."],
-    "de": ["Umfragekampagnen können sich jetzt wiederholen: Schicke jede Woche oder jeden Monat eine kurze Pulsumfrage, und jede Person erhält pro Runde eine Einladung."]
-  }
-}

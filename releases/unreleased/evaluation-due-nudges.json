@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Evaluation due dates and reminders (#1891):** INTERIM and FINAL evaluations now fall due from the org's own pipeline.\n- **Schedule:** INTERIM is due N days after entering a stage, FINAL on entering a stage. Settings `evaluationInterimStage`, `evaluationInterimDays` and `evaluationFinalStage`, plus an editor in `/admin/settings`. The built-in keys are only a fallback where the pipeline still has them; an unknown key is refused with 400 `unknown_stage`.\n- **Due rows:** one `EvaluationDue` row per relation and type (the unique is the claim), with no backfill.\n- **Reminders:** the mentor is reminded on the due date and a week later, never a third time, in-app (`goalsEvaluations`) and by e-mail (`goals-evaluation`).\n- **Stop on write:** `POST /api/evaluations` stamps `completedAt` when the mentor or an admin writes the evaluation, which stops the reminders at once.\n- **Attention queue:** new `evaluation_due` reason.\n- **Coverage:** `evaluationCoverage()` helper for the scorecard.\n- **Cron:** `job=evaluations`, daily at 08:15 UTC.",
-  "notes": {
-    "en": ["Mentors are now reminded when an interim or final evaluation is due — on the day and once more a week later — and the reminders stop the moment it is written. Set when each one falls due in Settings."],
-    "tr": ["Mentorlara artık ara ya da final değerlendirmenin zamanı geldiğinde hatırlatılıyor — o gün ve bir hafta sonra bir kez daha — ve değerlendirme yazıldığı anda hatırlatmalar duruyor. Ne zaman geleceklerini Ayarlar'dan belirle."],
-    "de": ["Mentor:innen werden jetzt erinnert, wenn eine Zwischen- oder Abschlussbewertung fällig ist — am Tag selbst und eine Woche später noch einmal — und die Erinnerungen hören auf, sobald sie geschrieben ist. Wann sie fällig werden, legst du in den Einstellungen fest."]
-  }
-}

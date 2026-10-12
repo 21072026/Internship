@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**A won customer's notice period** (#2841, decision #2572 option C). New nullable `MentorshipRelation.contractEndsAt` (+ `contractEndRemindedAt` bell claim). The owner or an ADMIN records it on a DEAL_WON record (`PATCH /api/mentorship/[id]/contract-end`, `ContractEndPanel` on `/sales/leads/[id]` and `/admin/candidates/[id]`); clearing it means the notice was withdrawn. The record stays DEAL_WON and shows the new `cancellation_pending` attention reason for the whole notice period; on the end day the daily trial sweep rings the owner once (`contract.endsToday`, in-app) — never an automatic move to DEAL_LOST (#2572 Q3). The date is carried over on an owner transfer and hidden from non-owners like the next action. New MARKETING loss reason `CUSTOMER_CANCELLED`. Rule `src/lib/contractEndRule.ts`, unit-tested; e2e `e2e/contract-end.spec.ts`.",
-  "notes": {
-    "en": ["When a customer gives notice, record the day their contract ends: they stay a won customer, show up in your attention queue for the whole notice period, and you get a reminder on the last day."],
-    "tr": ["Bir müşteri fesih bildirdiğinde sözleşmenin bittiği günü kaydedin: kazanılmış müşteri olarak kalır, ihbar süresi boyunca dikkat kuyruğunuzda görünür ve son gün size hatırlatma gelir."],
-    "de": ["Kündigt ein Kunde, tragen Sie den Tag ein, an dem der Vertrag endet: Er bleibt ein gewonnener Kunde, erscheint während der gesamten Kündigungsfrist in Ihrer Aufmerksamkeitsliste, und am letzten Tag werden Sie erinnert."]
-  }
-}
