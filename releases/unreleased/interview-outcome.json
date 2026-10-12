@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Interview outcome (#1846):** an interview that produces no recorded outcome is a meeting, not a hiring step. `POST /api/interview-requests/[id]/schedule` takes `createPanel` + `interviewerIds` and convenes the blind-scored `InterviewPanel` in the same transaction as the meeting (`InterviewPanel.meetingId`, `scheduledAt` = the meeting's, `InterviewRequest.panelId`); the interviewers are assigned, pushed to the calendars and the company's external interviewers remain `MeetingGuest`s from #1844. `POST /api/interview-panels/[id]/outcome` (ADMIN or the candidate's active MENTOR) records `ADVANCE | REJECT | OFFER` for a CLOSED panel only (409 `panel_open` before, 409 `outcome_recorded` after — sealed by a guarded `updateMany`), moves the application through `moveApplicationStage()` along the funnel (`outcomeTargetStage()` in `src/lib/interviewOutcome.ts`, pure), requires a disposition code on a rejection, tells the company the decision only (`interview_panel.outcome.*` notifications — never a score or a divergence flag), and moves the relation's pipeline stage one on-path step through the shared stage write path only on an explicit `advancePipeline: true` (never on a rejection). `interview_panel.outcome` is registered in `WEBHOOK_EVENTS`. The panel view gets an outcome card after close, with the application, the three decisions, the disposition select and the explicit pipeline checkbox.",
+  "notes": {
+    "en": [
+      "Interview panels now produce a decision: once the scorecards are in and the panel is closed, record whether the candidate advances, goes to offer or is not selected (with a reason). The company sees the decision only, never the scores. Scheduling an interview can convene the scorecard panel at the same time."
+    ],
+    "tr": [
+      "Mülakat panelleri artık bir karar üretiyor: puan kartları girilip panel kapandığında adayın ilerlediğini, teklife geçtiğini ya da seçilmediğini (gerekçeyle) kaydedin. Şirket yalnızca kararı görür, puanları asla. Mülakat planlarken puan kartı paneli aynı anda kurulabilir."
+    ],
+    "de": [
+      "Interview-Panels liefern jetzt eine Entscheidung: Sind die Bewertungen da und das Panel geschlossen, halte fest, ob die Person weiterkommt, ein Angebot erhält oder nicht ausgewählt wurde (mit Grund). Das Unternehmen sieht nur die Entscheidung, nie die Bewertungen. Beim Terminieren eines Interviews kann das Bewertungs-Panel gleich mit einberufen werden."
+    ]
+  }
+}

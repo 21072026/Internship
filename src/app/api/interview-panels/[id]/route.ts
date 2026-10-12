@@ -12,6 +12,7 @@ import { getSetting } from '@/lib/settings';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { logActivity } from '@/lib/activity';
 import { notifyIfAllowed } from '@/lib/notify';
+import { findActiveMentorship } from '@/lib/activeMentorship';
 import { z } from 'zod';
 
 // Panel detail — and the place blind scoring is actually enforced (#824).
@@ -35,7 +36,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const isAdmin = session.user.role === 'ADMIN';
     const isMember = panel.members.some((m) => m.userId === session.user.id);
-    if (!isAdmin && !isMember) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // The subject's active mentor decides the outcome (#1846) — the same rule the
+    // interview-request decision uses — and may read the panel for it.
+    const activeMentorship = session.user.role === 'MENTOR' || isAdmin ? await findActiveMentorship(prisma, panel.subjectId) : null;
+    const isSubjectsMentor = session.user.role === 'MENTOR' && activeMentorship?.mentorId === session.user.id;
+    if (!isAdmin && !isMember && !isSubjectsMentor) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const canDecide = !!panel.closedAt && !panel.outcome && (isAdmin || isSubjectsMentor);
 
     const state = panel.members.map((m) => ({
       userId: m.userId,
@@ -101,7 +107,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         // own routes; these flags only decide whether a button is offered.
         canEdit: (isAdmin || panel.createdById === session.user.id) && !panel.closedAt,
         canReopen: (isAdmin || panel.createdById === session.user.id) && !!panel.closedAt,
+        // The decision a closed panel produced (#1846), and whether this viewer may record it.
+        outcome: panel.outcome,
+        outcomeAt: panel.outcomeAt,
+        meetingId: panel.meetingId,
+        canDecide,
       },
+      // The candidate's open applications, for the outcome card — only for
+      // someone who may decide, and only what the card needs.
+      applications: canDecide
+        ? await prisma.application.findMany({
+            where: { menteeId: panel.subjectId, status: 'ACTIVE' },
+            select: { id: true, stage: true, requisition: { select: { title: true } }, company: { select: { name: true } } },
+            orderBy: { updatedAt: 'desc' },
+          })
+        : [],
       criteria,
       roster,
       // Your own scorecard always comes back — it is yours.

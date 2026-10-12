@@ -35,6 +35,8 @@ let req2: { id: string };
 let admin: APIRequestContext;
 let companyCtx: APIRequestContext;
 let mentee: APIRequestContext;
+let mentorCtx: APIRequestContext;
+let req3: { id: string };
 let requestId = '';
 let meetingId = '';
 
@@ -53,18 +55,22 @@ test.beforeAll(async ({ playwright }, info) => {
   relation = await prisma.mentorshipRelation.create({ data: { orgId: org.id, companyId: company.id, mentorId: mentorUser.id, menteeId: menteeUser.id, status: 'ACTIVE', pipelineStatus: 'APPLICATION_100' }, select: { id: true } });
   req = await prisma.requisition.create({ data: { orgId: org.id, companyId: company.id, title: `Loop Backend ${stamp}`, openings: 1, requiredSkills: [] }, select: { id: true } });
   req2 = await prisma.requisition.create({ data: { orgId: org.id, companyId: company.id, title: `Loop Data ${stamp}`, openings: 1, requiredSkills: [] }, select: { id: true } });
-  for (const r of [req, req2]) {
+  req3 = await prisma.requisition.create({ data: { orgId: org.id, companyId: company.id, title: `Loop Platform ${stamp}`, openings: 1, requiredSkills: [] }, select: { id: true } });
+  for (const r of [req, req2, req3]) {
     await prisma.companyInterest.create({ data: { companyId: company.id, menteeId: menteeUser.id, requisitionId: r.id, status: 'SHORTLISTED', scopeKey: companyInterestScopeKey(company.id, menteeUser.id, r.id) } });
   }
   const baseURL = info.project.use.baseURL;
-  [admin, companyCtx, mentee] = await Promise.all([1, 2, 3].map(() => playwright.request.newContext({ baseURL })));
+  [admin, companyCtx, mentee, mentorCtx] = await Promise.all([1, 2, 3, 4].map(() => playwright.request.newContext({ baseURL })));
   expect((await signInViaApi(admin, emails.admin, PW)).ok).toBe(true);
+  expect((await signInViaApi(mentorCtx, emails.mentor, PW)).ok).toBe(true);
   expect((await signInViaApi(companyCtx, emails.company, PW)).ok).toBe(true);
   expect((await signInViaApi(mentee, emails.mentee, PW)).ok).toBe(true);
 });
 
 test.afterAll(async () => {
-  await Promise.all([admin, companyCtx, mentee].map((c) => c?.dispose()));
+  await Promise.all([admin, companyCtx, mentee, mentorCtx].map((c) => c?.dispose()));
+  await prisma.interviewPanel.deleteMany({ where: { subjectId: menteeUser?.id } }).catch(() => {});
+  await prisma.statusChange.deleteMany({ where: { relationId: relation?.id } }).catch(() => {});
   const userIds = [adminUser, mentorUser, menteeUser].filter(Boolean).map((u) => u.id);
   await prisma.notification.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
   await prisma.auditLog.deleteMany({ where: { actorId: { in: userIds } } }).catch(() => {});
@@ -73,7 +79,7 @@ test.afterAll(async () => {
   await prisma.application.deleteMany({ where: { menteeId: menteeUser?.id } }).catch(() => {});
   await prisma.companyInterest.deleteMany({ where: { menteeId: menteeUser?.id } }).catch(() => {});
   await prisma.mentorshipRelation.deleteMany({ where: { id: relation?.id } }).catch(() => {});
-  await prisma.requisition.deleteMany({ where: { id: { in: [req?.id, req2?.id].filter(Boolean) } } }).catch(() => {});
+  await prisma.requisition.deleteMany({ where: { id: { in: [req?.id, req2?.id, req3?.id].filter((id): id is string => Boolean(id)) } } }).catch(() => {});
   await prisma.user.deleteMany({ where: { email: { in: Object.values(emails) } } }).catch(() => {});
   await prisma.company.deleteMany({ where: { id: company?.id } }).catch(() => {});
   await prisma.organization.deleteMany({ where: { id: org?.id } }).catch(() => {});
@@ -165,6 +171,104 @@ test('two concurrent schedules produce one meeting and one 409', async () => {
   const after = await prisma.interviewRequest.findUniqueOrThrow({ where: { id: row.id } });
   expect(after.status).toBe('SCHEDULED');
   expect(after.meetingId).not.toBeNull();
+});
+
+test('the panel convened with the meeting scores it; a closed panel\'s outcome moves the application and tells the company the decision only', async () => {
+  // The application the panel will decide on: shortlisted, moved to INTERVIEW by the approval (#1836).
+  const application = await prisma.application.create({
+    data: { orgId: org.id, requisitionId: req3.id, menteeId: menteeUser.id, companyId: company.id, stage: 'SHORTLISTED', status: 'ACTIVE', source: 'SHORTLIST' },
+    select: { id: true },
+  });
+  const asked = await companyCtx.post('/api/interview-requests', { data: { requisitionId: req3.id, menteeId: menteeUser.id, proposedSlots: [SLOT_A] } });
+  expect([200, 201]).toContain(asked.status());
+  const row = await prisma.interviewRequest.findFirstOrThrow({ where: { requisitionId: req3.id, menteeId: menteeUser.id }, select: { id: true } });
+  expect((await admin.patch(`/api/interview-requests/${row.id}`, { data: { action: 'approve' } })).status()).toBe(200);
+  expect((await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).stage).toBe('INTERVIEW');
+
+  // Scheduling with createPanel convenes the panel in the same transaction: its scheduledAt is the meeting's.
+  const scheduled = await admin.post(`/api/interview-requests/${row.id}/schedule`, {
+    data: { slot: SLOT_A, timeZone: 'Europe/Berlin', createPanel: true, interviewerIds: [mentorUser.id, adminUser.id] },
+  });
+  expect(scheduled.status()).toBe(200);
+  const { meetingId: panelMeetingId, panelId } = await scheduled.json();
+  expect(panelId).toBeTruthy();
+  const panel = await prisma.interviewPanel.findUniqueOrThrow({ where: { id: panelId }, include: { members: true } });
+  expect(panel.meetingId).toBe(panelMeetingId);
+  expect(panel.scheduledAt?.toISOString()).toBe(SLOT_A);
+  expect(panel.subjectId).toBe(menteeUser.id);
+  expect(panel.members.map((m) => m.userId).sort()).toEqual([adminUser.id, mentorUser.id].sort());
+  expect((await prisma.interviewRequest.findUniqueOrThrow({ where: { id: row.id } })).panelId).toBe(panelId);
+  // Both interviewers were assigned the panel.
+  expect(await prisma.notification.count({ where: { userId: mentorUser.id, type: { in: ['interview.assigned', 'interview.assignedBlind'] } } })).toBeGreaterThanOrEqual(1);
+
+  const url = `/api/interview-panels/${panelId}/outcome`;
+  const offer = { decision: 'OFFER', applicationId: application.id };
+  // No outcome pre-empts the scorecards.
+  const early = await admin.post(url, { data: offer });
+  expect(early.status()).toBe(409);
+  expect((await early.json()).code).toBe('panel_open');
+  expect((await admin.post(`/api/interview-panels/${panelId}/close`)).status()).toBe(200);
+  // Neither the candidate nor the company decides.
+  expect((await mentee.post(url, { data: offer })).status()).toBe(403);
+  expect((await companyCtx.post(url, { data: offer })).status()).toBe(403);
+  // A rejection needs a reason code.
+  const noReason = await admin.post(url, { data: { decision: 'REJECT', applicationId: application.id } });
+  expect(noReason.status()).toBe(400);
+  expect((await noReason.json()).code).toBe('disposition_required');
+  // The panel view hands the decider the candidate's open applications.
+  const view = await (await admin.get(`/api/interview-panels/${panelId}`)).json();
+  expect(view.panel.canDecide).toBe(true);
+  expect(view.applications.map((a: { id: string }) => a.id)).toContain(application.id);
+
+  const companyUser = await prisma.user.findFirstOrThrow({ where: { email: emails.company }, select: { id: true } });
+  const beforePipeline = (await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relation.id } })).pipelineStatus;
+  const recorded = await admin.post(url, { data: offer });
+  expect(recorded.status()).toBe(200);
+  const body = await recorded.json();
+  expect(body.application).toMatchObject({ id: application.id, fromStage: 'INTERVIEW', stage: 'OFFER' });
+  expect(body.pipeline).toBeNull();
+  const app = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+  expect(app.stage).toBe('OFFER');
+  expect(app.events.map((e) => e.toStage)).toEqual(['INTERVIEW', 'OFFER']);
+  const sealed = await prisma.interviewPanel.findUniqueOrThrow({ where: { id: panelId } });
+  expect(sealed).toMatchObject({ outcome: 'OFFER', outcomeById: adminUser.id, outcomeApplicationId: application.id });
+  expect(sealed.outcomeAt).not.toBeNull();
+  // The company hears the decision — and nothing from the scorecards.
+  const told = await prisma.notification.findMany({ where: { userId: companyUser.id, type: { startsWith: 'interview_panel.outcome' } } });
+  expect(told).toHaveLength(1);
+  expect(told[0].type).toBe('interview_panel.outcome.offer');
+  expect(JSON.stringify(told[0].params)).not.toMatch(/score|divergence|spread/i);
+  // Not asked for: the pipeline stage stays.
+  expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relation.id } })).pipelineStatus).toBe(beforePipeline);
+  // Sealed once.
+  const again = await admin.post(url, { data: offer });
+  expect(again.status()).toBe(409);
+  expect((await again.json()).code).toBe('outcome_recorded');
+  expect((await (await admin.get(`/api/interview-panels/${panelId}`)).json()).panel.outcome).toBe('OFFER');
+});
+
+test('the active mentor may record the outcome, and the pipeline stage moves only on the explicit flag', async () => {
+  const application = await prisma.application.create({
+    data: { orgId: org.id, requisitionId: req2.id, menteeId: menteeUser.id, companyId: company.id, stage: 'INTERVIEW', status: 'ACTIVE', source: 'SHORTLIST' },
+    select: { id: true },
+  });
+  const panel = await prisma.interviewPanel.create({
+    data: { orgId: org.id, subjectId: menteeUser.id, title: 'Second round', closedAt: new Date(), createdById: adminUser.id, members: { create: [{ userId: adminUser.id }] } },
+    select: { id: true },
+  });
+  const before = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relation.id }, select: { pipelineStatus: true } });
+  const statusChangesBefore = await prisma.statusChange.count({ where: { relationId: relation.id } });
+  const advanced = await mentorCtx.post(`/api/interview-panels/${panel.id}/outcome`, { data: { decision: 'ADVANCE', applicationId: application.id, advancePipeline: true, note: 'strong round' } });
+  expect(advanced.status()).toBe(200);
+  const body = await advanced.json();
+  expect(body.application.stage).toBe('OFFER');
+  expect(body.pipeline).toMatchObject({ moved: true, from: before.pipelineStatus });
+  expect(body.pipeline.to).not.toBe(before.pipelineStatus);
+  const after = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relation.id }, select: { pipelineStatus: true } });
+  expect(after.pipelineStatus).toBe(body.pipeline.to);
+  // The shared stage write path recorded the move.
+  expect(await prisma.statusChange.count({ where: { relationId: relation.id } })).toBe(statusChangesBefore + 1);
+  expect((await prisma.interviewPanel.findUniqueOrThrow({ where: { id: panel.id } })).outcome).toBe('ADVANCE');
 });
 
 test('a cancellation writes CANCELLED and takes the meeting off the calendars without deleting it', async () => {

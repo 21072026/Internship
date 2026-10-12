@@ -38,6 +38,10 @@ export const scheduleInterviewRequestSchema = z.object({
   guestEmails: z.array(z.string().trim().toLowerCase().email().max(200)).max(MAX_INTERVIEW_GUESTS).optional(),
   /** "Another time": the slot is not one the company proposed, and the approver says so. */
   override: z.boolean().optional(),
+  /** Convene the scorecard panel in the same transaction (#1846): its scheduledAt is the meeting's. */
+  createPanel: z.boolean().optional(),
+  /** The internal interviewers (ADMIN/MENTOR accounts) who sit on that panel. */
+  interviewerIds: z.array(z.string().min(1)).max(10).optional(),
 }).strict();
 
 export const cancelInterviewRequestSchema = z.object({
