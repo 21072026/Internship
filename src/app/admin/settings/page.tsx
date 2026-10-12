@@ -22,6 +22,9 @@ import { MarketingAccountImport } from '@/components/MarketingAccountImport';
 import { DEFAULT_TRIAL_LENGTH_DAYS, MAX_TRIAL_LENGTH_DAYS } from '@/lib/trialReminderRule';
 import { verticalHasCapability } from '@/lib/verticals';
 import { isValidWonTargetInput, SALES_TARGET_MAX } from '@/lib/salesTargetRule';
+import { TwoFactorCoverageCard } from '@/components/admin/TwoFactorCoverageCard';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { coverageFor, isStricterMode, newlyHeldAtGate, parseRequire2faMode, rolesCoveredBy, type RoleCoverage } from '@/lib/twoFactorPolicyRule';
 
 // The delivery log answers "did our mail actually go out, and when?", and a
 // newsletter or announcement send writes one EmailLog row per recipient — 50
@@ -42,6 +45,12 @@ export default function AdminSettingsPage() {
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [require2fa, setRequire2fa] = useState('off');
+  // The policy as last loaded/saved, the coverage rows the card reported, and
+  // whether a stricter switch is waiting for the admin's confirmation (#1644).
+  const [loadedRequire2fa, setLoadedRequire2fa] = useState('off');
+  const [coverageRows, setCoverageRows] = useState<RoleCoverage[] | null>(null);
+  const [coverageReload, setCoverageReload] = useState(0);
+  const [stricterPending, setStricterPending] = useState(false);
   const [selfRegistration, setSelfRegistration] = useState('auto');
   // Password policy (#1544) — stored as strings; the API range-checks the minimum.
   const [passwordMinLength, setPasswordMinLength] = useState('8');
@@ -225,6 +234,7 @@ export default function AdminSettingsPage() {
     setSupportEmail(settings.supportEmail ?? '');
     setWeeklyDigest(settings.weeklyDigest !== 'false');
     setRequire2fa(settings.require2fa ?? 'off');
+    setLoadedRequire2fa(settings.require2fa ?? 'off');
     setSelfRegistration(settings.selfRegistration ?? 'auto');
     setPasswordMinLength(settings.passwordMinLength ?? '8');
     setPasswordRequireUpper(settings.passwordRequireUpper !== 'false');
@@ -271,8 +281,16 @@ export default function AdminSettingsPage() {
   }, [hasTrialStage]);
   useEffect(() => { load(); }, [load]);
 
-  const saveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveSettings = async (e?: React.FormEvent, opts?: { stricterConfirmed?: boolean }) => {
+    e?.preventDefault();
+    // LOCKOUT GUARD (#1644): a stricter policy holds every active account
+    // without 2FA in the newly covered roles at the setup gate on its next
+    // page load — `all` at 0 % enrolment locks the whole tenant out at once.
+    // So a stricter switch is confirmed first, with the number it affects.
+    if (!opts?.stricterConfirmed && isStricterMode(parseRequire2faMode(require2fa), parseRequire2faMode(loadedRequire2fa))) {
+      setStricterPending(true);
+      return;
+    }
     setFlash(null); setSaveError(null); setQuotaError(null); setWipLimitError(null); setBroadcastQuotaError(null); setTrialLengthError(null); setSalesWonTargetError(null);
     // The API validates the quota with /^\d{1,6}$/ and rejects the WHOLE
     // payload on a miss, so an unusable number is caught here and reported on
@@ -323,7 +341,7 @@ export default function AdminSettingsPage() {
       // A failure used to be silent: the page only reacted to `ok`, so a
       // rejected payload looked exactly like a successful save while every
       // change on the form was dropped.
-      if (res.ok) { setFlash(t.settings.saved); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); }
+      if (res.ok) { setFlash(t.settings.saved); setLoadedRequire2fa(require2fa); setCoverageReload((n) => n + 1); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); }
       else setSaveError(t.settings.saveFailed);
     } catch {
       setSaveError(t.settings.saveFailed);
@@ -461,9 +479,44 @@ export default function AdminSettingsPage() {
                 <option value="off">{t.settings.require2faOff}</option>
                 <option value="admins">{t.settings.require2faAdmins}</option>
                 <option value="admins_mentors">{t.settings.require2faAdminsMentors}</option>
+                <option value="all">{t.settings.require2faAll}</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">{t.settings.require2faHint}</p>
+              {require2fa === 'all' && <p className="text-xs text-gray-500 mt-1">{t.settings.require2faAllHint}</p>}
+              {/* The coverage of the SELECTED mode, live (#1644): what the gate
+                  would hold if this value were saved, not what is saved. */}
+              {coverageRows && (() => {
+                const c = coverageFor(coverageRows, rolesCoveredBy(parseRequire2faMode(require2fa)));
+                return (
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1" data-testid="two-factor-scope-coverage">
+                    {fillTemplate(t.settings.twoFactorCoverageScope, { enabled: c.enabled, total: c.total, percentage: c.percentage })}
+                  </p>
+                );
+              })()}
             </div>
+            <TwoFactorCoverageCard onRows={setCoverageRows} reloadKey={coverageReload} />
+            <ConfirmDialog
+              open={stricterPending}
+              title={t.settings.twoFactorStricterTitle}
+              message={
+                <>
+                  <p>
+                    {coverageRows
+                      ? fillTemplate(t.settings.twoFactorStricterMessage, {
+                          count: newlyHeldAtGate(parseRequire2faMode(require2fa), parseRequire2faMode(loadedRequire2fa), coverageRows),
+                        })
+                      : t.settings.twoFactorStricterUnknown}
+                  </p>
+                  <p className="mt-2">{t.settings.twoFactorStricterRecovery}</p>
+                </>
+              }
+              confirmLabel={t.settings.twoFactorStricterConfirm}
+              cancelLabel={t.common.cancel}
+              variant="danger"
+              loading={savingSettings}
+              onConfirm={() => { setStricterPending(false); void saveSettings(undefined, { stricterConfirmed: true }); }}
+              onCancel={() => setStricterPending(false)}
+            />
             {/* The password policy (#1544): what a new password is judged by, per
                 org. The forms list the same rules (src/lib/passwordPolicyRule.ts);
                 the API refuses a minimum under 8. */}

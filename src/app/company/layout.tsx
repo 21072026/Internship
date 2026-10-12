@@ -15,6 +15,8 @@ import { prisma } from '@/lib/prisma';
 import { hasFeature } from '@/lib/entitlements';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
+import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -26,7 +28,14 @@ export default async function CompanyLayout({ children }: { children: React.Reac
   if (session.user.role !== 'COMPANY' && session.user.role !== 'ADMIN') redirect('/');
 
   const { locale, t } = await getServerDictionary();
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true } });
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
+  // The same 2FA hold as every other authenticated shell (#1644): under
+  // `require2fa = 'all'` a company login is held at the setup gate too, or
+  // "all" would be a false claim. Skipped while impersonating — the admin
+  // behind the session is already authenticated and cannot enrol for someone.
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
+    redirect('/security-setup');
+  }
   // Show the premium talent-pool link only when the company is entitled (admins
   // always see it for support).
   const showTalentPool = session.user.role === 'ADMIN' || (await hasFeature(session.user.companyId, 'TALENT_POOL_SEARCH'));
