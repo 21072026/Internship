@@ -371,6 +371,19 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   leave `lastTotpStep` alone (it is the TOTP replay floor, #865); and no endpoint may return
   a code after enrolment — `GET /api/account/2fa` answers with counts. Admin-side 2FA reset
   is a separate task (#1543).
+- **Security notices have one sender** ([`docs/security-notices.md`](docs/security-notices.md),
+  #1717): a sign-in from a browser the account has not used before, a replayed remember-me
+  cookie, a password or e-mail change, 2FA on/off, recovery codes replaced and "sign out of all
+  devices" all go through `sendSecurityNotice()` / `observeSignInDevice()` in
+  `src/lib/securityNotices.ts` — in-app via `notifyEvent(..., { channels: ['inApp'] })` and the
+  mail inline under `category: 'security'`, which is the **essential** `account_security` group
+  (no preference, quiet hour or unsubscribe can silence it; the unit test pins every kind to
+  that group). The new-device rule is pure in `src/lib/signInDeviceRule.ts`: a device is
+  `sha256(userAgent)`, a notice is due only when the sign-in **created** the `SignInDevice` row
+  and the account already had one — the first browser is the baseline, so rollout mails nobody.
+  A notice never carries a token, hash, code, raw user-agent or geolocation; an admin-side
+  notice passes no `request` (the browser/IP would be the admin's). The router's e-mail
+  channel is still a stub (a job no worker consumes), which is why the mail is sent inline.
 - **Pasif ilk temaslar** (`docs/dormant-first-contacts.md`, #1499/#1508): biri pipeline'ın
   ilk aşamasında takılı, kendisine yazılmış ve 14 gündür yanıt vermemişse "pasif" sayılır —
   mentor kuyruğundan ve hatırlatma e-postasından düşer, `dormantSince` damgalanır ve

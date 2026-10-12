@@ -158,6 +158,7 @@ test(
 );
 
 test('the panel writes minutes, shows who edited, and lists the versions', async ({ page }) => {
+  test.setTimeout(120_000);
   const p = await seedPair('minutes-ui');
   try {
     await signInAndSettle(page, p.mentorEmail, PASSWORD, '/mentor');
@@ -168,11 +169,12 @@ test('the panel writes minutes, shows who edited, and lists the versions', async
 
     await panel.getByTestId('session-note-new').click();
     await panel.getByTestId('session-note-draft').fill('We agreed to rewrite the CV summary first.');
+    // Wait on the request itself: on a cold dev server the POST queues behind
+    // the page's own on-demand compiles for well over ten seconds.
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/session-notes') && r.request().method() === 'POST', { timeout: 60_000 });
     await panel.getByTestId('session-note-save').click();
-    const stored = await expect
-      .poll(async () => prisma.sessionNote.findFirst({ where: { relationId: p.rel.id } }), { timeout: 10_000 })
-      .not.toBeNull()
-      .then(() => prisma.sessionNote.findFirstOrThrow({ where: { relationId: p.rel.id } }));
+    expect((await saved).status()).toBe(201);
+    const stored = await prisma.sessionNote.findFirstOrThrow({ where: { relationId: p.rel.id } });
     const row = panel.getByTestId(`session-note-${stored.id}`);
     await expect(row).toContainText('We agreed to rewrite the CV summary first.');
     await expect(row).toContainText('Written by Minutes Mentor');

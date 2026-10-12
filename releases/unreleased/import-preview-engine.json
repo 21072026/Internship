@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**The candidate importer runs on the shared import engine (#2072):** `POST /api/admin/import` is now `runImport` (`src/lib/importPreview.ts`, #1965) with the `src/lib/csvImport.ts` rules as its hooks — `candidateTable` (on the shared `parseDelimited`: a quoted newline, `;`/tab delimiters, CRLF and a BOM all read, and a header is matched by column name in any order) as `parse`, `validateCandidate` as `validate`, and `planCandidates` plus one bulk e-mail lookup and one duplicate-pool pass as `resolve`. `apply` catches each row, so a failed write is that row's ERROR line and never the chunk's. The hand-rolled `parseCsvLine` is gone. Every field the settings screen read is unchanged (`willCreate`/`created`, `skipped`, `errors`, `rows`), and the response gains `report`, the engine's shared shape, drawn by the new `<ImportPreview>` component (`import-preview`, `import-preview-counts`, `import-preview-row-<n>`, per-field diff for UPDATE rows) with an `importPreview` i18n block.",
-  "notes": {
-    "en": ["Importing people from a spreadsheet now reads exports from German or Turkish Excel (with ; as the separator) and shows each row's result — and why — in a clearer table, before and after the import."],
-    "tr": ["Elektronik tablodan kişi içe aktarma artık Almanca ya da Türkçe Excel dışa aktarımlarını (ayraç olarak ; ile) okuyor ve her satırın sonucunu — ve nedenini — içe aktarmadan önce ve sonra daha anlaşılır bir tabloda gösteriyor."],
-    "de": ["Der Import von Personen aus einer Tabelle liest jetzt Exporte aus deutschem oder türkischem Excel (mit ; als Trennzeichen) und zeigt das Ergebnis jeder Zeile — samt Grund — vor und nach dem Import in einer übersichtlicheren Tabelle."]
-  }
-}

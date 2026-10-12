@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**BCC-to-CRM: sent sales e-mails log themselves** (#2809, decision #2564). Each org has a signed address `crm+<orgId>~<version>.<sig>@INBOUND_EMAIL_DOMAIN` (`src/lib/crmBccTokens.ts`, own HMAC purpose prefix). The IMAP bridge and `POST /api/inbound-email` now go through `routeInboundMail()` (`src/lib/crmBcc.ts`): `reply+` stays the thread path, `crm+` writes an `InteractionLog` (`Email`, `autoLogged`) on the ACTIVE funnel record of every account whose `Company.contactEmail` / `CompanyContact.email` is in To/Cc — date, subject clipped to 200, recipient addresses; never the body or attachments, never a `ContactPermission`. Both the token AND an active ADMIN/MENTOR sender of that org (world-scoped lookup) are required. Idempotent per Message-ID × record via the new nullable `InteractionLog.sourceRef` + `@@unique([relationId, sourceRef])`. Settings `crmBccEnabled` ('' = on for MARKETING, off for INTERNSHIP) and `crmBccVersion` (rotation kills the old address); admin card on `/admin/settings` (`/api/admin/crm-bcc`). Rule unit-tested (`scripts/test/crm-bcc.test.mjs`), e2e `e2e/crm-bcc.spec.ts`. Privacy notice names it (`PRIVACY_POLICY_VERSION` 2026-10-06).",
-  "notes": {
-    "en": ["Put your organisation’s CRM address in BCC when you e-mail a customer, and the contact is logged on their account automatically — date, subject and recipients only, never the content."],
-    "tr": ["Bir müşteriye e-posta yazarken kurumunuzun CRM adresini gizli kopyaya (BCC) ekleyin; temas hesabına kendiliğinden kaydedilir — yalnızca tarih, konu ve alıcılar, içerik asla."],
-    "de": ["Setzen Sie die CRM-Adresse Ihrer Organisation in BCC, wenn Sie einem Kunden schreiben, und der Kontakt wird automatisch an seinem Account erfasst — nur Datum, Betreff und Empfänger, nie der Inhalt."]
-  }
-}

@@ -69,6 +69,11 @@ export const sessionNoteInclude = {
     take: SESSION_NOTE_REVISIONS_KEPT,
     include: { author },
   },
+  // The `- [ ]` lines promoted to to-dos (#1849), with the to-do's live state.
+  actionItems: {
+    orderBy: { createdAt: 'asc' as const },
+    include: { task: { select: { id: true, done: true, assignee: author } } },
+  },
 } as const;
 
 type NoteRow = {
@@ -83,6 +88,7 @@ type NoteRow = {
   createdBy: { id: string; fullName: string } | null;
   meeting: { id: string; title: string; scheduledAt: Date | null } | null;
   revisions: Array<{ id: string; authorId: string | null; body: string; createdAt: Date; author: { id: string; fullName: string } | null }>;
+  actionItems: Array<{ id: string; taskId: string; text: string; task: { id: string; done: boolean; assignee: { id: string; fullName: string } | null } }>;
 };
 
 /** The client-facing shape. Revisions newest first; the latest one is the current body's author. */
@@ -106,6 +112,12 @@ export function serializeSessionNote(note: NoteRow) {
       author: r.author,
       body: r.body,
       createdAt: r.createdAt.toISOString(),
+    })),
+    actionItems: note.actionItems.map((a) => ({
+      taskId: a.taskId,
+      text: a.text,
+      done: a.task.done,
+      assignee: a.task.assignee,
     })),
   };
 }

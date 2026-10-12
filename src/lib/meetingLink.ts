@@ -115,15 +115,26 @@ const MEETING_PROVIDERS: ReadonlyArray<readonly [host: string, name: string]> = 
   ['8x8.vc', 'Jitsi'],
 ];
 
+// A Slack huddle is a product, not a host (#2879): `app.slack.com` also serves
+// message permalinks and the workspace itself, so only the `/huddle/…` link of
+// a channel gets the name. Anything else on that host falls through to the
+// hostname like every unknown link. Deliberately NOT in EMBEDDABLE_MEETING_HOSTS:
+// Slack refuses to be framed, and "Open in Slack Huddle" is the whole point.
+export const SLACK_HUDDLE_PROVIDER = 'Slack Huddle';
+
 export function meetingProviderName(link: string | null | undefined): string | null {
   if (!link) return null;
   let host: string;
+  let path: string;
   try {
-    host = new URL(link).hostname.toLowerCase();
+    const url = new URL(link);
+    host = url.hostname.toLowerCase();
+    path = url.pathname;
   } catch {
     return null;
   }
   if (!host) return null;
+  if (host === 'app.slack.com' && /^\/huddle\/[^/]+\/[^/]+\/?$/.test(path)) return SLACK_HUDDLE_PROVIDER;
   for (const [known, name] of MEETING_PROVIDERS) {
     if (host === known || host.endsWith(`.${known}`)) return name;
   }

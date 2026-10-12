@@ -1,14 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { History, NotebookPen, Pencil, Plus, X } from 'lucide-react';
+import { Check, Circle, History, ListTodo, NotebookPen, Pencil, Plus, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { RelativeTime } from '@/components/ui/RelativeTime';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { useRealtime } from '@/hooks/useRealtime';
+import { formatDate } from '@/lib/relativeTime';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { normalizeActionText, parseActionItems, setActionItemDone } from '@/lib/minutesActionItems';
 
 // The pair's shared minutes (#1847): what was said and agreed in a session,
 // written by either seat and readable by both — the third note model beside
@@ -18,6 +21,11 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 // Every save writes a revision naming the editor; the trail is shown as a list,
 // not a diff. Both seats see the same text without polling: writes publish a
 // `sessionNote` realtime signal for the relation and the panel refetches.
+//
+// #1849: minutes can be pinned to one of the pairing's past meetings (they
+// then become that meeting's interaction log), and every `- [ ]` line is an
+// action item: tick it here, or promote it to a to-do on the mentor's or the
+// mentee's list — the two stay in step either way.
 
 interface Person {
   id: string;
@@ -31,6 +39,13 @@ interface Revision {
   createdAt: string;
 }
 
+interface ActionItemLink {
+  taskId: string;
+  text: string;
+  done: boolean;
+  assignee: Person | null;
+}
+
 interface Note {
   id: string;
   body: string;
@@ -40,13 +55,26 @@ interface Note {
   lastEditedBy: Person | null;
   meeting: { id: string; title: string; scheduledAt: string | null } | null;
   revisions: Revision[];
+  actionItems: ActionItemLink[];
+}
+
+interface MeetingOption {
+  id: string;
+  title: string;
+  scheduledAt: string | null;
+  hasMinutes: boolean;
 }
 
 export function SessionNotePanel({ relationId, readOnly = false }: { relationId: string; readOnly?: boolean }) {
   const t = useT();
+  const locale = useLocale();
   const L = t.sessionNotes;
   const [notes, setNotes] = useState<Note[]>([]);
   const [writable, setWritable] = useState(false);
+  const [participants, setParticipants] = useState<Person[]>([]);
+  const [meetings, setMeetings] = useState<MeetingOption[]>([]);
+  const [draftMeeting, setDraftMeeting] = useState('');
+  const [promoteFor, setPromoteFor] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -63,6 +91,8 @@ export function SessionNotePanel({ relationId, readOnly = false }: { relationId:
       const body = await res.json();
       setNotes(body.notes ?? []);
       setWritable(body.writable === true);
+      setParticipants(body.participants ?? []);
+      setMeetings(body.meetings ?? []);
     }
     setLoaded(true);
   }, [relationId]);
@@ -98,13 +128,39 @@ export function SessionNotePanel({ relationId, readOnly = false }: { relationId:
     if (!draft.trim()) return;
     const body = await call('create', '/api/session-notes', {
       method: 'POST',
-      body: JSON.stringify({ relationId, body: draft.trim() }),
+      body: JSON.stringify({ relationId, body: draft.trim(), meetingId: draftMeeting || undefined }),
     });
     if (body) {
       setDraft('');
+      setDraftMeeting('');
       setComposing(false);
     }
   };
+
+  // Tick a `- [ ]` line in place: the body is saved with the checkbox flipped;
+  // the server ticks the to-do it was promoted to, if any.
+  const toggleLine = async (note: Note, text: string, done: boolean) => {
+    const next = setActionItemDone(note.body, text, done);
+    if (next === note.body) return;
+    await call(`${note.id}:${text}`, `/api/session-notes/${note.id}`, { method: 'PATCH', body: JSON.stringify({ body: next }) });
+  };
+
+  const promote = async (note: Note, text: string) => {
+    const assigneeId = promoteFor[`${note.id}:${text}`] || participants[0]?.id;
+    if (!assigneeId) return;
+    await call(`promote:${note.id}:${text}`, `/api/session-notes/${note.id}/action-items`, {
+      method: 'POST',
+      body: JSON.stringify({ text, assigneeId }),
+    });
+  };
+
+  const linkFor = (note: Note, text: string) => {
+    const wanted = normalizeActionText(text);
+    return note.actionItems.find((a) => normalizeActionText(a.text) === wanted) ?? null;
+  };
+
+  const meetingLabel = (m: { title: string; scheduledAt: string | null }) =>
+    m.scheduledAt ? `${m.title} · ${formatDate(m.scheduledAt, locale)}` : m.title;
 
   const startEdit = (note: Note) => {
     setEditingId(note.id);
@@ -137,6 +193,19 @@ export function SessionNotePanel({ relationId, readOnly = false }: { relationId:
 
       {canWrite && composing && (
         <form onSubmit={create} className="mb-4 space-y-2" data-testid="session-note-compose">
+          {meetings.length > 0 && (
+            <Select
+              label={L.forMeeting}
+              value={draftMeeting}
+              onChange={(e) => setDraftMeeting(e.target.value)}
+              options={[
+                { value: '', label: L.noMeeting },
+                ...meetings.map((m) => ({ value: m.id, label: m.hasMinutes ? `${meetingLabel(m)} · ${L.hasMinutes}` : meetingLabel(m) })),
+              ]}
+              data-testid="session-note-meeting"
+            />
+          )}
+          <p className="text-xs text-gray-400">{L.actionItemHint}</p>
           <label htmlFor={`session-note-draft-${relationId}`} className="block text-sm font-medium text-gray-700">
             {L.bodyLabel}
           </label>
@@ -174,7 +243,7 @@ export function SessionNotePanel({ relationId, readOnly = false }: { relationId:
           {notes.map((note) => (
             <li key={note.id} data-testid={`session-note-${note.id}`} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
-                {note.meeting && <span className="font-medium text-gray-700">{note.meeting.title}</span>}
+                {note.meeting && <span className="font-medium text-gray-700" data-testid="session-note-meeting-label">{meetingLabel(note.meeting)}</span>}
                 <span>
                   {L.writtenBy.replace('{name}', note.createdBy?.fullName ?? L.someone)} · <RelativeTime date={note.createdAt} />
                 </span>
@@ -234,6 +303,65 @@ export function SessionNotePanel({ relationId, readOnly = false }: { relationId:
                 <p className="mt-2 whitespace-pre-line text-sm text-gray-800 dark:text-gray-100" data-testid={`session-note-body-${note.id}`}>
                   {note.body}
                 </p>
+              )}
+
+              {editingId !== note.id && parseActionItems(note.body).length > 0 && (
+                <ul className="mt-3 space-y-1.5 border-t border-gray-100 pt-2 dark:border-gray-800" data-testid={`session-note-actions-${note.id}`}>
+                  {parseActionItems(note.body).map((item) => {
+                    const link = linkFor(note, item.text);
+                    const key = `${note.id}:${item.text}`;
+                    return (
+                      <li key={item.line} className="flex flex-wrap items-center gap-2 text-sm" data-testid={`session-note-action-${note.id}-${item.line}`}>
+                        <button
+                          type="button"
+                          onClick={() => canWrite && toggleLine(note, item.text, !item.done)}
+                          disabled={!canWrite || busy === key}
+                          aria-label={item.done ? L.markOpen : L.markDone}
+                          aria-pressed={item.done}
+                          data-testid={`session-note-action-toggle-${note.id}-${item.line}`}
+                          className={`${item.done ? 'text-green-600' : 'text-gray-300 hover:text-gray-500'} disabled:cursor-default`}
+                        >
+                          {item.done ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+                        </button>
+                        <span className={item.done ? 'text-gray-400 line-through' : 'text-gray-800'}>{item.text}</span>
+                        {link ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700"
+                            data-testid={`session-note-action-link-${note.id}-${item.line}`}
+                          >
+                            <ListTodo className="h-3 w-3" aria-hidden="true" />
+                            {L.promotedFor.replace('{name}', link.assignee?.fullName ?? L.someone)}
+                          </span>
+                        ) : (
+                          canWrite &&
+                          participants.length > 0 && (
+                            <span className="ml-auto flex items-center gap-1">
+                              <Select
+                                aria-label={L.promoteFor}
+                                value={promoteFor[key] ?? participants[0].id}
+                                onChange={(e) => setPromoteFor((prev) => ({ ...prev, [key]: e.target.value }))}
+                                className="py-1 pl-2 pr-7 text-xs"
+                                options={participants.map((p) => ({ value: p.id, label: p.fullName }))}
+                                data-testid={`session-note-action-assignee-${note.id}-${item.line}`}
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                loading={busy === `promote:${key}`}
+                                onClick={() => promote(note, item.text)}
+                                data-testid={`session-note-action-promote-${note.id}-${item.line}`}
+                              >
+                                <ListTodo className="h-3.5 w-3.5" />
+                                {L.promote}
+                              </Button>
+                            </span>
+                          )
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
 
               {historyId === note.id && (

@@ -1,4 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**The Application object (#1828):** `Application` (one row per person per role, `@@unique([requisitionId, menteeId])`, tenant-scoped through `TENANT_MODELS`) and `ApplicationEvent` (one row per stage change) join the schema, purely additive — `CompanyInterest` is untouched. `src/lib/applications.ts` holds the stage vocabulary (`APPLIED → SCREENING → SHORTLISTED → INTERVIEW → OFFER → HIRED`, plus `REJECTED`/`WITHDRAWN`), the explicit transition table, the disposition codes, `canPerformApplicationAction()` as the single authorization rule and `applicationFromInterest()` as the only bridge from the company's shortlist flag. `npm run backfill:applications` (also on deploy) creates one application per existing requisition-scoped interest and is idempotent. No API routes or screens yet: those are #1836 and #1846."
-}

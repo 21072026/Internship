@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Download, Sparkles } from 'lucide-react';
+import { Download, Power, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useLocale, useT } from '@/i18n/client';
 import { formatUsd, recentPeriods, successRate, type TaskUsage, type UsageTotals } from '@/lib/ai/consoleRules';
 
@@ -15,16 +16,25 @@ import { formatUsd, recentPeriods, successRate, type TaskUsage, type UsageTotals
 // and GET /api/admin/ai/status (key configured?, model per task, breaker,
 // injection flags). The quota is the same `aiMonthlyQuota` setting the gate
 // enforces, saved through PUT /api/admin/settings like the settings page does.
+//
+// The switches (#2032) are the org's policy chain, read and written through
+// GET/PUT /api/admin/ai/policy: a master switch (confirmed before it goes off)
+// and a row per registered task with its own on/off and an optional monthly
+// allowance. The gate enforces the same chain server-side; this screen only
+// edits it.
 
 interface MonthUsage { period: string; tasks: TaskUsage[]; totals: UsageTotals }
 interface UsageBody { month: string; current: MonthUsage; previous: MonthUsage; quota: { quota: number; used: number; remaining: number } }
 interface StatusBody {
   configured: boolean;
+  enabled: boolean;
   breaker: 'closed' | 'open' | 'half-open';
   flaggedCalls: number;
   flagWindowDays: number;
   tasks: { id: string; label: string; audience: 'participant' | 'operator'; tier: string; model: string }[];
 }
+interface PolicyTask { id: string; label: string; audience: 'participant' | 'operator'; enabled: boolean; monthlyQuota: number | null }
+interface PolicyBody { enabled: boolean; tasks: PolicyTask[] }
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -89,15 +99,23 @@ export default function AdminAiPage() {
   const [quotaInput, setQuotaInput] = useState('');
   const [quotaMsg, setQuotaMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [policy, setPolicy] = useState<PolicyBody | null>(null);
+  const [quotaDrafts, setQuotaDrafts] = useState<Record<string, string>>({});
+  const [confirmOff, setConfirmOff] = useState(false);
+  const [policyBusy, setPolicyBusy] = useState('');
+  const [policyMsg, setPolicyMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
     setFailed(false);
     try {
-      const [u, s] = await Promise.all([fetch(`/api/admin/ai/usage?month=${encodeURIComponent(period)}`), fetch('/api/admin/ai/status')]);
-      if (!u.ok || !s.ok) throw new Error('load');
+      const [u, s, p] = await Promise.all([fetch(`/api/admin/ai/usage?month=${encodeURIComponent(period)}`), fetch('/api/admin/ai/status'), fetch('/api/admin/ai/policy')]);
+      if (!u.ok || !s.ok || !p.ok) throw new Error('load');
       const body = (await u.json()) as UsageBody;
       setUsage(body);
       setStatus((await s.json()) as StatusBody);
+      const pol = (await p.json()) as PolicyBody;
+      setPolicy(pol);
+      setQuotaDrafts(Object.fromEntries(pol.tasks.map((x) => [x.id, x.monthlyQuota === null ? '' : String(x.monthlyQuota)])));
       setQuotaInput(String(body.quota.quota));
     } catch {
       setFailed(true);
@@ -126,6 +144,37 @@ export default function AdminAiPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // One PUT per change; the server answers with the whole policy, which replaces ours.
+  const savePolicy = async (key: string, patch: { enabled?: boolean; tasks?: Array<{ id: string; enabled?: boolean; monthlyQuota?: number | null }> }) => {
+    setPolicyBusy(key);
+    setPolicyMsg(null);
+    try {
+      const res = await fetch('/api/admin/ai/policy', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPolicyMsg({ ok: false, text: body.code === 'invalid_quota' ? a.quotaInvalid : t.common.error });
+        return;
+      }
+      const pol = body as PolicyBody;
+      setPolicy(pol);
+      setQuotaDrafts(Object.fromEntries(pol.tasks.map((x) => [x.id, x.monthlyQuota === null ? '' : String(x.monthlyQuota)])));
+      setStatus((s) => (s ? { ...s, enabled: pol.enabled } : s));
+      setPolicyMsg({ ok: true, text: a.switchesSaved });
+    } catch {
+      setPolicyMsg({ ok: false, text: t.common.error });
+    } finally {
+      setPolicyBusy('');
+    }
+  };
+  const saveTaskQuota = (id: string) => {
+    const raw = quotaDrafts[id]?.trim() ?? '';
+    if (raw !== '' && !/^\d{1,6}$/.test(raw)) {
+      setPolicyMsg({ ok: false, text: a.quotaInvalid });
+      return;
+    }
+    void savePolicy(`quota-${id}`, { tasks: [{ id, monthlyQuota: raw === '' ? null : parseInt(raw, 10) }] });
   };
 
   const labels = Object.fromEntries((status?.tasks ?? []).map((x) => [x.id, x.label]));
@@ -215,6 +264,9 @@ export default function AdminAiPage() {
               <p className={`mt-2 text-sm font-medium ${status.configured ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`} data-testid="ai-console-configured">
                 {status.configured ? a.configured : a.notConfigured}
               </p>
+              {!status.enabled && (
+                <p className="mt-2 text-sm font-medium text-red-700 dark:text-red-400" data-testid="ai-console-disabled">{a.masterOffNote}</p>
+              )}
               <p className="mt-2 text-sm text-gray-700 dark:text-gray-300" data-testid="ai-console-breaker">
                 {a.breaker}: {breakerText}
               </p>
@@ -223,6 +275,108 @@ export default function AdminAiPage() {
               </p>
             </Card>
           </div>
+
+          {policy && (
+            <Card className="p-5" data-testid="ai-console-switches">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    <Power className="h-5 w-5 text-gray-500" aria-hidden /> {a.switchesTitle}
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{a.switchesIntro}</p>
+                </div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-checked={policy.enabled}
+                    checked={policy.enabled}
+                    disabled={policyBusy !== ''}
+                    onChange={(e) => (e.target.checked ? void savePolicy('master', { enabled: true }) : setConfirmOff(true))}
+                    className="h-4 w-4 rounded border-gray-300"
+                    data-testid="ai-console-master"
+                  />
+                  {policy.enabled ? a.masterOn : a.masterOff}
+                </label>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[560px] text-sm text-gray-800 dark:text-gray-200" data-testid="ai-console-switch-table">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <th className="py-2 pr-3 font-medium">{a.colTask}</th>
+                      <th className="py-2 pr-3 font-medium">{a.colAudience}</th>
+                      <th className="py-2 pr-3 font-medium">{a.colEnabled}</th>
+                      <th className="py-2 font-medium">{a.colTaskQuota}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {policy.tasks.map((x) => (
+                      <tr key={x.id} className={`border-t border-gray-100 dark:border-gray-800 ${!policy.enabled || !x.enabled ? 'text-gray-400 dark:text-gray-500' : ''}`} data-testid={`ai-switch-row-${x.id}`}>
+                        <td className="py-2 pr-3">{x.label}</td>
+                        <td className="py-2 pr-3">{x.audience === 'participant' ? a.audienceParticipant : a.audienceOperator}</td>
+                        <td className="py-2 pr-3">
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              role="switch"
+                              aria-checked={x.enabled}
+                              aria-label={`${x.label}: ${a.colEnabled}`}
+                              checked={x.enabled}
+                              disabled={policyBusy !== ''}
+                              onChange={(e) => void savePolicy(`task-${x.id}`, { tasks: [{ id: x.id, enabled: e.target.checked }] })}
+                              className="h-4 w-4 rounded border-gray-300"
+                              data-testid={`ai-switch-${x.id}`}
+                            />
+                            <span>{x.enabled ? a.taskOn : a.taskOff}</span>
+                          </label>
+                        </td>
+                        <td className="py-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={999999}
+                              step={1}
+                              inputMode="numeric"
+                              aria-label={`${x.label}: ${a.colTaskQuota}`}
+                              placeholder={a.taskQuotaInherit}
+                              value={quotaDrafts[x.id] ?? ''}
+                              onChange={(e) => setQuotaDrafts((d) => ({ ...d, [x.id]: e.target.value }))}
+                              className="w-28 rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800"
+                              data-testid={`ai-quota-${x.id}`}
+                            />
+                            <Button type="button" size="sm" variant="outline" loading={policyBusy === `quota-${x.id}`} disabled={policyBusy !== ''} onClick={() => saveTaskQuota(x.id)} data-testid={`ai-quota-save-${x.id}`}>
+                              {a.quotaSave}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{a.switchesHint}</p>
+              {policyMsg && (
+                <p role={policyMsg.ok ? 'status' : 'alert'} className={`mt-2 text-sm ${policyMsg.ok ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} data-testid="ai-console-switches-msg">
+                  {policyMsg.text}
+                </p>
+              )}
+              <ConfirmDialog
+                open={confirmOff}
+                title={a.confirmOffTitle}
+                message={a.confirmOffBody}
+                confirmLabel={a.confirmOff}
+                cancelLabel={t.common.cancel}
+                variant="danger"
+                loading={policyBusy === 'master'}
+                onConfirm={() => {
+                  setConfirmOff(false);
+                  void savePolicy('master', { enabled: false });
+                }}
+                onCancel={() => setConfirmOff(false)}
+              />
+            </Card>
+          )}
 
           <Card className="p-5">
             <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">{a.tableTitle} · {usage.current.period}</h2>

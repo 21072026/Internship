@@ -8,6 +8,7 @@ import { orgIdsEntitledTo } from '@/lib/subscription';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { purgeExpiredLoginLinks } from '@/lib/magicLink';
+import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
@@ -1510,12 +1511,14 @@ function meetingIcsAttachment(opts: {
 
 // Minimal HTML escape for user-supplied strings interpolated into templates
 // (names, free-text messages) — keeps a stray "<" from breaking the markup.
-function esc(s: string): string {
+// Exported, with ctaBlock below, for the security notices (#1717): their body
+// is assembled in src/lib/securityNotices.ts from the same escape and button.
+export function esc(s: string): string {
   return s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c] as string);
 }
 
 // A branded button + wrapper shared by the notification templates below.
-function ctaBlock(brand: { accent: string }, url: string, label: string): string {
+export function ctaBlock(brand: { accent: string }, url: string, label: string): string {
   return `<a href="${url}" style="display:inline-block;background-color:${brand.accent};color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">${label}</a>`;
 }
 
@@ -5103,6 +5106,10 @@ export function initCronJobs() {
       // sign-in links can admit nothing and are not kept.
       const links = await purgeExpiredLoginLinks();
       if (links) console.log(`[Cron] Login link purge: ${links} links`);
+      // And the sign-in device memory (#1717): a browser not seen for half a
+      // year is forgotten, so its next sign-in is "new" again.
+      const devices = await purgeStaleSignInDevices();
+      if (devices) console.log(`[Cron] Sign-in device purge: ${devices} devices`);
     } catch (e) {
       console.error('[Cron] Trusted device purge error:', e);
     }

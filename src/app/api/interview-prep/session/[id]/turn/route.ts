@@ -14,6 +14,12 @@ import { practiceReport, practiceTurn } from '@/lib/ai/practiceInterview';
 import { practiceContext, toSessionView } from '@/lib/practiceInterview';
 import { PRACTICE_ANSWER_MAX, isLastAnswer, readTurns, type PracticeReport } from '@/lib/practiceInterviewRules';
 
+/** The one answer every denial gets — never a paywall; switched off (#2032) is named as such. */
+function practiceUnavailable(reason: string) {
+  if (reason === 'disabled') return NextResponse.json({ error: 'AI is turned off for this organisation', code: 'disabled' }, { status: 403 });
+  return NextResponse.json({ error: 'Practice interviews are not available right now', code: reason === 'not_configured' ? 'not_configured' : 'unavailable' }, { status: reason === 'not_configured' ? 501 : 503 });
+}
+
 // POST — one typed answer to the current question (#2051). The mentee's own
 // session only (anyone else's reads as missing), and only while it runs. The
 // answer is fenced as untrusted data in every prompt it enters. Up to the cap
@@ -62,7 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           deserialize: (c) => JSON.parse(c) as PracticeReport,
         },
       });
-      if (!gated.ok || !gated.result) return NextResponse.json({ error: 'Practice interviews are not available right now', code: gated.ok ? 'unavailable' : gated.reason === 'not_configured' ? 'not_configured' : 'unavailable' }, { status: gated.ok || gated.reason !== 'not_configured' ? 503 : 501 });
+      if (!gated.ok || !gated.result) return practiceUnavailable(gated.ok ? 'unavailable' : gated.reason);
       const done = await prisma.practiceSession.update({
         where: { id: row.id },
         data: { turns: answeredTurns as unknown as Prisma.InputJsonValue, status: 'COMPLETED', endedAt: new Date(), reportArtifactId: gated.artifact?.id ?? null },
@@ -71,7 +77,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const gated = await runAiGated({ orgId, scope: 'practice_interview', userId: session.user.id, call: () => practiceTurn(ctx, answeredTurns) });
-    if (!gated.ok || !gated.result) return NextResponse.json({ error: 'Practice interviews are not available right now', code: gated.ok ? 'unavailable' : gated.reason === 'not_configured' ? 'not_configured' : 'unavailable' }, { status: gated.ok || gated.reason !== 'not_configured' ? 503 : 501 });
+    if (!gated.ok || !gated.result) return practiceUnavailable(gated.ok ? 'unavailable' : gated.reason);
     const next = [...answeredTurns.slice(0, -1), { ...answeredTurns[answeredTurns.length - 1], note: gated.result.observation }, { q: gated.result.question }];
     const updated = await prisma.practiceSession.update({ where: { id: row.id }, data: { turns: next as unknown as Prisma.InputJsonValue } });
     return NextResponse.json({ session: toSessionView(updated) });

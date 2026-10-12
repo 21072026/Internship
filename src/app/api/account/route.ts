@@ -14,6 +14,7 @@ import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { clearRememberCookies } from '@/lib/rememberCookie';
 import { isPasswordLoginBlocked, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { sendSecurityNotice } from '@/lib/securityNotices';
 
 const schema = z.object({
   email: z.string().email().optional(),
@@ -99,6 +100,9 @@ export async function PUT(request: Request) {
     await prisma.user.update({ where: { id: user.id }, data });
     if (data.email) {
       await logActivity({ action: 'account.email_change', level: 'warning', actorId: user.id, actorEmail: data.email, detail: `from ${user.email}` });
+      // Both addresses hear about it (#1717): the old one is the only place a
+      // hijacked account's real owner can still be reached.
+      await sendSecurityNotice('emailChanged', { userId: user.id, request, emailChange: { from: user.email, to: data.email } });
     }
     if (data.password) {
       // Any reset link already in flight for this account is now stale — a
@@ -113,6 +117,7 @@ export async function PUT(request: Request) {
       // out, so the long-lived device credentials go with the sessions.
       await revokeAllTrustedDevices(user.id);
       await logActivity({ action: 'account.password_change', level: 'warning', actorId: user.id, actorEmail: user.email });
+      await sendSecurityNotice('passwordChanged', { userId: user.id, request });
     }
     const res = NextResponse.json({
       message: 'Account updated',

@@ -460,6 +460,22 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     endRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'end' });
   }, [lastMessageId]);
 
+  // Opening the inline picker grows the bubble without adding a message.
+  // Keep its controls inside the scroll viewport, including on the last row.
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !reactId) return;
+    const picker = scroller.querySelector<HTMLElement>('[data-reaction-picker]');
+    if (!picker) return;
+    const viewport = scroller.getBoundingClientRect();
+    const bounds = picker.getBoundingClientRect();
+    if (bounds.bottom > viewport.top + scroller.clientHeight) {
+      scroller.scrollTop += bounds.bottom - (viewport.top + scroller.clientHeight);
+    } else if (bounds.top < viewport.top) {
+      scroller.scrollTop -= viewport.top - bounds.top;
+    }
+  }, [reactId]);
+
   // Opened from a search hit (`?m=<id>`): page back until the message is on
   // screen — bounded, a hit from years ago is not worth an unbounded walk —
   // then bring it into view and mark it for a moment.
@@ -860,7 +876,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
                     {reactId === m.id && !m.deleted && (() => {
                       const myEmoji = m.reactions.find((r) => r.mine)?.emoji;
                       return (
-                        <div className="mt-1.5 flex gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit">
+                        <div data-reaction-picker className="mt-1.5 flex flex-wrap gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit max-w-full">
                           {REACTIONS.map((emoji) => (
                             <button
                               key={emoji}

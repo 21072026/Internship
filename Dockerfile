@@ -37,7 +37,8 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     NEXTAUTH_SECRET="build-placeholder" \
     NEXTAUTH_URL="http://localhost:3000"
 
-RUN npm run build
+# Build-only heap budget; the runtime stage keeps its own default.
+RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 # ---- runner ----
 FROM node:20-slim AS runner

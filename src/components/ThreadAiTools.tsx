@@ -11,7 +11,7 @@ import { AiText } from '@/components/ai/AiText';
 // reply only ever comes back as TEXT for the composer — this component has no
 // way to send anything, by construction: it hands the draft to `onDraft`.
 
-type Failure = 'consent_required' | 'quota_exceeded' | 'provider_error' | 'not_configured' | 'generic';
+type Failure = 'consent_required' | 'quota_exceeded' | 'disabled' | 'provider_error' | 'not_configured' | 'generic';
 
 function useFailureText() {
   const t = useT();
@@ -19,6 +19,7 @@ function useFailureText() {
   return (f: Failure) =>
     f === 'consent_required' ? A.consentRequired
       : f === 'quota_exceeded' ? A.quotaExceeded
+      : f === 'disabled' ? A.aiOff
         : f === 'provider_error' ? A.providerError
           : f === 'not_configured' ? A.notConfigured
             : A.failed;
@@ -30,7 +31,7 @@ async function ask(url: string, body: object): Promise<{ ok: true; data: Record<
     const data = await res.json().catch(() => ({}));
     if (res.ok) return { ok: true, data };
     const code = data.code as string | undefined;
-    const known: Failure[] = ['consent_required', 'quota_exceeded', 'provider_error', 'not_configured'];
+    const known: Failure[] = ['consent_required', 'quota_exceeded', 'disabled', 'provider_error', 'not_configured'];
     return { ok: false, failure: known.includes(code as Failure) ? (code as Failure) : 'generic' };
   } catch {
     return { ok: false, failure: 'generic' };

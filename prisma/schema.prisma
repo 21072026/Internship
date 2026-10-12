@@ -188,6 +188,7 @@ model Organization {
   surveyCampaigns         SurveyCampaign[]
   savedViews              SavedView[]
   aiArtifacts             AiArtifact[]
+  aiFeatureSettings       AiFeatureSetting[]
   meetingAttendance       MeetingAttendance[]
   evaluationDues          EvaluationDue[]
   surveyInvitations       SurveyInvitation[]
@@ -599,6 +600,7 @@ model User {
   cancelledInterviewRequests        InterviewRequest[]            @relation("InterviewRequestCanceller")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+  signInDevices                     SignInDevice[]
   ownedMessageTemplates             MessageTemplate[]             @relation("MessageTemplateOwner")
   authoredMessageTemplates          MessageTemplate[]             @relation("MessageTemplateAuthor")
   createdApiKeys                    ApiKey[]                      @relation("ApiKeyCreatedBy")
@@ -921,6 +923,10 @@ model Message {
   // db push to drop or rename an FK-backing index is what MySQL refuses (#784).
   @@index([conversationId, createdAt])
   @@index([relationId, createdAt])
+  // One sender's messages over a window (#1608): the activity report's sent/
+  // received counts (`senderId` + `createdAt: { gte }`), the message-retention
+  // sweep (`senderId: { in }` + `createdAt: { lt }`, #2056) and erasure.
+  @@index([senderId, createdAt])
 }
 
 // A single emoji reaction on a message by one user (WhatsApp/Slack style).
@@ -2250,6 +2256,29 @@ model AiUsage {
   @@index([taskId, createdAt])
 }
 
+// Per-task AI switches and quota overrides of ONE organisation (#2032). The
+// org-wide kill switch is the `aiEnabled` Setting; this table holds what is
+// decided per task: off, or a monthly allowance of its own (null = the org's
+// `aiMonthlyQuota`). No row means "on, inherit" — the chain lives in
+// src/lib/ai/policy.ts and is the only reader. Tenant configuration, so it is
+// in TENANT_MODELS; `taskId` is a registry key (src/lib/ai/tasks.ts), not a
+// foreign key, so a retired task's row is harmless and a typo never compiles
+// into the gate.
+model AiFeatureSetting {
+  id           String   @id @default(cuid())
+  orgId        String
+  taskId       String   @db.VarChar(64)
+  enabled      Boolean  @default(true)
+  monthlyQuota Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, taskId])
+  @@index([orgId])
+}
+
 // What an AI call PRODUCED (#2044) — AiUsage above is the meter (that a call
 // happened); this is the artefact, so a result survives a reload, can be shared
 // with a mentor, and an identical request inside the task's TTL is answered
@@ -2573,12 +2602,14 @@ model ProjectTask {
   // place that decides what "late" means.
   dueDate     DateTime?
 
-  project  Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee User?                @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  author   User?                @relation("ProjectTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  project     Project?               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?                  @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  author      User?                  @relation("ProjectTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   // A template is archived rather than deleted, so this normally stays intact;
   // SetNull is the safety net that leaves the snapshot title behind.
-  template ProjectTaskTemplate? @relation("TaskFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  template    ProjectTaskTemplate?   @relation("TaskFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  // The minutes line this to-do was promoted from (#1849), when it was.
+  minutesItem SessionNoteActionItem?
 
   @@index([projectId])
   @@index([assigneeId])
@@ -3275,14 +3306,36 @@ model SessionNote {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  relation  MentorshipRelation    @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  meeting   Meeting?              @relation(fields: [meetingId], references: [id], onDelete: SetNull)
-  agenda    SessionAgenda?        @relation(fields: [agendaId], references: [id], onDelete: SetNull)
-  createdBy User?                 @relation("SessionNoteAuthor", fields: [createdById], references: [id], onDelete: SetNull)
-  revisions SessionNoteRevision[]
+  relation    MentorshipRelation      @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  meeting     Meeting?                @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  agenda      SessionAgenda?          @relation(fields: [agendaId], references: [id], onDelete: SetNull)
+  createdBy   User?                   @relation("SessionNoteAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  revisions   SessionNoteRevision[]
+  actionItems SessionNoteActionItem[]
 
   @@index([relationId])
   @@index([meetingId])
+}
+
+// A `- [ ]` line of the minutes promoted to a to-do (#1849): the link that
+// keeps the two in step — ticking the to-do ticks the line, ticking the line
+// ticks the to-do. `text` is the line as promoted, which is how the line is
+// found again after the body is edited (lines move; wording rarely does). One
+// to-do per line, one line per to-do (taskId @unique). Cascade from the note:
+// without the minutes there is nothing to keep in step; the to-do itself
+// stays (SetNull on the task side would be wrong — the row IS the link).
+// Reached through SessionNote → MentorshipRelation, so no `orgId` either.
+model SessionNoteActionItem {
+  id        String   @id @default(cuid())
+  noteId    String
+  taskId    String   @unique
+  text      String
+  createdAt DateTime @default(now())
+
+  note SessionNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  task ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([noteId])
 }
 
 // Who changed the minutes after the meeting (#1847): an append-only trail, one
@@ -4092,6 +4145,36 @@ model TrustedDevice {
   @@index([expiresAt])
 }
 
+// A browser a person has signed in from (#1717).
+//
+// The memory behind the "new sign-in from a device we haven't seen" security
+// notice. One row per (user, browser fingerprint); the fingerprint is the
+// SHA-256 of the user-agent string, so two tabs of the same browser are one
+// device and an upgraded browser is a new one — a deliberately coarse notion
+// that errs towards the occasional extra notice rather than silence. No
+// geolocation, no cookie: the row says "this browser has signed in here before"
+// and nothing else, which is why the first sign-in of an account is the
+// baseline (nothing to compare against) and sends no mail. The address is the
+// one the sign-in came from; the mail quotes it so the reader can recognise
+// their own network. User-keyed and without `orgId`, exactly like TrustedDevice:
+// the row is read only through the user it belongs to.
+model SignInDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // sha256(userAgent), hex. Never the raw agent as the key: it is 512 bytes wide.
+  fingerprint String
+  // "Chrome on macOS" — the label the notice quotes.
+  label       String?
+  userAgent   String?  @db.Text
+  lastIp      String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([userId, fingerprint])
+  @@index([lastSeenAt])
+}
+
 // Single-use 2FA recovery codes (#1542).
 //
 // The way back in when the authenticator is gone. Without this, an organisation
@@ -4204,6 +4287,9 @@ model ActivityLog {
   @@index([action])
   @@index([createdAt])
   @@index([orgId])
+  // /admin/activity (#1608): one tenant's rows, newest first, a page at a time
+  // — `where: { orgId }` + `orderBy: { createdAt: 'desc' }` + skip/take.
+  @@index([orgId, createdAt])
 }
 
 enum EmailStatus {
@@ -4246,6 +4332,12 @@ model EmailLog {
   @@index([status])
   @@index([category])
   @@index([createdAt])
+  // The FAILED/SENT-by-recency shape (#1608): /api/health's
+  // `findFirst({ where: { status: 'FAILED' }, orderBy: { createdAt: 'desc' } })`
+  // and the email-log screen's `groupBy` over `{ status, createdAt: { gte } }`.
+  // Without it MySQL filesorts the status set or walks createdAt past every
+  // row of the other statuses — the documented ep:health landmine.
+  @@index([status, createdAt])
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).

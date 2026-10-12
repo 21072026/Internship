@@ -107,7 +107,8 @@ test.describe('evaluation due dates', () => {
       create: { orgId, relationId: relationIds[0], type: 'INTERIM', dueAt: new Date(Date.now() - DAY) },
     });
     await signInAndSettle(page, mentor, PW, '/mentor');
-    const queue = page.getByTestId('attention-queue');
+    // The queue renders twice (streamed Suspense copy); the first is the live one.
+    const queue = page.getByTestId('attention-queue').first();
     await expect(queue).toContainText(`ED Mentee A ${stamp}`);
     await expect(queue).toContainText('Evaluation due — write it');
 

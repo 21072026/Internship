@@ -23,6 +23,565 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.352.0-beta] - 2026-10-08
+
+_Shipped 2026-10-08 07:25 UTC · commit [30b913d](https://github.com/21072026/Internship/commit/30b913ddbb8288d3bbbcf7f8f22ef9cc7755390b)_
+
+- **Slack Huddle links are recognised as bring-your-own meeting links** (#2879, PR 1 of the Slack huddle trial). `meetingProviderName()` returns “Slack Huddle” for `https://app.slack.com/huddle/<TEAM>/<CHANNEL>`, so the meeting panel's fallback button reads “Open in Slack Huddle” and the link-box hint says where it opens; `EMBEDDABLE_MEETING_HOSTS` is unchanged (Slack cannot be framed) and `checkPastedMeetingLink()` is not relaxed — the link already passed it. New dependency-free `src/lib/slackHuddle.ts` (`buildHuddleUrl` / `parseHuddleUrl`, strict on the `T…` / `[CDG]…` id grammar) with a `@smoke` unit spec, an untagged e2e for the account page and the panel, and a “Slack Huddle link” section in `docs/video-calls-jaas.md`.
+
+## [0.351.0-beta] - 2026-10-08
+
+_Shipped 2026-10-08 00:26 UTC · commit [2fc299e](https://github.com/21072026/Internship/commit/2fc299e92dfe8488b704ba54bdc1f5bf4409582b)_
+
+- **Per-feature AI switches, an org kill switch and a per-task quota chain** (#2032): a new additive `AiFeatureSetting` table (in `TENANT_MODELS`) holds, per organisation and registered task, an on/off and an optional monthly allowance of its own; the `aiEnabled` Setting is the org-wide kill switch. `src/lib/ai/policy.ts` is the ONE reader of AI settings — the chain is org kill switch → per-task switch → per-task quota → org quota → global default (`src/lib/ai/policyRule.ts`, unit-tested) — and `runAiGated` asks it before the pack, the cache and the quota, answering the new typed denial `'disabled'`, distinct from `'quota_exceeded'`. Every AI route and screen says "turned off" for it, never "quota used up" and never a paywall. `getAiQuota(orgId, taskId)` measures a task with its own allowance against its own calls. `/admin/ai` gains the switches: a master switch with a confirmation, and a row per task with an on/off and a quota override, through `GET`/`PUT /api/admin/ai/policy`.
+
+## [0.350.0-beta] - 2026-10-08
+
+_Shipped 2026-10-08 00:18 UTC · commit [0ccbc28](https://github.com/21072026/Internship/commit/0ccbc28d090daa5df19ec8764ef223b354310516)_
+
+**Interview requests become real meetings (#1844):** the two declared-but-dead statuses are finally written. `POST /api/interview-requests/[id]/schedule` (ADMIN or the mentee's active MENTOR — the actor rule now lives in `interviewRequestActorWhere()` and is shared with the decision route) turns an APPROVED request into a `Meeting` linked in both directions (`InterviewRequest.meetingId`, `scheduledAt`), on the IANA zone the approver picked, with the company's interviewers invited as `MeetingGuest`s (addresses, never accounts); the status flip is a guarded `updateMany` in the same transaction as the meeting, so two concurrent calls produce one meeting and one `409 not_approved`, and a slot the company did not propose needs `override: true`. `POST /api/interview-requests/[id]/cancel` (the programme, or the company for its own request) writes `CANCELLED` with the reason and takes the meeting off every calendar through the new shared `cancelMeetingRows()` (`src/lib/meetingCancel.ts`, also used by `PATCH /api/meetings/[id]`) — never by deleting the row. The mentee, the mentor and the company are told the confirmed time in their own zone and language (`interview_request.scheduled` / `.cancelled`, registered in the notification catalogue and in `WEBHOOK_EVENTS`). The queue replaces its deep link with an inline slot picker, time-zone select, interviewer e-mails and a cancel control; the company's requisition page shows the confirmed time or the cancellation instead of an instruction.
+
+## [0.349.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 23:32 UTC · commit [24d6a91](https://github.com/21072026/Internship/commit/24d6a9189c9397cbcef3ea0fae35ed1e3c496166)_
+
+**Application stage transitions, disposition reasons and bulk actions (#1836):** the write half of the per-role funnel. `PATCH /api/applications/[id]/stage` moves one application (`{ toStage, expectedStage, note?, dispositionCode? }`): `canPerformApplicationAction()` decides with flags read from the database (the requisition's company, the mentee, the active mentor), `canTransition()` enforces the legal path (`APPLIED → HIRED` is refused), a move to `REJECTED` needs a disposition code, and the write is a guarded `updateMany` so two concurrent moves yield one success and one `409 stage_conflict`. `POST /api/applications/bulk-stage` applies the same rules per row to up to 50 ids and reports `{ moved, skipped: [{ id, reason }] }` honestly. `GET /api/company/applications?stage=&dispositionCode=&since=` surfaces past applicants for rediscovery, company-scoped. Two write-through hooks keep the models from drifting: a requisition-scoped shortlist creates or moves the application through `applicationFromInterest()`, and an approved interview request moves it to `INTERVIEW`. Every stage change writes exactly one `ApplicationEvent` and one activity row, all through `moveApplicationStage()` in `src/lib/applicationStage.ts`.
+
+## [0.348.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 23:29 UTC · commit [523546a](https://github.com/21072026/Internship/commit/523546a7a8bcc56adebee347795a2003754f1a6f)_
+
+- **Configurable password policy + breached-password screening** (#1544, fixes #1215 for good). The rule a new password is judged by is now data — `passwordMinLength` (clamped 8…128 on read, refused outside that range on write), `passwordRequireUpper/Lower/Digit/Symbol`, `breachedPasswordCheck` — read through the per-org settings chain; defaults equal the old hard-coded rule. `src/lib/passwordPolicyRule.ts` holds the pure, Unicode-aware check (unit-tested) shared by the server (`checkPassword()` in `src/lib/password.ts`, the one entry point for register, reset and account; refusals answer `400 { code: 'password_policy', failed }` / `'password_breached'`) and the browser (`GET /api/auth/password-policy`, `usePasswordPolicy()`, `<PasswordRules>` under every new-password field), so the forms validate exactly what the API enforces. `src/lib/breachedPassword.ts` screens against Have I Been Pwned by k-anonymity — five hex characters of the SHA-1 leave the box, the suffix is matched locally, `Add-Padding` on — through the SSRF guard with a 2 s timeout and **fails open** with one logged warning. Controls on `/admin/settings` next to the 2FA policy (EN/TR/DE). `e2e/password-policy.spec.ts` against a local HIBP stub (`e2e/support/hibp-mock.mjs`); the server contract is `@smoke`. `docs/password-policy.md`.
+
+## [0.347.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 18:56 UTC · commit [a7421ab](https://github.com/21072026/Internship/commit/a7421ab8e5793e16ac39e02c2f019115b90d3a06)_
+
+**Safeguarding — contact-detail and keyword detection, and message retention (#2056):** every message write path (composer, edits, the mentor's in-app e-mail, inbound mail replies) runs `scanMessageForSafeguarding` (`src/lib/safeguardingScan.ts`) after the row is written. The pure rule in `src/lib/safeguarding.ts` detects dialled-looking phone numbers (9–15 digits starting `+`/`00`/`0`, or the US shape), spelled-out numbers (7+ digit words, EN/TR/DE), plain and obfuscated e-mail addresses (`at`/`dot`, `[at]`, `(at)`, `ät`/`punkt`, `nokta`) and the org's watch keywords (whole-word, case/accent/Turkish-i/ß folded); dates, amounts, bare order numbers and IBAN/reference fragments are pinned negative in an EN/TR/DE corpus test. Detection never blocks or holds a message. Findings become `SafeguardingFlag` rows (new model, `orgId` + `TENANT_MODELS`, unique per message/kind/term, storing a MASKED contact detail), and the org's admins get one in-app `safeguarding.flagged` bell per hour. `/admin/safeguarding` (ADMIN-only, tenant-scoped at the route) lists flags with live context and records NO_ACTION / REVIEWED / ESCALATED (audited as `safeguarding.reviewed`), and edits the watch list and `messageRetentionDays` (new per-org settings `safeguardingKeywords`, `messageRetentionDays`, default 0 = keep forever). Retention is one `message` entry in the #1678 registry that masks bodies past the window with the delete-for-everyone mechanism (attachments dropped, body emptied, `deletedForEveryoneAt` stamped), per sender org, floor 30 days. Account erasure deletes the flags on the person's messages; the DB sanitizer drops all flags. Docs: `docs/safeguarding.md`, linked from the trust security overview.
+
+## [0.346.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 18:51 UTC · commit [5eda233](https://github.com/21072026/Internship/commit/5eda233054aa67d3f64604a7dc9a7ed48b52b174)_
+
+- **AI-personalised session agenda** (#1845): `POST /api/agendas/personalize` proposes 4–7 agenda lines adapted from the chosen guide, the pair's open goals (the goal visibility rule decides which leave), the previous session and the newest log entries, through `runAiGated` as the participant task `agenda_personalize` — free, never behind the AI pack. Every denial (no consent, no provider, no quota, provider error) answers with the guide as written plus the reason; the proposal is a draft in `AgendaPanel` until a seat adds it, and `POST /api/agendas/[id]/items` takes `texts[]` for that. The payload builder (`src/lib/aiAgendaRule.ts`) is unit-tested for what leaves the process.
+
+## [0.345.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 18:43 UTC · commit [52e76df](https://github.com/21072026/Internship/commit/52e76df814dfae7cb5b0fb37cdd97c4d3d022ffd)_
+
+**Shared session minutes (#1847):** `SessionNote` — the pair's co-authored record of what was said and agreed — is a third model beside the two private ones; `PersonalNote` (author-only) and `RelationNote` (mentor-private) are untouched, and the e2e proves a mentor's private note stays invisible and unwritable to the mentee. `SessionNoteRevision` is an append-only trail (body as saved + editor, last 20 kept, no diff UI). `/api/session-notes` (`GET ?relationId=` / `?meetingId=`, `POST`) and `/api/session-notes/[id]` (`GET`, `PATCH`) use the relation rule from `src/lib/sessionNoteAccess.ts` (admin, mentor, mentee read; another tenant's note 404, a tenant-mate outside the pairing 403), `loadAccessibleMeeting` for a meeting-pinned note, the archived-relation 409 `inactive_relation`, and a new 403 `admin_read_only`: an admin reads, they do not author on the pair's behalf. Saving identical text writes no revision. Writes publish a `sessionNote` realtime event (no counter moves; the inbox refresher ignores it) so `SessionNotePanel` shows both seats the same text live; mounted beside the agenda on `/mentor/mentees/[id]` and `/portal/goals`. Account erasure also blanks the minutes and their revisions of the erased mentee's relations. EN/TR/DE `sessionNotes.*`. E2E `e2e/session-notes.spec.ts` (`@smoke`).
+
+## [0.344.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 18:38 UTC · commit [b60f7bd](https://github.com/21072026/Internship/commit/b60f7bd3bd4a4eb4c57b26ce331c3d1fcb98dd1e)_
+
+**The Application object (#1828):** `Application` (one row per person per role, `@@unique([requisitionId, menteeId])`, tenant-scoped through `TENANT_MODELS`) and `ApplicationEvent` (one row per stage change) join the schema, purely additive — `CompanyInterest` is untouched. `src/lib/applications.ts` holds the stage vocabulary (`APPLIED → SCREENING → SHORTLISTED → INTERVIEW → OFFER → HIRED`, plus `REJECTED`/`WITHDRAWN`), the explicit transition table, the disposition codes, `canPerformApplicationAction()` as the single authorization rule and `applicationFromInterest()` as the only bridge from the company's shortlist flag. `npm run backfill:applications` (also on deploy) creates one application per existing requisition-scoped interest and is idempotent. No API routes or screens yet: those are #1836 and #1846.
+
+## [0.343.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 17:53 UTC · commit [e8cc39b](https://github.com/21072026/Internship/commit/e8cc39b8459cba76e30c410b598311c7186d221f)_
+
+- **Operator AI tasks need the AI pack; the registry's `audience` decides** (#1738, epic #1727). Every entry in `src/lib/ai/tasks.ts` carries `audience: 'participant' | 'operator'`. For an `operator` task (`mentor_match`, `survey_summary`, `evaluation_insights`, `weekly_report_digest`, `analytics_narrative`) `runAiGated` asks `entitled(orgId, 'AI_PACKAGE')` (`AI_PACK_FEATURE`) right after consent and before the artefact cache and returns the new typed denial `{ ok: false, reason: 'not_entitled' }`; a `participant` task (`cv_extract`, `cv_feedback`, `interview_prep`, `interaction_summary`) never runs the query, so the free core stays free and its routes and screens are unchanged. The operator routes answer the shared `403 { code: 'feature_locked', feature: 'AI_PACKAGE' }` and their `GET`s report `locked`, so `/admin/insights`, the analytics narrative and the survey results page draw a locked state; `POST /api/admin/mentor-suggest` keeps the rule-based ranking for every admin and answers `200 { …, aiUsed: false, locked: 'AI_PACKAGE' }`. **Existing orgs keep the tools:** `prisma/backfill-ai-package-grandfather.mjs` (run by `infra/deploy-prod.sh`) grants `AI_PACKAGE` to every org that exists on the deploy — once; its grants carry a marker note and a later run that finds one does nothing, so orgs created after the gate are really gated (unit-tested in `scripts/test/ai-package-grandfather.test.mjs`). `prisma/seed-demo.mjs` grants the pack to both demo tenants so every topic environment shows the whole product.
+
+## [0.342.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 17:40 UTC · commit [b3cc5de](https://github.com/21072026/Internship/commit/b3cc5de770204de0f6578e9729a4f945a0826d88)_
+
+**A real VPAT 2.5 INT, generated from the repository's own evidence (#2037):** `src/lib/vpat.ts` holds every row — WCAG 2.2 Level A and AA complete (plus the AAA criteria the product can speak to), EN 301 549 V3.2.1 chapters 4–12 (clause 9 generated from the WCAG rows) and Revised Section 508 chapters 3–6 — with a conformance level, remarks and an **evidence** column (a repository path, a spec, an issue or a repeatable `check:`). `scripts/vpat-evidence.mjs` (`npm run vpat:evidence`) reads `e2e/a11y-baseline.json`, `e2e/a11y-scan.spec.ts` and `docs/a11y-audit.md` plus git and writes `docs/legal/vpat.md`, `docs/legal/vpat-evidence.md` and the generated `src/lib/vpatEvidence.generated.ts`; `scripts/test/vpat.test.mjs` fails on a `Supports` row without evidence, an evidence path that does not exist, a stale generated file or Markdown that differs from what the data renders. Published unauthenticated at `/accessibility/vpat` (translated chrome, English report) and `/accessibility/vpat.md` (Markdown is not in the image, so both render from the data), linked from `/accessibility` and `/trust`, listed in the public-route registry. The statement's closed `/account` select limitation (#2041) is retired and the review date moved; the open rows name #2864.
+
+## [0.341.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 17:28 UTC · commit [b382502](https://github.com/21072026/Internship/commit/b382502abfac53f3ce4b502328428b13b7e1022f)_
+
+**Session guides — the admin library (#1843, part 2):** `/admin/agenda-templates` (sidebar: *Session guides*, `mentorship` capability, gated layout) curates the guided-conversation library of #1841 in EN/TR/DE: title, a "when to use it" summary and the ordered prompts with an optional mentor-only facilitation note, with search (`data-testid="agenda-template-search"`) and use-count sort. `/api/admin/agenda-templates` mirrors `goal-templates`: `GET` (live guides with prompts, most-used first), `POST` (canonical title = the default locale's wording; the same title twice is 409, a retired title is revived in place so held sessions stay attached), `PATCH` (title/summary/prompts; prompts sent with their id are reworded and reordered in place so a held session keeps following them, unlisted prompts are removed and the held line falls back to its snapshot text — SetNull), `DELETE` archives, never removes (#1113). Prompts are bounded like to-do titles (VARCHAR 191), summaries at 500, notes at 2000, 30 prompts per guide. E2E `e2e/agenda-templates-admin.spec.ts`.
+
+## [0.340.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 17:25 UTC · commit [cb89bd8](https://github.com/21072026/Internship/commit/cb89bd871ed50a713bfecf1652e0653e65150dde)_
+
+- **Audit stream to a SIEM** (#2012). `AuditLog` gained a nullable `orgId` (registered in `TENANT_MODELS`, every writer stamps it, legacy rows attributed on deploy by `prisma/backfill-audit-log-org.mjs` before the generic default-org pass) and a new `AuditDrain` model holds, per tenant, a receiver URL, a signing secret, the `(createdAt, id)` cursor and the backoff/pause state. A five-minute tick (`src/lib/auditDrain.ts`, `GET /api/cron?job=audit-drain` to force one) ships each due drain's next rows as signed `application/x-ndjson` batches (`X-Signature: sha256=…`, `json_lines` or ECS), moves the cursor only on 2xx, backs off 1m→6h and pauses itself after 20 consecutive failures; the rules are pure and unit-tested in `src/lib/auditDrainRule.ts`. New admin API `GET/POST/PATCH/DELETE /api/admin/audit-drains` (+ `/test` with a synthetic flagged batch, `/rotate-secret`), gated on `INTEGRATIONS_API` and scoped to the caller's org; a card on `/admin/integrations` and an `audit_drain` row on the connector-health board. The receiver contract is `docs/audit-stream.md`; `e2e/audit-stream.spec.ts` drives configure → deliver → outage → replay against a local sink, and the cross-tenant guard is `@smoke`.
+
+## [0.339.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 17:20 UTC · commit [79ecf1e](https://github.com/21072026/Internship/commit/79ecf1edd3c6c1bca3ccd9e877a6d79757bfc738)_
+
+**Practice interview with a stored after-action report (#2051):** mentees can rehearse a text-only interview on `/portal/goals` — `POST /api/interview-prep/session` starts one (MENTEE only, grounded in their target position or a requisition they are connected to, same rule as the CV review's tailoring) and `POST /api/interview-prep/session/[id]/turn` takes one typed answer and returns the interviewer's one-line observation and next question. A session is bounded at 6 answers; the sixth ends it with an after-action report on a fixed rubric (structure, evidence, relevance, clarity, 1–5) plus what went well, the two things to practise next and one rewritten answer, parsed with `safeParseModelJson` and stored as a PRIVATE `AiArtifact` the mentee may share with their mentor (enforced by the artefact routes; shared reports render on the mentor's view). New tenant model `PracticeSession` (orgId, `TENANT_MODELS`, cascades with the user) holds the transcript. Every typed answer, the role and the posting enter the prompt fenced as untrusted data; the interviewer's prompt carries the tone rules (challenging, never hostile; never comments on accent, appearance, name, age or background; no legal or immigration advice — redirect). Its own task id `practice_interview` (participant-side, free) makes the cost visible on `/admin/ai`. Text only: nothing touches a microphone or camera, asserted statically. Every denial is the same neutral "not available right now", and an unavailable provider stores nothing, so the typed answer stays in the box.
+
+## [0.338.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 15:04 UTC · commit [2abffa3](https://github.com/21072026/Internship/commit/2abffa3b906c31a46c5796b9ea4247188539fd9d)_
+
+**Session agendas — the panel and the API (#1843, part 1):** `/api/agendas` (`GET ?relationId=` / `?meetingId=`, `POST` from a guide or empty), `/api/agendas/[id]` (`GET`/`DELETE`), `/api/agendas/[id]/items` (`POST` an ad-hoc line), `/api/agendas/[id]/items/[itemId]` (`PATCH` tick/reword/reorder, `DELETE`), `POST /api/agendas/[id]/carry-over` (a new agenda on the pairing holding every unticked line, each marked `carriedFromItemId` and keeping its template reference), and `GET /api/agendas/templates` (the tenant's live guides for the picker). Authorization is the relation's (`src/lib/agendaAccess.ts` mirrors `relationIfAllowed`: admin, mentor, mentee; another tenant's agenda answers 404, a tenant-mate outside the pairing 403) plus `loadAccessibleMeeting` for a meeting-pinned agenda, and the archived-relation lock answers the existing 409 `inactive_relation`. Writes publish a new `agenda` realtime event for the relation (moves no unread counter, ignored by the inbox refresher), so `AgendaPanel.tsx` — guide picker, live tick, ad-hoc line, carry-over, read-only for archives, mentor-only facilitation notes — shows both seats the same list without polling. Mounted on `/mentor/mentees/[id]` and `/portal/goals`. EN/TR/DE `agenda.*` keys. E2E `e2e/session-agenda.spec.ts` (`@smoke`: pick → tick → carry-over, 403 for a third party, 409 on an archive). `/admin/agenda-templates` follows in part 2.
+
+## [0.337.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 14:59 UTC · commit [fe970ff](https://github.com/21072026/Internship/commit/fe970ff83361c54902b512d2b7221ea06ba5f451)_
+
+**Structured compensation on offers + the benchmark read model (#1851):** `Offer` gains `currency`, `baseAmountMinor`, `basePeriod` (HOURLY|MONTHLY|YEARLY), `signingBonusMinor`, `otherBonusMinor`, `equityNote`, `hoursPerWeek` and `contractType` (INTERNSHIP|WORKING_STUDENT|FIXED_TERM|PERMANENT) — integer **minor units** + ISO 4217 code per the repo's money rule (not the `Decimal` the issue sketched), `compensationNote` stays as the free-text elaboration. The rules live in the pure `src/lib/compensation.ts` (closed currency list, "an amount needs a currency and a period", `normalizeToMonthlyMinor` that refuses to assume 40 h for an hourly rate, R-7 quantiles, the <5 suppression floor; unit-tested). Every new column rides `canSeeCompensation` through `OFFER_COMPENSATION_FIELDS` — a COMPANY response carries none of them, pinned in `e2e/offers.spec.ts`. Wizard, admin panel and the candidate's card get structured inputs and a `CompensationSummary`. `GET /api/admin/offers/benchmark` (ADMIN, tenant-scoped) groups ACCEPTED offers by position × currency (`?by=contractType` adds the type) and returns count/median/p25/p75 of the monthly base; a bucket under 5 offers comes back with `null` figures and `suppressed: true`, never omitted. Surfaced as a collapsed card on `/admin/offers`.
+
+## [0.336.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 14:54 UTC · commit [a017f90](https://github.com/21072026/Internship/commit/a017f90b17183f265e34a157c0f590bf69aae3c3)_
+
+**Follow-up panel in the programme's own words (#2875):** the "Next step" field no longer suggests *Call about pricing* on an internship record — the base dictionary carries an internship example and the MARKETING overlay keeps the sales one. The panel now says who reads the note (the owning mentor and the admins; never the mentee; the owner is reminded by e-mail on the day), offers two or three ready-made lines per canonical stage as one-click chips (`src/lib/nextStepSuggestions.ts`, EN/TR/DE, unit-tested against the pipeline catalogue and the chip width), and — for a record with a logged interaction — a *Suggest with AI* button that asks for three lines from the log and the stage through the usual gate (new task `next_step_suggest`, `POST /api/mentorship/[id]/next-step`: owner or admin, the mentee's `AI_INTERACTION_SUMMARY` consent, monthly quota, 10/10 min, 1-day artefact cache keyed on log + stage + note + day in stage). Everything only fills the field; Save is still the owner's click.
+
+## [0.335.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 14:43 UTC · commit [83a46e0](https://github.com/21072026/Internship/commit/83a46e055496ea56af92164fe3222b37f50d8c18)_
+
+**Provable opt-out (#2054):** every bulk path now leaves an `EmailLog` row for each intended recipient — the five that used to filter opted-out people out before `sendEmail()` (`sendWeeklyMentorDigests`, `sendDailyActivityDigests`, `checkCompanyNeedMatches`, the report-subscription job and `POST /api/admin/announcements`) write the same `SKIPPED` + `Unsubscribed: <group>` row the central check does, via the new `recordOptOuts()` (`src/services/emailService.ts`): from the preference row the job already holds, so no extra `User` read and no digest rendered for someone who will not get it; an announcement records all its opt-outs in one `createMany`. `sent` / `emailed` / `alerts` keep meaning "actually sent" — each job also returns `skipped`, and the announcement response carries it. Admin → Settings → Email health gains **Honoured opt-outs** (super-admin only, like the log): a per-group and per-category breakdown for 1/7/30/90 days and a lookup by address, backed by `GET /api/admin/email-log?suppressed=1&days=&to=`. Erasure still deletes these rows with the person (`forgetEmailLog`), as `docs/EMAIL_DELIVERABILITY.md` now records along with the decision itself.
+
+## [0.334.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 14:00 UTC · commit [e0dc89e](https://github.com/21072026/Internship/commit/e0dc89e631c0d5edfe77ea6e1d011dd5a3f3ce33)_
+
+**Authoring assist and paste-in profile enrichment (#2055, part 2):** "Draft in 3 languages" on the announcement composer and the goal/message-template forms turns a short brief into an EN/TR/DE draft (`POST /api/admin/ai/draft`, task `content_draft`), offered only while every language is empty and folded in through `mergeMachine`, so every drafted locale is marked machine-written until reviewed and nothing a person wrote can be replaced. Mentors get "Suggest from pasted text" on their profile (`POST /api/profile/enrich`, task `profile_enrich` — participant-side and free, gated on their own `AI_CV_PARSING` consent): a proposed bio, expertise and interests, each accepted or skipped on its own and only stored by the form's Save; admins get the same for a company's description and industry (`POST /api/admin/ai/company-enrich`, task `company_enrich`). Input is pasted text only — no URL is fetched and no profile scraped, and `scripts/test/authoring-assist.test.mjs` asserts statically that none of these modules fetches or writes; all of them are also in the never-auto-send list. Nothing is published, queued or sent by any of it.
+
+## [0.333.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 13:44 UTC · commit [0178cb5](https://github.com/21072026/Internship/commit/0178cb5ae807c01b83c135843a99afef6dc5cc30)_
+
+**Machine-translation assist for tenant-authored text (#2055, part 1):** announcements, goal templates and message templates get a "Fill empty languages" button: the admin writes one language, `POST /api/admin/ai/translate` (ADMIN-only, `runAiGated` task `content_translate`, operator-side, purpose-specific tone, the text fenced as untrusted data) translates it into the locales left empty, and the editor shows the result as a draft — nothing is saved, published or sent by the button. `mergeMachine` (`src/lib/machineTranslation.ts`, unit-tested) fills empty locales only, so a human-written translation is never overwritten, including on a re-run. Machine-filled locales are marked "Machine-translated — review" and stored as the new nullable `machineTranslated` JSON column on `Announcement`, `ProjectTaskTemplate` and `MessageTemplate` until the admin edits or confirms them. The per-locale map shape and its resolvers (`normalizeAnnouncementTranslations`, `resolveTemplateTitle`, the message-template resolver) are unchanged. Part 2 (authoring assist from a brief, paste-in profile enrichment) follows.
+
+## [0.332.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 13:20 UTC · commit [9d6db5c](https://github.com/21072026/Internship/commit/9d6db5c81a554a00d6460d2424b1ea584b735ce2)_
+
+**Scored CV review with a gap checklist and role tailoring (#2050):** `cv_feedback` now returns a `CvReview` instead of prose — an overall 0–100 score, a band derived from it (`needs_work` < 50 ≤ `nearly` < 75 ≤ `ready`, never the model's own label), six fixed, ordered sections (contact & links, structure, impact statements, skills evidence, education, language quality) each with a score and findings, an actionable checklist (`ok` / `missing` / `weak` + how to fix) and a summary, requested as a JSON schema and parsed with `safeParseModelJson` (a reply that is not it is metered `parse_error`, stored nowhere, answered neutrally). `POST /api/cv/feedback` takes an optional `requisitionId` for a role the mentee is connected to (a non-PASS company interest or an interview request — anything else is `404 role_not_found`); the posting is sent fenced as untrusted data (#2026) and the tailoring block always names the required skills the CV text never mentions, computed deterministically (`missingRequiredSkills`) and merged with the model's. Reviews persist as `AiArtifact`s keyed on CV text + requisition (the column carries the requisition), so re-opening is free; `GET` returns the latest plus the previous score for the same target, and the card shows the delta. Prose artefacts stored before this change still render. The card (`CvReviewView`) shows score, band, delta, checklist, sections and tailoring through `AiText`, keeps the neutral copy on every denial, and now shows a stored review even when no provider is configured. Shared reviews render as reviews on the mentor's view. The score is advice: nothing reads it to gate a stage or rank a candidate, and no company screen shows it. `cv_feedback` output cap raised to 1 600 tokens for the structured reply.
+
+## [0.331.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 12:57 UTC · commit [b0e81ca](https://github.com/21072026/Internship/commit/b0e81cab952a42f7ad5b8a7124dc94866c9ff249)_
+
+**Per-API-key quota and RateLimit headers (#2010):** a request with a working API key now spends only that key's per-minute window (120/min, on the shared limiter store — #1546's `key:<id>` keying, consumed), so two integrations behind one address no longer share a budget; requests without a key, and requests whose key fails, spend their address's window, which is checked before the key lookup so a flood of bad keys stops costing database round trips. Keys may carry an optional period allowance (`ApiKey.quotaPeriod` 'day' | 'month' + `quotaLimit`, additive nullable columns — existing keys are unchanged): past it the door answers `429 { type: 'quota_exceeded', resetAt }` with `Retry-After`, distinct from the per-minute `429 { type: 'rate_limited' }`. Usage is tallied per process and flushed every few seconds as one atomic `increment` upsert into the new `ApiKeyUsage` model (orgId, `TENANT_MODELS`) — never a database write per request; replicas add up and the count survives a restart. Every `/api/v1` response carries `RateLimit-Limit` / `-Remaining` / `-Reset` for the limit closest to exhaustion. `lastUsedAt` is now stamped at most once a minute. The admin key list shows requests this period against the allowance, the allowance can be set at minting or changed in place (`PATCH /api/admin/api-keys?id=`), and the public OpenAPI document and `/admin/api-docs` describe the limits, the headers and both 429 types. Session-authenticated requests are never metered.
+
+## [0.330.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 12:38 UTC · commit [c9068dd](https://github.com/21072026/Internship/commit/c9068dde36a61c89cda81518b0eda32e6bda16a4)_
+
+**/admin/ai — AI usage, spend, quota and provider status (#2030):** `GET /api/admin/ai/usage` (`?month=YYYY-MM`, default the current month, plus the month before) returns calls per task split into ok / `parse_error` / `provider_error`, input and output tokens, list-price spend (with a count of answered calls whose model is unpriced, so the spend reads as a floor) and nearest-rank p50/p95 latency, aggregated in SQL (one `groupBy` per month plus two indexed `skip` lookups per task — never a month of rows); `?format=csv` exports that month's metered calls (meter columns only: no user, no content). `GET /api/admin/ai/status` says whether a provider key is configured (never which), the model each registry task resolves to, this process's circuit-breaker state and the 30-day count of calls flagged by the prompt-injection tripwire (#2026). Both are ADMIN-only at the route and scoped to the admin's org with `orgWhere()`, the same rows the quota counts. The page has an editable quota card (0 = AI off), per-task tables for both months, provider status, the model table and the CSV link; sidebar entry "AI usage". `/api/health`'s detail block gains `ai: 'ok' | 'not_configured'`. The settings hint no longer claims AI usage is metered install-wide — it is per organisation.
+
+## [0.329.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 12:18 UTC · commit [260935e](https://github.com/21072026/Internship/commit/260935ed3a7e9e3df738def7ac57532c2de08b91)_
+
+**Prompt-injection hardening, a PII pre-flight and safe rendering of model output (#2026):** every piece of user-authored text entering a prompt (CV, interaction log, conversation, survey row, interview focus, names) now travels inside a nonce-fenced `wrapUntrusted()` block (`src/lib/ai/untrusted.ts`) whose fence cannot be forged. `callModel()` is the enforcement point: it refuses an input with no block (`UnfencedInputError`), appends `UNTRUSTED_DATA_RULE` to every system prompt, cuts an over-long input inside the data instead of through a fence, masks e-mail addresses, phone numbers, links, IBANs, 11-digit ID numbers and street addresses inside the blocks unless the registry entry declares `needsContactDetails` (only `cv_extract`; `src/lib/ai/redact.ts`, tuned not to touch CV dates), and runs an EN/DE/TR injection tripwire (`src/lib/ai/injection.ts`) that flags but never blocks — hits land on the new nullable `AiUsage.flags` column. Thread prompts no longer put participant names into the system prompt. The open-text engine pre-masks its rows with the same pre-flight so its verbatim-quote check still compares like with like. All AI prose surfaces render through the new `AiText` component (plain text, no markup or live links, control and bidi-override characters stripped, length capped). `docs/security-audit-playbook.md` moves the AI endpoints from "never examined" to the tested matrix. Tests: `scripts/test/ai-untrusted.test.mjs`, `e2e/ai-output-safety.spec.ts`.
+
+## [0.328.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 11:47 UTC · commit [fe81b17](https://github.com/21072026/Internship/commit/fe81b17cd1d2d4f1d3158d340f627c06e1f15f43)_
+
+**Grounded outreach drafts and the never-auto-send rule (#2048, part 2):** `POST /api/mentorship/[id]/ai-draft` (`moment: first_message | dormant_nudge | outcome_note | auto`) drafts a message for one mentee in the mentee's `preferredLanguage`, for the mentor of the pair or an admin of its org only, gated on the mentee's `AI_INTERACTION_SUMMARY` consent. The draft is grounded in an eight-line facts block (`src/lib/outreachRules.ts` `factsBlock`, read by `src/lib/outreachFacts.ts`): first name, stage, outcome, dormant flag, up to three open goals the mentor may see (`visibleGoals` — a private goal is never quoted), last meeting, last message, whether the mentor has written before. No e-mail address, no notes. The `AiArtifact` key is that facts block plus moment, language and author, so an unchanged relation costs no provider call. `POST /api/ai/bulk-draft` drafts one `{name}`-personalised text for the targeted-email composer: ONE provider call, refused before any call above `BULK_DRAFT_MAX_RECIPIENTS` (200) with `batch_too_large`, cost stated on the panel. New registry tasks `outreach_draft` / `bulk_draft`, rate limits, 1-day TTL. The hard rule is static: `scripts/test/ai-never-autosend.test.mjs` fails if the dormant check-ins, the outcome auto-send, the cron route or the e-mail service ever import an AI module, or if any draft module/route sends, notifies or logs a message — `outcomeAutoSend` stays templated-only. UI: "Draft for this mentee" in the mentor's thread composer, AI panel and outcome-note draft in `/mentor/email`, both marked ✨ until edited.
+
+## [0.327.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 11:17 UTC · commit [8770914](https://github.com/21072026/Internship/commit/877091426d3101508f64f8eb7e63582bf87d28d5)_
+
+**Tenant provisioning wizard (#2065):** new `/admin/organizations/new` takes a platform administrator through *identity → plan → branding → starter pack + first admin → review* and creates the organization in one POST. The step lives in the URL (`?step=`) and the values in `sessionStorage`, so a reload keeps the work and the first admin's address stays out of the URL. Creation moved into `provisionOrganization()` (`src/lib/orgProvisioning.ts`): the Organization row, the product's stage preset (`provisionStagePreset`/`replaceStages` now accept a transaction client), the starter pack and its optional sample programme (#2066), and the first administrator's ADMIN invitation (`persistInvitation`) all happen in **one transaction**. Mail and audit lines are written after commit. The self-serve signup (#1749) is meant to call the same function. `POST /api/admin/organizations` is now a thin zod-validated wrapper. It gains optional `plan`, branding fields, `supportEmail`, `starterPack`, `sampleProgram`, `firstAdminEmail` and `firstAdminLocale`. Branding and the support address need the WHITE_LABEL plan feature on create, as they already do on edit (#1742). The slug is re-checked inside the transaction (P2002 → 409 `slug_taken`), and an address that already has an account in this product returns 409. A signed-in non-admin now gets **403** instead of 401. New `GET /api/admin/organizations/slug-availability?slug=` (super admin) lets the wizard report a taken slug before submit. The shared slug rule is `src/lib/orgSlug.ts`.
+
+## [0.326.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 11:13 UTC · commit [98161d3](https://github.com/21072026/Internship/commit/98161d3348fdd46db6c92b1845396bf7989a6a95)_
+
+**Thread catch-up and suggested replies (#2048, part 1):** two new endpoints, `POST /api/conversations/[id]/summary` ("what happened here", bullets in the reader's language) and `POST /api/conversations/[id]/suggest-reply` (`tone: brief | warm | formal`, written in the recipient's language on a 1:1 thread and the author's in a group room). Both are for participants only, through `getConversationIfAllowed` plus participant membership, so an admin who may read a thread does not get it summarised. Both read the latest 60 messages as the asker sees them, never ones deleted for everyone or for the asker (`src/lib/threadAiContext.ts`). They require `AI_INTERACTION_SUMMARY` consent from everyone quoted, are free (never plan-gated), and run through `runAiGated` with an `AiArtifact` keyed on the thread's last message and last edit, so reopening an unchanged thread costs no provider call and no quota. The artefacts are subject-less and listed in `OPEN_TEXT_TASKS`, so erasing any participant wipes them. A suggested reply is only ever returned as text: the composer fills its box and marks it ✨ until edited, and no code path sends it. Transcript, language and tone rules live in `src/lib/threadAiRules.ts` (unit-tested). New rate limits `thread_summary` and `suggested_reply`.
+
+## [0.325.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 05:45 UTC · commit [56b0a4b](https://github.com/21072026/Internship/commit/56b0a4bc0ac56cd758bc78b50aed9683ed54aa84)_
+
+**Magic-link sign-in (#1959):** "Email me a sign-in link" on `/auth/signin`. `POST /api/auth/magic-link` answers the same 200 for every address (rate-limited 5/15min per IP *and* per address), mails an eligible account a single-use link that expires in 15 minutes, and refuses silently for inactive, unverified, pending-approval and SSO-enforced accounts. Only the SHA-256 of the token is stored (`LoginLinkToken`, user-keyed like `SsoLoginGrant`); the new `magic` NextAuth provider spends it with one conditional `updateMany`, so two clicks cannot both sign in. An enrolled authenticator is **not** bypassed: the credentials provider's TOTP/recovery step moved into a shared `requireSecondFactor()` that the magic provider calls before the link is spent — the first visit answers `2FA_REQUIRED` without spending it, `/auth/magic/complete` asks for the code, and a wrong code costs the TOTP bucket, never the link. Spent and expired rows go with the nightly trusted-device purge. Not behind any plan or entitlement.
+
+## [0.324.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 05:33 UTC · commit [0c0f9ff](https://github.com/21072026/Internship/commit/0c0f9ffc12dc2c53078da4cc99b3ba65d1ed7ab9)_
+
+**Goals gain success criteria, a target date, progress and a sharing scope (#1858):** `Goal` has four additive columns — `successCriteria` (text), `targetDate` (distinct from `dueDate`, the deadline), `progress` (0–100, entered by hand until sub-tasks derive it) and `visibility` (`PAIR` default | `PROGRAM` | `PRIVATE`) — plus `createdById`, the author. The scope is authorization, not presentation: `src/lib/goalVisibilityRule.ts` is the one rule, and `GET /api/goals`, `PATCH`/`DELETE /api/goals/[id]` and the relation timeline all answer through it. A `PRIVATE` goal is absent from the other participant's and the admin's `GET`, and its id answers 404 on `PATCH`/`DELETE` — the same answer a goal of another tenant gets (#2542), so the id confirms nothing. Only the author may change the scope (403 `not_author` otherwise); a goal older than the column resolves its author from `createdByRole`. `PAIR` reads exactly as every goal did before, so nothing already written changes reach. `GoalsPanel` renders the criteria, the target date, a progress bar and a Private/Programme badge, with the new fields behind a "More details" disclosure on the add form and in the inline editor; `completedAt`, the archive and the archived-relation 409 are untouched. Account erasure also blanks `successCriteria`. Unit test `scripts/test/goal-visibility.test.mjs`; e2e `e2e/goal-depth.spec.ts` (the API boundary is `@smoke`).
+
+## [0.323.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 05:31 UTC · commit [5d4f45d](https://github.com/21072026/Internship/commit/5d4f45dcef782662d68e6d090430471a64de2d83)_
+
+**Win a lost customer back** (#2842, decision #2572 Q4). `POST /api/mentorship/[id]/win-back` (owner or ADMIN) closes an open DEAL_LOST record as COMPLETED + the new lifecycle state `ENDED_CHURNED` and opens a new journey at TRIAL_ACTIVE (fresh trial window) or DEAL_WON, linked by `previousRelationId`, in one transaction that re-asks the one-active-mentor rule (#419). Rule `src/lib/winBackRule.ts` (unit-tested), store `src/lib/winBack.ts`, `WinBackPanel` on the sales lead page; the account page labels such a chain "won back" rather than "continues an earlier deal". e2e `e2e/win-back.spec.ts`.
+
+## [0.322.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 05:31 UTC · commit [5d4f45d](https://github.com/21072026/Internship/commit/5d4f45dcef782662d68e6d090430471a64de2d83)_
+
+**MARKETING preset follows the SaleVali journey** (#2840, decision #2572). New MARKETING orgs are provisioned without `DEAL_PROPOSAL`/`DEAL_NEGOTIATION` — the win comes straight out of the trial's decision window — and the `TRIAL_EXPIRED` service level is 7 days instead of 3. Existing orgs keep their rows (no backfill), and the two retired stages still read back localized (`RETIRED_STAGE_LABELS` in `src/lib/programTemplates.ts`). The demo marketing tenant, its mirror (`MARKETING_DEMO_STAGES`), the sample import file and the fidelity floors follow. The decision itself is recorded in `docs/marketing-vertical/funnel-decision.md` and `salevali-provider-contract.md`.
+
+## [0.321.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 05:31 UTC · commit [5d4f45d](https://github.com/21072026/Internship/commit/5d4f45dcef782662d68e6d090430471a64de2d83)_
+
+**A won customer's notice period** (#2841, decision #2572 option C). New nullable `MentorshipRelation.contractEndsAt` (+ `contractEndRemindedAt` bell claim). The owner or an ADMIN records it on a DEAL_WON record (`PATCH /api/mentorship/[id]/contract-end`, `ContractEndPanel` on `/sales/leads/[id]` and `/admin/candidates/[id]`); clearing it means the notice was withdrawn. The record stays DEAL_WON and shows the new `cancellation_pending` attention reason for the whole notice period; on the end day the daily trial sweep rings the owner once (`contract.endsToday`, in-app) — never an automatic move to DEAL_LOST (#2572 Q3). The date is carried over on an owner transfer and hidden from non-owners like the next action. New MARKETING loss reason `CUSTOMER_CANCELLED`. Rule `src/lib/contractEndRule.ts`, unit-tested; e2e `e2e/contract-end.spec.ts`.
+
+## [0.320.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 01:15 UTC · commit [d4277a2](https://github.com/21072026/Internship/commit/d4277a20eb71de8edeff230ce98f9d4b47eb4016)_
+
+**Product-usage signals and the account usage chart** (#2449, #2448). The rule is `src/lib/usageRule.ts` (pure, `scripts/test/usage-rule.test.mjs`), the queries `src/lib/usageSignals.ts`. The attention queue gains `usage_drop` (the last half of a `usageBaselineDays` window — default 60 — at least `usageDropThresholdPct`, default 40 %, below the half before it) and `trial_inactive` (a `TRIAL_ACTIVE` record with no usage at all `trialActivationDays`, default 7, after `trialStartedAt`); both are in `SALES_ATTENTION_REASONS`, only show and never move a stage. Its footnote counts the caller's accounts left out for too short a history, the org's dropping accounts with no active owner, and says when no usage feed has delivered anything yet. The account page (`/admin/companies/[id]`, `/sales/accounts/[id]`) charts the last 90 days of `CompanyUsage` in the house CSS-bar style (`UsageSparkline`), with a recorded zero and a missing day drawn and summarised differently. Both stay dark until the SaleVali usage feed (#2447) writes rows.
+
+## [0.319.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 01:15 UTC · commit [5526b44](https://github.com/21072026/Internship/commit/5526b44091382c57d2c95eb2aaf42b49bcb6ef51)_
+
+- **Bring your own conferencing link** (#2007). `Organization.conferencingPolicy` (`BUILTIN` default · `PREFER_PERSONAL` · `REQUIRE_EXTERNAL`) and `User.personalMeetingUrl`, both additive. The precedence — pasted link → the organiser's saved personal room (under the two non-default policies) → a room of ours, refused under `REQUIRE_EXTERNAL` — is one pure rule (`src/lib/conferencingRule.ts`, unit-tested) applied inside `resolveMeetingLink()`, so the schedule, instant, series and accept-a-request paths all inherit it; the series `PATCH` and the profile route validate through the same `checkPastedMeetingLink()`. Every supplied link must be https, carry no credentials, not point at a served host and fit the column. New `GET/PATCH /api/admin/organizations/[id]/conferencing` (org admin or world super admin); a personal-room card on `/account`; the schedule forms say whether a link embeds or opens in a new tab and show the refusal; the meeting panel's fallback button reads “Open in Zoom/Meet/Teams”. `EMBEDDABLE_MEETING_HOSTS` and `next.config.js` are unchanged.
+
+## [0.318.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 01:14 UTC · commit [d293ec4](https://github.com/21072026/Internship/commit/d293ec4addc603127ba7c5b62c48acebb34c98e3)_
+
+**Session agendas — the data model (#1841):** four additive models. `AgendaTemplate` + `AgendaTemplateItem` are the tenant's reusable, trilingual guided-conversation library (the `ProjectTaskTemplate` shape: canonical `title`/`prompt` as dedupe key and fallback, `translations` JSON per locale, `useCount`, `archivedAt` retire-not-delete, `@@unique([orgId, title])`; `programId` is a plain nullable id until #1622 lands). `SessionAgenda` + `SessionAgendaItem` are the per-session instance a pair works through, hanging off `MentorshipRelation` and optionally the `Meeting` it was held in (`meetingId @unique`, `templateId` SetNull so retiring a template never blanks a held session, `carriedFromItemId` for carry-over). `AgendaTemplate` is in `TENANT_MODELS`; `SessionAgenda` carries the "reached through a scoped parent" comment. `src/lib/agendas.ts` (+ dependency-free `agendasRule.ts`) mirrors `goalTemplates.ts`: `resolveItemText` reads a templated item live from the template in the reader's locale, falling back to the default locale, then the canonical string; `instantiateAgenda()` creates a session from a template and bumps `useCount`. `prisma/seed-agenda-templates.mjs` seeds six trilingual starter conversations (kickoff, goal-setting, mid-point review, career, feedback, closing) idempotently and runs on deploy next to `seed-goal-templates`. Schema, resolver and seeder only — the agenda panel and `/admin/agenda-templates` are #1843.
+
+## [0.317.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 01:01 UTC · commit [4d93914](https://github.com/21072026/Internship/commit/4d939148f8c673fd53f63d9bdb6f85fc66c3481e)_
+
+- **One AI provider module, a task registry and real cost rows** (#2022). `src/lib/ai/tasks.ts` registers every AI task (the historic `scope` strings, audience, consent, model tier, input/output caps) and `runAiGated` only accepts a registered id. `src/lib/ai/provider.ts` is now the only importer of `@anthropic-ai/sdk`: `callModel()` applies the 60s timeout and the input cap centrally, `resolveModel()` routes per task (`AI_MODEL_<TASK_ID>` → `AI_MODEL_TIER_<TIER>` → `ANTHROPIC_SUMMARY_MODEL` → `ANTHROPIC_CV_MODEL` → default), and every `AiUsage` row records the model, both token counts, the list-price cost (`src/lib/ai/pricing.ts`, micro-dollars, `null` for an unpriced model) and the latency. Additive nullable columns; the deploy backfills `taskId` from `scope`. Every AI variable is documented in `.env.example`.
+
+## [0.316.1-beta] - 2026-10-07
+
+_Shipped 2026-10-07 00:59 UTC · commit [14569e3](https://github.com/21072026/Internship/commit/14569e3ede3afac4e53191b53d93abfdaf792eda)_
+
+- **SSO role mapping speaks the vertical's words and offers only its roles** (#2839). The IdP role-mapping card labels roles through `usersAdmin.*` (a MARKETING tenant reads rep/lead, not MENTOR/MENTEE) and its three hints gain MARKETING overlay entries — they named the enum in uppercase, which the leak ratchet strips as a code. `mappableRolesFor(capabilities)` in `ssoRoleMapping.ts` drops a role whose module the vertical lacks (SOURCE without `sourcing`, COMPANY without `companies`): the API offers and accepts only that list (`role_not_in_vertical`), and the ACS ignores a stray row the way it ignores ADMIN.
+
+## [0.316.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 00:33 UTC · commit [d7d0121](https://github.com/21072026/Internship/commit/d7d0121b690a14601eacc96447996e882026207f)_
+
+**Inbox filters: archive, mute, pin (#1609, part 2):** `ConversationParticipant` gains nullable `archivedAt`, `mutedUntil` and `pinnedAt` (additive columns only, no index, per the FK-index warning on that model). The rules live in `src/lib/conversationState.ts` (unit-tested). Pinned threads sort first. A mute (8 hours, a week, or until turned back on) means no push, no e-mail mirror, no bell row and no unread-digest line for that viewer; the digest still marks the line digested, so unmuting does not deliver a backlog. Inbox unread counts are unchanged. An archived thread leaves the main list and returns on its own when someone else writes into it, unless it is also muted. That return is derived at read time and never written. New `PATCH /api/conversations/[id]/state` writes only the caller's own row, in a conversation that opens for them. `loadInbox` (the page and `GET /api/conversations`) returns `pinned / muted / mutedUntil / archived` per thread in pinned-first order. `/messages` gets *All / Unread / Pinned / Archived* chips (`?filter=`) and a per-row options menu. Not plan-gated.
+
+## [0.315.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 00:28 UTC · commit [f419bba](https://github.com/21072026/Internship/commit/f419bba8d8fc92e74ea2c1ec4f21c6ca2ddb69da)_
+
+**MARKETING go-live helpers** (#2579, #2397). `prisma/check-marketing-orgs.mjs` is a report-only deploy-log line (`infra/deploy-prod.sh`): per MARKETING org it prints plan, public host, stage count, active admins/reps, default lead owner and BCC-to-CRM state, then one line per gap (no stage rows = running on the INTERNSHIP default pipeline, missing TRIAL_ACTIVE/TRIAL_EXPIRED, no host, no team, no default owner) — so the prod org can be verified without a DB connection; no PII, never writes, exit 0 (`scripts/test/marketing-org-report.test.mjs`). The admin account list gets a "My accounts" owner filter (`GET /api/companies?owner=me`, MARKETING only in the UI, kept in saved views) for admins who also own leads.
+
+## [0.314.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 00:19 UTC · commit [fe0fb74](https://github.com/21072026/Internship/commit/fe0fb740654c5e9687a71cc0eebc7104e203a1dc)_
+
+**BCC-to-CRM: forwarded customer replies are logged too** (#2815, follow-up to #2809). A rep forwards a customer's answer to the org's `crm+` address and it lands as an inbound `InteractionLog` (`BCC ← <customer>`) on the original sender's account, with the original's date and subject. The original is read from a `message/rfc822` attachment (bridge: `forwardedAttachment`) or the inline forward header block (`parseForwardedHeaders` in `src/lib/crmBccRule.ts`: Gmail, Outlook EN/DE/TR, Apple Mail — unit-tested corpus). The body is read in memory only for those fields, never stored. Same gates (signed address + active staff sender), same `sourceRef` idempotency. Privacy notice sentence extended (`PRIVACY_POLICY_VERSION` 2026-10-07).
+
+## [0.313.0-beta] - 2026-10-07
+
+_Shipped 2026-10-07 00:19 UTC · commit [887266c](https://github.com/21072026/Internship/commit/887266ca87f06960c0f1414d3b20c20923f8aec6)_
+
+**Paged message threads and message search (#1609, part 1):** `GET /api/messages` no longer reads a whole thread. It returns the newest `?limit=` messages (default 50, max 100), oldest first, with `{ hasMore, nextCursor }`, and `?before=<nextCursor>` returns the page before that one. The cursor is a keyset on `(createdAt, id)`, so a message that arrives or is deleted while someone scrolls back neither duplicates nor skips a row. Older-page requests return history only: no roster and no read marker. New composite indexes `Message(conversationId, createdAt)` and `(relationId, createdAt)` sit beside the FK-backing single-column ones (additive). The thread view loads the newest page, loads older pages when you scroll up or press *Load older messages*, keeps your reading position, and merges live refreshes onto pages you already scrolled back to (`src/lib/messagePage.ts`, unit-tested). New `GET /api/messages/search?q=`: a bounded, LIKE-escaped `contains` over the caller's own threads only (mentorships they are in and conversations they take part in), with every hit's thread re-checked through `getThreadIfAllowed` / `getConversationIfAllowed`. It never returns messages deleted for everyone or deleted for yourself, and nothing is plan-gated. Each hit links to `…?m=<id>`; the thread pages back to that message and highlights it. The inbox gets a search box.
+
+## [0.312.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 23:03 UTC · commit [84573b8](https://github.com/21072026/Internship/commit/84573b8bdf5656fe0066ae23d7dd31751ac822b4)_
+
+**Migration screen (#2073, part 2):** `/admin/migrate` (nav, `mentorship`) over `POST /api/admin/migrate` — upload one CSV per sheet, a column mapping proposed from the headers by `suggestMapping` (EN/TR/DE synonyms) and corrected by the admin, a stage map listing every distinct source stage (`sourceStages`) against the org's stages (new `GET /api/admin/migrate`), the per-sheet preview in the shared `ImportPreview`, then confirm. Exact stage keys are preselected; everything else starts unmapped. `ImportPreview` translates the migration's reasons (neutral ones in `importPreview`, the internship-worded ones passed in via a new `reasons` prop so the shared block stays vertical-neutral). `migration` i18n block in EN/TR/DE.
+
+## [0.311.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 23:01 UTC · commit [7234123](https://github.com/21072026/Internship/commit/7234123955172a7c2b3cefa7dd89e460ea6dea1a)_
+
+**Starter pack sample programme (#2066, part 2):** `applyOrgStarterPack(orgId, { sampleProgram: true })` (and `POST …/starter-pack` with `{ sampleProgram: true }`) adds a labelled synthetic set inside the tenant — 1 company, 1 requisition, 2 mentors, 4 mentees spread over the org's own on-path stages by position (no stage key spelled out), 4 interactions and one weekly report — in the same transaction, idempotently, internship vertical only. Names say "(sample)" and addresses are `@sample.invalid` (RFC 2606, undeliverable). **Schema, purely additive:** `sampleData Boolean @default(false)` on `User`, `Company`, `MentorshipRelation` and `Requisition` — a server-side default, no `@id`, key or relation touched (`check:schema-push` green). `DELETE /api/admin/organizations/[id]/sample-data` removes exactly the tagged rows (people through the account-erasure hard delete); the shared `orgAdminRefusal` gate covers both routes. Settings card: a sample checkbox and a remove button.
+
+## [0.310.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 22:57 UTC · commit [7c0f9b4](https://github.com/21072026/Internship/commit/7c0f9b415487e85c91002f6b0962ec9970a052ef)_
+
+**Mobile: icon for the admin Insights menu entry (#2775):** `apps/mobile/src/lib/menu.ts` gains `insights: 'bulb'` (the web uses `Lightbulb`). The nav key arrived with #2807 without a glyph; the `Mobile app` workflow's icon test only ran on the next `apps/mobile` change, #2824, and has been red on `main` since.
+
+## [0.310.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 22:51 UTC · commit [3671a05](https://github.com/21072026/Internship/commit/3671a053c18c357c02e106e8dbfd14ea7e4ed4d9)_
+
+**Mid-programme migration API (#2073, part 1):** `POST /api/admin/migrate` (ADMIN, `mentorship`) takes four CSV sheets — `people`, `pairs`, `stageHistory`, `interactions` — with a per-run column `mapping` and an explicit `stageMap` onto the org's own stage keys, on the shared import engine (#2072). Dry run by default, `confirm: true` writes. An unmapped source stage is an ERROR row, never defaulted; no `StatusChange` from X to X (#934) and no future dates; history keeps its original timestamps and each pair's `pipelineStatus` is the target of its last move; people keyed by e-mail and pairs by both e-mails so a re-run is UNCHANGED; ACTIVE pairs respect the one-active-mentor rule inside the write's transaction (#419); addresses of another tenant are reported, never linked; every created row carries the admin's org; nothing is mailed; one real run per org at a time (JobLease). Rules in `src/lib/migration/migrationRules.ts` (unit-tested), writer in `runMigration.ts`; format and the not-migrated list in `docs/migration.md`.
+
+## [0.309.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 22:49 UTC · commit [a998c74](https://github.com/21072026/Internship/commit/a998c7421f0afb9bed1a05da6dc79970ebc8754e)_
+
+**Tenant starter pack (#2066, part 1):** `applyOrgStarterPack(orgId, { tx?, locale? })` in `src/lib/orgStarterPack.ts` seeds a tenant's stages, service levels, document requirements, an evaluation framework per scope and goal templates in one transaction — the caller's when given, so the provisioning wizard (#2065) and self-serve signup (#1749) can run it right after creating the org. Stages and template service levels/documents come from the programme template catalogue (#1641: the vertical's default, else the canonical set derived from the enum — no stage key is spelled out, `check:stage-keys` stays green); the canonical set's starter days are given per on-path stage position, pinned by a unit test. Idempotent and edit-safe: `createMany({ skipDuplicates })` on each model's unique key, stages only for an org with none, rubrics only for a scope without one, goals by title — a second run reports `created: 0` and no tenant edit is overwritten. `POST /api/admin/organizations/[id]/starter-pack` (that org's ADMIN or a super admin of its world) and a Starter pack card in settings. The sample programme (`sampleData` columns) is part 2.
+
+## [0.308.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 22:37 UTC · commit [96d82e7](https://github.com/21072026/Internship/commit/96d82e7732a4805385ee57f060290bddeaad4089)_
+
+**Mobile: development build for the emulator (#2775):** `apps/mobile` now depends on `expo-dev-client`, so `npx expo run:android` / `run:ios` produce a development build that carries the app's own native modules (`react-native-keyboard-controller`, which Expo Go lacks) and reloads JS with Fast Refresh. `apps/mobile/README.md` § Emulator documents the one-time setup for macOS, Windows and Linux and the daily loop.
+
+## [0.308.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 22:20 UTC · commit [7ecbb0d](https://github.com/21072026/Internship/commit/7ecbb0d1d47547f389ed663fb67d70580adde823)_
+
+**The candidate importer runs on the shared import engine (#2072):** `POST /api/admin/import` is now `runImport` (`src/lib/importPreview.ts`, #1965) with the `src/lib/csvImport.ts` rules as its hooks — `candidateTable` (on the shared `parseDelimited`: a quoted newline, `;`/tab delimiters, CRLF and a BOM all read, and a header is matched by column name in any order) as `parse`, `validateCandidate` as `validate`, and `planCandidates` plus one bulk e-mail lookup and one duplicate-pool pass as `resolve`. `apply` catches each row, so a failed write is that row's ERROR line and never the chunk's. The hand-rolled `parseCsvLine` is gone. Every field the settings screen read is unchanged (`willCreate`/`created`, `skipped`, `errors`, `rows`), and the response gains `report`, the engine's shared shape, drawn by the new `<ImportPreview>` component (`import-preview`, `import-preview-counts`, `import-preview-row-<n>`, per-field diff for UPDATE rows) with an `importPreview` i18n block.
+
+## [0.307.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 22:12 UTC · commit [3fe9f7d](https://github.com/21072026/Internship/commit/3fe9f7d3a2d360c167646e38edd53acff5e83289)_
+
+**Negative feedback flag on the at-risk queue (#2046, part 3):** `/api/admin/health` reads the newest open-text summary of each kind (evaluation comments, weekly-report blockers, ≤30 days) and adds `feedbackFlag: { themes, at }` to every pair whose rows sit in a `negative` theme (`src/lib/insights/feedbackFlags.ts`, rule in `feedbackFlagRule.ts`, unit-tested). A note, not a rule: score, band, snapshots and `HEALTH_RULES_VERSION` are untouched and nothing is written to the relation. A flagged pair with no other reason is listed rather than counted as quiet; `counts.feedback` gives the total. `/admin/health` shows it as a chip linking to `/admin/insights`.
+
+## [0.306.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 22:11 UTC · commit [d19efeb](https://github.com/21072026/Internship/commit/d19efeb4e9cc1b9d71cf6c1d64e3ea3ac43b7bb1)_
+
+**Analytics narrative GET no longer doubles the dashboard's queries (#2046):** `GET /api/admin/analytics/narrative`, which the dashboard calls on every view, recomputed every figure to look up a stored paragraph — next to `GET /api/admin/analytics` computing the same ones. It now asks first, with one indexed read, whether the org has any narrative artefact inside the TTL, and recomputes only then. Found by two page-level specs timing out locally after #2816.
+
+## [0.306.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 22:05 UTC · commit [b15ed95](https://github.com/21072026/Internship/commit/b15ed95dbbed974d477daf830edc9da6006340bb)_
+
+**Past timestamps read as a distance, the exact time on hover (#2813):** a new `<RelativeTime>` element (`src/components/ui/RelativeTime.tsx`) renders an instant as compact `Intl.RelativeTimeFormat` text ("5 dk. önce" / "5 min. ago" / "vor 5 Min.") inside a `<time datetime>`, with the absolute reading as its `title`. It ticks on one shared 30 s clock and is keyed on hydration, so neither the server's nor a cache's "now" survives the first client render; a default title is attached only in the browser (it is in the viewer's zone), an explicit one is server-rendered. `relativeTime()` gains `style` and `now` options, returns `''` for an unparseable date instead of throwing, and drops the week rung ("8 days ago", not "last week"). `fillTemplate()` (`src/components/ui/fillTemplate.ts`) puts the element into a translated `{slot}` sentence. `/release-notes` shows each release's distance with its `YYYY-MM-DD HH:MM UTC` stamp on hover, and about 60 on-screen instants across admin, mentor, portal, messages, notifications, offers, invitations, integrations, account and activity views moved to it — every former `relativeTime()` rendering gains the hover. Schedules, future dates, date-only fields, printed/legal/exported records and charts stay absolute. e2e: `release-notes-relative-date`, `relative-time.unit`; `date-formatter-locale`, `interview-requests-locale` and `evaluation` now read the absolute value from the title/datetime.
+
+## [0.305.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 21:49 UTC · commit [04029f9](https://github.com/21072026/Internship/commit/04029f960b0a7f300a9021dcdf53e4f5161fc3c7)_
+
+**Open-text engine, part 2 (#2046):** the survey summary (#1910) now runs on `summarizeOpenText` — themes with the answers behind each (clickable on the results page), a four-bucket sentiment flag, verbatim quotes, caveats, cached as an `AiArtifact` and regenerable; the engine floor is the survey's k-floor applied to the question's written answers. `src/lib/surveyTextSummary.ts` and `parseSummary` are gone (the engine owns verification). New "what changed" paragraph on `/admin/analytics` (`GET|POST /api/admin/analytics/narrative`): the figures are recomputed server-side from the new `src/lib/adminAnalyticsData.ts` (which `GET /api/admin/analytics` now also returns from), sent as `label: value` facts with no names, and the reply is discarded unless every number it cites is in the facts (`acceptNarrative`, golden case in `scripts/test/narrative-rules.test.mjs`). `/ai` lists seven features.
+
+## [0.304.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 21:48 UTC · commit [90fe1df](https://github.com/21072026/Internship/commit/90fe1dfd7e18ea7daa7e7b5ca86d15e8ff9137be)_
+
+**Product tour in the page language (#2808):** both landing tours (internship and SaleVali) now serve captures and clips recorded in the visitor's language. English keeps its file names; Turkish and German use a `-tr` / `-de` suffix. `capture-landing-screenshots.mjs` takes `--locale=en|tr|de` and clicks and selects by stage key and testid instead of English labels, so the same script records every language.
+
+## [0.303.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 21:47 UTC · commit [90b43b5](https://github.com/21072026/Internship/commit/90b43b5708a6d68ec02ee0fb061464e8b9e355ec)_
+
+**BCC-to-CRM: sent sales e-mails log themselves** (#2809, decision #2564). Each org has a signed address `crm+<orgId>~<version>.<sig>@INBOUND_EMAIL_DOMAIN` (`src/lib/crmBccTokens.ts`, own HMAC purpose prefix). The IMAP bridge and `POST /api/inbound-email` now go through `routeInboundMail()` (`src/lib/crmBcc.ts`): `reply+` stays the thread path, `crm+` writes an `InteractionLog` (`Email`, `autoLogged`) on the ACTIVE funnel record of every account whose `Company.contactEmail` / `CompanyContact.email` is in To/Cc — date, subject clipped to 200, recipient addresses; never the body or attachments, never a `ContactPermission`. Both the token AND an active ADMIN/MENTOR sender of that org (world-scoped lookup) are required. Idempotent per Message-ID × record via the new nullable `InteractionLog.sourceRef` + `@@unique([relationId, sourceRef])`. Settings `crmBccEnabled` ('' = on for MARKETING, off for INTERNSHIP) and `crmBccVersion` (rotation kills the old address); admin card on `/admin/settings` (`/api/admin/crm-bcc`). Rule unit-tested (`scripts/test/crm-bcc.test.mjs`), e2e `e2e/crm-bcc.spec.ts`. Privacy notice names it (`PRIVACY_POLICY_VERSION` 2026-10-06).
+
+## [0.302.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 21:20 UTC · commit [88eaefe](https://github.com/21072026/Internship/commit/88eaefe5e136b03e30b7bd5a4c9a6097691c306f)_
+
+**Open-text insights (#2046, part 1):** one engine for reading many free-text rows at once — pure rules in `src/lib/ai/openTextRules.ts` (contact details and every known name masked, local row labels instead of ids, a floor below which nothing is sent, and a reply that is verified rather than trusted: theme counts are the number of valid row labels, sentiment is a four-bucket flag with `unclear` and no decimal, quotes must be verbatim) and the one prompt in `src/lib/ai/summarizeOpenText.ts`, run through `runAiGated` and cached as a subject-less `AiArtifact` keyed on exactly the text sent. New `/admin/insights` (nav, `mentorship` capability) with `GET|POST /api/admin/insights/[kind]` for `evaluations` (themes across evaluation comments) and `weekly-reports` (recurring blockers, week-by-week figures, who owed last week and did not hand it in — from the compliance rule, rendered with AI off). GET never calls the provider. Each theme opens its source rows. Erasing or anonymizing a person wipes their org's open-text artefacts. `noteParseError()` lets a custom parser meter `parse_error`. `/ai` and the privacy notice now list the feature and no longer claim generated text is never stored.
+
+## [0.301.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 20:55 UTC · commit [2fb1227](https://github.com/21072026/Internship/commit/2fb1227bf5639baf8e3766f3254b210be8c75a88)_
+
+**AI artefacts on the summary and the match rationale (#2044, part 2):** the interaction-log summary and the mentor-match rationale are now kept through `runAiGated`'s `persist`. `GET /api/interactions/summary?relationId=` returns the relation's last summary (pair's mentor or admin, else 403) and the card opens on it; an unchanged log inside a day is answered from the saved copy, Regenerate (`regenerate: true`) asks again. `POST /api/admin/mentor-suggest` keeps the AI ranking keyed on the mentee profile plus the exact candidate list (mentor ids and positions hashed, never sent), returns `cached`/`artifact`, and the candidate row shows when the rationale was made. `runAiGated` now treats a stored copy that fails to decode as a cache miss. Fixes the TTL key for the match task (`mentor_match`, the gate scope it runs as).
+
+## [0.300.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 20:48 UTC · commit [c78e381](https://github.com/21072026/Internship/commit/c78e381860fd45cf0dbb20438cd3e1dc3bfa7b91)_
+
+**Mobile app: every way into messages opens the native screen, and the keyboard no longer hides the composer** (#2775). One rule (`apps/mobile/src/lib/nativeRoutes.ts`, unit-tested) maps `/messages/c/<id>` to the native thread and `/messages` and `/notifications` to their tabs. A script injected before the page's own stops a link tap before the site's router sees it, reports a `router.push()` (the "send message" buttons) or a redirect's `replaceState` (legacy `/messages/<relationId>`) and undoes it with `history.back()`, and `onShouldStartLoadWithRequest` refuses a full load; a notification tap asks the same rule. A thread opened from a link names itself (`threadTitle`). The keyboard: the app draws edge to edge, so React Native's `KeyboardAvoidingView` did nothing on Android; the thread now follows the keyboard's height through `react-native-keyboard-controller`, and sign-in uses that library's `KeyboardAvoidingView`. `react-native-reanimated`/`react-native-worklets` became direct dependencies at the SDK's versions (they were already linked through expo-router, with a worklets version mismatch).
+
+## [0.300.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 20:40 UTC · commit [5c2cc02](https://github.com/21072026/Internship/commit/5c2cc026cab60561d9e0e158ab62d74149e09e86)_
+
+**Real-calendar free/busy (#1997, Google):** a block that exists only in someone's connected Google calendar now refuses a booking, removes the hour from the slot picker and keeps it out of suggested times. `providerBusy()` in `src/lib/calendarFreeBusy.ts` calls `freeBusy.query` with a 5 s timeout, at most 5 people at a time and a 60 s in-process cache, and maps the response to `{ start, end }` at the boundary. Nothing else is returned, logged or stored. It is fetched before the booking transaction, never inside the lock, and merged into `busyWindows()` through the new `external` option, so callers cannot tell the sources apart. The `calendar.freebusy` scope is now requested. A connection granted without it keeps working as it does today (database only, pushes unaffected), and the Connected calendars card offers a reconnect without forcing one. A timeout or provider error falls back to the database-only answer and is recorded on the connection's `lastError`. The e2e Google stub gains a `freeBusy` endpoint. Microsoft's `getSchedule` will follow with #1991.
+
+## [0.299.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 20:39 UTC · commit [c994356](https://github.com/21072026/Internship/commit/c99435615884c46bdb7b4e67e545fa3436976650)_
+
+**AI artefacts — keep, re-use and share AI results (#2044, part 1):** new `AiArtifact` model (tenant-registered, cascades with its subject) written through by `runAiGated`'s new `persist` option. An identical request inside the task's TTL (`TASK_TTL_MS` in `src/lib/ai/artifacts.ts`) is answered from the saved copy after the consent check and before the quota, so it costs no provider call and no unit of quota; `regenerate: true` forces a fresh call. CV feedback and interview prep load their latest result on mount and show when it was generated. Visibility (`PRIVATE` / `SHARED_WITH_MENTOR` / `SHARED_WITH_ADMIN`) is changed only by the subject (`PATCH /api/ai/artifacts/[id]`, audited as `ai_artifact.visibility`); `canReadArtifact` is the single read rule (subject and creator always, an ADMIN when shared, the ACTIVE mentor when shared with them, never across an org line). A shared artefact appears on `/mentor/mentees/[id]`. Retention: a daily sweep (`ai-artifact-retention`, 03:20) deletes artefacts older than the org's `retentionMonths`; account erasure and record merges cover the table. The `/ai` retention statement was updated to match.
+
+## [0.298.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 20:20 UTC · commit [60511d7](https://github.com/21072026/Internship/commit/60511d779a0ca87d5360b7f4451f948aafcabfa5)_
+
+**Scheduling assistant (#1999):** `GET /api/meetings/suggested-times?relationId=&duration=&count=` proposes times that work for both people of a relation. It starts from the mentor's posted hours (one-offs and away windows included), slices them to the meeting length, and removes everyone's busy windows (the mentor's widened by their buffer). It keeps only times inside 08:00–20:00 on each person's own clock and applies the mentor's notice and caps (#2003). Results are ranked soonest first, with on-the-hour starts preferred. When nothing qualifies, it names the binding constraint: `no_hours`, `all_taken`, `outside_hours` or `limit_reached`. The ranking logic is pure and unit-tested in `src/lib/suggestTimes.ts`, including two zones and a DST change. The response contains only instants and each person's zone, never anybody's calendar contents. A **Suggested times** strip on the scheduling panel and on the mentee's request panel shows each option on the viewer's clock, with `AttendeeTimes` under the selected one. Picking an option fills the form and books through the existing POST.
+
+## [0.297.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 19:53 UTC · commit [6bad6da](https://github.com/21072026/Internship/commit/6bad6daac446068f85f956a5d8a9c786caa2774f)_
+
+**Booking guardrails (#2003):** a mentor can now set minimum notice, a gap between meetings, weekly and monthly caps, and a session length. The rules live in one `MentorBookingPolicy` row per person (minutes everywhere, the field contract with #1808), plus an optional `AvailabilitySlot.slotMinutes`. They are enforced in one helper, `findPolicyViolation` in `src/lib/bookingPolicy.ts`, on every write path: meeting create and move, inside the #1995 lock via a new `extraCheck` hook on `bookWithoutConflict`; the meeting-request POST; and the accept branch. A violation returns `409 { code: 'policy', rule, limit, windowStart }`. Week and month boundaries are the mentor's own (Monday 00:00 / the 1st, in their zone). A bulk session counts once toward a cap. The mentor's own bookings are exempt, and an admin can book over a rule with `force: true`, recorded as `meeting.forcePolicy`. On the offer side, `expandSlots()` slices windows into bookable blocks and cuts at the notice horizon, while `/api/availability?mentorId=` widens the mentor's busy windows by the buffer. It returns `booking: { slotMinutes, minNoticeMinutes }`, never the caps. An accepted request takes the mentor's session length. The judging is pure in `src/lib/bookingPolicyRule.ts` and unit-tested, including the week across a DST change.
+
+## [0.296.2-beta] - 2026-10-06
+
+_Shipped 2026-10-06 19:34 UTC · commit [0e9b43f](https://github.com/21072026/Internship/commit/0e9b43f63d5735aa1c3e1c59f8075ee6cd760ca8)_
+
+**The site knows it is inside the native app** (#2775). The app's web view sends `InternCRMApp/1` in its User-Agent; the root layout then renders `<html data-embedded-app>` (`src/lib/embeddedApp.ts` — server-rendered because a script-set attribute was stripped by React's hydration of `<html>`), and anything marked `data-app-chrome` (ResponsiveShell's mobile top bar and drawer, MessagesShell's header, the install prompt) is hidden there by one rule in `globals.css`; browsers are unchanged. New `GET /api/app/navigation` returns the role's web sidebar (`appNavLinks()` over `navLinks.ts`, same capability filter and sales-surface choice as the layouts, labels from `t.nav`) for the app's native menu. App: the page reports its title and colours, so the native header shows the page's own name on the page's own background (no empty white bar over a dark page); native screens follow the phone's light/dark setting with the web's grays; the More tab is the native menu plus account actions. Pinned by `e2e/mobile-app-shell.spec.ts`, `scripts/test/app-navigation.test.mjs` and the app's unit tests (including one that fails when a nav key has no icon).
+
+## [0.296.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 19:34 UTC · commit [0e9b43f](https://github.com/21072026/Internship/commit/0e9b43f63d5735aa1c3e1c59f8075ee6cd760ca8)_
+
+**Native messaging in the mobile app** (#2775). New `GET /api/conversations`: the caller's inbox (thread name, latest message, unread count, support unread, co-members to DM) as JSON. The query moved out of the `/messages` page into `src/lib/inbox.ts` (`loadInbox`), which the page and the endpoint now share, so the app and the web list the same rows the same way. The app gets a native inbox (pinned support line, unread badges, pull to refresh) and a native thread: reads `GET /api/messages?conversationId=` (which marks it read, as on the web), sends with a JSON `POST /api/messages`, polls every 5 s while open and in the foreground, honours `canPost`, shows deleted/edited messages and sender names in group rooms; attachments open in the signed-in web view. The Messages tab badge and the Notifications badge now come from one `GET /api/messages/unread`. Pinned by `e2e/mobile-messaging-api.spec.ts` (inbox → send → unread → open clears it, through the app's own no-Origin sign-in flow). Also fixes switching products: "Switch product" no longer signs out of the product being left — each host keeps its own session in the cookie jar, and picking a product reuses its live session or remembered device instead of asking for a password again.
+
+## [0.296.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 19:21 UTC · commit [832171c](https://github.com/21072026/Internship/commit/832171c51b02ddc1580da83049686da0967ecff6)_
+
+**First destination: screen, report pack, XLSX, scorecard (#1912, part 2):** `/admin/analytics/outcomes` (linked from Analytics for every plan, since it is a compliance report and not an upsell) sets up the destination survey in one click (30/90/180 days after completion). It shows the headline tiles (eligible, known, knowledge rate, working or studying), the destination table above the response floor, and breakdowns by cohort and by source, with the floor applied per bucket. "Print report" lays the page out as a one-page report pack (`#outcomes-print`) that includes the period, the programme NPS from the scorecard and the counting rule. Both analytics XLSX exports gain a `Destinations` sheet. The programme scorecard gains `destinationKnown` (green at 60%, amber at 40%, links to the screen). When a participant's latest relation reached the org's own finished stages (`outcomeStageKeys`, e.g. `HIRED_660`), the survey link opens with "working at the organisation I was placed with" pre-selected. This is only a starting value.
+
+## [0.295.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 19:01 UTC · commit [4ce414d](https://github.com/21072026/Internship/commit/4ce414da5e2a23f9a98ea0c674eb02310516de35)_
+
+**Availability: edit, one-off, away (#2001):** `PATCH /api/availability` changes a slot in place (day, times, date, note) under the same half-open overlap rule and `409 { code: 'overlap', clash }` contract, minus the row being edited. `AvailabilitySlot.date` (`@db.Date`) makes a row a one-off on that date, with `weekday` derived from it on write, and `AvailabilitySlot.note` labels it. The new `AvailabilityException` model, with `GET/POST/DELETE /api/availability/exceptions`, is an away window that suppresses every occurrence on its dates, evaluated in the mentor's own zone. It carries no `orgId` on purpose; access goes through `mentorId → User` in `src/lib/availabilityAccess.ts`. `expandSlots()` takes `exceptions` as an argument and stays pure. `GET /api/availability` returns the live rows only: past one-offs and ended windows are filtered out on read rather than swept by a cron. A booker gets the away dates without the reason. An ADMIN can do all of this for a mentor of their own org (`mentorId` on create).
+
+## [0.294.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 18:55 UTC · commit [2f4ebfa](https://github.com/21072026/Internship/commit/2f4ebfa5b53b139c4ea126617b781701a078139d)_
+
+**First destination: instrument, trigger and report (#1912, part 1):** a built-in `outcome_destination` survey template (destination with stable codes, employer/role, reporting consent) and a `DAYS_AFTER_END` campaign trigger that fires `dayOffset` days after a relation completes. `POST /api/admin/analytics/outcomes` sets up the open survey and a 30/90/180-day campaign in one idempotent call. `GET /api/admin/analytics/outcomes` reports destinations of the mentees whose relation completed in the period, overall, by cohort and by source. Every bucket carries its knowledge rate, counts only consented answers (a "no" is `withheld`), and applies the response floor per bucket. `DELETE ?userId=` withdraws a participant's answer (audited). The pure aggregation lives in `src/lib/outcomeDestination.ts` (unit-tested) and the rows in `src/lib/outcomesData.ts`. Retention is documented in `docs/surveys.md`.
+
+## [0.293.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 18:31 UTC · commit [e4e934e](https://github.com/21072026/Internship/commit/e4e934e2fcd8304f1265e5ec0e32de71fd49a2ba)_
+
+**Saved views, server-side and shareable (#1900):** new `SavedView` model (in `TENANT_MODELS`, `surface` from an allowlist, visibility `PRIVATE`/`ORG`) with `GET/POST /api/admin/saved-views` and `PATCH/DELETE /api/admin/saved-views/[id]`. Only the author (or a super admin) may change a view: a colleague gets 403, another tenant 404. `<SavedViews surface>` replaces `window.prompt` with a dialog that has a "share with my team" switch, and moves the browser's localStorage presets to the server once. Saved views are now on six admin lists: candidates, mentorships, board, mentors, companies and users.
+
+## [0.292.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 18:29 UTC · commit [d175cd3](https://github.com/21072026/Internship/commit/d175cd366eb55912f11278154c78936b6864c6e1)_
+
+**Double-booking guard (#1995):** every write path that puts a meeting on a calendar (`POST /api/meetings`, a move or new length via `PATCH /api/meetings/[id]`, `POST /api/meeting-requests` and accepting one) now refuses an hour either participant already has, with `409 { code: 'conflict', conflictsWith: { title, startsAt } }`. Busy windows (`src/lib/busyWindows.ts`) are read from non-cancelled `Meeting` rows (cut short at `endedAt`) plus the expanded occurrences of active `MeetingSeries`, using each row's own duration. The arithmetic is half-open and pure (`src/lib/busyWindowsRule.ts`, unit-tested), so back-to-back meetings are not a clash. Check and insert run in one transaction behind a `SELECT … FOR UPDATE` on the participants' `User` rows: three simultaneous bookings of one hour yield one meeting and two 409s. A bulk schedule books the free pairs and returns the rest in `conflicts`. `force: true` (an admin or the pair's mentor) books over a clash on purpose and writes a `meeting.forceConflict` audit row. The conflicting meeting's title is withheld from a caller who takes no part in it. `/api/availability?mentorId=` returns the booked hours as bare `busy` windows to an admin or the paired mentee, and the portal's slot picker stops offering them.
+
+## [0.291.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 17:44 UTC · commit [4adef55](https://github.com/21072026/Internship/commit/4adef55360a31cf0a92ea335264895aff06c00c8)_
+
+**Fix: AI provider failures no longer surface as 500s (#2024).**
+- **New denial reason:** `runAiGated` catches a failed call and returns `provider_error`. It records `AiUsage.outcome = 'provider_error'`, which does not consume quota (the quota count now excludes it).
+- **Retries and breaker:** new `src/lib/ai/provider.ts` with at most 2 retries (429/5xx/timeout/connection only, jittered backoff, no attempt after 45 s) and a per-process circuit breaker. The SDK's own retries are off.
+- **Safe parsing:** `safeParseModelJson` replaces the raw `JSON.parse` in `cvExtractAi` and `aiMentorMatch`. It falls back and records `parse_error` instead of throwing.
+- **Routes:** CV feedback, CV extract, interview prep and interaction summary answer `503 provider_error`; mentor suggestions keep the rule-based ranking.
+
+## [0.291.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 17:33 UTC · commit [1c9852d](https://github.com/21072026/Internship/commit/1c9852d935f0c5a60edda8685a10b9e9c4f68b04)_
+
+**Meeting attendance, part 2 (#2014):** ending a pair's meeting from the dashboard banner now asks "who was there?" (`AttendanceStep`, before the rating card; recurring occurrences included). Everyone defaults to attended and *Skip* records nothing. The relation record (`/mentor/mentees/[id]`, `/admin/candidates/[id]`) shows the pair's meeting rhythm and lets the mentor or an admin set it (`RelationCadencePanel`, `GET /api/mentorship/[id]/cadence`). `GET /api/meetings/[id]/attendance` now names the two participants.
+
+## [0.290.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 17:21 UTC · commit [274c66b](https://github.com/21072026/Internship/commit/274c66b3355332a2a8e45dd6110a93b1311c5fb1)_
+
+**Scorecard: evaluation coverage is measured (#1891 follow-up):** `evaluationCoverage` reads `EvaluationDue` and is no longer "not yet measurable". It is the share of INTERIM/FINAL evaluations due 7–90 days ago that were written: green at 80 %, amber at 50 %, linking to `/admin/mentors`. The helper moves to a mail-free `src/lib/evaluationCoverage.ts` so the scorecard does not load emailService. Every scorecard indicator is now measurable. **Fix:** the `nps`, `surveyResponseRate` and `evaluationCoverage` rows linked to their screen with an empty label; they now say where they lead.
+
+## [0.289.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 17:18 UTC · commit [2a0bf92](https://github.com/21072026/Internship/commit/2a0bf922fbb49aff55eb7cee4289e5e97458d4d0)_
+
+**A11y gate, deterministic and hover-aware (#2785):** before each axe scan, `e2e/a11y-scan.spec.ts` now moves the pointer off the page, scrolls to the top and freezes CSS transitions, so a result no longer depends on where the pointer was left, a translucent sticky header over scrolled content, or a colour mid-transition. A new hover-contrast check (`e2e/helpers/hoverContrast.ts`) hovers every visible `hover:text-*` / `group-hover:text-*` element on each scanned page in both themes and enforces WCAG 1.4.3 against the real background. Without the #2765 fix it reports all nine profile chips at 2.03:1. Its first run found three hover bugs, all fixed here: `hover:text-blue-600` in dark mode (the footer's release-notes link, the mentor e-mail on the journey card) now reads the accent's -300, and the messages back link gets `dark:hover:text-gray-100`.
+
+## [0.289.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 17:14 UTC · commit [7c84bbe](https://github.com/21072026/Internship/commit/7c84bbe17034fc7a16d9df3547d5ac825d332ba3)_
+
+**Recurring survey pulses (#2769):** `RECURRING` survey campaigns are enabled — every `everyDays` days each person in the audience gets one invitation per round (`pulse:<n>`). The contract step of #1887's expand → contract: `SurveyInvitation`'s unique widens from `[surveyId, email]` to `[surveyId, email, round]` (the `@@index([surveyId])` that #1887 shipped is what lets MariaDB drop the old one), and the `recurring_not_yet` refusal is gone.
+
+## [0.288.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 17:10 UTC · commit [d4894ae](https://github.com/21072026/Internship/commit/d4894ae56dac843b3f344816e0d1c9443beeb45e)_
+
+**Meeting attendance and cadence (#2014, part 1):**
+- New `enum AttendanceState` (the schema's one attendance vocabulary) and `MeetingAttendance`, covering both a Meeting row and a recurring occurrence with no row, each with its own unique key. `meetingId` is `SetNull`, so deleting a meeting keeps its attendance.
+- `POST/GET /api/meetings/[id]/attendance`: the mentor's record wins over the mentee's.
+- `LATE_CANCEL` is derived when one of the pair cancels within the `lateCancelHours` setting.
+- A no-show gets one neutral in-app note (`meeting.noShow`), sent once.
+- New `MentorshipRelation.expectedMeetingIntervalWeeks`.
+- Deterministic `src/lib/meetingCadence.ts`, feeding `GET /api/admin/analytics/attendance` and a Meeting attendance card on `/admin/analytics`: pairs met in the last 30 days, pairs on their agreed rhythm, no-show rate and median gap, each suppressed below five.
+
+## [0.287.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 16:55 UTC · commit [0cb71a1](https://github.com/21072026/Internship/commit/0cb71a1b3b5211e9851994abc31da5b42baee446)_
+
+**Survey numbers in the scorecard and the exports (#1910):** the programme health scorecard's `nps` and `surveyResponseRate` were "not yet measurable" and are now real.
+- `nps` is the pooled NPS of the last 90 days' answers. A survey counts only once its own answers reach its own floor. Green at 30, amber at 0, new unit `score`.
+- `surveyResponseRate` is the share of invitations sent 7–90 days ago that were answered. Green at 50 %, amber at 30 %.
+- Both link to `/admin/surveys`.
+- New one-row-per-survey overview (`src/lib/surveyOverview.ts`, `GET /api/admin/analytics/surveys`), shown as the print report's Surveys block and an XLSX "Surveys" sheet. The rate and the NPS are floored per survey.
+
+## [0.286.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 16:36 UTC · commit [f99866c](https://github.com/21072026/Internship/commit/f99866c5d3a5ded60a880541b9d912859e8eaa65)_
+
+**Evaluation due dates and reminders (#1891):** INTERIM and FINAL evaluations now fall due from the org's own pipeline.
+- **Schedule:** INTERIM is due N days after entering a stage, FINAL on entering a stage. Settings `evaluationInterimStage`, `evaluationInterimDays` and `evaluationFinalStage`, plus an editor in `/admin/settings`. The built-in keys are only a fallback where the pipeline still has them; an unknown key is refused with 400 `unknown_stage`.
+- **Due rows:** one `EvaluationDue` row per relation and type (the unique is the claim), with no backfill.
+- **Reminders:** the mentor is reminded on the due date and a week later, never a third time, in-app (`goalsEvaluations`) and by e-mail (`goals-evaluation`).
+- **Stop on write:** `POST /api/evaluations` stamps `completedAt` when the mentor or an admin writes the evaluation, which stops the reminders at once.
+- **Attention queue:** new `evaluation_due` reason.
+- **Coverage:** `evaluationCoverage()` helper for the scorecard.
+- **Cron:** `job=evaluations`, daily at 08:15 UTC.
+
+## [0.285.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 16:20 UTC · commit [0a64a5f](https://github.com/21072026/Internship/commit/0a64a5fefb53a95ccb3d91c71955d820eafff365)_
+
+**Survey free-text AI summary (#1910):** a free-text question on `/admin/surveys/[id]/results` can be summarised into themes with quotes (`POST /api/admin/surveys/[id]/summary`, ADMIN only, scope `survey_summary` through `runAiGated`). It runs only above the response floor (409 `below_floor`). Contact details are masked before the texts leave (`src/lib/surveyTextRules.ts`), and `parseSummary` drops any quote that no answer contains verbatim. When AI is unavailable the reply carries the reason and the screen keeps the plain list.
+
+## [0.284.3-beta] - 2026-10-06
+
+_Shipped 2026-10-06 16:16 UTC · commit [eaae2fc](https://github.com/21072026/Internship/commit/eaae2fc0c2cb7d64d05df455bcaf39ccfd92bc18)_
+
+**Native notifications in the mobile app** (#2775). `GET /api/notifications` now carries `display` on every row — the sentence the bell shows, rendered server-side in the reader's locale and vertical by the same `renderNotification` the web uses — because the native app cannot carry the web dictionary; the field is additive and the web keeps rendering from `type`/`params`. The app gets a native Notifications tab (server-rendered text, unread dot, pull to refresh, paging, mark one / all read, a tap opens the row's same-site path in the signed-in web view — never an absolute link) with an unread badge refreshed on foreground and once a minute. Unused `expo-secure-store` dropped. Pinned by `e2e/notifications-history.spec.ts` ("carries each row rendered for display") and the app's unit tests.
+
+## [0.284.2-beta] - 2026-10-06
+
+_Shipped 2026-10-06 16:12 UTC · commit [a3ad16d](https://github.com/21072026/Internship/commit/a3ad16dbda6e3a14edd763606a098b31d24c2161)_
+
+**A MARKETING lead is no longer notified of internal stage moves** (#2781). `emitStageChange` wrote `stage.changed` / `outcome.*` notifications to the relation's mentee on every move; in an org without the `mentorship` capability that person is a prospect with no portal, so the rows were unreadable in-app yet carried the internal funnel ("Qualified → Negotiation") into the lead's data export. The mentee half now runs only when the org's vertical has `mentorship`; the rep's `outcome.needsMessage`, the webhook and the SLA refresh are unchanged. Pinned in `e2e/outcome-communication.spec.ts`.
+
+## [0.284.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 15:54 UTC · commit [6f011a8](https://github.com/21072026/Internship/commit/6f011a89556e3e584a815c78500f22a191765bb6)_
+
+**Native mobile app, skeleton** (#2775, `apps/mobile`). Expo (React Native) app for iOS and Android — one app for both products: the person picks Internship CRM or SaleVali, and the app talks only to that host (docs/worlds.md). Native sign-in with 2FA/recovery codes and "keep me signed in" drives NextAuth's own HTTP flow through the OS cookie jar (`authClient.ts`) — no second session minter, no server auth change. Native home and more tabs; messages, to-dos and every other surface open the product's web page in a signed-in in-app web view that never leaves the product's origin and hands a lost session back to the native sign-in. EN/TR/DE. EAS profiles `preview`/`staging`/`production`; `mobile.yml` typechecks, unit-tests and bundles the app on PRs that touch it. `docs/mobile-strategy.md` records the reversed decision (native, not TWA-only). Root `tsconfig.json` and `.dockerignore` exclude `apps/`.
+
+## [0.284.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 15:53 UTC · commit [02ddd7a](https://github.com/21072026/Internship/commit/02ddd7acbbba6ffda95fc86ef4ac18e9ad46fbee)_
+
+**Estimated deal value: net change, both XLSX exports and the printed report** (#2424). The month × value table is one component (`DealValueTable`), shared by the `/admin/analytics` card and the full report at `/admin/analytics/report`; it gains a "Net change (estimated)" column (`netChangeMinor()` in `src/lib/dealValue.ts` = won − lost, unit-tested to equal the month-end book's delta) and shows "—" instead of a fabricated 0 for a month with nothing in a column. Both `analytics` and `analytics-full` exports carry an "Estimated value" sheet (counts, values in major units, net change, currency); a range that mixes currencies exports the typed refusal, never a total. MARKETING only — `enabled: false` elsewhere writes no sheet.
+
+## [0.283.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 15:49 UTC · commit [e710446](https://github.com/21072026/Internship/commit/e7104462f3af7b1199d25050b2fced91b6a254a3)_
+
+**Survey reminders & completion console (#1889):** unanswered survey invitations get at most two reminders (day 3 and day 7, `SURVEY_MAX_REMINDERS = 2`), never two within 24 hours. The scheduled pass and the admin's "remind now" (`POST /api/admin/surveys/[id]/remind`) claim each reminder with one conditional UPDATE, so neither can send a third or double-send. Each reminder mints its own link (`SurveyInvitationToken`) and the first link keeps working. `/admin/surveys/[id]` (API `GET /api/admin/surveys/[id]/completion`) shows answered/invited (suppressed below the floor), reminder state and the non-responders, except on an ANONYMOUS survey, whose payload names nobody.
+
+## [0.282.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 15:40 UTC · commit [46098da](https://github.com/21072026/Internship/commit/46098da316000b4f8089a869c7c3df33ae764860)_
+
+**Fix:** `/messages` could fall into the error boundary ("Something went wrong") when two renders raced — e.g. pressing back twice out of a thread. Every inbox render upserted each project's GROUP room, and two concurrent upserts deadlocked on the participant `createMany` (Prisma `P2034`, seen in prod logs). `createOrGetProjectConversation` now reads first and writes only when the room is missing or lacks a member, and retries a write that hits a deadlock.
+
+## [0.282.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 15:21 UTC · commit [4c78444](https://github.com/21072026/Internship/commit/4c784446d72a36ddd8acf166cf0f6aaff764f033)_
+
+**Survey results & NPS (#1910):** `/admin/surveys` and `/admin/surveys/[id]/results` (API `GET /api/admin/surveys/[id]/results`) — NPS with promoter/passive/detractor bands, a week-by-week trend, per-question distributions and means, unattributed free text, and NPS by role, cohort and mentor. All privacy rules run in `src/lib/surveyResults.ts`: nothing but counts under the floor, hidden breakdown groups are not sent at all, and the trend weeks are floored like any breakdown. **Privacy fixes:** `applyResponseFloor` now hides shown buckets until the hidden ones reach the floor together (two hidden buckets of 1 and 2 were readable as a group of 3), and an ANONYMOUS response no longer stores its `relationId`.
+
+## [0.281.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 15:03 UTC · commit [fe58150](https://github.com/21072026/Internship/commit/fe581504f5b6ade9e579067451f078824cae766a)_
+
+**SaleVali publishes its price list** (#2767). New dependency-free `src/lib/marketingPlans.ts` (deliberately apart from `plans.ts`, whose plans drive subscriptions, entitlements and the meter): Team €149 / Business €249 / Enterprise €390 per user per month billed annually (monthly €179 / €299 / annual only), minimum 3 / 5 / 10 users, onboarding none / €2,900 / €6,900, all net. `/pricing` on the marketing host renders it as three cards (`pricing-marketing-plans`, `mkt-plan-<key>`) with a "Talk to us" link to the landing demo form; the internship price model stays hidden there. The Pricing entry is back in the marketing header and footer, and the marketing landing FAQ quotes the "from" price via `marketingFromSeatEur()`. Unit test `scripts/test/marketing-plans.test.mjs`; `e2e/host-vertical-public-pages.spec.ts` now asserts the published list instead of its absence.
+
+## [0.280.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 14:38 UTC · commit [ca8c947](https://github.com/21072026/Internship/commit/ca8c947c0fd48e8845527e5d79c8d9a2ecf9ee4a)_
+
+**Survey campaigns — the programme sends the survey** (#1887; docs/surveys.md § Campaigns). New tenant model `SurveyCampaign` (trigger STAGE_ENTERED / DAYS_AFTER_START / DAYS_BEFORE_END / RECURRING / MANUAL) and the claim row `SurveyCampaignSend` (`@@unique([campaignId, userId, periodKey])`). `dispatchDueSurveyCampaigns()` (`src/lib/surveyCampaigns.ts`; daily 10:00 UTC from `/api/cron/start`, `GET /api/cron?job=surveys` for the caller's org, `?batch=` may only lower the cap) claims before minting the invitation (#1881) and mailing, looks back at most 7 days and never before the campaign existed, caps a tick at 50, and skips anyone who switched off the new `surveys` e-mail group (category `survey-invite`; in-app categories stay frozen, #2348). Stage triggers read StatusChange against the tenant's own stage keys — a key the org lacks is refused at create (`unknown_stage`). Admin API `GET/POST /api/admin/survey-campaigns`, `PATCH /api/admin/survey-campaigns/[id]`. Schema is the EXPAND step for pulses: `SurveyInvitation.round` and a dedicated `@@index([surveyId])`; widening the invitation unique to `[surveyId, email, round]` (the contract step) follows in its own deploy, because MariaDB will not drop a unique an FK relies on — until then RECURRING is refused (`recurring_not_yet`).
+
+## [0.279.1-beta] - 2026-10-06
+
+_Shipped 2026-10-06 14:27 UTC · commit [fdc551e](https://github.com/21072026/Internship/commit/fdc551ece5bc8dfde88fdf58d5cb4858cdb51baa)_
+
+**Fix (a11y):** in dark mode a hovered `hover:text-blue-800` link fell through to the accent remap (`accent-800`, dark text on a dark card). The profile-progress chips on `/portal/profile` hovered to `rgb(30,64,175)` on gray-900, which turned the full-suite `a11y-scan` red. `hover:text-blue-800` now joins the dark accent hover list and reads `accent-300`.
+
+## [0.279.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 14:20 UTC · commit [020937a](https://github.com/21072026/Internship/commit/020937a91d83af0fcb9c339b93ad0b7a63e926b3)_
+
+**Answer a survey from the mailed link, no login** (#1881; docs/surveys.md § Answering by link). `src/lib/surveyTokens.ts` mints a random 256-bit invitation token (`createSurveyInvitation`, 30-day default), stores only its SHA-256 hash and resolves it; `surveyInviteUrl()` builds `/s/<token>`. `GET /api/surveys/respond?token=` returns the survey in the recipient's language and the invitation state (`open` / `alreadyAnswered` / `closed` / `expired` 410 / `invalid` 404), never an answer; `POST` validates through the shared validator and writes through `submitSurveyResponse()` — single-use (a replay is `{ state: 'alreadyAnswered' }`), identity severed for ANONYMOUS — rate-limited per IP and per token. New `surveyAcceptsAnswers()` makes the survey window (`opensAt`/`closesAt`) part of the one write rule. `/s/<token>`: one question per screen on a phone, all on one from `sm` up, NPS as a 0–10 row, answers checked in the browser with the same validator, no autosave. Public route registered in the middleware verify allowlist, `VERIFY_EXEMPT` and the route-auth baseline.
+
+![A survey opened from an e-mail link: a note that answers are anonymous, a 0 to 10 recommendation scale with 9 selected, a 1 to 5 expectation scale with 4 selected, a free-text answer and a Send answers button](public/release-media/survey-token-answering.png)
+
+## [0.278.0-beta] - 2026-10-06
+
+_Shipped 2026-10-06 13:52 UTC · commit [4d85cc7](https://github.com/21072026/Internship/commit/4d85cc784712ca0d4664bcdf461df3ea02ff225d)_
+
+**Post-meeting feedback — one tap, two questions** (#1896; docs/surveys.md § Meeting feedback). New tenant model `MeetingFeedback` (`@@unique([meetingId, raterId])`, `relationId` denormalised) and nullable `Meeting.feedbackAskedAt`. Ending a meeting in the dashboard banner shows `MeetingFeedbackCard` (did it take place? how helpful, 1–5? optional note) → `POST /api/meetings/[id]/feedback`. When nobody ended it, the auto-log sweep now returns `loggedIds` and `askForMeetingFeedback()` mails the mentee once — the meeting row is claimed before sending, a second sweep asks nobody, guests are never asked — with six signed one-click links (`src/lib/meetingFeedbackToken.ts`, own HMAC domain) to `/meeting-feedback/<token>`, which records from the browser (`GET /api/meeting-feedback/[token]` only reads; mail scanners prefetch). "We didn't meet" is stored as `happened = false` and never scored. A mentor reads only `GET /api/mentor/meeting-feedback`: the aggregate of other people's answers above the response floor (`surveyPrivacy.effectiveMinResponses`), never a rating, rater or note; `meetingQualityFor(relationId, windowDays)` returns null under the floor for the health score. Mail category `meeting-feedback` in the task-reminders group. Free — no entitlement check.
+
+![The meeting feedback card: did it take place, answered yes; how helpful was it, 4 of 5 selected; an optional note field; Send and Skip; and a line saying the other person only sees an average](public/release-media/meeting-feedback.png)
+
 ## [0.277.0-beta] - 2026-10-06
 
 _Shipped 2026-10-06 13:36 UTC · commit [cf0c975](https://github.com/21072026/Internship/commit/cf0c975e16cf8e3aaeff8fb79012eb2d2bee48aa)_

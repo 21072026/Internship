@@ -126,6 +126,7 @@ export function TargetedEmailComposer() {
     return code === 'feature_locked' ? t.organizations.featureLocked
       : code === 'consent_required' ? A.consentRequired
       : code === 'quota_exceeded' ? A.quotaExceeded
+      : code === 'disabled' ? A.aiOff
         : code === 'provider_error' ? A.providerError
           : code === 'not_configured' ? A.notConfigured
             : code === 'batch_too_large' ? t.mentorEmail.ai.tooMany.replace('{max}', String(BULK_DRAFT_MAX_RECIPIENTS))

@@ -12,6 +12,8 @@ export function threadAiRefusal(reason: AiDenialReason | 'forbidden'): NextRespo
   }
   // An operator use of a task without the AI pack (#1738): the shared locked shape.
   if (reason === 'not_entitled') return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
+  // The org (or this task) is switched off (#2032): an admin's decision, said as such.
+  if (reason === 'disabled') return NextResponse.json({ error: 'AI is turned off for this organisation', code: 'disabled' }, { status: 403 });
   if (reason === 'quota_exceeded') return NextResponse.json({ error: 'Monthly AI quota exhausted', code: 'quota_exceeded' }, { status: 429 });
   if (reason === 'provider_error') return NextResponse.json({ error: 'Temporarily unavailable', code: 'provider_error' }, { status: 503 });
   return NextResponse.json({ error: 'AI is not configured', code: 'not_configured' }, { status: 501 });
