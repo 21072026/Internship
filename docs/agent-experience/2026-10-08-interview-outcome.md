@@ -12,3 +12,10 @@
 - **The pipeline is a different ledger.** The application funnel moves on the decision; the
   mentorship pipeline moves one on-path step only on the explicit flag and only through
   `stageMoveData()` + `recordStageMove()`, so a `StatusChange` row and the stage effects follow.
+- **`check:demo-fidelity` without `--manifest-only` counts rows in YOUR database.** A local red
+  with every model at 0 is an unseeded DB, not a regression — `npx prisma db seed && npm run
+  seed:demo` first, then the full check (CI seeds before it runs). The manifest-only variant is
+  what the fast CI job runs and needs no DB.
+- **`.filter(Boolean)` does not narrow `(string | undefined)[]` to `string[]`** for TypeScript;
+  a `.map((r) => r.id)` on the result then fails on `string`. Use a type-guard predicate
+  (`.filter((id): id is string => Boolean(id))`).
