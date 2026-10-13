@@ -9,11 +9,15 @@ name: Deploy prod (hosted build → server swap, auto on main)
 #         production box run `npm ci` + `next build` for every merge.
 #   #800  it became automatic instead of dispatch-only (44 manual dispatches in a
 #         row is not a pipeline).
-#   now   the repo is PUBLIC, so hosted runners are free and unmetered again. The
-#         build goes back to GitHub; the self-hosted runner keeps only the work
+#   07-29 the repo went PUBLIC, so hosted runners were free and unmetered. The
+#         build went back to GitHub; the self-hosted runner keeps only the work
 #         that genuinely has to happen on the server — reading the live health
 #         endpoint, `docker pull`, `prisma db push`, the container swap. Nothing
 #         on the box compiles anymore.
+#   10    the repo is PRIVATE again (Free plan: 2,000 hosted minutes a month,
+#         #2910). The build stays hosted; compiling on the box is the thing this
+#         layout prevents. The gate and the deploy job run on the self-hosted
+#         runner and cost no hosted minutes.
 #
 # HOW IT TRIGGERS:
 #   push to main   → deploy (the normal path; PRs already passed the smoke gate
