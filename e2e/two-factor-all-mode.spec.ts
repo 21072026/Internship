@@ -209,8 +209,10 @@ test('switching to a stricter mode shows the coverage and asks for confirmation 
     await signInAndSettle(page, adminEmail, PW, '/admin');
     await gotoSettled(page, '/admin/settings');
     const form = page.getByTestId('settings-form');
-    await expect(form).toHaveAttribute('data-state', 'ready', { timeout: 15_000 });
-    await expect(page.getByTestId('two-factor-coverage')).toHaveAttribute('data-state', 'ready', { timeout: 15_000 });
+    // 30s: the first visit compiles the page and two API routes under `next dev`
+    // (CI serves a production build, where this is instant).
+    await expect(form).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+    await expect(page.getByTestId('two-factor-coverage')).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
     await expect(page.getByTestId('two-factor-coverage-role-MENTEE')).toBeVisible();
 
     await page.locator('#require-2fa').selectOption('all');
