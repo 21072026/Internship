@@ -23,6 +23,36 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.355.0-beta] - 2026-10-12
+
+_Shipped 2026-10-12 16:14 UTC · commit [623af3d](https://github.com/21072026/Internship/commit/623af3d2aa8313c94697a96a63e8f55d6ebe60b7)_
+
+**Interview outcome (#1846):** an interview that produces no recorded outcome is a meeting, not a hiring step. `POST /api/interview-requests/[id]/schedule` takes `createPanel` + `interviewerIds` and convenes the blind-scored `InterviewPanel` in the same transaction as the meeting (`InterviewPanel.meetingId`, `scheduledAt` = the meeting's, `InterviewRequest.panelId`); the interviewers are assigned, pushed to the calendars and the company's external interviewers remain `MeetingGuest`s from #1844. `POST /api/interview-panels/[id]/outcome` (ADMIN or the candidate's active MENTOR) records `ADVANCE | REJECT | OFFER` for a CLOSED panel only (409 `panel_open` before, 409 `outcome_recorded` after — sealed by a guarded `updateMany`), moves the application through `moveApplicationStage()` along the funnel (`outcomeTargetStage()` in `src/lib/interviewOutcome.ts`, pure), requires a disposition code on a rejection, tells the company the decision only (`interview_panel.outcome.*` notifications — never a score or a divergence flag), and moves the relation's pipeline stage one on-path step through the shared stage write path only on an explicit `advancePipeline: true` (never on a rejection). `interview_panel.outcome` is registered in `WEBHOOK_EVENTS`. The panel view gets an outcome card after close, with the application, the three decisions, the disposition select and the explicit pipeline checkbox.
+
+## [0.354.2-beta] - 2026-10-12
+
+_Shipped 2026-10-12 15:41 UTC · commit [36aba27](https://github.com/21072026/Internship/commit/36aba274f609a273f179bf559b091969b9b64f38)_
+
+**Database observability (#1608):** one Prisma timing middleware (`src/lib/prisma.ts`, registered first, one-time guarded) feeds `observeQuery(model, action, durationMs)` in `src/lib/dbQueryObserver.ts` — never the query's values. Slow operations log a warning with model, action, duration and the request id behind `DB_SLOW_QUERY_MS` (off in production until measured, 200 ms elsewhere). Every query inside a `withRequestScope` request is counted; past `DB_QUERY_WARN_CEILING` (default 50) one warning names the top models, and outside production the count is returned as `x-db-queries`. A reporting-only N+1 spec (`e2e/db-query-report.spec.ts`) records per-model query counts for `/messages`, `/admin/board` and `/admin/candidates` from a test-only tally (`DB_QUERY_TALLY=1`, `/api/dev/db-tally`, 404 elsewhere, ADMIN-only). New composite indexes: `EmailLog [status, createdAt]` (defuses the documented `/api/health` landmine), `ActivityLog [orgId, createdAt]`, `Message [senderId, createdAt]`. Docs: `docs/observability.md`; `docs/testing.md` updated.
+
+## [0.354.1-beta] - 2026-10-12
+
+_Shipped 2026-10-12 15:30 UTC · commit [c44b452](https://github.com/21072026/Internship/commit/c44b452ad6db14d28b54f99b00ad0c872d26df4e)_
+
+- **Seed the recruitment demo** (#1419). Add deterministic open/filled requisitions, requisition-scoped shortlists, pending/approved interview requests, sent/accepted offers, a completed two-interviewer panel, and a SOURCE account with two linked candidates. Preserve tenant scope, accepted-offer seat accounting, synthetic identities, and the existing no-op status-history guard on repeated seeds.
+
+## [0.354.0-beta] - 2026-10-12
+
+_Shipped 2026-10-12 15:29 UTC · commit [bb5e741](https://github.com/21072026/Internship/commit/bb5e7412419f0519e4c34ded3085343fc2a07e0a)_
+
+**Security notices (#1717):** the account owner is told — in-app and by e-mail through the essential `account_security` group, which no preference, quiet hour or unsubscribe can silence — when their account is signed in to from a browser it has not used before, when a superseded "keep me signed in" cookie is replayed (the device is revoked), when the password or the e-mail address changes (the e-mail notice goes to both addresses), when two-factor authentication is turned on or off or its recovery codes are replaced, and when every device is signed out (by them or by an administrator). One sender, `src/lib/securityNotices.ts`, composes all of them in the recipient's language and time zone with the browser label and IP of the request; new `SignInDevice` rows remember an account's browsers (sha256 of the user-agent, 20 per account, forgotten after 180 days) and the first browser is the baseline, so the rollout mails nobody. The rule is pure and unit-tested (`src/lib/signInDeviceRule.ts`); `e2e/security-notices.spec.ts` drives the routes under total opt-out.
+
+## [0.353.0-beta] - 2026-10-12
+
+_Shipped 2026-10-12 15:28 UTC · commit [4c4ccd9](https://github.com/21072026/Internship/commit/4c4ccd99d9ba3a0c012c6d111e89ab82fa27aa88)_
+
+**Real minutes replace the placeholder log, and action items become to-dos (#1849):** `meetingAutoLog` now prefers the session's `SessionNote` (#1847) pinned to the meeting over the localized "the scheduled meeting took place" placeholder, and minutes written after the row exists update that auto-logged `InteractionLog` in place (`src/lib/minutesSync.ts`) — one meeting stays one log, the sweep stays idempotent, `SWEEP_BATCH`/`SWEEP_LOOKBACK_DAYS`/`SIBLING_BATCH` are untouched, and a log the mentor typed by hand is never overwritten. A `- [ ]` line of the minutes is an action item: `POST /api/session-notes/[id]/action-items` promotes it to a personal `ProjectTask` for the mentor or the mentee (the to-do API's own reach, `project.newTodo` notification), linked by the new `SessionNoteActionItem` row; ticking the to-do rewrites the line as a revision by the ticker and ticking the line (in the panel or by editing the text) ticks the to-do. `GET /api/session-notes?relationId=` adds the pairing's past meetings for the picker and the two seats for the assignee; the panel gains the meeting select, the action-item list with toggles and "Make it a to-do". The mentee's journey and interaction history show the real minutes through the updated log. Unit test `scripts/test/minutes-action-items.test.mjs`; e2e `e2e/minutes-as-log.spec.ts`.
+
 ## [0.352.0-beta] - 2026-10-08
 
 _Shipped 2026-10-08 07:25 UTC · commit [30b913d](https://github.com/21072026/Internship/commit/30b913ddbb8288d3bbbcf7f8f22ef9cc7755390b)_
