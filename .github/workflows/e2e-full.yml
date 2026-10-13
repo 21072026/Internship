@@ -20,12 +20,16 @@ name: E2E Full Suite (scheduled)
 # lands — that is the point of the alert, and a re-run also tells a flake apart
 # from a real break. workflow_dispatch always runs (manual = deliberate).
 #
-# Cost note: this repo is PUBLIC since 2026-07, so GitHub-hosted standard runners
-# are free and unmetered. Sharding multiplies billed minutes (each shard repeats
-# npm ci + prisma + build + browser install) but cuts wall-clock ~4×, and with
-# 200+ spec files at `workers: 1` a serial run is hours long. Free minutes make
-# that trade obvious, so the 4×/day sharded cadence from #627 is back — it had
-# been cut to 1×/day serial while the private-repo quota was exhausted (#636/#648).
+# Cost note: this cadence was set while the repo was PUBLIC (2026-07 → 2026-10)
+# and GitHub-hosted standard runners were free. Sharding multiplies billed
+# minutes (each shard repeats npm ci + prisma + build + browser install) but
+# cuts wall-clock ~4×, and with 200+ spec files at `workers: 1` a serial run is
+# hours long. Free minutes made that trade obvious, so the 4×/day sharded
+# cadence from #627 came back. It had been cut to 1×/day serial while the
+# private-repo quota was exhausted (#636/#648). The repo is PRIVATE again since
+# 2026-10, on the Free plan: 2,000 hosted minutes a month, every job rounded up
+# to a whole minute. A full run is one of the largest single costs, and its
+# cadence is under review in #2910.
 #
 # Note: GitHub scheduled workflows can lag a few minutes and are disabled
 # automatically after 60 days without repository activity.

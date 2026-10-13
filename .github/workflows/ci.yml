@@ -1,10 +1,13 @@
 name: CI
 
 on:
-  # Re-enabled 2026-07-21 after the repo transfer reset the Actions quota
-  # (clean 2000h/month). PR gate is cheap (~2 min); the heavy scheduled
-  # workflows (e2e-full, stress, topic-preview) stay workflow_dispatch-only to
-  # keep the monthly budget comfortable.
+  # Re-enabled 2026-07-21 after the repo transfer reset the Actions quota.
+  # This note used to say the gate costs ~2 min and that e2e-full, stress and
+  # topic-preview stay workflow_dispatch-only. Neither is true any more. A run
+  # is two jobs, ~7 billed minutes (each job rounds up to a whole minute), and
+  # it runs on every PR push and again on every push to main. The repo is
+  # private on the Free plan since 2026-10, so those minutes come out of 2,000
+  # a month (#2910).
   workflow_dispatch:
   push:
     branches: [main]

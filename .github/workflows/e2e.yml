@@ -20,6 +20,10 @@ on:
   # runs; the `changes` job below decides whether the smoke job has anything
   # to test, and a job skipped by its `if:` reports Success to branch
   # protection.
+  # Since 2026-10 the repo is private on the Free plan, where branch protection
+  # is not enforced (the API answers 403), so "required" is a convention and
+  # nothing blocks a red merge (#2910). The design above stays, so the gate
+  # works again the day protection does.
   pull_request:
     branches: [main]
 

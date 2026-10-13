@@ -41,9 +41,14 @@ npm run test:load        # nightly k6 ramp            (BASE_URL=… ; needs the 
 
 **E2E tests** (Playwright) live in `e2e/`. The PR quality gate
 (`.github/workflows/e2e.yml`, isolated MySQL service) runs **only the `@smoke` subset**;
-the full suite is the scheduled safety net (see below). `Playwright smoke` is a **required**
-check, so the workflow has **no `paths-ignore`** (#2719): a path-filtered workflow reports
-nothing and left every docs-only PR `BLOCKED` forever. Instead its `changes` job reads the PR's
+the full suite is the scheduled safety net (see below). `Playwright smoke` is the
+**required** check by convention. Branch protection is **not enforced** since the repo went
+private in 2026-10 on the Free plan: the protection API answers `403 Upgrade to GitHub Pro or
+make this repository public` (#2910). So nothing stops a red merge, and `gh pr merge --auto`
+merges at once instead of waiting for checks. Read the checks yourself before you merge.
+The workflow still has **no `paths-ignore`** (#2719), so the gate works again the day
+protection does. A path-filtered workflow reports nothing, which left every docs-only PR
+`BLOCKED` forever. Instead its `changes` job reads the PR's
 file list and the smoke job is *skipped* — which branch protection counts as passing — only
 when every path is `docs/**`, `releases/unreleased/**`, `*.md` or a root `.HANDOFF-*`; any
 other path (a rename counts by both names) runs it, and a failed detection runs it too.
@@ -160,9 +165,12 @@ All three environments follow the same shape: the image is **built on a GitHub-h
 runner** (`build-image.yml`, pushed to `ghcr.io/21072026/internship`), and the
 server's **self-hosted runner** only pulls it, runs `prisma db push --accept-data-loss`
 + the idempotent backfills, swaps its container and health-checks it. **Nothing
-compiles on the server** — keep it that way (the repo is public, so `ubuntu-latest`
-is free; between 2026-06 and 2026-07-29 the builds ran on the box as a quota
-workaround, #636, and it compiled on every PR push).
+compiles on the server**. Keep it that way. Hosted minutes are **metered** again: the repo
+went private in 2026-10 on the Free plan, which includes 2,000 hosted minutes a month. arm64
+counts against the same pool, and every job is rounded up to a whole minute (#2910). Cost is
+still not a reason to build on the box without the maintainer's explicit approval. Between
+2026-06 and 2026-07-29 the builds ran there as a quota workaround (#636), and the production
+host compiled on every PR push.
 
 | Env | Container | Port | URL | Image tag | Trigger |
 |-----|-----------|------|-----|-----------|---------|
@@ -247,8 +255,10 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
 - **Branch + PR per change.** Branch names: `feat/<issue>-slug`, `fix/<issue>-slug`,
   `docs/...`. Reference issues with `Closes #N`. Merging to `main` deploys to production.
 - **Ship it yourself (standing instruction from the maintainer, 2026-07):** for every change,
-  open a PR, self-review the diff, and **merge it once CI is green** (enable auto-merge if
-  your session may end before checks finish). Don't leave green PRs waiting for a human.
+  open a PR, self-review the diff, and **merge it once CI is green**. Don't use auto-merge
+  while branch protection is off (see the E2E note under Commands): it merges at once,
+  checks or not. If your session may end before the checks finish, leave the PR open.
+  Don't leave green PRs waiting for a human.
   Track multi-step work with a visible task list as you go.
   **Always open the PR, without being asked** (restated 2026-08-06): the PR is how the
   maintainer *tests* the change — every PR gets its own environment at
