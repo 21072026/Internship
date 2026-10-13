@@ -8,7 +8,8 @@ import {
   seedCustomPipelineOrg,
   cleanupCustomPipelineOrg,
 } from './helpers/db';
-import { signInViaApi, signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
+import crypto from 'node:crypto';
 
 /**
  * `require2fa = 'all'` and the enrolment coverage report (#1644).
@@ -46,8 +47,8 @@ async function defaultOrgPolicy(): Promise<string | undefined> {
  * `redirect()` in the role layout, so the answer is in the first response —
  * no browser needed, and no client-side check could fake it.
  */
-async function landing(request: APIRequestContext, path: string): Promise<string> {
-  const res = await request.get(path, { maxRedirects: 0 });
+async function landing(request: APIRequestContext, path: string, headers: Record<string, string> = {}): Promise<string> {
+  const res = await request.get(path, { maxRedirects: 0, headers });
   const loc = res.headers()['location'];
   if (loc) return new URL(loc, 'http://placeholder.invalid').pathname;
   return res.ok() ? path : `status:${res.status()}`;
@@ -97,6 +98,36 @@ test(
     }
   }
 );
+
+test("'all' holds a MARKETING lead on its sign-in path, ahead of the bounce to /account", async ({ playwright, baseURL }) => {
+  // A vertical without the mentorship module has no mentee shell: /portal sends
+  // a MENTEE on to /account, which is deliberately outside the gate (account
+  // self-service must stay reachable). The gate therefore has to fire BEFORE
+  // that bounce, or a MARKETING lead under 'all' is never held at all.
+  const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+  const mkt = await prisma.organization.create({
+    data: { name: `TFA MKT ${stamp}`, slug: `tfa-mkt-${stamp}`, vertical: 'MARKETING' },
+  });
+  const leadEmail = uniqueEmail('tfa-mkt-lead');
+  const host = asHost(MARKETING_HOST);
+  const lead = await playwright.request.newContext({ baseURL });
+  try {
+    await seedUser(leadEmail, PW, 'MENTEE', 'Marketing Lead', { orgId: mkt.id });
+    expect((await signInViaApi(lead, leadEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+
+    await setOrgPolicy(mkt.id, 'off');
+    expect(await landing(lead, '/portal', host), 'off: the usual bounce').toBe('/account');
+
+    await setOrgPolicy(mkt.id, 'all');
+    expect(await landing(lead, '/portal', host), 'all: held first').toBe('/security-setup');
+    expect(await landing(lead, '/security-setup', host), 'the gate page is served').toBe('/security-setup');
+  } finally {
+    await lead.dispose();
+    await prisma.setting.deleteMany({ where: { orgId: mkt.id } });
+    await cleanupByEmail(leadEmail);
+    await prisma.organization.deleteMany({ where: { id: mkt.id } });
+  }
+});
 
 test('two orgs hold different policies, and the coverage report is org-scoped and admin-only', async ({ playwright, baseURL }) => {
   const seeded = await seedCustomPipelineOrg('tfa-cov', PW);
@@ -201,7 +232,7 @@ test('switching to a stricter mode shows the coverage and asks for confirmation 
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Apply the stricter policy' }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText('Changes saved')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 10_000 });
     expect(await defaultOrgPolicy()).toBe('all');
 
     // Relaxing it back asks nothing.

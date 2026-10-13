@@ -33,6 +33,20 @@ export default async function PortalLayout({ children }: { children: React.React
     redirect('/auth/signin');
   }
 
+  // The 2FA gate (#1644), FIRST — before any redirect that sends this person
+  // elsewhere. A vertical without the mentorship module bounces a MENTEE to
+  // '/account' below, and '/account' is deliberately outside the gate (account
+  // self-service, including deleting the account, must stay reachable); with
+  // the gate after that bounce, a MARKETING lead under `require2fa = 'all'` was
+  // never held at all. Skipped while impersonating, as everywhere.
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { avatarUrl: true, twoFactorEnabled: true },
+  });
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
+    redirect('/security-setup');
+  }
+
   if (session.user.role === 'COMPANY') {
     redirect('/company');
   }
@@ -59,22 +73,11 @@ export default async function PortalLayout({ children }: { children: React.React
   }
 
   const { locale, t } = await getServerDictionary();
-  const me = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { avatarUrl: true, twoFactorEnabled: true },
-  });
   const customStages = await resolveCustomStages(session.user.orgId);
   // The tenant's own competency framework, or null when it uses the built-in
   // criteria (#822) — same provider shape as the pipeline stages above.
   const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
-
-  // The 2FA gate lives on each staff shell; the portal needs it too now that a
-  // role in scope for the policy can enter here — otherwise the portal would be
-  // a way around the setup gate.
-  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
-    redirect('/security-setup');
-  }
 
   return (
     <>

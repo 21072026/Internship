@@ -38,6 +38,13 @@ session is already authenticated and cannot enrol on someone else's behalf. The 
 (`src/app/security-setup/page.tsx`) sends anyone the policy does not hold back home.
 Never gate on the client.
 
+**Order matters.** In the portal and mentor layouts the gate runs **first**, before the
+redirects that send a person elsewhere. A vertical without the mentorship module (MARKETING)
+has no mentee shell: `/portal` bounces a MENTEE to `/account`. `/account` — like
+`/notifications` and `/announcements` — is deliberately **outside** the gate, so account
+self-service, including deleting the account, stays reachable; with the gate after that
+bounce, a MARKETING lead under `all` was never held at all.
+
 ## Coverage report
 
 `GET /api/admin/2fa-coverage` — admin-only (401 without a session, 403 for a non-admin),
@@ -65,6 +72,7 @@ codes (#1542) and the admin 2FA reset (#1543). Relaxing a policy never asks.
 
 - `npm run test:two-factor-policy` — the vocabulary and the arithmetic.
 - `e2e/two-factor-all-mode.spec.ts` — `all` holds a mentee, a company and a source login
-  at the gate and `off` releases them (`@smoke`); two orgs with different policies; the
-  report's tenant scoping, 401/403 and CSV; the stricter-mode confirmation.
+  at the gate and `off` releases them (`@smoke`); a MARKETING lead is held ahead of the
+  bounce to `/account`; two orgs with different policies; the report's tenant scoping,
+  401/403 and CSV; the stricter-mode confirmation.
 - `e2e/two-factor-enforcement.spec.ts` — the `admins` mode, unchanged.

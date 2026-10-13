@@ -48,7 +48,10 @@ export async function GET(request: Request) {
 
     const missingWhere = withinTenant({ isActive: true, twoFactorEnabled: false }, tenant);
     const missingSelect = { id: true, fullName: true, email: true, role: true, lastLoginAt: true } as const;
-    const order = [{ role: 'asc' as const }, { fullName: 'asc' as const }];
+    // `id` last: names repeat, and without a total order LIMIT/OFFSET may split
+    // a run of equal names differently per page (one person twice, another
+    // never) — the same fix as src/app/api/mentors/route.ts.
+    const order = [{ role: 'asc' as const }, { fullName: 'asc' as const }, { id: 'asc' as const }];
 
     if (format === 'csv') {
       const users = await prisma.user.findMany({ where: missingWhere, select: missingSelect, orderBy: order });
