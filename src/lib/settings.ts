@@ -49,7 +49,8 @@ export const SETTING_DEFAULTS = {
   // automatic deletion; an admin reviews and erases manually.
   retentionMonths: '12',
   // Role-based two-factor enforcement. 'off' = optional for everyone;
-  // 'admins' = required for ADMIN; 'admins_mentors' = required for ADMIN+MENTOR.
+  // 'admins' = required for ADMIN; 'admins_mentors' = required for ADMIN+MENTOR;
+  // 'all' = every role (#1644). The vocabulary: src/lib/twoFactorPolicyRule.ts.
   // Users in scope are held at a 2FA-setup gate until they enable it.
   require2fa: 'off',
   // Password policy (#1544, src/lib/passwordPolicyRule.ts): what a NEW password

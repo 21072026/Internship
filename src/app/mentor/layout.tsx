@@ -34,6 +34,17 @@ export default async function MentorLayout({ children }: { children: React.React
     redirect('/auth/signin');
   }
 
+  // The 2FA gate (#1644), FIRST — before any redirect that sends this person
+  // elsewhere. A vertical without the mentorship module bounces a dual-role
+  // MENTEE to '/account' below, and '/account' is deliberately outside the
+  // gate (account self-service, including deleting the account, must stay
+  // reachable); with the gate after that bounce, a MARKETING lead under
+  // `require2fa = 'all'` was never held at all. Skipped while impersonating.
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
+    redirect('/security-setup');
+  }
+
   // A mentee-role account gets in too, but only once someone has actually been
   // assigned to them to mentor (#1141) — the same dual-role symmetry that lets a
   // mentor be mentored. With nobody to mentor, this shell is empty for them.
@@ -57,18 +68,11 @@ export default async function MentorLayout({ children }: { children: React.React
   }
 
   const { locale, t } = await getServerDictionary();
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
   const customStages = await resolveCustomStages(session.user.orgId);
   // The tenant's own competency framework, or null when it uses the built-in
   // criteria (#822) — same provider shape as the pipeline stages above.
   const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
-
-  // Auth hardening: hold in-scope roles at the 2FA setup gate until enabled.
-  // Skipped while impersonating (the admin behind it is already authenticated).
-  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
-    redirect('/security-setup');
-  }
 
   return (
     <>

@@ -11,6 +11,8 @@ import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
+import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 
 export default async function SourceLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -19,7 +21,12 @@ export default async function SourceLayout({ children }: { children: React.React
   if (session.user.role !== 'SOURCE' && session.user.role !== 'ADMIN') redirect('/');
 
   const { locale, t } = await getServerDictionary();
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true } });
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
+  // The same 2FA hold as every other authenticated shell (#1644); see the
+  // company layout for why, and why impersonation is excluded.
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
+    redirect('/security-setup');
+  }
 
   return (
     <ResponsiveShell

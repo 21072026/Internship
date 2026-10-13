@@ -13,6 +13,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { salesTargetApplies } from '@/lib/salesTargetRule';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { isStorableMinLength } from '@/lib/passwordPolicyRule';
+import { REQUIRE_2FA_MODES } from '@/lib/twoFactorPolicyRule';
 
 // GET — the EFFECTIVE settings of the caller's tenant: its own row → the global
 // row → the code default (see src/lib/settings.ts). The org is passed
@@ -30,7 +31,9 @@ const schema = z.object({
   supportEmail: z.string().email().or(z.literal('')).optional(),
   weeklyDigest: z.enum(['true', 'false']).optional(),
   retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),
-  require2fa: z.enum(['off', 'admins', 'admins_mentors']).optional(),
+  // The vocabulary is src/lib/twoFactorPolicyRule.ts (#1644): `all` holds
+  // every role — MENTEE, COMPANY and SOURCE included — at the setup gate.
+  require2fa: z.enum(REQUIRE_2FA_MODES).optional(),
   // Password policy (#1544). The minimum is range-checked below against the
   // floor/ceiling of src/lib/passwordPolicyRule.ts, not only by shape.
   passwordMinLength: z.string().regex(/^\d{1,3}$/).optional(),
