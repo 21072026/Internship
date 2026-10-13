@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Funnel analytics: a win-back is a new journey, a handover is not** (#2845, decision #2572 Q6). Transfer chains were already folded into one journey (#2556); the new win-back chain (#2842) shares the same `previousRelationId` link and would have been folded too, hiding the churn and the return. `cutChurnLinks()` (`src/lib/funnelKpi.ts`, unit-tested) drops a link whose predecessor closed as `ENDED_CHURNED` before chaining, in both the funnel and the deal-value routes."
+}

@@ -16,6 +16,7 @@ import { TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTe
 import { findDueTrialReminders, type DueTrialReminderRow } from '@/lib/trialReminders';
 import { sendTrialReminderEmail } from '@/services/emailService';
 import { ringContractEnds } from '@/lib/contractEnd';
+import { ringDecisionWindows } from '@/lib/decisionWindow';
 
 // The `trial-reminders` job (#2415, #2410, #2417 — story #2392).
 //
@@ -129,6 +130,8 @@ export const TRIAL_EXPIRY_MAX_PER_RUN = 500;
 export interface TrialRemindersResult {
   /** End-day bells rung for won customers whose notice period ends (#2841). */
   contractEnds: number;
+  /** "Decision window closing" bells rung for expired trials (#2843). */
+  decisionWindows: number;
   /** Due (record, threshold) pairs found across every tenant in scope. */
   considered: number;
   /** Pairs claimed and dispatched on at least one channel. */
@@ -550,7 +553,19 @@ export async function runTrialReminders(
     }
   }
 
-  return { considered: due.length, sent, skipped, failed, expired, contractEnds, orgs: inScope.length };
+  // An expired trial whose decision window is about to close (#2843): one bell
+  // to the owner, a week before SaleVali passivates the account.
+  let decisionWindows = 0;
+  for (const orgId of inScope) {
+    try {
+      decisionWindows += await runWithOrg(orgId, () => ringDecisionWindows(orgId, now));
+    } catch (error) {
+      failed += 1;
+      logger.error('Decision window bells failed for one organisation', { orgId, error: String(error) });
+    }
+  }
+
+  return { considered: due.length, sent, skipped, failed, expired, contractEnds, decisionWindows, orgs: inScope.length };
 }
 
 const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
