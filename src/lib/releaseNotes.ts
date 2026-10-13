@@ -65,6 +65,57 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.355.0-beta',
+    date: '2026-10-12',
+    time: '16:14',
+    commit: '623af3d',
+    highlights: {
+      en: [
+        "Interview panels now produce a decision: once the scorecards are in and the panel is closed, record whether the candidate advances, goes to offer or is not selected (with a reason). The company sees the decision only, never the scores. Scheduling an interview can convene the scorecard panel at the same time.",
+      ],
+      tr: [
+        "Mülakat panelleri artık bir karar üretiyor: puan kartları girilip panel kapandığında adayın ilerlediğini, teklife geçtiğini ya da seçilmediğini (gerekçeyle) kaydedin. Şirket yalnızca kararı görür, puanları asla. Mülakat planlarken puan kartı paneli aynı anda kurulabilir.",
+      ],
+      de: [
+        "Interview-Panels liefern jetzt eine Entscheidung: Sind die Bewertungen da und das Panel geschlossen, halte fest, ob die Person weiterkommt, ein Angebot erhält oder nicht ausgewählt wurde (mit Grund). Das Unternehmen sieht nur die Entscheidung, nie die Bewertungen. Beim Terminieren eines Interviews kann das Bewertungs-Panel gleich mit einberufen werden.",
+      ],
+    },
+  },
+  {
+    version: '0.354.0-beta',
+    date: '2026-10-12',
+    time: '15:29',
+    commit: 'bb5e741',
+    highlights: {
+      en: [
+        "You now get an e-mail (and an in-app notice) when your account is signed in to from a new browser, when your password or e-mail address changes, when two-factor authentication is turned on or off, when your recovery codes are replaced, or when every device is signed out — even if you have switched all other notifications off.",
+      ],
+      tr: [
+        "Hesabına yeni bir tarayıcıdan giriş yapıldığında, parolan veya e-posta adresin değiştiğinde, iki adımlı doğrulama açılıp kapatıldığında, kurtarma kodların yenilendiğinde ya da tüm cihazlardan çıkış yapıldığında artık bir e-posta (ve uygulama içi bildirim) alıyorsun — diğer tüm bildirimleri kapatmış olsan bile.",
+      ],
+      de: [
+        "Du erhältst jetzt eine E-Mail (und eine Benachrichtigung in der App), wenn sich jemand aus einem neuen Browser an deinem Konto anmeldet, wenn sich dein Passwort oder deine E-Mail-Adresse ändert, wenn die Zwei-Faktor-Authentifizierung ein- oder ausgeschaltet wird, wenn deine Wiederherstellungscodes ersetzt werden oder wenn alle Geräte abgemeldet werden — auch wenn du alle anderen Benachrichtigungen ausgeschaltet hast.",
+      ],
+    },
+  },
+  {
+    version: '0.353.0-beta',
+    date: '2026-10-12',
+    time: '15:28',
+    commit: '4c4ccd9',
+    highlights: {
+      en: [
+        "Minutes you write for a session now become that meeting's entry in the interaction history, replacing the automatic one-liner. Any line that starts with \"- [ ]\" is an action item: tick it in the minutes or turn it into a to-do for either of you — the two stay in step.",
+      ],
+      tr: [
+        "Bir oturum için yazdığın tutanak artık o toplantının etkileşim geçmişindeki kaydı oluyor ve otomatik tek cümlenin yerine geçiyor. \"- [ ]\" ile başlayan her satır bir aksiyon maddesi: tutanakta işaretle ya da ikinizden biri için yapılacak yap — ikisi birlikte güncellenir.",
+      ],
+      de: [
+        "Das Protokoll, das ihr für eine Sitzung schreibt, wird jetzt zum Eintrag dieses Termins in der Interaktionshistorie und ersetzt den automatischen Einzeiler. Jede Zeile, die mit „- [ ]\" beginnt, ist ein Aktionspunkt: im Protokoll abhaken oder für eine von euch zur Aufgabe machen — beides bleibt im Gleichschritt.",
+      ],
+    },
+  },
+  {
     version: '0.352.0-beta',
     date: '2026-10-08',
     time: '07:25',
