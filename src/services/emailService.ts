@@ -8,6 +8,7 @@ import { orgIdsEntitledTo } from '@/lib/subscription';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { purgeExpiredLoginLinks } from '@/lib/magicLink';
+import { purgeStaleSignInDevices } from '@/lib/signInDevice';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
@@ -271,6 +272,50 @@ async function recordEmail(
   } catch (e) {
     logger.error('Failed to write EmailLog', { to, category, status, error: String(e) });
   }
+}
+
+/**
+ * The audit row of an honoured opt-out, for a bulk job that decided — from the
+ * preference row it ALREADY holds — not to mail someone (#2054). It is the same
+ * row `sendEmail()`'s central enforcement writes (`SKIPPED`, `Unsubscribed:
+ * <group>`), so Admin → Email shows a suppression the same way whichever path
+ * made it, and a DPO's "show me this person's opt-out was honoured on this
+ * send" has an answer on every bulk path, not only the ones without a guard.
+ *
+ * Why not route these recipients through `sendEmail()` with `prefs` instead:
+ * the decision is the job's own guard (the legacy in-app category AND the
+ * group, which the central check would not repeat exactly), and reaching
+ * `sendEmail()` would mean rendering a digest nobody will receive — several
+ * queries per suppressed recipient, the very cost #2054 set out to avoid. This
+ * writes one row and reads nothing; a batch is one `createMany`.
+ *
+ * A recipient with no address leaves no row: there is nothing to look it up by.
+ */
+export async function recordOptOuts(rows: { to: string | null | undefined; category: string; subject: string }[]): Promise<number> {
+  const data = rows
+    .filter((r): r is { to: string; category: string; subject: string } => typeof r.to === 'string' && r.to !== '')
+    .map((r) => ({
+      to: r.to.slice(0, 320),
+      subject: r.subject.slice(0, 512),
+      category: r.category.slice(0, 64),
+      transport: transportFor(r.category),
+      status: 'SKIPPED' as const,
+      error: `Unsubscribed: ${groupForCategory(r.category) ?? r.category}`,
+    }));
+  let written = 0;
+  for (let i = 0; i < data.length; i += 500) {
+    try {
+      written += (await prisma.emailLog.createMany({ data: data.slice(i, i + 500) })).count;
+    } catch (e) {
+      logger.error('Failed to write opt-out EmailLog rows', { count: data.length, error: String(e) });
+    }
+  }
+  return written;
+}
+
+/** One recipient's opt-out row — see recordOptOuts. */
+export async function recordOptOut(to: string | null | undefined, category: string, subject: string): Promise<void> {
+  await recordOptOuts([{ to, category, subject }]);
 }
 
 // ── E-mail delivery health alerts (#1190) ───────────────────────────────────
@@ -1466,12 +1511,14 @@ function meetingIcsAttachment(opts: {
 
 // Minimal HTML escape for user-supplied strings interpolated into templates
 // (names, free-text messages) — keeps a stray "<" from breaking the markup.
-function esc(s: string): string {
+// Exported, with ctaBlock below, for the security notices (#1717): their body
+// is assembled in src/lib/securityNotices.ts from the same escape and button.
+export function esc(s: string): string {
   return s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c] as string);
 }
 
 // A branded button + wrapper shared by the notification templates below.
-function ctaBlock(brand: { accent: string }, url: string, label: string): string {
+export function ctaBlock(brand: { accent: string }, url: string, label: string): string {
   return `<a href="${url}" style="display:inline-block;background-color:${brand.accent};color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">${label}</a>`;
 }
 
@@ -3849,10 +3896,17 @@ export async function sendWeeklyMentorDigests() {
   const brandOf = createBrandBook();
 
   let sent = 0;
+  // Opt-outs honoured this run (#2054): `sent` keeps meaning "actually sent".
+  let skipped = 0;
   const dictionaryOf = emailDictionaryMemo();
   for (const m of mentors) {
     if (m.mentorRelations.length === 0) continue;
-    if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'mentor-digest')) continue;
+    if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'mentor-digest')) {
+      // Honoured — and on record (#2054).
+      await recordOptOut(m.email, 'mentor-digest', 'Weekly mentor digest (not sent: opted out)');
+      skipped++;
+      continue;
+    }
     // Mentorship work (stale mentees, /mentor): a sales rep is a MENTOR row
     // with a book of leads, and gets no mentoring summary — skipped, not
     // re-branded, as checkMentorInteractionReminders does.
@@ -3900,7 +3954,7 @@ export async function sendWeeklyMentorDigests() {
       console.error('Mentor digest failed:', e);
     }
   }
-  return { mentors: mentors.length, sent };
+  return { mentors: mentors.length, sent, skipped };
 }
 
 // Renders the per-mentee rows of the daily activity digest email. Page-view /
@@ -4071,6 +4125,8 @@ export async function sendDailyActivityDigests() {
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   let sent = 0;
+  // Opt-outs honoured this run (#2054): `sent` keeps meaning "actually sent".
+  let skipped = 0;
 
   const mentors = await prisma.user.findMany({
     where: { role: 'MENTOR', isActive: true },
@@ -4090,7 +4146,11 @@ export async function sendDailyActivityDigests() {
   const brandOf = createBrandBook();
   const dictionaryOf = emailDictionaryMemo();
   for (const m of mentors) {
-    if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'activity-digest')) continue;
+    if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'activity-digest')) {
+      await recordOptOut(m.email, 'activity-digest', 'Daily activity digest (not sent: opted out)');
+      skipped++;
+      continue;
+    }
     if (!interactionReminderApplies(await capabilitiesOf(m.orgId))) {
       try {
         const leads = await prisma.mentorshipRelation.findMany({ where: { mentorId: m.id }, select: { menteeId: true } });
@@ -4156,7 +4216,11 @@ export async function sendDailyActivityDigests() {
     // overdue to-dos of its own people (sendOverdueTodoMail).
     if (!interactionReminderApplies(await capabilitiesOf(orgId))) {
       for (const a of orgAdmins) {
-        if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
+        if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) {
+          await recordOptOut(a.email, 'activity-digest', 'Daily activity digest (not sent: opted out)');
+          skipped++;
+          continue;
+        }
         try {
           if (await sendOverdueTodoMail(a, { assignee: { is: orgFilter } }, await origins.urlFor(a.orgId), brand)) sent++;
         } catch (e) {
@@ -4168,7 +4232,11 @@ export async function sendDailyActivityDigests() {
     const adminItems = await getSystemMenteeActivity(since, orgFilter);
     if (adminItems.length === 0) continue;
     for (const a of orgAdmins) {
-      if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
+      if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) {
+        await recordOptOut(a.email, 'activity-digest', 'Daily activity digest (not sent: opted out)');
+        skipped++;
+        continue;
+      }
       const aLocale = resolveLocale(a.preferredLanguage);
       const A = (await dictionaryOf(aLocale, a.orgId)).notifications.activityDigestEmail;
       // Their own organisation's to-dos, by the same org rule as the table.
@@ -4197,7 +4265,7 @@ export async function sendDailyActivityDigests() {
     }
   }
 
-  return { mentors: mentors.length, admins: admins.length, sent };
+  return { mentors: mentors.length, admins: admins.length, sent, skipped };
 }
 
 // Retention re-consent (GDPR Art. 5(1)(e) + 7): when a candidate's consent is
@@ -4484,6 +4552,8 @@ export async function checkCompanyNeedMatches() {
   const origins = createOriginBook();
   await origins.prefetch(companies.flatMap((company) => company.users.map((u) => u.orgId)));
   let alerts = 0;
+  // Recipients who opted out of match alerts, each on record (#2054).
+  let skipped = 0;
 
   for (const company of companies) {
     // Matching the talent pool against open roles is placement work: an org
@@ -4527,7 +4597,11 @@ export async function checkCompanyNeedMatches() {
         // legacy 'digest' conjunct that used to stand here was reading another
         // group's key and dropping alerts the surfaces showed as ON. It now
         // lives in opportunities.legacy.
-        if (emailGroupAllowedForCategory(u, 'company-need-alert')) {
+        if (!emailGroupAllowedForCategory(u, 'company-need-alert')) {
+          // Honoured — and on record (#2054).
+          await recordOptOut(u.email, 'company-need-alert', 'A candidate matches your open position (not sent: opted out)');
+          skipped++;
+        } else {
           const base = await origins.urlFor(u.orgId);
           await brandOf(u.orgId).then((brand) => sendEmail({
             category: 'company-need-alert',
@@ -4550,7 +4624,7 @@ export async function checkCompanyNeedMatches() {
     }
   }
 
-  return { companies: companies.length, alerts };
+  return { companies: companies.length, alerts, skipped };
 }
 
 // Weekly missing-document reminders (#811). Completion is derived live from
@@ -5032,6 +5106,10 @@ export function initCronJobs() {
       // sign-in links can admit nothing and are not kept.
       const links = await purgeExpiredLoginLinks();
       if (links) console.log(`[Cron] Login link purge: ${links} links`);
+      // And the sign-in device memory (#1717): a browser not seen for half a
+      // year is forgotten, so its next sign-in is "new" again.
+      const devices = await purgeStaleSignInDevices();
+      if (devices) console.log(`[Cron] Sign-in device purge: ${devices} devices`);
     } catch (e) {
       console.error('[Cron] Trusted device purge error:', e);
     }

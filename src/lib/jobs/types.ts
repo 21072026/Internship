@@ -55,13 +55,18 @@ export interface JobPayloadMap {
   /// off its own `cron.schedule` today; giving it a name here is what lets
   /// #1676 move it onto the queue without inventing one.
   'jobs.deadLetterAlert': Record<string, never>;
+  /// One tick of the audit stream (#2012, `src/lib/auditDrain.ts`): ship the
+  /// due drains' next batches. Runs off its own `cron.schedule` today, like
+  /// the dead-letter alert; the name is here so #1673's worker can take it
+  /// over as a handler without inventing one.
+  'audit.drain': Record<string, never>;
 }
 
 export type JobName = keyof JobPayloadMap;
 
 export type JobPayload<N extends JobName = JobName> = JobPayloadMap[N];
 
-export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert'] as const;
+export const JOB_NAMES: readonly JobName[] = ['jobs.pruneRuns', 'jobs.deadLetterAlert', 'audit.drain'] as const;
 
 export function isJobName(value: unknown): value is JobName {
   return typeof value === 'string' && (JOB_NAMES as readonly string[]).includes(value);

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**MARKETING go-live helpers** (#2579, #2397). `prisma/check-marketing-orgs.mjs` is a report-only deploy-log line (`infra/deploy-prod.sh`): per MARKETING org it prints plan, public host, stage count, active admins/reps, default lead owner and BCC-to-CRM state, then one line per gap (no stage rows = running on the INTERNSHIP default pipeline, missing TRIAL_ACTIVE/TRIAL_EXPIRED, no host, no team, no default owner) — so the prod org can be verified without a DB connection; no PII, never writes, exit 0 (`scripts/test/marketing-org-report.test.mjs`). The admin account list gets a \"My accounts\" owner filter (`GET /api/companies?owner=me`, MARKETING only in the UI, kept in saved views) for admins who also own leads.",
-  "notes": {
-    "en": ["Admins who also work leads can narrow the account list to “My accounts”."],
-    "tr": ["Kendi lead'leriyle de çalışan adminler hesap listesini “Benim hesaplarım” ile daraltabilir."],
-    "de": ["Admins, die selbst Leads betreuen, können die Account-Liste auf „Meine Accounts“ eingrenzen."]
-  }
-}

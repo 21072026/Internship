@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -218,6 +219,10 @@ async function handleGet(request: Request) {
             ...group,
             participants,
             mentorId,
+            // The mentorship behind a 1:1 conversation, so the mentor's composer
+            // can ask for a grounded draft for it (#2048). The draft route does
+            // its own authorization; this only names the relation.
+            mentorshipId: counterpartMentorship?.id ?? null,
             // Lets the client render the thread read-only instead of failing on
             // send. The POST route enforces the same rule regardless (#770).
             canPost: await canPostToConversation(session.user, conversation!),
@@ -338,6 +343,11 @@ async function handlePost(request: Request) {
       },
       include: { attachments: { select: ATTACHMENT_SELECT } },
     });
+
+    // Safeguarding (#2056): flag a shared contact detail or a watch keyword for
+    // the admin queue. After the write and never able to fail or hold it — the
+    // message is delivered whatever this finds.
+    await scanMessageForSafeguarding({ messageId: message.id, body, senderId: session.user.id });
 
     // Notify everyone but the sender — the single other party on a mentorship
     // thread, or every other participant of a conversation. An admin posting

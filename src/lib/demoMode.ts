@@ -61,6 +61,7 @@ export const DEMO_BLOCKED_WRITES: readonly (readonly [RegExp, string])[] = [
   [/^\/api\/admin\/users\/[^\/]+\/reset-password$/, 'rotates a shared password'],
   // 2. reach outside the demo
   [/^\/api\/admin\/webhooks/, 'would POST from the production host to any URL'],
+  [/^\/api\/admin\/audit-drains/, 'would stream the audit trail from the production host to any URL'],
   [/^\/api\/admin\/api-keys/, 'mints a real API credential'],
   [/^\/api\/admin\/email-test$/, 'sends mail to an arbitrary address'],
   [/^\/api\/admin\/import$/, 'bulk-imports data from an uploaded file'],

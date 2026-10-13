@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
       // mentee in-app. Stamped with both links: the conversation is where it is
       // read, the relation is what the digest and reply tokens work off.
       const conversation = await conversationForRelation(rel);
-      await prisma.message.create({
+      const mirrored = await prisma.message.create({
         data: {
           relationId: rel.id,
           conversationId: conversation?.id ?? null,
@@ -149,7 +150,11 @@ export async function POST(request: Request) {
           channel: 'EMAIL',
           body: `${personalSubject}\n\n${personalBody}`,
         },
+        select: { id: true, body: true },
       });
+      // Composed in the app, so scanned like any message (#2056) — only mail
+      // that ARRIVES by e-mail skips the contact-detail check.
+      await scanMessageForSafeguarding({ messageId: mirrored.id, body: mirrored.body, senderId: session.user.id });
       const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${rel.id}`;
       const senderName = session.user.name;
       // Same category, same gate as the e-mail branch above (#1426). The

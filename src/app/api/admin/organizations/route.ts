@@ -13,7 +13,8 @@ import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
 import { isSuperAdminFor, logCrossTenantDenial, superAdminWorld } from '@/lib/superAdmin';
 import { creatableVertical, orgInWorld, orgWorldWhere } from '@/lib/superAdminWorld';
 import { resolveOrgId } from '@/lib/orgScope';
-import { provisionStagePreset } from '@/lib/pipelineStages';
+import { provisionOrganization, type ProvisionRefusal } from '@/lib/orgProvisioning';
+import { locales } from '@/i18n/config';
 import { getLocale } from '@/i18n/server';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import {
@@ -153,20 +154,22 @@ export async function GET() {
   });
 }
 
-// URL-safe slug: lowercase, alphanumerics + single hyphens, no leading/trailing.
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
-}
-
+// What a create may carry (#2065). Everything beyond name/slug/plan/vertical
+// is optional, so the quick form on the list page and the wizard share one
+// door. The server applies it — the client never posts stages or a pre-built
+// configuration, only choices.
 const createSchema = z.object({
-  name: z.string().min(1).max(120),
+  name: z.string().trim().min(1).max(120),
   slug: z.string().max(60).optional(),
   plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
+  brandName: z.string().max(TEXT_LIMITS.orgBrandName).optional(),
+  brandLogoUrl: z.string().max(2000).optional(),
+  brandColor: z.string().max(TEXT_LIMITS.orgBrandColor).optional(),
+  supportEmail: z.union([z.string().email().max(TEXT_LIMITS.orgSupportEmail), z.literal('')]).optional(),
+  starterPack: z.boolean().optional(),
+  sampleProgram: z.boolean().optional(),
+  firstAdminEmail: z.union([z.string().trim().email().max(191), z.literal('')]).optional(),
+  firstAdminLocale: z.enum(locales).optional(),
   // Validated against the catalogue rather than a second hand-written list:
   // a z.enum() copy here is exactly the drift that makes a new key type-check
   // everywhere and 400 at the only door that creates tenants.
@@ -180,7 +183,10 @@ const createSchema = z.object({
 // it is super-admin only (#1535).
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Signed in but not an administrator: refused whatever the body carries
+  // (#2065) — the wizard's extra fields add no way around this line.
+  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const world = await superAdminWorld(session);
   if (!world) {
     await logCrossTenantDenial(session, 'POST /api/admin/organizations', null);
@@ -206,39 +212,39 @@ export async function POST(request: Request) {
     );
   }
 
-  const name = parsed.data.name.trim();
-  const slug = slugify(parsed.data.slug || name);
-  if (!slug) return NextResponse.json({ error: 'Could not derive a valid slug from the name' }, { status: 400 });
-
-  const existing = await prisma.organization.findUnique({ where: { slug } });
-  if (existing) return NextResponse.json({ error: 'An organization with that slug already exists' }, { status: 409 });
-
-  const organization = await prisma.organization.create({
-    // The vertical is explicit and in the caller's world (checked above) —
-    // never the column default.
-    data: {
-      name,
-      slug,
-      plan: parsed.data.plan ?? 'FREE',
-      vertical,
-    },
-  });
-  // Seed the vertical's starting stage set (#2353). A no-op for INTERNSHIP
-  // (returns false, org resolves to the canonical built-ins); a MARKETING org
-  // gets the marketing funnel. Provisioning by a super admin, so it deliberately
-  // bypasses the editor's FREE-plan gate — see provisionStagePreset.
-  await provisionStagePreset(organization.id, organization.vertical, await getLocale());
-  await logActivity({
-    action: 'org.created',
-    actorId: session.user.id,
-    actorEmail: session.user.email ?? null,
-    targetType: 'organization',
-    targetId: organization.id,
-    detail: organization.name,
+  // The whole creation — row, stage preset, starter pack, first-admin
+  // invitation — is one transaction in provisionOrganization() (#2065); this
+  // handler only authenticates, validates and maps its refusals.
+  const d = parsed.data;
+  const result = await provisionOrganization({
+    actor: { id: session.user.id, email: session.user.email },
+    name: d.name,
+    slug: d.slug,
+    vertical,
+    plan: d.plan,
+    branding: { brandName: d.brandName, brandLogoUrl: d.brandLogoUrl, brandColor: d.brandColor, supportEmail: d.supportEmail },
+    starterPack: d.starterPack,
+    sampleProgram: d.sampleProgram,
+    firstAdmin: d.firstAdminEmail ? { email: d.firstAdminEmail, locale: d.firstAdminLocale ?? null } : null,
+    locale: await getLocale(),
     request,
   });
-  return NextResponse.json({ organization }, { status: 201 });
+  if (!result.ok) {
+    const r = result.refusal;
+    if (r.code === 'feature_locked') return featureLocked('WHITE_LABEL');
+    return NextResponse.json({ error: PROVISION_ERRORS[r.code], code: r.code }, { status: r.status });
+  }
+  const { organization, starterPack, invitation } = result.value;
+  return NextResponse.json({ organization, starterPack, invitation }, { status: 201 });
 }
+
+const PROVISION_ERRORS: Record<Exclude<ProvisionRefusal['code'], 'feature_locked'>, string> = {
+  slug_invalid: 'Could not derive a valid slug from the name',
+  slug_taken: 'An organization with that slug already exists',
+  invalid_brand_color: 'Brand color must be a hex value like #2563eb',
+  invalid_brand_logo: 'Brand logo must be an https URL, a same-origin path or an image data URI',
+  email_taken_in_world: 'A user with this email already exists',
+};
 
 // Empty string clears an optional branding field (stored as null).
 const optionalText = z.string().max(TEXT_LIMITS.orgBrandName).optional();

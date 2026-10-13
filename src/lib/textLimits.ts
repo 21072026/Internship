@@ -183,6 +183,14 @@ export const TEXT_LIMITS = {
   goalDescription: 2000,
   /** Goal.successCriteria — @db.Text (#1858) */
   goalSuccessCriteria: 2000,
+  /** SessionAgendaItem.text — @db.Text (#1843); an ad-hoc agenda line */
+  agendaItemText: 2000,
+  /** SessionNote.body — @db.Text (#1847); the pair's shared minutes */
+  sessionNoteBody: 10000,
+  /** AgendaTemplate.summary — a locale entry of the JSON column (#1843) */
+  agendaSummary: 500,
+  /** AgendaTemplateItem.guidance — @db.Text (#1843) */
+  agendaGuidance: 2000,
   /** MeetingRequest.topic — VARCHAR(191) */
   meetingTopic: 191,
   /** Document.title — VARCHAR(191) */

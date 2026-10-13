@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.277.0-beta",
+  "version": "0.355.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -19,6 +19,7 @@
     "check:demo-blocklist": "node scripts/check-demo-blocklist.mjs",
     "check:demo-fidelity": "node scripts/check-demo-fidelity.mjs",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
+    "vpat:evidence": "node --experimental-strip-types scripts/vpat-evidence.mjs",
     "check:reports": "node --experimental-strip-types scripts/check-reports.ts",
     "check:skills": "node --experimental-strip-types scripts/check-skills.mjs",
     "check:release-fragments": "node scripts/check-release-fragments.mjs",
@@ -55,6 +56,7 @@
     "test:request-id": "node --test --experimental-strip-types scripts/test/request-id.test.mjs",
     "test:service-worker": "node --test scripts/test/service-worker-cache.test.mjs",
     "test:recovery-codes": "node --test --experimental-strip-types scripts/test/recovery-code-format.test.mjs",
+    "test:sign-in-device": "node --test --experimental-strip-types scripts/test/sign-in-device.test.mjs",
     "test:funnel-cohorts": "node --test --experimental-strip-types scripts/test/funnel-cohorts.test.mjs",
     "test:profile-completeness": "node --test --experimental-strip-types scripts/test/profile-completeness.test.mjs",
     "test:mentor-impact": "node --test --experimental-strip-types scripts/test/mentor-impact.test.mjs",
@@ -91,6 +93,7 @@
     "sanitize:verify": "node scripts/sanitize-db.mjs --verify-only",
     "db:dev:up": "docker compose -f docker-compose.dev.yml up -d",
     "backfill:requisitions": "node scripts/backfill-requisitions.mjs",
+    "backfill:applications": "node scripts/backfill-applications.mjs",
     "db:dev:down": "docker compose -f docker-compose.dev.yml down"
   },
   "dependencies": {

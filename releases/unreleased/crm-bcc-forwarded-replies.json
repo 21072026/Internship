@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**BCC-to-CRM: forwarded customer replies are logged too** (#2815, follow-up to #2809). A rep forwards a customer's answer to the org's `crm+` address and it lands as an inbound `InteractionLog` (`BCC ← <customer>`) on the original sender's account, with the original's date and subject. The original is read from a `message/rfc822` attachment (bridge: `forwardedAttachment`) or the inline forward header block (`parseForwardedHeaders` in `src/lib/crmBccRule.ts`: Gmail, Outlook EN/DE/TR, Apple Mail — unit-tested corpus). The body is read in memory only for those fields, never stored. Same gates (signed address + active staff sender), same `sourceRef` idempotency. Privacy notice sentence extended (`PRIVACY_POLICY_VERSION` 2026-10-07).",
-  "notes": {
-    "en": ["Forward a customer’s reply to your CRM address and it is logged on their account as an incoming contact — with the original date and subject, never the content."],
-    "tr": ["Bir müşterinin yanıtını CRM adresinize yönlendirin; hesabına gelen bir temas olarak kaydedilir — asıl tarih ve konuyla, içerik asla."],
-    "de": ["Leiten Sie die Antwort eines Kunden an Ihre CRM-Adresse weiter, und sie wird an seinem Account als eingehender Kontakt erfasst — mit Originaldatum und -betreff, nie mit dem Inhalt."]
-  }
-}

@@ -12,6 +12,7 @@ import { findLeadOwner } from '@/lib/leadOwner';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { salesTargetApplies } from '@/lib/salesTargetRule';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { isStorableMinLength } from '@/lib/passwordPolicyRule';
 
 // GET — the EFFECTIVE settings of the caller's tenant: its own row → the global
 // row → the code default (see src/lib/settings.ts). The org is passed
@@ -30,6 +31,14 @@ const schema = z.object({
   weeklyDigest: z.enum(['true', 'false']).optional(),
   retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),
   require2fa: z.enum(['off', 'admins', 'admins_mentors']).optional(),
+  // Password policy (#1544). The minimum is range-checked below against the
+  // floor/ceiling of src/lib/passwordPolicyRule.ts, not only by shape.
+  passwordMinLength: z.string().regex(/^\d{1,3}$/).optional(),
+  passwordRequireUpper: z.enum(['true', 'false']).optional(),
+  passwordRequireLower: z.enum(['true', 'false']).optional(),
+  passwordRequireDigit: z.enum(['true', 'false']).optional(),
+  passwordRequireSymbol: z.enum(['true', 'false']).optional(),
+  breachedPasswordCheck: z.enum(['true', 'false']).optional(),
   selfRegistration: z.enum(['auto', 'manual']).optional(),
   outcomeAutoSend: z.enum(['true', 'false']).optional(),
   blindReview: z.enum(['true', 'false']).optional(),
@@ -138,6 +147,12 @@ export async function PUT(request: Request) {
   }
 
   const orgId = await settingsOrgOf(session);
+
+  // A minimum below the floor would be clamped back up on read and silently
+  // not be what the admin typed; refuse it instead (#1544).
+  if (parsed.data.passwordMinLength !== undefined && !isStorableMinLength(parsed.data.passwordMinLength)) {
+    return NextResponse.json({ error: 'Validation failed', field: 'passwordMinLength' }, { status: 400 });
+  }
 
   const ownerId = parsed.data.defaultLeadOwnerId;
   if (ownerId && !(await findLeadOwner(orgId, ownerId))) {

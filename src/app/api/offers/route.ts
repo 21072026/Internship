@@ -7,12 +7,16 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
-import { canSeeCompensation, isDeclineReasonCode, isOfferStatus } from '@/lib/offers';
+import { canSeeCompensation, compensationSelect, isDeclineReasonCode, isOfferStatus } from '@/lib/offers';
+import { EMPTY_COMPENSATION, validateCompensation } from '@/lib/compensation';
+import { compensationInputShape, mergeCompensation, pickCompensationInput } from '@/lib/compensationInput';
 import { validateOfferRequisition } from '@/lib/requisitions';
 import { resolveOrgId } from '@/lib/orgScope';
 
-// Fields every authorized caller may see. compensationNote is added on top of
-// this only for ADMIN / the offer's own MENTEE — see canSeeCompensation().
+// Fields every authorized caller may see. The compensation columns (the note
+// and, since #1851, the structured figures — OFFER_COMPENSATION_FIELDS) are
+// added on top of this only for ADMIN / the offer's own MENTEE — see
+// canSeeCompensation().
 const baseSelect = {
   id: true,
   orgId: true,
@@ -155,7 +159,7 @@ export async function GET(request: Request) {
     }
 
     const select = canSeeCompensation({ role, isOwnMenteeOffer: role === 'MENTEE' })
-      ? { ...baseSelect, compensationNote: true }
+      ? { ...baseSelect, ...compensationSelect() }
       : baseSelect;
     // The index shows who each offer is for, so ADMIN alone gets the mentee's
     // name joined in. Deliberately not folded into baseSelect: POST reuses it,
@@ -202,6 +206,7 @@ const createSchema = z.object({
   position: z.string().min(1).max(200),
   startDate: z.string().nullable().optional(),
   compensationNote: z.string().max(2000).nullable().optional(),
+  ...compensationInputShape,
   expiresAt: z.string().nullable().optional(),
 });
 
@@ -225,6 +230,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
     const { relationId, requisitionId, companyId, position, startDate, compensationNote, expiresAt } = parsed.data;
+    // Structured compensation (#1851): whitelists and the "an amount needs a
+    // currency and a period" rule live in src/lib/compensation.ts; a draft
+    // that fails them is refused here rather than saved half-meaningful.
+    const compensation = mergeCompensation(EMPTY_COMPENSATION, pickCompensationInput(parsed.data));
+    const compensationProblem = validateCompensation(compensation);
+    if (compensationProblem) {
+      return NextResponse.json({ error: 'Invalid compensation', code: compensationProblem }, { status: 400 });
+    }
 
     const relation = await prisma.mentorshipRelation.findUnique({
       where: { id: relationId },
@@ -256,14 +269,15 @@ export async function POST(request: Request) {
         position,
         startDate: startDate ? new Date(startDate) : null,
         compensationNote: compensationNote || null,
+        ...compensation,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         createdById: session.user.id,
       },
-      select: { ...baseSelect, compensationNote: true },
+      select: { ...baseSelect, ...compensationSelect() },
     });
 
     await prisma.auditLog.create({
-      data: { actorId: session.user.id, action: 'offer.create', targetId: offer.id, detail: `relation ${relationId}` },
+      data: { actorId: session.user.id, action: 'offer.create', targetId: offer.id, detail: `relation ${relationId}`, orgId: resolveOrgId(session) },
     });
     await logActivity({
       action: 'offer.create',

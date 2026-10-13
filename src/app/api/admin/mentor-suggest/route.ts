@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { runAiGated } from '@/lib/aiGate';
+import { AI_PACK_FEATURE, runAiGated } from '@/lib/aiGate';
 import { aiRankMentors, type MatchCandidate } from '@/lib/aiMentorMatch';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -38,6 +38,11 @@ function decodeRanking(content: string): Ranking {
 // provider), the top candidates are re-ranked by AI with a one-sentence
 // rationale each. With no provider or quota the rule-based result is returned
 // unchanged (aiUsed: false) — the feature degrades, never breaks.
+//
+// The AI re-rank is an operator task behind the AI pack (#1738); the ranking
+// is not AI. So an org without the pack is NOT refused — it gets the same
+// rule-based list, and `locked: 'AI_PACKAGE'` names the add-on the rationale
+// would need. The other denials stay silent, exactly as before.
 //
 // Since #2040 every returned suggestion is also RECORDED (MatchFeedback, one
 // SHOWN row per suggestion, all sharing one `batchId` that goes back to the
@@ -197,7 +202,9 @@ export async function POST(request: Request) {
   if (!gated.ok) {
     // Graceful fallback: rule-based order, no rationale text.
     await recordShown(base, false);
-    return NextResponse.json({ batchId, suggestions: base, aiUsed: false });
+    const fallback: { batchId: string; suggestions: typeof base; aiUsed: false; locked?: typeof AI_PACK_FEATURE } = { batchId, suggestions: base, aiUsed: false };
+    if (gated.reason === 'not_entitled') fallback.locked = AI_PACK_FEATURE;
+    return NextResponse.json(fallback);
   }
 
   // Map the AI ranking (labels) back to mentors; anything unranked keeps its

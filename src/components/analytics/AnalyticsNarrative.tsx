@@ -5,6 +5,7 @@ import { Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { AiBadge } from '@/components/AiBadge';
+import { AiText } from '@/components/ai/AiText';
 import { ArtifactMeta, type ArtifactInfo } from '@/components/ai/ArtifactMeta';
 import { useT } from '@/i18n/client';
 
@@ -13,6 +14,10 @@ import { useT } from '@/i18n/client';
 // On load it shows the stored paragraph for the current range, if any (GET —
 // no provider call); writing one is an explicit click. With AI off the card
 // is not drawn at all: the figures around it are complete without it.
+// An org without the AI pack (#1738) sees the card with one line saying so,
+// no button — and that line wins over "AI off": the missing key is the
+// deployment's business, the missing pack is the operator's, and it is the
+// one of the two they have to learn here.
 
 interface Body {
   narrative: string | null;
@@ -20,6 +25,7 @@ interface Body {
   artifact: ArtifactInfo | null;
   reason: string | null;
   configured: boolean;
+  locked: boolean;
 }
 
 export function AnalyticsNarrative({ query }: { query: string }) {
@@ -50,12 +56,21 @@ export function AnalyticsNarrative({ query }: { query: string }) {
         body: JSON.stringify({ ...params, regenerate }),
       });
       if (res.ok) setBody(await res.json());
+      else if (res.status === 403) {
+        // The pack went missing between the load and the click: the state the
+        // GET would have carried, so the button goes and the line appears.
+        const d = await res.json().catch(() => ({}));
+        if (d.code === 'feature_locked') setBody((b) => (b ? { ...b, locked: true, narrative: null, cached: false, artifact: null, reason: null } : b));
+      }
     } finally {
       setBusy(false);
     }
   }, [query]);
 
-  if (!body || (!body.configured && !body.narrative)) return null;
+  if (!body) return null;
+  // Locked wins over unconfigured (see the header); unconfigured with nothing
+  // stored still hides the card.
+  if (!body.locked && !body.configured && !body.narrative) return null;
   const reason = body.reason ? (n.reasons as Record<string, string>)[body.reason] ?? t.common.error : null;
 
   return (
@@ -64,9 +79,11 @@ export function AnalyticsNarrative({ query }: { query: string }) {
         <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{n.title}</h2>
         <AiBadge note />
       </div>
-      {body.narrative ? (
+      {body.locked ? (
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300" data-testid="analytics-narrative-locked">{n.locked}</p>
+      ) : body.narrative ? (
         <>
-          <p className="mt-2 whitespace-pre-line text-sm text-gray-800 dark:text-gray-200" data-testid="analytics-narrative-text">{body.narrative}</p>
+          <AiText as="p" text={body.narrative} className="mt-2 text-sm text-gray-800 dark:text-gray-200" testId="analytics-narrative-text" />
           <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">{n.note}</p>
           {body.artifact && <ArtifactMeta key={body.artifact.id} artifact={body.artifact} cached={body.cached} onRegenerate={body.configured ? () => run(true) : undefined} regenerating={busy} />}
         </>

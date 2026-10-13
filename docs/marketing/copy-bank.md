@@ -151,13 +151,13 @@ ve denenebilirliği (tek tıklık demo) üç cümlede veriyor — hiçbir sayı 
 [EN]
 [![CI](https://github.com/21072026/Internship/actions/workflows/ci.yml/badge.svg)](https://github.com/21072026/Internship/actions/workflows/ci.yml)
 [![E2E smoke](https://github.com/21072026/Internship/actions/workflows/e2e.yml/badge.svg)](https://github.com/21072026/Internship/actions/workflows/e2e.yml)
-[![CodeQL](https://github.com/21072026/Internship/actions/workflows/codeql.yml/badge.svg)](https://github.com/21072026/Internship/actions/workflows/codeql.yml)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen.svg)](https://demo.interncrm.com/auth/signin)
 ```
 
-*Neden bu metin:* beş rozetin dördü **canlı GitHub Actions durumu** (`ci.yml`, `e2e.yml`,
-`codeql.yml` gerçekten var), yani gerçek bir kalite sinyali; "downloads" veya "stars" rozeti
+*Neden bu metin:* dört rozetin ikisi **canlı GitHub Actions durumu** (`ci.yml` ve `e2e.yml`
+gerçekten var), yani gerçek bir kalite sinyali. CodeQL rozeti 2026-10-12'de çıktı: repo private
+oldu ve CodeQL kapatıldı (#2903). "downloads" veya "stars" rozeti
 bilinçli olarak yok, çünkü bugünkü sayılar zayıf ve zayıf sayı gösterilmez.
 
 ### 1.6 README — "Why this exists"

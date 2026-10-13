@@ -42,35 +42,44 @@
     },
     {
       "model": "Requisition",
-      "minRows": 0,
-      "target": 3,
+      "minRows": 4,
+      "target": 4,
       "screen": "/admin/requisitions — company requisition list and its pipeline counts",
       "issue": "#2062"
     },
     {
       "model": "InterviewRequest",
-      "minRows": 0,
+      "minRows": 2,
       "target": 3,
       "screen": "/admin/interview-requests, /mentor/interview-requests — interview request inbox",
       "issue": "#2062"
     },
     {
       "model": "Offer",
-      "minRows": 0,
+      "minRows": 2,
       "target": 2,
       "screen": "/admin/mentorship relation detail — offer stage and offer history",
       "issue": "#2062"
     },
     {
       "model": "InterviewPanel",
-      "minRows": 0,
+      "minRows": 1,
       "target": 2,
       "screen": "interview panel scheduling and panel-member scoring",
       "issue": "#2062"
     },
     {
+      "model": "Evaluation",
+      "where": { "type": "INTERVIEW", "submittedAt": { "not": null } },
+      "label": "Evaluation(submitted INTERVIEW)",
+      "minRows": 2,
+      "target": 2,
+      "screen": "interview panel calibration — independently submitted scorecards",
+      "issue": "#1419"
+    },
+    {
       "model": "CompanyInterest",
-      "minRows": 0,
+      "minRows": 2,
       "target": 3,
       "screen": "company talent-pool interest list — the COMPANY role's main screen",
       "issue": "#2062"
@@ -121,9 +130,9 @@
       "model": "User",
       "where": { "role": "SOURCE" },
       "label": "User(role=SOURCE)",
-      "minRows": 0,
+      "minRows": 1,
       "target": 2,
-      "screen": "/admin/sources — the SOURCE role has no demo account at all, so the screen is blank",
+      "screen": "/admin/sources — SOURCE accounts and their referred candidates",
       "issue": "#2062"
     },
     {

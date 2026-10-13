@@ -18,6 +18,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { AgendaPanel } from '@/components/AgendaPanel';
+import { SessionNotePanel } from '@/components/SessionNotePanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { SharedAiArtifacts } from '@/components/ai/SharedAiArtifacts';
@@ -341,6 +343,7 @@ export default function MenteeDetailPage() {
           relationId={relation.id}
           nextActionAt={relation.nextActionAt}
           nextActionNote={relation.nextActionNote}
+          pipelineStatus={relation.pipelineStatus}
           onSaved={fetchRelation}
         />
       </div>
@@ -629,6 +632,14 @@ export default function MenteeDetailPage() {
           <EvaluationPanel relationId={id} />
 
           <GoalsPanel relationId={id} />
+
+          {/* What the next session is about (#1843): a guide from the library,
+              ticked live by both sides, unfinished lines carried forward. */}
+          <AgendaPanel relationId={id} />
+
+          {/* The pair's shared minutes (#1847) — beside the agenda, written by
+              either seat; the two private note models stay private. */}
+          <SessionNotePanel relationId={id} />
 
           {/* Everything on this mentee's list — what came from a project and what a
               mentor handed them directly — plus the box to add to it (#1113). */}

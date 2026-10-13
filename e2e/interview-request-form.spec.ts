@@ -158,11 +158,12 @@ test.describe.serial('Interview request form (note + proposed slots)', () => {
     await expect(queue.getByText('Proposed slots')).toBeVisible();
     await expect(queue.locator('li')).toHaveCount(1);
 
-    const link = page.locator('a', { hasText: 'Schedule interview' }).first();
-    await expect(link).toBeVisible();
-    const href = await link.getAttribute('href');
-    expect(href).toContain(`relationId=${relationWithNote.id}`);
-    expect(href).toContain(`interviewRequestId=${pending.id}`);
-    expect(href).toContain(`requisitionId=${requisition.id}`);
+    // #1844: approval no longer hands out a deep link — the queue schedules
+    // inline (a slot picker + "Schedule interview" button), which carries the
+    // request id itself.
+    const form = page.getByTestId(`interview-request-${pending.id}`).getByTestId('interview-schedule-form');
+    await expect(form).toBeVisible();
+    await expect(form.getByTestId('interview-slot-option')).toHaveCount(1);
+    await expect(form.getByTestId('interview-schedule')).toBeVisible();
   });
 });

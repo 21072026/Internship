@@ -1,20 +1,70 @@
 import { prisma } from '@/lib/prisma';
-import { getSetting } from '@/lib/settings';
 import { hasConsent } from '@/lib/consent';
 import { ambientOrgId } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
 import { callProvider, isAiConfigured, trackAiCall, usageOfFailure, type AiCallUsage } from '@/lib/ai/provider';
-import type { AiTaskId } from '@/lib/ai/tasks';
+import { AI_TASKS, type AiTaskId, type AiTaskSpec } from '@/lib/ai/tasks';
 import { estimateCostMicros } from '@/lib/ai/pricing';
+import { entitled } from '@/lib/entitlements';
+import { orgAiQuota, resolveAiPolicy, type AiPolicy } from '@/lib/ai/policy';
+import { flagsColumn } from '@/lib/ai/injection';
 import type { ConsentType } from '@prisma/client';
 import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts';
 
 // Central AI gate (Faz 2, #537) — the single wrapper every AI feature goes
-// through: consent check → provider configured → monthly quota → call →
-// metering. Other AI tasks (#533-#536) build on this; none of them may call
-// the provider directly.
+// through: consent check → entitlement (operator tasks) → monthly quota →
+// provider configured → call → metering. Other AI tasks (#533-#536) build on
+// this; none of them may call the provider directly.
+//
+// WHO THE TASK IS FOR decides whether the AI pack is asked for (#1738). The
+// decision is made once, in the registry (`audience` in src/lib/ai/tasks.ts —
+// a task cannot be registered without it), and read here from the task id:
+//
+//   task                  audience     route / screen                         AI_PACKAGE
+//   cv_extract            participant  the mentee's own CV (B3), also when a   never
+//                                      staff role with CV access triggers it
+//   cv_feedback           participant  the mentee's own CV, /portal            never
+//   interview_prep        participant  the mentee, for themselves, /portal     never
+//   practice_interview    participant  the mentee's own text-only mock          never
+//                                      interview, /portal (#2051)
+//   interaction_summary   participant  the mentor's own view of their own      never —
+//                                      mentee (/mentor/mentees/[id]); an       except an
+//                                      ADMIN reading another pair's log is     admin: the
+//                                      operator use and the route says so      route escalates
+//   mentor_match          operator     admin triage, /admin/candidates         required
+//   survey_summary        operator     admin, /admin/surveys/[id]              required
+//   evaluation_insights   operator     admin, /admin/insights                  required
+//   weekly_report_digest  operator     admin, /admin/insights                  required
+//   analytics_narrative   operator     admin, /admin/analytics                 required
+//   thread_summary        participant  a participant's own conversation        never
+//   suggested_reply       participant  a participant's own conversation        never
+//   outreach_draft        participant  the mentor's draft to their own mentee  never
+//   bulk_draft            participant  a mentor's bulk draft to their mentees; never — except
+//                                      an ADMIN's bulk draft is escalated       an admin
+//   profile_enrich        participant  a mentor's own profile from own text    never
+//   next_step_suggest     participant  the owning mentor's own record; an      never — except
+//                                      ADMIN on another record is escalated     an admin
+//   agenda_personalize    participant  the pair's own session agenda (#1845);  never — except
+//                                      an ADMIN on another pair is escalated    an admin
+//   content_translate     operator     admin authoring, /admin/*               required
+//   content_draft         operator     admin authoring from a brief            required
+//   company_enrich        operator     admin company record from pasted text   required
+//
+// `participant` is the free core: the gate never runs the entitlement query
+// on that path (no extra read, no paywall — the denial copy stays the neutral
+// "not right now", docs/ai.md § The degradation contract). A route may
+// ESCALATE one call of a participant task to operator (`audience: 'operator'`)
+// when the caller is staff using it as a tool — an admin summarising a pair
+// that is not theirs; the registry's audience is the floor and is never
+// lowered per call. `operator` asks
+// `entitled(orgId, 'AI_PACKAGE')` (#1733) and answers 'not_entitled' when the
+// org has neither a plan with the pack nor a grant; the operator routes turn
+// that into the shared `403 { code: 'feature_locked', feature: 'AI_PACKAGE' }`.
+// The check sits BEFORE the artefact cache on purpose: a locked org reads no
+// stored copy of the add-on either. The orgs that existed when the gate went
+// live were grandfathered by prisma/backfill-ai-package-grandfather.mjs.
 //
 // Quota: Setting.aiMonthlyQuota calls per calendar month (UTC, the metering
 // month of src/lib/meteringRules.ts) PER ORG ('0' disables AI). The quota is a
@@ -35,8 +85,14 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 // mentees are never shown a paywall (core flows never depend on AI).
 
 // 'provider_error' (#2024): the provider failed even after its retries, or the
-// breaker is open. Like the other three it is a typed denial, never a throw.
-export type AiDenialReason = 'no_consent' | 'not_configured' | 'quota_exceeded' | 'provider_error';
+// breaker is open. 'not_entitled' (#1738): an operator task in an org without
+// the AI pack. Like the others each is a typed denial, never a throw.
+// 'disabled' (#2032): the org's kill switch or this task's own switch is off —
+// an admin's decision, answered as such, never dressed up as a spent quota.
+export type AiDenialReason = 'no_consent' | 'not_entitled' | 'disabled' | 'not_configured' | 'quota_exceeded' | 'provider_error';
+
+/** The paid add-on an operator task needs (#1738). One name, so a route and a test cannot drift from the gate. */
+export const AI_PACK_FEATURE = 'AI_PACKAGE' as const;
 
 /** The stored artefact behind a result (#2044), when the call persisted one. */
 export interface AiArtifactRef {
@@ -76,16 +132,32 @@ async function quotaOrgId(orgId: string | null | undefined): Promise<string> {
   return orgId ?? ambientOrgId() ?? (await defaultOrgId());
 }
 
+/**
+ * The allowance that applies, and how much of it is spent this month. With a
+ * task, the policy chain decides (#2032): a task with its own `monthlyQuota`
+ * is measured against ITS calls; every other task against the org's calls
+ * and the org quota (tenant row → global row → default). Without a task it is
+ * the org figure the console shows. `policy` lets the gate pass the chain it
+ * already resolved instead of reading it twice.
+ */
 export async function getAiQuota(
   orgId?: string | null,
-): Promise<{ orgId: string; quota: number; used: number; remaining: number }> {
+  taskId?: AiTaskId,
+  policy?: AiPolicy,
+): Promise<{ orgId: string; quota: number; used: number; remaining: number; source: 'org' | 'task' }> {
   const org = await quotaOrgId(orgId);
-  const quota = parseInt(await getSetting('aiMonthlyQuota', org), 10) || 0;
-  // A provider failure is recorded (#2024) but never consumes quota.
+  const chain = taskId ? (policy ?? (await resolveAiPolicy(org, taskId))) : null;
+  const quota = chain ? chain.quota : await orgAiQuota(org);
+  const source = chain?.quotaSource ?? 'org';
+  // A provider failure is recorded (#2024) but never consumes quota. A per-task
+  // allowance counts the task's own rows (`scope` is set on every row, old and new).
   const used = await prisma.aiUsage.count({
-    where: withinTenant({ createdAt: periodRange(currentPeriod()), outcome: { not: 'provider_error' } }, await orgWhere(org)),
+    where: withinTenant(
+      { createdAt: periodRange(currentPeriod()), outcome: { not: 'provider_error' }, ...(source === 'task' && taskId ? { scope: taskId } : {}) },
+      await orgWhere(org),
+    ),
   });
-  return { orgId: org, quota, used, remaining: Math.max(0, quota - used) };
+  return { orgId: org, quota, used, remaining: Math.max(0, quota - used), source };
 }
 
 export async function runAiGated<T>(opts: {
@@ -99,6 +171,10 @@ export async function runAiGated<T>(opts: {
   // The tenant whose quota the call consumes — `settingsOrgOf(session)`. Required
   // so a new AI feature cannot silently meter against the default org.
   orgId: string | null;
+  // Escalate THIS call to operator use of a participant task (#1738): an admin
+  // reading a pair's summary, a staff-triggered extraction. Only 'operator'
+  // can be passed — the registry's audience is the floor, never lowered here.
+  audience?: 'operator';
   // Recorded for metering/attribution (companyId prepares per-company quotas).
   userId?: string | null;
   companyId?: string | null;
@@ -108,12 +184,25 @@ export async function runAiGated<T>(opts: {
   if (opts.consent && !(await hasConsent(opts.consent.userId, opts.consent.type))) {
     return { ok: false, reason: 'no_consent' };
   }
+  // The switches (#2032): the org's kill switch, then this task's own. Before
+  // the pack, the cache and the quota — off means off, not "spent", and not a
+  // stored copy either. One read of the chain; the quota check below reuses it.
+  const org = await quotaOrgId(opts.orgId);
+  const policy = await resolveAiPolicy(org, opts.scope);
+  if (!policy.taskEnabled) return { ok: false, reason: 'disabled' };
+  // The add-on, for operator tasks only (#1738, the table in the header). A
+  // participant task never reaches this read. Before the cache: a locked org
+  // is not answered from a stored copy either.
+  const task: AiTaskSpec = AI_TASKS[opts.scope];
+  if ((opts.audience ?? task.audience) === 'operator' && !(await entitled(org, AI_PACK_FEATURE))) {
+    return { ok: false, reason: 'not_entitled' };
+  }
   // Consent first, cache second: a withdrawn consent is not answered from a
   // stored copy either. A hit costs nothing — no provider call, no quota.
   const persist = opts.persist;
   const decode = persist?.deserialize ?? ((c: string) => c as unknown as T);
   if (persist && !persist.force) {
-    const hit = await findCachedArtifact({ orgId: await quotaOrgId(opts.orgId), taskId: opts.scope, subjectUserId: persist.subjectUserId, inputHash: persist.inputHash }).catch(() => null);
+    const hit = await findCachedArtifact({ orgId: org, taskId: opts.scope, subjectUserId: persist.subjectUserId, inputHash: persist.inputHash }).catch(() => null);
     // A stored copy that no longer decodes (a format change, a hand-edited
     // row) is a miss, not an error: the provider answers instead.
     if (hit) {
@@ -126,8 +215,9 @@ export async function runAiGated<T>(opts: {
   }
   // Quota before configuration (the issue's order: consent → flag → quota →
   // provider): quota 0 means "AI off" regardless of key, and quota behaviour
-  // stays testable in environments without a provider key.
-  const { orgId, quota, used } = await getAiQuota(opts.orgId);
+  // stays testable in environments without a provider key. The allowance and
+  // the counter are the chain's — a task with its own quota spends its own.
+  const { orgId, quota, used } = await getAiQuota(org, opts.scope, policy);
   if (quota <= 0 || used >= quota) return { ok: false, reason: 'quota_exceeded' };
   if (!isAiConfigured()) return { ok: false, reason: 'not_configured' };
 
@@ -153,6 +243,7 @@ export async function runAiGated<T>(opts: {
           outputTokens: usage && usage.completed > 0 ? usage.outputTokens : null,
           costMicros: usage && usage.completed > 0 ? estimateCostMicros(usage.model, usage.inputTokens, usage.outputTokens) : null,
           latencyMs: usage && usage.completed > 0 ? usage.latencyMs : null,
+          flags: flagsColumn(usage?.flags ?? []),
         },
       })
       .catch(() => {}); // metering must never break the call

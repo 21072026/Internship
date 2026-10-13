@@ -711,12 +711,18 @@ run_tool node prisma/backfill-project-members.mjs || true
 # orgId with the default org, which would hand a MARKETING tenant's audit trail
 # and goal pool to the INTERNSHIP admin. Only fills NULLs — idempotent.
 run_tool node prisma/backfill-activity-log-org.mjs || true
+# Same shape for the audit trail (#2012): the actor's org, then the target
+# user's; system rows fall to the default org below.
+run_tool node prisma/backfill-audit-log-org.mjs || true
 run_tool node prisma/backfill-task-template-org.mjs || true
 run_tool node prisma/backfill-ai-usage-org.mjs || true
 run_tool node prisma/backfill-ai-usage-task.mjs || true
 run_tool node prisma/backfill-organization.mjs \
   || log "WARNING: org backfill FAILED (exit non-zero) — see the output above. It may be incomplete; do NOT enable MT_ENFORCE_ISOLATION until it runs green (#1557)."
 run_tool node scripts/backfill-requisitions.mjs || true
+# One Application per CompanyInterest that names a requisition (#1828). Only
+# ever adds rows; a second run reports created=0.
+run_tool node scripts/backfill-applications.mjs || true
 # Detector, NOT a gate (#419): reports mentees holding more than one ACTIVE
 # mentorship. Exits 0 by design, and `|| true` on top — this must never be the
 # reason a deploy fails. The DB-level @@unique([activeMenteeKey]) backstop lands
@@ -804,6 +810,9 @@ run_tool node prisma/backfill-premium-analytics-entitlement.mjs || true
 # note and a later run that finds one does nothing, so orgs created after the
 # gate do not inherit it.
 run_tool node prisma/backfill-report-export-grandfather.mjs || true
+
+# Same for the admin AI tools (AI_PACKAGE, #1738): every org that exists keeps them, ONCE (marker note).
+run_tool node prisma/backfill-ai-package-grandfather.mjs || true
 
 # Grandfather every org already running an integration when the
 # INTEGRATIONS_API gate goes live (#1744): a live public-API key or an active

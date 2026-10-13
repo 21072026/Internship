@@ -5,16 +5,20 @@ import type { Session } from 'next-auth';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
+import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import {
   canPerformAction,
   canSeeCompensation,
+  compensationSelect,
   isDeclineReasonCode,
   isOfferAction,
   transitionForAction,
 } from '@/lib/offers';
+import { validateCompensation, type CompensationFields } from '@/lib/compensation';
+import { compensationInputShape, mergeCompensation, pickCompensationInput } from '@/lib/compensationInput';
 import { notifyOfferSent, notifyOfferDecided } from '@/lib/offerNotify';
 import { validateOfferRequisition } from '@/lib/requisitions';
 import { applyAcceptedOffer, requisitionCountDetail, type RequisitionCount } from '@/lib/hiringOutcome';
@@ -76,10 +80,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     if (!authorized) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    let result: typeof offer & { compensationNote?: string | null; history?: unknown[]; requisitionTitle?: string | null } = offer;
+    let result: typeof offer & Partial<CompensationFields> & { compensationNote?: string | null; history?: unknown[]; requisitionTitle?: string | null } = offer;
     if (canSeeCompensation({ role, isOwnMenteeOffer })) {
-      const withComp = await prisma.offer.findUnique({ where: { id }, select: { compensationNote: true } });
-      result = { ...offer, compensationNote: withComp?.compensationNote ?? null };
+      // The note AND the structured figures (#1851), from one list — a column
+      // the list does not name is never read for anyone.
+      const withComp = await prisma.offer.findUnique({ where: { id }, select: compensationSelect() });
+      result = { ...offer, ...withComp };
     }
 
     if (offer.requisitionId) {
@@ -110,6 +116,7 @@ const editSchema = z.object({
   companyId: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   compensationNote: z.string().max(2000).nullable().optional(),
+  ...compensationInputShape,
   expiresAt: z.string().nullable().optional(),
 });
 
@@ -207,6 +214,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           actorId: session.user.id,
           action: `offer.${actionStr}`,
           targetId: id,
+          orgId: resolveOrgId(session),
           detail:
             actionStr === 'decline' ? `reason ${declineReasonCode}` : requisitionCountDetail(outcome.count),
         },
@@ -273,7 +281,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         );
       }
     }
+    // The structured figures are validated as a SET against what is stored
+    // (#1851): a PATCH that sends only `basePeriod: null` while an amount is
+    // on the row would leave the amount meaningless, so the merge is checked,
+    // not the patch.
+    const compensationPatch = pickCompensationInput(parsed.data);
     const data: Prisma.OfferUncheckedUpdateInput = {};
+    if (Object.keys(compensationPatch).length > 0) {
+      const { compensationNote: _note, ...current } = await prisma.offer.findUniqueOrThrow({ where: { id }, select: compensationSelect() });
+      void _note;
+      const merged = mergeCompensation(current, compensationPatch);
+      const compensationProblem = validateCompensation(merged);
+      if (compensationProblem) {
+        return NextResponse.json({ error: 'Invalid compensation', code: compensationProblem }, { status: 400 });
+      }
+      Object.assign(data, merged);
+    }
     if (position !== undefined) data.position = position;
     if (requisitionId !== undefined) data.requisitionId = normalizedRequisitionId;
     if (companyId !== undefined) data.companyId = companyId;
@@ -281,7 +304,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (compensationNote !== undefined) data.compensationNote = compensationNote;
     if (expiresAt !== undefined) data.expiresAt = expiresAt ? new Date(expiresAt) : null;
 
-    const updated = await prisma.offer.update({ where: { id }, data, select: { ...baseSelect, compensationNote: true } });
+    const updated = await prisma.offer.update({ where: { id }, data, select: { ...baseSelect, ...compensationSelect() } });
     return NextResponse.json({ offer: updated });
   });
 }

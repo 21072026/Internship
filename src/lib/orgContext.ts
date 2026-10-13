@@ -91,12 +91,17 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'SavedView',
   // What an AI call produced (#2044).
   'AiArtifact',
+  // Per-task AI switches and quota overrides (#2032): one tenant's policy, never another's.
+  'AiFeatureSetting',
   // Who attended a meeting (#2014).
   'MeetingAttendance',
   // INTERIM/FINAL due dates and reminders (#1891).
   'EvaluationDue',
   'Requisition',
   'InterviewRequest',
+  // One person considered for one role (#1828). ApplicationEvent is reached only
+  // through its application and is deliberately not listed (schema comment).
+  'Application',
   'MessageTemplate',
   // Guided-conversation library (#1841). SessionAgenda and both item models
   // are reached only through a scoped parent and are deliberately not listed
@@ -110,6 +115,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Programmatic credentials are tenant property too (#1466): a key minted in
   // one org must never be listed by — or authenticate into — another.
   'ApiKey',
+  // Per-key request counts (#2010) — the key's tenant owns its usage.
+  'ApiKeyUsage',
+  // A mentee's practice interview transcript (#2051).
+  'PracticeSession',
+  // Safeguarding flags (#2056) — one org's review queue; stamped with the
+  // sender's org at write time.
+  'SafeguardingFlag',
   'MatchFeedback',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
@@ -252,6 +264,15 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Webhook',
   'Announcement',
   'Newsletter',
+  // The audit trail and where it is streamed to (#2012). AuditLog gained a
+  // nullable orgId so a tenant's SIEM drain can select its own rows and
+  // nothing else; the request-scoped writers get it stamped here, the two
+  // sessionless ones (the offer expiry sweep, the impersonation STOP) pass it
+  // themselves, and the drain job reads with an explicit `orgId` because it
+  // runs outside any request scope. AuditDrain has a REQUIRED orgId: a
+  // receiver belongs to exactly one tenant.
+  'AuditLog',
+  'AuditDrain',
   // The public /for-companies enquiry (#1104). The form has no session and no
   // host→org resolution exists yet, so the submit stamps the default org
   // itself (the same one registration uses) rather than leaving NULL — a

@@ -13,8 +13,10 @@ import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { DEFAULT_HIRED_STAGE_KEY } from '@/lib/offers';
 import type { ResolvedStage } from '@/lib/pipeline';
+import type { CompensationFields } from '@/lib/compensation';
+import { CompensationSummary } from '@/components/CompensationSummary';
 
-interface Offer {
+interface Offer extends Partial<CompensationFields> {
   id: string;
   status: string;
   position: string;
@@ -139,6 +141,16 @@ export function OfferManagementPanel({
       startDate: o.startDate ? o.startDate.slice(0, 10) : '',
       compensationNote: o.compensationNote ?? '',
       expiresAt: o.expiresAt ? o.expiresAt.slice(0, 10) : '',
+      // Minor units back to the typed form: 250000 → "2500.00" (the parser
+      // accepts either separator, so the edit round-trips exactly).
+      currency: o.currency ?? '',
+      baseAmount: o.baseAmountMinor != null ? (o.baseAmountMinor / 100).toFixed(2) : '',
+      basePeriod: o.basePeriod ?? '',
+      hoursPerWeek: o.hoursPerWeek != null ? String(o.hoursPerWeek) : '',
+      contractType: o.contractType ?? '',
+      signingBonus: o.signingBonusMinor != null ? (o.signingBonusMinor / 100).toFixed(2) : '',
+      otherBonus: o.otherBonusMinor != null ? (o.otherBonusMinor / 100).toFixed(2) : '',
+      equityNote: o.equityNote ?? '',
     });
     setWizardOpen(true);
   };
@@ -215,6 +227,9 @@ export function OfferManagementPanel({
                     {o.startDate && `${t.offers.wizard.startDate}: ${formatDate(o.startDate, locale)} · `}
                     {o.expiresAt && `${t.offers.wizard.expiresAt}: ${formatDate(o.expiresAt, locale)}`}
                   </p>
+                  <div className="mt-1">
+                    <CompensationSummary offer={o} testId={`offer-compensation-${o.id}`} />
+                  </div>
                   {o.requisitionTitle && (
                     <p className="text-xs text-gray-500 mt-1" data-testid={`offer-requisition-title-${o.id}`}>
                       {t.offers.wizard.requisitionId}: {o.requisitionTitle}

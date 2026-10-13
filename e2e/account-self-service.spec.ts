@@ -31,7 +31,10 @@ test('a mentee can change password from /account; weak passwords are rejected', 
     await page.getByLabel(/^New password/).fill('weakpass');
     await page.getByLabel(/Confirm new password/).fill('weakpass');
     await page.getByRole('button', { name: 'Update password' }).click();
-    await expect(page.getByText(/uppercase|at least 8/i)).toBeVisible({ timeout: 10_000 });
+    // The refusal names the rule. `.first()`: the rule list under the field
+    // (#1544) also says "include an uppercase letter", and the flash is mirrored
+    // into the assertive live region, so a bare text locator resolves to four.
+    await expect(page.getByText(/does not meet the policy.*uppercase|at least 8/i).first()).toBeVisible({ timeout: 10_000 });
 
     // Valid password succeeds.
     await page.getByLabel(/Current password/).nth(1).fill(oldPw);

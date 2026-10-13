@@ -83,6 +83,10 @@ export async function POST(request: Request) {
     });
 
     if (!gated.ok) {
+      if (gated.reason === 'disabled') {
+        // Switched off by the organisation (#2032): said as such, never as a spent quota.
+        return NextResponse.json({ error: 'AI is turned off for this organisation', code: 'disabled' }, { status: 403 });
+      }
       if (gated.reason === 'quota_exceeded') {
         return NextResponse.json({ error: 'Temporarily unavailable', code: 'quota_exceeded' }, { status: 429 });
       }

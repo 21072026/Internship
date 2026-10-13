@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { AiBadge } from '@/components/AiBadge';
 import { useToast } from '@/components/ui/Toast';
 import { useT, useLocale } from '@/i18n/client';
+import { useVertical } from '@/lib/verticalClient';
 import { formatDate } from '@/lib/relativeTime';
 import {
   NEXT_ACTION_NOTE_MAX,
@@ -14,6 +16,7 @@ import {
   isNextActionReminderDue,
   parseNextActionDate,
 } from '@/lib/nextActionRule';
+import { nextStepSuggestions } from '@/lib/nextStepSuggestions';
 
 /** The stored UTC day as the `YYYY-MM-DD` a date input reads. */
 export function followUpInputValue(at: string | null | undefined): string {
@@ -53,33 +56,54 @@ export function FollowUpChip({ at }: { at: string | null | undefined }) {
   );
 }
 
+const CHIP_CLASS =
+  'rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:border-blue-400 hover:text-blue-700 ' +
+  'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-blue-400 dark:hover:text-blue-300 disabled:opacity-50';
+
 /**
  * The owner's next action on a record (#2563): a follow-up date and one short
  * line. Owner and ADMIN edit it through PUT /api/mentorship/[id]; it is
- * independent of the stage and of the stage SLA, so nothing here reads either.
+ * independent of the stage and of the stage SLA, so nothing here reads the
+ * stage for the DATE. The stage is read for one thing only (#2875): the
+ * ready-made lines offered under the field, and the AI proposal next to them.
+ * Both only fill the input — the owner still presses Save.
  */
 export function FollowUpPanel({
   relationId,
   nextActionAt,
   nextActionNote,
+  pipelineStatus,
   onSaved,
 }: {
   relationId: string;
   nextActionAt: string | null | undefined;
   nextActionNote: string | null | undefined;
+  /** The record's current stage key; without it no suggestions render. */
+  pipelineStatus?: string | null;
   onSaved?: () => void | Promise<void>;
 }) {
   const t = useT();
+  const locale = useLocale();
+  const vertical = useVertical();
   const toast = useToast();
   const [date, setDate] = useState(followUpInputValue(nextActionAt));
   const [note, setNote] = useState(nextActionNote ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [aiLines, setAiLines] = useState<string[]>([]);
+  const [aiNotice, setAiNotice] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiHidden, setAiHidden] = useState(false);
 
   useEffect(() => {
     setDate(followUpInputValue(nextActionAt));
     setNote(nextActionNote ?? '');
   }, [nextActionAt, nextActionNote]);
+
+  // The catalogue is the internship programme's; a vertical with its own
+  // funnel writes its lines by hand, as before.
+  const stageLines = vertical === 'INTERNSHIP' ? nextStepSuggestions(locale, pipelineStatus) : [];
+  const aiOffered = vertical === 'INTERNSHIP' && !!pipelineStatus && !aiHidden;
 
   const save = async (next: { date: string; note: string }) => {
     setError('');
@@ -107,6 +131,43 @@ export function FollowUpPanel({
       setSaving(false);
     }
   };
+
+  // One click, one call (#2875): the gate's denials become a line under the
+  // chips, and an unconfigured provider hides the button for good.
+  const suggestWithAi = async () => {
+    setAiLoading(true);
+    setAiNotice('');
+    try {
+      const res = await fetch(`/api/mentorship/${relationId}/next-step`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (body.empty || !Array.isArray(body.suggestions) || body.suggestions.length === 0) setAiNotice(t.followUp.aiEmpty);
+        else setAiLines(body.suggestions.filter((s: unknown): s is string => typeof s === 'string'));
+      } else if (body.code === 'consent_required') {
+        setAiNotice(t.aiSummary.consentRequired);
+      } else if (body.code === 'disabled') {
+        setAiNotice(t.aiSummary.aiOff);
+      } else if (body.code === 'quota_exceeded') {
+        setAiNotice(t.aiSummary.quotaExceeded);
+      } else if (body.code === 'provider_error') {
+        setAiNotice(t.aiSummary.providerError);
+      } else if (body.code === 'not_configured') {
+        setAiHidden(true);
+      } else {
+        setAiNotice(t.common.error);
+      }
+    } catch {
+      setAiNotice(t.common.error);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const showSuggestionRow = stageLines.length > 0 || aiOffered;
 
   return (
     <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="follow-up-panel">
@@ -136,6 +197,61 @@ export function FollowUpPanel({
           data-testid="follow-up-note"
         />
       </div>
+      {showSuggestionRow && (
+        <div className="mt-3" data-testid="follow-up-suggestions">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{t.followUp.suggestionsLabel}</p>
+            {aiOffered && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={aiLoading}
+                disabled={saving}
+                title={t.followUp.aiHint}
+                onClick={suggestWithAi}
+                data-testid="follow-up-ai"
+              >
+                <Sparkles className="mr-1 h-4 w-4" /> {t.followUp.aiButton}
+              </Button>
+            )}
+          </div>
+          {stageLines.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {stageLines.map((line) => (
+                <button
+                  key={line}
+                  type="button"
+                  className={CHIP_CLASS}
+                  disabled={saving}
+                  onClick={() => setNote(line)}
+                  data-testid="follow-up-suggestion"
+                >
+                  {line}
+                </button>
+              ))}
+            </div>
+          )}
+          {aiLines.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="follow-up-ai-suggestions">
+              <AiBadge className="mr-1" />
+              {aiLines.map((line) => (
+                <button
+                  key={line}
+                  type="button"
+                  className={CHIP_CLASS}
+                  disabled={saving}
+                  onClick={() => setNote(line)}
+                  data-testid="follow-up-ai-suggestion"
+                >
+                  {line}
+                </button>
+              ))}
+            </div>
+          )}
+          {aiNotice && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{aiNotice}</p>}
+        </div>
+      )}
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" loading={saving} onClick={() => save({ date, note })} data-testid="follow-up-save">
@@ -153,6 +269,9 @@ export function FollowUpPanel({
           </Button>
         )}
       </div>
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400" data-testid="follow-up-visibility">
+        {t.followUp.visibility}
+      </p>
     </div>
   );
 }

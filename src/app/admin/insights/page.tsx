@@ -18,7 +18,8 @@ import { formatDate } from '@/lib/relativeTime';
 // and renders with AI off; the summary appears only after "Summarise" (POST),
 // or on load when one is stored for exactly the rows in range — a page view
 // never spends a call. Each theme opens the rows it was built from: a summary
-// you cannot check is worse than none.
+// you cannot check is worse than none. An org without the AI pack (#1738)
+// gets every number and one line saying why there is no summary — no button.
 
 type Kind = 'evaluations' | 'weekly-reports';
 type Sentiment = 'positive' | 'neutral' | 'negative' | 'unclear';
@@ -31,6 +32,7 @@ interface Body {
   available: number;
   floor: number;
   configured: boolean;
+  locked: boolean;
   summary: { themes: Theme[]; overall: Record<Sentiment, number>; notableQuotes: { id: string; text: string }[] } | null;
   cached: boolean;
   artifact: ArtifactInfo | null;
@@ -92,6 +94,11 @@ function InsightPanel({ kind }: { kind: Kind }) {
       if (res.ok) {
         setData(await res.json());
         setOpen(null);
+      } else if (res.status === 403) {
+        // The pack went missing between the load and the click: the state the
+        // GET would have carried, so the button goes and the line appears.
+        const d = await res.json().catch(() => ({}));
+        if (d.code === 'feature_locked') setData((b) => (b ? { ...b, locked: true, summary: null, cached: false, artifact: null, sources: [] } : b));
       }
     } finally {
       setRunning(false);
@@ -118,12 +125,15 @@ function InsightPanel({ kind }: { kind: Kind }) {
             <Input type="date" value={range?.to ?? ''} onChange={(e) => setRange((r) => (r ? { ...r, to: e.target.value } : r))} onBlur={() => load(range)} data-testid="insights-to" />
           </label>
           <p className="text-sm text-gray-700 dark:text-gray-200" data-testid="insights-available">{fill(s.rows, { n: data.available })}</p>
-          {data.configured && data.available >= data.floor && !data.summary && (
+          {data.configured && !data.locked && data.available >= data.floor && !data.summary && (
             <Button size="sm" onClick={() => run()} loading={running} data-testid="insights-summarise">
               <Sparkles className="mr-1 h-4 w-4" /> {s.summarise}
             </Button>
           )}
         </div>
+        {data.locked && (
+          <p className="mt-3 text-sm text-gray-600 dark:text-gray-300" data-testid="insights-locked">{s.locked}</p>
+        )}
         {data.reason === 'below_floor' && data.caveats[0] && (
           <p className="mt-3 text-sm text-amber-800 dark:text-amber-300" data-testid="insights-below-floor">{caveatText(data.caveats[0])}</p>
         )}
@@ -237,7 +247,7 @@ function InsightPanel({ kind }: { kind: Kind }) {
               ))}
             </ul>
           )}
-          {data.artifact && <ArtifactMeta key={data.artifact.id} artifact={data.artifact} cached={data.cached} onRegenerate={data.configured ? () => run(true) : undefined} regenerating={running} />}
+          {data.artifact && <ArtifactMeta key={data.artifact.id} artifact={data.artifact} cached={data.cached} onRegenerate={data.configured && !data.locked ? () => run(true) : undefined} regenerating={running} />}
         </Card>
       )}
     </div>

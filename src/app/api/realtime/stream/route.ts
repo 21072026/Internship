@@ -160,7 +160,8 @@ async function handleGet(request: Request) {
         // arrives up to once every 3s per open thread per participant — one
         // coalesced pair of unread COUNTs each would be a database round trip
         // per keystroke burst for a number that cannot have changed.
-        if (event.type !== 'typing') pushCounts('sync');
+        // `agenda` (#1843) and `sessionNote` (#1847) move no counter either.
+        if (event.type !== 'typing' && event.type !== 'agenda' && event.type !== 'sessionNote') pushCounts('sync');
       });
       // Lost the race against the per-user cap between the check above and here.
       if (!unsubscribe) {

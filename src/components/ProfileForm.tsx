@@ -14,6 +14,7 @@ import { CvFeedback } from '@/components/CvFeedback';
 import { CvSuggestPanel } from '@/components/CvSuggestPanel';
 import { SkillRating } from '@/components/SkillRating';
 import { SkillsField } from '@/components/ui/SkillsField';
+import { EnrichPanel } from '@/components/ai/EnrichPanel';
 import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
@@ -353,6 +354,23 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
             <p className="text-sm font-semibold text-gray-700 mb-4">{t.profileForm.about}</p>
             <div className="space-y-4">
               <Input label={t.profileForm.displayName} placeholder={t.profileForm.displayNameHint} {...register('displayName')} error={errors.displayName?.message} />
+              {/* Paste-in enrichment for a mentor's own profile (#2055): proposals
+                  only, each accepted into the form; Save is what stores them. */}
+              {role === 'MENTOR' && (
+                <EnrichPanel
+                  endpoint="/api/profile/enrich"
+                  testId="mentor-enrich"
+                  fields={[
+                    { key: 'bio', label: t.enrich.fields.bio },
+                    { key: 'skills', label: t.enrich.fields.skills },
+                    { key: 'interests', label: t.enrich.fields.interests },
+                  ]}
+                  onAccept={(key, value) => {
+                    if (key === 'skills' && Array.isArray(value)) applySuggestedSkills(value);
+                    else if (key === 'bio' || key === 'interests') setValue(key, String(value), { shouldDirty: true });
+                  }}
+                />
+              )}
               <div id={profileFieldAnchor('bio')} className="scroll-mt-24">
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.profileForm.bio}</label>
                 <Textarea

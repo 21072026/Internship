@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Survey free-text AI summary (#1910):** a free-text question on `/admin/surveys/[id]/results` can be summarised into themes with quotes (`POST /api/admin/surveys/[id]/summary`, ADMIN only, scope `survey_summary` through `runAiGated`). It runs only above the response floor (409 `below_floor`). Contact details are masked before the texts leave (`src/lib/surveyTextRules.ts`), and `parseSummary` drops any quote that no answer contains verbatim. When AI is unavailable the reply carries the reason and the screen keeps the plain list.",
-  "notes": {
-    "en": ["Too many written answers to read? Summarise them with AI into themes, with quotes taken word for word from the answers — and nobody is ever named."],
-    "tr": ["Okunamayacak kadar çok yazılı yanıt mı var? AI ile temalara özetle; alıntılar yanıtlardan kelimesi kelimesine alınır ve kimsenin adı geçmez."],
-    "de": ["Zu viele Freitextantworten zum Lesen? Fasse sie mit KI zu Themen zusammen, mit wörtlichen Zitaten aus den Antworten — und niemand wird je genannt."]
-  }
-}

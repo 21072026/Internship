@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Session } from 'next-auth';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 import { loadAdminAnalytics } from '../src/lib/adminAnalyticsData';
 import { analyticsFacts } from '../src/lib/ai/narrativeRules';
@@ -34,6 +34,9 @@ test('the paragraph is only ever read from storage or written on request, and ci
   const org = await prisma.organization.create({ data: { name: `Narrative ${stamp}`, slug: `narrative-${stamp}` } });
   const adminEmail = uniqueEmail('narr-admin');
   const admin = await seedUser(adminEmail, PW, 'ADMIN', 'Narrative Admin', org.id);
+  // An operator task behind the AI pack (#1738); the locked org is
+  // e2e/ai-entitlement.spec.ts's business, this spec's org holds the pack.
+  await setOrgFeature(org.id, 'AI_PACKAGE', true);
   try {
     const range = sixMonths();
     await signInAndSettle(page, adminEmail, PW, '/admin');
@@ -74,6 +77,7 @@ test('the paragraph is only ever read from storage or written on request, and ci
   } finally {
     await prisma.aiArtifact.deleteMany({ where: { orgId: org.id } });
     await cleanupByEmail(adminEmail);
+    await prisma.orgEntitlement.deleteMany({ where: { orgId: org.id } });
     await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });

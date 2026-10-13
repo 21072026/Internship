@@ -54,6 +54,12 @@ const ALLOWED = {
   // DEFAULT_HIRED_STAGE_KEY: the documented fallback for a tenant whose own
   // stage set declares no terminal stage.
   'src/lib/offers.ts': 'DEFAULT_HIRED_STAGE_KEY, the documented fallback',
+  // The follow-up panel's per-stage lines (#2875): a content catalogue keyed on
+  // the canonical keys exactly like the labels in pipeline.ts — not a consumer
+  // reaching for "hired". A renamed pipeline keeps the keys and so keeps the
+  // lines; a tenant's own stage set resolves to none (the lookup is total and
+  // unit-tested), which is the right answer for a stage nobody wrote lines for.
+  'src/lib/nextStepSuggestions.ts': 'per-default-stage content, a companion catalogue of pipeline.ts',
 };
 
 // A file that has never been triaged gets the parent story as its owner; the

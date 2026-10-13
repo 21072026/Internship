@@ -36,7 +36,7 @@ export function MessagesLiveRefresh() {
     // read-stamp updateMany and one unread count per thread — every ~3s for as
     // long as somebody is typing anywhere. Anything ephemeral added to the bus
     // later belongs in this list too; this is the bus's only catch-all consumer.
-    if (signal.type === 'notification' || signal.type === 'typing') return;
+    if (signal.type === 'notification' || signal.type === 'typing' || signal.type === 'agenda' || signal.type === 'sessionNote') return;
     if (signal.type === 'ready' && !seenReady.current) {
       seenReady.current = true;
       return;

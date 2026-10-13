@@ -90,3 +90,26 @@ export const DEFAULT_HIRED_STAGE_KEY = 'HIRED_660';
 export function canSeeCompensation(params: { role: string; isOwnMenteeOffer: boolean }): boolean {
   return params.role === 'ADMIN' || (params.role === 'MENTEE' && params.isOwnMenteeOffer);
 }
+
+// Every column canSeeCompensation() guards (#1851): the note, and the
+// structured figures beside it. Routes build their conditional `select` from
+// THIS list, so a column added here is withheld from COMPANY by construction —
+// and one added to the schema but not here is a review failure, caught by
+// e2e/offers.spec.ts asserting a COMPANY body carries none of them.
+export const OFFER_COMPENSATION_FIELDS = [
+  'compensationNote',
+  'currency',
+  'baseAmountMinor',
+  'basePeriod',
+  'signingBonusMinor',
+  'otherBonusMinor',
+  'equityNote',
+  'hoursPerWeek',
+  'contractType',
+] as const;
+export type OfferCompensationField = (typeof OFFER_COMPENSATION_FIELDS)[number];
+
+/** `{ compensationNote: true, currency: true, … }` for a Prisma `select`. */
+export function compensationSelect(): Record<OfferCompensationField, true> {
+  return Object.fromEntries(OFFER_COMPENSATION_FIELDS.map((f) => [f, true])) as Record<OfferCompensationField, true>;
+}

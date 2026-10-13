@@ -22,6 +22,13 @@
 //     not write the disclaimer that qualifies its own output.
 
 import { redactAnswerText, MAX_SUMMARY_INPUT_CHARS } from '@/lib/surveyTextRules';
+import { redactForPrompt } from '@/lib/ai/redact';
+
+// The survey masking first, then callModel's own pre-flight (#2026): applying
+// it here too means the rows the quote check compares against are exactly
+// what the model saw — the pre-flight is idempotent, so callModel's second
+// pass changes nothing.
+const maskRow = (text: string) => redactForPrompt(redactAnswerText(text));
 
 export const SENTIMENTS = ['positive', 'neutral', 'negative', 'unclear'] as const;
 export type Sentiment = (typeof SENTIMENTS)[number];
@@ -95,7 +102,7 @@ export function prepareOpenText(
   let masked = false;
   let available = 0;
   for (const item of items) {
-    const redacted = redactAnswerText(item.text).trim();
+    const redacted = maskRow(item.text).trim();
     if (!redacted) continue;
     available++;
     const text = names.length ? maskNames(redacted, names) : redacted;
@@ -112,7 +119,7 @@ export function prepareOpenText(
 
 /** Rows that count toward a floor: non-empty after redaction. */
 export function countUsable(items: OpenTextItem[]): number {
-  return items.filter((i) => redactAnswerText(i.text).trim()).length;
+  return items.filter((i) => maskRow(i.text).trim()).length;
 }
 
 /** The refusal below the floor — the only thing said there. */

@@ -212,6 +212,29 @@ async function upsertUser({ email, fullName, role, extra = {} }) {
   return user;
 }
 
+// The AI pack for a demo tenant (#1738). The admin AI tools — the match
+// rationale, the survey summary, the open-text insights, the analytics
+// narrative — sit behind the AI_PACKAGE add-on since #1738, and the demo must
+// show the whole product (#2061): without this grant every topic environment's
+// admin AI tools would render locked. A grant rather than a plan, because the
+// pack is grant-only (GRANT_ONLY_FEATURES in src/lib/plans.ts). Idempotent over
+// @@unique([orgId, feature]), and its note is deliberately NOT the marker of
+// prisma/backfill-ai-package-grandfather.mjs: that backfill counts only its own
+// marker, so a seeded local database still gets the grandfather decision on
+// its own terms, and its createMany skips this row instead of duplicating it.
+async function grantAiPack(orgId, tenant) {
+  await prisma.orgEntitlement.upsert({
+    where: { orgId_feature: { orgId, feature: 'AI_PACKAGE' } },
+    create: {
+      orgId,
+      feature: 'AI_PACKAGE',
+      note: `Demo tenant (${tenant}): the AI pack is granted so the demo shows the whole product (#1738, #2061).`,
+    },
+    update: {},
+  });
+  console.log(`granted AI_PACKAGE to the ${tenant} demo tenant`);
+}
+
 async function main() {
   assertSafeTarget();
 
@@ -389,6 +412,7 @@ async function main() {
   // REQUIRED column and is read from the relations/users backfilled above.
   await assignDefaultOrg(prisma, defaultOrg.id);
   console.log('backfilled default org onto demo rows');
+  await grantAiPack(defaultOrg.id, 'internship');
 
   // ---------------------------------------------------------------------------
   // Development / oversight half (#2062): weekly reports, to-dos, mentor
@@ -412,6 +436,141 @@ async function main() {
     orderBy: { mentee: { email: 'asc' } },
   });
   const relationOf = (localPart) => demoRelations.find((relation) => relation.mentee.email === `${localPart}@${DEMO_DOMAIN}`);
+
+  // Recruitment (#1419). These rows need the org backfill above and belong
+  // only to the internship tenant. Stable demo IDs / natural unique keys and
+  // empty updates preserve decisions a visitor made between seed runs.
+  const recruitmentRelation = (localPart) => {
+    const relation = demoRelations.find((r) => r.orgId === defaultOrg.id && r.mentee.email === `${localPart}@${DEMO_DOMAIN}`);
+    if (!relation) throw new Error(`Missing internship demo relation: ${localPart}`);
+    return relation;
+  };
+  const deniz = recruitmentRelation('mentee.deniz');
+  const hakan = recruitmentRelation('mentee.hakan');
+  const kaan = recruitmentRelation('mentee.kaan');
+  const daysAgo = (days) => new Date(Date.now() - days * DAY_MS);
+
+  const source = await prisma.source.upsert({
+    where: { orgId_name: { orgId: defaultOrg.id, name: 'Demo University Careers' } },
+    update: {},
+    create: { orgId: defaultOrg.id, name: 'Demo University Careers', contactEmail: `source.careers@${DEMO_DOMAIN}` },
+  });
+  await upsertUser({
+    email: `source.careers@${DEMO_DOMAIN}`, fullName: 'Careers Demo (Source)', role: 'SOURCE',
+    extra: { orgId: defaultOrg.id, sourceId: source.id, emailVerified: true },
+  });
+  // SOURCE is an account observing a Source institution; candidates share the
+  // institution's id, not the SOURCE user's id. Preserve any later reassignment.
+  await prisma.user.updateMany({
+    where: { id: { in: [deniz.menteeId, recruitmentRelation('mentee.firat').menteeId] }, orgId: defaultOrg.id, sourceId: null },
+    data: { sourceId: source.id },
+  });
+
+  // The FILLED requisition and its counted ACCEPTED offer must commit together.
+  await prisma.$transaction(async (tx) => {
+    const requisitionSpecs = [
+      { key: 'frontend', company: companies[0], title: 'Frontend Developer (demo)', openings: 2, skills: ['React', 'TypeScript'] },
+      { key: 'backend', company: companies[0], title: 'Backend Developer (demo)', openings: 1, skills: ['C#', '.NET'] },
+      { key: 'frontend-filled', company: companies[0], title: 'Frontend Developer — filled (demo)', openings: 1, skills: ['TypeScript', 'Next.js'], filled: true },
+      { key: 'data', company: companies[1], title: 'Data Engineer (demo)', openings: 1, skills: ['Python', 'SQL'] },
+    ];
+    const requisitions = new Map();
+    for (const spec of requisitionSpecs) {
+      const row = await tx.requisition.upsert({
+        where: { id: `demo-requisition-${spec.key}` },
+        update: {},
+        create: {
+          id: `demo-requisition-${spec.key}`, orgId: defaultOrg.id, companyId: spec.company.id,
+          title: spec.title, description: 'Synthetic demo hiring opportunity.',
+          status: spec.filled ? 'FILLED' : 'OPEN', openings: spec.openings,
+          filled: spec.filled ? 1 : 0, requiredSkills: spec.skills,
+          closedAt: spec.filled ? daysAgo(21) : null,
+        },
+      });
+      requisitions.set(spec.key, row);
+    }
+
+    for (const spec of [
+      { relation: deniz, key: 'frontend', status: 'PENDING' },
+      { relation: kaan, key: 'frontend-filled', status: 'APPROVED' },
+    ]) {
+      const requisition = requisitions.get(spec.key);
+      const menteeId = spec.relation.menteeId;
+      // Plain-ESM equivalent of companyInterestScopeKey in
+      // src/lib/companyInterests.ts (this seeder runs without a TS loader).
+      const scopeKey = `requisition:${requisition.id}:${menteeId}`;
+      await tx.companyInterest.upsert({
+        where: { scopeKey }, update: {},
+        create: { companyId: requisition.companyId, menteeId, requisitionId: requisition.id, scopeKey, status: 'SHORTLISTED' },
+      });
+      const approved = spec.status === 'APPROVED';
+      await tx.interviewRequest.upsert({
+        where: { id: `demo-interview-request-${spec.key}` }, update: {},
+        create: {
+          id: `demo-interview-request-${spec.key}`, orgId: defaultOrg.id,
+          companyId: requisition.companyId, requisitionId: requisition.id, menteeId,
+          status: spec.status, note: 'Synthetic demo interview request.',
+          createdAt: daysAgo(approved ? 32 : 1),
+          // Current API shape: an array of ISO timestamps, not slot objects.
+          proposedSlots: [daysAgo(approved ? 30 : -7).toISOString()],
+          // Mirrors interviewActiveKey; the decision route clears it on approval.
+          activeKey: approved ? null : `${requisition.id}:${menteeId}`,
+          decidedAt: approved ? daysAgo(31) : null,
+          decidedById: approved ? demoAdmin.id : null,
+        },
+      });
+    }
+
+    for (const spec of [
+      { relation: hakan, key: 'backend', status: 'SENT' },
+      { relation: kaan, key: 'frontend-filled', status: 'ACCEPTED' },
+    ]) {
+      const requisition = requisitions.get(spec.key);
+      const accepted = spec.status === 'ACCEPTED';
+      await tx.offer.upsert({
+        where: { id: `demo-offer-${spec.key}` }, update: {},
+        create: {
+          id: `demo-offer-${spec.key}`, orgId: defaultOrg.id, relationId: spec.relation.id,
+          companyId: requisition.companyId, requisitionId: requisition.id,
+          position: requisition.title, status: spec.status, createdById: demoAdmin.id,
+          createdAt: daysAgo(accepted ? 25 : 3), sentAt: daysAgo(accepted ? 24 : 2),
+          decidedAt: accepted ? daysAgo(21) : null,
+          decidedById: accepted ? spec.relation.menteeId : null,
+          // Same meaning as applyAcceptedOffer: this acceptance took one seat.
+          requisitionCountedAt: accepted ? requisition.closedAt : null,
+        },
+      });
+    }
+
+    // A completed historical round for the hired candidate. Every assigned
+    // interviewer submitted independently, so calibration is legitimately open.
+    // Null templateId uses the built-in mentee rubric, as in the panel API.
+    const panel = await tx.interviewPanel.upsert({
+      where: { id: 'demo-interview-panel-frontend' }, update: {},
+      create: {
+        id: 'demo-interview-panel-frontend', orgId: defaultOrg.id, subjectId: kaan.menteeId,
+        title: 'Frontend interview (demo)', createdById: demoAdmin.id,
+        createdAt: daysAgo(31), scheduledAt: daysAgo(30),
+      },
+    });
+    for (const [index, mentor] of mentors.slice(0, 2).entries()) {
+      await tx.interviewPanelMember.upsert({
+        where: { panelId_userId: { panelId: panel.id, userId: mentor.id } }, update: {},
+        create: { panelId: panel.id, userId: mentor.id },
+      });
+      await tx.evaluation.upsert({
+        where: { id: `demo-interview-evaluation-${index + 1}` }, update: {},
+        create: {
+          id: `demo-interview-evaluation-${index + 1}`, panelId: panel.id,
+          subjectId: kaan.menteeId, authorId: mentor.id, type: 'INTERVIEW',
+          scores: { technical: 4 - index, communication: 4, reliability: 5 - index, growth: 4 },
+          comment: 'Independent synthetic demo interview scorecard.',
+          createdAt: daysAgo(30), submittedAt: daysAgo(29),
+        },
+      });
+    }
+  });
+  console.log('recruitment demo: requisitions, shortlist, requests, offers, panel and source in place');
 
   // Weekly reports (#2062, #1917) — one per owed week of every internship, with
   // a deliberate mix so the compliance listing (/api/admin/weekly-reports) is
@@ -773,9 +932,9 @@ async function main() {
         menteeId: relation.menteeId,
         companyId: related?.companyId ?? null,
         placedAt: new Date(Date.now() - 21 * DAY_MS),
-        // A junior first-year salary, entered by hand: #1851 has not landed, so
-        // there is no structured compensation on the Offer to derive it from
-        // and the seed says MANUAL rather than pretending otherwise.
+        // A junior first-year salary, entered by hand. Offers carry structured
+        // compensation since #1851, but nothing in the tree derives a Placement
+        // from an offer yet, so the seed says MANUAL rather than pretending.
         valueMinor: 4_200_000,
         valueCurrency: 'EUR',
         valueSource: 'MANUAL',
@@ -811,13 +970,17 @@ async function main() {
   //     converging on the second pass, which is not what a fresh topic
   //     environment gets.
   // ---------------------------------------------------------------------------
-  await seedMarketingDemo({
+  const marketing = await seedMarketingDemo({
     prisma,
     // Hashed once and shared: bcrypt at cost 10 is ~80 ms, and this tenant alone
     // opens thirty-four accounts.
     passwordHash: await bcrypt.hash(PASSWORD, 10),
     domain: DEMO_DOMAIN,
   });
+  // The marketing tenant reaches two of the operator AI tasks — the analytics
+  // narrative on /admin/analytics and the survey summary — neither of which
+  // sits behind the `mentorship` capability, so it needs the pack as well.
+  await grantAiPack(marketing.orgId, 'marketing');
 
   // Contributor terms (#1025, #1026). The demo set portrays projects that have
   // been running for a while, and someone who has been on a project for months

@@ -34,6 +34,11 @@ export type RealtimeSignal =
   | { type: 'typing'; conversationId: string | null; relationId: string | null; senderId: string | null }
   // Any in-app notification row was created for the viewer.
   | { type: 'notification' }
+  // A session agenda of one of the viewer's mentorships changed (#1843). Ids
+  // only: the panel refetches through the authorized endpoint.
+  | { type: 'agenda'; relationId: string | null; senderId: string | null }
+  // The pair's shared minutes changed (#1847); same contract as `agenda`.
+  | { type: 'sessionNote'; relationId: string | null; senderId: string | null }
   // "Refetch whatever you are showing." Emitted on every poll while in fallback
   // mode, and whenever the tab becomes visible again — a phone suspends both the
   // socket and our timers, so coming back to the app must not wait for a beat.
@@ -188,6 +193,22 @@ function openStream() {
     });
   }) as EventListener);
   es.addEventListener('notification', (() => emit({ type: 'notification' })) as EventListener);
+  es.addEventListener('agenda', ((event: MessageEvent) => {
+    const d = parse(event);
+    emit({
+      type: 'agenda',
+      relationId: (d.relationId as string) ?? null,
+      senderId: (d.senderId as string) ?? null,
+    });
+  }) as EventListener);
+  es.addEventListener('sessionNote', ((event: MessageEvent) => {
+    const d = parse(event);
+    emit({
+      type: 'sessionNote',
+      relationId: (d.relationId as string) ?? null,
+      senderId: (d.senderId as string) ?? null,
+    });
+  }) as EventListener);
   // The server hit its per-user connection cap: this tab gets polling.
   es.addEventListener('unavailable', (() => fallbackToPolling()) as EventListener);
 

@@ -1,4 +1,5 @@
 import {
+  BookOpenCheck,
   Activity, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
@@ -7,8 +8,10 @@ import {
   Webhook,
   Send,
   Lightbulb,
+  Sparkles,
   ArrowRightLeft,
   type LucideIcon,
+  ShieldAlert,
 } from 'lucide-react';
 import type { VerticalCapability } from '@/lib/verticals';
 
@@ -69,6 +72,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // sidebar — and the projects write APIs are gated on the same capability.
   { href: '/admin/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },
   { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates', capability: 'mentorship' },
+  // The guided-conversation library a pair's session agenda is picked from (#1843).
+  { href: '/admin/agenda-templates', icon: BookOpenCheck, key: 'agendaTemplates', capability: 'mentorship' },
   // The canned-response pool the composer offers (#1871), next to the other
   // reusable-text screen rather than buried under settings.
   { href: '/admin/message-templates', icon: MessageSquareQuote, key: 'messageTemplates' },
@@ -94,6 +99,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/email', icon: Mail, key: 'email', capability: 'mentorship' },
   { href: '/admin/documents', icon: FileText, key: 'documents' },
   { href: '/admin/support', icon: LifeBuoy, key: 'support' },
+  // Safeguarding review queue (#2056). Untagged: every vertical has messaging.
+  { href: '/admin/safeguarding', icon: ShieldAlert, key: 'safeguarding' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
   // Term compliance of the weekly diaries (#1918) — an internship-only screen.
@@ -105,6 +112,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // from another platform — internship records, hence `mentorship`.
   { href: '/admin/migrate', icon: ArrowRightLeft, key: 'migrate', capability: 'mentorship' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
+  // AI spend, failures, quota and provider status (#2030). Untagged: every
+  // vertical has AI tasks and a quota.
+  { href: '/admin/ai', icon: Sparkles, key: 'aiConsole' },
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
   { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },

@@ -22,6 +22,12 @@ export const WEBHOOK_EVENTS = [
   // Every assigned interviewer has submitted (or an admin closed the panel):
   // the scores are now comparable (#824).
   'interview_panel.completed',
+  // A closed panel's decision: ADVANCE | REJECT | OFFER (#1846). Registered, not yet dispatched.
+  'interview_panel.outcome',
+  // An approved interview request got a real meeting / was called off (#1844).
+  // Registered, not yet dispatched: see scripts/check-events.mjs.
+  'interview_request.scheduled',
+  'interview_request.cancelled',
   // An offer was decided by the candidate (#1854), and an acceptance took the
   // last seat of its requisition. Registered, not yet raised: they leave
   // through `emit()` (#1693) once it exists — see the note in

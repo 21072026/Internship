@@ -57,6 +57,8 @@ export function MeetingsManager() {
   const interviewRequestId = searchParams.get('interviewRequestId');
   const interviewRequisitionId = searchParams.get('requisitionId');
   const interviewRequisitionTitle = searchParams.get('requisitionTitle');
+  // The meeting an interview request was turned into (#1844): the queue links here with its id.
+  const linkedMeetingId = searchParams.get('meetingId');
   const [relations, setRelations] = useState<Relation[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
@@ -206,6 +208,13 @@ export function MeetingsManager() {
         <p className="text-gray-500 mt-1">{t.meetings.subtitle}</p>
       </div>
 
+      {linkedMeetingId && (
+        <Card className="mb-4" data-testid="interview-meeting-linked">
+          <a href={`#meeting-${linkedMeetingId}`} className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
+            {t.interviewRequests.meetingLinked}
+          </a>
+        </Card>
+      )}
       {interviewRelationId && interviewRequestId && interviewRequisitionId && (
         <Card className="mb-4" data-testid="interview-meeting-context">
           <p className="text-sm text-gray-700 dark:text-gray-300">
@@ -354,7 +363,7 @@ export function MeetingsManager() {
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
               {meetings.map((m) => (
-                <div key={m.id} className="flex items-center justify-between gap-3 py-3">
+                <div key={m.id} id={`meeting-${m.id}`} className={`flex items-center justify-between gap-3 py-3${m.id === linkedMeetingId ? ' rounded-lg bg-blue-50 px-2 dark:bg-blue-950/40' : ''}`}>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.title}</p>
                     <p className="text-xs text-gray-500 truncate">

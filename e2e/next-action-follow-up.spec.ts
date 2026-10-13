@@ -40,6 +40,15 @@ test('a follow-up date reminds its owner once, then flags the record until it is
     await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     await gotoSettled(page, `/mentor/mentees/${rel.id}`);
     const panel = page.getByTestId('follow-up-panel');
+    // The panel says who reads the note (#2875), offers the stage's ready-made
+    // lines, and a chip only fills the field — nothing is saved by the click.
+    await expect(panel.getByTestId('follow-up-visibility')).toContainText('never does');
+    await expect(panel.getByTestId('follow-up-note')).toHaveAttribute('placeholder', /CV/);
+    const chips = panel.getByTestId('follow-up-suggestion');
+    await expect(chips).toHaveCount(3);
+    await chips.first().click();
+    await expect(panel.getByTestId('follow-up-note')).toHaveValue('Propose a day for the intro call');
+    expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.id } })).nextActionNote).toBeNull();
     await panel.getByTestId('follow-up-date').fill(utcDay(0));
     await panel.getByTestId('follow-up-note').fill('Call about pricing');
     await panel.getByTestId('follow-up-save').click();

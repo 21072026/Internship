@@ -103,6 +103,17 @@ test('a remembered device signs itself back in after the session expires', async
     });
     expect(devices).toHaveLength(1);
     expect(devices[0].revokedAt).not.toBeNull();
+
+    // And the owner is told (#1717): a replayed cookie means a copy left their
+    // machine. In-app row plus a mail through the essential group — the row is
+    // written before the mail, so it is polled first.
+    const owner = await prisma.user.findFirstOrThrow({ where: { email }, select: { id: true } });
+    await expect
+      .poll(() => prisma.notification.count({ where: { userId: owner.id, type: 'security.deviceTokenReuse' } }), { timeout: 10_000 })
+      .toBe(1);
+    await expect
+      .poll(() => prisma.emailLog.count({ where: { to: email, category: 'security' } }), { timeout: 10_000 })
+      .toBe(1);
   } finally {
     await context.close();
     await cleanupByEmail(email);

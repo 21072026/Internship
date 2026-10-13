@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fix (a11y):** in dark mode a hovered `hover:text-blue-800` link fell through to the accent remap (`accent-800`, dark text on a dark card). The profile-progress chips on `/portal/profile` hovered to `rgb(30,64,175)` on gray-900, which turned the full-suite `a11y-scan` red. `hover:text-blue-800` now joins the dark accent hover list and reads `accent-300`.",
-  "notes": {
-    "en": ["In dark mode, the missing-field links on your profile stay readable when you hover them."],
-    "tr": ["Koyu temada profilindeki eksik alan bağlantıları, üzerine gelince de okunur kalıyor."],
-    "de": ["Im Dunkelmodus bleiben die Links zu fehlenden Profilfeldern auch beim Überfahren lesbar."]
-  }
-}

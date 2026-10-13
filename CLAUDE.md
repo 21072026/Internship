@@ -347,6 +347,18 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   (`spendLoginLink`), the request route answers the same 200 for every address and mails
   **after** the response (`after()`), and both limits apply: 5/15min per IP *and* per address.
   Never add a second TOTP implementation and never log the raw token.
+- **The password policy is data, and one function judges it** ([`docs/password-policy.md`](docs/password-policy.md),
+  #1544): `passwordMinLength` (clamped 8…128 on read, refused outside that range on write),
+  `passwordRequireUpper/Lower/Digit/Symbol` and `breachedPasswordCheck` are settings read through
+  the per-org chain; the rule check is pure and Unicode-aware in `src/lib/passwordPolicyRule.ts`
+  and runs identically in the browser (`usePasswordPolicy()` + `<PasswordRules>` under every
+  new-password field, fed by `GET /api/auth/password-policy`) and on the server. **Every path
+  that accepts a new password calls `checkPassword(password, orgId)`** (`src/lib/password.ts`)
+  after it knows the account's org — register, reset, account today — and answers a refusal as
+  `400 { code: 'password_policy' | 'password_breached' }`; `passwordSchema` is only the shape.
+  The HIBP lookup (`src/lib/breachedPassword.ts`) sends five hex characters of the SHA-1, matches
+  the suffix locally, goes through the SSRF guard and **fails open** — never log the password or
+  the hash. `HIBP_ALLOW_INSECURE_STUB=1` is the e2e stub's switch and is never set on a deployment.
 - **2FA recovery codes** ([`docs/two-factor-recovery.md`](docs/two-factor-recovery.md), #1542):
   enabling 2FA mints **ten single-use codes**, returned by that one response and never
   again — only an HMAC of each is stored (`src/lib/recoveryCodes.ts`; the format rules,
@@ -359,6 +371,19 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   leave `lastTotpStep` alone (it is the TOTP replay floor, #865); and no endpoint may return
   a code after enrolment — `GET /api/account/2fa` answers with counts. Admin-side 2FA reset
   is a separate task (#1543).
+- **Security notices have one sender** ([`docs/security-notices.md`](docs/security-notices.md),
+  #1717): a sign-in from a browser the account has not used before, a replayed remember-me
+  cookie, a password or e-mail change, 2FA on/off, recovery codes replaced and "sign out of all
+  devices" all go through `sendSecurityNotice()` / `observeSignInDevice()` in
+  `src/lib/securityNotices.ts` — in-app via `notifyEvent(..., { channels: ['inApp'] })` and the
+  mail inline under `category: 'security'`, which is the **essential** `account_security` group
+  (no preference, quiet hour or unsubscribe can silence it; the unit test pins every kind to
+  that group). The new-device rule is pure in `src/lib/signInDeviceRule.ts`: a device is
+  `sha256(userAgent)`, a notice is due only when the sign-in **created** the `SignInDevice` row
+  and the account already had one — the first browser is the baseline, so rollout mails nobody.
+  A notice never carries a token, hash, code, raw user-agent or geolocation; an admin-side
+  notice passes no `request` (the browser/IP would be the admin's). The router's e-mail
+  channel is still a stub (a job no worker consumes), which is why the mail is sent inline.
 - **Pasif ilk temaslar** (`docs/dormant-first-contacts.md`, #1499/#1508): biri pipeline'ın
   ilk aşamasında takılı, kendisine yazılmış ve 14 gündür yanıt vermemişse "pasif" sayılır —
   mentor kuyruğundan ve hatırlatma e-postasından düşer, `dormantSince` damgalanır ve
@@ -447,6 +472,20 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   served host, ≤ 191 chars — never a bare `z.string().url()`. `BUILTIN` stays the default and
   ignores saved rooms. Don't widen `EMBEDDABLE_MEETING_HOSTS` for a provider link; the UI
   offers "Open in <provider>" (`meetingProviderName()`) instead.
+- **The audit stream is one reader, one cursor, one signature** ([`docs/audit-stream.md`](docs/audit-stream.md),
+  #2012): a tenant's `AuditLog` rows are POSTed to its registered `AuditDrain` URL as signed
+  `application/x-ndjson` batches (`X-Signature: sha256=…`, `json_lines` or ECS), read forward
+  from a `(createdAt, id)` cursor that moves **only on 2xx** — an outage replays, never loses,
+  so delivery is at-least-once and a receiver dedupes on the row `id`. The rules (encoding,
+  signing, cursor, 1m→6h backoff, self-pause after 20 failures, URL shape) are pure in
+  `src/lib/auditDrainRule.ts`; `src/lib/auditDrain.ts` is the only reader and the only writer
+  of the drain row. Three things are load-bearing: **every `prisma.auditLog.create` passes
+  `orgId`** (the middleware stamps it only under `MT_ENFORCE_ISOLATION`; a row without one
+  reaches no drain), `prisma/backfill-audit-log-org.mjs` runs **before** the generic
+  `backfill-organization.mjs` in the deploy, and the stream never folds `NULL`-org rows into
+  the default org. The test button ships **synthetic** rows only (`X-Audit-Test: 1`).
+  `AUDIT_DRAIN_ALLOW_INSECURE_RECEIVERS=1` is the e2e sink's switch and is never set on a
+  deployment.
 - **Single-owner background work** (`src/lib/jobs/lease.ts`, #1701): anything that
   must run **once per environment** rather than once per process takes a `JobLease`
   — one row per lease name, a TTL, and a takeover by conditional `UPDATE`. Today
@@ -481,6 +520,65 @@ automatic TLS; `infra/README.md` § The marketing hosts is the runbook. The reti
   counters only at the source. A request path never scans the activity tables; it reads the
   rollup. **Video volume is reported, never gated** — no meeting path may return a 403 for a
   metering reason.
+- **An `Application` is the hiring row** (#1828): one person considered for one role, where they are
+  in it — `@@unique([requisitionId, menteeId])` in the DB, `orgId` + `TENANT_MODELS`, one
+  `ApplicationEvent` per stage change (reached through its application, deliberately unregistered).
+  The vocabulary and the rules are pure in `src/lib/applications.ts`: `stage` (`APPLIED → SCREENING →
+  SHORTLISTED → INTERVIEW → OFFER → HIRED`, plus `REJECTED`/`WITHDRAWN`) moves forward only through the
+  explicit `canTransition` table, `status` is **derived** by `statusForStage()` (never set by hand), a
+  move to `REJECTED` needs a `DISPOSITION_CODES` entry, and `canPerformApplicationAction()` is the ONE
+  authorization rule — every flag it takes (owning company, own application, active mentor) is derived
+  from the database, never from a request body. `CompanyInterest` stays as the company's flat flag;
+  `applicationFromInterest()` is the only bridge and `scripts/applications-backfill-lib.mjs` its plain-ESM
+  mirror (Node 20 on the server cannot import TS) — the unit test compares the two, change both in one
+  commit. `npm run backfill:applications` (also on deploy) only ever adds rows; re-keying or deleting
+  `CompanyInterest` is a drop-and-recreate under `db push` and is out of scope by design.
+  **`Application.stage` has ONE writer** (#1836): `moveApplicationStage()` in `src/lib/applicationStage.ts`,
+  a guarded `updateMany` with the expected stage in the WHERE plus exactly one `ApplicationEvent`, zero
+  rows → `409 stage_conflict`; `PATCH /api/applications/[id]/stage`, `POST /api/applications/bulk-stage`
+  (≤ 50 ids, honest `{ moved, skipped[] }`), the shortlist write-through in `/api/company/interests` and
+  the interview approval all go through it, and `visibleApplicationsWhere()` is the one "which rows may
+  this actor see" filter (not yours = 404, never a 403 that confirms the id). A hand-rolled
+  `prisma.application.update` of `stage` skips the event, the derived status and the race guard at once.
+- **An interview request's SCHEDULED and CANCELLED are written by two routes only** (#1844):
+  `POST /api/interview-requests/[id]/schedule` creates the `Meeting` and flips the status in ONE
+  transaction (a guarded `updateMany` on `APPROVED`; the loser of a race rolls its meeting back and
+  answers 409), and `/cancel` writes `CANCELLED` and calls `cancelMeetingRows()`
+  (`src/lib/meetingCancel.ts`) — the one way a meeting leaves the calendars (status flip, late-cancel
+  record, Google withdrawal), shared with `PATCH /api/meetings/[id]`; a Meeting row is never deleted
+  for it. Who may act is `interviewRequestActorWhere()` in `src/lib/interviewRequests.ts` (ADMIN the
+  org, MENTOR the mentees they actively mentor, COMPANY its own request and only for cancel) — the
+  decision route reads the same rule, do not copy the filter. A slot the company did not propose
+  needs `override: true`; the company's interviewers are `MeetingGuest` rows, never accounts; every
+  confirmed time a person reads is rendered in their zone and language through
+  `formatInTimeZone(when, tz, undefined, intlLocaleFor(lang))`, never a bare `toLocaleString()`.
+- **A closed panel's outcome is recorded once, through the stage writer** (#1846): `POST
+  /api/interview-panels/[id]/outcome` refuses while `closedAt` is null (the scorecards decide first),
+  seals `InterviewPanel.outcome` with a guarded `updateMany` (`outcome: null`), moves the application
+  through `moveApplicationStage()` to the stage `outcomeTargetStage()` (`src/lib/interviewOutcome.ts`,
+  pure) names — ADVANCE = the next open stage, OFFER needs INTERVIEW, REJECT needs a disposition code —
+  and tells the company the **decision only**: never a score, never a divergence flag. The relation's
+  pipeline stage moves only on an explicit `advancePipeline: true`, never on a rejection, and only
+  through `stageMoveData()` + `recordStageMove()` (the shared stage write path). `schedule` with
+  `createPanel` convenes the panel in the meeting's transaction; `InterviewPanel.meetingId` and
+  `InterviewRequest.panelId` are the links.
+- **Structured compensation on offers** ([`docs/offer-compensation.md`](docs/offer-compensation.md),
+  #1851): money on `Offer` is integer **minor units** + ISO code (`baseAmountMinor`, `currency`,
+  `basePeriod`…) — never a Float/Decimal, same rule as `ProgramCost`/`Placement`. The rules
+  are pure in `src/lib/compensation.ts`; every compensation column is withheld from COMPANY
+  through ONE list, `OFFER_COMPENSATION_FIELDS` (`src/lib/offers.ts`) — add a column there or
+  `e2e/offers.spec.ts` goes red. The benchmark (`/api/admin/offers/benchmark`) never
+  converts currencies and returns buckets under 5 offers as `suppressed: true` with `null`
+  figures, never omitted.
+- **The VPAT is generated, never hand-edited** (`docs/legal/README.md` § VPAT, #2037): rows live
+  in `src/lib/vpat.ts`, the automated evidence in `e2e/a11y-baseline.json`; `npm run vpat:evidence`
+  writes `docs/legal/vpat.md`, `docs/legal/vpat-evidence.md` and `src/lib/vpatEvidence.generated.ts`,
+  and `scripts/test/vpat.test.mjs` fails on a stale copy, a `Supports` row without an evidence
+  path, a path that does not exist, or a `check:` claim whose quoted command no longer "returns
+  nothing" / "lists … only" (it executes them; a grep there must `--exclude=vpat.ts` or it finds its
+  own quotation). Whenever the a11y baseline changes, regenerate in the same PR and re-review the
+  affected rows. Markdown is not in the image, so the public copy is the
+  `/accessibility/vpat` page and the `/accessibility/vpat.md` route, both rendered from the data.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

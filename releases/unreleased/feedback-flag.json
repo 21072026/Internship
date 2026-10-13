@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Negative feedback flag on the at-risk queue (#2046, part 3):** `/api/admin/health` reads the newest open-text summary of each kind (evaluation comments, weekly-report blockers, ≤30 days) and adds `feedbackFlag: { themes, at }` to every pair whose rows sit in a `negative` theme (`src/lib/insights/feedbackFlags.ts`, rule in `feedbackFlagRule.ts`, unit-tested). A note, not a rule: score, band, snapshots and `HEALTH_RULES_VERSION` are untouched and nothing is written to the relation. A flagged pair with no other reason is listed rather than counted as quiet; `counts.feedback` gives the total. `/admin/health` shows it as a chip linking to `/admin/insights`.",
-  "notes": {
-    "en": ["Relationship health now marks pairs whose evaluation comments or weekly-report blockers fall into a negative theme on the Insights page — as a note to read, without changing the score."],
-    "tr": ["İlişki sağlığı artık değerlendirme yorumları ya da haftalık rapor engelleri İçgörüler sayfasında olumsuz bir temaya düşen eşleşmeleri işaretliyor — puanı değiştirmeden, okunacak bir not olarak."],
-    "de": ["Die Beziehungsgesundheit markiert jetzt Paare, deren Bewertungskommentare oder Wochenbericht-Hindernisse auf der Seite „Einblicke“ in ein negatives Thema fallen — als Hinweis zum Lesen, ohne die Bewertung zu ändern."]
-  }
-}
