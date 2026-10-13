@@ -22,6 +22,7 @@ jobs:
     env:
       # Prisma client instantiates lazily; build never connects, but a valid-format URL is required.
       DATABASE_URL: 'mysql://user:pass@127.0.0.1:3306/db'
+      NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - uses: actions/checkout@v7
         with:
