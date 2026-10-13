@@ -195,7 +195,29 @@ async function pruneStalePushSubscriptions(ctx: RetentionContext) {
     handleBatch: async (ids) =>
       (await prisma.pushSubscription.deleteMany({ where: { id: { in: ids } } })).count,
   });
-  return { deleted: processed, capped };
+
+  // The native app's installs (#2775), under the same rule and the same window:
+  // `lastSeenAt` moves on every app launch, so a token unseen for six months
+  // whose owner has not signed in either is an app nobody opens any more. The
+  // budget left over from the browsers is what this half may spend.
+  const remaining = ctx.budget - processed;
+  if (remaining <= 0) return { deleted: processed, capped };
+  const apps = await pruneInBatches({
+    batchSize: ctx.batchSize,
+    budget: remaining,
+    selectIds: async (take) =>
+      (
+        await prisma.nativePushToken.findMany({
+          where: { lastSeenAt: { lt: ctx.cutoff }, user: ownerQuiet },
+          orderBy: { lastSeenAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) =>
+      (await prisma.nativePushToken.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed + apps.processed, capped: capped || apps.capped };
 }
 
 /**

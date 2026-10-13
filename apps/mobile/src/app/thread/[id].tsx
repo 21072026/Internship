@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
@@ -26,15 +27,18 @@ import {
   type Thread,
   type ThreadMessage,
 } from '../../lib/messages';
-import { useSession } from '../../lib/session';
+import { nativeRouteFor } from '../../lib/nativeRoutes';
+import { pushData } from '../../lib/push';
+import { setOpenThread } from '../../lib/pushDevice';
+import { APP_ENV, useSession } from '../../lib/session';
 import { useAppTheme, type Palette } from '../../lib/theme';
 import { useUnread } from '../../lib/unread';
 
 // Native thread (#2775). Reads GET /api/messages?conversationId= — which is
 // also what marks the thread read, exactly as opening it on the web does — and
 // sends with a JSON POST to /api/messages. While the screen is open and the app
-// is in the foreground it asks again every few seconds; native push replaces
-// that in a later slice.
+// is in the foreground it asks again every few seconds, and at once when a push
+// for this thread arrives (#2775).
 export default function ThreadScreen() {
   const { c } = useAppTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
@@ -93,6 +97,24 @@ export default function ThreadScreen() {
       sub.remove();
     };
   }, [load]);
+
+  // While this thread is on screen a push for it shows no banner (pushDevice.ts)
+  // and reloads the thread instead of waiting for the next poll.
+  useFocusEffect(
+    useCallback(() => {
+      setOpenThread(typeof id === 'string' ? id : null);
+      return () => setOpenThread(null);
+    }, [id]),
+  );
+  useEffect(() => {
+    const host = product?.hosts[APP_ENV] ?? null;
+    const sub = Notifications.addNotificationReceivedListener((n) => {
+      const data = pushData(n.request.content.data);
+      const route = nativeRouteFor(data.url);
+      if (data.host === host && route?.kind === 'thread' && route.id === id) void load();
+    });
+    return () => sub.remove();
+  }, [product, id, load]);
 
   const send = async () => {
     const body = sendableBody(draft);

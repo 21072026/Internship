@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { renderNotification } from '@/lib/notificationText';
-import { sendPushToUser, pushConfigured } from '@/lib/webPush';
+import { sendPushToUser } from '@/lib/webPush';
 
 /**
  * "A message arrived while you were not in the app" (#1464).
@@ -20,7 +20,9 @@ export async function sendNewMessagePush(
   recipientId: string,
   options: { senderName?: string | null; link: string; preview?: string | null; byEmail?: boolean },
 ): Promise<void> {
-  if (!pushConfigured()) return;
+  // No `pushConfigured()` gate any more (#2775): that is the WEB channel's
+  // switch, and native push needs no configuration. A recipient with neither a
+  // subscription nor an app install costs a few indexed reads by userId.
   try {
     const recipient = await prisma.user.findUnique({
       where: { id: recipientId },

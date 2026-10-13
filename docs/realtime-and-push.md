@@ -90,6 +90,10 @@ kapandı" diye okunup yeniden bağlanma döngüsüne dönüşür.
 uygulama kapalıyken de bildirim gönderir. Push servisi **service worker'ı**
 uyandırır, bildirimi sayfa değil worker gösterir.
 
+> **Native uygulama (#2775):** `sendPushToUser` aynı yükü ve aynı kategori kontrolünü
+> uygulama kurulumlarına da (`NativePushToken`, Expo push servisi) dağıtır; VAPID
+> gerektirmez. Ayrıntı: [`mobile-push.md`](mobile-push.md).
+
 ### Kurulum
 
 1. Anahtar çiftini bir kez üret: `npx web-push generate-vapid-keys`

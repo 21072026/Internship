@@ -122,7 +122,7 @@ export async function DELETE(request: Request) {
       level: 'warning',
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
-      targetType: 'PushSubscription',
+      targetType: revoked === 'app' ? 'NativePushToken' : 'PushSubscription',
       targetId: id,
       request,
     });

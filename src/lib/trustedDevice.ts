@@ -21,6 +21,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
+import { revokeNativePushTokens } from '@/lib/expoPush';
 import { logActivity } from '@/lib/activity';
 import { clientIp, type HeaderSource } from '@/lib/clientIp';
 import { REMEMBER_COOKIES } from '@/lib/rememberCookie';
@@ -300,6 +301,11 @@ export async function revokeAllTrustedDevices(userId: string): Promise<void> {
     where: { userId, revokedAt: null },
     data: { revokedAt: new Date() },
   });
+  // The native app's push tokens ride along (#2775): every phone of this
+  // account has just been signed out, and a signed-out phone must not keep
+  // showing the account's messages. Here rather than at every caller, so the
+  // pairing cannot be forgotten by the next place that revokes sessions.
+  await revokeNativePushTokens([userId]);
 }
 
 /**
@@ -317,6 +323,7 @@ export async function revokeTrustedDevicesForUsers(userIds: string[]): Promise<v
     where: { userId: { in: userIds }, revokedAt: null },
     data: { revokedAt: new Date() },
   });
+  await revokeNativePushTokens(userIds);
 }
 
 export interface TrustedDeviceView {
