@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Meeting attendance, part 2 (#2014):** ending a pair's meeting from the dashboard banner now asks \"who was there?\" (`AttendanceStep`, before the rating card; recurring occurrences included). Everyone defaults to attended and *Skip* records nothing. The relation record (`/mentor/mentees/[id]`, `/admin/candidates/[id]`) shows the pair's meeting rhythm and lets the mentor or an admin set it (`RelationCadencePanel`, `GET /api/mentorship/[id]/cadence`). `GET /api/meetings/[id]/attendance` now names the two participants.",
-  "notes": {
-    "en": ["When you end a meeting, you can now note who was there in one tap — and each mentorship shows whether the pair meets on the rhythm you agreed."],
-    "tr": ["Bir görüşmeyi bitirirken artık kimin katıldığını tek dokunuşla not edebilirsin — her mentorlukta da çiftin anlaşılan sıklıkta görüşüp görüşmediği görünüyor."],
-    "de": ["Wenn du ein Treffen beendest, kannst du jetzt mit einem Tipp festhalten, wer dabei war — und jedes Mentoring zeigt, ob sich das Paar im vereinbarten Rhythmus trifft."]
-  }
-}

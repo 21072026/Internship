@@ -923,6 +923,10 @@ model Message {
   // db push to drop or rename an FK-backing index is what MySQL refuses (#784).
   @@index([conversationId, createdAt])
   @@index([relationId, createdAt])
+  // One sender's messages over a window (#1608): the activity report's sent/
+  // received counts (`senderId` + `createdAt: { gte }`), the message-retention
+  // sweep (`senderId: { in }` + `createdAt: { lt }`, #2056) and erasure.
+  @@index([senderId, createdAt])
 }
 
 // A single emoji reaction on a message by one user (WhatsApp/Slack style).
@@ -3106,25 +3110,39 @@ model Evaluation {
 //
 // That rule is enforced in the API, never merely hidden in the UI.
 model InterviewPanel {
-  id          String    @id @default(cuid())
-  orgId       String?
+  id                   String    @id @default(cuid())
+  orgId                String?
   // The candidate being interviewed.
-  subjectId   String
+  subjectId            String
   // The rubric to score against (#822). Null = the org's built-in mentee
   // criteria, resolved at read time like everywhere else.
-  templateId  String?
-  title       String?
-  scheduledAt DateTime?
-  createdById String?
+  templateId           String?
+  title                String?
+  scheduledAt          DateTime?
+  createdById          String?
   // Set when an admin closes the panel early — a no-show interviewer must not
   // hold the calibration view hostage for ever. Closing reveals the scorecards
   // that were submitted.
-  closedAt    DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  closedAt             DateTime?
+  // The calendar entry this panel scores (#1846): set when an interview
+  // request is scheduled with `createPanel`, so `scheduledAt` is the meeting's
+  // and the interviewers are on a calendar.
+  meetingId            String?   @unique
+  // The decision a closed panel produced (#1846): ADVANCE | REJECT | OFFER,
+  // written once by POST /api/interview-panels/[id]/outcome and never by a
+  // side effect. The application it moved is kept so the funnel can be read
+  // back from the panel.
+  outcome              String?
+  outcomeAt            DateTime?
+  outcomeById          String?
+  outcomeApplicationId String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  members    InterviewPanelMember[]
-  scorecards Evaluation[]
+  members          InterviewPanelMember[]
+  scorecards       Evaluation[]
+  meeting          Meeting?               @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  interviewRequest InterviewRequest?
 
   @@index([orgId, subjectId])
   @@index([subjectId, createdAt])
@@ -3625,6 +3643,7 @@ model Meeting {
   agenda           SessionAgenda?
   sessionNotes     SessionNote[]
   interviewRequest InterviewRequest?
+  interviewPanel   InterviewPanel?
 
   @@index([relationId])
   @@index([projectId])
@@ -4268,6 +4287,9 @@ model ActivityLog {
   @@index([action])
   @@index([createdAt])
   @@index([orgId])
+  // /admin/activity (#1608): one tenant's rows, newest first, a page at a time
+  // — `where: { orgId }` + `orderBy: { createdAt: 'desc' }` + skip/take.
+  @@index([orgId, createdAt])
 }
 
 enum EmailStatus {
@@ -4310,6 +4332,12 @@ model EmailLog {
   @@index([status])
   @@index([category])
   @@index([createdAt])
+  // The FAILED/SENT-by-recency shape (#1608): /api/health's
+  // `findFirst({ where: { status: 'FAILED' }, orderBy: { createdAt: 'desc' } })`
+  // and the email-log screen's `groupBy` over `{ status, createdAt: { gte } }`.
+  // Without it MySQL filesorts the status set or walks createdAt past every
+  // row of the other statuses — the documented ep:health landmine.
+  @@index([status, createdAt])
 }
 
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
@@ -4619,16 +4647,20 @@ model InterviewRequest {
   cancelledAt       DateTime?
   cancelledById     String?
   cancelReason      String?   @db.Text
+  // The scorecard panel convened for this interview (#1846), created in the
+  // same transaction as the meeting when the approver asks for one.
+  panelId           String?   @unique
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  requisition Requisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  mentee      User         @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  decidedBy   User?        @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
-  meeting     Meeting?     @relation(fields: [meetingId], references: [id], onDelete: SetNull)
-  cancelledBy User?        @relation("InterviewRequestCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
+  requisition Requisition     @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User            @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  org         Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  decidedBy   User?           @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  meeting     Meeting?        @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  cancelledBy User?           @relation("InterviewRequestCanceller", fields: [cancelledById], references: [id], onDelete: SetNull)
+  panel       InterviewPanel? @relation(fields: [panelId], references: [id], onDelete: SetNull)
 
   @@index([orgId, status])
   @@index([companyId, requisitionId])

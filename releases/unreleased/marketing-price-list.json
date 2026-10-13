@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**SaleVali publishes its price list** (#2767). New dependency-free `src/lib/marketingPlans.ts` (deliberately apart from `plans.ts`, whose plans drive subscriptions, entitlements and the meter): Team €149 / Business €249 / Enterprise €390 per user per month billed annually (monthly €179 / €299 / annual only), minimum 3 / 5 / 10 users, onboarding none / €2,900 / €6,900, all net. `/pricing` on the marketing host renders it as three cards (`pricing-marketing-plans`, `mkt-plan-<key>`) with a \"Talk to us\" link to the landing demo form; the internship price model stays hidden there. The Pricing entry is back in the marketing header and footer, and the marketing landing FAQ quotes the \"from\" price via `marketingFromSeatEur()`. Unit test `scripts/test/marketing-plans.test.mjs`; `e2e/host-vertical-public-pages.spec.ts` now asserts the published list instead of its absence.",
-  "notes": {
-    "en": ["SaleVali now has a published price list: three plans for sales teams, billed per user, on the pricing page."],
-    "tr": ["SaleVali'nin artık yayımlanmış bir fiyat listesi var: fiyatlandırma sayfasında, kullanıcı başına faturalanan üç satış ekibi paketi."],
-    "de": ["SaleVali hat jetzt eine veröffentlichte Preisliste: drei Pläne für Vertriebsteams, abgerechnet pro Nutzer, auf der Preisseite."]
-  }
-}

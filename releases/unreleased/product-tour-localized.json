@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Product tour in the page language (#2808):** both landing tours (internship and SaleVali) now serve captures and clips recorded in the visitor's language. English keeps its file names; Turkish and German use a `-tr` / `-de` suffix. `capture-landing-screenshots.mjs` takes `--locale=en|tr|de` and clicks and selects by stage key and testid instead of English labels, so the same script records every language.",
-  "notes": {
-    "en": ["The product tour on the home page now shows the screens in your language."],
-    "tr": ["Ana sayfadaki ürün turu artık ekranları senin dilinde gösteriyor."],
-    "de": ["Die Produkttour auf der Startseite zeigt die Bildschirme jetzt in deiner Sprache."]
-  }
-}

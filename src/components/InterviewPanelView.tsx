@@ -14,6 +14,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Textarea';
+import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CheckCircle2, Circle, Lock, TriangleAlert, UserRoundX } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
@@ -21,6 +22,8 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { useCriterionLabel } from '@/lib/evaluationCriteriaClient';
 import { DIVERGENCE_THRESHOLD, type CriterionDivergence } from '@/lib/interviewPanel';
 import type { ResolvedCriterion } from '@/lib/evaluation';
+import { DISPOSITION_CODES } from '@/lib/applications';
+import { INTERVIEW_OUTCOMES, type InterviewOutcome } from '@/lib/interviewOutcome';
 
 interface PanelData {
   panel: {
@@ -40,7 +43,13 @@ interface PanelData {
     // every read, so reopening cannot reveal anything.
     canReopen: boolean;
     canEdit: boolean;
+    // The decision a closed panel produced (#1846), and whether this viewer may record it.
+    outcome: string | null;
+    outcomeAt: string | null;
+    meetingId: string | null;
+    canDecide: boolean;
   };
+  applications: { id: string; stage: string; requisition: { title: string }; company: { name: string } }[];
   criteria: ResolvedCriterion[];
   roster: { userId: string; name: string | null; submittedAt: string | null; isMe: boolean }[];
   own: { scores: Record<string, number>; comment: string | null; submittedAt: string | null } | null;
@@ -48,6 +57,121 @@ interface PanelData {
   scorecards: { authorId: string; authorName: string | null; scores: Record<string, number>; comment: string | null }[];
   divergence: CriterionDivergence[];
   average: number | null;
+}
+
+type PanelText = ReturnType<typeof useT>['interviewPanel'];
+
+function outcomeLabel(text: PanelText, decision: string): string {
+  switch (decision) {
+    case 'ADVANCE': return text.outcomeAdvance;
+    case 'OFFER': return text.outcomeOffer;
+    case 'REJECT': return text.outcomeReject;
+    default: return decision;
+  }
+}
+
+// What happens next for the candidate's application, recorded once the panel
+// is closed (#1846). The server decides the legal move, requires a reason on a
+// rejection and moves the pipeline only on the explicit checkbox; the company
+// is told the decision and nothing from the scorecards.
+function OutcomeCard({ panelId, panel, applications, text, dispositionText, onDone }: {
+  panelId: string;
+  panel: PanelData['panel'];
+  applications: PanelData['applications'];
+  text: PanelText;
+  dispositionText: Record<string, string>;
+  onDone: () => Promise<void>;
+}) {
+  const [applicationId, setApplicationId] = useState(applications[0]?.id ?? '');
+  const [decision, setDecision] = useState<InterviewOutcome>('ADVANCE');
+  const [dispositionCode, setDispositionCode] = useState('');
+  const [note, setNote] = useState('');
+  const [advancePipeline, setAdvancePipeline] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  if (panel.outcome) {
+    return (
+      <Card className="mb-4" data-testid="panel-outcome">
+        <CardHeader><CardTitle>{text.outcomeTitle}</CardTitle></CardHeader>
+        <p className="text-sm font-medium text-gray-900 dark:text-gray-100" data-testid="panel-outcome-recorded">
+          {text.outcomeRecorded.replace('{decision}', outcomeLabel(text, panel.outcome))}
+        </p>
+        {notice && <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{notice}</p>}
+      </Card>
+    );
+  }
+  if (!panel.canDecide) return null;
+  const submit = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/interview-panels/${panelId}/outcome`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision,
+          applicationId,
+          ...(decision === 'REJECT' && dispositionCode ? { dispositionCode } : {}),
+          ...(note.trim() ? { note: note.trim() } : {}),
+          ...(advancePipeline ? { advancePipeline: true } : {}),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(body.error ?? 'Failed'); return; }
+      if (body.pipeline) {
+        setNotice(body.pipeline.moved ? text.outcomePipelineMoved.replace('{stage}', body.pipeline.to ?? '') : text.outcomePipelineSkipped.replace('{reason}', body.pipeline.reason ?? ''));
+      }
+      await onDone();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="mb-4" data-testid="panel-outcome">
+      <CardHeader><CardTitle>{text.outcomeTitle}</CardTitle></CardHeader>
+      <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">{text.outcomeHint}</p>
+      {applications.length === 0 ? (
+        <p className="text-sm text-amber-700 dark:text-amber-300" data-testid="panel-outcome-no-application">{text.outcomeNoApplication}</p>
+      ) : (
+        <div className="space-y-3">
+          <Select
+            label={text.outcomeApplication}
+            value={applicationId}
+            onChange={(e) => setApplicationId(e.target.value)}
+            options={applications.map((a) => ({ value: a.id, label: `${a.requisition.title} · ${a.company.name} · ${a.stage}` }))}
+            data-testid="panel-outcome-application"
+          />
+          <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+            <p className="font-medium">{text.outcomeDecision}</p>
+            {INTERVIEW_OUTCOMES.map((d) => (
+              <label key={d} className="flex items-center gap-2">
+                <input type="radio" name={`outcome-${panelId}`} value={d} checked={decision === d} onChange={() => setDecision(d)} data-testid={`panel-outcome-${d.toLowerCase()}`} />
+                <span>{outcomeLabel(text, d)}</span>
+              </label>
+            ))}
+          </div>
+          {decision === 'REJECT' && (
+            <Select
+              label={text.outcomeDisposition}
+              value={dispositionCode}
+              onChange={(e) => setDispositionCode(e.target.value)}
+              placeholder={text.outcomeDispositionPlaceholder}
+              options={DISPOSITION_CODES.map((code) => ({ value: code, label: dispositionText[code] ?? code }))}
+              data-testid="panel-outcome-disposition"
+            />
+          )}
+          <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={text.outcomeNote} data-testid="panel-outcome-note" />
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input type="checkbox" checked={advancePipeline} onChange={(e) => setAdvancePipeline(e.target.checked)} disabled={decision === 'REJECT'} data-testid="panel-outcome-advance-pipeline" />
+            <span>{text.outcomeAdvancePipeline}</span>
+          </label>
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          <Button size="sm" loading={busy} disabled={!applicationId} onClick={() => void submit()} data-testid="panel-outcome-record">{text.outcomeRecord}</Button>
+        </div>
+      )}
+    </Card>
+  );
 }
 
 export function InterviewPanelView({ panelId }: { panelId: string }) {
@@ -326,6 +450,9 @@ export function InterviewPanelView({ panelId }: { panelId: string }) {
         )}
       </Card>
 
+      {panel.closedAt && (panel.outcome || panel.canDecide) && (
+        <OutcomeCard panelId={panelId} panel={panel} applications={data.applications ?? []} text={t.interviewPanel} dispositionText={t.dispositionCodes} onDone={load} />
+      )}
       <ConfirmDialog
         open={confirmSubmit}
         message={t.interviewPanel.confirmSubmit}

@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fix:** `/messages` could fall into the error boundary (\"Something went wrong\") when two renders raced — e.g. pressing back twice out of a thread. Every inbox render upserted each project's GROUP room, and two concurrent upserts deadlocked on the participant `createMany` (Prisma `P2034`, seen in prod logs). `createOrGetProjectConversation` now reads first and writes only when the room is missing or lacks a member, and retries a write that hits a deadlock.",
-  "notes": {
-    "en": ["Going back from a conversation twice in a row no longer shows an error screen."],
-    "tr": ["Bir sohbetten art arda iki kez geri dönünce artık hata ekranı çıkmıyor."],
-    "de": ["Zweimal hintereinander aus einer Unterhaltung zurückzugehen, zeigt keinen Fehlerbildschirm mehr."]
-  }
-}

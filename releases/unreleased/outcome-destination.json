@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**First destination: instrument, trigger and report (#1912, part 1):** a built-in `outcome_destination` survey template (destination with stable codes, employer/role, reporting consent) and a `DAYS_AFTER_END` campaign trigger that fires `dayOffset` days after a relation completes. `POST /api/admin/analytics/outcomes` sets up the open survey and a 30/90/180-day campaign in one idempotent call. `GET /api/admin/analytics/outcomes` reports destinations of the mentees whose relation completed in the period, overall, by cohort and by source. Every bucket carries its knowledge rate, counts only consented answers (a \"no\" is `withheld`), and applies the response floor per bucket. `DELETE ?userId=` withdraws a participant's answer (audited). The pure aggregation lives in `src/lib/outcomeDestination.ts` (unit-tested) and the rows in `src/lib/outcomesData.ts`. Retention is documented in `docs/surveys.md`.",
-  "notes": {
-    "en": ["Programmes can now ask participants where they ended up, 30, 90 or 180 days after the programme, and see the answers by cohort and source, always alongside how many people actually answered."],
-    "tr": ["Programlar artık katılımcılara, program bittikten 30, 90 ya da 180 gün sonra nereye vardıklarını sorabiliyor ve cevapları kohort ve kaynağa göre görebiliyor. Kaç kişinin gerçekten cevap verdiği her zaman yanında yazıyor."],
-    "de": ["Programme können Teilnehmende jetzt 30, 90 oder 180 Tage nach Programmende fragen, wo sie gelandet sind, und die Antworten nach Kohorte und Quelle sehen, immer zusammen mit der Zahl derer, die tatsächlich geantwortet haben."]
-  }
-}
